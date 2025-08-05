@@ -36,16 +36,6 @@ const TableRollEntrySchema = new Schema({
       },
       message: 'Invalid URL format for thumbnail image'
     }
-  },
-  category: { 
-    type: String, 
-    default: 'general',
-    maxlength: 100
-  },
-  rarity: {
-    type: String,
-    enum: ['common', 'uncommon', 'rare', 'epic', 'legendary'],
-    default: 'common'
   }
 });
 
@@ -64,17 +54,7 @@ const TableRollSchema = new Schema({
       message: 'Table name can only contain letters, numbers, spaces, hyphens, and underscores'
     }
   },
-  description: { 
-    type: String, 
-    default: '', 
-    maxlength: 1000 
-  },
-  category: {
-    type: String,
-    default: 'general',
-    enum: ['general', 'loot', 'monster', 'treasure', 'crafting', 'event', 'custom'],
-    index: true
-  },
+
   entries: { 
     type: [TableRollEntrySchema], 
     required: true,
@@ -99,31 +79,16 @@ const TableRollSchema = new Schema({
   },
   isActive: { 
     type: Boolean, 
-    default: true,
-    index: true
+    default: true
   },
   totalWeight: { 
     type: Number, 
     default: 0,
     min: 0
   },
-  rollCount: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  lastRolled: {
-    type: Date,
-    default: null
-  },
-  tags: [{
-    type: String,
-    maxlength: 50
-  }],
-  isPublic: {
-    type: Boolean,
-    default: true
-  },
+
+
+
   maxRollsPerDay: {
     type: Number,
     default: 0, // 0 means unlimited
@@ -146,11 +111,8 @@ const TableRollSchema = new Schema({
 // ------------------- Indexes for performance -------------------
 TableRollSchema.index({ createdBy: 1 });
 TableRollSchema.index({ isActive: 1 });
-TableRollSchema.index({ category: 1 });
-TableRollSchema.index({ tags: 1 });
-TableRollSchema.index({ name: 'text', description: 'text' }); // Text search index
+TableRollSchema.index({ name: 'text' }); // Text search index
 TableRollSchema.index({ createdAt: -1 });
-TableRollSchema.index({ lastRolled: -1 });
 
 // ------------------- Pre-save middleware to calculate total weight -------------------
 TableRollSchema.pre('save', function(next) {
@@ -220,24 +182,21 @@ TableRollSchema.statics.rollOnTable = function(tableName, options = {}) {
         selectedEntry = table.entries[table.entries.length - 1];
       }
 
-      // Update roll statistics
-      table.rollCount += 1;
-      table.lastRolled = new Date();
-      table.dailyRollCount += 1;
+             // Update daily roll count
+       table.dailyRollCount += 1;
       
       // Save the updated statistics
       table.save().catch(err => {
         console.error(`[TableRollModel] Error updating roll statistics:`, err);
       });
 
-      return {
-        table: table,
-        result: selectedEntry,
-        rollValue: randomValue,
-        rollNumber: table.rollCount,
-        dailyRollsRemaining: table.maxRollsPerDay > 0 ? 
-          Math.max(0, table.maxRollsPerDay - table.dailyRollCount) : null
-      };
+             return {
+         table: table,
+         result: selectedEntry,
+         rollValue: randomValue,
+         dailyRollsRemaining: table.maxRollsPerDay > 0 ? 
+           Math.max(0, table.maxRollsPerDay - table.dailyRollCount) : null
+       };
     });
 };
 
@@ -247,10 +206,6 @@ TableRollSchema.statics.searchTables = function(searchTerm, options = {}) {
     isActive: true,
     $text: { $search: searchTerm }
   };
-  
-  if (options.category) {
-    query.category = options.category;
-  }
   
   if (options.createdBy) {
     query.createdBy = options.createdBy;
@@ -268,7 +223,7 @@ TableRollSchema.statics.searchTables = function(searchTerm, options = {}) {
 // ------------------- Get popular tables -------------------
 TableRollSchema.statics.getPopularTables = function(limit = 10) {
   return this.find({ isActive: true })
-    .sort({ rollCount: -1, lastRolled: -1 })
+    .sort({ createdAt: -1 })
     .limit(limit);
 };
 
@@ -279,21 +234,7 @@ TableRollSchema.statics.getRecentTables = function(limit = 10) {
     .limit(limit);
 };
 
-// ------------------- Get tables by category -------------------
-TableRollSchema.statics.getTablesByCategory = function(category, options = {}) {
-  const query = { 
-    isActive: true,
-    category: category 
-  };
-  
-  if (options.isPublic !== undefined) {
-    query.isPublic = options.isPublic;
-  }
-  
-  return this.find(query)
-    .sort({ name: 1 })
-    .limit(options.limit || 50);
-};
+
 
 // ------------------- Get user's tables -------------------
 TableRollSchema.statics.getUserTables = function(userId, options = {}) {
@@ -344,12 +285,8 @@ TableRollSchema.methods.updateEntry = function(index, updates) {
 TableRollSchema.methods.duplicate = function(newName, newCreator) {
   const duplicate = new this.constructor({
     name: newName,
-    description: this.description,
-    category: this.category,
     entries: this.entries,
     createdBy: newCreator,
-    tags: [...this.tags],
-    isPublic: this.isPublic,
     maxRollsPerDay: this.maxRollsPerDay
   });
   
