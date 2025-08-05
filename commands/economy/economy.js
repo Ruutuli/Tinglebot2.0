@@ -540,7 +540,8 @@ for (const { name } of cleanedItems) {
     return;
   }
 
-  const toCharacterOwnerId = toCharacter.userId;
+  // Determine the user ID to mention based on character type
+  const mentionUserId = isModCharacter ? "668281042414600212" : toCharacter.userId;
 
   if (
    fromCharacter.currentVillage.trim().toLowerCase() !==
@@ -697,8 +698,6 @@ for (const { name } of cleanedItems) {
 
   for (const { name, quantity } of aggregatedItems) {
    // Remove from source inventory first
-   console.log(`[handleGift] Removing item from source character - fromCharacter._id: ${fromCharacter._id}, type: ${typeof fromCharacter._id}, name: ${name}, quantity: ${quantity}`);
-   console.log(`[handleGift] Source character details - Name: ${fromCharacter.name}, isModCharacter: ${fromCharacter.isModCharacter}`);
    const removeResult = await removeItemInventoryDatabase(
     fromCharacter._id,
     name,
@@ -716,8 +715,6 @@ for (const { name } of cleanedItems) {
    }
 
    // Add to target inventory
-   console.log(`[handleGift] Adding item to target character - toCharacter._id: ${toCharacter._id}, type: ${typeof toCharacter._id}, name: ${name}, quantity: ${quantity}`);
-   console.log(`[handleGift] Target character details - Name: ${toCharacter.name}, isModCharacter: ${toCharacter.isModCharacter}`);
    const addResult = await addItemInventoryDatabase(
     toCharacter._id, 
     name, 
@@ -768,8 +765,8 @@ for (const { name } of cleanedItems) {
   );
 
   await interaction.channel.send({
-    content: `🎁 <@${toCharacterOwnerId}>, you received a gift!`,
-    allowedMentions: { users: [toCharacterOwnerId] },
+    content: `🎁 <@${mentionUserId}>, you received a gift!`,
+    allowedMentions: { users: [mentionUserId] },
     embeds: [giftEmbed],
   });
   await interaction.deleteReply();
