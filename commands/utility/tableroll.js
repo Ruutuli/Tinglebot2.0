@@ -110,12 +110,17 @@ module.exports = {
     .addSubcommand(subcommand =>
       subcommand
         .setName('edit')
-        .setDescription('Edit a table (only creator can edit)')
+        .setDescription('Edit a table by uploading a new CSV file')
         .addStringOption(option =>
           option.setName('name')
             .setDescription('Name of the table to edit')
             .setRequired(true)
             .setAutocomplete(true)
+        )
+        .addAttachmentOption(option =>
+          option.setName('csvfile')
+            .setDescription('New CSV file with table data (Weight,Flavor,Item,thumbnail image)')
+            .setRequired(true)
         )
     )
     .addSubcommand(subcommand =>
@@ -125,21 +130,6 @@ module.exports = {
         .addStringOption(option =>
           option.setName('name')
             .setDescription('Name of the table to delete')
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('duplicate')
-        .setDescription('Duplicate an existing table')
-        .addStringOption(option =>
-          option.setName('name')
-            .setDescription('Name of the table to duplicate')
-            .setRequired(true)
-        )
-        .addStringOption(option =>
-          option.setName('newname')
-            .setDescription('Name for the new table')
             .setRequired(true)
                 )
       ),
@@ -170,9 +160,6 @@ module.exports = {
           break;
         case 'delete':
           await this.handleDelete(interaction);
-          break;
-        case 'duplicate':
-          await this.handleDuplicate(interaction);
           break;
         default:
           await interaction.reply({
@@ -585,6 +572,15 @@ module.exports = {
   // ------------------- Handle table editing -------------------
   async handleEdit(interaction) {
     const tableName = interaction.options.getString('name');
+    const attachment = interaction.options.getAttachment('csvfile');
+
+    // Validate attachment
+    if (!attachment || !attachment.contentType?.includes('text/csv')) {
+      return await interaction.reply({
+        content: '❌ Please provide a valid CSV file attachment.',
+        flags: [MessageFlags.Ephemeral]
+      });
+    }
 
     try {
       const table = await TableRoll.findOne({ name: tableName, isActive: true });
@@ -596,18 +592,54 @@ module.exports = {
         });
       }
 
+      // Check if user is the creator
+      if (table.createdBy !== interaction.user.id) {
+        return await interaction.reply({
+          content: '❌ You can only edit tables that you created.',
+          flags: [MessageFlags.Ephemeral]
+        });
+      }
+
+      await interaction.deferReply();
+
+      // Download and parse CSV
+      const response = await fetch(attachment.url);
+      const csvText = await response.text();
+      
+      // Use consolidated CSV parsing
+      const parseResult = parseCSVData(csvText);
+      if (!parseResult.success) {
+        return await interaction.editReply({
+          content: `❌ Failed to parse CSV: ${parseResult.error}`,
+          flags: [MessageFlags.Ephemeral]
+        });
+      }
+
+      if (parseResult.entries.length === 0) {
+        return await interaction.editReply({
+          content: '❌ No valid entries found in the CSV file. Please check the format.',
+          flags: [MessageFlags.Ephemeral]
+        });
+      }
+
+      // Update table with new entries
+      table.entries = parseResult.entries;
+      table.totalWeight = parseResult.entries.reduce((sum, entry) => sum + (entry.weight || 0), 0);
+      table.updatedAt = new Date();
+
+      await table.save();
+
       const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`📋 Table: ${table.name}`)
+        .setColor(0x00FF00)
+        .setTitle(`✅ Table '${tableName}' Updated Successfully`)
         .setDescription(table.description || 'No description')
         .addFields(
-          { name: '📊 Entries', value: table.entries.length.toString(), inline: true },
-          { name: '🎲 Total Weight', value: table.totalWeight.toString(), inline: true },
-          { name: '👤 Created By', value: `<@${table.createdBy}>`, inline: true },
+          { name: '📊 New Entries', value: parseResult.entries.length.toString(), inline: true },
+          { name: '🎲 New Total Weight', value: table.totalWeight.toString(), inline: true },
+          { name: '👤 Updated By', value: `<@${interaction.user.id}>`, inline: true },
           { name: '📂 Category', value: table.category, inline: true },
           { name: '🏷️ Tags', value: table.tags.length > 0 ? table.tags.join(', ') : 'None', inline: true },
           { name: '🔒 Public', value: table.isPublic ? 'Yes' : 'No', inline: true },
-          { name: '📅 Created', value: table.createdAt.toLocaleDateString(), inline: true },
           { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true },
           { name: '🎲 Total Rolls', value: (table.rollCount || 0).toString(), inline: true }
         );
@@ -634,7 +666,7 @@ module.exports = {
         });
       }
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
       handleError(error, 'tableroll.js', {
@@ -644,8 +676,8 @@ module.exports = {
         tableName: tableName
       });
       
-      await interaction.reply({
-        content: '❌ Failed to view table.',
+      await interaction.editReply({
+        content: '❌ Failed to update table. Please check your CSV format and try again.',
         flags: [MessageFlags.Ephemeral]
       });
     }
@@ -694,61 +726,6 @@ module.exports = {
       await interaction.reply({
         content: '❌ Failed to delete table.',
         ephemeral: true
-      });
-    }
-  },
-
-  // ------------------- Handle table duplication -------------------
-  async handleDuplicate(interaction) {
-    const tableName = interaction.options.getString('name');
-    const newName = interaction.options.getString('newname');
-
-    try {
-      const table = await TableRoll.findOne({ name: tableName, isActive: true });
-      
-      if (!table) {
-        return await interaction.reply({
-          content: `❌ Table '${tableName}' not found.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-      }
-
-      // Check if new name already exists
-      const existingTable = await TableRoll.findOne({ name: newName });
-      if (existingTable) {
-        return await interaction.reply({
-          content: `❌ A table with the name '${newName}' already exists.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-      }
-
-      // Create duplicate
-      const duplicate = await table.duplicate(newName, interaction.user.id);
-
-      const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle(`✅ Table '${tableName}' Duplicated`)
-        .setDescription(`Successfully created '${newName}' as a copy of '${tableName}'`)
-        .addFields(
-          { name: '📊 Entries', value: duplicate.entries.length.toString(), inline: true },
-          { name: '🎲 Total Weight', value: duplicate.totalWeight.toString(), inline: true },
-          { name: '👤 Created By', value: `<@${interaction.user.id}>`, inline: true }
-        )
-        .setTimestamp();
-
-      await interaction.reply({ embeds: [embed] });
-
-    } catch (error) {
-      handleError(error, 'tableroll.js', {
-        commandName: 'tableroll duplicate',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
-        tableName: tableName
-      });
-      
-      await interaction.reply({
-        content: '❌ Failed to duplicate table.',
-        flags: [MessageFlags.Ephemeral]
       });
     }
   },
