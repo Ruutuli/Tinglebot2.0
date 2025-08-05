@@ -1092,12 +1092,24 @@ function capitalizeFirst(str) {
 }
 
 // ------------------- Subsection Title ------------------- 
-const createGatherEmbed = (character, randomItem) => {
+const createGatherEmbed = (character, randomItem, bonusItem = null) => {
  const settings = getCommonEmbedSettings(character);
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
  const article = getArticleForItem(randomItem.itemName);
 
  const flavorText = generateGatherFlavorText(randomItem.type[0]);
+
+ // Add bonus item information if present
+ let description = flavorText;
+ if (bonusItem) {
+   const bonusArticle = getArticleForItem(bonusItem.itemName);
+   description += `\n\n🎭 **Entertainer's Gift:** ${character.name} also found ${bonusArticle} ${bonusItem.itemName}!`;
+ }
+ 
+ // Add Scholar cross-region information if needed
+ if (character.boostedBy && character.boostedBy.toLowerCase().includes('scholar')) {
+   description += `\n\n📚 **Scholar's Insight:** ${character.name} used their knowledge to gather from afar!`;
+ }
 
  const isVisiting =
   character.homeVillage.toLowerCase() !==
@@ -1134,7 +1146,7 @@ const createGatherEmbed = (character, randomItem) => {
   .setTitle(
    `${locationPrefix}: ${character.name} ${action} ${article} ${randomItem.itemName}!`
   )
-  .setDescription(flavorText)
+  .setDescription(description)
   .setColor(embedColor)
   .setAuthor({
    name: `${character.name} 🔗`,
@@ -1930,6 +1942,97 @@ function createMountEncounterEmbed(encounter) {
         .setTimestamp();
 }
 
+// ------------------- Function: createBoostRequestEmbed -------------------
+const createBoostRequestEmbed = (requestData) => {
+  const { generateUniqueId } = require('../utils/uniqueIdUtils');
+  const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
+  const { getVillageColorByName, getVillageEmojiByName } = require('../modules/locationsModule');
+
+  // Generate a unique ID for the request
+  const requestId = generateUniqueId('B'); // 'B' for Boost
+  
+  // Format the data with proper capitalization
+  const requestedBy = capitalizeFirstLetter(requestData.requestedBy || 'Unknown');
+  const booster = capitalizeFirstLetter(requestData.booster || 'Unknown');
+  const boosterJob = capitalizeWords(requestData.boosterJob || 'Unknown');
+  const category = capitalizeFirstLetter(requestData.category || 'Unknown');
+  const boostEffect = requestData.boostEffect || 'No effect specified';
+  const village = capitalizeFirstLetter(requestData.village || 'Unknown');
+  
+  // Get village styling
+  const villageColor = getVillageColorByName(village) || '#7289DA';
+  const villageEmoji = getVillageEmojiByName(village) || '🏘️';
+  
+  // Calculate expiration time (24 hours from now)
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 24);
+  const expiresIn = expiresAt.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const embed = new EmbedBuilder()
+    .setTitle(`⚡ Boost Request Created`)
+    .setDescription(
+      `**${requestedBy}** has requested a boost from **${booster}**!\n\n` +
+      `This request will expire in **24 hours** if not accepted.`
+    )
+    .setColor(villageColor)
+    .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png')
+    .addFields(
+      {
+        name: '👤 **Requested By**',
+        value: `> ${requestedBy}`,
+        inline: true
+      },
+      {
+        name: '🎭 **Booster**',
+        value: `> ${booster}`,
+        inline: true
+      },
+      {
+        name: '💼 **Booster Job**',
+        value: `> ${boosterJob}`,
+        inline: true
+      },
+      {
+        name: '📋 **Category**',
+        value: `> ${category}`,
+        inline: true
+      },
+      {
+        name: '🏘️ **Village**',
+        value: `> ${villageEmoji} ${village}`,
+        inline: true
+      },
+      {
+        name: '🆔 **Request ID**',
+        value: `> \`${requestId}\``,
+        inline: true
+      },
+      {
+        name: '⚡ **Boost Effect**',
+        value: `> ${boostEffect}`,
+        inline: false
+      },
+      {
+        name: '⏰ **Expires**',
+        value: `> ${expiresIn}`,
+        inline: false
+      }
+    )
+    .setFooter({ 
+      text: `This request will expire in 24 hours if not accepted.`,
+      iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/clock-icon.png'
+    })
+    .setTimestamp();
+
+  return embed;
+};
+
 module.exports = {
  DEFAULT_EMOJI,
  DEFAULT_IMAGE_URL,
@@ -1976,4 +2079,5 @@ module.exports = {
  createUpdatedTravelEmbed,
  createMountEncounterEmbed,
  createWrongVillageEmbed,
+ createBoostRequestEmbed,
 };
