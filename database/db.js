@@ -309,10 +309,8 @@ const fetchCharacterById = async (characterId) => {
   const character = await Character.findById(characterId);
   console.log(`[fetchCharacterById] Database query result:`, character ? `Found - Name: ${character.name}, ID: ${character._id}` : 'Not found');
   if (!character) {
-   console.error(
-    `[characterService]: logs - Character with ID "${characterId}" not found.`
-   );
-   throw new Error("Character not found");
+   console.log(`[fetchCharacterById] Character with ID "${characterId}" not found in regular collection.`);
+   return null; // Return null instead of throwing error
   }
   console.log(`[fetchCharacterById] Successfully returning character: ${character.name}`);
   return character;
@@ -2122,6 +2120,7 @@ inventoryUtils.initializeInventoryUtils({
  connectToInventories,
  fetchItemByName,
  fetchCharacterById,
+ fetchModCharacterById,
  getInventoryCollection,
 });
 
