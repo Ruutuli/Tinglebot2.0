@@ -18,7 +18,7 @@ const { connectToTinglebot } = require('../database/db');
 // Database Models
 // ------------------- Importing database models -------------------
 const Item = require('../models/ItemModel');
-const TableModel = require('../models/TableModel');
+const TableRoll = require('../models/TableRollModel');
 
 // ============================================================================
 // Utility Functions
@@ -63,28 +63,35 @@ async function fetchTableData(sheetName) {
 
 // ------------------- Fetch Table Data from Database -------------------
 // Retrieves table data stored in the database by table name.
-async function fetchTableFromDatabase(sheetName) {
+async function fetchTableFromDatabase(tableName) {
     try {
-        // If sheetName is provided as an array, extract the first element.
-        if (Array.isArray(sheetName)) {
+        // If tableName is provided as an array, extract the first element.
+        if (Array.isArray(tableName)) {
             console.error(`[sheetTableUtils.js]: ❌ Invalid table name format: Expected a string but got an array. Fixing it.`);
-            sheetName = sheetName[0];
+            tableName = tableName[0];
         }
 
-        if (typeof sheetName !== 'string') {
-            console.error(`[sheetTableUtils.js]: ❌ Table name must be a string. Received:`, sheetName);
+        if (typeof tableName !== 'string') {
+            console.error(`[sheetTableUtils.js]: ❌ Table name must be a string. Received:`, tableName);
             return null;
         }
 
-        sheetName = sheetName.trim(); // Remove extra spaces.
-        console.log(`[sheetTableUtils.js]: 📊 Fetching table with name: ${sheetName}`);
+        tableName = tableName.trim(); // Remove extra spaces.
+        console.log(`[sheetTableUtils.js]: 📊 Fetching table with name: ${tableName}`);
 
-        const table = await TableModel.findOne({ tableName: sheetName });
+        // Find table in new TableRoll system
+        const table = await TableRoll.findOne({ name: tableName, isActive: true });
         if (!table) {
-            console.error(`[sheetTableUtils.js]: ❌ No table found in database for: ${sheetName}`);
+            console.error(`[sheetTableUtils.js]: ❌ No table found in database for: ${tableName}`);
             return null;
         }
-        return table.data;
+        
+        // Convert to old format for backward compatibility
+        return table.entries.map(entry => [
+            entry.weight.toString(),
+            entry.flavor || '',
+            entry.item || ''
+        ]);
     } catch (error) {
     handleError(error, 'sheetTableUtils.js');
         console.error(`[sheetTableUtils.js]: ❌ Error fetching table from database:`, error);
@@ -92,27 +99,48 @@ async function fetchTableFromDatabase(sheetName) {
     }
 }
 
-// ------------------- Load Table -------------------
-// Loads table data from Google Sheets into memory and saves it to the database.
-async function loadTable(sheetName) {
-    const db = await connectToTinglebot();
-    const data = await fetchTableData(sheetName);
-    if (!data.length) {
-        console.error(`[sheetTableUtils.js]: logs No data found for sheet: ${sheetName}`);
+// ------------------- Load Table to New System -------------------
+// Loads table data from Google Sheets into the new TableRoll system
+async function loadTableToNewSystem(sheetName, tableName, description = '', category = 'general') {
+    try {
+        const data = await fetchTableData(sheetName);
+        if (!data.length) {
+            console.error(`[sheetTableUtils.js]: No data found for sheet: ${sheetName}`);
+            return false;
+        }
+
+        // Convert to new format
+        const entries = data.map(([weight, flavorText, itemName]) => ({
+            weight: parseFloat(weight) || 1,
+            flavor: flavorText || '',
+            item: itemName || '',
+            thumbnailImage: '',
+            category: 'general',
+            rarity: 'common'
+        }));
+
+        // Create new table
+        const table = new TableRoll({
+            name: tableName,
+            description: description,
+            category: category,
+            entries: entries,
+            createdBy: 'system', // Mark as system migration
+            tags: ['sheets', 'migrated'],
+            isPublic: true
+        });
+
+        await table.save();
+        console.log(`[sheetTableUtils.js]: Successfully loaded table: ${sheetName} -> ${tableName}`);
+        return true;
+    } catch (error) {
+        handleError(error, 'sheetTableUtils.js', {
+            functionName: 'loadTableToNewSystem',
+            sheetName: sheetName,
+            tableName: tableName
+        });
         return false;
     }
-    try {
-        await TableModel.findOneAndUpdate(
-            { tableName: sheetName },
-            { tableName: sheetName, data },
-            { upsert: true, new: true }
-        );
-    } catch (error) {
-    handleError(error, 'sheetTableUtils.js');
-
-        console.error(`[sheetTableUtils.js]: logs Error saving table to database:`, error);
-    }
-    return true;
 }
 
 
@@ -120,8 +148,8 @@ async function loadTable(sheetName) {
 // Item Rolling Functions
 // ------------------- Roll Item -------------------
 // Rolls an item from a loaded table in the database based on weighted probabilities.
-async function rollItem(sheetName, allowNA = false) {
-    const data = await fetchTableFromDatabase(sheetName);
+async function rollItem(tableName, allowNA = false) {
+    const data = await fetchTableFromDatabase(tableName);
     if (!data) {
         return null;
     }
@@ -137,7 +165,7 @@ async function rollItem(sheetName, allowNA = false) {
         }
     });
     if (!weightedItems.length) {
-        console.error(`[sheetTableUtils.js]: logs No valid weighted items found in ${sheetName}.`);
+        console.error(`[sheetTableUtils.js]: logs No valid weighted items found in ${tableName}.`);
         return null;
     }
 
@@ -177,25 +205,133 @@ async function rollItem(sheetName, allowNA = false) {
     return { item: foundItem.itemName, flavorText: selected.flavorText };
 }
 
+// ------------------- Roll Item from New System -------------------
+// Rolls an item from the new TableRoll system
+async function rollItemFromNewSystem(tableName, allowNA = false) {
+    try {
+        const result = await TableRoll.rollOnTable(tableName);
+        const rolledItemName = result.result.item;
+        const rolledFlavor = result.result.flavor;
+        const rolledRarity = result.result.rarity;
+
+        // If the rolled item is 'n/a' and allowNA is true, return as is.
+        if (rolledItemName.toLowerCase() === 'n/a' && allowNA) {
+            return { 
+                item: 'N/A', 
+                flavorText: rolledFlavor,
+                rarity: rolledRarity,
+                rollNumber: result.rollNumber
+            };
+        }
+
+        // Try to find the item in the database.
+        const foundItem = await Item.findOne({ itemName: rolledItemName });
+        if (!foundItem) {
+            console.error(`[sheetTableUtils.js]: Item not found in database: ${rolledItemName}`);
+            return { 
+                item: 'N/A', 
+                flavorText: rolledFlavor,
+                rarity: rolledRarity,
+                rollNumber: result.rollNumber
+            };
+        }
+
+        return { 
+            item: foundItem.itemName, 
+            flavorText: rolledFlavor,
+            rarity: rolledRarity,
+            rollNumber: result.rollNumber
+        };
+    } catch (error) {
+        handleError(error, 'sheetTableUtils.js', {
+            functionName: 'rollItemFromNewSystem',
+            tableName: tableName
+        });
+        return null;
+    }
+}
 
 // ============================================================================
 // Discord Embed Functions
 // ------------------- Create Roll Embed -------------------
 // Creates a Discord embed containing the roll result.
-function createRollEmbed(result, sheetName) {
+function createRollEmbed(result, tableName) {
     const embed = new EmbedBuilder()
         .setColor('#0099ff')
-        .setTitle(`🎲 Roll Result from ${sheetName}`)
+        .setTitle(`🎲 Roll Result from ${tableName}`)
         .addFields(
             { name: 'Item', value: result.item || 'Unknown', inline: true },
             { name: 'Flavor Text', value: result.flavorText || 'No description', inline: false }
         )
         .setTimestamp();
+
+    // Add rarity if available
+    if (result.rarity && result.rarity !== 'common') {
+        embed.addFields({
+            name: '⭐ Rarity',
+            value: result.rarity.charAt(0).toUpperCase() + result.rarity.slice(1),
+            inline: true
+        });
+    }
+
+    // Add roll number if available
+    if (result.rollNumber) {
+        embed.addFields({
+            name: '🎲 Roll #',
+            value: result.rollNumber.toString(),
+            inline: true
+        });
+    }
+
     return embed;
 }
 
+// ============================================================================
+// Migration Functions
+// ============================================================================
+
+// ------------------- Function: migrateAllTablesToNewSystem -------------------
+// Migrates all tables from Google Sheets to the new TableRoll system
+async function migrateAllTablesToNewSystem() {
+    try {
+        // This function would need to be called with specific sheet names
+        // since we can't automatically determine all sheet names
+        console.log(`[sheetTableUtils.js]: Migration function called - requires specific sheet names`);
+        return [];
+    } catch (error) {
+        handleError(error, 'sheetTableUtils.js', {
+            functionName: 'migrateAllTablesToNewSystem'
+        });
+        throw error;
+    }
+}
+
+// ------------------- Function: getTableList -------------------
+// Gets a list of all available tables in the new system
+async function getTableList() {
+    try {
+        const tables = await TableRoll.find({ isActive: true });
+        return {
+            tables: tables.map(t => ({ name: t.name, system: 'new', category: t.category }))
+        };
+    } catch (error) {
+        handleError(error, 'sheetTableUtils.js', {
+            functionName: 'getTableList'
+        });
+        throw error;
+    }
+}
 
 // ============================================================================
 // Module Exports
 // ------------------- Exporting functions -------------------
-module.exports = { loadTable, rollItem, fetchTableFromDatabase, fetchTableData, createRollEmbed };
+module.exports = { 
+    fetchTableData,
+    fetchTableFromDatabase, 
+    loadTableToNewSystem,
+    rollItem, 
+    rollItemFromNewSystem,
+    createRollEmbed,
+    migrateAllTablesToNewSystem,
+    getTableList
+};

@@ -4,37 +4,187 @@ const { Schema } = mongoose;
 
 // ------------------- Schema for table roll entries -------------------
 const TableRollEntrySchema = new Schema({
-  weight: { type: Number, required: true }, // Weight/probability for this entry
-  flavor: { type: String, default: '' }, // Flavor text for the entry
-  item: { type: String, default: '' }, // Item name or description (optional for flavor-only entries)
-  thumbnailImage: { type: String, default: '' } // Image URL for the item
+  weight: { 
+    type: Number, 
+    required: true, 
+    min: 0.1, // Minimum weight to prevent zero-weight entries
+    default: 1 
+  },
+  flavor: { 
+    type: String, 
+    default: '', 
+    maxlength: 2000 // Prevent extremely long flavor text
+  },
+  item: { 
+    type: String, 
+    default: '', 
+    maxlength: 500 // Prevent extremely long item names
+  },
+  thumbnailImage: { 
+    type: String, 
+    default: '',
+    validate: {
+      validator: function(v) {
+        // Basic URL validation
+        if (!v) return true; // Empty is allowed
+        try {
+          new URL(v);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      message: 'Invalid URL format for thumbnail image'
+    }
+  },
+  category: { 
+    type: String, 
+    default: 'general',
+    maxlength: 100
+  },
+  rarity: {
+    type: String,
+    enum: ['common', 'uncommon', 'rare', 'epic', 'legendary'],
+    default: 'common'
+  }
 });
 
 // ------------------- Schema for table rolls -------------------
 const TableRollSchema = new Schema({
-  name: { type: String, required: true, unique: true }, // Name of the table
-  description: { type: String, default: '' }, // Description of the table
-  entries: { type: [TableRollEntrySchema], required: true }, // Array of table entries
-  createdBy: { type: String, required: true }, // Discord user ID who created the table
-  createdAt: { type: Date, default: Date.now }, // When the table was created
-  updatedAt: { type: Date, default: Date.now }, // When the table was last updated
-  isActive: { type: Boolean, default: true }, // Whether the table is active
-  totalWeight: { type: Number, default: 0 } // Sum of all weights for quick calculations
-}, { collection: 'tablerolls' });
+  name: { 
+    type: String, 
+    required: true, 
+    unique: true,
+    trim: true,
+    maxlength: 100,
+    validate: {
+      validator: function(v) {
+        return /^[a-zA-Z0-9\s\-_]+$/.test(v); // Only alphanumeric, spaces, hyphens, underscores
+      },
+      message: 'Table name can only contain letters, numbers, spaces, hyphens, and underscores'
+    }
+  },
+  description: { 
+    type: String, 
+    default: '', 
+    maxlength: 1000 
+  },
+  category: {
+    type: String,
+    default: 'general',
+    enum: ['general', 'loot', 'monster', 'treasure', 'crafting', 'event', 'custom'],
+    index: true
+  },
+  entries: { 
+    type: [TableRollEntrySchema], 
+    required: true,
+    validate: {
+      validator: function(entries) {
+        return entries && entries.length > 0;
+      },
+      message: 'Table must have at least one entry'
+    }
+  },
+  createdBy: { 
+    type: String, 
+    required: true 
+  },
+  createdAt: { 
+    type: Date, 
+    default: Date.now 
+  },
+  updatedAt: { 
+    type: Date, 
+    default: Date.now 
+  },
+  isActive: { 
+    type: Boolean, 
+    default: true,
+    index: true
+  },
+  totalWeight: { 
+    type: Number, 
+    default: 0,
+    min: 0
+  },
+  rollCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  lastRolled: {
+    type: Date,
+    default: null
+  },
+  tags: [{
+    type: String,
+    maxlength: 50
+  }],
+  isPublic: {
+    type: Boolean,
+    default: true
+  },
+  maxRollsPerDay: {
+    type: Number,
+    default: 0, // 0 means unlimited
+    min: 0
+  },
+  dailyRollCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  dailyRollReset: {
+    type: Date,
+    default: Date.now
+  }
+}, { 
+  collection: 'tablerolls',
+  timestamps: true // Automatically manage createdAt and updatedAt
+});
+
+// ------------------- Indexes for performance -------------------
+TableRollSchema.index({ createdBy: 1 });
+TableRollSchema.index({ isActive: 1 });
+TableRollSchema.index({ category: 1 });
+TableRollSchema.index({ tags: 1 });
+TableRollSchema.index({ name: 'text', description: 'text' }); // Text search index
+TableRollSchema.index({ createdAt: -1 });
+TableRollSchema.index({ lastRolled: -1 });
 
 // ------------------- Pre-save middleware to calculate total weight -------------------
 TableRollSchema.pre('save', function(next) {
-  this.totalWeight = this.entries.reduce((sum, entry) => sum + entry.weight, 0);
+  this.totalWeight = this.entries.reduce((sum, entry) => sum + (entry.weight || 1), 0);
   this.updatedAt = new Date();
+  
+  // Reset daily roll count if it's a new day
+  if (this.dailyRollReset) {
+    const now = new Date();
+    const resetDate = new Date(this.dailyRollReset);
+    if (now.getDate() !== resetDate.getDate() || 
+        now.getMonth() !== resetDate.getMonth() || 
+        now.getFullYear() !== resetDate.getFullYear()) {
+      this.dailyRollCount = 0;
+      this.dailyRollReset = now;
+    }
+  }
+  
   next();
 });
 
-// ------------------- Add indexes for quick lookup -------------------
-TableRollSchema.index({ createdBy: 1 });
-TableRollSchema.index({ isActive: 1 });
+// ------------------- Pre-validate middleware -------------------
+TableRollSchema.pre('validate', function(next) {
+  // Ensure entries have valid weights
+  if (this.entries) {
+    this.entries = this.entries.filter(entry => entry.weight > 0);
+  }
+  next();
+});
 
-// ------------------- Static method to roll on a table -------------------
-TableRollSchema.statics.rollOnTable = function(tableName) {
+// ------------------- Static methods -------------------
+
+// ------------------- Roll on a table with enhanced features -------------------
+TableRollSchema.statics.rollOnTable = function(tableName, options = {}) {
   return this.findOne({ name: tableName, isActive: true })
     .then(table => {
       if (!table) {
@@ -44,30 +194,167 @@ TableRollSchema.statics.rollOnTable = function(tableName) {
       if (table.entries.length === 0) {
         throw new Error(`Table '${tableName}' has no entries`);
       }
+
+      // Check daily roll limit
+      if (table.maxRollsPerDay > 0 && table.dailyRollCount >= table.maxRollsPerDay) {
+        throw new Error(`Table '${tableName}' has reached its daily roll limit`);
+      }
       
       // Generate random number between 0 and total weight
       const randomValue = Math.random() * table.totalWeight;
       
       // Find the entry based on weight
       let currentWeight = 0;
+      let selectedEntry = null;
+      
       for (const entry of table.entries) {
         currentWeight += entry.weight;
         if (randomValue <= currentWeight) {
-          return {
-            table: table,
-            result: entry,
-            rollValue: randomValue
-          };
+          selectedEntry = entry;
+          break;
         }
       }
       
       // Fallback to last entry (shouldn't happen with proper weight calculation)
+      if (!selectedEntry) {
+        selectedEntry = table.entries[table.entries.length - 1];
+      }
+
+      // Update roll statistics
+      table.rollCount += 1;
+      table.lastRolled = new Date();
+      table.dailyRollCount += 1;
+      
+      // Save the updated statistics
+      table.save().catch(err => {
+        console.error(`[TableRollModel] Error updating roll statistics:`, err);
+      });
+
       return {
         table: table,
-        result: table.entries[table.entries.length - 1],
-        rollValue: randomValue
+        result: selectedEntry,
+        rollValue: randomValue,
+        rollNumber: table.rollCount,
+        dailyRollsRemaining: table.maxRollsPerDay > 0 ? 
+          Math.max(0, table.maxRollsPerDay - table.dailyRollCount) : null
       };
     });
 };
 
+// ------------------- Search tables by text -------------------
+TableRollSchema.statics.searchTables = function(searchTerm, options = {}) {
+  const query = {
+    isActive: true,
+    $text: { $search: searchTerm }
+  };
+  
+  if (options.category) {
+    query.category = options.category;
+  }
+  
+  if (options.createdBy) {
+    query.createdBy = options.createdBy;
+  }
+  
+  if (options.isPublic !== undefined) {
+    query.isPublic = options.isPublic;
+  }
+  
+  return this.find(query, { score: { $meta: "textScore" } })
+    .sort({ score: { $meta: "textScore" } })
+    .limit(options.limit || 10);
+};
+
+// ------------------- Get popular tables -------------------
+TableRollSchema.statics.getPopularTables = function(limit = 10) {
+  return this.find({ isActive: true })
+    .sort({ rollCount: -1, lastRolled: -1 })
+    .limit(limit);
+};
+
+// ------------------- Get recent tables -------------------
+TableRollSchema.statics.getRecentTables = function(limit = 10) {
+  return this.find({ isActive: true })
+    .sort({ createdAt: -1 })
+    .limit(limit);
+};
+
+// ------------------- Get tables by category -------------------
+TableRollSchema.statics.getTablesByCategory = function(category, options = {}) {
+  const query = { 
+    isActive: true,
+    category: category 
+  };
+  
+  if (options.isPublic !== undefined) {
+    query.isPublic = options.isPublic;
+  }
+  
+  return this.find(query)
+    .sort({ name: 1 })
+    .limit(options.limit || 50);
+};
+
+// ------------------- Get user's tables -------------------
+TableRollSchema.statics.getUserTables = function(userId, options = {}) {
+  const query = { createdBy: userId };
+  
+  if (options.isActive !== undefined) {
+    query.isActive = options.isActive;
+  }
+  
+  return this.find(query)
+    .sort({ updatedAt: -1 })
+    .limit(options.limit || 50);
+};
+
+// ------------------- Instance methods -------------------
+
+// ------------------- Add entry to table -------------------
+TableRollSchema.methods.addEntry = function(entry) {
+  if (!entry || typeof entry !== 'object') {
+    throw new Error('Invalid entry provided');
+  }
+  
+  this.entries.push(entry);
+  return this.save();
+};
+
+// ------------------- Remove entry from table -------------------
+TableRollSchema.methods.removeEntry = function(index) {
+  if (index < 0 || index >= this.entries.length) {
+    throw new Error('Invalid entry index');
+  }
+  
+  this.entries.splice(index, 1);
+  return this.save();
+};
+
+// ------------------- Update entry in table -------------------
+TableRollSchema.methods.updateEntry = function(index, updates) {
+  if (index < 0 || index >= this.entries.length) {
+    throw new Error('Invalid entry index');
+  }
+  
+  Object.assign(this.entries[index], updates);
+  return this.save();
+};
+
+// ------------------- Duplicate table -------------------
+TableRollSchema.methods.duplicate = function(newName, newCreator) {
+  const duplicate = new this.constructor({
+    name: newName,
+    description: this.description,
+    category: this.category,
+    entries: this.entries,
+    createdBy: newCreator,
+    tags: [...this.tags],
+    isPublic: this.isPublic,
+    maxRollsPerDay: this.maxRollsPerDay
+  });
+  
+  return duplicate.save();
+};
+
+// ------------------- Export the model -------------------
 module.exports = mongoose.model('TableRoll', TableRollSchema); 

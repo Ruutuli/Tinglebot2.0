@@ -331,7 +331,6 @@ function handleTokenError(error, interaction) {
         !error.message.includes('permission') && 
         !error.message.includes('404') && 
         !error.message.includes('headers') &&
-        !error.message.includes('No \'earned\' entries found') &&
         !error.message.includes('Invalid sheet format')) {
         console.error('[tokenUtils.js]: ❌ System error:', error);
     }
@@ -374,11 +373,12 @@ function handleTokenError(error, interaction) {
             .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else if (error.message.includes('No \'earned\' entries found')) {
         errorEmbed
-            .setTitle('❌ No Earned Entries')
-            .setDescription('No earned entries found in your token tracker.')
+            .setTitle('✅ Token Tracker Setup Complete')
+            .setDescription('Your token tracker has been set up successfully!')
             .addFields(
-                { name: '📝 Quick Guide', value: '1. Add at least one entry with type "earned" in column E:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```\n\n2. Make sure your sheet has these headers in row 7 (B7:F7):\n```\nSUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n```\n\n3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n4. Make sure you have a tab named exactly `loggedTracker`\n5. Use `/tokens setup` to verify your setup' }
+                { name: '📝 Next Steps', value: '1. Add entries with type "earned" in column E to start tracking tokens:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```\n\n2. Your current token balance is set to 0\n3. Use `/tokens check` to view your balance\n4. Use `/tokens setup` again to sync when you add entries' }
             )
+            .setColor(0x00FF00)
             .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else if (error.message.includes('Unknown interaction')) {
         errorEmbed

@@ -1420,7 +1420,11 @@ async function syncTokenTracker(userId) {
   // Check if there are any earned entries
   const earnedRows = sheetData.slice(1).filter(row => row[3] === "earned");
   if (!earnedRows.length) {
-    throw new Error("No 'earned' entries found in your token tracker. Please add at least one entry with type 'earned' in column E.");
+    // Allow setup even with no earned entries - set tokens to 0
+    user.tokens = 0;
+    user.tokensSynced = true;
+    await user.save();
+    return user;
   }
 
   let totalEarned = 0;
@@ -1448,8 +1452,7 @@ async function syncTokenTracker(userId) {
   return user;
  } catch (error) {
   // Only log non-validation errors
-  if (!error.message.includes('No \'earned\' entries found') && 
-      !error.message.includes('Invalid sheet format') && 
+  if (!error.message.includes('Invalid sheet format') && 
       !error.message.includes('Invalid URL')) {
     handleError(error, "tokenService.js");
     console.error("[tokenService.js]: ❌ Error syncing token tracker:", error);
