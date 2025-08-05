@@ -433,6 +433,7 @@ async function getStealStats(characterId) {
             totalAttempts: 0,
             successfulSteals: 0,
             failedSteals: 0,
+            successRate: 0,
             itemsByRarity: {
                 common: 0,
                 uncommon: 0,
@@ -567,6 +568,15 @@ async function checkAndUpdateJailStatus(character) {
 }
 
 async function sendToJail(character) {
+    // Mod characters are immune to jail
+    if (character.isModCharacter) {
+        console.log(`[steal.js]: 👑 Mod character ${character.name} is immune to jail.`);
+        return {
+            success: false,
+            message: `👑 ${character.name} is a mod character and cannot be sent to jail.`
+        };
+    }
+    
     character.inJail = true;
     character.jailReleaseTime = new Date(Date.now() + JAIL_DURATION);
     character.failedStealAttempts = 0; // Reset counter
@@ -701,6 +711,11 @@ async function handleFailedAttempts(thiefCharacter, embed) {
 async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, interaction) {
     // Only check for blight infection when stealing from players (not NPCs)
     if (isNPC) {
+        return { infected: false, message: null };
+    }
+
+    // Mod characters are immune to blight infection
+    if (thiefCharacter.isModCharacter) {
         return { infected: false, message: null };
     }
 
@@ -1238,6 +1253,16 @@ module.exports = {
             }
 
             const targetCharacter = targetType === 'player' ? targetValidation.character : null;
+
+            // ---- Mod Character Immunity Check ----
+            if (targetType === 'player' && targetCharacter && targetCharacter.isModCharacter) {
+                await interaction.editReply({ 
+                    content: `❌ **You cannot steal from a mod character!**\n👑 ${targetCharacter.name} is a ${targetCharacter.modTitle} of ${targetCharacter.modType} and is immune to theft.`, 
+                    ephemeral: true 
+                });
+                console.log(`[steal.js]: ⚠️ Attempted to steal from mod character: ${targetCharacter.name}`);
+                return;
+            }
 
             // ---- Prevent Stealing from Self ----
             if (targetType === 'player' && thiefCharacter._id.toString() === targetCharacter._id.toString()) {

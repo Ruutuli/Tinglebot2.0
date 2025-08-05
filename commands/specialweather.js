@@ -396,7 +396,7 @@ module.exports = {
 
       // Check if character has already gathered during special weather in this village today
       const isModerator = ['inarikomod', 'rudaniamod', 'vhintlmod'].includes(character.name.toLowerCase());
-      if (!isModerator && !canUseSpecialWeather(character, channelVillage)) {
+      if ((!isModerator && !character.isModCharacter) && !canUseSpecialWeather(character, channelVillage)) {
         const lastUsage = character.specialWeatherUsage.get(channelVillage);
         const nextGather = getNextAvailableTime(lastUsage);
         const unixTimestamp = Math.floor(nextGather.getTime() / 1000);

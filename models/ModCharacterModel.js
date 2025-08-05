@@ -109,7 +109,7 @@ const modCharacterSchema = new Schema({
   failedFleeAttempts: { type: Number, default: 0 },
   inJail: { type: Boolean, default: false },
   jailReleaseTime: { type: Date, default: null },
-  canBeStolenFrom: { type: Boolean, default: true },
+  canBeStolenFrom: { type: Boolean, default: false }, // Mod characters cannot be stolen from
   dailyRoll: {
     type: Map,
     of: Schema.Types.Mixed,
@@ -156,10 +156,35 @@ modCharacterSchema.pre('save', function (next) {
   this.currentHearts = this.maxHearts;
   this.currentStamina = this.maxStamina;
   
+  // Ensure mod characters are immune to negative effects
+  this.blighted = false;
+  this.blightedAt = null;
+  this.blightStage = 0;
+  this.blightPaused = false;
+  this.ko = false;
+  this.debuff = {
+    active: false,
+    endDate: null
+  };
+  this.inJail = false;
+  this.jailReleaseTime = null;
+  this.canBeStolenFrom = false; // Mod characters cannot be stolen from
+  
+  // Reset blight effects
+  this.blightEffects = {
+    rollMultiplier: 1.0,
+    noMonsters: false,
+    noGathering: false
+  };
+  
   // Ensure jobVoucher is always false on save
   if (this.isNew || this.isModified('jobVoucher')) {
     this.jobVoucher = false;
   }
+  
+  // Ensure all mod characters use the shared inventory
+  const MOD_SHARED_INVENTORY_LINK = 'https://docs.google.com/spreadsheets/d/17XE0IOXSjVx47HVQ4FdcvEXm7yeg51KVkoiamD5dmKs/edit?usp=sharing';
+  this.inventory = MOD_SHARED_INVENTORY_LINK;
   
   next();
 });

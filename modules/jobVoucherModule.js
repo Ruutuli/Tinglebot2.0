@@ -120,6 +120,12 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
 
 // ------------------- Validate Job Voucher -------------------
 async function validateJobVoucher(character, jobName, requiredPerk = null) {
+    // Mod characters can use any job without a voucher
+    if (character.isModCharacter) {
+        console.log(`[jobVoucherModule.js]: 👑 Mod character ${character.name} can use any job without a voucher.`);
+        return { success: true };
+    }
+
     // First check if character actually has a job voucher
     if (!character.jobVoucher) {
         console.error(`[jobVoucherModule.js]: ❌ No active job voucher found for ${character.name}`);

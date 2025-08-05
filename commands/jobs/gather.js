@@ -316,7 +316,13 @@ module.exports = {
       // ---- Blight Rain Infection Check ----
       const weather = await getWeatherWithoutGeneration(character.currentVillage);
       if (weather?.special?.label === 'Blight Rain') {
-        if (character.blighted) {
+        // Mod characters are immune to blight infection
+        if (character.isModCharacter) {
+          const immuneMsg =
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
+          await safeReply({ content: immuneMsg, ephemeral: false });
+        } else if (character.blighted) {
           const alreadyMsg =
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
@@ -361,8 +367,8 @@ module.exports = {
       }
 
       // Check for job voucher and daily roll AFTER job validation
-      if (character.jobVoucher) {
-        // Job voucher is active, no need for daily roll check
+      if (character.jobVoucher || character.isModCharacter) {
+        // Job voucher is active or mod character - no need for daily roll check
       } else {
         // Check if gather has been used today
         const canGather = canUseDailyRoll(character, 'gather', interaction.user.id);

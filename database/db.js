@@ -464,6 +464,40 @@ const getCharacterInventoryCollection = async (characterName) => {
  }
 };
 
+// ------------------- getCharacterInventoryCollectionWithModSupport -------------------
+const getCharacterInventoryCollectionWithModSupport = async (character) => {
+ try {
+  if (typeof character === "string") {
+   // If character is a string (character name), use the original function
+   return await getCharacterInventoryCollection(character);
+  }
+  
+  if (!character || typeof character !== "object") {
+   throw new TypeError(
+    `Expected a character object or string, but received ${typeof character}`
+   );
+  }
+  
+  await connectToInventories();
+  
+  // Use shared inventory collection for mod characters
+  let collectionName;
+  if (character.isModCharacter) {
+    collectionName = 'mod_shared_inventory';
+  } else {
+    collectionName = character.name.toLowerCase();
+  }
+  
+  return await getInventoryCollection(collectionName);
+ } catch (error) {
+  handleError(error, "db.js");
+  console.error(
+   `[characterService]: logs - Error in getCharacterInventoryCollectionWithModSupport: ${error.message}`
+  );
+  throw error;
+ }
+};
+
 // ------------------- createCharacterInventory -------------------
 const createCharacterInventory = async (characterName, characterId, job) => {
  try {
@@ -501,6 +535,21 @@ const deleteCharacterInventoryCollection = async (characterName) => {
   handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in deleteCharacterInventoryCollection for "${characterName}": ${error.message}`
+  );
+  throw error;
+ }
+};
+
+// ------------------- getModSharedInventoryCollection -------------------
+const getModSharedInventoryCollection = async () => {
+ try {
+  await connectToInventories();
+  const collectionName = 'mod_shared_inventory';
+  return await getInventoryCollection(collectionName);
+ } catch (error) {
+  handleError(error, "db.js");
+  console.error(
+   `[characterService]: logs - Error in getModSharedInventoryCollection: ${error.message}`
   );
   throw error;
  }
@@ -2202,8 +2251,10 @@ module.exports = {
  fetchBlightedCharactersByUserId,
  updateCharacterInventorySynced,
  getCharacterInventoryCollection,
+ getCharacterInventoryCollectionWithModSupport,
  createCharacterInventory,
  deleteCharacterInventoryCollection,
+ getModSharedInventoryCollection,
  // Mod Character Functions
  fetchModCharacterByNameAndUserId,
  fetchModCharactersByUserId,

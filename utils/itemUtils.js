@@ -85,7 +85,14 @@ const addItemsToDatabase = async (character, items, interaction) => {
     try {
         const inventoriesConnection = await connectToInventories();
         const db = inventoriesConnection.useDb('inventories');
-        const collectionName = character.name.toLowerCase();
+        
+        // Use shared inventory collection for mod characters
+        let collectionName;
+        if (character.isModCharacter) {
+          collectionName = 'mod_shared_inventory';
+        } else {
+          collectionName = character.name.toLowerCase();
+        }
         const inventoryCollection = db.collection(collectionName);
 
         for (const item of items) {
@@ -136,7 +143,14 @@ const removeItemDatabase = async (character, item, quantity, interaction) => {
     try {
         const inventoriesConnection = await connectToInventories();
         const db = inventoriesConnection.useDb('inventories');
-        const collectionName = character.name.toLowerCase();
+        
+        // Use shared inventory collection for mod characters
+        let collectionName;
+        if (character.isModCharacter) {
+          collectionName = 'mod_shared_inventory';
+        } else {
+          collectionName = character.name.toLowerCase();
+        }
         const inventoryCollection = db.collection(collectionName);
 
         const existingItem = await inventoryCollection.findOne({

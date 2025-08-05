@@ -214,7 +214,13 @@ module.exports = {
 
       // Check starting village for blight rain
       if (startingWeather?.special?.label === 'Blight Rain') {
-        if (character.blighted) {
+        // Mod characters are immune to blight infection
+        if (character.isModCharacter) {
+          const immuneMsg =
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
+          await interaction.editReply({ content: immuneMsg, ephemeral: false });
+        } else if (character.blighted) {
           const alreadyMsg =
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
