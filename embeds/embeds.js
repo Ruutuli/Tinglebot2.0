@@ -2020,8 +2020,8 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null) => {
       }
     )
     .setFooter({ 
-      text: `This request will expire in 24 hours if not accepted.`,
-      iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/clock-icon.png'
+      text: `Boost requested by ${requestedBy} • This request will expire in 24 hours if not accepted.`,
+      iconURL: requestData.boosterIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png'
     })
     .setTimestamp();
 
@@ -2103,12 +2103,22 @@ const createBoostAppliedEmbed = (boostData) => {
       {
         name: '💚 **Stamina Cost**',
         value: `> 1 stamina used`,
-        inline: false
+        inline: true
+      },
+      {
+        name: '💚 **Booster Stamina**',
+        value: `> ${boostData.boosterStamina || 0}/${boostData.boosterMaxStamina || 0}`,
+        inline: true
+      },
+      {
+        name: '❤️ **Booster Hearts**',
+        value: `> ${boostData.boosterHearts || 0}/${boostData.boosterMaxHearts || 0}`,
+        inline: true
       }
     )
     .setFooter({ 
-      text: `Boost fulfilled by ${boostedBy} and will last 24 hours`,
-      iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/boost-success-icon.png'
+      text: `Boost applied to ${target} • Will last 24 hours`,
+      iconURL: boostData.targetIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-success-icon.png'
     })
     .setTimestamp();
 
