@@ -399,7 +399,7 @@ const typeActionMap = {
  Inedible: { action: "found an inedible", color: "#696969" },
 };
 
-const generateGatherFlavorText = (itemType) => {
+const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion = null) => {
   const typeToFlavorText = {
    "1h": [
     "⚔️ A reliable one-handed blade, worn but ready for use.",
@@ -424,7 +424,7 @@ const generateGatherFlavorText = (itemType) => {
     "🌿 Small and strange, these creatures thrive where few tread.",
     "🍃 Collected quickly, before they slipped out of reach.",
     "🪴 Elusive and light-footed—barely caught in time.",
-    "🐾 They don’t stay still long, but they’re in the basket now.",
+    "🐾 They don't stay still long, but they're in the basket now.",
    ],
    Dairy: [
     "🥛 Clean and fresh, the result of a practiced hand.",
@@ -440,7 +440,7 @@ const generateGatherFlavorText = (itemType) => {
    ],
    Fruit: [
     "🍎 Ripe and ready, picked at just the right moment.",
-    "🍇 Sweet and full, these won’t last long in the sun.",
+    "🍇 Sweet and full, these won't last long in the sun.",
     "🍊 A good bunch—unblemished and easy to carry.",
     "🌿 Found low on the branches, hiding in plain sight.",
    ],
@@ -448,15 +448,15 @@ const generateGatherFlavorText = (itemType) => {
     "🍖 A solid cut, fresh and ready for the fire.",
     "🥩 Enough to feed a few or fill a pack.",
     "🍗 Skinned and cleaned, just needs a cook.",
-    "🥓 Stashed quickly—this won’t stay fresh forever.",
+    "🥓 Stashed quickly—this won't stay fresh forever.",
     "🍖 No frills, just something to roast or trade.",
     "🥩 Bagged up, heavy and useful.",
     "🍗 Plenty for now. Hopefully enough for later.",
     "🥓 Straight from the field, nothing wasted.",
    ],
    Monster: [
-    "👹 The creature’s remains hold strange materials of interest.",
-    "🔮 What’s left behind isn’t just scrap—it hums with energy.",
+    "👹 The creature's remains hold strange materials of interest.",
+    "🔮 What's left behind isn't just scrap—it hums with energy.",
     "👾 Gnarled pieces, clearly touched by something unnatural.",
     "🩸 Tough hide, brittle claw—still worth something.",
    ],
@@ -476,13 +476,13 @@ const generateGatherFlavorText = (itemType) => {
     "⛏️ A solid find, chipped loose from the rock face.",
     "💎 Raw and unpolished, but valuable all the same.",
     "🏔️ Tough to reach, but worth the weight.",
-    "🪨 Uncut and gritty—exactly what’s needed for smelting.",
+    "🪨 Uncut and gritty—exactly what's needed for smelting.",
    ],
    Plant: [
     "🌿 Useful herbs and greens, gathered with care.",
     "🍃 Picked before they wilted—still potent.",
     "🌱 Recognizable by scent alone—good for tinctures or meals.",
-    "🌻 These will dry out quick, but there’s time to use them.",
+    "🌻 These will dry out quick, but there's time to use them.",
    ],
    Protein: [
     "🥩 Cleaned and stored, ready to be cooked or traded.",
@@ -496,7 +496,7 @@ const generateGatherFlavorText = (itemType) => {
     "🏞️ Not the rarest day, but not a wasted one either.",
     "🔍 Practical, serviceable, and well worth the time.",
     "⚙️ A solid collection—tools, parts, and odds and ends.",
-    "📚 Most folks would walk right past it—but you didn’t.",
+    "📚 Most folks would walk right past it—but you didn't.",
    ],
   };
 
@@ -504,8 +504,28 @@ const generateGatherFlavorText = (itemType) => {
  const flavorOptions =
   typeToFlavorText[itemType] || typeToFlavorText["default"];
 
- // Randomly select a flavor text from the options
- return getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
+ // Get base flavor text
+ const baseFlavorText = getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
+
+ // If this is a Scholar boost, add cross-region insight
+ if (isScholarBoost && targetRegion) {
+   const scholarInsights = [
+     `📚 Thanks to the Scholar's advice, ${targetRegion} yielded this find!`,
+     `🎓 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
+     `📖 Guided by scholarly wisdom, ${targetRegion} revealed its secrets!`,
+     `🔍 The Scholar's research of ${targetRegion} proved invaluable!`,
+     `📚 Cross-region insight from the Scholar uncovered this ${targetRegion} treasure!`,
+     `🎓 The Scholar's expertise about ${targetRegion} made this gathering possible!`,
+     `📖 Thanks to the Scholar's guidance, ${targetRegion} shared its bounty!`,
+     `🔍 The Scholar's knowledge of ${targetRegion} led to this valuable find!`
+   ];
+   
+   const scholarInsight = getRandomMessage(scholarInsights);
+   return `${baseFlavorText}\n\n${scholarInsight}`;
+ }
+
+ // Return base flavor text for normal gathering
+ return baseFlavorText;
 };
 
 const generateCraftingFlavorText = (job) => {

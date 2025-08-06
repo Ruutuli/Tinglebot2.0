@@ -616,18 +616,19 @@ module.exports = {
           const { fetchCharacterByName } = require('../../database/db');
           boosterCharacter = await fetchCharacterByName(character.boostedBy);
           
-          // Handle Scholar boost (cross-region gathering) before filtering items
-          if (boosterCharacter && boosterCharacter.job === 'Scholar') {
-            // Get the boost data to find the target village
-            const { retrieveBoostingRequestFromTempDataByCharacter } = require('../../utils/expirationHandler');
-            const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-            
-            if (boostData && boostData.targetVillage) {
-              scholarTargetVillage = boostData.targetVillage;
-              gatheringRegion = scholarTargetVillage;
-              console.log(`[gather.js] Scholar boost applied: ${region} → ${gatheringRegion} (cross-region gathering)`);
-            }
-          }
+                     // Handle Scholar boost (cross-region gathering) before filtering items
+           if (boosterCharacter && boosterCharacter.job === 'Scholar') {
+             // Get the boost data to find the target village
+             const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
+             const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+             
+             if (boostData && boostData.targetVillage) {
+               scholarTargetVillage = boostData.targetVillage;
+               gatheringRegion = scholarTargetVillage;
+               console.log(`[gather.js] Scholar boost applied: ${region} → ${gatheringRegion} (cross-region gathering)`);
+               console.log(`[gather.js] Cross-Region Insight: ${character.name} will gather from ${scholarTargetVillage} while staying in ${character.currentVillage}`);
+             }
+           }
         }
         
         const availableItems = items.filter(item => {
@@ -701,10 +702,15 @@ module.exports = {
         const randomItem = weightedItems[randomIndex];
         const quantity = 1;
         
-        // Log the final selection with its weight percentage
-        const selectedWeight = randomItem.weight || 1;
-        const selectedPercentage = (selectedWeight / totalWeight * 100).toFixed(1);
-        console.log(`[gather.js] Selected: ${randomItem.itemName} (Rarity: ${randomItem.itemRarity || 'Unknown'}) - Weight: ${selectedWeight} (${selectedPercentage}%)`);
+                 // Log the final selection with its weight percentage
+         const selectedWeight = randomItem.weight || 1;
+         const selectedPercentage = (selectedWeight / totalWeight * 100).toFixed(1);
+         console.log(`[gather.js] Selected: ${randomItem.itemName} (Rarity: ${randomItem.itemRarity || 'Unknown'}) - Weight: ${selectedWeight} (${selectedPercentage}%)`);
+         
+         // Log cross-region insight if Scholar boost was applied
+         if (scholarTargetVillage) {
+           console.log(`[gather.js] Cross-Region Insight: ${randomItem.itemName} was gathered from ${scholarTargetVillage} thanks to Scholar's knowledge!`);
+         }
         
         // Handle Entertainer bonus item
         if (isEntertainerBoost) {
