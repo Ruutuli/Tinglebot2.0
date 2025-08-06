@@ -1092,7 +1092,7 @@ function capitalizeFirst(str) {
 }
 
 // ------------------- Subsection Title ------------------- 
-const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null) => {
+const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null, scholarTargetVillage = null) => {
  const settings = getCommonEmbedSettings(character);
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
  const article = getArticleForItem(randomItem.itemName);
@@ -1122,7 +1122,11 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
  
  // Add Scholar cross-region information if needed
  if (character.boostedBy && character.boostedBy.toLowerCase().includes('scholar')) {
-   description += `\n\n📚 **Scholar's Insight:** ${character.name} used their knowledge to gather from afar!`;
+   if (scholarTargetVillage) {
+     description += `\n\n📚 **Scholar's Insight:** ${character.name} used their knowledge to gather from ${scholarTargetVillage} while staying in ${character.currentVillage}!`;
+   } else {
+     description += `\n\n📚 **Scholar's Insight:** ${character.name} used their knowledge to gather from afar!`;
+   }
  }
 
  const isVisiting =

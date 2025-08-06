@@ -234,7 +234,9 @@ const boostingEffects = {
       // ------------------- Gathering -------------------
       Gathering: {
         name: 'Cross-Region Insight',
-        description: 'Gather from another village\'s item table without leaving your current location.'
+        description: 'Gather from another village\'s item table without leaving your current location.',
+        apply: (itemsArray) => itemsArray, // Simply return the items array since village is temporarily changed
+        duration: 24 * 60 * 60 * 1000, // 24 hours
       },
       // ------------------- Healers -------------------
       Healers: {
@@ -612,28 +614,12 @@ function applyScholarExploringBoost(exploreResult) {
 }
 
 function applyScholarGatheringBoost(gatheringData, targetRegion) {
-  // Let the player select or default to a secondary region's gather table if boost is active. Still respects job requirements.
-  // This function returns the target region for cross-region gathering
-  const currentRegion = typeof gatheringData === 'string' ? gatheringData : 'Inariko';
+  // Scholar boost now allows cross-region gathering without changing character location
+  // The target region is handled in the gather command by retrieving it from boost data
+  console.log(`[boostingModule.js] applyScholarGatheringBoost called - cross-region gathering enabled`);
   
-  // If no target region specified, default to a different region
-  if (!targetRegion) {
-    const regions = ['Inariko', 'Rudania', 'Vhintl'];
-    const currentIndex = regions.indexOf(currentRegion);
-    // Default to next region in rotation
-    targetRegion = regions[(currentIndex + 1) % regions.length];
-  }
-  
-  // Validate that the target region is different from current region
-  if (targetRegion.toLowerCase() === currentRegion.toLowerCase()) {
-    console.log(`[boostingModule.js] Scholar Gathering Boost: Target region same as current, using default rotation`);
-    const regions = ['Inariko', 'Rudania', 'Vhintl'];
-    const currentIndex = regions.indexOf(currentRegion);
-    targetRegion = regions[(currentIndex + 1) % regions.length];
-  }
-  
-  console.log(`[boostingModule.js] Scholar Gathering Boost: ${currentRegion} → ${targetRegion}`);
-  return targetRegion;
+  // Return the original gathering data since we handle region selection in the gather command
+  return gatheringData;
 }
 
 function applyScholarHealingBoost(healingData) {
