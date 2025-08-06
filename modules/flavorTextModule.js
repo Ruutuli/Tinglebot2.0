@@ -509,18 +509,41 @@ const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion
 
  // If this is a Scholar boost, add cross-region insight
  if (isScholarBoost && targetRegion) {
+   console.log(`[flavorTextModule.js] Scholar boost flavor text triggered:`, {
+     isScholarBoost: isScholarBoost,
+     targetRegion: targetRegion,
+     itemType: itemType
+   });
+   
    const scholarInsights = [
-     `📚 Thanks to the Scholar's advice, ${targetRegion} yielded this find!`,
-     `🎓 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
-     `📖 Guided by scholarly wisdom, ${targetRegion} revealed its secrets!`,
-     `🔍 The Scholar's research of ${targetRegion} proved invaluable!`,
-     `📚 Cross-region insight from the Scholar uncovered this ${targetRegion} treasure!`,
-     `🎓 The Scholar's expertise about ${targetRegion} made this gathering possible!`,
-     `📖 Thanks to the Scholar's guidance, ${targetRegion} shared its bounty!`,
-     `🔍 The Scholar's knowledge of ${targetRegion} led to this valuable find!`
+     `📚 Thanks to your boost, you gathered this item that is normally found in ${targetRegion}!`,
+     `🎓 Your scholarly insight revealed treasures from ${targetRegion}!`,
+     `📖 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
+     `🔍 Cross-region expertise uncovered ${targetRegion}'s hidden bounty!`,
+     `📚 The Scholar's research of ${targetRegion} proved invaluable!`,
+     `🎓 Thanks to scholarly wisdom, ${targetRegion} shared its secrets!`,
+     `📖 Your boost granted access to ${targetRegion}'s natural resources!`,
+     `🔍 The Scholar's guidance revealed ${targetRegion}'s hidden treasures!`,
+     `📚 Academic knowledge of ${targetRegion} made this gathering possible!`,
+     `🎓 Scholarly expertise unlocked ${targetRegion}'s natural wealth!`,
+     `📖 Your boost tapped into ${targetRegion}'s regional specialties!`,
+     `🔍 The Scholar's insight revealed ${targetRegion}'s local treasures!`,
+     `📚 Thanks to your boost, you accessed ${targetRegion}'s unique resources!`,
+     `🎓 Scholarly knowledge of ${targetRegion} led to this valuable find!`,
+     `📖 Your boost revealed ${targetRegion}'s regional bounty!`,
+     `🔍 The Scholar's expertise uncovered ${targetRegion}'s hidden gems!`,
+     `📚 Cross-region insight revealed ${targetRegion}'s natural treasures!`,
+     `🎓 Thanks to your boost, you discovered ${targetRegion}'s local specialties!`,
+     `📖 Scholarly wisdom granted access to ${targetRegion}'s resources!`,
+     `🔍 Your boost unlocked ${targetRegion}'s regional knowledge!`,
+     `📚 The Scholar's research revealed ${targetRegion}'s hidden wealth!`,
+     `🎓 Academic expertise made ${targetRegion}'s treasures accessible!`,
+     `📖 Your boost tapped into ${targetRegion}'s natural knowledge!`,
+     `🔍 Scholarly insight revealed ${targetRegion}'s local bounty!`
    ];
    
    const scholarInsight = getRandomMessage(scholarInsights);
+   console.log(`[flavorTextModule.js] Generated Scholar insight: ${scholarInsight}`);
    return `${baseFlavorText}\n\n${scholarInsight}`;
  }
 
@@ -641,25 +664,16 @@ function generateBlightRollFlavorText(blightStage, rollType = 'combat') {
         "🩸 Your feverish corruption heightens your awareness of the most valuable materials.",
         "🌑 The dark energy within you has become a beacon for powerful spoils.",
         "⚡ Your blight-enhanced senses detect rare components that pulse with dark energy.",
-        "🖤 The corruption in your blood has become a magnet for the most potent remnants."
+        "🖤 The corruption in your blood has become a magnet for "
       ]
     },
-    stage5: {
-      combat: [
-        "💀 The blight's corruption has reached terminal levels, but you channel its overwhelming power into devastating attacks...",
-        "🩸 Your blood burns with the fever of approaching death, driving you to fight with desperate, unnatural strength.",
-        "🌑 The dark influence has nearly consumed your being, but you wield it as a weapon of pure destruction.",
-        "⚡ Your blight-stained soul pulses with malevolent energy, turning your agony into overwhelming power.",
-        "🖤 The corruption within you has become a force of pure darkness that even the strongest monsters fear."
-      ],
-      loot: [
-        "💀 The blight's corruption has reached such intensity that it draws the most potent remnants to you like a beacon...",
-        "🩸 Your feverish corruption has become so intense that it heightens your awareness of the most valuable materials.",
-        "🌑 The dark energy within you has become a powerful beacon for the most potent spoils.",
-        "⚡ Your blight-enhanced senses detect rare components that pulse with dark energy, drawn to your corruption.",
-        "🖤 The corruption in your blood has become a powerful magnet for the most potent remnants."
-      ]
-    }
+    stage5: [
+      "💀 The blight's corruption has reached terminal levels, but you channeled its overwhelming power into devastating attacks...",
+      "🩸 Your blood burns with the fever of approaching death, driving you to fight with desperate, unnatural strength for victory.",
+      "🌑 The dark influence has nearly consumed your being, but you wielded it as a weapon of pure destruction for victory.",
+      "⚡ Your blight-stained soul pulsed with malevolent energy, turning your agony into overwhelming power for victory.",
+      "🖤 The corruption within you has become a force of pure darkness that even the strongest monsters fear, securing your victory."
+    ]
   };
 
   const stageKey = `stage${blightStage}`;

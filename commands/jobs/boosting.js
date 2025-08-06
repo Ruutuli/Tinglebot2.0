@@ -22,12 +22,11 @@ async function saveBoostingRequestToTempData(requestId, requestData) {
     await TempData.findOneAndUpdate(
       { type: 'boosting', key: requestId },
       { 
-        data: requestData,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        data: requestData
       },
       { upsert: true, new: true }
     );
-    console.log(`[boosting.js]: Saved boosting request ${requestId} to TempData`);
+    console.log(`[boosting.js]: Saved boosting request ${requestId} to TempData (48-hour expiration)`);
   } catch (error) {
     console.error(`[boosting.js]: Error saving boosting request to TempData:`, error);
     throw error;

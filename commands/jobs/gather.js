@@ -786,6 +786,14 @@ module.exports = {
         }
 
         // Create embed with cross-region gathering info if applicable
+        console.log(`[gather.js] Creating embed with boost data:`, {
+          characterBoostedBy: character.boostedBy,
+          boosterCharacter: boosterCharacter?.name,
+          boosterCharacterJob: boosterCharacter?.job,
+          scholarTargetVillage: scholarTargetVillage,
+          isDivineItemWithPriestBoost: isDivineItemWithPriestBoost
+        });
+        
         const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage);
         await safeReply({ embeds: [embed] });
         

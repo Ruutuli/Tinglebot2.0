@@ -476,9 +476,16 @@ async function setupBoostingScheduler(client) {
  createCronJob("0 0 * * *", "Boost Cleanup", async () => {
   try {
    console.log("[scheduler.js]: 🧹 Starting boost cleanup");
+   
+   // Clean up old file-based boosting requests
    const stats = cleanupExpiredBoostingRequests();
+   
+   // Clean up TempData boosting requests
+   const TempData = require('./models/TempDataModel');
+   const tempDataResult = await TempData.cleanupByType('boosting');
+   
    console.log(
-    `[scheduler.js]: ✅ Boost cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}`
+    `[scheduler.js]: ✅ Boost cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}, TempData boosting deleted: ${tempDataResult.deletedCount || 0}`
    );
   } catch (error) {
    handleError(error, "scheduler.js");
@@ -506,6 +513,19 @@ async function setupBoostingScheduler(client) {
   } catch (error) {
    handleError(error, "scheduler.js");
    console.error("[scheduler.js]: ❌ Error getting boost statistics:", error);
+  }
+ });
+
+ // Additional cleanup every 6 hours for TempData boosting requests
+ createCronJob("0 */6 * * *", "TempData Boost Cleanup", async () => {
+  try {
+   console.log("[scheduler.js]: 🧹 Starting TempData boost cleanup");
+   const TempData = require('./models/TempDataModel');
+   const result = await TempData.cleanupByType('boosting');
+   console.log(`[scheduler.js]: ✅ TempData boost cleanup complete - Deleted: ${result.deletedCount || 0}`);
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: ❌ Error during TempData boost cleanup:", error);
   }
  });
 }
