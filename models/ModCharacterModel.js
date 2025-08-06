@@ -177,10 +177,8 @@ modCharacterSchema.pre('save', function (next) {
     noGathering: false
   };
   
-  // Ensure jobVoucher is always false on save
-  if (this.isNew || this.isModified('jobVoucher')) {
-    this.jobVoucher = false;
-  }
+  // Allow job vouchers for mod characters (don't force to false)
+  // Job vouchers are a special feature for mod characters
   
   // Ensure all mod characters use the shared inventory
   const MOD_SHARED_INVENTORY_LINK = 'https://docs.google.com/spreadsheets/d/17XE0IOXSjVx47HVQ4FdcvEXm7yeg51KVkoiamD5dmKs/edit?usp=sharing';

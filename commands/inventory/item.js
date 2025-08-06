@@ -14,7 +14,8 @@ const {
   fetchModCharacterByNameAndUserId,
   fetchItemByName,
   getCharacterInventoryCollection,
-  updateCharacterById
+  updateCharacterById,
+  updateModCharacterById
 } = require('../../database/db');
 
 // ------------------- Custom Modules -------------------
@@ -212,12 +213,34 @@ module.exports = {
           }
 
           // Activate job voucher for mod character (without consuming the voucher)
-          const updatedCharacter = await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+          console.log(`[item.js] Mod character job voucher activation - Before update:`, {
+            characterId: character._id,
+            jobVoucher: character.jobVoucher,
+            jobVoucherJob: character.jobVoucherJob,
+            isModCharacter: character.isModCharacter
+          });
+          
+          // Use the appropriate update function based on character type
+          const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+          const updatedCharacter = await updateFunction(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+          
+          console.log(`[item.js] Mod character job voucher activation - After update:`, {
+            updatedCharacter: updatedCharacter ? {
+              jobVoucher: updatedCharacter.jobVoucher,
+              jobVoucherJob: updatedCharacter.jobVoucherJob
+            } : null
+          });
+          
           // Update the character object with the new values
           if (updatedCharacter) {
             character.jobVoucher = updatedCharacter.jobVoucher;
             character.jobVoucherJob = updatedCharacter.jobVoucherJob;
           }
+          
+          console.log(`[item.js] Mod character job voucher activation - Final character object:`, {
+            jobVoucher: character.jobVoucher,
+            jobVoucherJob: character.jobVoucherJob
+          });
 
           // Log job voucher usage to Google Sheets (but don't remove from inventory)
           const inventoryLink = character.inventory || character.inventoryLink;
@@ -350,7 +373,9 @@ module.exports = {
         }
 
         // --- Only now activate voucher and remove from inventory ---
-        const updatedCharacter = await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+        // Use the appropriate update function based on character type
+        const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+        const updatedCharacter = await updateFunction(character._id, { jobVoucher: true, jobVoucherJob: jobName });
         // Update the character object with the new values
         if (updatedCharacter) {
           character.jobVoucher = updatedCharacter.jobVoucher;
