@@ -221,7 +221,23 @@ tempDataSchema.statics.cleanup = async function(maxAgeInMs = 86400000) { // Defa
 
 // Static method to cleanup specific type entries
 tempDataSchema.statics.cleanupByType = async function(type) {
-  const result = await this.deleteMany({ type, expiresAt: { $lt: new Date() } });
+  let result;
+  
+  if (type === 'boosting') {
+    // Special cleanup for boosting data - remove expired entries and fulfilled boosts that have expired
+    result = await this.deleteMany({
+      type: 'boosting',
+      $or: [
+        { expiresAt: { $lt: new Date() } },
+        { 'data.status': 'expired' },
+        { 'data.status': 'fulfilled', 'data.boostExpiresAt': { $lt: Date.now() } }
+      ]
+    });
+  } else {
+    // Standard cleanup for other types
+    result = await this.deleteMany({ type, expiresAt: { $lt: new Date() } });
+  }
+  
   if (result.deletedCount > 0) {
     console.log(`[TempDataModel]: 🧹 Cleaned up ${result.deletedCount} expired ${type} entries`);
   }

@@ -88,6 +88,17 @@ async function initializeDatabases() {
     console.log(`[index.js]: 🧹 Cleaned up ${expiredResult.deletedCount} expired temp data entries`);
     console.log(`[index.js]: 🧹 Cleaned up ${noExpirationResult.deletedCount} entries without expiration dates`);
     
+    // Clean up expired and fulfilled boosting data
+    const boostingCleanupResult = await TempData.deleteMany({
+      type: 'boosting',
+      $or: [
+        { expiresAt: { $lt: new Date() } },
+        { 'data.status': 'expired' },
+        { 'data.status': 'fulfilled', 'data.boostExpiresAt': { $lt: Date.now() } }
+      ]
+    });
+    console.log(`[index.js]: 🧹 Cleaned up ${boostingCleanupResult.deletedCount} expired/fulfilled boosting entries`);
+    
     console.log("[index.js]: ✅ Databases connected successfully");
   } catch (err) {
     console.error("[index.js]: ❌ Database initialization error:", err);
