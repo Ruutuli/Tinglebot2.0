@@ -1,25 +1,26 @@
+// ============================================================================
 // ------------------- Gather Command Module -------------------
+// ============================================================================
 // This module handles the gathering of items based on the character's job and location.
 
-
+// ============================================================================
 // ------------------- Discord.js Components -------------------
-// Import Discord.js classes for building slash commands.
+// ============================================================================
 const { SlashCommandBuilder } = require('discord.js');
 
-
-const { handleError } = require('../../utils/globalErrorHandler.js');
+// ============================================================================
 // ------------------- Standard Libraries -------------------
-// Import third-party libraries.
+// ============================================================================
 const { v4: uuidv4 } = require('uuid');
 
-
+// ============================================================================
 // ------------------- Database Services -------------------
-// Import character, item, and monster related database service functions.
+// ============================================================================
 const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters } = require('../../database/db.js');
 
-
+// ============================================================================
 // ------------------- Modules -------------------
-// Import custom modules for RNG, flavor text, damage calculations, job handling, locations, character stats, formatting, and job vouchers.
+// ============================================================================
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule.js');
 const { generateVictoryMessage, generateDamageMessage, generateFinalOutcomeMessage, generateDefenseBuffMessage, generateAttackBuffMessage } = require('../../modules/flavorTextModule.js');
 const { getEncounterOutcome } = require('../../modules/encounterModule.js');
@@ -28,33 +29,41 @@ const { getVillageRegionByName } = require('../../modules/locationsModule.js');
 const { useHearts, handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
 const { capitalizeWords } = require('../../modules/formattingModule.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
-const { checkInventorySync } = require('../../utils/characterUtils');
-const { enforceJail } = require('../../utils/jailCheck');
-const { getWeatherWithoutGeneration } = require('../../services/weatherService');
-
-// ------------------- Boosting Module -------------------
-// Import boosting functionality for applying job-based boosts
 const { applyBoostEffect, getBoostEffect, getBoostEffectByCharacter } = require('../../modules/boostingModule.js');
 
-
+// ============================================================================
 // ------------------- Utilities -------------------
-// Import helper utilities for inventory management, Google Sheets integration, URL validation, and Blood Moon detection.
+// ============================================================================
+const { handleError } = require('../../utils/globalErrorHandler.js');
+const { checkInventorySync } = require('../../utils/characterUtils');
+const { enforceJail } = require('../../utils/jailCheck');
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
-const { authorizeSheets, appendSheetData,safeAppendDataToSheet  } = require('../../utils/googleSheetsUtils.js');
+const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils.js');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils.js');
-const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 
+// ============================================================================
+// ------------------- Services -------------------
+// ============================================================================
+const { getWeatherWithoutGeneration } = require('../../services/weatherService');
 
+// ============================================================================
 // ------------------- Embeds -------------------
-// Import embed utilities for gathering and monster encounter messages.
+// ============================================================================
 const { createGatherEmbed, createMonsterEncounterEmbed, createKOEmbed } = require('../../embeds/embeds.js');
 
+// ============================================================================
 // ------------------- Models -------------------
-// Import database models.
+// ============================================================================
 const User = require('../../models/UserModel.js');
 
+// ============================================================================
+// ------------------- Scripts -------------------
+// ============================================================================
+const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 
+// ============================================================================
 // ------------------- Village Channels -------------------
+// ============================================================================
 // Define the allowed channels for each village.
 const villageChannels = {
   Inariko: process.env.INARIKO_TOWNHALL,
@@ -62,8 +71,11 @@ const villageChannels = {
   Vhintl: process.env.VHINTL_TOWNHALL,
 };
 
-
+// ============================================================================
 // ------------------- Helper Functions -------------------
+// ============================================================================
+
+// ------------------- Daily Roll Functions ------------------
 // Check if a daily roll is available for a specific activity
 function canUseDailyRoll(character, activity, userId) {
   // If character has an active job voucher, they can always use the command
@@ -121,7 +133,9 @@ async function updateDailyRoll(character, activity) {
   }
 }
 
+// ============================================================================
 // ------------------- Command Definition -------------------
+// ============================================================================
 // Define the slash command for gathering.
 module.exports = {
   data: new SlashCommandBuilder()
@@ -133,7 +147,9 @@ module.exports = {
         .setRequired(true)
         .setAutocomplete(true)),
 
+  // ============================================================================
   // ------------------- Command Execution Logic -------------------
+  // ============================================================================
   async execute(interaction) {
     // Initialize variables at the top of the function
     let job;
@@ -141,6 +157,7 @@ module.exports = {
     let currentVillage;
     let hasResponded = false;
 
+    // ------------------- Helper Function: Safe Reply ------------------
     // Helper function to safely respond to interaction
     const safeReply = async (content, options = {}) => {
       if (hasResponded || interaction.replied || interaction.deferred) {
@@ -234,7 +251,7 @@ module.exports = {
         return;
       }
 
-      // ------------------- Step 3: Validate Job -------------------
+      // ------------------- Step 3: Validate Job ------------------
       if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
         await safeReply({
           content: getJobVoucherErrorMessage('MISSING_SKILLS', {
@@ -265,7 +282,7 @@ module.exports = {
         return;
       }
 
-      // ------------------- Step 2: Validate Interaction Channel -------------------
+      // ------------------- Step 2: Validate Interaction Channel ------------------
       currentVillage = capitalizeWords(character.currentVillage);
       let allowedChannel = villageChannels[currentVillage];
 
@@ -316,7 +333,7 @@ module.exports = {
         return;
       }
 
-      // ---- Blight Rain Infection Check ----
+      // ------------------- Blight Rain Infection Check ------------------
       const weather = await getWeatherWithoutGeneration(character.currentVillage);
       if (weather?.special?.label === 'Blight Rain') {
         // Mod characters are immune to blight infection
@@ -369,6 +386,7 @@ module.exports = {
         }
       }
 
+      // ------------------- Daily Roll Check ------------------
       // Check for job voucher and daily roll AFTER job validation
       if (character.jobVoucher || character.isModCharacter) {
         // Job voucher is active or mod character - no need for daily roll check
@@ -413,7 +431,7 @@ module.exports = {
         }
       }
 
-      // ------------------- Step 5: Validate Region -------------------
+      // ------------------- Step 5: Validate Region ------------------
       region = getVillageRegionByName(currentVillage);
       if (!region) {
         await safeReply({
@@ -422,7 +440,8 @@ module.exports = {
         return;
       }
 
-      // ------------------- Helper Function: Outcome Message Generator -------------------
+      // ------------------- Helper Functions ------------------
+      // Helper function to generate outcome messages
       function generateOutcomeMessage(outcome) {
         if (outcome.result === 'KO') {
           return generateDamageMessage('KO');
@@ -460,7 +479,7 @@ module.exports = {
         );
       }
 
-      // ------------------- Helper Function: Looted Item Generator -------------------
+      // Helper function to generate looted items
       function generateLootedItem(encounteredMonster, weightedItems) {
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
         const lootedItem = { ...weightedItems[randomIndex] };
@@ -475,7 +494,7 @@ module.exports = {
         return lootedItem;
       }
 
-      // ------------------- Helper Function: Determine Jelly Type -------------------
+      // Helper function to determine jelly type
       function determineJellyType(monsterName) {
         if (monsterName.includes('Ice')) return 'White Chuchu Jelly';
         if (monsterName.includes('Fire')) return 'Red Chuchu Jelly';
@@ -483,14 +502,14 @@ module.exports = {
         return 'Chuchu Jelly';
       }
 
-      // ------------------- Helper Function: Determine Jelly Quantity -------------------
+      // Helper function to determine jelly quantity
       function determineJellyQuantity(monsterName) {
         if (monsterName.includes('Large')) return 3;
         if (monsterName.includes('Medium')) return 2;
         return 1;
       }
 
-      // ------------------- Encounter Determination -------------------
+      // ------------------- Encounter Determination ------------------
       const randomChance = Math.random();
       const bloodMoonActive = isBloodMoonActive();
 
@@ -603,10 +622,10 @@ module.exports = {
       } else {
 
         
-        // ------------------- Normal Gathering Logic -------------------
+        // ------------------- Normal Gathering Logic ------------------
         const items = await fetchAllItems();
         
-        // ------------------- Apply Scholar Boost (Cross-Region Gathering) -------------------
+        // ------------------- Apply Scholar Boost (Cross-Region Gathering) ------------------
         // Check if character is boosted and handle Scholar boost for cross-region gathering
         let gatheringRegion = region;
         let boosterCharacter = null;
@@ -655,7 +674,7 @@ module.exports = {
           return;
         }
 
-        // ------------------- Apply Other Boosting Effects -------------------
+        // ------------------- Apply Other Boosting Effects ------------------
         // Check if character is boosted and apply gathering boosts to the available items
         let boostedAvailableItems = availableItems;
         let bonusItem = null;
@@ -677,7 +696,7 @@ module.exports = {
           }
         }
 
-        // ------------------- Create Weighted Item List -------------------
+        // ------------------- Create Weighted Item List ------------------
         // Safety check: ensure boostedAvailableItems is an array
         if (!Array.isArray(boostedAvailableItems)) {
           console.log(`[gather.js] Error: boostedAvailableItems is not an array, got ${typeof boostedAvailableItems}`);
@@ -770,19 +789,19 @@ module.exports = {
         const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage);
         await safeReply({ embeds: [embed] });
         
-        // ------------------- Clear Boost After Use -------------------
+        // ------------------- Clear Boost After Use ------------------
         if (character.boostedBy) {
           console.log(`[gather.js] Boost cleared for ${character.name}`);
           character.boostedBy = null;
         }
         
-        // ------------------- Update Last Gather Timestamp -------------------
+        // ------------------- Update Last Gather Timestamp ------------------
         character.lastGatheredAt = new Date().toISOString();
         await character.save();
 
       }
 
-      // ------------------- Deactivate Job Voucher -------------------
+      // ------------------- Deactivate Job Voucher ------------------
       if (character.jobVoucher) {
         const deactivationResult = await deactivateJobVoucher(character._id);
         if (!deactivationResult.success) {
