@@ -350,11 +350,43 @@ async function removeQuestItems(character, quest, interaction) {
       }
     }
     
+    // Update VillageShops stock if this was an item quest
+    if (quest.type === 'item' && totalRemoved > 0) {
+      await updateVillageShopsStock(quest.requirements.item, totalRemoved);
+    }
+    
     return true;
     
   } catch (error) {
     console.error(`[helpWanted.js]: ❌ Error removing items for quest completion:`, error);
     return false;
+  }
+}
+
+/**
+ * Updates VillageShops stock when items are used for quests
+ * @param {string} itemName - Name of the item
+ * @param {number} amountUsed - Amount used in the quest
+ * @returns {Promise<void>}
+ */
+async function updateVillageShopsStock(itemName, amountUsed) {
+  try {
+    const VillageShopItem = require('../../models/VillageShopsModel');
+    
+    // Find the item in VillageShops and reduce stock
+    const shopItem = await VillageShopItem.findOne({
+      itemName: { $regex: new RegExp(itemName, 'i') }
+    });
+    
+    if (shopItem && shopItem.stock > 0) {
+      const newStock = Math.max(0, shopItem.stock - amountUsed);
+      shopItem.stock = newStock;
+      await shopItem.save();
+      
+      console.log(`[helpWanted.js]: Updated VillageShops stock for ${itemName}: ${shopItem.stock + amountUsed} → ${newStock}`);
+    }
+  } catch (error) {
+    console.error(`[helpWanted.js]: ❌ Error updating VillageShops stock for ${itemName}:`, error);
   }
 }
 
@@ -876,7 +908,8 @@ module.exports = {
     .addSubcommand(sub =>
       sub.setName('history')
         .setDescription('View your recent Help Wanted quest completions and character info')
-    ),
+    )
+
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -1210,5 +1243,7 @@ module.exports = {
       }
       return;
     }
+
+
   }
 }; 

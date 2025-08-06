@@ -17,15 +17,33 @@ const { generateUniqueId } = require('../utils/uniqueIdUtils');
 // ============================================================================
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting'];
+
+// Generate full 24-hour schedule with hourly intervals (24 time slots per day)
 const FIXED_CRON_TIMES = [
-'0 3 * * *',   // 3:00 AM EST  
-'0 6 * * *',   // 6:00 AM EST  
-'0 9 * * *',   // 9:00 AM EST  
-'0 12 * * *',  // 12:00 PM EST  
-'0 15 * * *',  // 3:00 PM EST  
-'0 18 * * *',  // 6:00 PM EST  
-'0 21 * * *',  // 9:00 PM EST  
-'0 23 * * *'   // 11:00 PM EST
+  '0 0 * * *',   // 12:00 AM EST (Midnight)
+  '0 1 * * *',   // 1:00 AM EST  
+  '0 2 * * *',   // 2:00 AM EST  
+  '0 3 * * *',   // 3:00 AM EST  
+  '0 4 * * *',   // 4:00 AM EST  
+  '0 5 * * *',   // 5:00 AM EST  
+  '0 6 * * *',   // 6:00 AM EST  
+  '0 7 * * *',   // 7:00 AM EST  
+  '0 8 * * *',   // 8:00 AM EST  
+  '0 9 * * *',   // 9:00 AM EST  
+  '0 10 * * *',  // 10:00 AM EST  
+  '0 11 * * *',  // 11:00 AM EST  
+  '0 12 * * *',  // 12:00 PM EST (Noon)
+  '0 13 * * *',  // 1:00 PM EST  
+  '0 14 * * *',  // 2:00 PM EST  
+  '0 15 * * *',  // 3:00 PM EST  
+  '0 16 * * *',  // 4:00 PM EST  
+  '0 17 * * *',  // 5:00 PM EST  
+  '0 18 * * *',  // 6:00 PM EST  
+  '0 19 * * *',  // 7:00 PM EST  
+  '0 20 * * *',  // 8:00 PM EST  
+  '0 21 * * *',  // 9:00 PM EST  
+  '0 22 * * *',  // 10:00 PM EST  
+  '0 23 * * *'   // 11:00 PM EST  
 ];
 
 const QUEST_TYPE_EMOJIS = {
@@ -54,6 +72,101 @@ const QUEST_PARAMS = {
   crafting: { minAmount: 1, maxAmount: 3 }
 };
 
+// ============================================================================
+// ------------------- Utility Functions -------------------
+// ============================================================================
+
+// Utility function to convert cron time to hour
+const cronToHour = (cronTime) => {
+  const parts = cronTime.split(' ');
+  return parseInt(parts[1]);
+};
+
+// Utility function to check if two hours are at least 6 hours apart
+const isHoursApart = (hour1, hour2, minHours = 6) => {
+  const hourDiff = Math.abs(hour1 - hour2);
+  const minHourDiff = Math.min(hourDiff, 24 - hourDiff);
+  return minHourDiff >= minHours;
+};
+
+// Utility function to format hour for display
+const formatHour = (hour) => {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${displayHour}:00 ${period}`;
+};
+
+// ------------------- Function: getRandomElement -------------------
+// Returns a random element from an array
+function getRandomElement(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) {
+    throw new Error('Invalid array provided to getRandomElement');
+  }
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ------------------- Function: getRandomNPCName -------------------
+// Returns a random NPC name from the stealingNPCSModule
+function getRandomNPCName() {
+  const npcNames = Object.keys(NPCs);
+  if (npcNames.length === 0) {
+    throw new Error('No NPCs available');
+  }
+  return getRandomElement(npcNames);
+}
+
+// ------------------- Function: shuffleArray -------------------
+// Shuffles an array in place using Fisher-Yates algorithm
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+// ------------------- Function: getNPCQuestFlavor -------------------
+// Returns a random quest flavor text for the given NPC and quest type
+function getNPCQuestFlavor(npcName, questType, requirements) {
+  // ------------------- Special Walton Acorn Quest -------------------
+  if (npcName === 'Walton' && questType === 'item' && requirements.item === 'Acorn' && requirements.amount === 50) {
+    const specialAcornTexts = [
+      "Walton the Korok is preparing for a grand forest festival! He needs **50x Acorn** to create beautiful decorations for the celebration.",
+      "Walton discovered an ancient Korok tradition that requires **50x Acorn** for a sacred forest ritual. He needs help gathering these special acorns.",
+      "Walton's forest friends are planning a massive acorn feast! He needs **50x Acorn** to make sure everyone has enough to eat.",
+      "Walton found an old Korok recipe that calls for **50x Acorn** to make a legendary forest elixir. He's excited to try it!",
+      "Walton's tree friends are feeling lonely and want **50x Acorn** to plant new saplings. He needs help to grow the forest family.",
+      "Walton wishes to harass the peddler. Please give him **50x Acorn** to help him!"
+    ];
+    return getRandomElement(specialAcornTexts);
+  }
+
+  const npcFlavor = NPC_QUEST_FLAVOR[npcName];
+  if (!npcFlavor || !npcFlavor[questType]) {
+    // Fallback to generic flavor text if NPC or quest type not found
+    const fallbackTexts = {
+      item: `**${npcName} needs supplies:** Gather **${requirements.amount}x ${requirements.item}** for the village`,
+      monster: `**${npcName} seeks a hunter:** Defeat **${requirements.amount}x ${requirements.monster} (tier: ${requirements.tier})** threatening the area`,
+      escort: `**${npcName} needs protection:** Safely escort them to **${requirements.location}**`,
+      crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount}x ${requirements.item}**`
+    };
+    return fallbackTexts[questType] || `**${npcName} needs help:** Complete this quest for the village`;
+  }
+
+  const flavorOptions = npcFlavor[questType];
+  const selectedFlavor = getRandomElement(flavorOptions);
+  
+  // Replace placeholders with actual quest requirements
+  return selectedFlavor
+    .replace('{amount}', requirements.amount)
+    .replace('{item}', requirements.item)
+    .replace('{monster}', requirements.monster)
+    .replace('{tier}', requirements.tier)
+    .replace('{location}', requirements.location);
+}
+
+// ============================================================================
 // ------------------- NPC Quest Flavor Text Database -------------------
 // Specialized quest flavor text for each NPC, organized by quest type
 // ============================================================================
@@ -325,80 +438,6 @@ const NPC_QUEST_FLAVOR = {
 };
 
 // ============================================================================
-// ------------------- Utility Functions -------------------
-// ============================================================================
-
-// ------------------- Function: getRandomElement -------------------
-// Returns a random element from an array
-function getRandomElement(arr) {
-  if (!Array.isArray(arr) || arr.length === 0) {
-    throw new Error('Invalid array provided to getRandomElement');
-  }
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-// ------------------- Function: getRandomNPCName -------------------
-// Returns a random NPC name from the stealingNPCSModule
-function getRandomNPCName() {
-  const npcNames = Object.keys(NPCs);
-  if (npcNames.length === 0) {
-    throw new Error('No NPCs available');
-  }
-  return getRandomElement(npcNames);
-}
-
-// ------------------- Function: shuffleArray -------------------
-// Shuffles an array in place using Fisher-Yates algorithm
-function shuffleArray(array) {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
-
-// ------------------- Function: getNPCQuestFlavor -------------------
-// Returns a random quest flavor text for the given NPC and quest type
-function getNPCQuestFlavor(npcName, questType, requirements) {
-  // ------------------- Special Walton Acorn Quest -------------------
-  if (npcName === 'Walton' && questType === 'item' && requirements.item === 'Acorn' && requirements.amount === 50) {
-    const specialAcornTexts = [
-      "Walton the Korok is preparing for a grand forest festival! He needs **50x Acorn** to create beautiful decorations for the celebration.",
-      "Walton discovered an ancient Korok tradition that requires **50x Acorn** for a sacred forest ritual. He needs help gathering these special acorns.",
-      "Walton's forest friends are planning a massive acorn feast! He needs **50x Acorn** to make sure everyone has enough to eat.",
-      "Walton found an old Korok recipe that calls for **50x Acorn** to make a legendary forest elixir. He's excited to try it!",
-      "Walton's tree friends are feeling lonely and want **50x Acorn** to plant new saplings. He needs help to grow the forest family.",
-      "Walton wishes to harass the peddler. Please give him **50x Acorn** to help him!"
-    ];
-    return getRandomElement(specialAcornTexts);
-  }
-
-  const npcFlavor = NPC_QUEST_FLAVOR[npcName];
-  if (!npcFlavor || !npcFlavor[questType]) {
-    // Fallback to generic flavor text if NPC or quest type not found
-    const fallbackTexts = {
-      item: `**${npcName} needs supplies:** Gather **${requirements.amount}x ${requirements.item}** for the village`,
-      monster: `**${npcName} seeks a hunter:** Defeat **${requirements.amount}x ${requirements.monster} (tier: ${requirements.tier})** threatening the area`,
-      escort: `**${npcName} needs protection:** Safely escort them to **${requirements.location}**`,
-      crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount}x ${requirements.item}**`
-    };
-    return fallbackTexts[questType] || `**${npcName} needs help:** Complete this quest for the village`;
-  }
-
-  const flavorOptions = npcFlavor[questType];
-  const selectedFlavor = getRandomElement(flavorOptions);
-  
-  // Replace placeholders with actual quest requirements
-  return selectedFlavor
-    .replace('{amount}', requirements.amount)
-    .replace('{item}', requirements.item)
-    .replace('{monster}', requirements.monster)
-    .replace('{tier}', requirements.tier)
-    .replace('{location}', requirements.location);
-}
-
-// ============================================================================
 // ------------------- Quest Pool Management -------------------
 // ============================================================================
 
@@ -613,7 +652,6 @@ async function generateQuestForVillage(village, date, pools) {
 
 
 
-// ------------------- Function: generateDailyQuests -------------------
 // Generates and saves daily quests for all villages
 async function generateDailyQuests() {
   try {
@@ -626,13 +664,14 @@ async function generateDailyQuests() {
 
     const pools = await getAllQuestPools();
 
-    // Generate unique posting times for each village to avoid conflicts
-    const shuffledTimes = shuffleArray([...FIXED_CRON_TIMES]);
+    // Generate quest posting times with 6-hour buffer between each
+    const selectedTimes = selectTimesWithBuffer(FIXED_CRON_TIMES, VILLAGES.length);
     const quests = await Promise.all(VILLAGES.map(async (village, index) => {
       const quest = await generateQuestForVillage(village, date, pools);
-      // Assign a unique posting time for each village each day
-      quest.scheduledPostTime = shuffledTimes[index];
-      console.log(`[HelpWanted] Generated quest for ${village} with posting time: ${quest.scheduledPostTime}`);
+      // Assign a posting time with 6-hour buffer from the selected times
+      quest.scheduledPostTime = selectedTimes[index];
+      const hour = cronToHour(quest.scheduledPostTime);
+      console.log(`[HelpWanted] Generated quest for ${village} with posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
       return quest;
     }));
 
@@ -650,11 +689,8 @@ async function generateDailyQuests() {
     // Log the final schedule for the day
     console.log(`[HelpWanted] Daily quest schedule for ${date}:`);
     results.forEach(quest => {
-      const timeParts = quest.scheduledPostTime.split(' ');
-      const hour = parseInt(timeParts[1]);
-      const minute = parseInt(timeParts[0]);
-      const timeString = `${hour}:${minute.toString().padStart(2, '0')}`;
-      console.log(`  ${quest.village}: ${timeString} (${quest.scheduledPostTime})`);
+      const hour = cronToHour(quest.scheduledPostTime);
+      console.log(`  ${quest.village}: ${formatHour(hour)} (${quest.scheduledPostTime})`);
     });
     
     return results;
@@ -662,6 +698,51 @@ async function generateDailyQuests() {
     console.error('[HelpWanted] Error generating daily quests:', error);
     throw error;
   }
+}
+
+// ============================================================================
+// ------------------- Time Selection with Buffer -------------------
+// ============================================================================
+
+// ------------------- Function: selectTimesWithBuffer -------------------
+// Selects times from FIXED_CRON_TIMES ensuring at least 4-hour buffer between each
+function selectTimesWithBuffer(availableTimes, count) {
+  // Convert cron times to time slots with hour information
+  const timeSlots = availableTimes.map(cronTime => ({
+    cron: cronTime,
+    hour: cronToHour(cronTime)
+  }));
+
+  const selected = [];
+  const shuffled = shuffleArray([...timeSlots]); // Start with random order
+
+  for (const timeSlot of shuffled) {
+    // Check if this time slot is compatible with all already selected times
+    const isCompatible = selected.every(selectedTime => 
+      isHoursApart(timeSlot.hour, selectedTime.hour, 6) // Changed from 4 to 6
+    );
+
+    if (isCompatible) {
+      selected.push(timeSlot);
+      if (selected.length === count) {
+        break;
+      }
+    }
+  }
+
+  // If we couldn't find enough compatible times, log a warning
+  if (selected.length < count) {
+    console.log(`[HelpWanted] Warning: Could only find ${selected.length} times with 6-hour buffer out of ${availableTimes.length} available times`);
+  }
+
+  // Sort selected times by hour for better scheduling
+  selected.sort((a, b) => a.hour - b.hour);
+  
+  // Log the selected times in a readable format
+  const timeDisplay = selected.map(t => formatHour(t.hour)).join(', ');
+  console.log(`[HelpWanted] Selected times with 6-hour buffer: ${timeDisplay}`);
+  
+  return selected.map(timeSlot => timeSlot.cron);
 }
 
 // ============================================================================
