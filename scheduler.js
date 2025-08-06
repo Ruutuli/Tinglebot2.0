@@ -528,6 +528,21 @@ async function setupBoostingScheduler(client) {
    console.error("[scheduler.js]: ❌ Error during TempData boost cleanup:", error);
   }
  });
+
+ // Hourly cleanup for boosting data to ensure expired boosts are removed quickly
+ createCronJob("0 * * * *", "Hourly Boost Cleanup", async () => {
+  try {
+   console.log("[scheduler.js]: 🧹 Starting hourly boost cleanup");
+   const TempData = require('./models/TempDataModel');
+   const result = await TempData.cleanupByType('boosting');
+   if (result.deletedCount > 0) {
+     console.log(`[scheduler.js]: ✅ Hourly boost cleanup complete - Deleted: ${result.deletedCount}`);
+   }
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: ❌ Error during hourly boost cleanup:", error);
+  }
+ });
 }
 
 // ============================================================================

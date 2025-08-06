@@ -94,53 +94,56 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
       currentTime: currentTime
     });
 
+    // Find all active boosts for this character and sort by timestamp (most recent first)
+    const activeBoosts = [];
+    
     for (const tempData of allBoostingData) {
       const requestData = tempData.data;
-      console.log(`[boosting.js] Checking boost data:`, {
-        targetCharacter: requestData.targetCharacter,
-        status: requestData.status,
-        boostExpiresAt: requestData.boostExpiresAt,
-        targetVillage: requestData.targetVillage,
-        isExpired: requestData.boostExpiresAt && currentTime > requestData.boostExpiresAt
-      });
       
       if (
         requestData.targetCharacter === characterName &&
-        requestData.status === "fulfilled"
+        requestData.status === "fulfilled" &&
+        requestData.boostExpiresAt &&
+        currentTime <= requestData.boostExpiresAt
       ) {
-        if (
-          requestData.boostExpiresAt &&
-          currentTime <= requestData.boostExpiresAt
-        ) {
-          console.log(`[boosting.js] Found active boost for ${characterName}:`, {
-            targetVillage: requestData.targetVillage,
-            boostExpiresAt: requestData.boostExpiresAt,
-            timeRemaining: requestData.boostExpiresAt - currentTime
-          });
-          return requestData;
-        } else if (
-          requestData.boostExpiresAt &&
-          currentTime > requestData.boostExpiresAt
-        ) {
-          console.log(`[boosting.js] Found expired boost for ${characterName}, marking as expired`);
-          requestData.status = "expired";
-          await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
-          
-          // Note: Embed update skipped here since we don't have access to the client
-          // The embed will be updated when the user checks boost status or when the boost is accessed
-          
-                     // Clear the boostedBy field from the character when boost expires
-           const targetCharacter = await fetchCharacterByName(characterName);
-           if (targetCharacter && targetCharacter.boostedBy) {
-             targetCharacter.boostedBy = null;
-             
-             // Scholar Gathering boosts no longer change character location, so no restoration needed
-             
-             await targetCharacter.save();
-             console.log(`[boosting.js]: Cleared ${targetCharacter.name}.boostedBy due to expiration in retrieveBoostingRequestFromTempDataByCharacter`);
-           }
+        activeBoosts.push({
+          requestData,
+          timestamp: requestData.timestamp || 0
+        });
+      } else if (
+        requestData.targetCharacter === characterName &&
+        requestData.status === "fulfilled" &&
+        requestData.boostExpiresAt &&
+        currentTime > requestData.boostExpiresAt
+      ) {
+        // Mark expired boosts as expired
+        console.log(`[boosting.js] Found expired boost for ${characterName}, marking as expired`);
+        requestData.status = "expired";
+        await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
+        
+        // Clear the boostedBy field from the character when boost expires
+        const targetCharacter = await fetchCharacterByName(characterName);
+        if (targetCharacter && targetCharacter.boostedBy) {
+          targetCharacter.boostedBy = null;
+          await targetCharacter.save();
+          console.log(`[boosting.js]: Cleared ${targetCharacter.name}.boostedBy due to expiration in retrieveBoostingRequestFromTempDataByCharacter`);
         }
       }
+    }
+
+    // Sort by timestamp (most recent first) and return the most recent active boost
+    if (activeBoosts.length > 0) {
+      activeBoosts.sort((a, b) => b.timestamp - a.timestamp);
+      const mostRecentBoost = activeBoosts[0].requestData;
+      
+      console.log(`[boosting.js] Found ${activeBoosts.length} active boosts for ${characterName}, returning most recent:`, {
+        targetVillage: mostRecentBoost.targetVillage,
+        boostExpiresAt: mostRecentBoost.boostExpiresAt,
+        timeRemaining: mostRecentBoost.boostExpiresAt - currentTime,
+        timestamp: mostRecentBoost.timestamp
+      });
+      
+      return mostRecentBoost;
     }
 
     console.log(`[boosting.js] No active boost found for ${characterName}`);
