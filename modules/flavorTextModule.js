@@ -667,59 +667,69 @@ function generateBlightRollFlavorText(blightStage, rollType = 'combat') {
   const blightMessages = {
     stage2: {
       combat: [
-        "💀 The blight's corruption courses through your veins, making your movements more erratic but somehow more powerful...",
-        "🩸 Your blight-infected blood burns with unnatural energy, amplifying your combat prowess.",
-        "🌑 The dark influence of blight seems to enhance your reflexes, though at what cost?",
-        "⚡ The corruption within you crackles with energy, turning your pain into power.",
-        "🖤 Your blight-stained soul resonates with the monster's essence, creating an eerie synergy."
+        "💀 A surge of unnatural strength courses through your limbs—the Blight is spreading, and you're starting to feel powerful.",
+        "🩸 Your fever burns low, but your muscles twitch with uncanny speed. The infection sharpens your instincts.",
+        "🌑 The Blight whispers through your bloodstream, turning your nausea into a cold, focused fury.",
+        "⚡ The corruption claws at your core, but your strikes land harder than ever before.",
+        "🖤 A strange clarity overtakes you. It's not you fighting—it's something deeper, darker."
       ],
       loot: [
-        "💀 The blight's influence seems to guide your hands to the most valuable spoils...",
-        "🩸 Your corrupted senses detect hidden treasures that others might miss.",
-        "🌑 The dark energy within you resonates with the monster's remains, revealing secrets.",
-        "⚡ Your blight-enhanced perception uncovers rare materials in the carnage.",
-        "🖤 The corruption in your blood draws you to the most potent remnants."
+        "💀 Your fingers move with eerie confidence—the Blight seems to guide your search.",
+        "🩸 Beneath your skin, something writhes. You feel drawn to materials others overlook.",
+        "🌑 A pulse of Malice runs through you as your hands uncover hidden remnants.",
+        "⚡ You sift through the carnage with precision born of something... else.",
+        "🖤 The corruption inside you leads you to the most potent fragments left behind."
       ]
     },
     stage3: {
       combat: [
-        "💀 The blight's grip tightens, but your desperation fuels an unnatural strength...",
-        "🩸 Your corrupted blood burns with feverish intensity, driving you to fight harder.",
-        "🌑 The dark influence has taken hold, but you channel it into devastating attacks.",
-        "⚡ Your blight-stained soul crackles with malevolent energy, turning fear into fury.",
-        "🖤 The corruption within you resonates with the monster's own darkness."
+        "💀 The Blight is no longer content to linger—it floods your veins, fueling every swing.",
+        "🩸 You laugh, or scream—it’s hard to tell. The hallucinations blur with your battle frenzy.",
+        "🌑 The monsters don’t attack you anymore. Maybe they recognize you as kin.",
+        "⚡ Your reflexes are too fast, too sharp. Something ancient is helping you strike.",
+        "🖤 You feel no pain—just momentum. The Blight is your blade, and you are its vessel."
       ],
       loot: [
-        "💀 The blight's corruption seems to attract the most potent remnants...",
-        "🩸 Your feverish state heightens your awareness of valuable materials.",
-        "🌑 The dark energy within you draws you to the most powerful spoils.",
-        "⚡ Your blight-enhanced senses detect rare components others would miss.",
-        "🖤 The corruption in your blood resonates with the monster's essence."
+        "💀 A haze clouds your vision, yet your hands find treasure with uncanny ease.",
+        "🩸 The fever intensifies, but so does your luck. Valuable remnants seem to call out to you.",
+        "🌑 The Malice inside you resonates with what's left behind. You know what’s useful.",
+        "⚡ Your senses warp, stretching beyond human limits. You *see* what others miss.",
+        "🖤 You no longer search—*it* finds you. The Blight chooses what you take."
       ]
     },
     stage4: {
       combat: [
-        "💀 The blight's corruption has reached a critical point, but you channel its power into devastating strikes...",
-        "🩸 Your blood burns with the fever of corruption, driving you to fight with desperate strength.",
-        "🌑 The dark influence has consumed much of your being, but you wield it as a weapon.",
-        "⚡ Your blight-stained soul pulses with malevolent energy, turning your agony into power.",
-        "🖤 The corruption within you has become a dark force that even monsters fear."
+        "💀 Your eyes burn like Malice, your heart pounds with something inhuman. You're no longer entirely yourself.",
+        "🩸 Your body betrays you with every motion—but in doing so, grants terrifying speed.",
+        "🌑 The rage is endless, the strength unholy. Every strike is a scream you can’t voice.",
+        "⚡ Your soul howls with the Blight’s power, each hit a flash of destruction.",
+        "🖤 The monsters cower now. They see their future in your eyes, and it terrifies them."
       ],
       loot: [
-        "💀 The blight's corruption has reached such intensity that it draws the most potent remnants to you...",
-        "🩸 Your feverish corruption heightens your awareness of the most valuable materials.",
-        "🌑 The dark energy within you has become a beacon for powerful spoils.",
-        "⚡ Your blight-enhanced senses detect rare components that pulse with dark energy.",
-        "🖤 The corruption in your blood has become a magnet for "
+        "💀 The air bends around you. The Blight draws rarest spoils into your path like a magnet.",
+        "🩸 Your presence corrupts the land itself—and in the wreckage, riches bloom.",
+        "🌑 You walk among the remains, and the strongest remnants cling to you like flies to rot.",
+        "⚡ The Blight inside you trembles with hunger. It knows what is valuable, and it *takes* it.",
+        "🖤 You no longer scavenge. You *absorb*. The loot surrenders to your dark resonance."
       ]
     },
-    stage5: [
-      "💀 The blight's corruption has reached terminal levels, but you channeled its overwhelming power into devastating attacks...",
-      "🩸 Your blood burns with the fever of approaching death, driving you to fight with desperate, unnatural strength for victory.",
-      "🌑 The dark influence has nearly consumed your being, but you wielded it as a weapon of pure destruction for victory.",
-      "⚡ Your blight-stained soul pulsed with malevolent energy, turning your agony into overwhelming power for victory.",
-      "🖤 The corruption within you has become a force of pure darkness that even the strongest monsters fear, securing your victory."
-    ]
+    stage5: {
+      // Terminal Stage – No separation between combat and loot; you are no longer "you"
+      combat: [
+        "💀 You are a weapon now—wielded by the Blight itself. Your victory is its will made manifest.",
+        "🩸 Your body burns with feverish death, but your blows carry the weight of calamity.",
+        "🌑 There is no you. Only the corruption, howling through sinew and bone.",
+        "⚡ You do not fight—you *obliterate*. The Blight has fully claimed its host.",
+        "🖤 Darkness radiates from you. Even monsters recoil from the twisted power you now wield."
+      ],
+      loot: [
+        "💀 The remains twist and shift in your presence, offering themselves to the corruption within.",
+        "🩸 What’s left behind is drawn to your decay, as if knowing its fate lies with you.",
+        "🌑 No hand moves—but still the treasures come. The Blight has made you its beacon.",
+        "⚡ Spoils seep toward you, as though alive and eager to be tainted.",
+        "🖤 You are no longer a scavenger—you are the Blight’s chosen harvester."
+      ]
+    }
   };
 
   const stageKey = `stage${blightStage}`;
