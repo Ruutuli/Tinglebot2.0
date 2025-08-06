@@ -1103,7 +1103,11 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
    const { generateDivineItemFlavorText } = require('../modules/flavorTextModule');
    flavorText = generateDivineItemFlavorText();
  } else {
-   flavorText = generateGatherFlavorText(randomItem.type[0]);
+   // Check if this is a Scholar boost for cross-region gathering
+   const isScholarBoost = character.boostedBy && boosterCharacter && boosterCharacter.job === 'Scholar';
+   const targetRegion = scholarTargetVillage;
+   
+   flavorText = generateGatherFlavorText(randomItem.type[0], isScholarBoost, targetRegion);
  }
 
  // Add bonus item information if present
