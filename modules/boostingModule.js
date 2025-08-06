@@ -469,8 +469,9 @@ async function applyPriestGatheringBoost(gatherTable) {
       const existingIndex = combinedTable.findIndex(item => item.itemName === divineItem.itemName);
       
       if (existingIndex >= 0) {
-        // If it exists, increase its weight by 3x
+        // If it exists, increase its weight by 3x and ensure divineItems flag is set
         combinedTable[existingIndex].weight = (combinedTable[existingIndex].weight || 1) * 3;
+        combinedTable[existingIndex].divineItems = true; // Ensure the flag is set
         console.log(`[boostingModule.js] Priest Gathering Boost - Increased weight for existing divine item: ${divineItem.itemName}`);
       } else {
         // If it doesn't exist, add it with 3x weight
@@ -623,6 +624,15 @@ function applyScholarGatheringBoost(gatheringData, targetRegion) {
     targetRegion = regions[(currentIndex + 1) % regions.length];
   }
   
+  // Validate that the target region is different from current region
+  if (targetRegion.toLowerCase() === currentRegion.toLowerCase()) {
+    console.log(`[boostingModule.js] Scholar Gathering Boost: Target region same as current, using default rotation`);
+    const regions = ['Inariko', 'Rudania', 'Vhintl'];
+    const currentIndex = regions.indexOf(currentRegion);
+    targetRegion = regions[(currentIndex + 1) % regions.length];
+  }
+  
+  console.log(`[boostingModule.js] Scholar Gathering Boost: ${currentRegion} → ${targetRegion}`);
   return targetRegion;
 }
 

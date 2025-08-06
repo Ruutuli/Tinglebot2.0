@@ -1092,7 +1092,7 @@ function capitalizeFirst(str) {
 }
 
 // ------------------- Subsection Title ------------------- 
-const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false) => {
+const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null) => {
  const settings = getCommonEmbedSettings(character);
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
  const article = getArticleForItem(randomItem.itemName);
@@ -1174,8 +1174,20 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
  if (character.jobVoucher && character.jobVoucherJob) {
   embed.setFooter({ text: `🎫 Job Voucher in use: ${character.jobVoucherJob}` });
  } else if (character.boostedBy) {
-  // Add boost indicator to footer
-  embed.setFooter({ text: `⚡ Boosted by: ${character.boostedBy}` });
+  // Add boost indicator to footer with boost type
+  let footerText = `⚡ Boosted by: ${character.boostedBy}`;
+  if (boosterCharacter && boosterCharacter.job) {
+    // Get the boost effect name from the boosting module
+    const { getBoostEffect } = require('../modules/boostingModule');
+    const boostEffect = getBoostEffect(boosterCharacter.job, 'Gathering');
+    
+    if (boostEffect && boostEffect.name) {
+      footerText += ` (${boostEffect.name})`;
+    } else {
+      footerText += ` (${boosterCharacter.job} Gathering)`;
+    }
+  }
+  embed.setFooter({ text: footerText });
  }
 
  return embed;
@@ -2042,6 +2054,11 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
         inline: true
       },
       {
+        name: '🎯 **Target Village**',
+        value: requestData.targetVillage ? `> ${getVillageEmojiByName(requestData.targetVillage) || '🏘️'} ${capitalizeFirstLetter(requestData.targetVillage)}` : '> Not specified',
+        inline: true
+      },
+      {
         name: '🆔 **Request ID**',
         value: `> \`${requestId}\``,
         inline: true
@@ -2102,6 +2119,7 @@ const updateBoostRequestEmbed = async (client, requestData, newStatus = 'pending
       category: requestData.category,
       boostEffect: requestData.boostEffect || 'No effect specified',
       village: requestData.village,
+      targetVillage: requestData.targetVillage,
       requestedByIcon: requestData.requestedByIcon,
       boosterIcon: requestData.boosterIcon
     };
