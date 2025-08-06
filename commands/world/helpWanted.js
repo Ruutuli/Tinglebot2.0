@@ -908,10 +908,9 @@ module.exports = {
     .addSubcommand(sub =>
       sub.setName('history')
         .setDescription('View your recent Help Wanted quest completions and character info')
-    )
+    ),
 
-
-  async execute(interaction) {
+  execute: async function(interaction) {
     const sub = interaction.options.getSubcommand();
     
     if (sub === 'monsterhunt') {
