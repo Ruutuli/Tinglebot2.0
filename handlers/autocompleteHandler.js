@@ -224,6 +224,10 @@ async function handleAutocomplete(interaction) {
                 if (focusedOption.name === "monster") {
                   await handleTier5PlusMonsterAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "blight") {
+                if (focusedOption.name === "character") {
+                  await handleModBlightCharacterAutocomplete(interaction, focusedOption);
+                }
               } else if (modSubcommand === "blightoverride") {
                 if (focusedOption.name === "target") {
                   await handleBlightOverrideTargetAutocomplete(interaction, focusedOption);
@@ -735,6 +739,27 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
   console.error("[handleBlightCharacterAutocomplete]: Error occurred:", error);
   await safeRespondWithError(interaction);
  }
+}
+
+// ------------------- Mod Blight Character Autocomplete -------------------
+// Provides character suggestions for the "/mod blight" command by showing
+// all characters in the database for moderators to select from.
+async function handleModBlightCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    // For mod blight command, show ALL characters in the database
+    const allCharacters = await fetchAllCharacters();
+    
+    const choices = allCharacters.map((character) => ({
+      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)} | Owner: ${character.userId}`,
+      value: character.name,
+    }));
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleModBlightCharacterAutocomplete]: Error occurred:", error);
+    await safeRespondWithError(interaction);
+  }
 }
 
 // ------------------- Blight Item Autocomplete -------------------
