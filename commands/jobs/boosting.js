@@ -89,10 +89,7 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
     const allBoostingData = await TempData.findAllByType('boosting');
     const currentTime = Date.now();
 
-    console.log(`[boosting.js] retrieveBoostingRequestFromTempDataByCharacter debug for ${characterName}:`, {
-      totalBoostingData: allBoostingData.length,
-      currentTime: currentTime
-    });
+    // Debug info removed to reduce log bloat
 
     // Find all active boosts for this character and sort by timestamp (most recent first)
     const activeBoosts = [];
@@ -136,17 +133,12 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
       activeBoosts.sort((a, b) => b.timestamp - a.timestamp);
       const mostRecentBoost = activeBoosts[0].requestData;
       
-      console.log(`[boosting.js] Found ${activeBoosts.length} active boosts for ${characterName}, returning most recent:`, {
-        targetVillage: mostRecentBoost.targetVillage,
-        boostExpiresAt: mostRecentBoost.boostExpiresAt,
-        timeRemaining: mostRecentBoost.boostExpiresAt - currentTime,
-        timestamp: mostRecentBoost.timestamp
-      });
+      console.log(`[boosting.js] Found ${activeBoosts.length} active boosts for ${characterName}, returning most recent`);
       
       return mostRecentBoost;
     }
 
-    console.log(`[boosting.js] No active boost found for ${characterName}`);
+    // Debug info removed to reduce log bloat
     return null;
   } catch (error) {
     console.error(`[boosting.js]: Error retrieving active boost for ${characterName}:`, error);
@@ -313,13 +305,7 @@ async function handleBoostRequest(interaction) {
  const village = interaction.options.getString("village");
  const userId = interaction.user.id;
 
- console.log(`[boosting.js] handleBoostRequest debug:`, {
-   characterName,
-   boosterName,
-   category,
-   village,
-   userId
- });
+ // Debug info removed to reduce log bloat
 
  const targetCharacter = await fetchCharacterByNameAndUserId(
   characterName,
@@ -428,14 +414,7 @@ async function handleBoostRequest(interaction) {
   boosterIcon: boosterCharacter.icon
  };
 
- console.log(`[boosting.js] Created requestData:`, {
-   boostRequestId,
-   targetCharacter: targetCharacter.name,
-   boostingCharacter: boosterCharacter.name,
-   category,
-   targetVillage: village,
-   boosterJob
- });
+ // Debug info removed to reduce log bloat
 
  // Save to TempData only
  await saveBoostingRequestToTempData(boostRequestId, requestData);
@@ -478,16 +457,11 @@ async function handleBoostAccept(interaction) {
  const boosterName = interaction.options.getString("character");
  const userId = interaction.user.id;
 
- console.log(`[boosting.js]: handleBoostAccept called with requestId: ${requestId}, boosterName: ${boosterName}, userId: ${userId}`);
+ // Debug info removed to reduce log bloat
 
  const requestData = await retrieveBoostingRequestFromTempData(requestId);
  
- console.log(`[boosting.js]: Retrieved requestData for ${requestId}:`, {
-   found: !!requestData,
-   status: requestData?.status,
-   targetCharacter: requestData?.targetCharacter,
-   boostingCharacter: requestData?.boostingCharacter
- });
+ // Debug info removed to reduce log bloat
  
  if (!requestData) {
   console.error(

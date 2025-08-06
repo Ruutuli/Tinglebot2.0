@@ -166,7 +166,7 @@ tempDataSchema.index({ type: 1, key: 1 });
 
 // Pre-save middleware to set expiration based on type
 tempDataSchema.pre('save', function(next) {
-  console.log(`[TempDataModel]: Pre-save middleware called for type: ${this.type}, key: ${this.key}`);
+  // Debug info removed to reduce log bloat
   
   const now = new Date();
   
@@ -205,7 +205,7 @@ tempDataSchema.pre('save', function(next) {
       this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
   }
   
-  console.log(`[TempDataModel]: Set expiresAt to: ${this.expiresAt} for type: ${this.type}`);
+  // Debug info removed to reduce log bloat
   next();
 });
 

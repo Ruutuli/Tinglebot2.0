@@ -509,11 +509,7 @@ const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion
 
  // If this is a Scholar boost, add cross-region insight
  if (isScholarBoost) {
-   console.log(`[flavorTextModule.js] Scholar boost flavor text triggered:`, {
-     isScholarBoost: isScholarBoost,
-     targetRegion: targetRegion,
-     itemType: itemType
-   });
+   // Debug info removed to reduce log bloat
    
    // Unified Scholar insights array
    const scholarInsights = [
@@ -573,7 +569,6 @@ const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion
    ];
    
    const scholarInsight = getRandomMessage(scholarInsights);
-   console.log(`[flavorTextModule.js] Generated Scholar insight: ${scholarInsight}`);
    return `${baseFlavorText}\n\n${scholarInsight}`;
  }
 
