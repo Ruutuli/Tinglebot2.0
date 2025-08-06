@@ -511,6 +511,8 @@ async function handleAutocomplete(interaction) {
                   await handleBoostingRequestCharacterAutocomplete(interaction, focusedOption);
                 } else if (focusedOption.name === "booster") {
                   await handleBoostingRequestBoosterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "village") {
+                  await handleBoostingVillageAutocomplete(interaction, focusedOption);
                 }
               } else if (boostingSubcommand === "accept") {
                 if (focusedOption.name === "character") {
@@ -1166,6 +1168,55 @@ async function handleCreateCharacterVillageAutocomplete(
 
   // Respond to the interaction with filtered village choices
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  // Handle errors gracefully and respond with a safe error message
+  await safeRespondWithError(interaction);
+ }
+}
+
+// ------------------- Boosting Village Autocomplete -------------------
+// Provides autocomplete suggestions for target villages in Scholar Gathering boosts.
+async function handleBoostingVillageAutocomplete(
+ interaction,
+ focusedOption
+) {
+ try {
+  // Get the current character and booster to determine available villages
+  const characterName = interaction.options.getString('character');
+  const boosterName = interaction.options.getString('booster');
+  const category = interaction.options.getString('category');
+  
+  // Only show villages for Scholar Gathering boosts
+  if (category !== 'Gathering') {
+   await interaction.respond([]);
+   return;
+  }
+  
+  // Get the booster character to check their job
+  const { fetchCharacterByName } = require('../database/db');
+  const boosterCharacter = await fetchCharacterByName(boosterName);
+  
+  if (!boosterCharacter || boosterCharacter.job !== 'Scholar') {
+   await interaction.respond([]);
+   return;
+  }
+  
+  // Get all villages except the character's current village
+  const character = await fetchCharacterByName(characterName);
+  const currentVillage = character?.currentVillage;
+  
+  const allVillages = getAllVillages();
+  const choices = allVillages
+   .filter(village => village.toLowerCase() !== currentVillage?.toLowerCase())
+   .map((village) => ({
+    name: `${village} (Cross-Region Gathering)`,
+    value: village,
+   }));
+
+  // Respond to the interaction with filtered village choices
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -4260,11 +4311,12 @@ module.exports = {
  handleBlightItemAutocomplete,
 
  // ------------------- Boosting Functions -------------------
- handleBoostingCharacterAutocomplete,
- handleBoostingRequestCharacterAutocomplete,
- handleBoostingRequestBoosterAutocomplete,
- handleBoostingAcceptCharacterAutocomplete,
- handleBoostingStatusCharacterAutocomplete,
+   handleBoostingCharacterAutocomplete,
+  handleBoostingRequestCharacterAutocomplete,
+  handleBoostingRequestBoosterAutocomplete,
+  handleBoostingVillageAutocomplete,
+  handleBoostingAcceptCharacterAutocomplete,
+  handleBoostingStatusCharacterAutocomplete,
 
  // ------------------- Change Job Functions -------------------
  handleChangeJobNewJobAutocomplete,

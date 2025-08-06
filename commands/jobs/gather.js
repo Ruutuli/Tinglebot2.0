@@ -608,11 +608,29 @@ module.exports = {
         
         // Check for Scholar boost to determine gathering region
         let gatheringRegion = region;
-        if (character.boostedBy && character.boostedBy.toLowerCase().includes('scholar')) {
-          const scholarRegion = await applyBoostEffect(character.boostedBy, 'Gathering', region);
-          if (scholarRegion && scholarRegion !== region) {
-            gatheringRegion = scholarRegion;
-            console.log(`[gather.js] Scholar boost: Gathering from ${region} → ${gatheringRegion}`);
+        if (character.boostedBy) {
+          // Get the active boost data to check for target village
+          const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting.js');
+          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+          
+          if (activeBoost && activeBoost.boosterJob === 'Scholar' && activeBoost.category === 'Gathering') {
+            // Use the target village from the boost request if available
+            const targetVillage = activeBoost.targetVillage;
+            if (targetVillage) {
+              const { getVillageRegionByName } = require('../../modules/locationsModule');
+              const targetRegion = getVillageRegionByName(targetVillage);
+              if (targetRegion && targetRegion !== region) {
+                gatheringRegion = targetRegion;
+                console.log(`[gather.js] Scholar boost: Gathering from ${region} → ${gatheringRegion} (target village: ${targetVillage})`);
+              }
+            } else {
+              // Fallback to the old method if no target village specified
+              const scholarRegion = await applyBoostEffect(character.boostedBy, 'Gathering', region);
+              if (scholarRegion && scholarRegion !== region) {
+                gatheringRegion = scholarRegion;
+                console.log(`[gather.js] Scholar boost: Gathering from ${region} → ${gatheringRegion} (fallback)`);
+              }
+            }
           }
         }
         
@@ -669,12 +687,26 @@ module.exports = {
         // ------------------- Create Weighted Item List -------------------
         const weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
         
+        // Log detailed weight information
+        const totalWeight = weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0);
+        console.log(`[gather.js] Weighted selection pool: ${weightedItems.length} items, total weight: ${totalWeight}`);
+        
+        // Log top 5 items by weight for visibility
+        const sortedByWeight = [...weightedItems].sort((a, b) => (b.weight || 1) - (a.weight || 1));
+        console.log(`[gather.js] Top 5 items by weight:`);
+        sortedByWeight.slice(0, 5).forEach((item, index) => {
+          const percentage = ((item.weight || 1) / totalWeight * 100).toFixed(1);
+          console.log(`  ${index + 1}. ${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'}) - Weight: ${item.weight || 1} (${percentage}%)`);
+        });
+        
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
         const randomItem = weightedItems[randomIndex];
         const quantity = 1;
         
-        // Log the final selection
-        console.log(`[gather.js] Selected: ${randomItem.itemName} (Rarity: ${randomItem.itemRarity || 'Unknown'})`);
+        // Log the final selection with its weight percentage
+        const selectedWeight = randomItem.weight || 1;
+        const selectedPercentage = (selectedWeight / totalWeight * 100).toFixed(1);
+        console.log(`[gather.js] Selected: ${randomItem.itemName} (Rarity: ${randomItem.itemRarity || 'Unknown'}) - Weight: ${selectedWeight} (${selectedPercentage}%)`);
         
         // Handle Entertainer bonus item
         if (isEntertainerBoost) {
@@ -719,16 +751,18 @@ module.exports = {
         // Check if this is a divine item gathered with Priest boost
         let isDivineItemWithPriestBoost = false;
         if (character.boostedBy && boosterCharacter && boosterCharacter.job === 'Priest') {
-          // Check if the gathered item is a divine item
+          // Check if the gathered item is a divine item - check both the item itself and the database
           const Item = require('../../models/ItemModel');
           const divineItem = await Item.findOne({ itemName: randomItem.itemName, divineItems: true });
-          if (divineItem) {
+          
+          // Check if the item itself has divineItems flag or if it's found in the database
+          if (randomItem.divineItems === true || divineItem) {
             isDivineItemWithPriestBoost = true;
             console.log(`[gather.js] Divine item gathered with Priest boost: ${randomItem.itemName}`);
           }
         }
 
-        const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost);
+        const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter);
         await safeReply({ embeds: [embed] });
         
         // ------------------- Clear Boost After Use -------------------

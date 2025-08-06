@@ -180,6 +180,13 @@ module.exports = {
        { name: "Other", value: "Other" }
       )
     )
+    .addStringOption((option) =>
+     option
+      .setName("village")
+      .setDescription("Target village for Scholar's Cross-Region Insight (only for Scholar Gathering boosts)")
+      .setRequired(false)
+      .setAutocomplete(true)
+    )
   )
   .addSubcommand((subcommand) =>
    subcommand
@@ -237,6 +244,7 @@ async function handleBoostRequest(interaction) {
  const characterName = interaction.options.getString("character");
  const boosterName = interaction.options.getString("booster");
  const category = interaction.options.getString("category");
+ const village = interaction.options.getString("village");
  const userId = interaction.user.id;
 
  const targetCharacter = await fetchCharacterByNameAndUserId(
@@ -306,6 +314,23 @@ async function handleBoostRequest(interaction) {
   return;
  }
 
+ // Validate village parameter for Scholar Gathering boosts
+ if (village && (boosterJob !== 'Scholar' || category !== 'Gathering')) {
+  await interaction.reply({
+   content: "❌ **Invalid Parameter**\n\nThe village option is only available for Scholar Gathering boosts.",
+   ephemeral: true,
+  });
+  return;
+ }
+
+ if (boosterJob === 'Scholar' && category === 'Gathering' && !village) {
+  await interaction.reply({
+   content: "❌ **Missing Parameter**\n\nScholar Gathering boosts require a target village to be specified.",
+   ephemeral: true,
+  });
+  return;
+ }
+
  const { generateUniqueId } = require('../../utils/uniqueIdUtils');
  const boostRequestId = generateUniqueId('B');
  const currentTime = Date.now();
@@ -319,6 +344,7 @@ async function handleBoostRequest(interaction) {
   status: "pending",
   requesterUserId: userId,
   village: targetCharacter.currentVillage,
+  targetVillage: village, // Store the target village for Scholar boosts
   timestamp: currentTime,
   expiresAt: expirationTime,
   createdAt: new Date().toISOString(),
@@ -344,6 +370,7 @@ async function handleBoostRequest(interaction) {
     category: category,
     boostEffect: `${boost.name} — ${boost.description}`,
     village: targetCharacter.currentVillage,
+    targetVillage: village, // Include target village for Scholar boosts
     requestedByIcon: targetCharacter.icon,
     boosterIcon: boosterCharacter.icon
   };
