@@ -127,7 +127,11 @@ module.exports = {
       const ownedItem = inventoryItems.find(invItem =>
         invItem.itemName?.toLowerCase() === cleanItemName
       );
-      if (!ownedItem || ownedItem.quantity < quantity) {
+      
+      // Skip inventory check for mod characters using job vouchers
+      const isModCharacterUsingJobVoucher = character.isModCharacter && item.itemName.toLowerCase() === 'job voucher';
+      
+      if (!isModCharacterUsingJobVoucher && (!ownedItem || ownedItem.quantity < quantity)) {
         return void await interaction.editReply({
           embeds: [{
             color: 0xAA926A,
