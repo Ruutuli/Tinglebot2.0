@@ -97,6 +97,13 @@ const {
   triggerRaid
 } = require('../../modules/raidModule');
 
+const {
+  generateBlightRollFlavorText,
+  generateBlightVictoryFlavorText,
+  generateBlightLootFlavorText,
+  generateBlightSubmissionExpiryFlavorText
+} = require('../../modules/flavorTextModule');
+
 // ------------------- Handlers -------------------
 const {
   handleAutocomplete,
@@ -1026,6 +1033,34 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: blight -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('blight')
+    .setDescription('👁️ Set or unset blight for a character')
+    .addStringOption(option =>
+      option
+        .setName('character')
+        .setDescription('Name of the character to modify')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addBooleanOption(option =>
+      option
+        .setName('status')
+        .setDescription('True to set blight, false to unset blight')
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('stage')
+        .setDescription('Blight stage/level (0-5, only used when status is true)')
+        .setRequired(false)
+        .setMinValue(0)
+        .setMaxValue(5)
+    )
+)
+
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -1124,6 +1159,8 @@ async function execute(interaction) {
         return await handleTriggerRaid(interaction);
     } else if (subcommand === 'blightoverride') {
         return await handleBlightOverride(interaction);
+    } else if (subcommand === 'blight') {
+        return await handleBlight(interaction);
     } else if (subcommand === 'debuff') {
         return await handleDebuff(interaction);
     } else if (subcommand === 'sheets') {
@@ -2825,6 +2862,129 @@ async function handleDebuff(interaction) {
     handleError(error, 'mod.js');
     console.error('[mod.js]: Error during debuff handling:', error);
     return interaction.editReply('⚠️ An error occurred while processing the debuff action.');
+  }
+}
+
+// ============================================================================
+// ------------------- Function: handleBlight -------------------
+// Sets or unsets blight for a specific character
+// ============================================================================
+
+async function handleBlight(interaction) {
+  try {
+    const characterName = interaction.options.getString('character');
+    const status = interaction.options.getBoolean('status');
+    const stage = interaction.options.getInteger('stage') || 1;
+
+    // ------------------- Fetch Character -------------------
+    const character = await fetchCharacterByName(characterName);
+    if (!character) {
+      return interaction.editReply(`❌ Character **${characterName}** not found.`);
+    }
+
+    if (status) {
+      // ------------------- Set Blight -------------------
+      character.blightLevel = stage;
+      character.blightPaused = false; // Ensure blight is not paused when setting
+      await character.save();
+
+      console.log(`[mod.js]: ✅ Set blight stage ${stage} for ${character.name}`);
+
+      // Generate flavor text for blight application
+      const flavorText = generateBlightRollFlavorText(stage, 'combat');
+
+      // Send DM to user about the blight
+      try {
+        const user = await interaction.client.users.fetch(character.userId);
+        const blightEmbed = new EmbedBuilder()
+          .setColor('#8B0000') // Dark red for blight
+          .setTitle('👁️ Blight Applied 👁️')
+          .setDescription(`**${character.name}** has been afflicted with blight by a moderator.`)
+          .addFields(
+            {
+              name: '👁️ Blight Stage',
+              value: `Stage ${stage}`,
+              inline: true
+            },
+            {
+              name: '💀 Flavor Text',
+              value: flavorText,
+              inline: false
+            },
+            {
+              name: '⚠️ Warning',
+              value: 'Blight will progress naturally unless paused by a moderator.',
+              inline: false
+            }
+          )
+          .setThumbnail(character.icon)
+          .setFooter({ text: 'Moderator Action' })
+          .setTimestamp();
+
+        await user.send({ embeds: [blightEmbed] });
+      } catch (dmError) {
+        console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
+      }
+
+      return interaction.editReply({
+        content: `👁️ **${character.name}** has been afflicted with **blight stage ${stage}**.\n💀 **Flavor:** ${flavorText}`,
+        ephemeral: true
+      });
+
+    } else {
+      // ------------------- Unset Blight -------------------
+      if (character.blightLevel === 0) {
+        return interaction.editReply(`❌ **${character.name}** is not currently afflicted with blight.`);
+      }
+
+      const previousStage = character.blightLevel;
+      character.blightLevel = 0;
+      character.blightPaused = false;
+      await character.save();
+
+      console.log(`[mod.js]: ✅ Removed blight (was stage ${previousStage}) from ${character.name}`);
+
+      // Generate flavor text for blight removal
+      const flavorText = generateBlightVictoryFlavorText(previousStage);
+
+      // Send DM to user about the blight removal
+      try {
+        const user = await interaction.client.users.fetch(character.userId);
+        const removalEmbed = new EmbedBuilder()
+          .setColor('#00FF00')
+          .setTitle('✅ Blight Removed ✅')
+          .setDescription(`**${character.name}**'s blight has been removed by a moderator.`)
+          .addFields(
+            {
+              name: '👁️ Previous Stage',
+              value: `Stage ${previousStage}`,
+              inline: true
+            },
+            {
+              name: '💀 Flavor Text',
+              value: flavorText,
+              inline: false
+            }
+          )
+          .setThumbnail(character.icon)
+          .setFooter({ text: 'Moderator Action' })
+          .setTimestamp();
+
+        await user.send({ embeds: [removalEmbed] });
+      } catch (dmError) {
+        console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
+      }
+
+      return interaction.editReply({
+        content: `✅ **${character.name}**'s blight has been removed (was stage ${previousStage}).\n💀 **Flavor:** ${flavorText}`,
+        ephemeral: true
+      });
+    }
+
+  } catch (error) {
+    handleError(error, 'mod.js');
+    console.error('[mod.js]: Error during blight handling:', error);
+    return interaction.editReply('⚠️ An error occurred while processing the blight action.');
   }
 }
 
