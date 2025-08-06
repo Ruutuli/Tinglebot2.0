@@ -302,7 +302,7 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
   const excludedItems = gatherTable.filter(item => !item.itemRarity || item.itemRarity < 3);
   
   if (validItems.length === 0) {
-    console.log(`[boostingModule.js] Fortune Teller Boost: No valid items (rarity 3+) found, returning original table`);
+  
     return gatherTable;
   }
   
@@ -356,7 +356,7 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
     });
   });
   
-  console.log(`[boostingModule.js] Fortune Teller Boost: Excluded ${excludedItems.length} rarity 1-2 items, boosted ${validItems.length} items (max rarity: ${maxRarity})`);
+
   return boostedTable;
 }
 
@@ -378,22 +378,58 @@ function applyTeacherExploringBoost(exploredItem) {
 }
 
 function applyTeacherGatheringBoost(gatherTable) {
-  console.log(`[boostingModule.js] Teacher Gathering Boost - Input table has ${gatherTable.length} items`);
+  // Top materials that should always be available when Teacher is boosting
+  const topMaterials = [
+    'Leather', 'Eldin Ore', 'Wood', 'Rock Salt', 'Goat Butter', 'Cotton', 
+    'Hylian Rice', 'Iron bar', 'Tabantha Wheat', 'Wool', 'Fresh Milk', 
+    'Goron Ore', 'Luminous Stone', 'Bird Egg', 'Goron Spice', 'Chuchu Jelly', 
+    'Gold Dust'
+  ];
   
-  // Filter for useful items (Material, Cooking, Potion tags)
-  const usefulItems = gatherTable.filter(item => 
-    item.tags && (item.tags.includes('Material') || item.tags.includes('Cooking') || item.tags.includes('Potion'))
-  );
+  // General categories that should be expanded
+  const generalCategories = require('../models/GeneralItemCategories');
+  const generalCategoryItems = {
+    'Any Plant': generalCategories['Any Plant'] || [],
+    'Any Seafood': generalCategories['Any Seafood'] || [],
+    'Any Mushroom': generalCategories['Any Mushroom'] || []
+  };
   
-  console.log(`[boostingModule.js] Teacher Gathering Boost - Found ${usefulItems.length} useful items`);
+  // Create a new table that includes the original items plus guaranteed top materials
+  const enhancedTable = [...gatherTable];
   
-  if (usefulItems.length > 0) {
-    console.log(`[boostingModule.js] Teacher Gathering Boost - Returning filtered useful items`);
-    return usefulItems;
-  } else {
-    console.log(`[boostingModule.js] Teacher Gathering Boost - No useful items found, returning original table`);
-    return gatherTable;
-  }
+  // Add top materials if they're not already in the table
+  topMaterials.forEach(materialName => {
+    const exists = enhancedTable.some(item => item.itemName === materialName);
+    if (!exists) {
+      enhancedTable.push({
+        itemName: materialName,
+        itemRarity: 3, // Default rarity for materials
+        weight: 2, // Give them higher weight
+        type: ['Material'],
+        image: 'No Image',
+        emoji: '📦'
+      });
+    }
+  });
+  
+  // Add general category items if they're not already in the table
+  Object.entries(generalCategoryItems).forEach(([categoryName, items]) => {
+    items.forEach(itemName => {
+      const exists = enhancedTable.some(item => item.itemName === itemName);
+      if (!exists) {
+        enhancedTable.push({
+          itemName: itemName,
+          itemRarity: 3, // Default rarity for materials
+          weight: 1.5, // Slightly higher weight
+          type: ['Material'],
+          image: 'No Image',
+          emoji: '📦'
+        });
+      }
+    });
+  });
+  
+  return enhancedTable;
 }
 
 function applyTeacherHealingBoost(healedCharacter) {
@@ -428,7 +464,7 @@ function applyTeacherTravelingBoost(roadGathers) {
     const firstRarity = firstRoll.rarity || firstRoll.itemRarity || 0;
     const secondRarity = secondRoll.rarity || secondRoll.itemRarity || 0;
     
-    console.log(`[boostingModule.js] Teacher Traveling Boost - Comparing rarities: ${firstRarity} vs ${secondRarity}`);
+  
     
     return firstRarity > secondRarity ? firstRoll : secondRoll;
   }
@@ -455,10 +491,10 @@ async function applyPriestGatheringBoost(gatherTable) {
     const Item = require('../models/ItemModel');
     const divineItems = await Item.find({ divineItems: true });
     
-    console.log(`[boostingModule.js] Priest Gathering Boost - Found ${divineItems.length} divine/spiritual items globally`);
+  
     
     if (divineItems.length === 0) {
-      console.log(`[boostingModule.js] Priest Gathering Boost - No divine items found, returning original table`);
+  
       return gatherTable;
     }
     
@@ -474,7 +510,7 @@ async function applyPriestGatheringBoost(gatherTable) {
         // If it exists, increase its weight by 3x and ensure divineItems flag is set
         combinedTable[existingIndex].weight = (combinedTable[existingIndex].weight || 1) * 3;
         combinedTable[existingIndex].divineItems = true; // Ensure the flag is set
-        console.log(`[boostingModule.js] Priest Gathering Boost - Increased weight for existing divine item: ${divineItem.itemName}`);
+
       } else {
         // If it doesn't exist, add it with 3x weight
         combinedTable.push({
@@ -486,11 +522,11 @@ async function applyPriestGatheringBoost(gatherTable) {
           emoji: divineItem.emoji,
           divineItems: true
         });
-        console.log(`[boostingModule.js] Priest Gathering Boost - Added divine item: ${divineItem.itemName}`);
+        
       }
     });
     
-    console.log(`[boostingModule.js] Priest Gathering Boost - Combined table: ${gatherTable.length} original + ${divineItems.length} divine items`);
+
     return combinedTable;
   } catch (error) {
     console.error('[boostingModule.js] Error fetching divine items:', error);
@@ -546,7 +582,7 @@ async function applyEntertainerGatheringBoost(regionItems) {
     const Item = require('../models/ItemModel');
     const entertainerItems = await Item.find({ entertainerItems: true });
     
-    console.log(`[boostingModule.js] Entertainer Gathering Boost - Found ${entertainerItems.length} entertainer-themed items globally`);
+  
     
     // Return the entertainer items for potential bonus selection
     // The actual bonus logic will be handled in the gather command
@@ -616,7 +652,7 @@ function applyScholarExploringBoost(exploreResult) {
 function applyScholarGatheringBoost(gatheringData, targetRegion) {
   // Scholar boost now allows cross-region gathering without changing character location
   // The target region is handled in the gather command by retrieving it from boost data
-  console.log(`[boostingModule.js] applyScholarGatheringBoost called - cross-region gathering enabled`);
+
   
   // Return the original gathering data since we handle region selection in the gather command
   return gatheringData;
@@ -681,18 +717,18 @@ function applyScholarVendingBoost(allInventories) {
     });
   });
   
-  console.log(`[boostingModule.js] Scholar Vending Boost - Analyzing ${Object.keys(itemCounts).length} unique items`);
+
   
   // Find items with low global quantity but high crafting use
   const rareItems = Object.entries(itemCounts)
     .filter(([name, count]) => count <= 5) // Rare items
     .sort(([,a], [,b]) => a - b);
   
-  console.log(`[boostingModule.js] Scholar Vending Boost - Found ${rareItems.length} rare items (count <= 5)`);
+  
   
   if (rareItems.length > 0) {
     const recommendedItem = rareItems[0][0];
-    console.log(`[boostingModule.js] Scholar Vending Boost - Recommending: ${recommendedItem} (count: ${rareItems[0][1]})`);
+    
     return recommendedItem;
   }
   
@@ -700,11 +736,11 @@ function applyScholarVendingBoost(allInventories) {
   const sortedItems = Object.entries(itemCounts).sort(([,a], [,b]) => a - b);
   if (sortedItems.length > 0) {
     const fallbackItem = sortedItems[0][0];
-    console.log(`[boostingModule.js] Scholar Vending Boost - No rare items found, recommending least common: ${fallbackItem} (count: ${sortedItems[0][1]})`);
+
     return fallbackItem;
   }
   
-  console.log(`[boostingModule.js] Scholar Vending Boost - No items found to recommend`);
+  
   return null;
 }
 
@@ -744,7 +780,7 @@ async function getBoostEffectByCharacter(characterName, category) {
 // ------------------- Function to Apply Boost Effect -------------------
 // Applies the appropriate boost effect based on job and category
 async function applyBoostEffect(job, category, data, additionalData = null) {
-  console.log(`[boostingModule.js] applyBoostEffect called with job: "${job}", category: "${category}"`);
+
   
   // Check if the job parameter is actually a character name and get their job
   let actualJob = job;
@@ -754,11 +790,11 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
       const { fetchCharacterByName } = require('../database/db');
       const character = await fetchCharacterByName(job);
       if (character && character.job) {
-        console.log(`[boostingModule.js] Resolved character "${job}" to job "${character.job}"`);
+  
         actualJob = character.job;
       }
     } catch (error) {
-      console.log(`[boostingModule.js] Could not resolve character "${job}" to job, using as-is`);
+
     }
   }
   
@@ -767,11 +803,11 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
   ).join(' ');
   
-  console.log(`[boostingModule.js] Normalized job name: "${normalizedJob}"`);
+  
   
   switch (normalizedJob) {
     case 'Fortune Teller':
-      console.log(`[boostingModule.js] Applying Fortune Teller boost for category: ${category}`);
+
       switch (category) {
         case 'Crafting': return applyFortuneTellerCraftingBoost(data);
         case 'Gathering': return applyFortuneTellerGatheringBoost(data);
@@ -779,7 +815,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
         case 'Tokens': return applyFortuneTellerTokensBoost(data);
         case 'Traveling': return applyFortuneTellerTravelingBoost(data);
         default: 
-          console.log(`[boostingModule.js] No Fortune Teller boost found for category: ${category}`);
+  
           return data;
       }
     case 'Teacher':

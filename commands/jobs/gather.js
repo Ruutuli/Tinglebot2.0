@@ -646,7 +646,7 @@ module.exports = {
              if (boostData && boostData.targetVillage) {
                scholarTargetVillage = boostData.targetVillage;
                gatheringRegion = scholarTargetVillage;
-               console.log(`[gather.js] Scholar boost applied: ${region} → ${gatheringRegion}`);
+
              } else {
                // Debug info removed to reduce log bloat
              }
@@ -659,7 +659,7 @@ module.exports = {
         const villageRegion = getVillageRegionByName(gatheringRegion);
         if (villageRegion) {
           regionKey = villageRegion.toLowerCase();
-          console.log(`[gather.js] Village ${gatheringRegion} maps to region ${villageRegion} (${regionKey})`);
+
         }
         
         const availableItems = items.filter(item => {
@@ -702,7 +702,7 @@ module.exports = {
               // Skip Scholar since we already handled the region change above
               const originalItemCount = availableItems.length;
               boostedAvailableItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
-              console.log(`[gather.js] ${character.boostedBy} boost applied: ${originalItemCount} → ${boostedAvailableItems.length} items`);
+
             }
           }
         }
@@ -710,7 +710,6 @@ module.exports = {
         // ------------------- Create Weighted Item List ------------------
         // Safety check: ensure boostedAvailableItems is an array
         if (!Array.isArray(boostedAvailableItems)) {
-          console.log(`[gather.js] Error: boostedAvailableItems is not an array, got ${typeof boostedAvailableItems}`);
           boostedAvailableItems = availableItems; // Fallback to original items
         }
         
@@ -723,13 +722,7 @@ module.exports = {
         const randomItem = weightedItems[randomIndex];
         const quantity = 1;
         
-         // Log the final selection
-         console.log(`[gather.js] Selected: ${randomItem.itemName}`);
-         
-         // Log cross-region insight if Scholar boost was applied
-         if (scholarTargetVillage) {
-           console.log(`[gather.js] Scholar boost: ${randomItem.itemName} gathered from ${scholarTargetVillage}`);
-         }
+
         
         // Handle Entertainer bonus item
         if (isEntertainerBoost) {
@@ -739,7 +732,7 @@ module.exports = {
             // Select a random entertainer item as bonus
             const bonusIndex = Math.floor(Math.random() * entertainerItems.length);
             bonusItem = entertainerItems[bonusIndex];
-            console.log(`[gather.js] Entertainer boost: Bonus item ${bonusItem.itemName}`);
+
           }
         }
         
@@ -762,7 +755,7 @@ module.exports = {
             interaction,
             `Gathering (Entertainer Bonus)`
           );
-          console.log(`[gather.js] Added bonus item: ${bonusItem.itemName}`);
+          
         }
         
         // Note: Google Sheets sync is handled by addItemInventoryDatabase
@@ -777,7 +770,7 @@ module.exports = {
           // Check if the item itself has divineItems flag or if it's found in the database
           if (randomItem.divineItems === true || divineItem) {
             isDivineItemWithPriestBoost = true;
-            console.log(`[gather.js] Divine item gathered with Priest boost: ${randomItem.itemName}`);
+  
           }
         }
 
@@ -789,7 +782,7 @@ module.exports = {
         
         // ------------------- Clear Boost After Use ------------------
         if (character.boostedBy) {
-          console.log(`[gather.js] Boost cleared for ${character.name}`);
+  
           character.boostedBy = null;
         }
         

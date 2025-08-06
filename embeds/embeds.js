@@ -1103,6 +1103,10 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
    const { generateDivineItemFlavorText } = require('../modules/flavorTextModule');
    flavorText = generateDivineItemFlavorText();
  } else {
+   // Check if this is a Teacher boost for practical wisdom
+   const isTeacherBoost = character.boostedBy && boosterCharacter && 
+     (boosterCharacter.job === 'Teacher' || boosterCharacter.job?.toLowerCase() === 'teacher');
+   
    // Check if this is a Scholar boost for cross-region gathering
    const isScholarBoost = character.boostedBy && boosterCharacter && 
      (boosterCharacter.job === 'Scholar' || boosterCharacter.job?.toLowerCase() === 'scholar');
@@ -1110,7 +1114,12 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
    
    // Debug info removed to reduce log bloat
    
-   flavorText = generateGatherFlavorText(randomItem.type[0], isScholarBoost, targetRegion);
+   if (isTeacherBoost) {
+     const { generateTeacherGatheringFlavorText } = require('../modules/flavorTextModule');
+     flavorText = generateTeacherGatheringFlavorText();
+   } else {
+     flavorText = generateGatherFlavorText(randomItem.type[0], isScholarBoost, targetRegion);
+   }
  }
 
  // Add bonus item information if present
