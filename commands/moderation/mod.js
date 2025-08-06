@@ -2923,14 +2923,19 @@ async function handleBlight(interaction) {
       // Send DM to user about the blight
       try {
         const user = await interaction.client.users.fetch(character.userId);
+        
+        // Get character stats for context
+        const characterStats = `❤️ **Hearts:** ${character.currentHearts}/${character.maxHearts} | 🟩 **Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+        
+        // Create enhanced blight application DM embed
         const blightEmbed = new EmbedBuilder()
           .setColor(stageColor)
-          .setTitle(`${stageEmoji} Blight Affliction Applied ${stageEmoji}`)
-          .setDescription(`**${character.name}** has been afflicted with **blight stage ${stage}** by a moderator.\n\n${villageEmoji} **Village:** ${character.currentVillage}\n⚔️ **Job:** ${character.job}`)
+          .setTitle(`${stageEmoji} The Corruption Takes Hold ${stageEmoji}`)
+          .setDescription(`**${character.name}** has been afflicted with **blight stage ${stage}** by a moderator.\n\n${villageEmoji} **Village:** ${character.currentVillage}\n⚔️ **Job:** ${character.job}\n${characterStats}`)
           .addFields(
             {
               name: `${stageEmoji} Blight Stage ${stage}`,
-              value: `The corruption has taken hold...`,
+              value: `The corruption has taken hold of your character...`,
               inline: true
             },
             {
@@ -2939,13 +2944,18 @@ async function handleBlight(interaction) {
               inline: true
             },
             {
+              name: '🏥 Healing Required',
+              value: 'Seek immediate healing from a Mod Character before the corruption consumes you entirely.',
+              inline: true
+            },
+            {
               name: '💀 The Corruption',
               value: flavorText,
               inline: false
             },
             {
-              name: '⚠️ Important',
-              value: 'Seek healing from a Mod Character before the corruption consumes you entirely.',
+              name: '⚠️ Critical Warning',
+              value: 'If blight reaches stage 5, your character will be permanently lost. Act quickly to prevent this fate.',
               inline: false
             }
           )
@@ -2954,7 +2964,7 @@ async function handleBlight(interaction) {
           .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
           .setTimestamp();
 
-        await user.send({ embeds: [blightEmbed] });
+        await user.send({ content: `<@${character.userId}>, your character has been afflicted with blight!`, embeds: [blightEmbed] });
       } catch (dmError) {
         console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
       }
@@ -3051,10 +3061,15 @@ async function handleBlight(interaction) {
       // Send DM to user about the blight removal
       try {
         const user = await interaction.client.users.fetch(character.userId);
+        
+        // Get character stats for context
+        const characterStats = `❤️ **Hearts:** ${character.currentHearts}/${character.maxHearts} | 🟩 **Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+        
+        // Create enhanced blight removal DM embed
         const removalEmbed = new EmbedBuilder()
           .setColor('#00FF00')
-          .setTitle('✨ Blight Cleansed ✨')
-          .setDescription(`**${character.name}** has been **cleansed of blight** by a moderator.\n\n${villageEmoji} **Village:** ${character.currentVillage}\n⚔️ **Job:** ${character.job}`)
+          .setTitle('✨ The Corruption is Cleansed ✨')
+          .setDescription(`**${character.name}** has been **completely cleansed of blight** by a moderator.\n\n${villageEmoji} **Village:** ${character.currentVillage}\n⚔️ **Job:** ${character.job}\n${characterStats}`)
           .addFields(
             {
               name: '🔄 Previous Stage',
@@ -3063,7 +3078,12 @@ async function handleBlight(interaction) {
             },
             {
               name: '⏰ Status',
-              value: 'Blight progression has been halted.',
+              value: 'Blight progression has been completely halted.',
+              inline: true
+            },
+            {
+              name: '🏥 Recovery Complete',
+              value: 'Your character is now fully healed and free from corruption.',
               inline: true
             },
             {
@@ -3072,8 +3092,8 @@ async function handleBlight(interaction) {
               inline: false
             },
             {
-              name: '🎉 Recovery',
-              value: 'You are now free from the corruption. Your character can continue their journey without the blight\'s influence.',
+              name: '🎉 Freedom Restored',
+              value: 'You are now completely free from the corruption. Your character can continue their journey without any blight influence and is no longer at risk of permanent loss.',
               inline: false
             }
           )
@@ -3082,7 +3102,7 @@ async function handleBlight(interaction) {
           .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/healing-icon.png' })
           .setTimestamp();
 
-        await user.send({ embeds: [removalEmbed] });
+        await user.send({ content: `<@${character.userId}>, your character has been cleansed of blight!`, embeds: [removalEmbed] });
       } catch (dmError) {
         console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
       }
