@@ -2993,7 +2993,7 @@ async function handleBlight(interaction) {
           {
             name: '<:blight_eye:805576955725611058> Blight Stage',
             value: `${stageEmoji} Stage ${stage}`,
-            inline: true
+            inline: false
           },
           {
             name: '👤 Owner',
@@ -3012,6 +3012,7 @@ async function handleBlight(interaction) {
           }
         )
         .setThumbnail(character.icon)
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
         .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
         .setTimestamp();
 
