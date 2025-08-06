@@ -112,7 +112,9 @@ const adjustRarityWeights = (fv) => {
 // ------------------- Create Weighted Item List -------------------
 // Creates a weighted list of items based on their rarity and a provided Final Value (FV).
 function createWeightedItemList(items, fv, job) {
-  if (!items || items.length === 0) {
+  // Safety check: ensure items is an array
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    console.log(`[rngModule.js] createWeightedItemList: Invalid items parameter - expected array, got ${typeof items}`);
     return [];
   }
 

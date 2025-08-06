@@ -606,30 +606,26 @@ module.exports = {
         // ------------------- Normal Gathering Logic -------------------
         const items = await fetchAllItems();
         
-        // Check for Scholar boost to determine gathering region
+        // ------------------- Apply Scholar Boost (Cross-Region Gathering) -------------------
+        // Check if character is boosted and handle Scholar boost for cross-region gathering
         let gatheringRegion = region;
+        let boosterCharacter = null;
+        let scholarTargetVillage = null;
+        
         if (character.boostedBy) {
-          // Get the active boost data to check for target village
-          const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting.js');
-          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+          const { fetchCharacterByName } = require('../../database/db');
+          boosterCharacter = await fetchCharacterByName(character.boostedBy);
           
-          if (activeBoost && activeBoost.boosterJob === 'Scholar' && activeBoost.category === 'Gathering') {
-            // Use the target village from the boost request if available
-            const targetVillage = activeBoost.targetVillage;
-            if (targetVillage) {
-              const { getVillageRegionByName } = require('../../modules/locationsModule');
-              const targetRegion = getVillageRegionByName(targetVillage);
-              if (targetRegion && targetRegion !== region) {
-                gatheringRegion = targetRegion;
-                console.log(`[gather.js] Scholar boost: Gathering from ${region} → ${gatheringRegion} (target village: ${targetVillage})`);
-              }
-            } else {
-              // Fallback to the old method if no target village specified
-              const scholarRegion = await applyBoostEffect(character.boostedBy, 'Gathering', region);
-              if (scholarRegion && scholarRegion !== region) {
-                gatheringRegion = scholarRegion;
-                console.log(`[gather.js] Scholar boost: Gathering from ${region} → ${gatheringRegion} (fallback)`);
-              }
+          // Handle Scholar boost (cross-region gathering) before filtering items
+          if (boosterCharacter && boosterCharacter.job === 'Scholar') {
+            // Get the boost data to find the target village
+            const { retrieveBoostingRequestFromTempDataByCharacter } = require('../../utils/expirationHandler');
+            const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+            
+            if (boostData && boostData.targetVillage) {
+              scholarTargetVillage = boostData.targetVillage;
+              gatheringRegion = scholarTargetVillage;
+              console.log(`[gather.js] Scholar boost applied: ${region} → ${gatheringRegion} (cross-region gathering)`);
             }
           }
         }
@@ -658,25 +654,21 @@ module.exports = {
           return;
         }
 
-        // ------------------- Apply Boosting Effects -------------------
+        // ------------------- Apply Other Boosting Effects -------------------
         // Check if character is boosted and apply gathering boosts to the available items
         let boostedAvailableItems = availableItems;
         let bonusItem = null;
         let isEntertainerBoost = false;
-        let boosterCharacter = null; // Moved to higher scope
         
-        if (character.boostedBy) {
+        if (character.boostedBy && boosterCharacter) {
           const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Gathering');
           if (boostEffect) {
-            // Get the booster character to check their job
-            const { fetchCharacterByName } = require('../../database/db');
-            boosterCharacter = await fetchCharacterByName(character.boostedBy); // Removed const declaration
-            
             // Special handling for Entertainer boost (bonus item after normal gather)
-            if (boosterCharacter && boosterCharacter.job === 'Entertainer') {
+            if (boosterCharacter.job === 'Entertainer') {
               isEntertainerBoost = true;
-            } else {
+            } else if (boosterCharacter.job !== 'Scholar') {
               // Normal boost application for all other jobs (including Priest) - apply to available items
+              // Skip Scholar since we already handled the region change above
               const originalItemCount = availableItems.length;
               boostedAvailableItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
               console.log(`[gather.js] ${character.boostedBy} boost applied: ${originalItemCount} → ${boostedAvailableItems.length} items`);
@@ -685,6 +677,12 @@ module.exports = {
         }
 
         // ------------------- Create Weighted Item List -------------------
+        // Safety check: ensure boostedAvailableItems is an array
+        if (!Array.isArray(boostedAvailableItems)) {
+          console.log(`[gather.js] Error: boostedAvailableItems is not an array, got ${typeof boostedAvailableItems}`);
+          boostedAvailableItems = availableItems; // Fallback to original items
+        }
+        
         const weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
         
         // Log detailed weight information
@@ -762,7 +760,8 @@ module.exports = {
           }
         }
 
-        const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter);
+        // Create embed with cross-region gathering info if applicable
+        const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage);
         await safeReply({ embeds: [embed] });
         
         // ------------------- Clear Boost After Use -------------------

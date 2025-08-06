@@ -70,13 +70,16 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
           // Note: Embed update skipped here since we don't have access to the client
           // The embed will be updated when the user checks boost status or when the boost is accessed
           
-          // Clear the boostedBy field from the character when boost expires
-          const targetCharacter = await fetchCharacterByName(characterName);
-          if (targetCharacter && targetCharacter.boostedBy) {
-            targetCharacter.boostedBy = null;
-            await targetCharacter.save();
-            console.log(`[boosting.js]: Cleared ${targetCharacter.name}.boostedBy due to expiration in retrieveBoostingRequestFromTempDataByCharacter`);
-          }
+                     // Clear the boostedBy field from the character when boost expires
+           const targetCharacter = await fetchCharacterByName(characterName);
+           if (targetCharacter && targetCharacter.boostedBy) {
+             targetCharacter.boostedBy = null;
+             
+             // Scholar Gathering boosts no longer change character location, so no restoration needed
+             
+             await targetCharacter.save();
+             console.log(`[boosting.js]: Cleared ${targetCharacter.name}.boostedBy due to expiration in retrieveBoostingRequestFromTempDataByCharacter`);
+           }
         }
       }
     }
@@ -325,7 +328,7 @@ async function handleBoostRequest(interaction) {
 
  if (boosterJob === 'Scholar' && category === 'Gathering' && !village) {
   await interaction.reply({
-   content: "❌ **Missing Parameter**\n\nScholar Gathering boosts require a target village to be specified.",
+   content: "❌ **Scholar Gathering Boost Requires Target Village**\n\n**Cross-Region Insight** allows Scholar-boosted characters to gather items from another village's item table without physically being there.\n\n💡 **Please specify a target village** using the `village` option to enable cross-region gathering.\n\n**Example:** `/boosting request character:YourChar booster:ScholarName category:Gathering village:Inariko`",
    ephemeral: true,
   });
   return;
@@ -495,15 +498,23 @@ async function handleBoostAccept(interaction) {
  requestData.durationRemaining = boostDuration;
  requestData.boostExpiresAt = boostExpiresAt;
 
- // Update the target character's boostedBy field
- const targetCharacter = await fetchCharacterByName(requestData.targetCharacter);
- if (targetCharacter) {
-   targetCharacter.boostedBy = booster.name;
-   await targetCharacter.save();
-   console.log(`[boosting.js]: Set ${targetCharacter.name}.boostedBy = ${booster.name}`);
- } else {
-   console.error(`[boosting.js]: Error - Could not find target character "${requestData.targetCharacter}"`);
- }
+   // Update the target character's boostedBy field
+  const targetCharacter = await fetchCharacterByName(requestData.targetCharacter);
+  if (targetCharacter) {
+    targetCharacter.boostedBy = booster.name;
+    
+    // For Scholar Gathering boosts, store the target village in the boost data
+    if (booster.job === 'Scholar' && requestData.category === 'Gathering' && requestData.targetVillage) {
+      // Store the target village in the boost data for cross-region gathering
+      requestData.targetVillage = requestData.targetVillage;
+      console.log(`[boosting.js]: Scholar boost applied - ${targetCharacter.name} can now gather from ${requestData.targetVillage} while staying in ${targetCharacter.currentVillage}`);
+    }
+    
+    await targetCharacter.save();
+    console.log(`[boosting.js]: Set ${targetCharacter.name}.boostedBy = ${booster.name}`);
+  } else {
+    console.error(`[boosting.js]: Error - Could not find target character "${requestData.targetCharacter}"`);
+  }
 
    // Save to TempData only
   await saveBoostingRequestToTempData(requestId, requestData);
@@ -584,12 +595,15 @@ async function handleBoostStatus(interaction) {
   const { updateBoostRequestEmbed } = require('../../embeds/embeds');
   await updateBoostRequestEmbed(interaction.client, activeBoost, 'expired');
 
-  // Clear the boostedBy field from the character
-  if (character.boostedBy) {
-    character.boostedBy = null;
-    await character.save();
-    console.log(`[boosting.js]: Cleared ${character.name}.boostedBy due to expiration`);
-  }
+     // Clear the boostedBy field from the character
+   if (character.boostedBy) {
+     character.boostedBy = null;
+     
+     // Scholar Gathering boosts no longer change character location, so no restoration needed
+     
+     await character.save();
+     console.log(`[boosting.js]: Cleared ${character.name}.boostedBy due to expiration`);
+   }
 
   await interaction.reply({
    content: `${characterName}'s boost has expired.`,
@@ -630,26 +644,38 @@ async function handleBoostStatus(interaction) {
   return;
  }
 
- const embed = new EmbedBuilder()
- .setTitle(`Active Boost Status: ${characterName}`)
- .addFields(
-  { name: "Boost Type", value: boost.name, inline: true },
-  { name: "Category", value: activeBoost.category, inline: true },
-  { name: "Boosted By", value: activeBoost.boostingCharacter, inline: true },
-  { name: "Effect", value: boost.description, inline: false },
-  {
-   name: "Time Remaining",
-   value: `${hoursRemaining}h ${minutesRemaining}m`,
-   inline: true,
-  },
-  {
-   name: "Expires",
-   value: `<t:${Math.floor(activeBoost.boostExpiresAt / 1000)}:R>`,
-   inline: true,
+   // Create fields array for the embed
+  const fields = [
+   { name: "Boost Type", value: boost.name, inline: true },
+   { name: "Category", value: activeBoost.category, inline: true },
+   { name: "Boosted By", value: activeBoost.boostingCharacter, inline: true },
+   { name: "Effect", value: boost.description, inline: false },
+   {
+    name: "Time Remaining",
+    value: `${hoursRemaining}h ${minutesRemaining}m`,
+    inline: true,
+   },
+   {
+    name: "Expires",
+    value: `<t:${Math.floor(activeBoost.boostExpiresAt / 1000)}:R>`,
+    inline: true,
+   }
+  ];
+
+  // Add cross-region gathering information for Scholar Gathering boosts
+  if (activeBoost.boosterJob === 'Scholar' && activeBoost.category === 'Gathering' && activeBoost.targetVillage) {
+    fields.push({
+      name: "🎯 Cross-Region Gathering",
+      value: `**Can gather from:** ${activeBoost.targetVillage}\n**Current location:** ${character.currentVillage}\n*Character stays in current location while gathering from target village*`,
+      inline: false
+    });
   }
- )
- .setColor("#4CAF50")
- .setFooter({ text: "Boost will automatically expire when duration ends" });
+
+  const embed = new EmbedBuilder()
+  .setTitle(`Active Boost Status: ${characterName}`)
+  .addFields(fields)
+  .setColor("#4CAF50")
+  .setFooter({ text: "Boost will automatically expire when duration ends" });
 
  await interaction.reply({
   embeds: [embed],
@@ -664,3 +690,6 @@ async function handleBoostStatus(interaction) {
 module.exports.isBoostActive = isBoostActive;
 module.exports.getActiveBoostEffect = getActiveBoostEffect;
 module.exports.getRemainingBoostTime = getRemainingBoostTime;
+module.exports.retrieveBoostingRequestFromTempDataByCharacter = retrieveBoostingRequestFromTempDataByCharacter;
+module.exports.saveBoostingRequestToTempData = saveBoostingRequestToTempData;
+module.exports.retrieveBoostingRequestFromTempData = retrieveBoostingRequestFromTempData;
