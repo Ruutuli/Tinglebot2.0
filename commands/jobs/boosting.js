@@ -23,7 +23,8 @@ async function saveBoostingRequestToTempData(requestId, requestData) {
       targetCharacter: requestData.targetCharacter,
       boostingCharacter: requestData.boostingCharacter,
       status: requestData.status,
-      category: requestData.category
+      category: requestData.category,
+      targetVillage: requestData.targetVillage
     });
     
     // First try to find existing document
@@ -51,7 +52,8 @@ async function saveBoostingRequestToTempData(requestId, requestData) {
       key: result.key,
       type: result.type,
       expiresAt: result.expiresAt,
-      hasData: !!result.data
+      hasData: !!result.data,
+      savedTargetVillage: result.data?.targetVillage
     });
   } catch (error) {
     console.error(`[boosting.js]: Error saving boosting request to TempData:`, error);
@@ -62,7 +64,20 @@ async function saveBoostingRequestToTempData(requestId, requestData) {
 async function retrieveBoostingRequestFromTempData(requestId) {
   try {
     const tempData = await TempData.findByTypeAndKey('boosting', requestId);
-    return tempData ? tempData.data : null;
+    if (tempData) {
+      console.log(`[boosting.js] retrieveBoostingRequestFromTempData debug for ${requestId}:`, {
+        found: true,
+        targetVillage: tempData.data?.targetVillage,
+        status: tempData.data?.status,
+        category: tempData.data?.category
+      });
+      return tempData.data;
+    } else {
+      console.log(`[boosting.js] retrieveBoostingRequestFromTempData debug for ${requestId}:`, {
+        found: false
+      });
+      return null;
+    }
   } catch (error) {
     console.error(`[boosting.js]: Error retrieving boosting request from TempData:`, error);
     return null;
@@ -74,8 +89,21 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
     const allBoostingData = await TempData.findAllByType('boosting');
     const currentTime = Date.now();
 
+    console.log(`[boosting.js] retrieveBoostingRequestFromTempDataByCharacter debug for ${characterName}:`, {
+      totalBoostingData: allBoostingData.length,
+      currentTime: currentTime
+    });
+
     for (const tempData of allBoostingData) {
       const requestData = tempData.data;
+      console.log(`[boosting.js] Checking boost data:`, {
+        targetCharacter: requestData.targetCharacter,
+        status: requestData.status,
+        boostExpiresAt: requestData.boostExpiresAt,
+        targetVillage: requestData.targetVillage,
+        isExpired: requestData.boostExpiresAt && currentTime > requestData.boostExpiresAt
+      });
+      
       if (
         requestData.targetCharacter === characterName &&
         requestData.status === "fulfilled"
@@ -84,11 +112,17 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
           requestData.boostExpiresAt &&
           currentTime <= requestData.boostExpiresAt
         ) {
+          console.log(`[boosting.js] Found active boost for ${characterName}:`, {
+            targetVillage: requestData.targetVillage,
+            boostExpiresAt: requestData.boostExpiresAt,
+            timeRemaining: requestData.boostExpiresAt - currentTime
+          });
           return requestData;
         } else if (
           requestData.boostExpiresAt &&
           currentTime > requestData.boostExpiresAt
         ) {
+          console.log(`[boosting.js] Found expired boost for ${characterName}, marking as expired`);
           requestData.status = "expired";
           await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
           
@@ -109,6 +143,7 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
       }
     }
 
+    console.log(`[boosting.js] No active boost found for ${characterName}`);
     return null;
   } catch (error) {
     console.error(`[boosting.js]: Error retrieving active boost for ${characterName}:`, error);
@@ -275,6 +310,14 @@ async function handleBoostRequest(interaction) {
  const village = interaction.options.getString("village");
  const userId = interaction.user.id;
 
+ console.log(`[boosting.js] handleBoostRequest debug:`, {
+   characterName,
+   boosterName,
+   category,
+   village,
+   userId
+ });
+
  const targetCharacter = await fetchCharacterByNameAndUserId(
   characterName,
   userId
@@ -381,6 +424,15 @@ async function handleBoostRequest(interaction) {
   requestedByIcon: targetCharacter.icon,
   boosterIcon: boosterCharacter.icon
  };
+
+ console.log(`[boosting.js] Created requestData:`, {
+   boostRequestId,
+   targetCharacter: targetCharacter.name,
+   boostingCharacter: boosterCharacter.name,
+   category,
+   targetVillage: village,
+   boosterJob
+ });
 
  // Save to TempData only
  await saveBoostingRequestToTempData(boostRequestId, requestData);

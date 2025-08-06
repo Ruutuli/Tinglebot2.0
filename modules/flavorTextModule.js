@@ -515,9 +515,10 @@ const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion
      itemType: itemType
    });
    
-   if (targetRegion) {
-     // Specific region insight
-     const scholarInsights = [
+   // Unified Scholar insights array
+   const scholarInsights = [
+     // Specific region insights (when targetRegion is provided)
+     ...(targetRegion ? [
        `📚 Thanks to your boost, you gathered this item that is normally found in ${targetRegion}!`,
        `🎓 Your scholarly insight revealed treasures from ${targetRegion}!`,
        `📖 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
@@ -542,14 +543,8 @@ const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion
        `🎓 Academic expertise made ${targetRegion}'s treasures accessible!`,
        `📖 Your boost tapped into ${targetRegion}'s natural knowledge!`,
        `🔍 Scholarly insight revealed ${targetRegion}'s local bounty!`
-     ];
-     
-     const scholarInsight = getRandomMessage(scholarInsights);
-     console.log(`[flavorTextModule.js] Generated Scholar insight: ${scholarInsight}`);
-     return `${baseFlavorText}\n\n${scholarInsight}`;
-   } else {
-     // General Scholar boost insight (no specific region)
-     const generalScholarInsights = [
+     ] : [
+       // General Scholar boost insights (when no specific region)
        `📚 Thanks to your boost, you gathered this item with enhanced scholarly insight!`,
        `🎓 Your scholarly knowledge revealed hidden treasures that others might miss!`,
        `📖 The Scholar's expertise led to this valuable discovery!`,
@@ -574,12 +569,12 @@ const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion
        `🎓 Academic expertise made treasures accessible!`,
        `📖 Your boost tapped into natural knowledge!`,
        `🔍 Scholarly insight revealed local bounty!`
-     ];
-     
-     const scholarInsight = getRandomMessage(generalScholarInsights);
-     console.log(`[flavorTextModule.js] Generated general Scholar insight: ${scholarInsight}`);
-     return `${baseFlavorText}\n\n${scholarInsight}`;
-   }
+     ])
+   ];
+   
+   const scholarInsight = getRandomMessage(scholarInsights);
+   console.log(`[flavorTextModule.js] Generated Scholar insight: ${scholarInsight}`);
+   return `${baseFlavorText}\n\n${scholarInsight}`;
  }
 
  // Return base flavor text for normal gathering
