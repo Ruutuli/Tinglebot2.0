@@ -652,7 +652,19 @@ module.exports = {
         
         const availableItems = items.filter(item => {
           const jobKey = job.toLowerCase();
-          const regionKey = gatheringRegion.toLowerCase();
+          
+          // Convert village name to region for proper item filtering
+          let regionKey = gatheringRegion.toLowerCase();
+          
+          // Import the village-to-region mapping function
+          const { getVillageRegionByName } = require('../../modules/locationsModule');
+          
+          // If gatheringRegion is a village name, convert it to its region
+          const villageRegion = getVillageRegionByName(gatheringRegion);
+          if (villageRegion) {
+            regionKey = villageRegion.toLowerCase();
+            console.log(`[gather.js] Village ${gatheringRegion} maps to region ${villageRegion} (${regionKey})`);
+          }
           
           // Use the normalizeJobName function from jobsModule
           const normalizedInputJob = normalizeJobName(job);

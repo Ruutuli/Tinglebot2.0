@@ -19,14 +19,40 @@ const TempData = require("../../models/TempDataModel");
 
 async function saveBoostingRequestToTempData(requestId, requestData) {
   try {
-    await TempData.findOneAndUpdate(
-      { type: 'boosting', key: requestId },
-      { 
-        data: requestData
-      },
-      { upsert: true, new: true }
-    );
-    console.log(`[boosting.js]: Saved boosting request ${requestId} to TempData (48-hour expiration)`);
+    console.log(`[boosting.js]: Attempting to save boost request ${requestId} with data:`, {
+      targetCharacter: requestData.targetCharacter,
+      boostingCharacter: requestData.boostingCharacter,
+      status: requestData.status,
+      category: requestData.category
+    });
+    
+    // First try to find existing document
+    let tempData = await TempData.findOne({ type: 'boosting', key: requestId });
+    
+    if (tempData) {
+      // Update existing document
+      tempData.data = requestData;
+    } else {
+      // Create new document with explicit expiresAt
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      tempData = new TempData({
+        type: 'boosting',
+        key: requestId,
+        data: requestData,
+        expiresAt: expiresAt
+      });
+    }
+    
+    // Save the document (this will trigger pre-save middleware)
+    const result = await tempData.save();
+    
+    console.log(`[boosting.js]: Successfully saved boosting request ${requestId} to TempData (48-hour expiration)`, {
+      savedId: result._id,
+      key: result.key,
+      type: result.type,
+      expiresAt: result.expiresAt,
+      hasData: !!result.data
+    });
   } catch (error) {
     console.error(`[boosting.js]: Error saving boosting request to TempData:`, error);
     throw error;
@@ -336,7 +362,6 @@ async function handleBoostRequest(interaction) {
  const { generateUniqueId } = require('../../utils/uniqueIdUtils');
  const boostRequestId = generateUniqueId('B');
  const currentTime = Date.now();
- const expirationTime = currentTime + 24 * 60 * 60 * 1000;
 
  const requestData = {
   boostRequestId,
@@ -348,7 +373,6 @@ async function handleBoostRequest(interaction) {
   village: targetCharacter.currentVillage,
   targetVillage: village, // Store the target village for Scholar boosts
   timestamp: currentTime,
-  expiresAt: expirationTime,
   createdAt: new Date().toISOString(),
   durationRemaining: null,
   fulfilledAt: null,
@@ -399,7 +423,16 @@ async function handleBoostAccept(interaction) {
  const boosterName = interaction.options.getString("character");
  const userId = interaction.user.id;
 
+ console.log(`[boosting.js]: handleBoostAccept called with requestId: ${requestId}, boosterName: ${boosterName}, userId: ${userId}`);
+
  const requestData = await retrieveBoostingRequestFromTempData(requestId);
+ 
+ console.log(`[boosting.js]: Retrieved requestData for ${requestId}:`, {
+   found: !!requestData,
+   status: requestData?.status,
+   targetCharacter: requestData?.targetCharacter,
+   boostingCharacter: requestData?.boostingCharacter
+ });
  
  if (!requestData) {
   console.error(
