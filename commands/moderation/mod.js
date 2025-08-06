@@ -2959,8 +2959,54 @@ async function handleBlight(interaction) {
         console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
       }
 
+      // Create enhanced ephemeral reply for moderator
+      const moderatorReplyEmbed = new EmbedBuilder()
+        .setColor(stageColor)
+        .setTitle(`${stageEmoji} Blight Application Complete ${stageEmoji}`)
+        .setDescription(`**${character.name}** has been successfully afflicted with blight stage ${stage}.`)
+        .addFields(
+          {
+            name: '👤 Character',
+            value: `${character.name}`,
+            inline: true
+          },
+          {
+            name: '🏰 Village',
+            value: `${villageEmoji} ${character.currentVillage}`,
+            inline: true
+          },
+          {
+            name: '⚔️ Job',
+            value: `${character.job}`,
+            inline: true
+          },
+          {
+            name: '<:blight_eye:805576955725611058> Blight Stage',
+            value: `${stageEmoji} Stage ${stage}`,
+            inline: true
+          },
+          {
+            name: '👤 Owner',
+            value: `<@${character.userId}>`,
+            inline: true
+          },
+          {
+            name: '⚠️ Status',
+            value: 'Blight successfully applied',
+            inline: true
+          },
+          {
+            name: '💀 The Corruption',
+            value: flavorText,
+            inline: false
+          }
+        )
+        .setThumbnail(character.icon)
+        .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
+        .setTimestamp();
+
       return interaction.editReply({
-        content: `👁️ **${character.name}** has been afflicted with **blight stage ${stage}**.\n💀 **Flavor:** ${flavorText}`,
+        embeds: [moderatorReplyEmbed],
         ephemeral: true
       });
 
@@ -2970,7 +3016,7 @@ async function handleBlight(interaction) {
         return interaction.editReply(`❌ **${character.name}** is not currently afflicted with blight.`);
       }
 
-      const previousStage = character.blightLevel;
+      const previousStage = character.blightLevel || 0;
       character.blightLevel = 0;
       character.blightPaused = false;
       await character.save();
@@ -3041,8 +3087,54 @@ async function handleBlight(interaction) {
         console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
       }
 
+      // Create enhanced ephemeral reply for moderator
+      const moderatorReplyEmbed = new EmbedBuilder()
+        .setColor('#00FF00')
+        .setTitle('✨ Blight Removal Complete ✨')
+        .setDescription(`**${character.name}** has been successfully cleansed of blight.`)
+        .addFields(
+          {
+            name: '👤 Character',
+            value: `${character.name}`,
+            inline: true
+          },
+          {
+            name: '🏰 Village',
+            value: `${villageEmoji} ${character.currentVillage}`,
+            inline: true
+          },
+          {
+            name: '⚔️ Job',
+            value: `${character.job}`,
+            inline: true
+          },
+          {
+            name: '🔄 Previous Blight Stage',
+            value: `${previousStageEmoji} Stage ${previousStage}`,
+            inline: true
+          },
+          {
+            name: '👤 Owner',
+            value: `<@${character.userId}>`,
+            inline: true
+          },
+          {
+            name: '✅ Status',
+            value: 'Blight successfully removed',
+            inline: true
+          },
+          {
+            name: '💀 Flavor Text',
+            value: flavorText,
+            inline: false
+          }
+        )
+        .setThumbnail(character.icon)
+        .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/healing-icon.png' })
+        .setTimestamp();
+
       return interaction.editReply({
-        content: `✅ **${character.name}**'s blight has been removed (was stage ${previousStage}).\n💀 **Flavor:** ${flavorText}`,
+        embeds: [moderatorReplyEmbed],
         ephemeral: true
       });
     }
