@@ -2890,35 +2890,68 @@ async function handleBlight(interaction) {
 
       console.log(`[mod.js]: ✅ Set blight stage ${stage} for ${character.name}`);
 
+      // Assign blight role to character owner
+      try {
+        const guild = interaction.guild;
+        if (guild) {
+          const member = await guild.members.fetch(character.userId);
+          await member.roles.add('798387447967907910');
+          console.log(`[mod.js]: ✅ Added blight role to user ${character.userId} for character ${character.name}`);
+        }
+      } catch (roleError) {
+        console.warn(`[mod.js]: ⚠️ Could not assign blight role to user ${character.userId}:`, roleError);
+      }
+
       // Generate flavor text for blight application
       const flavorText = generateBlightRollFlavorText(stage, 'combat');
+      
+      // Get village-specific styling
+      const villageColor = getVillageColorByName(character.currentVillage) || '#8B0000';
+      const villageEmoji = getVillageEmojiByName(character.currentVillage) || '🏰';
+      
+      // Get stage-specific emoji and color
+      const stageEmoji = stage === 5 ? '☠️' : 
+                        stage === 4 ? '💀' :
+                        stage === 3 ? '👻' :
+                        stage === 2 ? '🎯' : '⚠️';
+      
+      const stageColor = stage === 5 ? '#FF0000' :
+                        stage === 4 ? '#FF4500' :
+                        stage === 3 ? '#FF8C00' :
+                        stage === 2 ? '#FFD700' : '#FFFF00';
 
       // Send DM to user about the blight
       try {
         const user = await interaction.client.users.fetch(character.userId);
         const blightEmbed = new EmbedBuilder()
-          .setColor('#8B0000') // Dark red for blight
-          .setTitle('👁️ Blight Applied 👁️')
-          .setDescription(`**${character.name}** has been afflicted with blight by a moderator.`)
+          .setColor(stageColor)
+          .setTitle(`${stageEmoji} Blight Affliction Applied ${stageEmoji}`)
+          .setDescription(`**${character.name}** has been afflicted with **blight stage ${stage}** by a moderator.\n\n${villageEmoji} **Village:** ${character.currentVillage}\n⚔️ **Job:** ${character.job}`)
           .addFields(
             {
-              name: '👁️ Blight Stage',
-              value: `Stage ${stage}`,
+              name: `${stageEmoji} Blight Stage ${stage}`,
+              value: `The corruption has taken hold...`,
               inline: true
             },
             {
-              name: '💀 Flavor Text',
+              name: '⏰ Progression',
+              value: 'Blight will progress naturally unless paused by a moderator.',
+              inline: true
+            },
+            {
+              name: '💀 The Corruption',
               value: flavorText,
               inline: false
             },
             {
-              name: '⚠️ Warning',
-              value: 'Blight will progress naturally unless paused by a moderator.',
+              name: '⚠️ Important',
+              value: 'Seek healing from a Mod Character before the corruption consumes you entirely.',
               inline: false
             }
           )
           .setThumbnail(character.icon)
-          .setFooter({ text: 'Moderator Action' })
+          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+          .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
           .setTimestamp();
 
         await user.send({ embeds: [blightEmbed] });
@@ -2944,30 +2977,63 @@ async function handleBlight(interaction) {
 
       console.log(`[mod.js]: ✅ Removed blight (was stage ${previousStage}) from ${character.name}`);
 
+      // Remove blight role from character owner
+      try {
+        const guild = interaction.guild;
+        if (guild) {
+          const member = await guild.members.fetch(character.userId);
+          await member.roles.remove('798387447967907910');
+          console.log(`[mod.js]: ✅ Removed blight role from user ${character.userId} for character ${character.name}`);
+        }
+      } catch (roleError) {
+        console.warn(`[mod.js]: ⚠️ Could not remove blight role from user ${character.userId}:`, roleError);
+      }
+
       // Generate flavor text for blight removal
       const flavorText = generateBlightVictoryFlavorText(previousStage);
+      
+      // Get village-specific styling
+      const villageColor = getVillageColorByName(character.currentVillage) || '#00FF00';
+      const villageEmoji = getVillageEmojiByName(character.currentVillage) || '🏰';
+      
+      // Get previous stage emoji for context
+      const previousStageEmoji = previousStage === 5 ? '☠️' : 
+                                previousStage === 4 ? '💀' :
+                                previousStage === 3 ? '👻' :
+                                previousStage === 2 ? '🎯' : '⚠️';
 
       // Send DM to user about the blight removal
       try {
         const user = await interaction.client.users.fetch(character.userId);
         const removalEmbed = new EmbedBuilder()
           .setColor('#00FF00')
-          .setTitle('✅ Blight Removed ✅')
-          .setDescription(`**${character.name}**'s blight has been removed by a moderator.`)
+          .setTitle('✨ Blight Cleansed ✨')
+          .setDescription(`**${character.name}** has been **cleansed of blight** by a moderator.\n\n${villageEmoji} **Village:** ${character.currentVillage}\n⚔️ **Job:** ${character.job}`)
           .addFields(
             {
-              name: '👁️ Previous Stage',
-              value: `Stage ${previousStage}`,
+              name: '🔄 Previous Stage',
+              value: `${previousStageEmoji} Stage ${previousStage}`,
               inline: true
             },
             {
-              name: '💀 Flavor Text',
+              name: '⏰ Status',
+              value: 'Blight progression has been halted.',
+              inline: true
+            },
+            {
+              name: '✨ The Cleansing',
               value: flavorText,
+              inline: false
+            },
+            {
+              name: '🎉 Recovery',
+              value: 'You are now free from the corruption. Your character can continue their journey without the blight\'s influence.',
               inline: false
             }
           )
           .setThumbnail(character.icon)
-          .setFooter({ text: 'Moderator Action' })
+          .setImage('https://storage.googleapis.com/tinglebot/border%20healing.png')
+          .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/healing-icon.png' })
           .setTimestamp();
 
         await user.send({ embeds: [removalEmbed] });

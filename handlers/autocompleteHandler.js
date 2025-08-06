@@ -750,7 +750,7 @@ async function handleModBlightCharacterAutocomplete(interaction, focusedOption) 
     const allCharacters = await fetchAllCharacters();
     
     const choices = allCharacters.map((character) => ({
-      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)} | Owner: ${character.userId}`,
+      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
       value: character.name,
     }));
     
