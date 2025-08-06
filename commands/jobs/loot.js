@@ -900,7 +900,7 @@ async function processLootingLogic(
   }
 
   // Step 3: Generate Outcome Message
-  const outcomeMessage = generateOutcomeMessage(outcome);
+  const outcomeMessage = generateOutcomeMessage(outcome, character);
 
   // Step 4: Loot Item Logic
   let lootedItem = null;
@@ -1006,7 +1006,7 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
 }
 
 // ------------------- Helper Function: Generate Outcome Message -------------------
-function generateOutcomeMessage(outcome) {
+function generateOutcomeMessage(outcome, character = null) {
  if (outcome.hearts) {
   return outcome.result === "KO"
    ? generateDamageMessage("KO")
@@ -1023,7 +1023,12 @@ function generateOutcomeMessage(outcome) {
    outcome.adjustedRandomValue,
    outcome.damageValue
   );
- } else if (outcome.result === "Win!/Loot") {
+ } else if (outcome.result === "Win!/Loot" || outcome.result === "Win!/Loot (1HKO)") {
+  // Check if this is a mod character victory
+  if (character && character.isModCharacter && outcome.result === "Win!/Loot (1HKO)") {
+   const { generateModCharacterVictoryMessage } = require("../../modules/flavorTextModule.js");
+   return generateModCharacterVictoryMessage(character.name, character.modTitle, character.modType);
+  }
   return generateVictoryMessage(
    outcome.adjustedRandomValue,
    outcome.defenseSuccess,
