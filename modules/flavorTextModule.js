@@ -133,6 +133,27 @@ const generateDamageMessage = (damage) => {
 // ================
 
 // Messages for victory based on adjusted random value
+const generateModCharacterVictoryMessage = (characterName, modTitle, modType) => {
+ const messages = [
+  `🌟✨ With divine power, ${characterName} the ${modTitle} of ${modType} effortlessly vanquishes the monster!`,
+  `👑💫 The ${modTitle} of ${modType} demonstrates their legendary prowess - the monster stands no chance!`,
+  `⚡️🔥 ${characterName}'s ${modTitle} powers surge forth, obliterating the monster with ease!`,
+  `🌙✨ Ancient ${modType} magic flows through ${characterName} as they dispatch the monster with grace!`,
+  `💎🌟 The ${modTitle} of ${modType} channels their divine authority - the monster crumbles before their might!`,
+  `🔮✨ ${characterName} wields the power of a true ${modTitle} - the monster is but dust in their wake!`,
+  `⭐️💫 With the wisdom of a ${modTitle}, ${characterName} turns the monster's own strength against it!`,
+  `🌺✨ The ${modType} essence within ${characterName} manifests - the monster is overwhelmed by pure divinity!`,
+  `⚔️🌟 ${characterName} the ${modTitle} demonstrates why they are feared and revered - the monster falls instantly!`,
+  `💫🔮 The ${modTitle} of ${modType} shows no mercy - the monster is reduced to nothing but memories!`,
+  `🌟💎 ${characterName}'s ${modType} heritage awakens - the monster's fate was sealed from the start!`,
+  `✨👑 The ${modTitle} of ${modType} moves with otherworldly precision - the monster never stood a chance!`,
+  `🔥💫 ${characterName} channels the ancient power of their ${modTitle} lineage - the monster is obliterated!`,
+  `🌙💎 The ${modType} magic coursing through ${characterName} is overwhelming - the monster is annihilated!`,
+  `⭐️✨ With the authority of a true ${modTitle}, ${characterName} dispatches the monster with divine efficiency!`,
+ ];
+ return getRandomMessage(messages);
+};
+
 const generateVictoryMessage = (
  randomValue,
  defenseSuccess = false,
@@ -900,6 +921,7 @@ module.exports = {
  generateHelpWantedDamageMessage,
  // Victory
  generateVictoryMessage,
+ generateModCharacterVictoryMessage,
  // Attack Buff
  generateAttackBuffMessage,
  generateAttackBuffMessageReduced,
