@@ -1104,8 +1104,17 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
    flavorText = generateDivineItemFlavorText();
  } else {
    // Check if this is a Scholar boost for cross-region gathering
-   const isScholarBoost = character.boostedBy && boosterCharacter && boosterCharacter.job === 'Scholar';
+   const isScholarBoost = character.boostedBy && boosterCharacter && 
+     (boosterCharacter.job === 'Scholar' || boosterCharacter.job?.toLowerCase() === 'scholar');
    const targetRegion = scholarTargetVillage;
+   
+   console.log(`[embeds.js] Scholar boost debug:`, {
+     characterBoostedBy: character.boostedBy,
+     boosterCharacterJob: boosterCharacter?.job,
+     isScholarBoost: isScholarBoost,
+     targetRegion: targetRegion,
+     itemType: randomItem.type[0]
+   });
    
    flavorText = generateGatherFlavorText(randomItem.type[0], isScholarBoost, targetRegion);
  }

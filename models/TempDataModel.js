@@ -173,32 +173,35 @@ tempDataSchema.pre('save', function(next) {
     return next(new Error('Weather data storage not allowed for this bot'));
   }
   
-  // Set expiration based on type
-  switch (this.type) {
-    case 'blight':
-      this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-      break;
-    case 'monthly':
-      // Set to end of current month
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      lastDay.setHours(23, 59, 59, 999);
-      this.expiresAt = lastDay;
-      break;
-    case 'delivery':
-      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-      break;
-    case 'trade':
-      this.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
-      break;
-    case 'pendingEdit':
-      this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-      break;
-    case 'submission':
-      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-      break;
-    default:
-      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-  }
+      // Set expiration based on type
+    switch (this.type) {
+      case 'blight':
+        this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+        break;
+      case 'boosting':
+        this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+        break;
+      case 'monthly':
+        // Set to end of current month
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        lastDay.setHours(23, 59, 59, 999);
+        this.expiresAt = lastDay;
+        break;
+      case 'delivery':
+        this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+        break;
+      case 'trade':
+        this.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+        break;
+      case 'pendingEdit':
+        this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        break;
+      case 'submission':
+        this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+        break;
+      default:
+        this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+    }
   
   next();
 });
@@ -206,7 +209,20 @@ tempDataSchema.pre('save', function(next) {
 // Static method to cleanup old entries
 tempDataSchema.statics.cleanup = async function(maxAgeInMs = 86400000) { // Default 24 hours
   const cutoff = new Date(Date.now() - maxAgeInMs);
-  return this.deleteMany({ expiresAt: { $lt: new Date() } });
+  const result = await this.deleteMany({ expiresAt: { $lt: new Date() } });
+  if (result.deletedCount > 0) {
+    console.log(`[TempDataModel]: 🧹 Cleaned up ${result.deletedCount} expired entries`);
+  }
+  return result;
+};
+
+// Static method to cleanup specific type entries
+tempDataSchema.statics.cleanupByType = async function(type) {
+  const result = await this.deleteMany({ type, expiresAt: { $lt: new Date() } });
+  if (result.deletedCount > 0) {
+    console.log(`[TempDataModel]: 🧹 Cleaned up ${result.deletedCount} expired ${type} entries`);
+  }
+  return result;
 };
 
 // Static method to find by type and key
