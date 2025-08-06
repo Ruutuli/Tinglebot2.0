@@ -865,6 +865,30 @@ const generateDivineItemFlavorText = () => {
   return getRandomMessage(divineFlavorTexts);
 };
 
+// ------------------- Teacher Gathering Flavor Text -------------------
+const generateTeacherGatheringFlavorText = () => {
+  const teacherFlavorTexts = [
+    "📚 The Teacher's wisdom guided your hand to this practical material.",
+    "🎓 Thanks to your Teacher's guidance, you found something truly useful.",
+    "📖 The Teacher's knowledge revealed the value in what others might overlook.",
+    "🔍 Your Teacher's insight led you to gather something worth crafting with.",
+    "📚 Practical wisdom ensured you collected materials that serve a purpose.",
+    "🎓 The Teacher's guidance helped you avoid junk and find real value.",
+    "📖 Your Teacher's knowledge revealed the hidden usefulness in this material.",
+    "🔍 Thanks to scholarly guidance, you gathered something worth keeping.",
+    "📚 The Teacher's wisdom ensured you found materials for crafting or daily life.",
+    "🎓 Your Teacher's insight led you to practical, valuable materials.",
+    "📖 Scholarly knowledge helped you distinguish useful items from junk.",
+    "🔍 The Teacher's guidance revealed materials that serve a real purpose.",
+    "📚 Thanks to your Teacher, you gathered something truly worthwhile.",
+    "🎓 The Teacher's wisdom ensured you found materials worth the effort.",
+    "📖 Your Teacher's knowledge led you to practical, usable materials.",
+    "🔍 Scholarly guidance helped you avoid waste and find real value."
+  ];
+  
+  return getRandomMessage(teacherFlavorTexts);
+};
+
 // Module Exports
 // ==============
 
@@ -902,4 +926,5 @@ module.exports = {
  generateBlightLootFlavorText,
  generateBlightSubmissionExpiryFlavorText,
  generateDivineItemFlavorText,
+ generateTeacherGatheringFlavorText,
 };
