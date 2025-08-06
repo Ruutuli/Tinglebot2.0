@@ -641,11 +641,22 @@ module.exports = {
              const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
              const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
              
+             console.log(`[gather.js] Scholar boost debug - boostData:`, {
+               found: !!boostData,
+               targetVillage: boostData?.targetVillage,
+               status: boostData?.status,
+               category: boostData?.category,
+               boostExpiresAt: boostData?.boostExpiresAt,
+               currentTime: Date.now()
+             });
+             
              if (boostData && boostData.targetVillage) {
                scholarTargetVillage = boostData.targetVillage;
                gatheringRegion = scholarTargetVillage;
                console.log(`[gather.js] Scholar boost applied: ${region} → ${gatheringRegion} (cross-region gathering)`);
                console.log(`[gather.js] Cross-Region Insight: ${character.name} will gather from ${scholarTargetVillage} while staying in ${character.currentVillage}`);
+             } else {
+               console.log(`[gather.js] Scholar boost debug - No targetVillage found in boostData or boostData is null`);
              }
            }
         }
