@@ -212,7 +212,12 @@ module.exports = {
           }
 
           // Activate job voucher for mod character (without consuming the voucher)
-          await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+          const updatedCharacter = await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+          // Update the character object with the new values
+          if (updatedCharacter) {
+            character.jobVoucher = updatedCharacter.jobVoucher;
+            character.jobVoucherJob = updatedCharacter.jobVoucherJob;
+          }
 
           // Log job voucher usage to Google Sheets (but don't remove from inventory)
           const inventoryLink = character.inventory || character.inventoryLink;
@@ -345,7 +350,12 @@ module.exports = {
         }
 
         // --- Only now activate voucher and remove from inventory ---
-        await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+        const updatedCharacter = await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+        // Update the character object with the new values
+        if (updatedCharacter) {
+          character.jobVoucher = updatedCharacter.jobVoucher;
+          character.jobVoucherJob = updatedCharacter.jobVoucherJob;
+        }
         await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction);
 
         // Log job voucher usage to Google Sheets
