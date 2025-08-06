@@ -132,26 +132,33 @@ async function sendNoEncounterEmbed(interaction, character, bloodMoonActive) {
 
 // Unified character validation
 async function validateCharacterForLoot(interaction, characterName, userId) {
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  let character = await fetchCharacterByNameAndUserId(characterName, userId);
+  
+  // If not found as regular character, try as mod character
   if (!character) {
-    await interaction.editReply({
-      embeds: [{
-        color: 0xFF0000, // Red color
-        title: '❌ Character Not Found',
-        description: `Character \`${characterName}\` not found or does not belong to you.`,
-        image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-        },
-        footer: {
-          text: 'Character Validation'
-        }
-      }],
-      ephemeral: true
-    });
-    return null;
+    const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+    character = await fetchModCharacterByNameAndUserId(characterName, userId);
+    
+    if (character && character.isModCharacter) {
+      console.log(`[loot.js]: 👑 Mod character ${character.name} detected in validateCharacterForLoot`);
+    } else if (!character) {
+      await interaction.editReply({
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Character Not Found',
+          description: `Character \`${characterName}\` not found or does not belong to you.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Character Validation'
+          }
+        }],
+        ephemeral: true
+      });
+      return null;
+    }
   }
-
-
 
   return character;
 }
@@ -264,17 +271,9 @@ module.exports = {
 
    let character = await validateCharacterForLoot(interaction, characterName, userId);
    
-   // If not found as regular character, try as mod character
+   // If character validation failed, return early
    if (!character) {
-     const { fetchModCharacterByNameAndUserId } = require('../../database/db');
-     character = await fetchModCharacterByNameAndUserId(characterName, userId);
-     
-     if (character && character.isModCharacter) {
-       // For mod characters, skip some validations that don't apply
-       console.log(`[loot.js]: 👑 Mod character ${character.name} detected`);
-     } else if (!character) {
-       return;
-     }
+     return;
    }
 
    // ------------------- Step 2: Check Hearts and Job Validity -------------------
