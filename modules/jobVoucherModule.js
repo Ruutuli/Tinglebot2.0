@@ -196,10 +196,19 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
         await deactivateJobVoucher(character._id);
 
         // Then activate the new voucher
-        await updateCharacterById(character._id, { 
-            jobVoucher: true, 
-            jobVoucherJob: jobName 
-        });
+        // Use appropriate update function based on character type
+        if (character.isModCharacter) {
+            const { updateModCharacterById } = require('../database/db.js');
+            await updateModCharacterById(character._id, { 
+                jobVoucher: true, 
+                jobVoucherJob: jobName 
+            });
+        } else {
+            await updateCharacterById(character._id, { 
+                jobVoucher: true, 
+                jobVoucherJob: jobName 
+            });
+        }
 
         console.log(`[jobVoucherModule.js]: ✅ Job Voucher activated successfully for ${character.name} as ${jobName}`);
 
@@ -231,10 +240,15 @@ async function fetchJobVoucherItem() {
 // ------------------- Deactivate Job Voucher -------------------
 async function deactivateJobVoucher(characterId) {
     try {
-        // Fetch character to get name
-        const character = await Character.findById(characterId);
+        // Fetch character to get name - check both regular and mod characters
+        let character = await Character.findById(characterId);
         if (!character) {
-            throw new Error(`Character not found with ID: ${characterId}`);
+            // Try mod character if regular character not found
+            const ModCharacter = require('../models/ModCharacterModel.js');
+            character = await ModCharacter.findById(characterId);
+            if (!character) {
+                throw new Error(`Character not found with ID: ${characterId}`);
+            }
         }
 
         // Check if the voucher has been used (indicated by lastGatheredAt being set)
@@ -247,10 +261,19 @@ async function deactivateJobVoucher(characterId) {
         }
 
         // Always set jobVoucher to false and clear the job
-        await updateCharacterById(characterId, { 
-            jobVoucher: false, 
-            jobVoucherJob: null 
-        });
+        // Use appropriate update function based on character type
+        if (character.isModCharacter) {
+            const { updateModCharacterById } = require('../database/db.js');
+            await updateModCharacterById(characterId, { 
+                jobVoucher: false, 
+                jobVoucherJob: null 
+            });
+        } else {
+            await updateCharacterById(characterId, { 
+                jobVoucher: false, 
+                jobVoucherJob: null 
+            });
+        }
         console.log(`[Job Voucher Module]: 🎫 Job voucher deactivated for ${character.name}`);
         return {
             success: true,

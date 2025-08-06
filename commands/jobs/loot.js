@@ -883,9 +883,16 @@ async function processLootingLogic(
   }
 
   // Step 2: Handle KO Logic
-  const updatedCharacter = await Character.findById(character._id);
+  let updatedCharacter;
+  if (character.isModCharacter) {
+    const ModCharacter = require('../../models/ModCharacterModel.js');
+    updatedCharacter = await ModCharacter.findById(character._id);
+  } else {
+    updatedCharacter = await Character.findById(character._id);
+  }
+  
   if (!updatedCharacter) {
-   throw new Error(`Unable to find updated character with ID ${character._id}`);
+   throw new Error(`Unable to find updated character with ID ${character._id} (isModCharacter: ${character.isModCharacter})`);
   }
 
   if (updatedCharacter.currentHearts === 0 && !updatedCharacter.ko) {
