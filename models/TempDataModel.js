@@ -166,6 +166,8 @@ tempDataSchema.index({ type: 1, key: 1 });
 
 // Pre-save middleware to set expiration based on type
 tempDataSchema.pre('save', function(next) {
+  console.log(`[TempDataModel]: Pre-save middleware called for type: ${this.type}, key: ${this.key}`);
+  
   const now = new Date();
   
   // Prevent weather data storage for non-production bots
@@ -173,36 +175,37 @@ tempDataSchema.pre('save', function(next) {
     return next(new Error('Weather data storage not allowed for this bot'));
   }
   
-      // Set expiration based on type
-    switch (this.type) {
-      case 'blight':
-        this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-        break;
-      case 'boosting':
-        this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-        break;
-      case 'monthly':
-        // Set to end of current month
-        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        lastDay.setHours(23, 59, 59, 999);
-        this.expiresAt = lastDay;
-        break;
-      case 'delivery':
-        this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-        break;
-      case 'trade':
-        this.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
-        break;
-      case 'pendingEdit':
-        this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-        break;
-      case 'submission':
-        this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-        break;
-      default:
-        this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-    }
+  // Set expiration based on type
+  switch (this.type) {
+    case 'blight':
+      this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      break;
+    case 'boosting':
+      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      break;
+    case 'monthly':
+      // Set to end of current month
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      lastDay.setHours(23, 59, 59, 999);
+      this.expiresAt = lastDay;
+      break;
+    case 'delivery':
+      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      break;
+    case 'trade':
+      this.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+      break;
+    case 'pendingEdit':
+      this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      break;
+    case 'submission':
+      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      break;
+    default:
+      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+  }
   
+  console.log(`[TempDataModel]: Set expiresAt to: ${this.expiresAt} for type: ${this.type}`);
   next();
 });
 
@@ -227,12 +230,18 @@ tempDataSchema.statics.cleanupByType = async function(type) {
 
 // Static method to find by type and key
 tempDataSchema.statics.findByTypeAndKey = async function(type, key) {
-  return this.findOne({ type, key, expiresAt: { $gt: new Date() } });
+  const now = new Date();
+  return this.findOne({ 
+    type, 
+    key, 
+    expiresAt: { $gt: now }
+  });
 };
 
 // Static method to find all by type
 tempDataSchema.statics.findAllByType = async function(type) {
-  return this.find({ type, expiresAt: { $gt: new Date() } });
+  const now = new Date();
+  return this.find({ type, expiresAt: { $gt: now } });
 };
 
 // Static method to find all expired entries

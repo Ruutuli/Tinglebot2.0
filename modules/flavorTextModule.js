@@ -508,43 +508,78 @@ const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion
  const baseFlavorText = getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
 
  // If this is a Scholar boost, add cross-region insight
- if (isScholarBoost && targetRegion) {
+ if (isScholarBoost) {
    console.log(`[flavorTextModule.js] Scholar boost flavor text triggered:`, {
      isScholarBoost: isScholarBoost,
      targetRegion: targetRegion,
      itemType: itemType
    });
    
-   const scholarInsights = [
-     `📚 Thanks to your boost, you gathered this item that is normally found in ${targetRegion}!`,
-     `🎓 Your scholarly insight revealed treasures from ${targetRegion}!`,
-     `📖 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
-     `🔍 Cross-region expertise uncovered ${targetRegion}'s hidden bounty!`,
-     `📚 The Scholar's research of ${targetRegion} proved invaluable!`,
-     `🎓 Thanks to scholarly wisdom, ${targetRegion} shared its secrets!`,
-     `📖 Your boost granted access to ${targetRegion}'s natural resources!`,
-     `🔍 The Scholar's guidance revealed ${targetRegion}'s hidden treasures!`,
-     `📚 Academic knowledge of ${targetRegion} made this gathering possible!`,
-     `🎓 Scholarly expertise unlocked ${targetRegion}'s natural wealth!`,
-     `📖 Your boost tapped into ${targetRegion}'s regional specialties!`,
-     `🔍 The Scholar's insight revealed ${targetRegion}'s local treasures!`,
-     `📚 Thanks to your boost, you accessed ${targetRegion}'s unique resources!`,
-     `🎓 Scholarly knowledge of ${targetRegion} led to this valuable find!`,
-     `📖 Your boost revealed ${targetRegion}'s regional bounty!`,
-     `🔍 The Scholar's expertise uncovered ${targetRegion}'s hidden gems!`,
-     `📚 Cross-region insight revealed ${targetRegion}'s natural treasures!`,
-     `🎓 Thanks to your boost, you discovered ${targetRegion}'s local specialties!`,
-     `📖 Scholarly wisdom granted access to ${targetRegion}'s resources!`,
-     `🔍 Your boost unlocked ${targetRegion}'s regional knowledge!`,
-     `📚 The Scholar's research revealed ${targetRegion}'s hidden wealth!`,
-     `🎓 Academic expertise made ${targetRegion}'s treasures accessible!`,
-     `📖 Your boost tapped into ${targetRegion}'s natural knowledge!`,
-     `🔍 Scholarly insight revealed ${targetRegion}'s local bounty!`
-   ];
-   
-   const scholarInsight = getRandomMessage(scholarInsights);
-   console.log(`[flavorTextModule.js] Generated Scholar insight: ${scholarInsight}`);
-   return `${baseFlavorText}\n\n${scholarInsight}`;
+   if (targetRegion) {
+     // Specific region insight
+     const scholarInsights = [
+       `📚 Thanks to your boost, you gathered this item that is normally found in ${targetRegion}!`,
+       `🎓 Your scholarly insight revealed treasures from ${targetRegion}!`,
+       `📖 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
+       `🔍 Cross-region expertise uncovered ${targetRegion}'s hidden bounty!`,
+       `📚 The Scholar's research of ${targetRegion} proved invaluable!`,
+       `🎓 Thanks to scholarly wisdom, ${targetRegion} shared its secrets!`,
+       `📖 Your boost granted access to ${targetRegion}'s natural resources!`,
+       `🔍 The Scholar's guidance revealed ${targetRegion}'s hidden treasures!`,
+       `📚 Academic knowledge of ${targetRegion} made this gathering possible!`,
+       `🎓 Scholarly expertise unlocked ${targetRegion}'s natural wealth!`,
+       `📖 Your boost tapped into ${targetRegion}'s regional specialties!`,
+       `🔍 The Scholar's insight revealed ${targetRegion}'s local treasures!`,
+       `📚 Thanks to your boost, you accessed ${targetRegion}'s unique resources!`,
+       `🎓 Scholarly knowledge of ${targetRegion} led to this valuable find!`,
+       `📖 Your boost revealed ${targetRegion}'s regional bounty!`,
+       `🔍 The Scholar's expertise uncovered ${targetRegion}'s hidden gems!`,
+       `📚 Cross-region insight revealed ${targetRegion}'s natural treasures!`,
+       `🎓 Thanks to your boost, you discovered ${targetRegion}'s local specialties!`,
+       `📖 Scholarly wisdom granted access to ${targetRegion}'s resources!`,
+       `🔍 Your boost unlocked ${targetRegion}'s regional knowledge!`,
+       `📚 The Scholar's research revealed ${targetRegion}'s hidden wealth!`,
+       `🎓 Academic expertise made ${targetRegion}'s treasures accessible!`,
+       `📖 Your boost tapped into ${targetRegion}'s natural knowledge!`,
+       `🔍 Scholarly insight revealed ${targetRegion}'s local bounty!`
+     ];
+     
+     const scholarInsight = getRandomMessage(scholarInsights);
+     console.log(`[flavorTextModule.js] Generated Scholar insight: ${scholarInsight}`);
+     return `${baseFlavorText}\n\n${scholarInsight}`;
+   } else {
+     // General Scholar boost insight (no specific region)
+     const generalScholarInsights = [
+       `📚 Thanks to your boost, you gathered this item with enhanced scholarly insight!`,
+       `🎓 Your scholarly knowledge revealed hidden treasures that others might miss!`,
+       `📖 The Scholar's expertise led to this valuable discovery!`,
+       `🔍 Cross-region knowledge uncovered this hidden bounty!`,
+       `📚 The Scholar's research proved invaluable for this gathering!`,
+       `🎓 Thanks to scholarly wisdom, you found this rare item!`,
+       `📖 Your boost granted access to enhanced natural resources!`,
+       `🔍 The Scholar's guidance revealed this hidden treasure!`,
+       `📚 Academic knowledge made this gathering possible!`,
+       `🎓 Scholarly expertise unlocked this natural wealth!`,
+       `📖 Your boost tapped into regional specialties!`,
+       `🔍 The Scholar's insight revealed this local treasure!`,
+       `📚 Thanks to your boost, you accessed unique resources!`,
+       `🎓 Scholarly knowledge led to this valuable find!`,
+       `📖 Your boost revealed regional bounty!`,
+       `🔍 The Scholar's expertise uncovered this hidden gem!`,
+       `📚 Cross-region insight revealed this natural treasure!`,
+       `🎓 Thanks to your boost, you discovered local specialties!`,
+       `📖 Scholarly wisdom granted access to enhanced resources!`,
+       `🔍 Your boost unlocked regional knowledge!`,
+       `📚 The Scholar's research revealed hidden wealth!`,
+       `🎓 Academic expertise made treasures accessible!`,
+       `📖 Your boost tapped into natural knowledge!`,
+       `🔍 Scholarly insight revealed local bounty!`
+     ];
+     
+     const scholarInsight = getRandomMessage(generalScholarInsights);
+     console.log(`[flavorTextModule.js] Generated general Scholar insight: ${scholarInsight}`);
+     return `${baseFlavorText}\n\n${scholarInsight}`;
+   }
  }
 
  // Return base flavor text for normal gathering
