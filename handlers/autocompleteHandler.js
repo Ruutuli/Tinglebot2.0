@@ -642,11 +642,15 @@ async function handleCharacterBasedCommandsAutocomplete(
  try {
                 const userId = interaction.user.id;
 
-  // Fetch all characters owned by the user
+  // Fetch all characters owned by the user (both regular and mod characters)
                 const characters = await fetchCharactersByUserId(userId);
+                const modCharacters = await fetchModCharactersByUserId(userId);
+                
+                // Combine regular characters and mod characters
+                const allCharacters = [...characters, ...modCharacters];
                 
   // Map all characters to choices with their basic info
-  const choices = characters.map((character) => ({
+  const choices = allCharacters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
    value: character.name,
                 }));
@@ -715,7 +719,12 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
   } else {
     // For other blight commands (roll, history), show all characters owned by the user
     const characters = await fetchCharactersByUserId(userId);
-    const choices = characters.map((character) => ({
+    const modCharacters = await fetchModCharactersByUserId(userId);
+    
+    // Combine regular characters and mod characters
+    const allCharacters = [...characters, ...modCharacters];
+    
+    const choices = allCharacters.map((character) => ({
       name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
       value: character.name,
     }));
@@ -872,8 +881,12 @@ async function handleBoostingRequestCharacterAutocomplete(interaction, focusedOp
  try {
   const userId = interaction.user.id;
   const characters = await fetchCharactersByUserId(userId);
+  const modCharacters = await fetchModCharactersByUserId(userId);
+  
+  // Combine regular characters and mod characters
+  const allCharacters = [...characters, ...modCharacters];
 
-  const choices = characters.map((character) => ({
+  const choices = allCharacters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
    value: character.name,
   }));
@@ -925,6 +938,10 @@ async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOpt
  try {
   const userId = interaction.user.id;
   const characters = await fetchCharactersByUserId(userId);
+  const modCharacters = await fetchModCharactersByUserId(userId);
+  
+  // Combine regular characters and mod characters
+  const allCharacters = [...characters, ...modCharacters];
 
   // Import jobPerks from jobsModule to get jobs with BOOST perk
   const { jobPerks } = require('../modules/jobsModule.js');
@@ -934,7 +951,7 @@ async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOpt
    .filter(job => job.perk === 'BOOST')
    .map(job => job.job);
 
-  const filteredCharacters = characters.filter((character) =>
+  const filteredCharacters = allCharacters.filter((character) =>
    boostJobs.some(boostJob => 
      boostJob.toLowerCase() === character.job.toLowerCase()
    )
@@ -959,8 +976,12 @@ async function handleBoostingStatusCharacterAutocomplete(interaction, focusedOpt
  try {
   const userId = interaction.user.id;
   const characters = await fetchCharactersByUserId(userId);
+  const modCharacters = await fetchModCharactersByUserId(userId);
+  
+  // Combine regular characters and mod characters
+  const allCharacters = [...characters, ...modCharacters];
 
-  const choices = characters.map((character) => ({
+  const choices = allCharacters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
    value: character.name,
   }));
@@ -1268,11 +1289,15 @@ async function handleCustomWeaponCharacterAutocomplete(interaction, focusedOptio
   try {
                 const userId = interaction.user.id;
                 const characters = await fetchCharactersByUserId(userId);
+                const modCharacters = await fetchModCharactersByUserId(userId);
+                
+                // Combine regular characters and mod characters
+                const allCharacters = [...characters, ...modCharacters];
                 
     // Ensure focusedValue is a string and has a default value
     const focusedValue = focusedOption?.value?.toString() || '';
     
-    const choices = characters
+    const choices = allCharacters
       .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
                   name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
@@ -2450,9 +2475,13 @@ async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
   const expeditionId = interaction.options.getString("id");
 
   const userCharacters = await fetchCharactersByUserId(userId);
+  const modCharacters = await fetchModCharactersByUserId(userId);
+  
+  // Combine regular characters and mod characters
+  const allCharacters = [...userCharacters, ...modCharacters];
 
   if (!expeditionId) {
-   const choices = userCharacters.map((char) => ({
+   const choices = allCharacters.map((char) => ({
                   name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
     value: char.name,
    }));
@@ -2484,7 +2513,7 @@ async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
    ]);
   }
 
-  const eligibleCharacters = userCharacters.filter(
+  const eligibleCharacters = allCharacters.filter(
    (char) =>
     char.currentVillage.toLowerCase() === requiredVillage.toLowerCase() &&
     char.inventorySynced === true
@@ -2636,7 +2665,12 @@ async function handleHealAutocomplete(interaction, focusedOption) {
     if (focusedOption.name === "charactername") {
       // Autocomplete for characters owned by the user
       const userCharacters = await fetchCharactersByUserId(userId);
-      const choices = userCharacters.map((character) => ({
+      const modCharacters = await fetchModCharactersByUserId(userId);
+      
+      // Combine regular characters and mod characters
+      const allCharacters = [...userCharacters, ...modCharacters];
+      
+      const choices = allCharacters.map((character) => ({
         name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
         value: character.name,
                 }));
@@ -2673,7 +2707,12 @@ async function handleHealAutocomplete(interaction, focusedOption) {
     if (focusedOption.name === "healername") {
       // Autocomplete for user's own healers
       const userCharacters = await fetchCharactersByUserId(userId);
-      const healerCharacters = userCharacters.filter(
+      const modCharacters = await fetchModCharactersByUserId(userId);
+      
+      // Combine regular characters and mod characters
+      const allCharacters = [...userCharacters, ...modCharacters];
+      
+      const healerCharacters = allCharacters.filter(
         (character) =>
           character.job.toLowerCase() === "healer" ||
           (character.jobVoucher === true &&
