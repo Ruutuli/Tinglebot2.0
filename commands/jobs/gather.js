@@ -193,7 +193,14 @@ module.exports = {
       await interaction.deferReply();
 
       const characterName = interaction.options.getString('charactername');
-      const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+      let character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+      
+      // If not found as regular character, try as mod character
+      if (!character) {
+        const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+        character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+      }
+      
       if (!character) {
         await safeReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,

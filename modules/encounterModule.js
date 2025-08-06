@@ -46,6 +46,26 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
         console.log(`[encounterModule.js]: 🎯 Starting encounter calculation for ${character.name} vs ${monster.name} (T${tier})`);
         console.log(`[encounterModule.js]: 📊 Initial values - Roll: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
 
+        // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
+        if (character.name === 'Aemu' || character.job === 'Dragon') {
+            console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.job}) - Always win and 1HKO!`);
+            outcome = {
+                result: 'Win!/Loot (1HKO)',
+                hearts: 0,
+                canLoot: true,
+            };
+            
+            console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
+            
+            return {
+                ...outcome,
+                damageValue,
+                adjustedRandomValue,
+                attackSuccess,
+                defenseSuccess,
+            };
+        }
+
         // --- FIX: If defenseSuccess, always block all damage and win ---
         if (defenseSuccess) {
             outcome = {
@@ -104,6 +124,24 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
+
+    // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
+    if (character.name === 'Aemu' || character.job === 'Dragon') {
+        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.job}) - Always win and 1HKO!`);
+        outcome = `⚔️🏹 ${character.name} unleashes their power! The ${monster.name} is instantly defeated! 💀`;
+        heartsLostForMonster = monster.currentHearts || 3; // 1HKO - take all monster hearts
+        
+        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
+        
+        return { 
+            result: outcome, 
+            hearts: heartsLostForMonster, 
+            adjustedRandomValue, 
+            attackSuccess, 
+            defenseSuccess,
+            canLoot: true
+        };
+    }
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
@@ -165,6 +203,24 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
+
+    // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
+    if (character.name === 'Aemu' || character.job === 'Dragon') {
+        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.job}) - Always win and 1HKO!`);
+        outcome = `⚔️🏹 ${character.name} unleashes their power! The ${monster.name} is instantly defeated! 💀`;
+        heartsLostForMonster = monster.currentHearts || 4; // 1HKO - take all monster hearts
+        
+        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
+        
+        return { 
+            result: outcome, 
+            hearts: heartsLostForMonster, 
+            adjustedRandomValue, 
+            attackSuccess, 
+            defenseSuccess,
+            canLoot: true
+        };
+    }
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
@@ -228,6 +284,24 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
     let outcome;
     let characterDamage = 0;
 
+    // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
+    if (character.name === 'Aemu' || character.job === 'Dragon') {
+        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.job}) - Always win and 1HKO!`);
+        outcome = `⚔️🏹 ${character.name} unleashes their power! The ${monster.name} is instantly defeated! 💀`;
+        heartsLostForMonster = monster.currentHearts || 5; // 1HKO - take all monster hearts
+        
+        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
+        
+        return { 
+            result: outcome, 
+            hearts: heartsLostForMonster, 
+            adjustedRandomValue, 
+            attackSuccess, 
+            defenseSuccess,
+            canLoot: true
+        };
+    }
+
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!`;
         characterDamage = 7;
@@ -289,6 +363,24 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
+
+    // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
+    if (character.name === 'Aemu' || character.job === 'Dragon') {
+        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.job}) - Always win and 1HKO!`);
+        outcome = `⚔️🏹 ${character.name} unleashes their power! The ${monster.name} is instantly defeated! 💀`;
+        heartsLostForMonster = monster.currentHearts || 6; // 1HKO - take all monster hearts
+        
+        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
+        
+        return { 
+            result: outcome, 
+            hearts: heartsLostForMonster, 
+            adjustedRandomValue, 
+            attackSuccess, 
+            defenseSuccess,
+            canLoot: true
+        };
+    }
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!`;
@@ -352,6 +444,24 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
     let outcome;
     let characterDamage = 0;
 
+    // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
+    if (character.name === 'Aemu' || character.job === 'Dragon') {
+        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.job}) - Always win and 1HKO!`);
+        outcome = `⚔️🏹 ${character.name} unleashes their power! The ${monster.name} is instantly defeated! 💀`;
+        heartsLostForMonster = monster.currentHearts || 7; // 1HKO - take all monster hearts
+        
+        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
+        
+        return { 
+            result: outcome, 
+            hearts: heartsLostForMonster, 
+            adjustedRandomValue, 
+            attackSuccess, 
+            defenseSuccess,
+            canLoot: true
+        };
+    }
+
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️❤️ 9 hearts!`;
         characterDamage = 9;
@@ -413,6 +523,24 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
+
+    // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
+    if (character.name === 'Aemu' || character.job === 'Dragon') {
+        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.job}) - Always win and 1HKO!`);
+        outcome = `⚔️🏹 ${character.name} unleashes their power! The ${monster.name} is instantly defeated! 💀`;
+        heartsLostForMonster = monster.currentHearts || 8; // 1HKO - take all monster hearts
+        
+        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
+        
+        return { 
+            result: outcome, 
+            hearts: heartsLostForMonster, 
+            adjustedRandomValue, 
+            attackSuccess, 
+            defenseSuccess,
+            canLoot: true
+        };
+    }
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️ 10 hearts!`;

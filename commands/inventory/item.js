@@ -158,25 +158,120 @@ module.exports = {
           });
         }
 
-        // Mod characters don't need job vouchers
+        // Mod characters can use job vouchers without consuming them
         if (character.isModCharacter) {
-          return void await interaction.editReply({
-            embeds: [{
-              color: 0x00FF00,
-              title: '👑 Mod Character - No Job Voucher Needed',
-              description: `**${character.name}** is a ${character.modTitle} of ${character.modType} and can use any job without a voucher.\n\nJob vouchers are not needed for mod characters.`,
-              thumbnail: {
-                url: character.icon || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-              },
-              image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-              },
-              footer: {
-                text: 'Mod Character System'
+          const jobName = interaction.options.getString('jobname');
+          if (!jobName) {
+            const { embed } = getJobVoucherErrorMessage('NO_JOB_SPECIFIED');
+            return void await interaction.editReply({ embeds: [embed], ephemeral: true });
+          }
+
+          const jobPerkInfo = getJobPerk(jobName);
+          if (!jobPerkInfo) {
+            return void await interaction.editReply({
+              content: `❌ **"${capitalizeWords(jobName)}" is not a valid job.**\nPlease select a valid job from the suggestions.`,
+              ephemeral: true
+            });
+          }
+
+          // --- Location/Village validation for village-locked jobs ---
+          if (jobPerkInfo.village) {
+            const requiredVillage = jobPerkInfo.village.toLowerCase().trim();
+            const characterVillage = character.currentVillage?.toLowerCase().trim();
+            if (characterVillage !== requiredVillage) {
+              return void await interaction.editReply({
+                embeds: [{
+                  color: 0xFF0000,
+                  title: '❌ Job Voucher Error',
+                  description: `${character.name} must be in ${capitalizeWords(jobPerkInfo.village)} to use this job voucher.`,
+                  fields: [
+                    { name: 'Current Location', value: capitalizeWords(character.currentVillage), inline: true },
+                    { name: 'Required Location', value: capitalizeWords(jobPerkInfo.village), inline: true }
+                  ],
+                  image: {
+                    url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                  },
+                  footer: {
+                    text: 'Location Requirement'
+                  }
+                }],
+                ephemeral: true
+              });
+            }
+          }
+
+          // Activate job voucher for mod character (without consuming the voucher)
+          await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+
+          // Log job voucher usage to Google Sheets (but don't remove from inventory)
+          const inventoryLink = character.inventory || character.inventoryLink;
+          if (typeof inventoryLink === 'string') {
+            const { category = [], type = [], subtype = [] } = item;
+            const formattedDateTime = new Date().toISOString();
+            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+            const values = [[
+              character.name,
+              'Job Voucher',
+              '0', // No quantity change for mod characters
+              Array.isArray(category) ? category.join(', ') : category,
+              Array.isArray(type) ? type.join(', ') : type,
+              Array.isArray(subtype) ? subtype.join(', ') : subtype,
+              `Used for job voucher: ${jobName} (Mod Character - No Consumption)`,
+              character.job,
+              '',
+              character.currentVillage,
+              interactionUrl,
+              formattedDateTime,
+              ''
+            ]];
+            await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
+              skipValidation: true,
+              context: {
+                commandName: 'item',
+                userTag: interaction.user.tag,
+                userId: interaction.user.id,
+                options: {
+                  characterName,
+                  itemName,
+                  quantity,
+                  jobName: interaction.options.getString('jobname')
+                }
               }
-            }],
-            ephemeral: true
-          });
+            });
+          }
+
+          // Build and send voucher embed for mod character
+          const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
+          const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
+          let description = `**${character.name}** has used a Job Voucher to perform the **${capitalizeWords(jobName)}** job.`;
+          if (jobPerkInfo.perks?.length) {
+            description = `**${character.name}** has used a Job Voucher to perform the **${capitalizeWords(jobName)}** job with the following perk(s): **${jobPerkInfo.perks.join(', ')}**.`;
+          }
+          const commands = [
+            jobPerkInfo.perks.includes('GATHERING') && '> </gather:1372378304773881885>',
+            jobPerkInfo.perks.includes('CRAFTING') && '> </crafting:1372378304773881883>',
+            jobPerkInfo.perks.includes('LOOTING') && '> </loot:1372378304773881887>',
+            jobPerkInfo.perks.includes('HEALING') && '> </heal fufill:1372378304773881886>'
+          ].filter(Boolean);
+          if (commands.length) {
+            description += `\n\nUse the following commands to make the most of this role:\n${commands.join('\n')}`;
+          }
+
+          const voucherEmbed = new EmbedBuilder()
+            .setColor('#00FF00')
+            .setTitle('👑 Mod Character - Job Voucher Activated!')
+            .setDescription(description)
+            .addFields(
+              { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
+              { name: '🏷️ Normal Job', value: `**${capitalizeWords(character.job || 'Unemployed')}**`, inline: true },
+              { name: '👑 Mod Status', value: `**${character.modTitle} of ${character.modType}**`, inline: true },
+              { name: '💎 Voucher Status', value: `**Not Consumed** (Mod Character Benefit)`, inline: false }
+            )
+            .setThumbnail(item.image || 'https://via.placeholder.com/150')
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+            .setFooter({ text: '✨ Mod characters can use job vouchers without consuming them!' });
+
+          return void await interaction.editReply({ embeds: [voucherEmbed] });
         }
 
         if (character.jobVoucher) {

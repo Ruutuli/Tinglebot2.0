@@ -307,11 +307,24 @@ async function handleBoostRequest(interaction) {
 
  // Debug info removed to reduce log bloat
 
- const targetCharacter = await fetchCharacterByNameAndUserId(
+ let targetCharacter = await fetchCharacterByNameAndUserId(
   characterName,
   userId
  );
- const boosterCharacter = await fetchCharacterByName(boosterName);
+ 
+ // If not found as regular character, try as mod character
+ if (!targetCharacter) {
+   const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+   targetCharacter = await fetchModCharacterByNameAndUserId(characterName, userId);
+ }
+ 
+ let boosterCharacter = await fetchCharacterByName(boosterName);
+ 
+ // If not found as regular character, try as mod character
+ if (!boosterCharacter) {
+   const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+   boosterCharacter = await fetchModCharacterByNameAndUserId(boosterName, userId);
+ }
 
  if (!targetCharacter || !boosterCharacter) {
   console.error(
@@ -496,7 +509,14 @@ async function handleBoostAccept(interaction) {
   return;
  }
 
- const booster = await fetchCharacterByNameAndUserId(boosterName, userId);
+ let booster = await fetchCharacterByNameAndUserId(boosterName, userId);
+ 
+ // If not found as regular character, try as mod character
+ if (!booster) {
+   const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+   booster = await fetchModCharacterByNameAndUserId(boosterName, userId);
+ }
+ 
  if (!booster) {
   console.error(
    `[boosting.js]: Error - User does not own boosting character "${boosterName}".`
@@ -616,7 +636,14 @@ async function handleBoostStatus(interaction) {
  const characterName = interaction.options.getString("charactername");
  const userId = interaction.user.id;
 
- const character = await fetchCharacterByNameAndUserId(characterName, userId);
+ let character = await fetchCharacterByNameAndUserId(characterName, userId);
+ 
+ // If not found as regular character, try as mod character
+ if (!character) {
+   const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+   character = await fetchModCharacterByNameAndUserId(characterName, userId);
+ }
+ 
  if (!character) {
   await interaction.reply({
    content: "You do not own this character.",

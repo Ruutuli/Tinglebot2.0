@@ -87,7 +87,14 @@ module.exports = {
 
     try {
       // ------------------- Fetch and Validate Character -------------------
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      let character = await fetchCharacterByNameAndUserId(characterName, userId);
+      
+      // If not found as regular character, try as mod character
+      if (!character) {
+        const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+        character = await fetchModCharacterByNameAndUserId(characterName, userId);
+      }
+      
       if (!character) {
         return interaction.editReply({ content: `❌ **Character "${characterName}" not found or does not belong to you.**`, flags: [MessageFlags.Ephemeral] });
       }
