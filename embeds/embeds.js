@@ -1108,13 +1108,7 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
      (boosterCharacter.job === 'Scholar' || boosterCharacter.job?.toLowerCase() === 'scholar');
    const targetRegion = scholarTargetVillage;
    
-   console.log(`[embeds.js] Scholar boost debug:`, {
-     characterBoostedBy: character.boostedBy,
-     boosterCharacterJob: boosterCharacter?.job,
-     isScholarBoost: isScholarBoost,
-     targetRegion: targetRegion,
-     itemType: randomItem.type[0]
-   });
+   // Debug info removed to reduce log bloat
    
    flavorText = generateGatherFlavorText(randomItem.type[0], isScholarBoost, targetRegion);
  }

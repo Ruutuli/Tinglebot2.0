@@ -641,41 +641,29 @@ module.exports = {
              const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
              const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
              
-             console.log(`[gather.js] Scholar boost debug - boostData:`, {
-               found: !!boostData,
-               targetVillage: boostData?.targetVillage,
-               status: boostData?.status,
-               category: boostData?.category,
-               boostExpiresAt: boostData?.boostExpiresAt,
-               currentTime: Date.now()
-             });
+             // Debug info removed to reduce log bloat
              
              if (boostData && boostData.targetVillage) {
                scholarTargetVillage = boostData.targetVillage;
                gatheringRegion = scholarTargetVillage;
-               console.log(`[gather.js] Scholar boost applied: ${region} → ${gatheringRegion} (cross-region gathering)`);
-               console.log(`[gather.js] Cross-Region Insight: ${character.name} will gather from ${scholarTargetVillage} while staying in ${character.currentVillage}`);
+               console.log(`[gather.js] Scholar boost applied: ${region} → ${gatheringRegion}`);
              } else {
-               console.log(`[gather.js] Scholar boost debug - No targetVillage found in boostData or boostData is null`);
+               // Debug info removed to reduce log bloat
              }
            }
         }
         
+        // Convert village name to region for proper item filtering (only once)
+        let regionKey = gatheringRegion.toLowerCase();
+        const { getVillageRegionByName } = require('../../modules/locationsModule');
+        const villageRegion = getVillageRegionByName(gatheringRegion);
+        if (villageRegion) {
+          regionKey = villageRegion.toLowerCase();
+          console.log(`[gather.js] Village ${gatheringRegion} maps to region ${villageRegion} (${regionKey})`);
+        }
+        
         const availableItems = items.filter(item => {
           const jobKey = job.toLowerCase();
-          
-          // Convert village name to region for proper item filtering
-          let regionKey = gatheringRegion.toLowerCase();
-          
-          // Import the village-to-region mapping function
-          const { getVillageRegionByName } = require('../../modules/locationsModule');
-          
-          // If gatheringRegion is a village name, convert it to its region
-          const villageRegion = getVillageRegionByName(gatheringRegion);
-          if (villageRegion) {
-            regionKey = villageRegion.toLowerCase();
-            console.log(`[gather.js] Village ${gatheringRegion} maps to region ${villageRegion} (${regionKey})`);
-          }
           
           // Use the normalizeJobName function from jobsModule
           const normalizedInputJob = normalizeJobName(job);
@@ -728,45 +716,30 @@ module.exports = {
         
         const weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
         
-        // Log detailed weight information
+        // Calculate total weight for selection
         const totalWeight = weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0);
-        console.log(`[gather.js] Weighted selection pool: ${weightedItems.length} items, total weight: ${totalWeight}`);
-        
-        // Log top 5 items by weight for visibility
-        const sortedByWeight = [...weightedItems].sort((a, b) => (b.weight || 1) - (a.weight || 1));
-        console.log(`[gather.js] Top 5 items by weight:`);
-        sortedByWeight.slice(0, 5).forEach((item, index) => {
-          const percentage = ((item.weight || 1) / totalWeight * 100).toFixed(1);
-          console.log(`  ${index + 1}. ${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'}) - Weight: ${item.weight || 1} (${percentage}%)`);
-        });
         
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
         const randomItem = weightedItems[randomIndex];
         const quantity = 1;
         
-                 // Log the final selection with its weight percentage
-         const selectedWeight = randomItem.weight || 1;
-         const selectedPercentage = (selectedWeight / totalWeight * 100).toFixed(1);
-         console.log(`[gather.js] Selected: ${randomItem.itemName} (Rarity: ${randomItem.itemRarity || 'Unknown'}) - Weight: ${selectedWeight} (${selectedPercentage}%)`);
+         // Log the final selection
+         console.log(`[gather.js] Selected: ${randomItem.itemName}`);
          
          // Log cross-region insight if Scholar boost was applied
          if (scholarTargetVillage) {
-           console.log(`[gather.js] Cross-Region Insight: ${randomItem.itemName} was gathered from ${scholarTargetVillage} thanks to Scholar's knowledge!`);
+           console.log(`[gather.js] Scholar boost: ${randomItem.itemName} gathered from ${scholarTargetVillage}`);
          }
         
         // Handle Entertainer bonus item
         if (isEntertainerBoost) {
-          console.log(`[gather.js] Entertainer boost detected for ${character.name}`);
           const entertainerItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
-          console.log(`[gather.js] Entertainer boost: Found ${entertainerItems ? entertainerItems.length : 0} entertainer items in region`);
           
           if (entertainerItems && entertainerItems.length > 0) {
             // Select a random entertainer item as bonus
             const bonusIndex = Math.floor(Math.random() * entertainerItems.length);
             bonusItem = entertainerItems[bonusIndex];
             console.log(`[gather.js] Entertainer boost: Bonus item ${bonusItem.itemName}`);
-          } else {
-            console.log(`[gather.js] Entertainer boost: No entertainer items available in this region`);
           }
         }
         
@@ -809,13 +782,7 @@ module.exports = {
         }
 
         // Create embed with cross-region gathering info if applicable
-        console.log(`[gather.js] Creating embed with boost data:`, {
-          characterBoostedBy: character.boostedBy,
-          boosterCharacter: boosterCharacter?.name,
-          boosterCharacterJob: boosterCharacter?.job,
-          scholarTargetVillage: scholarTargetVillage,
-          isDivineItemWithPriestBoost: isDivineItemWithPriestBoost
-        });
+        // Debug info removed to reduce log bloat
         
         const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage);
         await safeReply({ embeds: [embed] });
