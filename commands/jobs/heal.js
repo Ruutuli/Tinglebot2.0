@@ -216,8 +216,24 @@ function createHealingRequestData(characterToHeal, healerCharacter, heartsToHeal
 // Handles the creation of a healing request
 async function handleHealingRequest(interaction, characterName, heartsToHeal, paymentOffered, healerName) {
   try {
-    const characterToHeal = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-    const healerCharacter = healerName ? await fetchCharacterByName(healerName) : null;
+    let characterToHeal = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+    
+    // If not found as regular character, try as mod character
+    if (!characterToHeal) {
+      const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+      characterToHeal = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+    }
+    
+    let healerCharacter = null;
+    if (healerName) {
+      healerCharacter = await fetchCharacterByName(healerName);
+      
+      // If not found as regular character, try as mod character
+      if (!healerCharacter) {
+        const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+        healerCharacter = await fetchModCharacterByNameAndUserId(healerName, interaction.user.id);
+      }
+    }
 
     // Ensure the character exists and belongs to the user
     if (!characterToHeal) {
@@ -525,7 +541,14 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     }
 
     // Fetch and validate characters
-    const healerCharacter = await fetchCharacterByNameAndUserId(healerName, interaction.user.id);
+    let healerCharacter = await fetchCharacterByNameAndUserId(healerName, interaction.user.id);
+    
+    // If not found as regular character, try as mod character
+    if (!healerCharacter) {
+      const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+      healerCharacter = await fetchModCharacterByNameAndUserId(healerName, interaction.user.id);
+    }
+    
     if (!healerCharacter) {
       console.error(`[heal.js]: ❌ Invalid healer character "${healerName}"`);
       const errorEmbed = createErrorEmbed(
@@ -550,7 +573,13 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       return;
     }
 
-    const characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
+    let characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
+    
+    // If not found as regular character, try as mod character
+    if (!characterToHeal) {
+      const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+      characterToHeal = await fetchModCharacterByNameAndUserId(healingRequest.characterRequesting, interaction.user.id);
+    }
     if (!characterToHeal) {
       const errorEmbed = createErrorEmbed(
         'Target Character Not Found',

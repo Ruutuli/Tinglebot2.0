@@ -262,9 +262,19 @@ module.exports = {
    const characterName = interaction.options.getString("charactername");
    const userId = interaction.user.id;
 
-   const character = await validateCharacterForLoot(interaction, characterName, userId);
+   let character = await validateCharacterForLoot(interaction, characterName, userId);
+   
+   // If not found as regular character, try as mod character
    if (!character) {
-    return;
+     const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+     character = await fetchModCharacterByNameAndUserId(characterName, userId);
+     
+     if (character && character.isModCharacter) {
+       // For mod characters, skip some validations that don't apply
+       console.log(`[loot.js]: 👑 Mod character ${character.name} detected`);
+     } else if (!character) {
+       return;
+     }
    }
 
    // ------------------- Step 2: Check Hearts and Job Validity -------------------

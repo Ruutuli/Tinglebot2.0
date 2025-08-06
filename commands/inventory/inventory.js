@@ -179,7 +179,13 @@ module.exports = {
       }
 
       await connectToTinglebot();
-      const character = await fetchCharacterByName(characterName);
+      let character = await fetchCharacterByName(characterName);
+      
+      // If not found as regular character, try as mod character
+      if (!character) {
+        const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+        character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+      }
       
       if (!character) {
         await interaction.editReply({
@@ -364,7 +370,14 @@ module.exports = {
 
       await connectToTinglebot();
 
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      let character = await fetchCharacterByNameAndUserId(characterName, userId);
+      
+      // If not found as regular character, try as mod character
+      if (!character) {
+        const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+        character = await fetchModCharacterByNameAndUserId(characterName, userId);
+      }
+      
       if (!character) {
         throw new Error(`Character with name ${characterName} not found.`);
       }
@@ -426,7 +439,14 @@ module.exports = {
       await connectToTinglebot();
       console.log('✅ Connected to Tinglebot database.');
 
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      let character = await fetchCharacterByNameAndUserId(characterName, userId);
+      
+      // If not found as regular character, try as mod character
+      if (!character) {
+        const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+        character = await fetchModCharacterByNameAndUserId(characterName, userId);
+      }
+      
       if (!character) {
         throw new Error(`Character with name "${characterName}" not found.`);
       }

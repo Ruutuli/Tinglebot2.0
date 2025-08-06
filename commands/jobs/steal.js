@@ -226,7 +226,14 @@ function getFallbackMessage(targetRarity, selectedTier) {
 // ------------------- Character Validation -------------------
 async function validateCharacter(characterName, userId, requireInventorySync = false) {
     try {
-        const character = await fetchCharacterByName(characterName);
+        let character = await fetchCharacterByName(characterName);
+        
+        // If not found as regular character, try as mod character
+        if (!character) {
+            const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+            character = await fetchModCharacterByNameAndUserId(characterName, userId);
+        }
+        
         if (!character) {
             return { valid: false, error: `❌ **Character "${characterName}" not found.** Please check the spelling and make sure the character exists.` };
         }
