@@ -10,7 +10,7 @@ const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js'
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // ------------------- Database Services -------------------
 // Import character-related database services for fetching and updating character data.
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../database/db.js');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../database/db.js');
 
 
 // ------------------- Database Models -------------------
@@ -97,7 +97,13 @@ module.exports = {
       await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
       // ------------------- Fetch Character Details -------------------
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      let character = await fetchCharacterByNameAndUserId(characterName, userId);
+      
+      // If not found as regular character, try as mod character
+      if (!character) {
+        character = await fetchModCharacterByNameAndUserId(characterName, userId);
+      }
+      
       if (!character) {
         await interaction.editReply({ content: `❌ **Character ${characterName} not found or does not belong to you.**`, flags: [MessageFlags.Ephemeral] });
         return;
@@ -133,7 +139,12 @@ module.exports = {
         await updateCharacterAttack(character._id);
 
         // Fetch the updated character details.
-        const updatedCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
+        let updatedCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
+        
+        // If not found as regular character, try as mod character
+        if (!updatedCharacter) {
+          updatedCharacter = await fetchModCharacterByNameAndUserId(characterName, userId);
+        }
 
         // Retrieve updated item details from the item database.
         const updatedItemDetails = await ItemModel.find({

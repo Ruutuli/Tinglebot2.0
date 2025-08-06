@@ -4,7 +4,7 @@
 // ============================================================================
 
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, InteractionType } = require('discord.js');
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../../database/db');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../../database/db');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { syncToInventoryDatabase } = require('../../utils/inventoryUtils');
 const { checkInventorySync } = require('../../utils/characterUtils');
@@ -48,8 +48,16 @@ module.exports = {
         });
       }
 
-      const fromChar = await fetchCharacterByNameAndUserId(fromName, userId);
-      const toChar = await fetchCharacterByNameAndUserId(toName, userId);
+      let fromChar = await fetchCharacterByNameAndUserId(fromName, userId);
+      let toChar = await fetchCharacterByNameAndUserId(toName, userId);
+      
+      // If not found as regular characters, try as mod characters
+      if (!fromChar) {
+        fromChar = await fetchModCharacterByNameAndUserId(fromName, userId);
+      }
+      if (!toChar) {
+        toChar = await fetchModCharacterByNameAndUserId(toName, userId);
+      }
       if (!fromChar || !toChar) {
         return await interaction.editReply({
           embeds: [
