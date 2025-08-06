@@ -11,6 +11,7 @@ const { EmbedBuilder } = require('discord.js');
 // Functions to fetch and update data from the database (characters, items, inventory).
 const {
   fetchCharacterByNameAndUserId,
+  fetchModCharacterByNameAndUserId,
   fetchItemByName,
   getCharacterInventoryCollection,
   updateCharacterById
@@ -81,7 +82,13 @@ module.exports = {
     try {
       // ------------------- Fetch Records -------------------
       // Retrieve character and item data; bail out if missing.
-      const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+      let character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+      
+      // If not found as regular character, try as mod character
+      if (!character) {
+        character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+      }
+      
       if (!character) {
         await interaction.editReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,

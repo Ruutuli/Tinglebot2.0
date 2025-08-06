@@ -11,7 +11,7 @@ const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 const mongoose = require('mongoose'); // Add mongoose import
 
 // ------------------- Database Connections -------------------
-const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes, fetchAllWeapons } = require('../../database/db');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes, fetchAllWeapons } = require('../../database/db');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
@@ -995,7 +995,13 @@ async function validateCreateCommandRequirements(characterName, weaponId, userId
         }
 
         // Fetch Character with comprehensive error handling
-        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        let character = await fetchCharacterByNameAndUserId(characterName, userId);
+        
+        // If not found as regular character, try as mod character
+        if (!character) {
+            character = await fetchModCharacterByNameAndUserId(characterName, userId);
+        }
+        
         if (!character) {
             throw new Error(`Character **${characterName}** not found.`);
         }
@@ -1517,7 +1523,13 @@ if (!weaponName.trim() || !description.trim() || !subtype.trim()) {
 
 // Fetch Character
 try {
-    const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+    let character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+    
+    // If not found as regular character, try as mod character
+    if (!character) {
+        character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+    }
+    
     if (!character) {
         await interaction.editReply({ content: `❌ Character **${characterName}** not found.`, ephemeral: true });
         return;
