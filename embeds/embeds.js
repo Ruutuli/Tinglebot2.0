@@ -83,6 +83,36 @@ function getArticleForItem(itemName) {
  return vowels.includes(itemName.charAt(0).toUpperCase()) ? "an" : "a";
 }
 
+function createBoostRequestEmbed(requestData, boostRequestId) {
+  const embed = new EmbedBuilder()
+    .setTitle('🌟 Boost Request')
+    .setColor('#FFD700')
+    .addFields(
+      { name: '📋 Request ID', value: `\`${boostRequestId}\``, inline: true },
+      { name: '🎯 Target Character', value: requestData.requestedBy, inline: true },
+      { name: '✨ Booster Character', value: requestData.booster, inline: true },
+      { name: '💼 Booster Job', value: requestData.boosterJob, inline: true },
+      { name: '📂 Category', value: requestData.category, inline: true },
+      { name: '🏘️ Village', value: requestData.village, inline: true },
+      { name: '🎁 Boost Effect', value: requestData.boostEffect, inline: false }
+    )
+    .setFooter({ 
+      text: 'Boost request expires in 24 hours if not accepted',
+      iconURL: requestData.requestedByIcon 
+    })
+    .setTimestamp();
+
+  if (requestData.targetVillage) {
+    embed.addFields({
+      name: '🎯 Target Village (Scholar)',
+      value: `Cross-region gathering from: **${requestData.targetVillage}**`,
+      inline: false
+    });
+  }
+
+  return embed;
+}
+
 function formatItemDetails(itemName, quantity = 1, emoji = DEFAULT_EMOJI) {
  const truncatedName =
   itemName.length > 20 ? itemName.substring(0, 17) + "..." : itemName;
