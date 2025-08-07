@@ -48,6 +48,9 @@ const {
   updateTokenBalance
 } = require('../../database/db');
 
+// ------------------- Database Models -------------------
+const Character = require('../../models/CharacterModel');
+
 // ------------------- Custom Modules -------------------
 const { monsterMapping } = require('../../models/MonsterModel');
 
@@ -116,7 +119,6 @@ const { simulateWeightedWeather } = require('../../services/weatherService');
 
 // ------------------- Database Models -------------------
 const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
-const Character = require('../../models/CharacterModel');
 const ItemModel = require('../../models/ItemModel');
 const Pet = require('../../models/PetModel');
 const TempData = require('../../models/TempDataModel');
@@ -2486,13 +2488,37 @@ async function handleBlightOverride(interaction) {
 
     switch (action) {
       case 'wipe_all':
-        updateQuery = { $set: { blightLevel: 0, blightPaused: false } };
+        updateQuery = { $set: { 
+          blighted: false, 
+          blightedAt: null, 
+          blightStage: 0, 
+          blightPaused: false,
+          lastRollDate: null,
+          deathDeadline: null,
+          blightEffects: {
+            rollMultiplier: 1.0,
+            noMonsters: false,
+            noGathering: false
+          }
+        }};
         actionDescription = 'wiped blight from ALL characters';
         break;
 
       case 'wipe_village':
         updateQuery = { 
-          $set: { blightLevel: 0, blightPaused: false },
+          $set: { 
+            blighted: false, 
+            blightedAt: null, 
+            blightStage: 0, 
+            blightPaused: false,
+            lastRollDate: null,
+            deathDeadline: null,
+            blightEffects: {
+              rollMultiplier: 1.0,
+              noMonsters: false,
+              noGathering: false
+            }
+          },
           $match: { currentVillage: target.toLowerCase() }
         };
         actionDescription = `wiped blight from all characters in ${target}`;
@@ -2507,20 +2533,32 @@ async function handleBlightOverride(interaction) {
           });
         }
         updateQuery = { 
-          $set: { blightLevel: 0, blightPaused: false },
+          $set: { 
+            blighted: false, 
+            blightedAt: null, 
+            blightStage: 0, 
+            blightPaused: false,
+            lastRollDate: null,
+            deathDeadline: null,
+            blightEffects: {
+              rollMultiplier: 1.0,
+              noMonsters: false,
+              noGathering: false
+            }
+          },
           $match: { _id: character._id }
         };
         actionDescription = `wiped blight from character ${target}`;
         break;
 
       case 'set_all_level':
-        updateQuery = { $set: { blightLevel: level, blightPaused: false } };
+        updateQuery = { $set: { blighted: true, blightedAt: new Date(), blightStage: level, blightPaused: false } };
         actionDescription = `set blight level to ${level} for ALL characters`;
         break;
 
       case 'set_village_level':
         updateQuery = { 
-          $set: { blightLevel: level, blightPaused: false },
+          $set: { blighted: true, blightedAt: new Date(), blightStage: level, blightPaused: false },
           $match: { currentVillage: target.toLowerCase() }
         };
         actionDescription = `set blight level to ${level} for all characters in ${target}`;
@@ -2535,7 +2573,7 @@ async function handleBlightOverride(interaction) {
           });
         }
         updateQuery = { 
-          $set: { blightLevel: level, blightPaused: false },
+          $set: { blighted: true, blightedAt: new Date(), blightStage: level, blightPaused: false },
           $match: { _id: targetCharacter._id }
         };
         actionDescription = `set blight level to ${level} for character ${target}`;
@@ -2558,10 +2596,59 @@ async function handleBlightOverride(interaction) {
       
       result = await Character.findByIdAndUpdate(
         characterId,
-        { blightLevel: action.startsWith('wipe_') ? 0 : level, blightPaused: false },
+        { 
+          blighted: !action.startsWith('wipe_'),
+          blightedAt: action.startsWith('wipe_') ? null : new Date(),
+          blightStage: action.startsWith('wipe_') ? 0 : level, 
+          blightPaused: false,
+          lastRollDate: action.startsWith('wipe_') ? null : undefined,
+          deathDeadline: action.startsWith('wipe_') ? null : undefined,
+          blightEffects: action.startsWith('wipe_') ? {
+            rollMultiplier: 1.0,
+            noMonsters: false,
+            noGathering: false
+          } : undefined
+        },
         { new: true }
       );
       affectedCount = result ? 1 : 0;
+
+      // Handle role management for single character actions
+      if (action === 'wipe_character' && result) {
+        try {
+          const otherBlightedCharacters = await Character.find({
+            userId: result.userId,
+            blighted: true,
+            _id: { $ne: result._id }
+          });
+
+          const guild = interaction.guild;
+          if (guild) {
+            const member = await guild.members.fetch(result.userId);
+            
+            if (otherBlightedCharacters.length === 0) {
+              // No other blighted characters, remove the role
+              await member.roles.remove('798387447967907910');
+              console.log(`[mod.js]: ✅ Removed blight role from user ${result.userId} via override - no other blighted characters`);
+            } else {
+              console.log(`[mod.js]: ⚠️ Kept blight role on user ${result.userId} via override - has ${otherBlightedCharacters.length} other blighted character(s)`);
+            }
+          }
+        } catch (roleError) {
+          console.warn(`[mod.js]: ⚠️ Could not manage blight role for user ${result.userId} via override:`, roleError);
+        }
+      } else if (action === 'set_character_level' && result) {
+        try {
+          const guild = interaction.guild;
+          if (guild) {
+            const member = await guild.members.fetch(result.userId);
+            await member.roles.add('798387447967907910');
+            console.log(`[mod.js]: ✅ Added blight role to user ${result.userId} via override for character ${result.name}`);
+          }
+        } catch (roleError) {
+          console.warn(`[mod.js]: ⚠️ Could not add blight role to user ${result.userId} via override:`, roleError);
+        }
+      }
     } else {
       // For bulk actions, use updateMany
       const filter = {};
@@ -2570,8 +2657,17 @@ async function handleBlightOverride(interaction) {
       }
       
       result = await Character.updateMany(filter, {
-        blightLevel: action.startsWith('wipe_') ? 0 : level,
-        blightPaused: false
+        blighted: !action.startsWith('wipe_'),
+        blightedAt: action.startsWith('wipe_') ? null : new Date(),
+        blightStage: action.startsWith('wipe_') ? 0 : level,
+        blightPaused: false,
+        lastRollDate: action.startsWith('wipe_') ? null : undefined,
+        deathDeadline: action.startsWith('wipe_') ? null : undefined,
+        blightEffects: action.startsWith('wipe_') ? {
+          rollMultiplier: 1.0,
+          noMonsters: false,
+          noGathering: false
+        } : undefined
       });
       affectedCount = result.modifiedCount;
     }
@@ -2884,7 +2980,9 @@ async function handleBlight(interaction) {
 
     if (status) {
       // ------------------- Set Blight -------------------
-      character.blightLevel = stage;
+      character.blighted = true;
+      character.blightedAt = new Date();
+      character.blightStage = stage;
       character.blightPaused = false; // Ensure blight is not paused when setting
       await character.save();
 
@@ -2976,73 +3074,91 @@ async function handleBlight(interaction) {
         .setDescription(`**${character.name}** has been successfully afflicted with blight stage ${stage}.`)
         .addFields(
           {
-            name: '👤 Character',
-            value: `${character.name}`,
-            inline: true
+            name: '__👤 Character__',
+            value: character.name,
+            inline: false
           },
           {
-            name: '🏰 Village',
-            value: `${villageEmoji} ${character.currentVillage}`,
-            inline: true
+            name: '__🏰 Village__',
+            value: `${villageEmoji} ${character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1)}`,
+            inline: false
           },
           {
-            name: '⚔️ Job',
-            value: `${character.job}`,
-            inline: true
+            name: '__⚔️ Job__',
+            value: character.job.charAt(0).toUpperCase() + character.job.slice(1),
+            inline: false
           },
           {
-            name: '<:blight_eye:805576955725611058> Blight Stage',
+            name: '__<:blight_eye:805576955725611058> Blight Stage__',
             value: `${stageEmoji} Stage ${stage}`,
-            inline: true
+            inline: false
           },
           {
-            name: '👤 Owner',
-            value: `<@${character.userId}>`,
-            inline: true
-          },
-          {
-            name: '⚠️ Status',
+            name: '__⚠️ Status__',
             value: 'Blight successfully applied',
-            inline: true
+            inline: false
           },
           {
-            name: '💀 The Corruption',
+            name: '__💀 The Corruption__',
             value: flavorText,
             inline: false
           }
         )
         .setThumbnail(character.icon)
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
         .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
         .setTimestamp();
 
       return interaction.editReply({
+        content: `<@${character.userId}>`,
         embeds: [moderatorReplyEmbed],
         ephemeral: true
       });
 
     } else {
       // ------------------- Unset Blight -------------------
-      if (character.blightLevel === 0) {
+      if (character.blightStage === 0) {
         return interaction.editReply(`❌ **${character.name}** is not currently afflicted with blight.`);
       }
 
-      const previousStage = character.blightLevel || 0;
-      character.blightLevel = 0;
+      const previousStage = character.blightStage || 0;
+      character.blighted = false;
+      character.blightedAt = null;
+      character.blightStage = 0;
       character.blightPaused = false;
+      character.lastRollDate = null;
+      character.deathDeadline = null;
+      character.blightEffects = {
+        rollMultiplier: 1.0,
+        noMonsters: false,
+        noGathering: false
+      };
       await character.save();
 
       console.log(`[mod.js]: ✅ Removed blight (was stage ${previousStage}) from ${character.name}`);
 
-      // Remove blight role from character owner
+      // Check if user has any other blighted characters before removing role
       try {
+        const otherBlightedCharacters = await Character.find({
+          userId: character.userId,
+          blighted: true,
+          _id: { $ne: character._id } // Exclude the current character
+        });
+
         const guild = interaction.guild;
         if (guild) {
           const member = await guild.members.fetch(character.userId);
-          await member.roles.remove('798387447967907910');
-          console.log(`[mod.js]: ✅ Removed blight role from user ${character.userId} for character ${character.name}`);
+          
+          if (otherBlightedCharacters.length === 0) {
+            // No other blighted characters, remove the role
+            await member.roles.remove('798387447967907910');
+            console.log(`[mod.js]: ✅ Removed blight role from user ${character.userId} - no other blighted characters`);
+          } else {
+            console.log(`[mod.js]: ⚠️ Kept blight role on user ${character.userId} - has ${otherBlightedCharacters.length} other blighted character(s)`);
+          }
         }
       } catch (roleError) {
-        console.warn(`[mod.js]: ⚠️ Could not remove blight role from user ${character.userId}:`, roleError);
+        console.warn(`[mod.js]: ⚠️ Could not manage blight role for user ${character.userId}:`, roleError);
       }
 
       // Generate flavor text for blight removal
@@ -3114,42 +3230,43 @@ async function handleBlight(interaction) {
         .setDescription(`**${character.name}** has been successfully cleansed of blight.`)
         .addFields(
           {
-            name: '👤 Character',
-            value: `${character.name}`,
+            name: '__👤 Character__',
+            value: `> ${character.name}`,
             inline: true
           },
           {
-            name: '🏰 Village',
-            value: `${villageEmoji} ${character.currentVillage}`,
+            name: '__🏰 Village__',
+            value: `> ${villageEmoji} ${character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1)}`,
             inline: true
           },
           {
-            name: '⚔️ Job',
-            value: `${character.job}`,
+            name: '__⚔️ Job__',
+            value: `> ${character.job.charAt(0).toUpperCase() + character.job.slice(1)}`,
             inline: true
           },
           {
-            name: '🔄 Previous Blight Stage',
-            value: `${previousStageEmoji} Stage ${previousStage}`,
+            name: '__🔄 Previous Stage__',
+            value: `> ${previousStageEmoji} Stage ${previousStage}`,
             inline: true
           },
           {
-            name: '👤 Owner',
-            value: `<@${character.userId}>`,
+            name: '__👤 Owner__',
+            value: `> <@${character.userId}>`,
             inline: true
           },
           {
-            name: '✅ Status',
-            value: 'Blight successfully removed',
+            name: '__✅ Status__',
+            value: '> Blight successfully removed',
             inline: true
           },
           {
-            name: '💀 Flavor Text',
-            value: flavorText,
+            name: '__✨ Healing Complete__',
+            value: '> Your character has been fully healed and is now free from corruption. They can continue their journey without any blight influence.',
             inline: false
           }
         )
         .setThumbnail(character.icon)
+        .setImage('https://storage.googleapis.com/tinglebot/border%20healing.png')
         .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/healing-icon.png' })
         .setTimestamp();
 
