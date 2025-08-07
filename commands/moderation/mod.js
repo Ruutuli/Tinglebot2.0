@@ -119,7 +119,6 @@ const { simulateWeightedWeather } = require('../../services/weatherService');
 
 // ------------------- Database Models -------------------
 const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
-const Character = require('../../models/CharacterModel');
 const ItemModel = require('../../models/ItemModel');
 const Pet = require('../../models/PetModel');
 const TempData = require('../../models/TempDataModel');
@@ -3231,42 +3230,43 @@ async function handleBlight(interaction) {
         .setDescription(`**${character.name}** has been successfully cleansed of blight.`)
         .addFields(
           {
-            name: '👤 Character',
-            value: `${character.name}`,
+            name: '__👤 Character__',
+            value: `> ${character.name}`,
             inline: true
           },
           {
-            name: '🏰 Village',
-            value: `${villageEmoji} ${character.currentVillage}`,
+            name: '__🏰 Village__',
+            value: `> ${villageEmoji} ${character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1)}`,
             inline: true
           },
           {
-            name: '⚔️ Job',
-            value: `${character.job}`,
+            name: '__⚔️ Job__',
+            value: `> ${character.job.charAt(0).toUpperCase() + character.job.slice(1)}`,
             inline: true
           },
           {
-            name: '🔄 Previous Blight Stage',
-            value: `${previousStageEmoji} Stage ${previousStage}`,
+            name: '__🔄 Previous Stage__',
+            value: `> ${previousStageEmoji} Stage ${previousStage}`,
             inline: true
           },
           {
-            name: '👤 Owner',
-            value: `<@${character.userId}>`,
+            name: '__👤 Owner__',
+            value: `> <@${character.userId}>`,
             inline: true
           },
           {
-            name: '✅ Status',
-            value: 'Blight successfully removed',
+            name: '__✅ Status__',
+            value: '> Blight successfully removed',
             inline: true
           },
           {
-            name: '💀 Flavor Text',
-            value: flavorText,
+            name: '__✨ Healing Complete__',
+            value: '> Your character has been fully healed and is now free from corruption. They can continue their journey without any blight influence.',
             inline: false
           }
         )
         .setThumbnail(character.icon)
+        .setImage('https://storage.googleapis.com/tinglebot/border%20healing.png')
         .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/healing-icon.png' })
         .setTimestamp();
 
