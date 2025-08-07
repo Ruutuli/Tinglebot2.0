@@ -2976,32 +2976,32 @@ async function handleBlight(interaction) {
         .setDescription(`**${character.name}** has been successfully afflicted with blight stage ${stage}.`)
         .addFields(
           {
-            name: '👤 Character',
+            name: '__👤 Character__',
             value: character.name,
             inline: false
           },
           {
-            name: '🏰 Village',
-            value: `${villageEmoji} ${character.currentVillage}`,
+            name: '__🏰 Village__',
+            value: `${villageEmoji} ${character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1)}`,
             inline: false
           },
           {
-            name: '⚔️ Job',
-            value: character.job,
+            name: '__⚔️ Job__',
+            value: character.job.charAt(0).toUpperCase() + character.job.slice(1),
             inline: false
           },
           {
-            name: '<:blight_eye:805576955725611058> Blight Stage',
+            name: '__<:blight_eye:805576955725611058> Blight Stage__',
             value: `${stageEmoji} Stage ${stage}`,
             inline: false
           },
           {
-            name: '⚠️ Status',
+            name: '__⚠️ Status__',
             value: 'Blight successfully applied',
             inline: false
           },
           {
-            name: '💀 The Corruption',
+            name: '__💀 The Corruption__',
             value: flavorText,
             inline: false
           }
