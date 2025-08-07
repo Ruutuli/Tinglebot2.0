@@ -2977,18 +2977,18 @@ async function handleBlight(interaction) {
         .addFields(
           {
             name: '👤 Character',
-            value: `${character.name}`,
-            inline: true
+            value: character.name,
+            inline: false
           },
           {
             name: '🏰 Village',
             value: `${villageEmoji} ${character.currentVillage}`,
-            inline: true
+            inline: false
           },
           {
             name: '⚔️ Job',
-            value: `${character.job}`,
-            inline: true
+            value: character.job,
+            inline: false
           },
           {
             name: '<:blight_eye:805576955725611058> Blight Stage',
@@ -2996,14 +2996,9 @@ async function handleBlight(interaction) {
             inline: false
           },
           {
-            name: '👤 Owner',
-            value: `<@${character.userId}>`,
-            inline: true
-          },
-          {
             name: '⚠️ Status',
             value: 'Blight successfully applied',
-            inline: true
+            inline: false
           },
           {
             name: '💀 The Corruption',
@@ -3017,6 +3012,7 @@ async function handleBlight(interaction) {
         .setTimestamp();
 
       return interaction.editReply({
+        content: `<@${character.userId}>`,
         embeds: [moderatorReplyEmbed],
         ephemeral: true
       });
