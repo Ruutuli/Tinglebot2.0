@@ -2486,13 +2486,13 @@ async function handleBlightOverride(interaction) {
 
     switch (action) {
       case 'wipe_all':
-        updateQuery = { $set: { blightLevel: 0, blightPaused: false } };
+        updateQuery = { $set: { blighted: false, blightedAt: null, blightStage: 0, blightPaused: false } };
         actionDescription = 'wiped blight from ALL characters';
         break;
 
       case 'wipe_village':
         updateQuery = { 
-          $set: { blightLevel: 0, blightPaused: false },
+          $set: { blighted: false, blightedAt: null, blightStage: 0, blightPaused: false },
           $match: { currentVillage: target.toLowerCase() }
         };
         actionDescription = `wiped blight from all characters in ${target}`;
@@ -2507,20 +2507,20 @@ async function handleBlightOverride(interaction) {
           });
         }
         updateQuery = { 
-          $set: { blightLevel: 0, blightPaused: false },
+          $set: { blighted: false, blightedAt: null, blightStage: 0, blightPaused: false },
           $match: { _id: character._id }
         };
         actionDescription = `wiped blight from character ${target}`;
         break;
 
       case 'set_all_level':
-        updateQuery = { $set: { blightLevel: level, blightPaused: false } };
+        updateQuery = { $set: { blighted: true, blightedAt: new Date(), blightStage: level, blightPaused: false } };
         actionDescription = `set blight level to ${level} for ALL characters`;
         break;
 
       case 'set_village_level':
         updateQuery = { 
-          $set: { blightLevel: level, blightPaused: false },
+          $set: { blighted: true, blightedAt: new Date(), blightStage: level, blightPaused: false },
           $match: { currentVillage: target.toLowerCase() }
         };
         actionDescription = `set blight level to ${level} for all characters in ${target}`;
@@ -2535,7 +2535,7 @@ async function handleBlightOverride(interaction) {
           });
         }
         updateQuery = { 
-          $set: { blightLevel: level, blightPaused: false },
+          $set: { blighted: true, blightedAt: new Date(), blightStage: level, blightPaused: false },
           $match: { _id: targetCharacter._id }
         };
         actionDescription = `set blight level to ${level} for character ${target}`;
@@ -2558,7 +2558,12 @@ async function handleBlightOverride(interaction) {
       
       result = await Character.findByIdAndUpdate(
         characterId,
-        { blightLevel: action.startsWith('wipe_') ? 0 : level, blightPaused: false },
+        { 
+          blighted: !action.startsWith('wipe_'),
+          blightedAt: action.startsWith('wipe_') ? null : new Date(),
+          blightStage: action.startsWith('wipe_') ? 0 : level, 
+          blightPaused: false 
+        },
         { new: true }
       );
       affectedCount = result ? 1 : 0;
@@ -2570,7 +2575,9 @@ async function handleBlightOverride(interaction) {
       }
       
       result = await Character.updateMany(filter, {
-        blightLevel: action.startsWith('wipe_') ? 0 : level,
+        blighted: !action.startsWith('wipe_'),
+        blightedAt: action.startsWith('wipe_') ? null : new Date(),
+        blightStage: action.startsWith('wipe_') ? 0 : level,
         blightPaused: false
       });
       affectedCount = result.modifiedCount;
@@ -2884,7 +2891,9 @@ async function handleBlight(interaction) {
 
     if (status) {
       // ------------------- Set Blight -------------------
-      character.blightLevel = stage;
+      character.blighted = true;
+      character.blightedAt = new Date();
+      character.blightStage = stage;
       character.blightPaused = false; // Ensure blight is not paused when setting
       await character.save();
 
@@ -3019,12 +3028,14 @@ async function handleBlight(interaction) {
 
     } else {
       // ------------------- Unset Blight -------------------
-      if (character.blightLevel === 0) {
+      if (character.blightStage === 0) {
         return interaction.editReply(`❌ **${character.name}** is not currently afflicted with blight.`);
       }
 
-      const previousStage = character.blightLevel || 0;
-      character.blightLevel = 0;
+      const previousStage = character.blightStage || 0;
+      character.blighted = false;
+      character.blightedAt = null;
+      character.blightStage = 0;
       character.blightPaused = false;
       await character.save();
 
