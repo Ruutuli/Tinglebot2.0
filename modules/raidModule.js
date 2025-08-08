@@ -86,6 +86,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       
       // Create a special outcome for mod character 1-hit KO
       outcome = {
+        result: modFlavorText, // Use special mod character flavor text
         hearts: monster.maxHearts || monster.hearts || 999, // Deal maximum damage to instantly kill monster
         playerHearts: {
           current: character.currentHearts, // Mod character takes no damage
@@ -98,7 +99,6 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
         diceRoll: diceRoll,
         damageValue: monster.maxHearts || monster.hearts || 999, // Show max damage dealt
         adjustedRandomValue: adjustedRandomValue,
-        outcome: modFlavorText, // Use special mod character flavor text
         isModKO: true // Special flag to indicate this was a mod character 1-hit KO
       };
     } else {
@@ -135,7 +135,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
 
     return {
       hearts: outcome.hearts, // Damage dealt to monster
-      outcome: outcome.result, // Use the detailed outcome message from encounter module
+      outcome: (outcome.result || outcome.outcome || 'Battle completed'), // Handle both regular and mod character outcomes with fallback
       playerHearts: {
         current: character.currentHearts,
         max: character.maxHearts
