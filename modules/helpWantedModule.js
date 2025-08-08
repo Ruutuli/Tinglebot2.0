@@ -115,6 +115,15 @@ function getRandomNPCName() {
   return getRandomElement(npcNames);
 }
 
+// ------------------- Function: getRandomNPCNameFromPool -------------------
+// Returns a random NPC name from a provided pool of available NPCs
+function getRandomNPCNameFromPool(availableNPCs) {
+  if (availableNPCs.length === 0) {
+    throw new Error('No NPCs available in pool');
+  }
+  return getRandomElement(availableNPCs);
+}
+
 // ------------------- Function: shuffleArray -------------------
 // Shuffles an array in place using Fisher-Yates algorithm
 function shuffleArray(array) {
@@ -599,7 +608,7 @@ function generateQuestRequirements(type, pools, village) {
 
 // ------------------- Function: generateQuestForVillage -------------------
 // Generates a random quest object for a given village and date
-async function generateQuestForVillage(village, date, pools) {
+async function generateQuestForVillage(village, date, pools, availableNPCs = null) {
   // Validate pools
   const requiredPools = ['itemPool', 'monsterPool', 'craftingPool', 'escortPool'];
   for (const poolName of requiredPools) {
@@ -614,7 +623,9 @@ async function generateQuestForVillage(village, date, pools) {
     throw new Error(`Failed to generate questId for ${village} quest`);
   }
   
-  const npcName = getRandomNPCName();
+  // Use provided NPC pool or fall back to all NPCs
+  const npcPool = availableNPCs || Object.keys(NPCs);
+  const npcName = getRandomNPCNameFromPool(npcPool);
   
   // ------------------- Special Walton Quest Logic -------------------
   // Walton has a 30% chance to request 50x acorns specifically
@@ -664,16 +675,34 @@ async function generateDailyQuests() {
 
     const pools = await getAllQuestPools();
 
+    // Create a shared pool of available NPCs to ensure uniqueness across all quests
+    const allNPCs = Object.keys(NPCs);
+    if (allNPCs.length < VILLAGES.length) {
+      throw new Error(`Not enough NPCs available (${allNPCs.length}) for ${VILLAGES.length} villages. Need at least ${VILLAGES.length} unique NPCs.`);
+    }
+    const availableNPCs = shuffleArray([...allNPCs]); // Shuffle for randomness
+    
     // Generate quest posting times with 6-hour buffer between each
     const selectedTimes = selectTimesWithBuffer(FIXED_CRON_TIMES, VILLAGES.length);
-    const quests = await Promise.all(VILLAGES.map(async (village, index) => {
-      const quest = await generateQuestForVillage(village, date, pools);
+    const quests = [];
+    
+    // Generate quests sequentially to ensure unique NPCs
+    for (let i = 0; i < VILLAGES.length; i++) {
+      const village = VILLAGES[i];
+      const quest = await generateQuestForVillage(village, date, pools, availableNPCs);
+      
+      // Remove the used NPC from the available pool
+      const npcIndex = availableNPCs.indexOf(quest.npcName);
+      if (npcIndex !== -1) {
+        availableNPCs.splice(npcIndex, 1);
+      }
+      
       // Assign a posting time with 6-hour buffer from the selected times
-      quest.scheduledPostTime = selectedTimes[index];
+      quest.scheduledPostTime = selectedTimes[i];
       const hour = cronToHour(quest.scheduledPostTime);
-      console.log(`[HelpWanted] Generated quest for ${village} with posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
-      return quest;
-    }));
+      console.log(`[HelpWanted] Generated quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
+      quests.push(quest);
+    }
 
     // Upsert quests
     const results = [];
@@ -690,7 +719,7 @@ async function generateDailyQuests() {
     console.log(`[HelpWanted] Daily quest schedule for ${date}:`);
     results.forEach(quest => {
       const hour = cronToHour(quest.scheduledPostTime);
-      console.log(`  ${quest.village}: ${formatHour(hour)} (${quest.scheduledPostTime})`);
+      console.log(`  ${quest.village}: ${quest.npcName} at ${formatHour(hour)} (${quest.scheduledPostTime})`);
     });
     
     return results;
