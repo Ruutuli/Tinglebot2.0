@@ -2421,7 +2421,7 @@ async function handleExploreRollCharacterAutocomplete(
   const choices = userPartyCharacters.map((char) => {
    const isTurn = currentTurnCharacter && char.name === currentTurnCharacter.name;
    return {
-    name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)} | ❤️ ${char.currentHearts || 0} | 🟩 ${char.currentStamina || 0}${isTurn ? " (Current Turn)" : ""}`,
+    name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)} | ❤️ ${char.currentHearts || 0} | 🟩 ${char.currentStamina || 0}`,
     value: char.name,
    };
   });
