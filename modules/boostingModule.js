@@ -548,10 +548,21 @@ function applyTeacherGatheringBoost(gatherTable) {
    'Any Mushroom': generalCategories['Any Mushroom'] || []
  };
  
- // Create a new table that includes the original items plus guaranteed top materials
- const enhancedTable = [...gatherTable];
+ // Create a set of all useful item names for efficient lookup
+ const usefulItemNames = new Set([
+   ...topMaterials,
+   ...Object.values(generalCategoryItems).flat()
+ ]);
  
- // Add top materials if they're not already in the table
+ // Filter the original table to only include useful items
+ const filteredTable = gatherTable.filter(item => {
+   return usefulItemNames.has(item.itemName);
+ });
+ 
+ // Create a new table with only useful items
+ const enhancedTable = [...filteredTable];
+ 
+ // Add top materials if they're not already in the filtered table
  topMaterials.forEach(materialName => {
    const exists = enhancedTable.some(item => item.itemName === materialName);
    if (!exists) {
@@ -566,7 +577,7 @@ function applyTeacherGatheringBoost(gatherTable) {
    }
  });
  
- // Add general category items if they're not already in the table
+ // Add general category items if they're not already in the filtered table
  Object.entries(generalCategoryItems).forEach(([categoryName, items]) => {
    items.forEach(itemName => {
      const exists = enhancedTable.some(item => item.itemName === itemName);

@@ -1931,6 +1931,68 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
       statusText = 'Pending';
   }
 
+  // Build fields array conditionally
+  const fields = [
+    {
+      name: '👤 **Requested By**',
+      value: `> ${requestedBy}`,
+      inline: true
+    },
+    {
+      name: '🎭 **Booster**',
+      value: `> ${booster}`,
+      inline: true
+    },
+    {
+      name: '💼 **Booster Job**',
+      value: `> ${boosterJob}`,
+      inline: true
+    },
+    {
+      name: '📋 **Category**',
+      value: `> ${category}`,
+      inline: true
+    },
+    {
+      name: '🏘️ **Village**',
+      value: `> ${villageEmoji} ${village}`,
+      inline: true
+    }
+  ];
+
+  // Only add Target Village field if it's specified
+  if (requestData.targetVillage) {
+    fields.push({
+      name: '🎯 **Target Village**',
+      value: `> ${getVillageEmojiByName(requestData.targetVillage) || '🏘️'} ${capitalizeFirstLetter(requestData.targetVillage)}`,
+      inline: true
+    });
+  }
+
+  // Add remaining fields
+  fields.push(
+    {
+      name: '🆔 **Request ID**',
+      value: `> \`${requestId}\``,
+      inline: true
+    },
+    {
+      name: `${statusEmoji} **Status**`,
+      value: `> ${statusText}`,
+      inline: true
+    },
+    {
+      name: '⚡ **Boost Effect**',
+      value: `> ${boostEffect}`,
+      inline: false
+    },
+    {
+      name: '⏰ **Expires**',
+      value: `> ${expiresIn}`,
+      inline: false
+    }
+  );
+
   const embed = new EmbedBuilder()
     .setTitle(`⚡ Boost Request Created`)
     .setDescription(
@@ -1939,58 +2001,7 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
     )
     .setColor(statusColor)
     .setThumbnail(requestData.requestedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png')
-    .addFields(
-      {
-        name: '👤 **Requested By**',
-        value: `> ${requestedBy}`,
-        inline: true
-      },
-      {
-        name: '🎭 **Booster**',
-        value: `> ${booster}`,
-        inline: true
-      },
-      {
-        name: '💼 **Booster Job**',
-        value: `> ${boosterJob}`,
-        inline: true
-      },
-      {
-        name: '📋 **Category**',
-        value: `> ${category}`,
-        inline: true
-      },
-      {
-        name: '🏘️ **Village**',
-        value: `> ${villageEmoji} ${village}`,
-        inline: true
-      },
-      {
-        name: '🎯 **Target Village**',
-        value: requestData.targetVillage ? `> ${getVillageEmojiByName(requestData.targetVillage) || '🏘️'} ${capitalizeFirstLetter(requestData.targetVillage)}` : '> Not specified',
-        inline: true
-      },
-      {
-        name: '🆔 **Request ID**',
-        value: `> \`${requestId}\``,
-        inline: true
-      },
-      {
-        name: `${statusEmoji} **Status**`,
-        value: `> ${statusText}`,
-        inline: true
-      },
-      {
-        name: '⚡ **Boost Effect**',
-        value: `> ${boostEffect}`,
-        inline: false
-      },
-      {
-        name: '⏰ **Expires**',
-        value: `> ${expiresIn}`,
-        inline: false
-      }
-    )
+    .addFields(fields)
     .setFooter({ 
       text: `Boost requested by ${requestedBy} • This request will expire in 24 hours if not accepted.`,
       iconURL: requestData.boosterIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png'
@@ -2070,12 +2081,17 @@ const createBoostAppliedEmbed = (boostData) => {
   
   // Get village styling
   const villageColor = getVillageColorByName(village) || '#00cc99';
-  const villageEmoji = getVillageEmojiByName(village) || '🏘️';
   
   // Calculate expiration time (24 hours from now)
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24);
   const expiresIn = `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`;
+
+  // Format stamina and hearts display
+  const boosterStamina = boostData.boosterStamina || 0;
+  const boosterMaxStamina = boostData.boosterMaxStamina || 0;
+  const boosterHearts = boostData.boosterHearts || 0;
+  const boosterMaxHearts = boostData.boosterMaxHearts || 0;
 
   const embed = new EmbedBuilder()
     .setTitle(`⚡ Boost Applied: ${boostData.boostName || 'Unknown Boost'}`)
@@ -2088,7 +2104,7 @@ const createBoostAppliedEmbed = (boostData) => {
     .addFields(
       {
         name: '🎭 **Boosted By**',
-        value: `> ${boostedBy}`,
+        value: `> Boost by: ${boosterJob} ${boostedBy} - ${boostData.boostName || 'Unknown Boost'} for ${category}`,
         inline: true
       },
       {
@@ -2107,43 +2123,28 @@ const createBoostAppliedEmbed = (boostData) => {
         inline: true
       },
       {
-        name: '🏘️ **Village**',
-        value: `> ${villageEmoji} ${village}`,
+        name: '⏰ **Expires**',
+        value: `> ${expiresIn}`,
         inline: true
       },
       {
-        name: '⏰ **Duration**',
-        value: `> 24 hours`,
+        name: '💚 **Booster Stamina**',
+        value: `> ${boosterStamina} → ${boosterStamina - 1}`,
+        inline: true
+      },
+      {
+        name: '❤️ **Booster Hearts**',
+        value: `> ${boosterHearts}`,
         inline: true
       },
       {
         name: '⚡ **Boost Effect**',
         value: `> ${effect}`,
         inline: false
-      },
-      {
-        name: '⏰ **Expires**',
-        value: `> ${expiresIn}`,
-        inline: false
-      },
-      {
-        name: '💚 **Stamina Cost**',
-        value: `> 1 stamina used`,
-        inline: true
-      },
-      {
-        name: '💚 **Booster Stamina**',
-        value: `> ${boostData.boosterStamina || 0}/${boostData.boosterMaxStamina || 0}`,
-        inline: true
-      },
-      {
-        name: '❤️ **Booster Hearts**',
-        value: `> ${boostData.boosterHearts || 0}/${boostData.boosterMaxHearts || 0}`,
-        inline: true
       }
     )
     .setFooter({ 
-      text: `Boost applied to ${target} • Will last 24 hours`,
+      text: `Boost ID: ${boostData.boostRequestId || 'Unknown'} • Boost applied to ${target} • Will last 24 hours`,
       iconURL: boostData.targetIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-success-icon.png'
     })
     .setTimestamp();

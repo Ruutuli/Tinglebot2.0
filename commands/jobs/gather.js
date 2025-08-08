@@ -213,15 +213,6 @@ module.exports = {
 
       // Initialize job variable
       job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
-      
-      console.log(`[gather.js] Job determination:`, {
-        characterName: character.name,
-        isModCharacter: character.isModCharacter,
-        jobVoucher: character.jobVoucher,
-        jobVoucherJob: character.jobVoucherJob,
-        normalJob: character.job,
-        finalJob: job
-      });
 
       // Check for KO status
       if (character.currentHearts === 0) {

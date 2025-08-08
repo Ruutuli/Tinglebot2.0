@@ -61,6 +61,7 @@ const Quest = require("../models/QuestModel");
 const ShopStock = require("../models/VillageShopsModel");
 const TableRoll = require("../models/TableRollModel");
 const { Village } = require("../models/VillageModel");
+const generalCategories = require("../models/GeneralItemCategories");
 
 
 // Add safe response utility
@@ -1132,28 +1133,37 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 async function handleCraftingAutocomplete(interaction, focusedOption) {
   try {
     // Extract user ID and character name from the interaction
-                const userId = interaction.user.id;
+    const userId = interaction.user.id;
     const characterName = interaction.options.getString("charactername");
     const searchQuery = focusedOption.value?.toLowerCase() || "";
 
+    // For inventory-dependent crafting, skip cache to ensure fresh inventory data
     // Check cache first for this character's craftable items
     const cacheKey = `${characterName}_${userId}`;
     let craftableItems = craftableItemsCache.get(cacheKey);
     
+    // Skip cache for crafting autocomplete since inventory changes frequently
+    craftableItems = null;
+    
     if (!craftableItems) {
-      // Fetch character and check job perks in parallel
-      const [character, allCraftableItems] = await Promise.all([
+      // Fetch character, inventory, and check job perks in parallel
+      const [character, allCraftableItems, inventoryCollection] = await Promise.all([
         fetchCharacterByNameAndUserId(characterName, userId),
         Item.find({
-          craftingTags: { $exists: true }
+          craftingTags: { $exists: true },
+          craftingMaterial: { $exists: true }
         })
-        .select('itemName craftingTags')
-        .lean()
+        .select('itemName craftingTags craftingMaterial')
+        .lean(),
+        getCharacterInventoryCollection(characterName)
       ]);
 
       if (!character) {
         return await safeAutocompleteResponse(interaction, []);
       }
+
+      // Get character's inventory
+      const inventory = await inventoryCollection.find().toArray();
 
       // Determine the character's job
       const job = character.jobVoucher ? character.jobVoucherJob : character.job;
@@ -1172,13 +1182,40 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
         return await safeAutocompleteResponse(interaction, []);
       }
 
-      // Filter items by job and cache them
-      craftableItems = allCraftableItems.filter(item => 
+      // Filter items by job first
+      const jobFilteredItems = allCraftableItems.filter(item => 
         item.craftingTags.some(tag => tag.toLowerCase() === job.toLowerCase())
       );
+
+      // Then filter by inventory availability
+      craftableItems = jobFilteredItems.filter(item => {
+        // Check if character has all required materials for at least 1 quantity
+        for (const material of item.craftingMaterial) {
+          const requiredQty = material.quantity;
+          let ownedQty = 0;
+
+          if (generalCategories[material.itemName]) {
+            // Check category items
+            ownedQty = inventory.filter(invItem => 
+              generalCategories[material.itemName].includes(invItem.itemName)
+            ).reduce((sum, inv) => sum + inv.quantity, 0);
+          } else {
+            // Check specific item
+            ownedQty = inventory.filter(invItem => 
+              invItem.itemName === material.itemName
+            ).reduce((sum, inv) => sum + inv.quantity, 0);
+          }
+
+          if (ownedQty < requiredQty) {
+            return false; // Missing required material
+          }
+        }
+        return true; // Has all required materials
+      });
       
-      craftableItemsCache.set(cacheKey, craftableItems);
-      setTimeout(() => craftableItemsCache.delete(cacheKey), CACHE_TTL);
+      // Don't cache crafting results since inventory changes frequently
+      // craftableItemsCache.set(cacheKey, craftableItems);
+      // setTimeout(() => craftableItemsCache.delete(cacheKey), CACHE_TTL);
     }
 
     // Filter items by search query and limit to 25
@@ -1238,32 +1275,36 @@ async function handleBoostingVillageAutocomplete(
   const boosterName = interaction.options.getString('booster');
   const category = interaction.options.getString('category');
   
-  // Only show villages for Scholar Gathering boosts
-  if (category !== 'Gathering') {
-   await interaction.respond([]);
-   return;
-  }
-  
   // Get the booster character to check their job
   const { fetchCharacterByName } = require('../database/db');
   const boosterCharacter = await fetchCharacterByName(boosterName);
   
-  if (!boosterCharacter || boosterCharacter.job !== 'Scholar') {
-   await interaction.respond([]);
-   return;
-  }
-  
-  // Get all villages except the character's current village
+  // Get the target character
   const character = await fetchCharacterByName(characterName);
   const currentVillage = character?.currentVillage;
   
+  // Get all villages except the character's current village
   const allVillages = getAllVillages();
-  const choices = allVillages
-   .filter(village => village.toLowerCase() !== currentVillage?.toLowerCase())
-   .map((village) => ({
-    name: `${village} (Cross-Region Gathering)`,
-    value: village,
-   }));
+  const availableVillages = allVillages
+   .filter(village => village.toLowerCase() !== currentVillage?.toLowerCase());
+  
+  // Create choices with appropriate context based on the boost type
+  const choices = availableVillages.map((village) => {
+   // For Scholar Gathering boosts, this is required
+   if (boosterCharacter?.job === 'Scholar' && category === 'Gathering') {
+    return {
+     name: `${village} (Required for Scholar Gathering)`,
+     value: village,
+    };
+   }
+   // For other boosts, this is optional
+   else {
+    return {
+     name: `${village} (Optional target village)`,
+     value: village,
+    };
+   }
+  });
 
   // Respond to the interaction with filtered village choices
   await respondWithFilteredChoices(interaction, focusedOption, choices);

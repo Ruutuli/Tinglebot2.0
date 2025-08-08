@@ -8,6 +8,7 @@ const {
  fetchCharacterByNameAndUserId,
  fetchCharacterByName,
  fetchModCharacterByNameAndUserId,
+ fetchModCharacterByName,
 } = require("../../database/db");
 const { getBoostEffect } = require("../../modules/boostingModule");
 const { getJobPerk } = require("../../modules/jobsModule");
@@ -71,7 +72,7 @@ async function fetchCharacterByNameWithFallback(characterName) {
  let character = await fetchCharacterByName(characterName);
  
  if (!character) {
-   character = await fetchModCharacterByNameAndUserId(characterName, null);
+   character = await fetchModCharacterByName(characterName);
  }
  
  return character;
@@ -79,20 +80,12 @@ async function fetchCharacterByNameWithFallback(characterName) {
 
 /**
  * Validates if a character can request a boost for a specific category
+ * Note: Target characters should be able to request any boost category since they're being boosted
+ * The booster character's job validation happens in validateBoostEffect
  */
 function validateBoostRequest(targetCharacter, category) {
- if (EXEMPT_CATEGORIES.includes(category)) {
-   return { valid: true };
- }
-
- const jobPerk = getJobPerk(targetCharacter.job);
- if (!jobPerk || !jobPerk.perks.includes(category.toUpperCase())) {
-   return {
-     valid: false,
-     error: `**${targetCharacter.name}** cannot request a boost for **${category}** because their job (**${targetCharacter.job}**) does not support it.`
-   };
- }
-
+ // Target characters can request any boost category since they're the ones being boosted
+ // The booster character's job determines what boosts they can provide
  return { valid: true };
 }
 
@@ -179,6 +172,34 @@ function validateScholarVillageParameter(boosterJob, category, village) {
 }
 
 /**
+ * Validates if a character already has an active boost
+ */
+async function validateActiveBoost(targetCharacter) {
+ // Check if the character has a boostedBy value (meaning they have an active boost)
+ if (targetCharacter.boostedBy) {
+   // Get the active boost details to show remaining time
+   const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(targetCharacter.name);
+   
+   if (activeBoost && activeBoost.status === "fulfilled") {
+     const currentTime = Date.now();
+     if (activeBoost.boostExpiresAt && currentTime <= activeBoost.boostExpiresAt) {
+       const timeRemaining = activeBoost.boostExpiresAt - currentTime;
+       const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+       const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+       
+       return {
+         valid: false,
+         error: `❌ **Active Boost Found**\n\n**${targetCharacter.name}** already has an active boost from **${targetCharacter.boostedBy}**.\n\n⏰ **Time remaining:** ${hoursRemaining}h ${minutesRemaining}m\n\n💡 **Tip:** You can only have one active boost at a time. Wait for the current boost to expire before requesting a new one.`
+       };
+     }
+   }
+ }
+ 
+ // Allow requesting new boosts if boostedBy is null (no active boost)
+ return { valid: true };
+}
+
+/**
  * Validates village compatibility between characters
  */
 function validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel) {
@@ -257,7 +278,8 @@ function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boos
    boosterStamina: booster.currentStamina,
    boosterHearts: booster.currentHearts,
    boosterMaxStamina: booster.maxStamina,
-   boosterMaxHearts: booster.maxHearts
+   boosterMaxHearts: booster.maxHearts,
+   boostRequestId: requestData.boostRequestId
  };
 }
 
@@ -267,14 +289,6 @@ function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boos
 
 async function saveBoostingRequestToTempData(requestId, requestData) {
   try {
-    console.log(`[boosting.js]: Attempting to save boost request ${requestId} with data:`, {
-      targetCharacter: requestData.targetCharacter,
-      boostingCharacter: requestData.boostingCharacter,
-      status: requestData.status,
-      category: requestData.category,
-      targetVillage: requestData.targetVillage
-    });
-    
     // First try to find existing document
     let tempData = await TempData.findOne({ type: 'boosting', key: requestId });
     
@@ -293,16 +307,7 @@ async function saveBoostingRequestToTempData(requestId, requestData) {
     }
     
     // Save the document (this will trigger pre-save middleware)
-    const result = await tempData.save();
-    
-    console.log(`[boosting.js]: Successfully saved boosting request ${requestId} to TempData (48-hour expiration)`, {
-      savedId: result._id,
-      key: result.key,
-      type: result.type,
-      expiresAt: result.expiresAt,
-      hasData: !!result.data,
-      savedTargetVillage: result.data?.targetVillage
-    });
+    await tempData.save();
   } catch (error) {
     console.error(`[boosting.js]: Error saving boosting request to TempData:`, error);
     throw error;
@@ -313,17 +318,8 @@ async function retrieveBoostingRequestFromTempData(requestId) {
   try {
     const tempData = await TempData.findByTypeAndKey('boosting', requestId);
     if (tempData) {
-      console.log(`[boosting.js] retrieveBoostingRequestFromTempData debug for ${requestId}:`, {
-        found: true,
-        targetVillage: tempData.data?.targetVillage,
-        status: tempData.data?.status,
-        category: tempData.data?.category
-      });
       return tempData.data;
     } else {
-      console.log(`[boosting.js] retrieveBoostingRequestFromTempData debug for ${requestId}:`, {
-        found: false
-      });
       return null;
     }
   } catch (error) {
@@ -360,7 +356,6 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
         currentTime > requestData.boostExpiresAt
       ) {
         // Mark expired boosts as expired
-        console.log(`[boosting.js] Found expired boost for ${characterName}, marking as expired`);
         requestData.status = "expired";
         await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
         
@@ -369,7 +364,6 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
         if (targetCharacter && targetCharacter.boostedBy) {
           targetCharacter.boostedBy = null;
           await targetCharacter.save();
-          console.log(`[boosting.js]: Cleared ${targetCharacter.name}.boostedBy due to expiration in retrieveBoostingRequestFromTempDataByCharacter`);
         }
       }
     }
@@ -378,8 +372,6 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
     if (activeBoosts.length > 0) {
       activeBoosts.sort((a, b) => b.timestamp - a.timestamp);
       const mostRecentBoost = activeBoosts[0].requestData;
-      
-      console.log(`[boosting.js] Found ${activeBoosts.length} active boosts for ${characterName}, returning most recent`);
       
       return mostRecentBoost;
     }
@@ -553,6 +545,17 @@ async function handleBoostRequest(interaction) {
   return;
  }
 
+ // Validate active boost
+ const activeBoostValidation = await validateActiveBoost(targetCharacter);
+ if (!activeBoostValidation.valid) {
+  console.error(`[boosting.js]: Error - ${activeBoostValidation.error}`);
+  await interaction.reply({
+   content: activeBoostValidation.error,
+   ephemeral: true,
+  });
+  return;
+ }
+
  // Validate village compatibility
  const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID;
  const villageValidation = validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel);
@@ -565,7 +568,7 @@ async function handleBoostRequest(interaction) {
   return;
  }
 
- // Validate boost request
+ // Validate boost request - target character can request any boost category
  const boostRequestValidation = validateBoostRequest(targetCharacter, category);
  if (!boostRequestValidation.valid) {
   console.error(`[boosting.js]: Error - ${boostRequestValidation.error}`);
@@ -721,11 +724,9 @@ async function handleBoostAccept(interaction) {
    // For Scholar Gathering boosts, store the target village in the boost data
    if (booster.job === 'Scholar' && requestData.category === 'Gathering' && requestData.targetVillage) {
      requestData.targetVillage = requestData.targetVillage;
-     console.log(`[boosting.js]: Scholar boost applied - ${targetCharacter.name} can now gather from ${requestData.targetVillage} while staying in ${targetCharacter.currentVillage}`);
    }
    
    await targetCharacter.save();
-   console.log(`[boosting.js]: Set ${targetCharacter.name}.boostedBy = ${booster.name}`);
  } else {
    console.error(`[boosting.js]: Error - Could not find target character "${requestData.targetCharacter}"`);
  }
@@ -791,7 +792,6 @@ async function handleBoostStatus(interaction) {
   if (character.boostedBy) {
     character.boostedBy = null;
     await character.save();
-    console.log(`[boosting.js]: Cleared ${character.name}.boostedBy due to expiration`);
   }
 
   await interaction.reply({

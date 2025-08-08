@@ -282,33 +282,64 @@ module.exports = {
           // Build and send voucher embed for mod character
           const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
           const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
-          let description = `**${character.name}** has used a Job Voucher to perform the **${capitalizeWords(jobName)}** job.`;
+          
+          // Create clickable command links with proper formatting
+          const commandLinks = [];
+          if (jobPerkInfo.perks.includes('GATHERING')) {
+            commandLinks.push('🔍 **Gathering:** </gather:1372378304773881885>');
+          }
+          if (jobPerkInfo.perks.includes('CRAFTING')) {
+            commandLinks.push('⚒️ **Crafting:** </crafting:1379838613067530387>');
+          }
+          if (jobPerkInfo.perks.includes('LOOTING')) {
+            commandLinks.push('💎 **Looting:** </loot:1372378304773881887>');
+          }
+          if (jobPerkInfo.perks.includes('HEALING')) {
+            commandLinks.push('💚 **Healing:** </heal fulfill:1372378304773881886>');
+          }
+
+          // Build enhanced description with better formatting
+          let enhancedDescription = `👑 **${character.name}** has activated a **Job Voucher**!\n\n`;
+          enhancedDescription += `**📋 Temporary Job:** ${capitalizeWords(jobName)}\n`;
           if (jobPerkInfo.perks?.length) {
-            description = `**${character.name}** has used a Job Voucher to perform the **${capitalizeWords(jobName)}** job with the following perk(s): **${jobPerkInfo.perks.join(', ')}**.`;
+            enhancedDescription += `**✨ Available Perks:** ${jobPerkInfo.perks.map(perk => `\`${perk}\``).join(', ')}\n`;
           }
-          const commands = [
-            jobPerkInfo.perks.includes('GATHERING') && '> </gather:1372378304773881885>',
-            jobPerkInfo.perks.includes('CRAFTING') && '> </crafting:1372378304773881883>',
-            jobPerkInfo.perks.includes('LOOTING') && '> </loot:1372378304773881887>',
-            jobPerkInfo.perks.includes('HEALING') && '> </heal fufill:1372378304773881886>'
-          ].filter(Boolean);
-          if (commands.length) {
-            description += `\n\nUse the following commands to make the most of this role:\n${commands.join('\n')}`;
-          }
+          enhancedDescription += `\n**🎯 Available Commands:**\n${commandLinks.join('\n')}`;
 
           const voucherEmbed = new EmbedBuilder()
             .setColor('#00FF00')
             .setTitle('👑 Mod Character - Job Voucher Activated!')
-            .setDescription(description)
+            .setDescription(enhancedDescription)
             .addFields(
-              { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
-              { name: '🏷️ Normal Job', value: `**${capitalizeWords(character.job || 'Unemployed')}**`, inline: true },
-              { name: '👑 Mod Status', value: `**${character.modTitle} of ${character.modType}**`, inline: true },
-              { name: '💎 Voucher Status', value: `**Not Consumed** (Mod Character Benefit)`, inline: false }
+              { 
+                name: `${villageEmoji} Current Village`, 
+                value: `**${currentVillage}**`, 
+                inline: true 
+              },
+              { 
+                name: '🏷️ Normal Job', 
+                value: `**${capitalizeWords(character.job || 'Unemployed')}**`, 
+                inline: true 
+              },
+              { 
+                name: '👑 Mod Status', 
+                value: `**${character.modTitle} of ${character.modType}**`, 
+                inline: true 
+              },
+              {
+                name: '⏰ Duration',
+                value: '**Until next job use**',
+                inline: true
+              },
+              { 
+                name: '💎 Voucher Status', 
+                value: `**Not Consumed** (Mod Character Benefit)`, 
+                inline: false 
+              }
             )
             .setThumbnail(item.image || 'https://via.placeholder.com/150')
             .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-            .setFooter({ text: '✨ Mod characters can use job vouchers without consuming them!' });
+            .setFooter({ text: '✨ Mod characters can use job vouchers without consuming them! Click the commands above to start working!' });
 
           return void await interaction.editReply({ embeds: [voucherEmbed] });
         }
@@ -427,27 +458,48 @@ module.exports = {
         if (jobPerkInfo.perks?.length) {
           description = `**${character.name}** has used a Job Voucher to perform the **${capitalizeWords(jobName)}** job with the following perk(s): **${jobPerkInfo.perks.join(', ')}**.`;
         }
-        const commands = [
-          jobPerkInfo.perks.includes('GATHERING') && '> </gather:1372378304773881885>',
-          jobPerkInfo.perks.includes('CRAFTING') && '> </crafting:1372378304773881883>',
-          jobPerkInfo.perks.includes('LOOTING') && '> </loot:1372378304773881887>',
-          jobPerkInfo.perks.includes('HEALING') && '> </heal fufill:1372378304773881886>'
-        ].filter(Boolean);
-        if (commands.length) {
-          description += `\n\nUse the following commands to make the most of this role:\n${commands.join('\n')}`;
+        // Create clickable command links with proper formatting
+        const commandLinks = [];
+        if (jobPerkInfo.perks.includes('GATHERING')) {
+          commandLinks.push('🔍 **Gathering:** </gather:1372378304773881885>');
         }
+        if (jobPerkInfo.perks.includes('CRAFTING')) {
+          commandLinks.push('⚒️ **Crafting:** </crafting:1379838613067530387>');
+        }
+        if (jobPerkInfo.perks.includes('LOOTING')) {
+          commandLinks.push('💎 **Looting:** </loot:1372378304773881887>');
+        }
+        if (jobPerkInfo.perks.includes('HEALING')) {
+          commandLinks.push('💚 **Healing:** </heal fulfill:1372378304773881886>');
+        }
+
+        // Build enhanced description with better formatting
+        let enhancedDescription = `🎫 **${character.name}** has activated a **Job Voucher**!\n\n`;
+        enhancedDescription += `**📋 Temporary Job:** ${capitalizeWords(jobName)}\n`;
+        if (jobPerkInfo.perks?.length) {
+          enhancedDescription += `**✨ Available Perks:** ${jobPerkInfo.perks.map(perk => `\`${perk}\``).join(', ')}\n`;
+        }
+        enhancedDescription += `\n**🎯 Available Commands:**\n${commandLinks.join('\n')}`;
 
         const voucherEmbed = new EmbedBuilder()
           .setColor('#FFD700')
           .setTitle('🎫 Job Voucher Activated!')
-          .setDescription(description)
+          .setDescription(enhancedDescription)
           .addFields(
-            { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
-            { name: '🏷️ Normal Job', value: `**${capitalizeWords(character.job || 'Unemployed')}**`, inline: true }
+            { 
+              name: `${villageEmoji} Current Village`, 
+              value: `**${currentVillage}**`, 
+              inline: true 
+            },
+            { 
+              name: '🏷️ Normal Job', 
+              value: `**${capitalizeWords(character.job || 'Unemployed')}**`, 
+              inline: true 
+            }
           )
           .setThumbnail(item.image || 'https://via.placeholder.com/150')
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-          .setFooter({ text: '✨ Good luck in your new role! Make the most of this opportunity!' });
+          .setFooter({ text: '✨ Click the commands above to start working in your new role!' });
 
         return void await interaction.editReply({ embeds: [voucherEmbed] });
       }
