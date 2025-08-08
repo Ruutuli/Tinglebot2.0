@@ -216,6 +216,10 @@ async function handleAutocomplete(interaction) {
                 } else if (focusedOption.name === "petname") {
                   await handleModPetLevelPetNameAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "resetrolls") {
+                if (focusedOption.name === "character") {
+                  await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+                }
               } else if (modSubcommand === "shopadd") {
                 if (focusedOption.name === "itemname") {
                   await handleModGiveItemAutocomplete(interaction, focusedOption);

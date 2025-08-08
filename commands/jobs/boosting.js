@@ -337,9 +337,14 @@ async function handleBoostRequest(interaction) {
   return;
  }
 
+ // Check if we're in the testing channel to skip village restrictions
+ const testingChannelId = '1391812848099004578';
+ const isTestingChannel = interaction.channelId === testingChannelId;
+
  if (
   targetCharacter.currentVillage.toLowerCase() !==
-  boosterCharacter.currentVillage.toLowerCase()
+  boosterCharacter.currentVillage.toLowerCase() &&
+  !isTestingChannel
  ) {
   console.error(
    `[boosting.js]: Error - Characters are in different villages. Target: ${targetCharacter.currentVillage}, Booster: ${boosterCharacter.currentVillage}`

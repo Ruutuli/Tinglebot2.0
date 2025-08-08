@@ -147,7 +147,11 @@ module.exports = {
           allowedChannel = villageChannels[requiredVillage];
         }
       }
-      if (!allowedChannel || interaction.channelId !== allowedChannel) {
+      // Allow testing in specific channel
+      const testingChannelId = '1391812848099004578';
+      const isTestingChannel = interaction.channelId === testingChannelId;
+
+      if (!allowedChannel || (interaction.channelId !== allowedChannel && !isTestingChannel)) {
         const channelMention = `<#${allowedChannel}>`;
         return interaction.editReply({
           embeds: [{

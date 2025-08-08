@@ -946,6 +946,20 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: resetrolls -------------------
+.addSubcommand(subcommand =>
+  subcommand
+    .setName('resetrolls')
+    .setDescription('🔄 Reset daily rolls for a specific character')
+    .addStringOption(option =>
+      option
+        .setName('character')
+        .setDescription('Name of the character to reset rolls for')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+)
+
 
 
 // ------------------- Subcommand: shopadd -------------------
@@ -1155,6 +1169,8 @@ async function execute(interaction) {
         return await handlePetRollsReset(interaction);
     } else if (subcommand === 'forceresetpetrolls') {
         return await handleForceResetPetRolls(interaction);
+    } else if (subcommand === 'resetrolls') {
+        return await handleResetRolls(interaction);
     } else if (subcommand === 'shopadd') {
         return await handleShopAdd(interaction);
     } else if (subcommand === 'trigger-raid') {
@@ -2285,7 +2301,65 @@ async function handleForceResetPetRolls(interaction) {
   }
 }
 
+// ------------------- Function: handleResetRolls -------------------
+// Resets daily rolls for a specific character so they can roll again
+async function handleResetRolls(interaction) {
+  try {
+    const characterName = interaction.options.getString('character');
+    
+    // Find the character by name
+    const character = await fetchCharacterByName(characterName);
+    if (!character) {
+      return interaction.editReply({
+        content: `❌ Character "${characterName}" not found.`,
+        ephemeral: true
+      });
+    }
 
+    // Check if character has any daily rolls to reset
+    if (!character.dailyRoll || character.dailyRoll.size === 0) {
+      return interaction.editReply({
+        content: `ℹ️ **${character.name}** has no daily rolls to reset.`,
+        ephemeral: true
+      });
+    }
+
+    // Get the current daily rolls for reference
+    const rollTypes = Array.from(character.dailyRoll.keys());
+    const rollTypesList = rollTypes.map(type => `\`${type}\``).join(', ');
+
+    // Reset the daily rolls
+    character.dailyRoll = new Map();
+    character.markModified('dailyRoll');
+    await character.save();
+
+    // Success response
+    return interaction.editReply({
+      content: `✅ **${character.name}'s** daily rolls have been reset!\n` +
+               `📋 **Reset roll types:** ${rollTypesList}\n` +
+               `🔄 They can now use their daily rolls again.`,
+      ephemeral: true
+    });
+
+  } catch (error) {
+    handleError(error, 'mod.js', {
+      commandName: '/mod resetrolls',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      options: {
+        subcommand: 'resetrolls',
+        character: interaction.options.getString('character')
+      }
+    });
+
+    console.error(`[mod.js]: Error in /mod resetrolls:`, error);
+
+    return interaction.editReply({
+      content: `❌ Failed to reset rolls for "${interaction.options.getString('character')}": ${error.message || 'Unknown error'}`,
+      ephemeral: true
+    });
+  }
+}
 
 // ------------------- Function: handleShopAdd -------------------
 // Adds an item to the village shop

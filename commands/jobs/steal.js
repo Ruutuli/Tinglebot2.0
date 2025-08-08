@@ -1572,7 +1572,7 @@ module.exports = {
                     return;
                 }
 
-                if (thiefCharacter.currentVillage !== targetCharacter.currentVillage) {
+                if (thiefCharacter.currentVillage !== targetCharacter.currentVillage && !isTestingChannel) {
                     const embed = new EmbedBuilder()
                         .setColor(0xFF6B35) // Orange color for warning
                         .setTitle('📍 Village Restriction')
