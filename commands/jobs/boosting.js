@@ -140,13 +140,17 @@ async function fetchActiveBoost(characterName, category) {
  * Validates boost effect for a job and category
  */
 function validateBoostEffect(boosterJob, category) {
+ console.log(`[validateBoostEffect]: boosterJob="${boosterJob}", category="${category}"`);
  const boost = getBoostEffect(boosterJob, category);
+ console.log(`[validateBoostEffect]: boost result:`, boost);
  if (!boost) {
+   console.log(`[validateBoostEffect]: No boost found - validation failed`);
    return {
      valid: false,
      error: `No boost found for job "${boosterJob}" in category "${category}".`
    };
  }
+ console.log(`[validateBoostEffect]: Boost found - validation passed`);
  return { valid: true, boost };
 }
 
@@ -154,20 +158,28 @@ function validateBoostEffect(boosterJob, category) {
  * Validates village parameter for Scholar Gathering boosts
  */
 function validateScholarVillageParameter(boosterJob, category, village) {
- if (village && (boosterJob !== 'Scholar' || category !== 'Gathering')) {
+ console.log(`[validateScholarVillageParameter]: boosterJob="${boosterJob}", category="${category}", village="${village}"`);
+ 
+ // Normalize job name for case-insensitive comparison
+ const normalizedJob = boosterJob.toLowerCase();
+ 
+ if (village && (normalizedJob !== 'scholar' || category !== 'Gathering')) {
+   console.log(`[validateScholarVillageParameter]: Village provided but not Scholar Gathering boost`);
    return {
      valid: false,
      error: "❌ **Invalid Parameter**\n\nThe village option is only available for Scholar Gathering boosts."
    };
  }
 
- if (boosterJob === 'Scholar' && category === 'Gathering' && !village) {
+ if (normalizedJob === 'scholar' && category === 'Gathering' && !village) {
+   console.log(`[validateScholarVillageParameter]: Scholar Gathering boost without village - should fail`);
    return {
      valid: false,
      error: "❌ **Scholar Gathering Boost Requires Target Village**\n\n**Cross-Region Insight** allows Scholar-boosted characters to gather items from another village's item table without physically being there.\n\n💡 **Please specify a target village** using the `village` option to enable cross-region gathering.\n\n**Example:** `/boosting request character:YourChar booster:ScholarName category:Gathering village:Inariko`"
    };
  }
 
+ console.log(`[validateScholarVillageParameter]: Validation passed`);
  return { valid: true };
 }
 
@@ -579,26 +591,31 @@ async function handleBoostRequest(interaction) {
   return;
  }
 
- // Validate boost effect
- const boostEffectValidation = validateBoostEffect(boosterCharacter.job, category);
- if (!boostEffectValidation.valid) {
-  console.error(`[boosting.js]: Error - ${boostEffectValidation.error}`);
-  await interaction.reply({
-   content: boostEffectValidation.error,
-   ephemeral: true,
-  });
-  return;
- }
+   // Validate boost effect
+  console.log(`[boosting.js]: Boost effect validation - boosterJob: "${boosterCharacter.job}", category: "${category}"`);
+  const boostEffectValidation = validateBoostEffect(boosterCharacter.job, category);
+  console.log(`[boosting.js]: Boost effect validation result:`, boostEffectValidation);
+  if (!boostEffectValidation.valid) {
+   console.error(`[boosting.js]: Error - ${boostEffectValidation.error}`);
+   await interaction.reply({
+    content: boostEffectValidation.error,
+    ephemeral: true,
+   });
+   return;
+  }
 
- // Validate Scholar village parameter
- const scholarValidation = validateScholarVillageParameter(boosterCharacter.job, category, village);
- if (!scholarValidation.valid) {
-  await interaction.reply({
-   content: scholarValidation.error,
-   ephemeral: true,
-  });
-  return;
- }
+   // Validate Scholar village parameter
+  console.log(`[boosting.js]: Scholar validation - boosterJob: "${boosterCharacter.job}", category: "${category}", village: "${village}"`);
+  const scholarValidation = validateScholarVillageParameter(boosterCharacter.job, category, village);
+  console.log(`[boosting.js]: Scholar validation result:`, scholarValidation);
+  if (!scholarValidation.valid) {
+   console.log(`[boosting.js]: Scholar validation failed:`, scholarValidation.error);
+   await interaction.reply({
+    content: scholarValidation.error,
+    ephemeral: true,
+   });
+   return;
+  }
 
  // Create boost request data
  const requestData = createBoostRequestData(targetCharacter, boosterCharacter, category, village, userId);
