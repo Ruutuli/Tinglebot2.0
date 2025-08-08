@@ -888,7 +888,7 @@ async function processLootingLogic(
    const inventoryLink = character.inventory || character.inventoryLink;
    if (!isValidGoogleSheetsUrl(inventoryLink)) {
     console.log(`[loot.js]: ❌ Invalid inventory link for ${character.name}`);
-    const embed = createMonsterEncounterEmbed(
+    const embed = await createMonsterEncounterEmbed(
      character,
      encounteredMonster,
      outcomeMessage,
@@ -910,7 +910,7 @@ async function processLootingLogic(
   // Update character timestamp
   await updateCharacterLootTimestamp(character);
 
-  const embed = createMonsterEncounterEmbed(
+  const embed = await createMonsterEncounterEmbed(
    character,
    encounteredMonster,
    outcomeMessage,

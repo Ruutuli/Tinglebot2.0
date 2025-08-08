@@ -1034,21 +1034,21 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
  const article = getArticleForItem(randomItem.itemName);
 
+ // Check if this is a Teacher boost for practical wisdom
+ const isTeacherBoost = character.boostedBy && boosterCharacter && 
+   (boosterCharacter.job === 'Teacher' || boosterCharacter.job?.toLowerCase() === 'teacher');
+ 
+ // Check if this is a Scholar boost for cross-region gathering
+ const isScholarBoost = character.boostedBy && boosterCharacter && 
+   (boosterCharacter.job === 'Scholar' || boosterCharacter.job?.toLowerCase() === 'scholar');
+ const targetRegion = scholarTargetVillage;
+ 
  // Use divine flavor text if this is a divine item gathered with Priest boost
  let flavorText;
  if (isDivineItemWithPriestBoost) {
    const { generateDivineItemFlavorText } = require('../modules/flavorTextModule');
    flavorText = generateDivineItemFlavorText();
  } else {
-   // Check if this is a Teacher boost for practical wisdom
-   const isTeacherBoost = character.boostedBy && boosterCharacter && 
-     (boosterCharacter.job === 'Teacher' || boosterCharacter.job?.toLowerCase() === 'teacher');
-   
-   // Check if this is a Scholar boost for cross-region gathering
-   const isScholarBoost = character.boostedBy && boosterCharacter && 
-     (boosterCharacter.job === 'Scholar' || boosterCharacter.job?.toLowerCase() === 'scholar');
-   const targetRegion = scholarTargetVillage;
-   
    if (isTeacherBoost) {
      const { generateTeacherGatheringFlavorText } = require('../modules/flavorTextModule');
      flavorText = generateTeacherGatheringFlavorText();
@@ -2171,6 +2171,20 @@ const createRaidVictoryEmbed = (monsterName, monsterImage = null) => {
   return embed;
 };
 
+// ------------------- Function: createDailyRollsResetEmbed -------------------
+// Creates an embed for when a character's daily rolls have been reset
+const createDailyRollsResetEmbed = (characterName, rollTypesList) => {
+  const embed = new EmbedBuilder()
+    .setTitle(`✅ ${characterName}'s Daily Rolls Reset`)
+    .setDescription(`**${characterName}**'s daily rolls have been reset!\n\n📋 **Reset roll types:** ${rollTypesList}\n🔄 They can now use their daily rolls again.`)
+    .setColor('#00FF00')
+    .setFooter({ text: 'Daily rolls reset successfully' })
+    .setTimestamp();
+
+  setDefaultImage(embed);
+  return embed;
+};
+
 // ============================================================================
 // MODULE EXPORTS
 // ============================================================================
@@ -2238,6 +2252,7 @@ module.exports = {
  updateBoostRequestEmbed,
  createBoostAppliedEmbed,
  createRaidVictoryEmbed,
+ createDailyRollsResetEmbed,
 };
 
 

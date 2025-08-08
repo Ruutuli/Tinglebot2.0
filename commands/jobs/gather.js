@@ -611,7 +611,7 @@ module.exports = {
               );
               // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
-              const embed = createMonsterEncounterEmbed(
+              const embed = await createMonsterEncounterEmbed(
                 character,
                 encounteredMonster,
                 outcomeMessage,
@@ -623,7 +623,7 @@ module.exports = {
               return;
             }
           }
-          const embed = createMonsterEncounterEmbed(
+          const embed = await createMonsterEncounterEmbed(
             character,
             encounteredMonster,
             outcomeMessage,
@@ -793,7 +793,7 @@ module.exports = {
         // Create embed with cross-region gathering info if applicable
         // Debug info removed to reduce log bloat
         
-        const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage);
+        const embed = await createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage);
         await safeReply({ embeds: [embed] });
         
         // ------------------- Clear Boost After Use ------------------
