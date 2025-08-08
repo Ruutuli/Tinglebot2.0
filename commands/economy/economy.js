@@ -1337,9 +1337,7 @@ if (quantity <= 0) {
 }
 
 
-  console.log(
-   `[shops]: Initiating sale process for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`
-  );
+  console.log(`[shops]: Starting sale: ${characterName} selling ${itemName} x${quantity}`);
 
   const character = await fetchCharacterByName(characterName);
   if (!character) {
@@ -1442,51 +1440,21 @@ if (quantity <= 0) {
    );
   }
 
-  console.log(
-   `[shops]: Inventory item found. Quantity available: ${inventoryItem.quantity}`
-  );
+  console.log(`[shops]: Inventory validated: ${itemName} x${inventoryItem.quantity} available`);
 
   const obtainMethod = inventoryItem.obtain.toLowerCase();
   const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
-  console.log(`[shops]: Item crafted: ${isCrafted}, Obtain method: ${inventoryItem.obtain}`);
-
-  if (!isCrafted) {
-   console.warn(
-    `[shops]: Item not crafted: ${itemName}. Obtain method: ${inventoryItem.obtain}`
-   );
-   console.log(`[shops]: Proceeding to sell item at the standard sell price.`);
-  }
 
   const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } })
    .select("buyPrice sellPrice category type image craftingJobs itemRarity")
    .lean();
   
-  // Add comprehensive logging for debugging
-  console.log(`[shops]: 🔍 Searching for item: "${itemName}"`);
-  console.log(`[shops]: 🔍 Query used: { itemName: { $regex: new RegExp("^${itemName}$", "i") } }`);
-  
   if (!itemDetails) {
-   console.error(`[shops]: Item details not found in database: ${itemName}`);
-   
-   // Try a partial search to see if there are similar items
-   const similarItems = await ItemModel.find({ 
-     itemName: { $regex: new RegExp(itemName, 'i') }
-   }).select("itemName buyPrice sellPrice").limit(5).lean();
-   
-   if (similarItems.length > 0) {
-     console.log(`[shops]: 🔍 Similar items found:`, similarItems.map(item => ({
-       itemName: item.itemName,
-       buyPrice: item.buyPrice,
-       sellPrice: item.sellPrice
-     })));
-   }
-   
+   console.error(`[shops]: Item not found in database: ${itemName}`);
    return interaction.editReply("❌ Item details not found.");
   }
 
-  console.log(`[shops]: ✅ Item found in database: "${itemDetails.itemName}"`);
-  console.log(`[shops]: 📊 Item details found. Buy price: ${itemDetails.buyPrice}, Sell price: ${itemDetails.sellPrice}, Category: ${itemDetails.category}, Crafting jobs: ${itemDetails.craftingJobs}`);
-  console.log(`[shops]: 📊 Full item details:`, JSON.stringify(itemDetails, null, 2));
+  console.log(`[shops]: Item found: ${itemName} (Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice})`);
 
   // Determine the effective job for crafting (consider job vouchers)
   const effectiveJob = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
@@ -1500,12 +1468,8 @@ if (quantity <= 0) {
    hasPerk({ ...character, job: effectiveJob }, "CRAFTING") &&
    normalizedCraftingJobs.includes(normalizedCharacterJob);
 
-  console.log(
-   `[shops]: Character job: ${character.job}, Effective job: ${effectiveJob}, Crafting jobs (normalized): ${normalizedCraftingJobs}`
-  );
-  console.log(
-   `[shops]: Meets crafting requirements: ${characterMeetsRequirements}`
-  );
+  const bonusApplied = isCrafted && characterMeetsRequirements;
+  console.log(`[shops]: Crafting evaluation - Crafted: ${isCrafted}, Bonus Applied: ${bonusApplied}`);
 
   const sellPrice =
    isCrafted && characterMeetsRequirements
@@ -1513,25 +1477,14 @@ if (quantity <= 0) {
     : itemDetails.sellPrice || 0;
 
   if (sellPrice <= 0) {
-   console.warn(
-    `[shops]: Invalid sell price for item: ${itemName}. Character job: ${character.job}, Item category: ${itemDetails.category}`
-   );
+   console.error(`[shops]: Invalid sell price for ${itemName}`);
    return interaction.editReply("❌ This item cannot be sold to the shop.");
   }
 
-  console.log(`[shops]: Valid sell price determined: ${sellPrice}`);
-
-  // Log the inventory update
-  console.log(`[shops]: 🔄 Updating inventory - removing ${quantity}x ${itemName} from ${characterName}'s inventory`);
   await inventoryCollection.updateOne(
    { itemName },
    { $inc: { quantity: -quantity } }
   );
-
-  console.log(`[shops]: Deducted ${quantity}x ${itemName} from inventory.`);
-
-  // Log the shop stock update
-  console.log(`[shops]: 🔄 Updating shop stock - adding ${quantity}x ${itemName} to shop stock`);
   
   // Update shop stock with correct item data
   await ShopStock.updateOne(
@@ -1551,17 +1504,13 @@ if (quantity <= 0) {
    { upsert: true }
   );
 
-  console.log(`[shops]: Added ${quantity}x ${itemName} to shop stock.`);
-
   const totalPrice = sellPrice * quantity;
 
   await updateTokenBalance(interaction.user.id, totalPrice);
 
-  console.log(`[shops]: 💰 Token balance for ${interaction.user.tag}:`);
-  console.log(`[shops]: 📊 Previous balance: 🪙 ${user.tokens}`);
-  console.log(`[shops]: ➕ Earned: 🪙 ${totalPrice}`);
-  console.log(`[shops]: 📊 New balance: 🪙 ${user.tokens + totalPrice}`);
+  console.log(`[shops]: Token update for ${interaction.user.tag}: ${user.tokens} + ${totalPrice} = ${user.tokens + totalPrice}`);
 
+  let tokenTrackerLogged = false;
   if (user.tokenTracker) {
    const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
    const auth = await authorizeSheets();
@@ -1574,9 +1523,10 @@ if (quantity <= 0) {
     `+${totalPrice}`,
    ];
    await safeAppendDataToSheet(user.tokenTracker, user, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
-   console.log(`[shops]: Logged sale in token tracker.`);
+   tokenTrackerLogged = true;
   }
 
+  let inventoryLogged = false;
   if (character.inventory) {
    const spreadsheetId = extractSpreadsheetId(character.inventory);
    const auth = await authorizeSheets();
@@ -1601,28 +1551,19 @@ if (quantity <= 0) {
    await appendSheetData(auth, spreadsheetId, "loggedInventory!A2:M", [
     inventoryRow,
    ]);
-   console.log(`[shops]: Logged sale in inventory tracker.`);
+   inventoryLogged = true;
   }
 
-  // Final verification and summary
-  console.log(`[shops]: ✅ Sale process completed successfully!`);
-  console.log(`[shops]: 📋 Sale Summary:`);
-  console.log(`[shops]: 📋 - Character: ${characterName}`);
-  console.log(`[shops]: 📋 - Item: ${itemName}`);
-  console.log(`[shops]: 📋 - Quantity sold: ${quantity}`);
-  console.log(`[shops]: 📋 - Price per item: ${sellPrice}`);
-  console.log(`[shops]: 📋 - Total earned: ${totalPrice} tokens`);
-  // Determine if crafter's bonus was applied
-  const crafterBonusApplied = isCrafted && characterMeetsRequirements;
-  
-  console.log(`[shops]: 📋 - Item data source: ItemModel (buyPrice: ${itemDetails.buyPrice}, sellPrice: ${itemDetails.sellPrice})`);
-  console.log(`[shops]: 📋 - Crafter's Bonus Applied: ${crafterBonusApplied}`);
-  console.log(`[shops]: 📋 - Item was crafted: ${isCrafted}`);
-  console.log(`[shops]: 📋 - Character meets requirements: ${characterMeetsRequirements}`);
-  console.log(`[shops]: 📋 - Character job: ${character.job}`);
-  console.log(`[shops]: 📋 - Effective job: ${effectiveJob}`);
-  console.log(`[shops]: 📋 - Item crafting jobs: ${itemDetails.craftingJobs}`);
-  const priceType = crafterBonusApplied ? "Crafter's Bonus (Buy Price)" : "Standard Sell Price";
+  // Log sheet updates
+  const updates = [];
+  if (tokenTrackerLogged) updates.push('token tracker');
+  if (inventoryLogged) updates.push('inventory tracker');
+  if (updates.length > 0) {
+    console.log(`[shops]: Updated sheets: ${updates.join(', ')}`);
+  }
+
+  const priceType = bonusApplied ? "Crafter's Bonus" : "Standard";
+  console.log(`[shops]: ✅ Sale completed - ${characterName} sold ${itemName} x${quantity} for ${totalPrice} tokens (${priceType})`);
   
   const saleEmbed = new EmbedBuilder()
    .setTitle("✅ Sale Successful!")
@@ -1638,7 +1579,7 @@ if (quantity <= 0) {
    .addFields(
     {
      name: "💰 Price Details",
-     value: `**${priceType}**: 🪙 ${sellPrice} per item`,
+     value: `**${priceType} Price**: 🪙 ${sellPrice} per item`,
      inline: true,
     },
     {
@@ -1659,7 +1600,6 @@ if (quantity <= 0) {
 
   interaction.editReply({ embeds: [saleEmbed] });
  } catch (error) {
-  // Log the error for debugging
   handleError(error, "shops.js", {
     commandName: "economy shop-sell",
     userTag: interaction.user.tag,
@@ -1671,9 +1611,8 @@ if (quantity <= 0) {
     }
   });
   
-  console.error("[shops]: Error selling item:", error);
+  console.error(`[shops]: Sale error - ${error.message}`);
   
-  // Determine if this is a token-related error or a general system error
   const isTokenError = error.message && (
     error.message.includes('Invalid URL') ||
     error.message.includes('permission') ||
@@ -1684,14 +1623,12 @@ if (quantity <= 0) {
   );
   
   if (isTokenError) {
-    // Handle token tracker specific errors
     const { fullMessage } = handleTokenError(error, interaction);
     await interaction.editReply({
       content: fullMessage,
       ephemeral: true,
     });
   } else {
-    // Handle general system errors with a user-friendly message
     await interaction.editReply({
       content: `❌ **An error occurred while processing your sale request.**\n\nThis appears to be a system error. Please try again in a moment, or contact a moderator if the problem persists.\n\n**Error Details:** ${error.message || 'Unknown error'}`,
       ephemeral: true,
