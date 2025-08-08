@@ -136,11 +136,11 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     return {
       hearts: outcome.hearts, // Damage dealt to monster
       outcome: (outcome.result || outcome.outcome || 'Battle completed'), // Handle both regular and mod character outcomes with fallback
-      playerHearts: {
+      playerHearts: outcome.playerHearts || {
         current: character.currentHearts,
         max: character.maxHearts
       },
-      monsterHearts: {
+      monsterHearts: outcome.monsterHearts || {
         current: monster.currentHearts,
         max: monster.maxHearts
       },
