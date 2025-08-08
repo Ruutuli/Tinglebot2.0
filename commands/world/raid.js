@@ -3,7 +3,7 @@
 // ============================================================================
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
-const { fetchCharacterByNameAndUserId } = require('../../database/db');
+const { fetchAnyCharacterByNameAndUserId } = require('../../database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration } = require('../../modules/raidModule');
 const { createRaidKOEmbed } = require('../../embeds/embeds.js');
 const Raid = require('../../models/RaidModel');
@@ -74,8 +74,8 @@ module.exports = {
       const characterName = interaction.options.getString('charactername');
       const userId = interaction.user.id;
 
-      // Fetch and validate character with user ownership
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      // Fetch and validate character with user ownership (includes both regular and mod characters)
+      const character = await fetchAnyCharacterByNameAndUserId(characterName, userId);
       if (!character) {
         return interaction.editReply({
           content: `❌ Character "${characterName}" not found or doesn't belong to you. Please check the spelling and try again.`,
@@ -189,9 +189,15 @@ module.exports = {
         // Send the final turn embed first
         await interaction.editReply({ embeds: [embed] });
         
-        // Send immediate victory message before loot processing
+        // Send immediate victory embed before loot processing
+        const { createRaidVictoryEmbed } = require('../../embeds/embeds');
+        const victoryEmbed = createRaidVictoryEmbed(
+          turnResult.raidData.monster.name, 
+          turnResult.raidData.monster.image
+        );
+        
         const immediateVictoryMessage = await interaction.followUp({
-          content: `🎉 **${turnResult.raidData.monster.name} DEFEATED!** Processing loot... Please stop rolling! ⏳`,
+          embeds: [victoryEmbed],
           ephemeral: false
         });
         

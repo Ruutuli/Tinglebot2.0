@@ -792,8 +792,11 @@ async function handleBloodMoonStart(client) {
    process.env.VHINTL_TOWNHALL,
   ];
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // Get current EST time and calculate tomorrow in EST
+  const now = new Date();
+  const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const tomorrow = new Date(estNow);
+  tomorrow.setDate(estNow.getDate() + 1);
   const tomorrowDate = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
   
   const { bloodmoonDates } = require('./modules/calendarModule');
@@ -846,8 +849,11 @@ async function handleBloodMoonEnd(client) {
    process.env.VHINTL_TOWNHALL,
   ];
 
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
+  // Get current EST time and calculate yesterday in EST
+  const now = new Date();
+  const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const yesterday = new Date(estNow);
+  yesterday.setDate(estNow.getDate() - 1);
   const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
   
   const { bloodmoonDates } = require('./modules/calendarModule');

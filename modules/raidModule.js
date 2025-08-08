@@ -69,8 +69,41 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
 
     let outcome;
     
-    // Use the encounter module's tier-specific logic
-    switch (monster.tier) {
+    // ------------------- Mod Character 1-Hit KO Logic -------------------
+    // Dragons and other special mod characters (like Aemu) have the ability to 1-hit KO all monsters
+    if (character.modTitle === 'Dragon' || character.name === 'Aemu') {
+      console.log(`[raidModule.js]: 👑 Mod character ${character.name} (${character.modTitle || 'Oracle'}) uses 1-hit KO ability on ${monster.name}!`);
+      
+      // Import flavor text module for mod character victory messages
+      const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
+      
+      // Generate appropriate flavor text based on character type
+      const modFlavorText = generateModCharacterVictoryMessage(
+        character.name, 
+        character.modTitle || 'Oracle', 
+        character.modType || 'Power'
+      );
+      
+      // Create a special outcome for mod character 1-hit KO
+      outcome = {
+        hearts: monster.maxHearts || monster.hearts || 999, // Deal maximum damage to instantly kill monster
+        playerHearts: {
+          current: character.currentHearts, // Mod character takes no damage
+          max: character.maxHearts
+        },
+        monsterHearts: {
+          current: 0, // Monster is instantly defeated
+          max: monster.maxHearts || monster.hearts || 999
+        },
+        diceRoll: diceRoll,
+        damageValue: monster.maxHearts || monster.hearts || 999, // Show max damage dealt
+        adjustedRandomValue: adjustedRandomValue,
+        outcome: modFlavorText, // Use special mod character flavor text
+        isModKO: true // Special flag to indicate this was a mod character 1-hit KO
+      };
+    } else {
+      // Use the encounter module's tier-specific logic for non-dragon characters
+      switch (monster.tier) {
       case 5:
         outcome = await getTier5EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
         break;
@@ -91,6 +124,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
         break;
       default:
         throw new Error(`Unsupported monster tier for raid: ${monster.tier}`);
+      }
     }
 
     if (!outcome) {

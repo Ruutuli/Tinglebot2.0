@@ -2257,6 +2257,25 @@ const createBoostAppliedEmbed = (boostData) => {
   return embed;
 };
 
+// ------------------- Function: createRaidVictoryEmbed -------------------
+// Creates an embed for when a raid monster is defeated, showing the victory message
+const createRaidVictoryEmbed = (monsterName, monsterImage = null) => {
+  const embed = new EmbedBuilder()
+    .setTitle(`🎉 ${monsterName} DEFEATED!`)
+    .setDescription(`The mighty **${monsterName}** has fallen! Processing loot distribution... Please stop rolling! ⏳`)
+    .setColor('#FFD700') // Gold color for victory
+    .setImage(DEFAULT_IMAGE_URL)
+    .setFooter({ text: 'Loot processing in progress...' })
+    .setTimestamp();
+
+  // Add monster thumbnail if provided
+  if (monsterImage && isValidImageUrl(monsterImage)) {
+    embed.setThumbnail(monsterImage);
+  }
+
+  return embed;
+};
+
 module.exports = {
  DEFAULT_EMOJI,
  DEFAULT_IMAGE_URL,
@@ -2306,4 +2325,5 @@ module.exports = {
  createBoostRequestEmbed,
  updateBoostRequestEmbed,
  createBoostAppliedEmbed,
+ createRaidVictoryEmbed,
 };

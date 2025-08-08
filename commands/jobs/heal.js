@@ -99,8 +99,8 @@ async function checkDebuff(character) {
 
 // ---- Function: checkVillageMatch ----
 // Checks if two characters are in the same village
-function checkVillageMatch(character1, character2) {
-  if (character1.currentVillage.toLowerCase() !== character2.currentVillage.toLowerCase()) {
+function checkVillageMatch(character1, character2, skipVillageCheck = false) {
+  if (character1.currentVillage.toLowerCase() !== character2.currentVillage.toLowerCase() && !skipVillageCheck) {
     return {
       match: false,
       message: `❌ **Village Mismatch**\n\nHealing request cannot be created because **${character1.name}** is in **${capitalizeFirstLetter(character1.currentVillage)}**, while **${character2.name}** is in **${capitalizeFirstLetter(character2.currentVillage)}**. Both must be in the same village.\n\n💡 **Travel Tip:** Use </travel:1379850586987430009> to travel between villages and access characters in different locations!`
@@ -123,7 +123,7 @@ function checkStamina(character, requiredStamina) {
 
 // ---- Function: validateCharacters ----
 // Validates both characters for healing request
-async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal) {
+async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal, interaction = null) {
   // Check debuffs
   const targetDebuff = await checkDebuff(characterToHeal);
   if (targetDebuff.hasDebuff) {
@@ -136,8 +136,12 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
       return { valid: false, message: healerDebuff.message };
     }
 
-    // Check village match
-    const villageCheck = checkVillageMatch(characterToHeal, healerCharacter);
+    // Check if we're in the testing channel to skip village restrictions
+    const testingChannelId = '1391812848099004578';
+    const isTestingChannel = interaction && interaction.channelId === testingChannelId;
+
+    // Check village match (skip for testing channel)
+    const villageCheck = checkVillageMatch(characterToHeal, healerCharacter, isTestingChannel);
     if (!villageCheck.match) {
       return { valid: false, message: villageCheck.message };
     }
@@ -284,7 +288,7 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
     }
 
     // Validate characters
-    const validation = await validateCharacters(characterToHeal, healerCharacter, heartsToHeal);
+    const validation = await validateCharacters(characterToHeal, healerCharacter, heartsToHeal, interaction);
     if (!validation.valid) {
       await interaction.editReply(validation.message);
       return;
@@ -628,7 +632,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     }
 
     // Validate characters and jobs
-    const validation = await validateCharacters(characterToHeal, healerCharacter, healingRequest.heartsToHeal);
+    const validation = await validateCharacters(characterToHeal, healerCharacter, healingRequest.heartsToHeal, interaction);
     if (!validation.valid) {
       await interaction.editReply(validation.message);
       return;

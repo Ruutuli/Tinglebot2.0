@@ -358,6 +358,40 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  }
 };
 
+// ------------------- fetchAnyCharacterByNameAndUserId -------------------
+const fetchAnyCharacterByNameAndUserId = async (characterName, userId) => {
+ try {
+  await connectToTinglebot();
+  // Get the actual name part before the "|" if it exists
+  const actualName = characterName.split('|')[0].trim();
+  
+  // Escape special regex characters in the character name
+  const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  // First try to find a regular character
+  const character = await Character.findOne({
+    name: new RegExp(`^${escapedName}$`, "i"),
+    userId
+  });
+
+  if (character) {
+    return character;
+  }
+
+  // If no regular character found, try to find a mod character
+  const modCharacter = await ModCharacter.findOne({
+    name: new RegExp(`^${escapedName}$`, "i"),
+    userId
+  });
+
+  return modCharacter;
+ } catch (error) {
+  handleError(error, "db.js");
+  console.error(`[characterService]: ❌ Error searching for "${actualName}" in both character collections: ${error.message}`);
+  throw error;
+ }
+};
+
 // ------------------- fetchAllCharactersExceptUser -------------------
 const fetchAllCharactersExceptUser = async (userId) => {
  try {
@@ -2230,6 +2264,7 @@ module.exports = {
  fetchCharacterById,
  fetchCharactersByUserId,
  fetchCharacterByNameAndUserId,
+ fetchAnyCharacterByNameAndUserId,
  fetchAllCharactersExceptUser,
  createCharacter,
  updateCharacterById,

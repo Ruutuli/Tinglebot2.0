@@ -312,9 +312,9 @@ module.exports = {
         }
       }
 
-      // Check if character is physically in the correct village
+      // Check if character is physically in the correct village (skip for testing channel)
       const channelVillage = Object.entries(villageChannels).find(([_, id]) => id === interaction.channelId)?.[0];
-      if (channelVillage && character.currentVillage.toLowerCase() !== channelVillage.toLowerCase()) {
+      if (channelVillage && character.currentVillage.toLowerCase() !== channelVillage.toLowerCase() && !isTestingChannel) {
         await safeReply({
           embeds: [{
             color: 0x008B8B, // Dark cyan color
@@ -331,7 +331,11 @@ module.exports = {
         return;
       }
 
-      if (!allowedChannel || interaction.channelId !== allowedChannel) {
+      // Allow testing in specific channel
+      const testingChannelId = '1391812848099004578';
+      const isTestingChannel = interaction.channelId === testingChannelId;
+
+      if (!allowedChannel || (interaction.channelId !== allowedChannel && !isTestingChannel)) {
         const channelMention = `<#${allowedChannel}>`;
         await safeReply({
           embeds: [{
