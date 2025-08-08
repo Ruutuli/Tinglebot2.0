@@ -83,6 +83,7 @@ function getArticleForItem(itemName) {
  return vowels.includes(itemName.charAt(0).toUpperCase()) ? "an" : "a";
 }
 
+
 function formatItemDetails(itemName, quantity = 1, emoji = DEFAULT_EMOJI) {
  const truncatedName =
   itemName.length > 20 ? itemName.substring(0, 17) + "..." : itemName;
