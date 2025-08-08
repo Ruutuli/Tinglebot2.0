@@ -7,11 +7,259 @@ const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const {
  fetchCharacterByNameAndUserId,
  fetchCharacterByName,
+ fetchModCharacterByNameAndUserId,
 } = require("../../database/db");
 const { getBoostEffect } = require("../../modules/boostingModule");
 const { getJobPerk } = require("../../modules/jobsModule");
 const { useStamina } = require("../../modules/characterStatsModule");
+const { generateUniqueId } = require('../../utils/uniqueIdUtils');
+const { createBoostRequestEmbed, createBoostAppliedEmbed, updateBoostRequestEmbed } = require('../../embeds/embeds');
 const TempData = require("../../models/TempDataModel");
+const { retrieveBoostingRequestFromStorageByCharacter } = require('../../utils/storage');
+
+// ============================================================================
+// ------------------- Constants and Configuration -------------------
+// ============================================================================
+
+const BOOST_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const REQUEST_EXPIRATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+const TESTING_CHANNEL_ID = '1391812848099004578';
+
+const EXEMPT_CATEGORIES = [
+ "Tokens",
+ "Exploring", 
+ "Traveling",
+ "Mounts",
+ "Other",
+];
+
+const BOOST_CATEGORIES = [
+ { name: "Looting", value: "Looting" },
+ { name: "Gathering", value: "Gathering" },
+ { name: "Crafting", value: "Crafting" },
+ { name: "Healers", value: "Healers" },
+ { name: "Stealing", value: "Stealing" },
+ { name: "Vending", value: "Vending" },
+ { name: "Tokens", value: "Tokens" },
+ { name: "Exploring", value: "Exploring" },
+ { name: "Traveling", value: "Traveling" },
+ { name: "Mounts", value: "Mounts" },
+ { name: "Other", value: "Other" }
+];
+
+// ============================================================================
+// ------------------- Utility Functions -------------------
+// ============================================================================
+
+/**
+ * Fetches a character by name and user ID, trying both regular and mod characters
+ */
+async function fetchCharacterWithFallback(characterName, userId) {
+ let character = await fetchCharacterByNameAndUserId(characterName, userId);
+ 
+ if (!character) {
+   character = await fetchModCharacterByNameAndUserId(characterName, userId);
+ }
+ 
+ return character;
+}
+
+/**
+ * Fetches a character by name only, trying both regular and mod characters
+ */
+async function fetchCharacterByNameWithFallback(characterName) {
+ let character = await fetchCharacterByName(characterName);
+ 
+ if (!character) {
+   character = await fetchModCharacterByNameAndUserId(characterName, null);
+ }
+ 
+ return character;
+}
+
+/**
+ * Validates if a character can request a boost for a specific category
+ */
+function validateBoostRequest(targetCharacter, category) {
+ if (EXEMPT_CATEGORIES.includes(category)) {
+   return { valid: true };
+ }
+
+ const jobPerk = getJobPerk(targetCharacter.job);
+ if (!jobPerk || !jobPerk.perks.includes(category.toUpperCase())) {
+   return {
+     valid: false,
+     error: `**${targetCharacter.name}** cannot request a boost for **${category}** because their job (**${targetCharacter.job}**) does not support it.`
+   };
+ }
+
+ return { valid: true };
+}
+
+// ------------------- Boosting Utilities -------------------
+// These functions provide helper methods for handling boost requests, including ID generation, category validation, formatting, and fetching active boosts.
+
+/**
+ * Generates a clean boost request ID (an 8-character uppercase string).
+ */
+function generateBoostRequestId() {
+  return uuidv4().slice(0, 8).toUpperCase();
+}
+
+/**
+ * Determines if the provided boost category is exempt from job perk validation.
+ */
+function isExemptBoostCategory(category) {
+  return EXEMPT_CATEGORIES.includes(category);
+}
+
+/**
+ * Validates if a character's job permits requesting a boost in the given category.
+ * Returns true if the category is exempt, or if the character's job includes the category perk; otherwise, false.
+ */
+function validateBoostEligibility(character, category, getJobPerk) {
+  if (isExemptBoostCategory(category)) return true;
+  const jobPerk = getJobPerk(character.job);
+  if (!jobPerk || !jobPerk.perks.includes(category.toUpperCase())) return false;
+  return true;
+}
+
+/**
+ * Formats a boost category name for display by capitalizing the first letter and lowercasing the remainder.
+ */
+function formatBoostCategoryName(category) {
+  return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+}
+
+/**
+ * Asynchronously retrieves an active boost for a character based on character name and boost category.
+ * Returns the boost request if it exists, is fulfilled, and the category matches; otherwise, null.
+ */
+async function fetchActiveBoost(characterName, category) {
+  const request = retrieveBoostingRequestFromStorageByCharacter(characterName);
+  if (!request) return null;
+  if (request.status !== 'fulfilled') return null;
+  if (request.category !== category) return null;
+  return request;
+}
+
+/**
+ * Validates boost effect for a job and category
+ */
+function validateBoostEffect(boosterJob, category) {
+ const boost = getBoostEffect(boosterJob, category);
+ if (!boost) {
+   return {
+     valid: false,
+     error: `No boost found for job "${boosterJob}" in category "${category}".`
+   };
+ }
+ return { valid: true, boost };
+}
+
+/**
+ * Validates village parameter for Scholar Gathering boosts
+ */
+function validateScholarVillageParameter(boosterJob, category, village) {
+ if (village && (boosterJob !== 'Scholar' || category !== 'Gathering')) {
+   return {
+     valid: false,
+     error: "❌ **Invalid Parameter**\n\nThe village option is only available for Scholar Gathering boosts."
+   };
+ }
+
+ if (boosterJob === 'Scholar' && category === 'Gathering' && !village) {
+   return {
+     valid: false,
+     error: "❌ **Scholar Gathering Boost Requires Target Village**\n\n**Cross-Region Insight** allows Scholar-boosted characters to gather items from another village's item table without physically being there.\n\n💡 **Please specify a target village** using the `village` option to enable cross-region gathering.\n\n**Example:** `/boosting request character:YourChar booster:ScholarName category:Gathering village:Inariko`"
+   };
+ }
+
+ return { valid: true };
+}
+
+/**
+ * Validates village compatibility between characters
+ */
+function validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel) {
+ if (
+   targetCharacter.currentVillage.toLowerCase() !== boosterCharacter.currentVillage.toLowerCase() &&
+   !isTestingChannel
+ ) {
+   return {
+     valid: false,
+     error: "❌ **Village Mismatch**\n\nBoth characters must be in the same village.\n\n💡 **Travel Tip:** Use </travel:1379850586987430009> to travel between villages and access characters in different locations!"
+   };
+ }
+
+ return { valid: true };
+}
+
+/**
+ * Creates boost request data object
+ */
+function createBoostRequestData(targetCharacter, boosterCharacter, category, village, userId) {
+ const boostRequestId = generateUniqueId('B');
+ const currentTime = Date.now();
+ const boost = getBoostEffect(boosterCharacter.job, category);
+
+ return {
+   boostRequestId,
+   targetCharacter: targetCharacter.name,
+   boostingCharacter: boosterCharacter.name,
+   category,
+   status: "pending",
+   requesterUserId: userId,
+   village: targetCharacter.currentVillage,
+   targetVillage: village,
+   timestamp: currentTime,
+   createdAt: new Date().toISOString(),
+   durationRemaining: null,
+   fulfilledAt: null,
+   boosterJob: boosterCharacter.job,
+   boostEffect: `${boost.name} — ${boost.description}`,
+   requestedByIcon: targetCharacter.icon,
+   boosterIcon: boosterCharacter.icon
+ };
+}
+
+/**
+ * Creates embed data for boost request
+ */
+function createBoostRequestEmbedData(targetCharacter, boosterCharacter, category, village, boost) {
+ return {
+   requestedBy: targetCharacter.name,
+   booster: boosterCharacter.name,
+   boosterJob: boosterCharacter.job,
+   category: category,
+   boostEffect: `${boost.name} — ${boost.description}`,
+   village: targetCharacter.currentVillage,
+   targetVillage: village,
+   requestedByIcon: targetCharacter.icon,
+   boosterIcon: boosterCharacter.icon
+ };
+}
+
+/**
+ * Creates embed data for boost applied
+ */
+function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boost) {
+ return {
+   boostedBy: booster.name,
+   boosterJob: booster.job,
+   target: requestData.targetCharacter,
+   category: requestData.category,
+   effect: boost.description,
+   boostName: boost.name,
+   village: requestData.village,
+   boostedByIcon: booster.icon,
+   targetIcon: targetCharacter.icon,
+   boosterStamina: booster.currentStamina,
+   boosterHearts: booster.currentHearts,
+   boosterMaxStamina: booster.maxStamina,
+   boosterMaxHearts: booster.maxHearts
+ };
+}
 
 // ============================================================================
 // ------------------- TempData Storage Functions -------------------
@@ -35,7 +283,7 @@ async function saveBoostingRequestToTempData(requestId, requestData) {
       tempData.data = requestData;
     } else {
       // Create new document with explicit expiresAt
-      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      const expiresAt = new Date(Date.now() + REQUEST_EXPIRATION);
       tempData = new TempData({
         type: 'boosting',
         key: requestId,
@@ -89,8 +337,6 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
     const allBoostingData = await TempData.findAllByType('boosting');
     const currentTime = Date.now();
 
-    // Debug info removed to reduce log bloat
-
     // Find all active boosts for this character and sort by timestamp (most recent first)
     const activeBoosts = [];
     
@@ -138,7 +384,6 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
       return mostRecentBoost;
     }
 
-    // Debug info removed to reduce log bloat
     return null;
   } catch (error) {
     console.error(`[boosting.js]: Error retrieving active boost for ${characterName}:`, error);
@@ -224,19 +469,7 @@ module.exports = {
       .setName("category")
       .setDescription("Category to be boosted")
       .setRequired(true)
-      .addChoices(
-       { name: "Looting", value: "Looting" },
-       { name: "Gathering", value: "Gathering" },
-       { name: "Crafting", value: "Crafting" },
-       { name: "Healers", value: "Healers" },
-       { name: "Stealing", value: "Stealing" },
-       { name: "Vending", value: "Vending" },
-       { name: "Tokens", value: "Tokens" },
-       { name: "Exploring", value: "Exploring" },
-       { name: "Traveling", value: "Traveling" },
-       { name: "Mounts", value: "Mounts" },
-       { name: "Other", value: "Other" }
-      )
+      .addChoices(...BOOST_CATEGORIES)
     )
     .addStringOption((option) =>
      option
@@ -305,26 +538,9 @@ async function handleBoostRequest(interaction) {
  const village = interaction.options.getString("village");
  const userId = interaction.user.id;
 
- // Debug info removed to reduce log bloat
-
- let targetCharacter = await fetchCharacterByNameAndUserId(
-  characterName,
-  userId
- );
- 
- // If not found as regular character, try as mod character
- if (!targetCharacter) {
-   const { fetchModCharacterByNameAndUserId } = require('../../database/db');
-   targetCharacter = await fetchModCharacterByNameAndUserId(characterName, userId);
- }
- 
- let boosterCharacter = await fetchCharacterByName(boosterName);
- 
- // If not found as regular character, try as mod character
- if (!boosterCharacter) {
-   const { fetchModCharacterByNameAndUserId } = require('../../database/db');
-   boosterCharacter = await fetchModCharacterByNameAndUserId(boosterName, userId);
- }
+ // Fetch characters with fallback
+ const targetCharacter = await fetchCharacterWithFallback(characterName, userId);
+ const boosterCharacter = await fetchCharacterByNameWithFallback(boosterName);
 
  if (!targetCharacter || !boosterCharacter) {
   console.error(
@@ -337,137 +553,71 @@ async function handleBoostRequest(interaction) {
   return;
  }
 
- // Check if we're in the testing channel to skip village restrictions
- const testingChannelId = '1391812848099004578';
- const isTestingChannel = interaction.channelId === testingChannelId;
-
- if (
-  targetCharacter.currentVillage.toLowerCase() !==
-  boosterCharacter.currentVillage.toLowerCase() &&
-  !isTestingChannel
- ) {
-  console.error(
-   `[boosting.js]: Error - Characters are in different villages. Target: ${targetCharacter.currentVillage}, Booster: ${boosterCharacter.currentVillage}`
-  );
+ // Validate village compatibility
+ const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID;
+ const villageValidation = validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel);
+ if (!villageValidation.valid) {
+  console.error(`[boosting.js]: Error - ${villageValidation.error}`);
   await interaction.reply({
-   content: "❌ **Village Mismatch**\n\nBoth characters must be in the same village.\n\n💡 **Travel Tip:** Use </travel:1379850586987430009> to travel between villages and access characters in different locations!",
+   content: villageValidation.error,
    ephemeral: true,
   });
   return;
  }
 
- const exemptCategories = [
-  "Tokens",
-  "Exploring",
-  "Traveling",
-  "Mounts",
-  "Other",
- ];
-
- if (!exemptCategories.includes(category)) {
-  const jobPerk = getJobPerk(targetCharacter.job);
-  if (!jobPerk || !jobPerk.perks.includes(category.toUpperCase())) {
-   console.error(
-    `[boosting.js]: Error - Job "${targetCharacter.job}" does not support boost category "${category}" for character "${targetCharacter.name}".`
-   );
-   await interaction.reply({
-    content: `**${targetCharacter.name}** cannot request a boost for **${category}** because their job (**${targetCharacter.job}**) does not support it.`,
-    ephemeral: true,
-   });
-   return;
-  }
- }
-
- const boosterJob = boosterCharacter.job;
- const boost = getBoostEffect(boosterJob, category);
-
- if (!boost) {
-  console.error(
-   `[boosting.js]: Error - No boost effect found for job "${boosterJob}" and category "${category}".`
-  );
+ // Validate boost request
+ const boostRequestValidation = validateBoostRequest(targetCharacter, category);
+ if (!boostRequestValidation.valid) {
+  console.error(`[boosting.js]: Error - ${boostRequestValidation.error}`);
   await interaction.reply({
-   content: `No boost found for job "${boosterJob}" in category "${category}".`,
+   content: boostRequestValidation.error,
    ephemeral: true,
   });
   return;
  }
 
- // Validate village parameter for Scholar Gathering boosts
- if (village && (boosterJob !== 'Scholar' || category !== 'Gathering')) {
+ // Validate boost effect
+ const boostEffectValidation = validateBoostEffect(boosterCharacter.job, category);
+ if (!boostEffectValidation.valid) {
+  console.error(`[boosting.js]: Error - ${boostEffectValidation.error}`);
   await interaction.reply({
-   content: "❌ **Invalid Parameter**\n\nThe village option is only available for Scholar Gathering boosts.",
+   content: boostEffectValidation.error,
    ephemeral: true,
   });
   return;
  }
 
- if (boosterJob === 'Scholar' && category === 'Gathering' && !village) {
+ // Validate Scholar village parameter
+ const scholarValidation = validateScholarVillageParameter(boosterCharacter.job, category, village);
+ if (!scholarValidation.valid) {
   await interaction.reply({
-   content: "❌ **Scholar Gathering Boost Requires Target Village**\n\n**Cross-Region Insight** allows Scholar-boosted characters to gather items from another village's item table without physically being there.\n\n💡 **Please specify a target village** using the `village` option to enable cross-region gathering.\n\n**Example:** `/boosting request character:YourChar booster:ScholarName category:Gathering village:Inariko`",
+   content: scholarValidation.error,
    ephemeral: true,
   });
   return;
  }
 
- const { generateUniqueId } = require('../../utils/uniqueIdUtils');
- const boostRequestId = generateUniqueId('B');
- const currentTime = Date.now();
+ // Create boost request data
+ const requestData = createBoostRequestData(targetCharacter, boosterCharacter, category, village, userId);
+ await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
 
- const requestData = {
-  boostRequestId,
-  targetCharacter: targetCharacter.name,
-  boostingCharacter: boosterCharacter.name,
-  category,
-  status: "pending",
-  requesterUserId: userId,
-  village: targetCharacter.currentVillage,
-  targetVillage: village, // Store the target village for Scholar boosts
-  timestamp: currentTime,
-  createdAt: new Date().toISOString(),
-  durationRemaining: null,
-  fulfilledAt: null,
-  boosterJob: boosterJob,
-  boostEffect: `${boost.name} — ${boost.description}`,
-  requestedByIcon: targetCharacter.icon,
-  boosterIcon: boosterCharacter.icon
- };
+ // Create embed data and embed
+ const embedData = createBoostRequestEmbedData(targetCharacter, boosterCharacter, category, village, boostEffectValidation.boost);
+ const embed = createBoostRequestEmbed(embedData, requestData.boostRequestId);
 
- // Debug info removed to reduce log bloat
+ // Get the owner of the booster character and send reply
+ const boosterOwnerId = boosterCharacter.userId;
+ const boosterOwnerMention = `<@${boosterOwnerId}>`;
+ 
+ const reply = await interaction.reply({
+  content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run </boosting accept:1394790096338817195> within 24 hours.`,
+  embeds: [embed]
+ }).then(response => response.fetch());
 
- // Save to TempData only
- await saveBoostingRequestToTempData(boostRequestId, requestData);
-
- // Import the new embed function
- const { createBoostRequestEmbed } = require('../../embeds/embeds');
-
-   // Create the embed using the new function
-  const requestDataForEmbed = {
-    requestedBy: targetCharacter.name,
-    booster: boosterCharacter.name,
-    boosterJob: boosterJob,
-    category: category,
-    boostEffect: `${boost.name} — ${boost.description}`,
-    village: targetCharacter.currentVillage,
-    targetVillage: village, // Include target village for Scholar boosts
-    requestedByIcon: targetCharacter.icon,
-    boosterIcon: boosterCharacter.icon
-  };
-
-  const embed = createBoostRequestEmbed(requestDataForEmbed, boostRequestId);
-
-   // Get the owner of the booster character
-  const boosterOwnerId = boosterCharacter.userId;
-  const boosterOwnerMention = `<@${boosterOwnerId}>`;
-  
-  const reply = await interaction.reply({
-   content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run </boosting accept:1394790096338817195> within 24 hours.`,
-   embeds: [embed]
-  }).then(response => response.fetch());
-
-  // Save the message ID to TempData for later updates
-  requestData.messageId = reply.id;
-  requestData.channelId = reply.channelId;
-  await saveBoostingRequestToTempData(boostRequestId, requestData);
+ // Save the message ID to TempData for later updates
+ requestData.messageId = reply.id;
+ requestData.channelId = reply.channelId;
+ await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
 }
 
 async function handleBoostAccept(interaction) {
@@ -475,16 +625,10 @@ async function handleBoostAccept(interaction) {
  const boosterName = interaction.options.getString("character");
  const userId = interaction.user.id;
 
- // Debug info removed to reduce log bloat
-
  const requestData = await retrieveBoostingRequestFromTempData(requestId);
  
- // Debug info removed to reduce log bloat
- 
  if (!requestData) {
-  console.error(
-   `[boosting.js]: Error - Invalid boost request ID "${requestId}".`
-  );
+  console.error(`[boosting.js]: Error - Invalid boost request ID "${requestId}".`);
   await interaction.reply({
    content: "Invalid request ID.",
    ephemeral: true,
@@ -496,17 +640,14 @@ async function handleBoostAccept(interaction) {
  if (requestData.expiresAt && currentTime > requestData.expiresAt) {
   console.error(`[boosting.js]: Request "${requestId}" has expired.`);
   await interaction.reply({
-   content:
-    "This boost request has expired. Boost requests are only valid for 24 hours.",
+   content: "This boost request has expired. Boost requests are only valid for 24 hours.",
    ephemeral: true,
   });
   return;
  }
 
  if (requestData.status !== "pending") {
-  console.error(
-   `[boosting.js]: Error - Boost request "${requestId}" is not pending (status: ${requestData.status}).`
-  );
+  console.error(`[boosting.js]: Error - Boost request "${requestId}" is not pending (status: ${requestData.status}).`);
   await interaction.reply({
    content: "This request has already been fulfilled or expired.",
    ephemeral: true,
@@ -514,18 +655,10 @@ async function handleBoostAccept(interaction) {
   return;
  }
 
- let booster = await fetchCharacterByNameAndUserId(boosterName, userId);
- 
- // If not found as regular character, try as mod character
- if (!booster) {
-   const { fetchModCharacterByNameAndUserId } = require('../../database/db');
-   booster = await fetchModCharacterByNameAndUserId(boosterName, userId);
- }
+ const booster = await fetchCharacterWithFallback(boosterName, userId);
  
  if (!booster) {
-  console.error(
-   `[boosting.js]: Error - User does not own boosting character "${boosterName}".`
-  );
+  console.error(`[boosting.js]: Error - User does not own boosting character "${boosterName}".`);
   await interaction.reply({
    content: `You do not own the boosting character "${boosterName}".`,
    ephemeral: true,
@@ -534,9 +667,7 @@ async function handleBoostAccept(interaction) {
  }
 
  if (booster.name !== requestData.boostingCharacter) {
-  console.error(
-   `[boosting.js]: Error - Mismatch in boosting character. Request designated for "${requestData.boostingCharacter}", but provided "${booster.name}".`
-  );
+  console.error(`[boosting.js]: Error - Mismatch in boosting character. Request designated for "${requestData.boostingCharacter}", but provided "${booster.name}".`);
   await interaction.reply({
    content: `This request was made for **${requestData.boostingCharacter}**, not **${booster.name}**.`,
    ephemeral: true,
@@ -544,13 +675,11 @@ async function handleBoostAccept(interaction) {
   return;
  }
 
- const boost = getBoostEffect(booster.job, requestData.category);
- if (!boost) {
-  console.error(
-   `[boosting.js]: Error - No boost effect found for job "${booster.job}" and category "${requestData.category}".`
-  );
+ const boostEffectValidation = validateBoostEffect(booster.job, requestData.category);
+ if (!boostEffectValidation.valid) {
+  console.error(`[boosting.js]: Error - ${boostEffectValidation.error}`);
   await interaction.reply({
-   content: `No boost found for job "${booster.job}" in category "${requestData.category}".`,
+   content: boostEffectValidation.error,
    ephemeral: true,
   });
   return;
@@ -575,61 +704,41 @@ async function handleBoostAccept(interaction) {
   return;
  }
 
+ // Update request data with fulfillment details
  const fulfilledTime = Date.now();
- const boostDuration = 24 * 60 * 60 * 1000;
- const boostExpiresAt = fulfilledTime + boostDuration;
+ const boostExpiresAt = fulfilledTime + BOOST_DURATION;
 
  requestData.status = "fulfilled";
  requestData.fulfilledAt = fulfilledTime;
- requestData.durationRemaining = boostDuration;
+ requestData.durationRemaining = BOOST_DURATION;
  requestData.boostExpiresAt = boostExpiresAt;
 
-   // Update the target character's boostedBy field
-  const targetCharacter = await fetchCharacterByName(requestData.targetCharacter);
-  if (targetCharacter) {
-    targetCharacter.boostedBy = booster.name;
-    
-    // For Scholar Gathering boosts, store the target village in the boost data
-    if (booster.job === 'Scholar' && requestData.category === 'Gathering' && requestData.targetVillage) {
-      // Store the target village in the boost data for cross-region gathering
-      requestData.targetVillage = requestData.targetVillage;
-      console.log(`[boosting.js]: Scholar boost applied - ${targetCharacter.name} can now gather from ${requestData.targetVillage} while staying in ${targetCharacter.currentVillage}`);
-    }
-    
-    await targetCharacter.save();
-    console.log(`[boosting.js]: Set ${targetCharacter.name}.boostedBy = ${booster.name}`);
-  } else {
-    console.error(`[boosting.js]: Error - Could not find target character "${requestData.targetCharacter}"`);
-  }
+ // Update the target character's boostedBy field
+ const targetCharacter = await fetchCharacterByName(requestData.targetCharacter);
+ if (targetCharacter) {
+   targetCharacter.boostedBy = booster.name;
+   
+   // For Scholar Gathering boosts, store the target village in the boost data
+   if (booster.job === 'Scholar' && requestData.category === 'Gathering' && requestData.targetVillage) {
+     requestData.targetVillage = requestData.targetVillage;
+     console.log(`[boosting.js]: Scholar boost applied - ${targetCharacter.name} can now gather from ${requestData.targetVillage} while staying in ${targetCharacter.currentVillage}`);
+   }
+   
+   await targetCharacter.save();
+   console.log(`[boosting.js]: Set ${targetCharacter.name}.boostedBy = ${booster.name}`);
+ } else {
+   console.error(`[boosting.js]: Error - Could not find target character "${requestData.targetCharacter}"`);
+ }
 
-   // Save to TempData only
-  await saveBoostingRequestToTempData(requestId, requestData);
+ // Save updated request data
+ await saveBoostingRequestToTempData(requestId, requestData);
 
-  // Update the original boost request embed to show fulfilled status
-  const { updateBoostRequestEmbed } = require('../../embeds/embeds');
-  await updateBoostRequestEmbed(interaction.client, requestData, 'fulfilled');
+ // Update the original boost request embed to show fulfilled status
+ await updateBoostRequestEmbed(interaction.client, requestData, 'fulfilled');
 
-  // Import the new embed function
-  const { createBoostAppliedEmbed } = require('../../embeds/embeds');
-
-  // Create the embed using the new function
-  const boostDataForEmbed = {
-    boostedBy: booster.name,
-    boosterJob: booster.job,
-    target: requestData.targetCharacter,
-    category: requestData.category,
-    effect: boost.description,
-    boostName: boost.name,
-    village: requestData.village,
-    boostedByIcon: booster.icon,
-    targetIcon: targetCharacter.icon,
-    boosterStamina: booster.currentStamina,
-    boosterHearts: booster.currentHearts,
-    boosterMaxStamina: booster.maxStamina,
-    boosterMaxHearts: booster.maxHearts
-  };
-
-  const embed = createBoostAppliedEmbed(boostDataForEmbed);
+ // Create and send boost applied embed
+ const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
+ const embed = createBoostAppliedEmbed(embedData);
 
  await interaction.reply({
   content: `Boost has been applied and will remain active for 24 hours!`,
@@ -641,13 +750,7 @@ async function handleBoostStatus(interaction) {
  const characterName = interaction.options.getString("charactername");
  const userId = interaction.user.id;
 
- let character = await fetchCharacterByNameAndUserId(characterName, userId);
- 
- // If not found as regular character, try as mod character
- if (!character) {
-   const { fetchModCharacterByNameAndUserId } = require('../../database/db');
-   character = await fetchModCharacterByNameAndUserId(characterName, userId);
- }
+ const character = await fetchCharacterWithFallback(characterName, userId);
  
  if (!character) {
   await interaction.reply({
@@ -658,7 +761,6 @@ async function handleBoostStatus(interaction) {
  }
 
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
-
  const currentTime = Date.now();
  
  if (!activeBoost || activeBoost.status !== "fulfilled") {
@@ -668,7 +770,6 @@ async function handleBoostStatus(interaction) {
     await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
     
     // Update the embed to show expired status
-    const { updateBoostRequestEmbed } = require('../../embeds/embeds');
     await updateBoostRequestEmbed(interaction.client, activeBoost, 'expired');
   }
   
@@ -681,22 +782,17 @@ async function handleBoostStatus(interaction) {
 
  if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
   activeBoost.status = "expired";
-  // Save to TempData only
   await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
 
   // Update the original boost request embed to show expired status
-  const { updateBoostRequestEmbed } = require('../../embeds/embeds');
   await updateBoostRequestEmbed(interaction.client, activeBoost, 'expired');
 
-     // Clear the boostedBy field from the character
-   if (character.boostedBy) {
-     character.boostedBy = null;
-     
-     // Scholar Gathering boosts no longer change character location, so no restoration needed
-     
-     await character.save();
-     console.log(`[boosting.js]: Cleared ${character.name}.boostedBy due to expiration`);
-   }
+  // Clear the boostedBy field from the character
+  if (character.boostedBy) {
+    character.boostedBy = null;
+    await character.save();
+    console.log(`[boosting.js]: Cleared ${character.name}.boostedBy due to expiration`);
+  }
 
   await interaction.reply({
    content: `${characterName}'s boost has expired.`,
@@ -707,9 +803,7 @@ async function handleBoostStatus(interaction) {
 
  const timeRemaining = activeBoost.boostExpiresAt - currentTime;
  const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
- const minutesRemaining = Math.floor(
-  (timeRemaining % (1000 * 60 * 60)) / (1000 * 60)
- );
+ const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
 
  const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
  if (!boosterCharacter) {
@@ -721,15 +815,9 @@ async function handleBoostStatus(interaction) {
   return;
  }
 
- const boost = getBoostEffect(
-  boosterCharacter.job,
-  activeBoost.category
- );
-
- if (!boost) {
-  console.error(
-   `[boosting.js]: Error - No boost effect found for booster "${activeBoost.boostingCharacter}" and category "${activeBoost.category}".`
-  );
+ const boostEffectValidation = validateBoostEffect(boosterCharacter.job, activeBoost.category);
+ if (!boostEffectValidation.valid) {
+  console.error(`[boosting.js]: Error - ${boostEffectValidation.error}`);
   await interaction.reply({
    content: `Error retrieving boost effect for ${characterName}.`,
    ephemeral: true,
@@ -737,34 +825,34 @@ async function handleBoostStatus(interaction) {
   return;
  }
 
-   // Create fields array for the embed
-  const fields = [
-   { name: "Boost Type", value: boost.name, inline: true },
-   { name: "Category", value: activeBoost.category, inline: true },
-   { name: "Boosted By", value: activeBoost.boostingCharacter, inline: true },
-   { name: "Effect", value: boost.description, inline: false },
-   {
-    name: "Time Remaining",
-    value: `${hoursRemaining}h ${minutesRemaining}m`,
-    inline: true,
-   },
-   {
-    name: "Expires",
-    value: `<t:${Math.floor(activeBoost.boostExpiresAt / 1000)}:R>`,
-    inline: true,
-   }
-  ];
-
-  // Add cross-region gathering information for Scholar Gathering boosts
-  if (activeBoost.boosterJob === 'Scholar' && activeBoost.category === 'Gathering' && activeBoost.targetVillage) {
-    fields.push({
-      name: "🎯 Cross-Region Gathering",
-      value: `**Can gather from:** ${activeBoost.targetVillage}\n**Current location:** ${character.currentVillage}\n*Character stays in current location while gathering from target village*`,
-      inline: false
-    });
+ // Create fields array for the embed
+ const fields = [
+  { name: "Boost Type", value: boostEffectValidation.boost.name, inline: true },
+  { name: "Category", value: activeBoost.category, inline: true },
+  { name: "Boosted By", value: activeBoost.boostingCharacter, inline: true },
+  { name: "Effect", value: boostEffectValidation.boost.description, inline: false },
+  {
+   name: "Time Remaining",
+   value: `${hoursRemaining}h ${minutesRemaining}m`,
+   inline: true,
+  },
+  {
+   name: "Expires",
+   value: `<t:${Math.floor(activeBoost.boostExpiresAt / 1000)}:R>`,
+   inline: true,
   }
+ ];
 
-  const embed = new EmbedBuilder()
+ // Add cross-region gathering information for Scholar Gathering boosts
+ if (activeBoost.boosterJob === 'Scholar' && activeBoost.category === 'Gathering' && activeBoost.targetVillage) {
+   fields.push({
+     name: "🎯 Cross-Region Gathering",
+     value: `**Can gather from:** ${activeBoost.targetVillage}\n**Current location:** ${character.currentVillage}\n*Character stays in current location while gathering from target village*`,
+     inline: false
+   });
+ }
+
+ const embed = new EmbedBuilder()
   .setTitle(`Active Boost Status: ${characterName}`)
   .addFields(fields)
   .setColor("#4CAF50")

@@ -1,6 +1,7 @@
 // ============================================================================
 // ------------------- Boost Integration Helper Functions -------------------
 // ============================================================================
+// New file boostIntegration.js will be for applying effects to commands
 
 const { applyBoostEffect } = require('./boostingModule');
 const { isBoostActive, getActiveBoostEffect } = require('../commands/jobs/boosting');
@@ -251,4 +252,4 @@ module.exports = {
   applyOtherBoost,
   getCharacterBoostStatus,
   addBoostNotificationToEmbed
-};
+}; 

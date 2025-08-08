@@ -29,7 +29,7 @@ const { getVillageRegionByName } = require('../../modules/locationsModule.js');
 const { useHearts, handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
 const { capitalizeWords } = require('../../modules/formattingModule.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
-const { applyBoostEffect, getBoostEffect, getBoostEffectByCharacter } = require('../../modules/boostingModule.js');
+const { applyGatheringBoost } = require('../../modules/boostIntegration');
 
 // ============================================================================
 // ------------------- Utilities -------------------
@@ -712,18 +712,14 @@ module.exports = {
         let isEntertainerBoost = false;
         
         if (character.boostedBy && boosterCharacter) {
-          const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Gathering');
-          if (boostEffect) {
-            // Special handling for Entertainer boost (bonus item after normal gather)
-            if (boosterCharacter.job === 'Entertainer') {
-              isEntertainerBoost = true;
-            } else if (boosterCharacter.job !== 'Scholar') {
-              // Normal boost application for all other jobs (including Priest) - apply to available items
-              // Skip Scholar since we already handled the region change above
-              const originalItemCount = availableItems.length;
-              boostedAvailableItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
-
-            }
+          // Special handling for Entertainer boost (bonus item after normal gather)
+          if (boosterCharacter.job === 'Entertainer') {
+            isEntertainerBoost = true;
+          } else if (boosterCharacter.job !== 'Scholar') {
+            // Normal boost application for all other jobs (including Priest) - apply to available items
+            // Skip Scholar since we already handled the region change above
+            const originalItemCount = availableItems.length;
+            boostedAvailableItems = await applyGatheringBoost(character.name, availableItems);
           }
         }
 
@@ -746,7 +742,7 @@ module.exports = {
         
         // Handle Entertainer bonus item
         if (isEntertainerBoost) {
-          const entertainerItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
+          const entertainerItems = await applyGatheringBoost(character.name, availableItems);
           
           if (entertainerItems && entertainerItems.length > 0) {
             // Select a random entertainer item as bonus

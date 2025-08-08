@@ -23,7 +23,7 @@ const { checkAndUseStamina } = require('../../modules/characterStatsModule');
 const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords, formatDateTime } = require('../../modules/formattingModule');
-const { applyBoostEffect, getBoostEffect, getBoostEffectByCharacter } = require('../../modules/boostingModule.js');
+const { applyCraftingBoost, applyCraftingStaminaBoost, applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../../utils/inventoryUtils');
@@ -254,16 +254,7 @@ module.exports = {
       let staminaCost = item.staminaToCraft * quantity;
       
       // Apply Crafting boosts to stamina cost
-      if (freshCharacter.boostedBy) {
-        const boostEffect = await getBoostEffectByCharacter(freshCharacter.boostedBy, 'Crafting');
-        if (boostEffect) {
-          const boostedStamina = await applyBoostEffect(freshCharacter.boostedBy, 'Crafting', staminaCost);
-          if (boostedStamina !== staminaCost) {
-            console.log(`[crafting.js] Applied ${freshCharacter.boostedBy} crafting stamina boost: ${staminaCost} → ${boostedStamina}`);
-            staminaCost = boostedStamina;
-          }
-        }
-      }
+      staminaCost = await applyCraftingStaminaBoost(freshCharacter.name, staminaCost);
       
       if (freshCharacter.currentStamina < staminaCost) {
         console.error(`[crafting.js]: ❌ Insufficient stamina for ${freshCharacter.name} - needed ${staminaCost}, has ${freshCharacter.currentStamina}`);
@@ -349,26 +340,7 @@ module.exports = {
       let craftedQuantity = quantity;
       
       // Apply Crafting boosts to crafted item quantity
-      if (freshCharacter.boostedBy) {
-        console.log(`[crafting.js] Character ${freshCharacter.name} is boosted by ${freshCharacter.boostedBy}`);
-        const boostEffect = await getBoostEffectByCharacter(freshCharacter.boostedBy, 'Crafting');
-        if (boostEffect) {
-          console.log(`[crafting.js] Found boost effect for ${freshCharacter.boostedBy}:`, boostEffect);
-          const originalQuantity = craftedQuantity;
-          const boostedQuantity = await applyBoostEffect(freshCharacter.boostedBy, 'Crafting', craftedQuantity);
-          if (boostedQuantity !== craftedQuantity) {
-            console.log(`[crafting.js] Applied ${freshCharacter.boostedBy} crafting quantity boost: ${originalQuantity} → ${boostedQuantity} items`);
-            console.log(`[crafting.js] Boost effect "${boostEffect.name}" increased crafting output by ${boostedQuantity - originalQuantity} items`);
-            craftedQuantity = boostedQuantity;
-          } else {
-            console.log(`[crafting.js] Boost effect "${boostEffect.name}" did not modify crafting quantity (${originalQuantity} items)`);
-          }
-        } else {
-          console.log(`[crafting.js] No boost effect found for ${freshCharacter.boostedBy} in Crafting category`);
-        }
-      } else {
-        console.log(`[crafting.js] Character ${freshCharacter.name} is not boosted`);
-      }
+      craftedQuantity = await applyCraftingQuantityBoost(freshCharacter.name, craftedQuantity);
       
       const craftedAt = new Date();
       await addItemInventoryDatabase(character._id, item.itemName, craftedQuantity, interaction, 'Crafting', craftedAt);
