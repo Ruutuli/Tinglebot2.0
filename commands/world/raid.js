@@ -420,10 +420,16 @@ async function handleRaidVictory(interaction, raidData, monster) {
     
     for (const participant of participants) {
       try {
-        // Fetch the character's current data
-        const character = await Character.findById(participant.characterId);
+        // Fetch the character's current data - check both regular and mod characters
+        let character = await Character.findById(participant.characterId);
         if (!character) {
-          console.log(`[raid.js]: ⚠️ Character ${participant.name} not found, skipping loot`);
+          // Try to find as mod character
+          const ModCharacter = require('../../models/ModCharacterModel');
+          character = await ModCharacter.findById(participant.characterId);
+        }
+        
+        if (!character) {
+          console.log(`[raid.js]: ⚠️ Character ${participant.name} not found in either collection, skipping loot`);
           failedCharacters.push({
             name: participant.name,
             reason: 'Character not found in database'
