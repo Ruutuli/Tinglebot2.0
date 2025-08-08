@@ -37,10 +37,7 @@ const { getJobPerk } = require("../../modules/jobsModule");
 const { checkInventorySync } = require("../../utils/characterUtils");
 
 // ------------------- Boost Integration -------------------
-const {
- applyBoostEffect,
- getBoostEffectByCharacter,
-} = require("../../modules/boostingModule.js");
+const { applyTravelBoost } = require("../../modules/boostIntegration");
 
 // ------------------- Database Models -------------------
 const ItemModel = require("../../models/ItemModel");
@@ -308,32 +305,7 @@ const command = {
     };
 
     // ------------------- Apply Delivery Boost (Traveling Category) -------------------
-    if (courier && courier.boostedBy) {
-     console.log(
-      `[deliver.js] Courier ${courier.name} is boosted by ${courier.boostedBy}`
-     );
-     const boostEffect = await getBoostEffectByCharacter(
-      courier.boostedBy,
-      "Traveling"
-     );
-     if (boostEffect) {
-      console.log(
-       `[deliver.js] Found traveling boost effect for ${courier.boostedBy}:`,
-       boostEffect
-      );
-      const boostedDelivery = await applyBoostEffect(
-       courier.boostedBy,
-       "Traveling",
-       deliveryTask
-      );
-      if (boostedDelivery !== deliveryTask) {
-       console.log(
-        `[deliver.js] Applied ${courier.boostedBy} traveling boost to delivery`
-       );
-       deliveryTask = boostedDelivery;
-      }
-     }
-    }
+    deliveryTask = await applyTravelBoost(courier.name, deliveryTask);
 
     // Save to TempData instead of using saveSubmissionToStorage
     await TempData.create({
@@ -660,20 +632,11 @@ const command = {
     }
 
     // ------------------- Apply Traveling Boost for Accept -------------------
-    if (courier && courier.boostedBy) {
+    if (courier) {
      console.log(
-      `[deliver.js] Courier ${courier.name} is boosted by ${courier.boostedBy} for accept`
+      `[deliver.js] Courier ${courier.name} is boosted for delivery acceptance`
      );
-     const boostEffect = await getBoostEffectByCharacter(
-      courier.boostedBy,
-      "Traveling"
-     );
-     if (boostEffect) {
-      console.log(
-       `[deliver.js] Applied traveling boost to delivery acceptance`
-      );
-      // Boost could reduce travel time or improve success rate
-     }
+     // Boost could reduce travel time or improve success rate
     }
 
     // ------------------- Update delivery status -------------------
@@ -771,20 +734,11 @@ const command = {
     }
 
     // ------------------- Apply Traveling Boost for Fulfill -------------------
-    if (courier && courier.boostedBy) {
+    if (courier) {
      console.log(
-      `[deliver.js] Courier ${courier.name} is boosted by ${courier.boostedBy} for fulfill`
+      `[deliver.js] Courier ${courier.name} is boosted for delivery fulfillment`
      );
-     const boostEffect = await getBoostEffectByCharacter(
-      courier.boostedBy,
-      "Traveling"
-     );
-     if (boostEffect) {
-      console.log(
-       `[deliver.js] Applied traveling boost to delivery fulfillment`
-      );
-      // Boost could provide additional benefits on completion
-     }
+     // Boost could provide additional benefits on completion
     }
 
     // ------------------- Update delivery status -------------------

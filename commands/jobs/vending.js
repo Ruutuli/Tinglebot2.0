@@ -7,10 +7,7 @@
 const { SlashCommandBuilder } = require("discord.js");
 
 // ------------------- Boost Integration -------------------
-const {
- applyBoostEffect,
- getBoostEffectByCharacter,
-} = require("../../modules/boostingModule.js");
+const { applyVendingBoost } = require("../../modules/boostIntegration");
 
 // ------------------- Command Handlers -------------------
 const {
@@ -319,22 +316,11 @@ async function execute(interaction) {
     console.log(
      `[vending.js] Character ${character.name} is boosted by ${character.boostedBy} for vending`
     );
-    const boostEffect = await getBoostEffectByCharacter(
-     character.boostedBy,
-     "Vending"
-    );
-    if (boostEffect) {
-     console.log(
-      `[vending.js] Found vending boost effect for ${character.boostedBy}:`,
-      boostEffect
-     );
-     // Store boost info for handlers to use
-     interaction.boostInfo = {
-      boosterName: character.boostedBy,
-      boostEffect: boostEffect,
-      character: character,
-     };
-    }
+    // Store boost info for handlers to use
+    interaction.boostInfo = {
+     boosterName: character.boostedBy,
+     character: character,
+    };
    }
   } catch (error) {
    console.error(`[vending.js]: Error checking boost status:`, error);
@@ -395,34 +381,8 @@ async function executeVendingWithBoost(interaction) {
 
    // Apply boost to vending points collection
    const character = interaction.boostInfo.character;
-   if (character.boostedBy) {
-    // Get base points collected
-    const basePoints = originalResult?.pointsCollected || 0;
-    const boostedPoints = await applyBoostEffect(
-     character.boostedBy,
-     "Vending",
-     basePoints
-    );
-
-    if (boostedPoints !== basePoints) {
-     console.log(
-      `[vending.js] Applied ${character.boostedBy} vending points boost: ${basePoints} → ${boostedPoints}`
-     );
-     // Update the points in database if boost increased them
-     if (boostedPoints > basePoints) {
-      // Add the bonus points
-      const bonusPoints = boostedPoints - basePoints;
-      // This would need to be implemented in your vending handler
-      console.log(
-       `[vending.js] Bonus vending points from boost: +${bonusPoints}`
-      );
-     }
-    }
-
-    // Clear boost after use
-    character.boostedBy = null;
-    await character.save();
-   }
+   const basePoints = originalResult?.pointsCollected || 0;
+   const boostedPoints = await applyVendingBoost(character.name, basePoints);
 
    return originalResult;
   } else {

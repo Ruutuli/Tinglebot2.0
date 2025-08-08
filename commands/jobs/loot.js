@@ -48,7 +48,7 @@ const {
 
 // ------------------- Boosting Module -------------------
 // Import boosting functionality for applying job-based boosts
-const { applyBoostEffect, getBoostEffect, getBoostEffectByCharacter } = require("../../modules/boostingModule.js");
+const { applyLootingBoost, applyLootingDamageBoost, applyLootingQuantityBoost } = require("../../modules/boostIntegration");
 
 // Modules - RNG Logic
 const {
@@ -838,23 +838,7 @@ async function processLootingLogic(
 
   // ------------------- Apply Boosting Effects -------------------
   // Check if character is boosted and apply looting boosts
-  if (character.boostedBy) {
-    console.log(`[loot.js] Character ${character.name} is boosted by ${character.boostedBy}`);
-    const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
-    if (boostEffect) {
-      console.log(`[loot.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
-      const originalValue = adjustedRandomValue;
-      // Apply boost to the adjusted random value (affects loot success)
-      const boostedValue = await applyBoostEffect(character.boostedBy, 'Looting', adjustedRandomValue);
-      adjustedRandomValue = boostedValue;
-      console.log(`[loot.js] Applied ${character.boostedBy} looting boost: ${originalValue} → ${boostedValue}`);
-      console.log(`[loot.js] Boost effect "${boostEffect.name}" ${boostedValue > originalValue ? 'increased' : boostedValue < originalValue ? 'decreased' : 'did not change'} loot success chance`);
-    } else {
-      console.log(`[loot.js] No boost effect found for ${character.boostedBy} in Looting category`);
-    }
-  } else {
-    console.log(`[loot.js] Character ${character.name} is not boosted`);
-  }
+  adjustedRandomValue = await applyLootingBoost(character.name, adjustedRandomValue);
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
   console.log(`[loot.js]: ⚔️ ${character.name} vs ${encounteredMonster.name} | Roll: ${diceRoll}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
@@ -870,19 +854,8 @@ async function processLootingLogic(
 
   // ------------------- Apply Damage Reduction Boosts -------------------
   // Check if character is boosted and apply damage reduction (Entertainer boost)
-  if (character.boostedBy && outcome.hearts) {
-    const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
-    if (boostEffect) {
-      const originalDamage = outcome.hearts;
-              const reducedDamage = await applyBoostEffect(character.boostedBy, 'Looting', outcome.hearts);
-      if (reducedDamage !== outcome.hearts) {
-        console.log(`[loot.js] Applied ${character.boostedBy} damage reduction: ${originalDamage} → ${reducedDamage} hearts`);
-        console.log(`[loot.js] Boost effect "${boostEffect.name}" reduced damage by ${originalDamage - reducedDamage} hearts`);
-        outcome.hearts = reducedDamage;
-      } else {
-        console.log(`[loot.js] Boost effect "${boostEffect.name}" did not reduce damage (${originalDamage} hearts)`);
-      }
-    }
+  if (outcome.hearts) {
+    outcome.hearts = await applyLootingDamageBoost(character.name, outcome.hearts);
   }
 
   // Step 2: Handle KO Logic
@@ -1079,23 +1052,10 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
 
  // ------------------- Apply Boosting Effects -------------------
  // Check if character is boosted and apply loot quantity boosts
- if (character && character.boostedBy) {
-   console.log(`[loot.js] Character ${character.name} is boosted by ${character.boostedBy} for loot quantity`);
-   const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
-   if (boostEffect) {
-     console.log(`[loot.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
-     const originalQuantity = lootedItem.quantity;
-     const boostedLoot = await applyBoostEffect(character.boostedBy, 'Looting', lootedItem);
-     if (boostedLoot && boostedLoot.quantity !== lootedItem.quantity) {
-       console.log(`[loot.js] Applied ${character.boostedBy} loot quantity boost: ${originalQuantity} → ${boostedLoot.quantity} items`);
-       console.log(`[loot.js] Boost effect "${boostEffect.name}" increased loot quantity by ${boostedLoot.quantity - originalQuantity} items`);
-       console.log(`[loot.js] Final loot: ${boostedLoot.itemName} (x${boostedLoot.quantity})`);
-       return boostedLoot;
-     } else {
-       console.log(`[loot.js] Boost effect "${boostEffect.name}" did not modify loot quantity (${originalQuantity} items)`);
-     }
-   } else {
-     console.log(`[loot.js] No boost effect found for ${character.boostedBy} in Looting category`);
+ if (character) {
+   const boostedLoot = await applyLootingQuantityBoost(character.name, lootedItem);
+   if (boostedLoot && boostedLoot.quantity !== lootedItem.quantity) {
+     return boostedLoot;
    }
  }
 
