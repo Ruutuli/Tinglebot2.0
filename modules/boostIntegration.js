@@ -40,8 +40,6 @@ async function applyBoostToAction(characterName, category, data, additionalData 
     // Apply the boost effect using the booster's job
     const boostedData = await applyBoostEffect(activeBoost.boostingCharacter, category, data, additionalData);
     
-    console.log(`[boostIntegration.js]: Applied ${category} boost to ${characterName} (boosted by ${activeBoost.boostingCharacter})`);
-    
     return boostedData;
   } catch (error) {
     console.error(`[boostIntegration.js]: Error applying boost to ${characterName} for ${category}:`, error);

@@ -608,6 +608,34 @@ const fetchModCharacterByNameAndUserId = async (characterName, userId) => {
  }
 };
 
+// ------------------- fetchModCharacterByName -------------------
+const fetchModCharacterByName = async (characterName) => {
+ try {
+  await connectToTinglebot();
+  // Get the actual name part before the "|" if it exists
+  const actualName = characterName.split('|')[0].trim();
+  
+  // Escape special regex characters in the character name
+  const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  const modCharacter = await ModCharacter.findOne({
+    name: new RegExp(`^${escapedName}$`, "i")
+  });
+
+  if (!modCharacter) {
+    return null;
+  }
+
+  return modCharacter;
+ } catch (error) {
+  handleError(error, "db.js", {
+   function: "fetchModCharacterByName",
+   characterName: characterName,
+  });
+  throw error;
+ }
+};
+
 const fetchModCharactersByUserId = async (userId) => {
  try {
   await connectToTinglebot();
@@ -2101,7 +2129,6 @@ const connectToInventoriesForItems = async () => {
             await inventoriesClient.connect();
             // Use tinglebot database for items
             inventoriesDb = inventoriesClient.db('tinglebot');
-            console.log(`[db.js]: 🔌 Connected to Items database: tinglebot`);
         } else {
             // Try to ping the server to check connection
             try {
@@ -2127,7 +2154,6 @@ const connectToInventoriesForItems = async () => {
                 });
                 await inventoriesClient.connect();
                 inventoriesDb = inventoriesClient.db('tinglebot');
-                console.log(`[db.js]: 🔌 Reconnected to Items database: tinglebot`);
             }
         }
         return inventoriesDb;
@@ -2277,6 +2303,7 @@ module.exports = {
  deleteCharacterInventoryCollection,
  getModSharedInventoryCollection,
  // Mod Character Functions
+ fetchModCharacterByName,
  fetchModCharacterByNameAndUserId,
  fetchModCharactersByUserId,
  fetchAllModCharacters,
