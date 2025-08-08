@@ -1,36 +1,35 @@
+// ============================================================================
+// IMPORTS
+// ============================================================================
+
+// ------------------- Discord.js Imports ------------------
 const { EmbedBuilder } = require("discord.js");
+
+// ------------------- Utility Module Imports ------------------
 const { handleError } = require("../utils/globalErrorHandler");
-const {
- capitalize,
- capitalizeFirstLetter,
- capitalizeWords,
- getRandomColor,
-} = require("../modules/formattingModule");
-const {
- convertCmToFeetInches,
- isValidImageUrl,
-} = require("../utils/validation");
-const {
- getVillageColorByName,
- getVillageEmojiByName,
-} = require("../modules/locationsModule");
-const {
- getNoEncounterMessage,
- typeActionMap,
- generateGatherFlavorText,
- generateCraftingFlavorText,
-} = require("../modules/flavorTextModule");
 const { getLastDebugValues } = require("../modules/buffModule");
-const ItemModel = require("../models/ItemModel");
+const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
+const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
+const { getMountEmoji, getMountThumbnail } = require("../modules/mountModule");
+const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap } = require("../modules/flavorTextModule");
+const { convertCmToFeetInches, isValidImageUrl } = require("../utils/validation");
+const { validateInventorySheet } = require("../utils/googleSheetsUtils");
+
+// ------------------- Database Model Imports ------------------
 const Character = require("../models/CharacterModel");
+const ItemModel = require("../models/ItemModel");
 const { monsterMapping } = require("../models/MonsterModel");
-const { validateInventorySheet } = require('../utils/googleSheetsUtils')
-const { getMountEmoji, getMountThumbnail } = require('../modules/mountModule');
 
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// ------------------- Default Values ------------------
 const DEFAULT_EMOJI = "🔹";
-const DEFAULT_IMAGE_URL =
- "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/100x100";
 
+// ------------------- Region Color Mapping ------------------
 const regionColors = {
  eldin: "#FF0000",
  lanayru: "#0000FF",
@@ -40,33 +39,36 @@ const regionColors = {
  hebra: "#800080",
 };
 
+// ------------------- Region Image Mapping ------------------
 const regionImages = {
  eldin: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
- lanayru:
-  "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
+ lanayru: "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
  faron: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png",
- central_hyrule:
-  "https://storage.googleapis.com/tinglebot/Graphics/Central-Hyrule-Region.png",
+ central_hyrule: "https://storage.googleapis.com/tinglebot/Graphics/Central-Hyrule-Region.png",
  gerudo: "https://storage.googleapis.com/tinglebot/Graphics/Gerudo-Region.png",
  hebra: "https://storage.googleapis.com/tinglebot/Graphics/Hebra-Region.png",
 };
 
+// ------------------- Travel Path Images ------------------
 const PATH_IMAGES = {
  pathOfScarletLeaves: "https://storage.googleapis.com/tinglebot/psl.png",
  leafDewWay: "https://storage.googleapis.com/tinglebot/ldw.png",
 };
 
+// ------------------- Village Emoji Mapping ------------------
 const villageEmojis = {
  rudania: "<:rudania:899492917452890142>",
  inariko: "<:inariko:899493009073274920>",
  vhintl: "<:vhintl:899492879205007450>",
 };
 
+// ------------------- Travel Path Emoji Mapping ------------------
 const pathEmojis = {
  pathOfScarletLeaves: "🍂",
  leafDewWay: "🥬",
 };
 
+// ------------------- Job Action Verbs ------------------
 const jobActions = {
  Artist: "created",
  Craftsman: "crafted",
@@ -78,24 +80,31 @@ const jobActions = {
  Researcher: "invented",
 };
 
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+// ------------------- Text Formatting Utilities ------------------
+// ------------------- Function: getArticleForItem ------------------
+// Determines the appropriate article (a/an) for an item name based on first letter
 function getArticleForItem(itemName) {
  const vowels = ["A", "E", "I", "O", "U"];
  return vowels.includes(itemName.charAt(0).toUpperCase()) ? "an" : "a";
 }
 
-
+// ------------------- Function: formatItemDetails ------------------
+// Formats item details with consistent spacing, emoji, and quantity display
 function formatItemDetails(itemName, quantity = 1, emoji = DEFAULT_EMOJI) {
- const truncatedName =
-  itemName.length > 20 ? itemName.substring(0, 17) + "..." : itemName;
+ const truncatedName = itemName.length > 20 ? itemName.substring(0, 17) + "..." : itemName;
  const itemNamePadded = truncatedName.padEnd(20, " ");
  const quantityPadded = quantity.toString().padStart(3, " ");
  return `${emoji} \`${itemNamePadded}\` ⨯ \`${quantityPadded}\``;
 }
 
+// ------------------- Function: getCommonEmbedSettings ------------------
+// Retrieves common embed settings (color, author, image) for a character
 const getCommonEmbedSettings = (character) => {
- const villageColor = getVillageColorByName(
-  capitalizeFirstLetter(character.homeVillage)
- );
+ const villageColor = getVillageColorByName(capitalizeFirstLetter(character.homeVillage));
  return {
   color: villageColor,
   author: {
@@ -107,6 +116,8 @@ const getCommonEmbedSettings = (character) => {
  };
 };
 
+// ------------------- Function: aggregateItems ------------------
+// Aggregates items by name and sums their quantities
 const aggregateItems = (items) => {
  return items.reduce((acc, item) => {
   acc[item.name] = (acc[item.name] || 0) + item.quantity;
@@ -114,13 +125,107 @@ const aggregateItems = (items) => {
  }, {});
 };
 
+// ------------------- Function: formatMaterialsList ------------------
+// Formats a list of materials for display in embeds
 const formatMaterialsList = (materials) => {
  return materials
   .map((material) => `${material.name} x${material.quantity}`)
   .join(", ");
 };
 
-// ------------------- Debuff Embed -------------------
+// ------------------- Embed Styling Utilities ------------------
+// ------------------- Function: setDefaultImage ------------------
+// Sets the default image on an embed
+const setDefaultImage = (embed) => {
+ return embed.setImage(DEFAULT_IMAGE_URL);
+};
+
+// ------------------- Function: setThumbnailWithFallback ------------------
+// Sets a thumbnail with fallback to default if image URL is invalid
+const setThumbnailWithFallback = (embed, imageUrl, fallbackUrl = DEFAULT_THUMBNAIL_URL) => {
+ const url = isValidImageUrl(imageUrl) ? imageUrl : fallbackUrl;
+ return embed.setThumbnail(url);
+};
+
+// ------------------- Boost System Utilities ------------------
+// ------------------- Function: getBoostInfo ------------------
+// Retrieves boost information for a character in a specific category
+const getBoostInfo = async (character, category) => {
+ if (!character.boostedBy) return null;
+ 
+ const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+ const boostStatus = await getCharacterBoostStatus(character.name);
+ 
+ if (boostStatus && boostStatus.category === category) {
+   const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+   return {
+     boosterJob: boostStatus.boosterJob,
+     boosterName: boostStatus.boosterName,
+     boostFlavorText: generateBoostFlavorText(boostStatus.boosterJob, category)
+   };
+ }
+ 
+ return null;
+};
+
+// ------------------- Function: addBoostFlavorText ------------------
+// Adds boost flavor text to a description if boost information is available
+const addBoostFlavorText = (description, boostInfo) => {
+ if (!boostInfo?.boostFlavorText) return description;
+ return `${description}\n\n⚡ **Boost Effect:** ${boostInfo.boostFlavorText}`;
+};
+
+// ------------------- Function: buildFooterText ------------------
+// Builds consistent footer text including boost and job voucher information
+const buildFooterText = (baseText, character, boostInfo = null) => {
+ let footerText = baseText;
+ 
+ if (character.jobVoucher && character.jobVoucherJob) {
+   footerText += ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}`;
+ }
+ 
+ if (character.boostedBy) {
+   if (boostInfo?.boosterJob && boostInfo?.boosterName) {
+     footerText += ` | ⚡ Boosted by ${boostInfo.boosterJob} ${boostInfo.boosterName}`;
+   } else {
+     footerText += ` | ⚡ Boosted by: ${character.boostedBy}`;
+   }
+ }
+ 
+ return footerText;
+};
+
+// ------------------- Location and Village Utilities ------------------
+// ------------------- Function: getVillageImage ------------------
+// Retrieves the image for a character's current village
+const getVillageImage = (character) => {
+ const villageImages = {
+  Inariko: "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
+  Rudania: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
+  Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png",
+ };
+ 
+ return villageImages[capitalizeWords(character.currentVillage)] || DEFAULT_IMAGE_URL;
+};
+
+// ------------------- Function: getLocationPrefix ------------------
+// Generates a location-based prefix for character actions (visiting vs home village)
+const getLocationPrefix = (character) => {
+ const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
+ 
+ if (isVisiting) {
+   return `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${capitalizeWords(character.currentVillage)}`;
+ }
+ 
+ return `${capitalizeWords(character.currentVillage)} ${capitalizeWords(character.job)}`;
+};
+
+// ============================================================================
+// EMBED CREATION FUNCTIONS
+// ============================================================================
+
+// ------------------- Character Status Embeds ------------------
+// ------------------- Function: createDebuffEmbed -------------------
 // Creates an embed for when a character is debuffed and cannot use items
 const createDebuffEmbed = (character) => {
   // Calculate the debuff expiration date and time
@@ -128,178 +233,81 @@ const createDebuffEmbed = (character) => {
   
   if (character.debuff?.endDate) {
     const debuffEndDate = new Date(character.debuff.endDate);
-    
-    // Use the original endDate timestamp directly for Discord display
     const utcTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
-    
     debuffExpirationText = `<t:${utcTimestamp}:D> (<t:${utcTimestamp}:R>)`;
   }
 
-  const embed = new EmbedBuilder()
+  return new EmbedBuilder()
     .setColor('#FF0000')
     .setTitle('⚠️ Debuff Active ⚠️')
     .setDescription(`**${character.name}** is currently debuffed and cannot use items to heal.`)
-    .addFields(
-      {
-        name: '🕒 Debuff Resets',
-        value: debuffExpirationText,
-        inline: false
-      }
-    )
+    .addFields({
+      name: '🕒 Debuff Resets',
+      value: debuffExpirationText,
+      inline: false
+    })
     .setThumbnail(character.icon)
     .setFooter({ text: 'Debuff System' });
-  
-  return embed;
 };
 
-// ------------------- Character Embed -------------------
-// Creates a detailed character information embed
+// ------------------- Function: createCharacterEmbed -------------------
+// Creates a detailed character information embed with all character stats and details
 const createCharacterEmbed = (character) => {
  const settings = getCommonEmbedSettings(character);
-
  const homeVillageEmoji = getVillageEmojiByName(character.homeVillage) || "";
- const currentVillageEmoji =
-  getVillageEmojiByName(character.currentVillage) || "";
+ const currentVillageEmoji = getVillageEmojiByName(character.currentVillage) || "";
+ const heightInFeetInches = character.height ? convertCmToFeetInches(character.height) : "N/A";
 
- const heightInFeetInches = character.height
-  ? convertCmToFeetInches(character.height)
-  : "N/A";
-
- const embed = new EmbedBuilder()
-  .setTitle(
-   `${character.name} | ${capitalize(character.race)} | ${capitalizeFirstLetter(
-    character.currentVillage
-   )} | ${capitalizeFirstLetter(character.job)}`
-  )
+ return new EmbedBuilder()
+  .setTitle(`${character.name} | ${capitalize(character.race)} | ${capitalizeFirstLetter(character.currentVillage)} | ${capitalizeFirstLetter(character.job)}`)
   .addFields(
    { name: "👤 __Name__", value: `> ${character.name}`, inline: true },
-   {
-    name: "❤️ __Hearts__",
-    value: `> ${character.currentHearts}/${character.maxHearts}`,
-    inline: true,
-   },
-   {
-    name: "🟩 __Stamina__",
-    value: `> ${character.currentStamina}/${character.maxStamina}`,
-    inline: true,
-   },
+   { name: "❤️ __Hearts__", value: `> ${character.currentHearts}/${character.maxHearts}`, inline: true },
+   { name: "🟩 __Stamina__", value: `> ${character.currentStamina}/${character.maxStamina}`, inline: true },
    { name: "🔹 __Pronouns__", value: `> ${character.pronouns}`, inline: true },
    { name: "🔹 __Age__", value: `> ${character.age || "N/A"}`, inline: true },
-   {
-    name: "🔹 __Height__",
-    value: `> ${
-     character.height ? `${character.height} cm (${heightInFeetInches})` : "N/A"
-    }`,
-    inline: true,
-   },
-   {
-    name: "🔹 __Race__",
-    value: `> ${capitalize(character.race)}`,
-    inline: true,
-   },
-   {
-    name: `🔹 __Home Village__`,
-    value: `> ${homeVillageEmoji} ${capitalizeFirstLetter(
-     character.homeVillage
-    )}`,
-    inline: true,
-   },
-   {
-    name: `🔹 __Current Village__`,
-    value: `> ${currentVillageEmoji} ${capitalizeFirstLetter(
-     character.currentVillage
-    )}`,
-    inline: true,
-   },
-   {
-    name: "🔹 __Job__",
-    value: `> ${capitalizeFirstLetter(character.job)}`,
-    inline: true,
-   },
-   {
-    name: "🎫 __Active Job Voucher__",
-    value: character.jobVoucher && character.jobVoucherJob
-     ? `> ${capitalizeWords(character.jobVoucherJob)}`
-     : `> N/A`,
-    inline: true,
-   },   
-   {
-    name: "🔹 __Blighted__",
-    value: `> ${
-     character.blighted ? `Yes (Stage ${character.blightStage})` : "No"
-    }`,
-    inline: true,
-   },
-   {
-    name: "🔹 __Spirit Orbs__",
-    value: `> ${character.spiritOrbs}`,
-    inline: true,
-   },
-
-   {
-    name: "💥 __KO Status__",
-    value: `> ${character.ko ? "True" : "False"}`,
-    inline: true,
-   },
-
-   // Full-width fields below
-   {
-    name: "📦 __Inventory__",
-    value: `> [Google Sheets](${character.inventory})`,
-    inline: false,
-   },
-   {
-    name: "🔗 __Application Link__",
-    value: `> [Link](${character.appLink})`,
-    inline: false,
-   }
+   { name: "🔹 __Height__", value: `> ${character.height ? `${character.height} cm (${heightInFeetInches})` : "N/A"}`, inline: true },
+   { name: "🔹 __Race__", value: `> ${capitalize(character.race)}`, inline: true },
+   { name: `🔹 __Home Village__`, value: `> ${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}`, inline: true },
+   { name: `🔹 __Current Village__`, value: `> ${currentVillageEmoji} ${capitalizeFirstLetter(character.currentVillage)}`, inline: true },
+   { name: "🔹 __Job__", value: `> ${capitalizeFirstLetter(character.job)}`, inline: true },
+   { name: "🎫 __Active Job Voucher__", value: character.jobVoucher && character.jobVoucherJob ? `> ${capitalizeWords(character.jobVoucherJob)}` : `> N/A`, inline: true },
+   { name: "🔹 __Blighted__", value: `> ${character.blighted ? `Yes (Stage ${character.blightStage})` : "No"}`, inline: true },
+   { name: "🔹 __Spirit Orbs__", value: `> ${character.spiritOrbs}`, inline: true },
+   { name: "💥 __KO Status__", value: `> ${character.ko ? "True" : "False"}`, inline: true },
+   { name: "📦 __Inventory__", value: `> [Google Sheets](${character.inventory})`, inline: false },
+   { name: "🔗 __Application Link__", value: `> [Link](${character.appLink})`, inline: false }
   )
   .setDescription("📋 Character profile created successfully.")
   .setColor(settings.color)
   .setThumbnail(character.icon)
   .setFooter({ text: "Character details" })
   .setImage(DEFAULT_IMAGE_URL);
-
-
- return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createSimpleCharacterEmbed -------------------
+// Creates a simplified character embed with basic information only
 const createSimpleCharacterEmbed = (character, description) => {
  const settings = getCommonEmbedSettings(character);
 
- const embed = new EmbedBuilder()
+ return new EmbedBuilder()
   .addFields(
    { name: "👤 __Name__", value: character.name, inline: true },
    { name: "🔹 __Pronouns__", value: character.pronouns, inline: true },
    { name: "\u200B", value: "\u200B", inline: true },
-   {
-    name: "❤️ __Hearts__",
-    value: `${character.currentHearts}/${character.maxHearts}`,
-    inline: true,
-   },
-   {
-    name: "🟩 __Stamina__",
-    value: `${character.currentStamina}/${character.maxStamina}`,
-    inline: true,
-   }
+   { name: "❤️ __Hearts__", value: `${character.currentHearts}/${character.maxHearts}`, inline: true },
+   { name: "🟩 __Stamina__", value: `${character.currentStamina}/${character.maxStamina}`, inline: true }
   )
   .setColor(settings.color)
   .setThumbnail(character.icon)
   .setDescription(description)
   .setTimestamp()
   .setImage(DEFAULT_IMAGE_URL);
-
- return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
-const createCharacterGearEmbed = (
- character,
- gearMap,
- type,
- unequippedMessage = ""
-) => {
+// ------------------- Function: createCharacterGearEmbed -------------------
+// Creates an embed displaying character equipment and gear stats
+const createCharacterGearEmbed = (character, gearMap, type, unequippedMessage = "") => {
  const settings = getCommonEmbedSettings(character);
  const gearEmojis = {
   head: "🪖",
@@ -319,93 +327,49 @@ const createCharacterGearEmbed = (
 
  let totalAttack = character.gearWeapon?.stats?.get("modifierHearts") || 0;
 
- const embed = new EmbedBuilder()
+ return new EmbedBuilder()
   .setColor(settings.color || "#0099ff")
-  .setTitle(
-   `${character.name}'s Equipment - 🗡️ ATK +${totalAttack} | 🛡️ DEF +${totalDefense}`
-  )
+  .setTitle(`${character.name}'s Equipment - 🗡️ ATK +${totalAttack} | 🛡️ DEF +${totalDefense}`)
   .addFields(
-   {
-    name: `__${gearEmojis.head} Head__`,
-    value: gearMap.head || "> N/A",
-    inline: true,
-   },
-   {
-    name: `__${gearEmojis.chest} Chest__`,
-    value: gearMap.chest || "> N/A",
-    inline: true,
-   },
-   {
-    name: `__${gearEmojis.legs} Legs__`,
-    value: gearMap.legs || "> N/A",
-    inline: true,
-   },
-   {
-    name: `__${gearEmojis.weapon} Weapon__`,
-    value: gearMap.weapon || "> N/A",
-    inline: true,
-   },
+   { name: `__${gearEmojis.head} Head__`, value: gearMap.head || "> N/A", inline: true },
+   { name: `__${gearEmojis.chest} Chest__`, value: gearMap.chest || "> N/A", inline: true },
+   { name: `__${gearEmojis.legs} Legs__`, value: gearMap.legs || "> N/A", inline: true },
+   { name: `__${gearEmojis.weapon} Weapon__`, value: gearMap.weapon || "> N/A", inline: true },
    { name: "\u200B", value: "\u200B", inline: true },
-   {
-    name: `__${gearEmojis.shield} Shield__`,
-    value: gearMap.shield || "> N/A",
-    inline: true,
-   }
+   { name: `__${gearEmojis.shield} Shield__`, value: gearMap.shield || "> N/A", inline: true }
   )
   .setFooter({
-   text: unequippedMessage
-    ? `${unequippedMessage}\nGear type: ${type}`
-    : `Gear type: ${type}`,
+   text: unequippedMessage ? `${unequippedMessage}\nGear type: ${type}` : `Gear type: ${type}`,
   })
   .setTimestamp()
   .setImage(DEFAULT_IMAGE_URL);
-
- return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createVendorEmbed -------------------
+// Creates an embed displaying vendor shop information and stats
 const createVendorEmbed = (character) => {
  if (!character.vendorType) return null;
 
  const monthName = character.lastCollectedMonth
-  ? new Date(0, character.lastCollectedMonth - 1).toLocaleString("default", {
-     month: "long",
-    })
+  ? new Date(0, character.lastCollectedMonth - 1).toLocaleString("default", { month: "long" })
   : "N/A";
 
- const embed = new EmbedBuilder()
+ return new EmbedBuilder()
   .setTitle(`${character.name}'s Shop`)
   .addFields(
-   {
-    name: "🛒 __Vendor Type__",
-    value: `> ${capitalizeFirstLetter(character.vendorType)}`,
-    inline: false,
-   },
-   {
-    name: "💰 __Shop Pouch__",
-    value: `> ${character.shopPouch || "N/A"}`,
-    inline: false,
-   },
-   {
-    name: "🏆 __Vending Points__",
-    value: `> ${character.vendingPoints || 0}`,
-    inline: false,
-   },
-   {
-    name: "📅 __Last Collection Month__",
-    value: `> ${monthName}`,
-    inline: false,
-   }
+   { name: "🛒 __Vendor Type__", value: `> ${capitalizeFirstLetter(character.vendorType)}`, inline: false },
+   { name: "💰 __Shop Pouch__", value: `> ${character.shopPouch || "N/A"}`, inline: false },
+   { name: "🏆 __Vending Points__", value: `> ${character.vendingPoints || 0}`, inline: false },
+   { name: "📅 __Last Collection Month__", value: `> ${monthName}`, inline: false }
   )
   .setColor("#FFD700")
   .setThumbnail(character.icon)
   .setImage(DEFAULT_IMAGE_URL)
   .setFooter({ text: "Vendor details" });
-
- return embed;
 };
 
-// ------------------- Vending Setup Instructions -------------------
+// ------------------- Function: createVendingSetupInstructionsEmbed -------------------
+// Creates setup instructions embed for vending shop configuration
 function createVendingSetupInstructionsEmbed(character = null) {
   if (character) {
     // Success state with character info
@@ -439,8 +403,8 @@ function createVendingSetupInstructionsEmbed(character = null) {
     .setTimestamp()
     .setFooter({ text: 'Note: The shop sheet should not be edited after initial setup' });
 }
-
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createExplorationItemEmbed -------------------
+// Creates an embed for when a character finds an item during exploration
 const createExplorationItemEmbed = (
  party,
  character,
@@ -483,7 +447,8 @@ const createExplorationItemEmbed = (
  return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createExplorationMonsterEmbed -------------------
+// Creates an embed for when a character encounters a monster during exploration
 const createExplorationMonsterEmbed = (
  party,
  character,
@@ -535,7 +500,8 @@ const createExplorationMonsterEmbed = (
  return embed;
 };
 
-// ------------------- Subsection Title -------------------
+// ------------------- Function: createSetupInstructionsEmbed -------------------
+// Creates setup instructions embed for Google Sheets inventory configuration
 const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
   const validationResult = await validateInventorySheet(googleSheetsUrl, characterName); // <-- Pass characterName here too
 
@@ -592,7 +558,8 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
 };
 
 
-// ------------------- Subsection Title -------------------
+// ------------------- Function: createSyncEmbed -------------------
+// Creates an embed with sync instructions for inventory synchronization
 const createSyncEmbed = (characterName, googleSheetsUrl) => {
   const syncEmbed = new EmbedBuilder()
     .setTitle(`🔄 Sync Inventory for ${characterName}`)
@@ -660,7 +627,8 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
   return syncEmbed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: editSyncMessage -------------------
+// Edits an existing sync message with completion results and statistics
 const editSyncMessage = async (
  interaction,
  characterName,
@@ -708,6 +676,8 @@ const editSyncMessage = async (
  }
 };
 
+// ------------------- Function: editSyncErrorMessage -------------------
+// Edits an existing sync message with error information
 const editSyncErrorMessage = async (interaction, errorMessage) => {
  try {
   await interaction.editReply({
@@ -722,7 +692,8 @@ const editSyncErrorMessage = async (interaction, errorMessage) => {
  }
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createTokenTrackerSetupEmbed -------------------
+// Creates setup instructions embed for token tracker Google Sheets configuration
 const createTokenTrackerSetupEmbed = (
  username,
  googleSheetsUrl,
@@ -785,75 +756,30 @@ const createTokenTrackerSetupEmbed = (
   .setFooter({ text: "Need help? Contact a mod for assistance!" });
 };
 
-// ------------------- Subsection Title ------------------- 
-const createCraftingEmbed = async (
- item,
- character,
- flavorText,
- materialsUsed,
- quantity,
- staminaCost,
- remainingStamina
-) => {
+// ------------------- Function: createCraftingEmbed -------------------
+// Creates an embed for crafting activities with materials used and boost support
+const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina) => {
  const action = jobActions[character.job] || "crafted";
-
  const itemQuantityText = ` x${quantity}`;
-
- const isVisiting =
-  character.homeVillage.toLowerCase() !==
-  character.currentVillage.toLowerCase();
- const locationPrefix = isVisiting
-  ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
-     character.job
-    )} is visiting ${capitalizeWords(character.currentVillage)}`
-  : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(
-     character.job
-    )}`;
-
+ const locationPrefix = getLocationPrefix(character);
  const embedTitle = `${locationPrefix}: ${character.name} ${action} ${item.itemName}${itemQuantityText}`;
 
- const jobForFlavorText = character.jobVoucher
-  ? character.jobVoucherJob
-  : character.job;
+ const jobForFlavorText = character.jobVoucher ? character.jobVoucherJob : character.job;
+ const craftingFlavorText = generateCraftingFlavorText(typeof jobForFlavorText === 'string' ? jobForFlavorText.trim() : '');
 
-const craftingFlavorText = generateCraftingFlavorText(
-  typeof jobForFlavorText === 'string' ? jobForFlavorText.trim() : ''
-);
-
-// Add boost flavor text if character is boosted
-let boostFlavorText = '';
-let boosterJob = '';
-let boosterName = '';
-
-if (character.boostedBy) {
-  // Get boost details from the boost integration module
-  const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-  const boostStatus = await getCharacterBoostStatus(character.name);
-  
-  if (boostStatus && boostStatus.category === 'Crafting') {
-    boosterJob = boostStatus.boosterJob;
-    boosterName = boostStatus.boosterName;
-    
-    // Generate boost-specific flavor text
-    const { generateBoostFlavorText } = require('../modules/flavorTextModule');
-    boostFlavorText = generateBoostFlavorText(boosterJob, 'Crafting');
-  }
-}
-
-const combinedFlavorText = flavorText?.trim()
-  ? `${craftingFlavorText}\n\n${boostFlavorText ? `⚡ **Boost Effect:** ${boostFlavorText}\n\n` : ''}🌟 **Custom Flavor Text:** ${flavorText.trim()}`
-  : boostFlavorText 
-    ? `${craftingFlavorText}\n\n⚡ **Boost Effect:** ${boostFlavorText}`
-    : craftingFlavorText;
+ // Get boost information
+ const boostInfo = await getBoostInfo(character, 'Crafting');
+ const combinedFlavorText = flavorText?.trim()
+  ? `${craftingFlavorText}\n\n${addBoostFlavorText('', boostInfo)}\n\n🌟 **Custom Flavor Text:** ${flavorText.trim()}`
+  : addBoostFlavorText(craftingFlavorText, boostInfo);
 
  const DEFAULT_EMOJI = ":small_blue_diamond:";
  let craftingMaterialText = "No materials used or invalid data format.";
+ 
  if (Array.isArray(materialsUsed) && materialsUsed.length > 0) {
   const formattedMaterials = await Promise.all(
    materialsUsed.map(async (material) => {
-    const materialItem = await ItemModel.findOne({
-     itemName: material.itemName,
-    }).select("emoji");
+    const materialItem = await ItemModel.findOne({ itemName: material.itemName }).select("emoji");
     const emoji = materialItem?.emoji || DEFAULT_EMOJI;
     return formatItemDetails(material.itemName, material.quantity, emoji);
    })
@@ -872,15 +798,12 @@ const combinedFlavorText = flavorText?.trim()
     chunk += line + "\n";
    });
    if (chunk) splitMaterials.push(chunk.trim());
-
    craftingMaterialText = splitMaterials;
   }
  }
 
  const latestCharacter = await Character.findById(character._id);
- const updatedStamina = latestCharacter
-  ? latestCharacter.currentStamina
-  : remainingStamina;
+ const updatedStamina = latestCharacter ? latestCharacter.currentStamina : remainingStamina;
 
  const embed = new EmbedBuilder()
   .setColor("#AA926A")
@@ -898,34 +821,22 @@ const combinedFlavorText = flavorText?.trim()
        value: chunk,
        inline: false,
       }))
-    : [
-       {
-        name: "📜 **__Materials Used__**",
-        value: craftingMaterialText,
-        inline: false,
-       },
-      ]),
+    : [{ name: "📜 **__Materials Used__**", value: craftingMaterialText, inline: false }]),
    { name: "⚡ **__Stamina Cost__**", value: `> ${staminaCost}`, inline: true },
-   {
-    name: "💚 **__Remaining Stamina__**",
-    value: `> ${updatedStamina}`,
-    inline: true,
-   }
-  );
-
- embed
+   { name: "💚 **__Remaining Stamina__**", value: `> ${updatedStamina}`, inline: true }
+  )
   .setThumbnail(item.image || 'https://via.placeholder.com/150')
-  .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+  .setImage(DEFAULT_IMAGE_URL)
   .setFooter({ 
     text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : 
-         character.boostedBy && boosterJob ? `⚡ Boosted by ${boosterJob} ${boosterName} (Crafting)` : 
-         character.boostedBy ? `⚡ Boosted by: ${character.boostedBy}` : '✨ Successfully crafted!'
+         buildFooterText('✨ Successfully crafted!', character, boostInfo)
   });
 
  return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createWritingSubmissionEmbed -------------------
+// Creates an embed for writing submission approvals with token calculations
 const createWritingSubmissionEmbed = (submissionData) => {
  // Build fields array dynamically - only include non-N/A fields
  const fields = [];
@@ -989,7 +900,8 @@ const createWritingSubmissionEmbed = (submissionData) => {
   .setFooter({ text: "⏳ Please wait for a mod to approve your submission!" });
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createArtSubmissionEmbed -------------------
+// Creates an embed for art submission approvals with detailed token breakdown
 const createArtSubmissionEmbed = (submissionData) => {
   const {
     submissionId,
@@ -1108,14 +1020,15 @@ const createArtSubmissionEmbed = (submissionData) => {
 
   return embed;
 }
-
-// Helper to capitalize first letter
+// ------------------- Function: capitalizeFirst -------------------
+// Helper function to capitalize the first letter of a string
 function capitalizeFirst(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createGatherEmbed -------------------
+// Creates an embed for gathering activities with boost support and flavor text
 const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null, scholarTargetVillage = null) => {
  const settings = getCommonEmbedSettings(character);
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
@@ -1136,8 +1049,6 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
      (boosterCharacter.job === 'Scholar' || boosterCharacter.job?.toLowerCase() === 'scholar');
    const targetRegion = scholarTargetVillage;
    
-   // Debug info removed to reduce log bloat
-   
    if (isTeacherBoost) {
      const { generateTeacherGatheringFlavorText } = require('../modules/flavorTextModule');
      flavorText = generateTeacherGatheringFlavorText();
@@ -1146,34 +1057,11 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
    }
  }
 
- // Add boost flavor text if character is boosted (for non-special cases)
- let boostFlavorText = '';
- let boosterJob = '';
- let boosterName = '';
-
- if (character.boostedBy && !isDivineItemWithPriestBoost && !isTeacherBoost) {
-   // Get boost details from the boost integration module
-   const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-   const boostStatus = await getCharacterBoostStatus(character.name);
-   
-   if (boostStatus && boostStatus.category === 'Gathering') {
-     boosterJob = boostStatus.boosterJob;
-     boosterName = boostStatus.boosterName;
-     
-     // Generate boost-specific flavor text
-     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
-     boostFlavorText = generateBoostFlavorText(boosterJob, 'Gathering');
-   }
- }
-
+ // Get boost information for non-special cases
+ const boostInfo = !isDivineItemWithPriestBoost && !isTeacherBoost ? await getBoostInfo(character, 'Gathering') : null;
+ let description = addBoostFlavorText(flavorText, boostInfo);
+ 
  // Add bonus item information if present
- let description = flavorText;
- 
- // Add boost flavor text if available
- if (boostFlavorText) {
-   description += `\n\n⚡ **Boost Effect:** ${boostFlavorText}`;
- }
- 
  if (bonusItem) {
    const bonusArticle = getArticleForItem(bonusItem.itemName);
    const bonusEmoji = bonusItem.emoji || "🎁";
@@ -1195,41 +1083,13 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
    }
  }
 
- const isVisiting =
-  character.homeVillage.toLowerCase() !==
-  character.currentVillage.toLowerCase();
- const locationPrefix = isVisiting
-  ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
-     character.job
-    )} is visiting ${capitalizeWords(character.currentVillage)}`
-  : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(
-     character.job
-    )}`;
-
- const embedColor =
-  getVillageColorByName(character.currentVillage) ||
-  settings.color ||
-  "#000000";
-
- const villageImages = {
-  Inariko:
-   "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
-  Rudania:
-   "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
-  Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png",
- };
-
- const villageImage =
-  villageImages[capitalizeWords(character.currentVillage)] || DEFAULT_IMAGE_URL;
-
- const thumbnailUrl = isValidImageUrl(randomItem.image)
-  ? randomItem.image
-  : DEFAULT_IMAGE_URL;
+ const locationPrefix = getLocationPrefix(character);
+ const embedColor = getVillageColorByName(character.currentVillage) || settings.color || "#000000";
+ const villageImage = getVillageImage(character);
+ const thumbnailUrl = isValidImageUrl(randomItem.image) ? randomItem.image : DEFAULT_IMAGE_URL;
 
  const embed = new EmbedBuilder()
-  .setTitle(
-   `${locationPrefix}: ${character.name} ${action} ${article} ${randomItem.itemName}!`
-  )
+  .setTitle(`${locationPrefix}: ${character.name} ${action} ${article} ${randomItem.itemName}!`)
   .setDescription(description)
   .setColor(embedColor)
   .setAuthor({
@@ -1238,34 +1098,26 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
    url: character.inventory || "",
   })
   .setThumbnail(thumbnailUrl)
-  .setImage(villageImage); // Use the village-specific image
+  .setImage(villageImage);
 
- // Add voucher info to footer if active
+ // Build footer text
+ let footerText = '';
  if (character.jobVoucher && character.jobVoucherJob) {
-  embed.setFooter({ text: `🎫 Job Voucher in use: ${character.jobVoucherJob}` });
+   footerText = `🎫 Job Voucher in use: ${character.jobVoucherJob}`;
  } else if (character.boostedBy) {
-  // Add boost indicator to footer with boost type
-  let footerText = `⚡ Boosted by: ${character.boostedBy}`;
-  if (boosterJob && boosterName) {
-    footerText = `⚡ Boosted by ${boosterJob} ${boosterName} (Gathering)`;
-  } else if (boosterCharacter && boosterCharacter.job) {
-    // Get the boost effect name from the boosting module
-    const { getBoostEffect } = require('../modules/boostingModule');
-    const boostEffect = getBoostEffect(boosterCharacter.job, 'Gathering');
-    
-    if (boostEffect && boostEffect.name) {
-      footerText += ` (${boostEffect.name})`;
-    } else {
-      footerText += ` (${boosterCharacter.job} Gathering)`;
-    }
-  }
-  embed.setFooter({ text: footerText });
+   footerText = buildFooterText('', character, boostInfo);
+ }
+ 
+ if (footerText) {
+   embed.setFooter({ text: footerText });
  }
 
  return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Item Transfer and Trade Embeds ------------------
+// ------------------- Function: createTransferEmbed -------------------
+// Creates an embed for item transfers between characters
 const createTransferEmbed = (
  fromCharacter,
  toCharacter,
@@ -1276,18 +1128,13 @@ const createTransferEmbed = (
  toCharacterIcon
 ) => {
  const fromSettings = getCommonEmbedSettings(fromCharacter);
-
  const formattedItems = items
-  .map(
-   ({ itemName, quantity, itemIcon }) =>
-    `${formatItemDetails(String(itemName), quantity, itemIcon)}`
+  .map(({ itemName, quantity, itemIcon }) =>
+   `${formatItemDetails(String(itemName), quantity, itemIcon)}`
   )
   .join("\n");
 
- // Fix iconURL for footer: only set if non-empty and looks like a URL
- let safeFooterIcon = toCharacterIcon && /^https?:\/\//.test(toCharacterIcon) ? toCharacterIcon : undefined;
-
- return new EmbedBuilder()
+ const embed = new EmbedBuilder()
   .setColor(fromSettings.color)
   .setAuthor({
    name: `${fromCharacter.name} 🔗`,
@@ -1297,11 +1144,17 @@ const createTransferEmbed = (
   .setTitle("✬ Item Transfer ✬")
   .setDescription(`**${fromCharacter.name}** ➡️ **[${toCharacter.name}](${toInventoryLink})🔗**`)
   .addFields({ name: "__Items__", value: formattedItems, inline: false })
-  .setFooter({ text: toCharacter.name, iconURL: safeFooterIcon })
-  .setImage(fromSettings.image.url);
+  .setFooter({ 
+   text: toCharacter.name, 
+   iconURL: toCharacterIcon && /^https?:\/\//.test(toCharacterIcon) ? toCharacterIcon : undefined 
+  });
+
+ setDefaultImage(embed);
+ return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createGiftEmbed -------------------
+// Creates an embed for item gifts between characters
 const createGiftEmbed = (
  fromCharacter,
  toCharacter,
@@ -1313,13 +1166,12 @@ const createGiftEmbed = (
 ) => {
  const fromSettings = getCommonEmbedSettings(fromCharacter);
  const formattedItems = items
-  .map(
-   ({ itemName, quantity, itemIcon }) =>
-    `${formatItemDetails(itemName, quantity, itemIcon)}`
+  .map(({ itemName, quantity, itemIcon }) =>
+   `${formatItemDetails(itemName, quantity, itemIcon)}`
   )
   .join("\n");
 
- return new EmbedBuilder()
+ const embed = new EmbedBuilder()
   .setColor(fromSettings.color)
   .setAuthor({
    name: `${fromCharacter.name} 🔗`,
@@ -1327,15 +1179,19 @@ const createGiftEmbed = (
    url: fromSettings.author.url,
   })
   .setTitle("✬ Gift ✬")
-  .setDescription(
-   `**${fromCharacter.name}** ➡️ **[${toCharacter.name}](${toInventoryLink})🔗**`
-  )
+  .setDescription(`**${fromCharacter.name}** ➡️ **[${toCharacter.name}](${toInventoryLink})🔗**`)
   .addFields({ name: "__Items__", value: formattedItems, inline: false })
-  .setFooter({ text: toCharacter.name, iconURL: toCharacterIcon })
-  .setImage(fromSettings.image.url);
+  .setFooter({ 
+   text: toCharacter.name, 
+   iconURL: toCharacterIcon && /^https?:\/\//.test(toCharacterIcon) ? toCharacterIcon : undefined 
+  });
+
+ setDefaultImage(embed);
+ return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createTradeEmbed -------------------
+// Creates an embed for item trades between characters
 const createTradeEmbed = async (
  fromCharacter,
  toCharacter,
@@ -1344,25 +1200,20 @@ const createTradeEmbed = async (
  messageUrl
 ) => {
  const settingsFrom = getCommonEmbedSettings(fromCharacter);
- const fromItemsDescription = fromItems
-  .map((item) => {
-    const emoji = item.emoji || DEFAULT_EMOJI;
-    return `${emoji} **${item.name}** x ${item.quantity}`;
-  })
-  .join("\n");
- const toItemsDescription =
-  toItems.length > 0
-   ? toItems
-      .map((item) => {
-        const emoji = item.emoji || DEFAULT_EMOJI;
-        return `${emoji} **${item.name}** x ${item.quantity}`;
-      })
-      .join("\n")
+ 
+ const formatTradeItems = (items) => {
+  return items.length > 0
+   ? items.map((item) => {
+      const emoji = item.emoji || DEFAULT_EMOJI;
+      return `${emoji} **${item.name}** x ${item.quantity}`;
+     }).join("\n")
    : "No items offered";
+ };
 
- // Fix iconURL for footer: only set if non-empty and looks like a URL
- let safeFooterIcon = toCharacter.icon && /^https?:\/\//.test(toCharacter.icon) ? toCharacter.icon : undefined;
- return new EmbedBuilder()
+ const fromItemsDescription = formatTradeItems(fromItems);
+ const toItemsDescription = formatTradeItems(toItems);
+
+ const embed = new EmbedBuilder()
   .setColor(settingsFrom.color)
   .setTitle("✬ Trade ✬")
   .setAuthor({
@@ -1373,20 +1224,27 @@ const createTradeEmbed = async (
   .addFields(
    {
     name: `__${fromCharacter.name} offers__`,
-    value: fromItemsDescription || "No items offered",
+    value: fromItemsDescription,
     inline: true,
    },
    {
     name: `__${toCharacter.name} offers__`,
-    value: toItemsDescription || "No items offered",
+    value: toItemsDescription,
     inline: true,
    }
   )
-  .setFooter({ text: toCharacter.name, iconURL: safeFooterIcon })
-  .setImage(settingsFrom.image.url);
+  .setFooter({ 
+   text: toCharacter.name, 
+   iconURL: toCharacter.icon && /^https?:\/\//.test(toCharacter.icon) ? toCharacter.icon : undefined 
+  });
+
+ setDefaultImage(embed);
+ return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Combat and Monster Encounter Embeds ------------------
+// ------------------- Function: createMonsterEncounterEmbed -------------------
+// Creates a monster encounter embed with boost support
 const createMonsterEncounterEmbed = async (
  character,
  monster,
@@ -1405,48 +1263,12 @@ const createMonsterEncounterEmbed = async (
   image: "https://via.placeholder.com/100x100",
  };
 
- const authorIconURL =
-  settings.author?.iconURL || "https://via.placeholder.com/100x100";
+ const koMessage = heartsRemaining === 0
+  ? "\n> 💥 **KO! You have been defeated and can't continue!**"
+  : "";
 
- const koMessage =
-  heartsRemaining === 0
-   ? "\n> 💥 **KO! You have been defeated and can't continue!**"
-   : "";
-
- const embedColor =
-  getVillageColorByName(character.currentVillage) || "#000000";
-
- const villageImages = {
-  Inariko:
-   "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
-  Rudania:
-   "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
-  Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png",
- };
-
- const villageImage =
-  villageImages[capitalizeWords(character.currentVillage)] ||
-  "https://via.placeholder.com/100x100";
-
- // Add boost flavor text if character is boosted
- let boostFlavorText = '';
- let boosterJob = '';
- let boosterName = '';
-
- if (character.boostedBy) {
-   // Get boost details from the boost integration module
-   const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-   const boostStatus = await getCharacterBoostStatus(character.name);
-   
-   if (boostStatus && boostStatus.category === 'Looting') {
-     boosterJob = boostStatus.boosterJob;
-     boosterName = boostStatus.boosterName;
-     
-     // Generate boost-specific flavor text
-     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
-     boostFlavorText = generateBoostFlavorText(boosterJob, 'Looting');
-   }
- }
+ // Get boost information
+ const boostInfo = await getBoostInfo(character, 'Looting');
 
  // Add progress indicator if provided
  const progressField = currentMonster && totalMonsters ? {
@@ -1455,16 +1277,16 @@ const createMonsterEncounterEmbed = async (
   inline: true,
  } : null;
 
+ // Add boost flavor text to outcome if available
+ let outcomeWithBoost = outcomeMessage || "No outcome specified.";
+ outcomeWithBoost = addBoostFlavorText(outcomeWithBoost, boostInfo);
+
  const embed = new EmbedBuilder()
-  .setColor(isBloodMoon ? "#FF4500" : embedColor)
-  .setTitle(
-   `${character.name} encountered a ${
-    monsterDetails.name || monster.name
-   }!`
-  )
+  .setColor(isBloodMoon ? "#FF4500" : settings.color || "#000000")
+  .setTitle(`${character.name} encountered a ${monsterDetails.name || monster.name}!`)
   .setAuthor({
    name: `${character.name} 🔗`,
-   iconURL: authorIconURL,
+   iconURL: settings.author?.iconURL || "https://via.placeholder.com/100x100",
    url: settings.author?.url || "",
   })
   .addFields(
@@ -1487,12 +1309,6 @@ const createMonsterEncounterEmbed = async (
   embed.addFields(progressField);
  }
 
- // Add boost flavor text to outcome if available
- let outcomeWithBoost = outcomeMessage || "No outcome specified.";
- if (boostFlavorText) {
-   outcomeWithBoost += `\n\n⚡ **Boost Effect:** ${boostFlavorText}`;
- }
-
  embed.addFields({
   name: "🔹 __Outcome__",
   value: `> ${outcomeWithBoost}${koMessage}`,
@@ -1504,20 +1320,11 @@ const createMonsterEncounterEmbed = async (
  if (isBloodMoon) {
    footerText += " 🔴 Blood Moon Encounter";
  }
- if (character.jobVoucher && character.jobVoucherJob) {
-   footerText += ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}`;
- }
- if (character.boostedBy) {
-   if (boosterJob && boosterName) {
-     footerText += ` | ⚡ Boosted by ${boosterJob} ${boosterName} (Looting)`;
-   } else {
-     footerText += ` | ⚡ Boosted by: ${character.boostedBy}`;
-   }
- }
+ footerText = buildFooterText(footerText, character, boostInfo);
 
  embed.setFooter({
   text: footerText,
-  iconURL: authorIconURL,
+  iconURL: settings.author?.iconURL || "https://via.placeholder.com/100x100",
  });
 
  if (lootItem) {
@@ -1532,71 +1339,40 @@ const createMonsterEncounterEmbed = async (
   });
  }
 
- if (isValidImageUrl(monsterDetails.image)) {
-  embed.setThumbnail(monsterDetails.image);
- } else {
-  embed.setThumbnail("https://via.placeholder.com/100x100");
- }
-
- // Set the default image for loot embeds
- embed.setImage(DEFAULT_IMAGE_URL);
+ // Set thumbnail and image
+ setThumbnailWithFallback(embed, monsterDetails.image);
+ setDefaultImage(embed);
 
  return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createNoEncounterEmbed -------------------
+// Creates an embed for when no monsters are encountered
 const createNoEncounterEmbed = (character, isBloodMoon = false) => {
  const settings = getCommonEmbedSettings(character);
-
  const noEncounterMessage = getNoEncounterMessage(character.currentVillage);
-
- const isVisiting =
-  character.homeVillage.toLowerCase() !==
-  character.currentVillage.toLowerCase();
- const locationPrefix = isVisiting
-  ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
-     character.job
-    )} is visiting ${capitalizeWords(character.currentVillage)}`
-  : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(
-     character.job
-    )}`;
+ const locationPrefix = getLocationPrefix(character);
+ const villageImage = getVillageImage(character);
 
  const embedColor = isBloodMoon
   ? "#FF4500"
-  : isVisiting
+  : character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase()
   ? getVillageColorByName(character.currentVillage) || "#000000"
   : settings.color || "#000000";
 
- const villageImages = {
-  inariko:
-   "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
-  rudania:
-   "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
-  vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png",
- };
-
- const villageImage =
-  villageImages[character.currentVillage.toLowerCase()] ||
-  "https://via.placeholder.com/100x100";
-
- const authorOptions = { name: `${character.name} 🔗` };
- if (settings.author && typeof settings.author.iconURL === "string") {
-  authorOptions.iconURL = settings.author.iconURL;
- }
- if (settings.author && typeof settings.author.url === "string") {
-  authorOptions.url = settings.author.url;
- }
-
- return new EmbedBuilder()
+ const embed = new EmbedBuilder()
   .setColor(embedColor)
   .setTitle(`${locationPrefix}: ${character.name} encountered no monsters.`)
-  .setAuthor(authorOptions)
+  .setAuthor({
+   name: `${character.name} 🔗`,
+   iconURL: settings.author?.iconURL,
+   url: settings.author?.url,
+  })
   .addFields({
    name: "🔹 __Outcome__",
    value: `> ${noEncounterMessage}`,
    inline: false,
   })
-  .setImage(villageImage)
   .setFooter({
    text: isBloodMoon
     ? "🔴 The Blood Moon rises... but nothing stirs in the shadows."
@@ -1604,40 +1380,41 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
     ? `🎫 No monsters encountered, job voucher for ${character.jobVoucherJob} remains active!`
     : "A quiet day in the village.",
   });
+
+ if (isValidImageUrl(villageImage)) {
+  embed.setImage(villageImage);
+ } else {
+  setDefaultImage(embed);
+ }
+
+ return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createKOEmbed -------------------
+// Creates an embed for when a character is knocked out
 const createKOEmbed = (character) => {
  const settings = getCommonEmbedSettings(character);
+ const locationPrefix = getLocationPrefix(character);
 
- const isVisiting = character.homeVillage !== character.currentVillage;
- const locationPrefix = isVisiting
-  ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
-     character.job
-    )} is visiting ${capitalizeWords(character.currentVillage)}`
-  : `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
-     character.job
-    )}`;
-
- return new EmbedBuilder()
-  .setColor("#FF0000") // Set to red
+ const embed = new EmbedBuilder()
+  .setColor("#FF0000")
   .setAuthor({
    name: `${character.name} 🔗`,
-   iconURL: settings.author.iconURL,
-   url: settings.author.url,
+   iconURL: settings.author?.iconURL,
+   url: settings.author?.url,
   })
   .setTitle(`💥 ${locationPrefix}: ${character.name} is KO'd!`)
   .setDescription(
    `> KO status can only be healed by fairies or Healers.\n` +
-    `> Use </itemheal:1306176789755858979> or </heal request:1306176789755858977> to heal your character.`
+   `> Use </itemheal:1306176789755858979> or </heal request:1306176789755858977> to heal your character.`
   )
-  .setImage(
-   "https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png"
-  );
+  .setImage("https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png");
+
+ return embed;
 };
 
 // ------------------- Function: createWrongVillageEmbed -------------------
-// Creates an embed for wrong village location messages
+// Creates an embed for when a character is in the wrong village for a quest
 function createWrongVillageEmbed(character, questVillage, isEscort = false, destination = null) {
   const villageEmoji = getVillageEmojiByName(character.currentVillage);
   const questVillageEmoji = getVillageEmojiByName(questVillage);
@@ -1669,40 +1446,32 @@ function createWrongVillageEmbed(character, questVillage, isEscort = false, dest
     ];
   }
   
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setTitle(title)
     .setDescription(description)
     .addFields(fields)
     .setColor(0xFF0000)
-    .setImage({
-      url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-    })
     .setFooter({
       text: isEscort ? 'For escort quests, characters must travel to the destination village to complete the quest.' : 'Characters must be in their home village to complete Help Wanted quests.'
     })
     .setTimestamp();
+
+  setDefaultImage(embed);
+  return embed;
 }
 
 // ------------------- Function: createRaidKOEmbed -------------------
 // Creates an embed for characters who are KO'd and cannot participate in raids
 const createRaidKOEmbed = (character) => {
  const settings = getCommonEmbedSettings(character);
+ const locationPrefix = getLocationPrefix(character);
 
- const isVisiting = character.homeVillage !== character.currentVillage;
- const locationPrefix = isVisiting
-  ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
-     character.job
-    )} is visiting ${capitalizeWords(character.currentVillage)}`
-  : `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
-     character.job
-    )}`;
-
- return new EmbedBuilder()
-  .setColor("#FF0000") // Red for KO status
+ const embed = new EmbedBuilder()
+  .setColor("#FF0000")
   .setAuthor({
    name: `${character.name} 🔗`,
-   iconURL: settings.author.iconURL,
-   url: settings.author.url,
+   iconURL: settings.author?.iconURL,
+   url: settings.author?.url,
   })
   .setTitle(`💥 ${locationPrefix}: ${character.name} Cannot Join Raid!`)
   .setDescription(
@@ -1729,12 +1498,13 @@ const createRaidKOEmbed = (character) => {
     inline: false,
    }
   )
-  .setImage(
-   "https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png"
-  );
+  .setImage("https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png");
+
+ return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createHealEmbed -------------------
+// Creates a healing request embed with boost support
 const createHealEmbed = async (
  healerCharacter,
  characterToHeal,
@@ -1751,25 +1521,8 @@ const createHealEmbed = async (
  const healerName = healerCharacter?.name || "Any available healer";
  const healerIcon = healerCharacter?.icon || DEFAULT_IMAGE_URL;
 
- // Add boost flavor text if character is boosted
- let boostFlavorText = '';
- let boosterJob = '';
- let boosterName = '';
-
- if (characterToHeal.boostedBy) {
-   // Get boost details from the boost integration module
-   const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-   const boostStatus = await getCharacterBoostStatus(characterToHeal.name);
-   
-   if (boostStatus && boostStatus.category === 'Healers') {
-     boosterJob = boostStatus.boosterJob;
-     boosterName = boostStatus.boosterName;
-     
-     // Generate boost-specific flavor text
-     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
-     boostFlavorText = generateBoostFlavorText(boosterJob, 'Healers');
-   }
- }
+ // Get boost information
+ const boostInfo = await getBoostInfo(characterToHeal, 'Healers');
 
  const settings = healerCharacter
   ? getCommonEmbedSettings(healerCharacter)
@@ -1828,9 +1581,7 @@ const createHealEmbed = async (
  if (isFulfilled) {
   // Add boost flavor text to description if available
   let description = `> ${healerName} has healed your character for ${heartsToHeal} hearts!`;
-  if (boostFlavorText) {
-    description += `\n\n⚡ **Boost Effect:** ${boostFlavorText}`;
-  }
+  description = addBoostFlavorText(description, boostInfo);
 
   embed
    .setTitle('✅ Healing Request Fulfilled')
@@ -1856,20 +1607,17 @@ const createHealEmbed = async (
      value: `> Fulfilled`,
      inline: false,
     }
-   )
-   // Build footer text
-   let footerText = "Healing process successfully completed.";
-   if (characterToHeal.boostedBy && boosterJob && boosterName) {
-     footerText += ` | ⚡ Boosted by ${boosterJob} ${boosterName} (Healing)`;
-   } else if (characterToHeal.boostedBy) {
-     footerText += ` | ⚡ Boosted by: ${characterToHeal.boostedBy}`;
-   }
+   );
 
-   embed.setFooter({
-    text: footerText,
-    iconURL: healerCharacter ? healerIcon : null,
-   })
-   .setImage(DEFAULT_IMAGE_URL);
+  // Build footer text
+  let footerText = "Healing process successfully completed.";
+  footerText = buildFooterText(footerText, characterToHeal, boostInfo);
+
+  embed.setFooter({
+   text: footerText,
+   iconURL: healerCharacter ? healerIcon : null,
+  });
+  setDefaultImage(embed);
  } else {
   embed
    .setTitle('📝 Healing Request Pending')
@@ -1896,25 +1644,24 @@ const createHealEmbed = async (
      value: `> Pending`,
      inline: false,
     }
-   )
-   // Build footer text for pending state
-   let pendingFooterText = "Waiting for a healer to fulfill this request.";
-   if (characterToHeal.boostedBy && boosterJob && boosterName) {
-     pendingFooterText += ` | ⚡ Boosted by ${boosterJob} ${boosterName} (Healing)`;
-   } else if (characterToHeal.boostedBy) {
-     pendingFooterText += ` | ⚡ Boosted by: ${characterToHeal.boostedBy}`;
-   }
+   );
 
-   embed.setFooter({
-    text: pendingFooterText,
-    iconURL: healerCharacter ? healerIcon : null,
-   })
-   .setImage(DEFAULT_IMAGE_URL);
+  // Build footer text for pending state
+  let pendingFooterText = "Waiting for a healer to fulfill this request.";
+  pendingFooterText = buildFooterText(pendingFooterText, characterToHeal, boostInfo);
+
+  embed.setFooter({
+   text: pendingFooterText,
+   iconURL: healerCharacter ? healerIcon : null,
+  });
+  setDefaultImage(embed);
  }
  return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Travel and Movement Embeds ------------------
+// ------------------- Function: createTravelMonsterEncounterEmbed -------------------
+// Creates a travel monster encounter embed with boost support
 const createTravelMonsterEncounterEmbed = async (
  character,
  monster,
@@ -1940,25 +1687,8 @@ const createTravelMonsterEncounterEmbed = async (
   image: "https://via.placeholder.com/100x100",
  };
 
- // Add boost flavor text if character is boosted
- let boostFlavorText = '';
- let boosterJob = '';
- let boosterName = '';
-
- if (character.boostedBy) {
-   // Get boost details from the boost integration module
-   const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-   const boostStatus = await getCharacterBoostStatus(character.name);
-   
-   if (boostStatus && boostStatus.category === 'Looting') {
-     boosterJob = boostStatus.boosterJob;
-     boosterName = boostStatus.boosterName;
-     
-     // Generate boost-specific flavor text
-     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
-     boostFlavorText = generateBoostFlavorText(boosterJob, 'Looting');
-   }
- }
+ // Get boost information
+ const boostInfo = await getBoostInfo(character, 'Looting');
 
  const embed = new EmbedBuilder()
   .setColor("#AA926A")
@@ -1977,9 +1707,7 @@ const createTravelMonsterEncounterEmbed = async (
 
   // Add boost flavor text to outcome if available
   let outcomeWithBoost = outcomeMessage;
-  if (boostFlavorText) {
-    outcomeWithBoost += `\n\n⚡ **Boost Effect:** ${boostFlavorText}`;
-  }
+  outcomeWithBoost = addBoostFlavorText(outcomeWithBoost, boostInfo);
 
   embed.addFields({
    name: "🔹 __Outcome__",
@@ -1989,11 +1717,7 @@ const createTravelMonsterEncounterEmbed = async (
 
   // Build footer text
   let footerText = `Tier: ${monster.tier}`;
-  if (character.boostedBy && boosterJob && boosterName) {
-    footerText += ` | ⚡ Boosted by ${boosterJob} ${boosterName} (Looting)`;
-  } else if (character.boostedBy) {
-    footerText += ` | ⚡ Boosted by: ${character.boostedBy}`;
-  }
+  footerText = buildFooterText(footerText, character, boostInfo);
 
   embed.setFooter({ text: footerText })
     .setImage(PATH_IMAGES[currentPath] || settings.image.url);
@@ -2010,19 +1734,15 @@ const createTravelMonsterEncounterEmbed = async (
   });
  }
 
- if (isValidImageUrl(monsterDetails.image)) {
-  embed.setThumbnail(monsterDetails.image);
- } else {
-  embed.setThumbnail("https://via.placeholder.com/100x100");
- }
-
- // Set the default image for loot embeds
- embed.setImage(DEFAULT_IMAGE_URL);
+ // Set thumbnail and image
+ setThumbnailWithFallback(embed, monsterDetails.image);
+ setDefaultImage(embed);
 
  return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createInitialTravelEmbed -------------------
+// Creates an embed for initial travel announcements
 const createInitialTravelEmbed = (
  character,
  startingVillage,
@@ -2034,50 +1754,45 @@ const createInitialTravelEmbed = (
 ) => {
  const startEmoji = villageEmojis[startingVillage.toLowerCase()] || "";
  const destEmoji = villageEmojis[destination.toLowerCase()] || "";
- let staminaLine = `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`;
- if (mode === 'on mount' && mount) {
-   staminaLine = `**🥕 __${mount.name}'s Stamina:__** ${mount.currentStamina}/${mount.stamina}`;
- }
- return new EmbedBuilder()
-  .setTitle(
-   `**${
-    character.name
-   }** is traveling from ${startEmoji} **${capitalizeFirstLetter(
-    startingVillage
-   )}** to ${destEmoji} **${capitalizeFirstLetter(destination)}**.`
-  )
+ 
+ const staminaLine = mode === 'on mount' && mount
+  ? `**🥕 __${mount.name}'s Stamina:__** ${mount.currentStamina}/${mount.stamina}`
+  : `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`;
+
+ const travelPath = paths
+  .map((path) => `${pathEmojis[path]} ${capitalizeWords(path.replace(/([a-z])([A-Z])/g, "$1 $2"))}`)
+  .join(", ");
+
+ const embed = new EmbedBuilder()
+  .setTitle(`**${character.name}** is traveling from ${startEmoji} **${capitalizeFirstLetter(startingVillage)}** to ${destEmoji} **${capitalizeFirstLetter(destination)}**.`)
   .setDescription(
-   `**Travel Path:** ${paths
-    .map(
-     (path) =>
-      `${pathEmojis[path]} ${capitalizeWords(
-       path.replace(/([a-z])([A-Z])/g, "$1 $2")
-      )}`
-    )
-    .join(
-     ", "
-    )}\n**Total Travel Duration:** ${totalTravelDuration} days\n**❤️ __Hearts:__** ${
-    character.currentHearts
-   }/${character.maxHearts}\n${staminaLine}`
+   `**Travel Path:** ${travelPath}\n` +
+   `**Total Travel Duration:** ${totalTravelDuration} days\n` +
+   `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
+   `${staminaLine}`
   )
   .setColor("#AA926A")
   .setAuthor({ name: "Travel Announcement", iconURL: character.icon })
-  .setImage(DEFAULT_IMAGE_URL)
   .setTimestamp();
+
+ setDefaultImage(embed);
+ return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createTravelingEmbed -------------------
+// Creates an embed for ongoing travel status
 const createTravelingEmbed = (character) => {
- return new EmbedBuilder()
-  .setDescription(
-   `**${character.name} is traveling** <a:loading:1260369094151114852>`
-  )
-  .setImage(DEFAULT_IMAGE_URL)
+ const embed = new EmbedBuilder()
+  .setDescription(`**${character.name} is traveling** <a:loading:1260369094151114852>`)
   .setColor("#AA926A")
   .setTimestamp();
+
+ setDefaultImage(embed);
+ return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createSafeTravelDayEmbed -------------------
+// Creates an embed for safe travel days
 const createSafeTravelDayEmbed = (
  character,
  day,
@@ -2085,14 +1800,14 @@ const createSafeTravelDayEmbed = (
  pathEmoji,
  currentPath
 ) => {
- const description = `🌸 **It's a nice and safe day of traveling.** What do you want to do next?\n- ❤️ Recover a heart (costs 1 🟩 stamina)\n- 🌿 Gather (costs 1 🟩 stamina)\n- 💤 Do 
- nothing (move onto the next day)`;
+ const description = `🌸 **It's a nice and safe day of traveling.** What do you want to do next?\n- ❤️ Recover a heart (costs 1 🟩 stamina)\n- 🌿 Gather (costs 1 🟩 stamina)\n- 💤 Do nothing (move onto the next day)`;
 
- return new EmbedBuilder()
+ const pathName = capitalizeWords(currentPath.replace(/([a-z])([A-Z])/g, "$1 $2"));
+ const pathImage = PATH_IMAGES[currentPath] || DEFAULT_IMAGE_URL;
+
+ const embed = new EmbedBuilder()
   .setAuthor({
-   name: `🗺️ Day ${day}/${totalTravelDuration} of travel on ${pathEmoji} ${capitalizeWords(
-    currentPath.replace(/([a-z])([A-Z])/g, "$1 $2")
-   )}`,
+   name: `🗺️ Day ${day}/${totalTravelDuration} of travel on ${pathEmoji} ${pathName}`,
    iconURL: character.icon,
   })
   .setTitle(`**${character.name}** is traveling`)
@@ -2100,13 +1815,21 @@ const createSafeTravelDayEmbed = (
    `${description}\n\n**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
   )
   .setColor("#AA926A")
-  .setImage(PATH_IMAGES[currentPath] || DEFAULT_IMAGE_URL)
   .setTimestamp();
+
+ if (isValidImageUrl(pathImage)) {
+  embed.setImage(pathImage);
+ } else {
+  setDefaultImage(embed);
+ }
+
+ return embed;
 };
 
 
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Function: createUpdatedTravelEmbed -------------------
+// Creates an updated travel embed from existing encounter message
 function createUpdatedTravelEmbed({ encounterMessage, character, description, fields = [], footer = null, titleFallback = null }) {
   const baseEmbed = (encounterMessage?.embeds?.[0])
     ? new EmbedBuilder(encounterMessage.embeds[0].toJSON())
@@ -2121,41 +1844,44 @@ function createUpdatedTravelEmbed({ encounterMessage, character, description, fi
     .setFooter(footer || null);
 }
 
-// Create an embed for mount encounters
+// ------------------- Function: createMountEncounterEmbed -------------------
+// Creates an embed for mount encounters
 function createMountEncounterEmbed(encounter) {
     const mountEmoji = getMountEmoji(encounter.mountType);
     const mountThumbnail = getMountThumbnail(encounter.mountType);
     const villageWithEmoji = `${getVillageEmojiByName(encounter.village)} ${capitalizeFirstLetter(encounter.village)}`;
     const allVillageMounts = ['Horse', 'Donkey', 'Mule']; // Add any other mounts that can be kept by anyone
 
-    return new EmbedBuilder()
+    const villageInfo = allVillageMounts.includes(encounter.mountType)
+        ? `> 🏠 This mount can be kept by anyone in **any village**, but only those currently in **${villageWithEmoji}** can participate!`
+        : `> ❗ This mount can only be kept by villagers from **${villageWithEmoji}**, and only those currently in **${villageWithEmoji}** can participate!`;
+
+    const embed = new EmbedBuilder()
         .setTitle(`${mountEmoji} 🌟 ${encounter.mountLevel} Level ${encounter.mountType} Encounter!`)
-        .setDescription(`🐾 A **${encounter.mountLevel} level ${encounter.mountType}** has been spotted in **${villageWithEmoji}**!\n\nTo join the encounter, use </
-        mount:1306176789755858983>.`)
+        .setDescription(`🐾 A **${encounter.mountLevel} level ${encounter.mountType}** has been spotted in **${villageWithEmoji}**!\n\nTo join the encounter, use </mount:1306176789755858983>.`)
         .addFields(
             {
                 name: '📜 Encounter Information',
-                value:
-                    `> You will need **Tokens** for this game if you succeed!\n\n` +
-                    `Use the command below to join:\n` +
-                    `\`\`\`/mount encounterid:${encounter.encounterId} charactername:\`\`\``,
+                value: `> You will need **Tokens** for this game if you succeed!\n\nUse the command below to join:\n\`\`\`/mount encounterid:${encounter.encounterId} charactername:\`\`\``,
                 inline: false,
             },
             {
                 name: '🏠 Village',
-                value: allVillageMounts.includes(encounter.mountType)
-                    ? `> 🏠 This mount can be kept by anyone in **any village**, but only those currently in **${villageWithEmoji}** can participate!`
-                    : `> ❗ This mount can only be kept by villagers from **${villageWithEmoji}**, and only those currently in **${villageWithEmoji}** can participate!`,
+                value: villageInfo,
                 inline: false,
             }
         )
-        .setThumbnail(mountThumbnail || '')
         .setColor(0xAA926A)
         .setFooter({ text: '⏳ Wait a minute before rolling again or let others participate.' })
         .setTimestamp();
+
+    setThumbnailWithFallback(embed, mountThumbnail);
+    return embed;
 }
 
+// ------------------- Boost System Embeds ------------------
 // ------------------- Function: createBoostRequestEmbed -------------------
+// Creates an embed for boost requests
 const createBoostRequestEmbed = (requestData, existingRequestId = null, status = 'pending') => {
   const { generateUniqueId } = require('../utils/uniqueIdUtils');
   const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
@@ -2213,7 +1939,6 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
     )
     .setColor(statusColor)
     .setThumbnail(requestData.requestedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png')
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .addFields(
       {
         name: '👤 **Requested By**',
@@ -2272,10 +1997,12 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
     })
     .setTimestamp();
 
+  setDefaultImage(embed);
   return embed;
 };
 
 // ------------------- Function: updateBoostRequestEmbed -------------------
+// Updates an existing boost request embed with new status information
 const updateBoostRequestEmbed = async (client, requestData, newStatus = 'pending') => {
   try {
     // Check if we have the message ID and channel ID
@@ -2328,6 +2055,7 @@ const updateBoostRequestEmbed = async (client, requestData, newStatus = 'pending
 };
 
 // ------------------- Function: createBoostAppliedEmbed -------------------
+// Creates an embed for when a boost is successfully applied
 const createBoostAppliedEmbed = (boostData) => {
   const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
   const { getVillageColorByName, getVillageEmojiByName } = require('../modules/locationsModule');
@@ -2357,7 +2085,6 @@ const createBoostAppliedEmbed = (boostData) => {
     )
     .setColor(villageColor)
     .setThumbnail(boostData.boostedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-applied-icon.png')
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .addFields(
       {
         name: '🎭 **Boosted By**',
@@ -2421,17 +2148,17 @@ const createBoostAppliedEmbed = (boostData) => {
     })
     .setTimestamp();
 
+  setDefaultImage(embed);
   return embed;
 };
 
 // ------------------- Function: createRaidVictoryEmbed -------------------
-// Creates an embed for when a raid monster is defeated, showing the victory message
+// Creates an embed for when a raid monster is defeated
 const createRaidVictoryEmbed = (monsterName, monsterImage = null) => {
   const embed = new EmbedBuilder()
     .setTitle(`🎉 ${monsterName} DEFEATED!`)
     .setDescription(`The mighty **${monsterName}** has fallen! Processing loot distribution... Please stop rolling! ⏳`)
-    .setColor('#FFD700') // Gold color for victory
-    .setImage(DEFAULT_IMAGE_URL)
+    .setColor('#FFD700')
     .setFooter({ text: 'Loot processing in progress...' })
     .setTimestamp();
 
@@ -2440,23 +2167,41 @@ const createRaidVictoryEmbed = (monsterName, monsterImage = null) => {
     embed.setThumbnail(monsterImage);
   }
 
+  setDefaultImage(embed);
   return embed;
 };
 
+// ============================================================================
+// MODULE EXPORTS
+// ============================================================================
+
 module.exports = {
+ // ------------------- Constants ------------------
  DEFAULT_EMOJI,
  DEFAULT_IMAGE_URL,
+ DEFAULT_THUMBNAIL_URL,
  jobActions,
  regionColors,
  regionImages,
  PATH_IMAGES,
  villageEmojis,
  pathEmojis,
+ 
+ // ------------------- Utility Functions ------------------
  getArticleForItem,
  formatItemDetails,
  getCommonEmbedSettings,
  aggregateItems,
  formatMaterialsList,
+ setDefaultImage,
+ setThumbnailWithFallback,
+ getBoostInfo,
+ addBoostFlavorText,
+ buildFooterText,
+ getVillageImage,
+ getLocationPrefix,
+ 
+ // ------------------- Embed Creation Functions ------------------
  createDebuffEmbed,
  createCharacterEmbed,
  createSimpleCharacterEmbed,
@@ -2494,3 +2239,8 @@ module.exports = {
  createBoostAppliedEmbed,
  createRaidVictoryEmbed,
 };
+
+
+
+
+
