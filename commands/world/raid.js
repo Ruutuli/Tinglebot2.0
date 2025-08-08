@@ -70,9 +70,14 @@ module.exports = {
       await interaction.deferReply();
 
       // Get command options
-      const raidId = interaction.options.getString('raidid');
+      let raidId = interaction.options.getString('raidid');
       const characterName = interaction.options.getString('charactername');
       const userId = interaction.user.id;
+      
+      // Extract raid ID if user pasted the full description
+      if (raidId.includes(' | ')) {
+        raidId = raidId.split(' | ')[0];
+      }
 
       // Fetch and validate character with user ownership (includes both regular and mod characters)
       const character = await fetchAnyCharacterByNameAndUserId(characterName, userId);
@@ -297,10 +302,10 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     if (isKO) {
       koCharacters.push(p.name);
       turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
-    } else if (isEffectiveCurrentTurn) {
-      // Show turn indicator on the effective current turn participant
-      turnOrderLines.push(`${idx + 1}. ${p.name} ⚔️ (Current Turn)`);
-    } else {
+            } else if (isEffectiveCurrentTurn) {
+          // Show turn indicator on the effective current turn participant
+          turnOrderLines.push(`${idx + 1}. ${p.name}`);
+        } else {
       turnOrderLines.push(`${idx + 1}. ${p.name}`);
     }
   }
