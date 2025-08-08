@@ -96,7 +96,7 @@ const initializeReactionHandler = (client) => {
           healingRequest.status = 'cancelled';
           await saveHealingRequestToStorage(healingRequest.healingRequestId, healingRequest);
           // Update the embed to show cancellation
-          const embed = createHealEmbed(null, { ...healingRequest, name: healingRequest.characterRequesting }, healingRequest.heartsToHeal, healingRequest.paymentOffered, healingRequest.healingRequestId, null, 'cancelled');
+          const embed = await createHealEmbed(null, { ...healingRequest, name: healingRequest.characterRequesting }, healingRequest.heartsToHeal, healingRequest.paymentOffered, healingRequest.healingRequestId, null, 'cancelled');
           await reaction.message.edit({ embeds: [embed] });
         }
       }

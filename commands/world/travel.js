@@ -852,7 +852,7 @@ async function processTravelDay(day, context) {
 
         // Before creating the encounter embed, check if Blood Moon is active
         const isBloodMoon = isBloodMoonActive();
-        const encounterEmbed = createMonsterEncounterEmbed(
+        const encounterEmbed = await createMonsterEncounterEmbed(
           character,
           monster,
           `You encountered a ${monster.name}!\nWhat do you want to do? Fleeing costs 1 🟩 stamina!`,

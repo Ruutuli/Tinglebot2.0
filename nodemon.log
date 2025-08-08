@@ -43,7 +43,7 @@
 [deploy-commands.js]: Processing file: commands\jobs\steal.js
 ✅ Loaded command: steal from commands\jobs\steal.js
 [deploy-commands.js]: Processing file: commands\jobs\vending.js
-⚠️ The command at commands\jobs\vending.js is missing a required "data" property.
+✅ Loaded command: vending from commands\jobs\vending.js
 [deploy-commands.js]: Processing file: commands\moderation\mod.js
 ✅ Loaded command: mod from commands\moderation\mod.js
 [deploy-commands.js]: Processing file: commands\specialweather.js
@@ -80,6 +80,7 @@
 ⚠️ The command at embeds\embeds.js is missing a required "data" property.
 [deploy-commands.js]: Processing file: embeds\weatherEmbed.js
 ⚠️ The command at embeds\weatherEmbed.js is missing a required "data" property.
-[deploy-commands.js]: Successfully loaded 32 commands
-🔄 Started refreshing 32 commands.
+[deploy-commands.js]: Successfully loaded 33 commands
+🔄 Started refreshing 33 commands.
 [deploy-commands.js]: Deploying to guild: 603960955839447050
+✅ Successfully registered 33 commands to guild.

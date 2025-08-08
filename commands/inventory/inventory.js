@@ -385,7 +385,7 @@ module.exports = {
       const inventoryUrl = character.inventory;
 
       if (!isValidGoogleSheetsUrl(inventoryUrl)) {
-        const setupEmbed = createSetupInstructionsEmbed(
+        const setupEmbed = await createSetupInstructionsEmbed(
           character.name, 
           inventoryUrl, 
           'Invalid Google Sheets URL. Please check the URL and try again.'

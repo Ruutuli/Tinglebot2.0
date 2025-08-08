@@ -300,7 +300,7 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
 
     // Create and save the healing request
     const healingRequestId = generateUniqueId('H');
-    const embed = createHealEmbed(
+    const embed = await createHealEmbed(
       healerCharacter,
       characterToHeal,
       heartsToHeal,
@@ -692,7 +692,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     try {
       const originalMessage = await channel.messages.fetch(healingRequest.messageId);
       if (originalMessage) {
-        const updatedEmbed = createHealEmbed(
+        const updatedEmbed = await createHealEmbed(
           healerCharacter,
           characterToHeal,
           healingRequest.heartsToHeal,
@@ -717,7 +717,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       message += `\n\nℹ️ **Note:** The original healing request message could not be updated (it may have been deleted).`;
     }
 
-    const embed = createHealEmbed(
+    const embed = await createHealEmbed(
       healerCharacter,
       characterToHeal,
       healingRequest.heartsToHeal,

@@ -133,7 +133,8 @@ const {
   createCharacterEmbed,
   createCharacterGearEmbed,
   createVendorEmbed,
-  getCommonEmbedSettings
+  getCommonEmbedSettings,
+  createDailyRollsResetEmbed
 } = require('../../embeds/embeds');
 
 const { createMountEncounterEmbed } = require('../../embeds/embeds');
@@ -2335,9 +2336,7 @@ async function handleResetRolls(interaction) {
 
     // Success response
     return interaction.editReply({
-      content: `✅ **${character.name}'s** daily rolls have been reset!\n` +
-               `📋 **Reset roll types:** ${rollTypesList}\n` +
-               `🔄 They can now use their daily rolls again.`,
+      embeds: [createDailyRollsResetEmbed(character.name, rollTypesList)],
       ephemeral: true
     });
 

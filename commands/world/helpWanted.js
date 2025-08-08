@@ -670,7 +670,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       if (heartsRemaining === 0) {
         await handleKO(character._id);
         
-        const koEmbed = createMonsterEncounterEmbed(
+        const koEmbed = await createMonsterEncounterEmbed(
           character,
           encounterResult.monster,
           encounterResult.outcomeMessage,
@@ -724,7 +724,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       }
       
       // Send battle embed
-      const battleEmbed = createMonsterEncounterEmbed(
+      const battleEmbed = await createMonsterEncounterEmbed(
         character,
         encounterResult.monster,
         encounterResult.outcomeMessage,
