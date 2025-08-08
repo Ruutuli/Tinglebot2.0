@@ -337,7 +337,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     .setColor(color)
     .setTitle(`⚔️ ${character.name}'s Raid Turn`)
     .setAuthor({ name: character.name, iconURL: characterIcon })
-    .setDescription(battleResult.outcome)
+    .setDescription(battleResult.outcome || 'Battle completed')
     .addFields(
       {
         name: `__${monster.name} Status__`,
