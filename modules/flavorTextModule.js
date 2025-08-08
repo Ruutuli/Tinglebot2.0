@@ -26,78 +26,6 @@ const generateContextualMessage = (messageSets, context, damage = null) => {
 // ------------------- Message Sets -------------------
 // ============================================================================
 
-// Scholar, Teacher, and Boosting message sets
-const SCHOLAR_TEACHER_BOOST_MESSAGES = {
-  scholar: {
-    insights: (targetRegion) => [
-      `📚 Thanks to your boost, you gathered this item that is normally found in ${targetRegion}!`,
-      `🎓 Your scholarly insight revealed treasures from ${targetRegion}!`,
-      `📖 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
-      `🔍 Cross-region expertise uncovered ${targetRegion}'s hidden bounty!`,
-      `📚 The Scholar's research of ${targetRegion} proved invaluable!`,
-      `🎓 Thanks to scholarly wisdom, ${targetRegion} shared its secrets!`,
-      `📖 Your boost granted access to ${targetRegion}'s natural resources!`,
-      `🔍 The Scholar's guidance revealed ${targetRegion}'s hidden treasures!`,
-      `📚 Academic knowledge of ${targetRegion} made this gathering possible!`,
-      `🎓 Scholarly expertise unlocked ${targetRegion}'s natural wealth!`,
-      `📖 Your boost tapped into ${targetRegion}'s regional specialties!`,
-      `🔍 The Scholar's insight revealed ${targetRegion}'s local treasures!`,
-      `📚 Thanks to your boost, you accessed ${targetRegion}'s unique resources!`,
-      `🎓 Scholarly knowledge of ${targetRegion} led to this valuable find!`,
-      `📖 Your boost revealed ${targetRegion}'s regional bounty!`,
-      `🔍 The Scholar's expertise uncovered ${targetRegion}'s hidden gems!`,
-      `📚 Cross-region insight revealed ${targetRegion}'s natural treasures!`,
-      `🎓 Thanks to your boost, you discovered ${targetRegion}'s local specialties!`,
-      `📖 Scholarly wisdom granted access to ${targetRegion}'s resources!`,
-      `🔍 Your boost unlocked ${targetRegion}'s regional knowledge!`,
-      `📚 The Scholar's research revealed ${targetRegion}'s hidden wealth!`,
-      `🎓 Academic expertise made ${targetRegion}'s treasures accessible!`,
-      `📖 Your boost tapped into ${targetRegion}'s natural knowledge!`,
-      `🔍 Scholarly insight revealed ${targetRegion}'s local bounty!`
-    ]
-  },
-  teacher: {
-    gathering: [
-      "📚 The Teacher's wisdom guided your hand to this practical material.",
-      "🎓 Thanks to your Teacher's guidance, you found something truly useful.",
-      "📖 The Teacher's knowledge revealed the value in what others might overlook.",
-      "🔍 Your Teacher's insight led you to gather something worth crafting with.",
-      "📚 Practical wisdom ensured you collected materials that serve a purpose.",
-      "🎓 The Teacher's guidance helped you avoid junk and find real value.",
-      "📖 Your Teacher's knowledge revealed the hidden usefulness in this material.",
-      "🔍 Thanks to scholarly guidance, you gathered something worth keeping.",
-      "📚 The Teacher's wisdom ensured you found materials for crafting or daily life.",
-      "🎓 Your Teacher's insight led you to practical, valuable materials.",
-      "📖 Scholarly knowledge helped you distinguish useful items from junk.",
-      "🔍 The Teacher's guidance revealed materials that serve a real purpose.",
-      "📚 Thanks to your Teacher, you gathered something truly worthwhile.",
-      "🎓 The Teacher's wisdom ensured you found materials worth the effort.",
-      "📖 Your Teacher's knowledge led you to practical, usable materials.",
-      "🔍 Scholarly guidance helped you avoid waste and find real value."
-    ]
-  },
-  divine: {
-    items: [
-      "🙏 Blessed by divine favor, this item radiates with sacred energy.",
-      "✨ A gift from the heavens, found after meeting with a priest.",
-      "🌟 Touched by the divine, this item carries ancient blessings.",
-      "💫 Sacred and pure, this item seems to glow with inner light.",
-      "🙏 The priest's blessing has revealed this divine treasure.",
-      "✨ Divine intervention has guided your hand to this sacred item.",
-      "🌟 Blessed by the gods, this item hums with spiritual power.",
-      "💫 A holy relic, discovered through divine guidance.",
-      "🙏 The priest's prayers have led you to this blessed find.",
-      "✨ Sacred energy flows through this divinely-gifted item.",
-      "🌟 A heavenly blessing has revealed this spiritual treasure.",
-      "💫 Touched by the divine, this item carries ancient wisdom.",
-      "🙏 Blessed by the priest's guidance, this sacred item is yours.",
-      "✨ Divine favor has shone upon your gathering efforts.",
-      "🌟 A holy blessing has revealed this spiritual artifact.",
-      "💫 Sacred and pure, this item glows with divine energy."
-    ]
-  }
-};
-
 // Combat message sets
 const COMBAT_MESSAGES = {
   damage: {
@@ -448,12 +376,7 @@ const typeActionMap = {
 // ------------------- Gathering and Crafting Flavor Text -------------------
 // ============================================================================
 
-const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion = null) => {
-  // Validate that targetRegion is provided when isScholarBoost is true
-  if (isScholarBoost && !targetRegion) {
-    throw new Error('Scholar boost requires a target region to be specified');
-  }
-
+const generateGatherFlavorText = (itemType) => {
   const typeToFlavorText = {
     "1h": [
       "⚔️ A reliable one-handed blade, worn but ready for use.",
@@ -558,19 +481,7 @@ const generateGatherFlavorText = (itemType, isScholarBoost = false, targetRegion
   const flavorOptions = typeToFlavorText[itemType] || typeToFlavorText["default"];
 
   // Get base flavor text
-  const baseFlavorText = getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
-
-  // If this is a Scholar boost, add cross-region insight
-  if (isScholarBoost) {
-    // Scholar insights array (targetRegion is guaranteed to be provided due to validation above)
-    const scholarInsights = SCHOLAR_TEACHER_BOOST_MESSAGES.scholar.insights(targetRegion);
-    
-    const scholarInsight = getRandomMessage(scholarInsights);
-    return `${baseFlavorText}\n\n${scholarInsight}`;
-  }
-
-  // Return base flavor text for normal gathering
-  return baseFlavorText;
+  return getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
 };
 
 const generateCraftingFlavorText = (job) => {
@@ -836,15 +747,182 @@ const generateBlightSubmissionExpiryFlavorText = (characterName, healerName, bli
 // ============================================================================
 
 const generateDivineItemFlavorText = () => {
-  const divineFlavorTexts = SCHOLAR_TEACHER_BOOST_MESSAGES.divine.items;
+  const divineFlavorTexts = BOOST_FLAVOR_MESSAGES.Priest.Gathering;
   
   return getRandomMessage(divineFlavorTexts);
 };
 
 const generateTeacherGatheringFlavorText = () => {
-  const teacherFlavorTexts = SCHOLAR_TEACHER_BOOST_MESSAGES.teacher.gathering;
+  const teacherFlavorTexts = BOOST_FLAVOR_MESSAGES.Teacher.Gathering;
   
   return getRandomMessage(teacherFlavorTexts);
+};
+
+// ============================================================================
+// ------------------- Boost Flavor Text Messages -------------------
+// ============================================================================
+
+// Boost-specific flavor text messages
+const BOOST_FLAVOR_MESSAGES = {
+  // Job-specific boost messages
+  Scholar: {
+    Gathering: (targetRegion) => [
+      `📚 Thanks to your boost, you gathered this item that is normally found in ${targetRegion}!`,
+      `🎓 Your scholarly insight revealed treasures from ${targetRegion}!`,
+      `📖 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
+      `🔍 Cross-region expertise uncovered ${targetRegion}'s hidden bounty!`,
+      `📚 The Scholar's research of ${targetRegion} proved invaluable!`,
+      `🎓 Thanks to scholarly wisdom, ${targetRegion} shared its secrets!`,
+      `📖 Your boost granted access to ${targetRegion}'s natural resources!`,
+      `🔍 The Scholar's guidance revealed ${targetRegion}'s hidden treasures!`,
+      `📚 Academic knowledge of ${targetRegion} made this gathering possible!`,
+      `🎓 Scholarly expertise unlocked ${targetRegion}'s natural wealth!`,
+      `📖 Your boost tapped into ${targetRegion}'s regional specialties!`,
+      `🔍 The Scholar's insight revealed ${targetRegion}'s local treasures!`,
+      `📚 Thanks to your boost, you accessed ${targetRegion}'s unique resources!`,
+      `🎓 Scholarly knowledge of ${targetRegion} led to this valuable find!`,
+      `📖 Your boost revealed ${targetRegion}'s regional bounty!`,
+      `🔍 The Scholar's expertise uncovered ${targetRegion}'s hidden gems!`,
+      `📚 Cross-region insight revealed ${targetRegion}'s natural treasures!`,
+      `🎓 Thanks to your boost, you discovered ${targetRegion}'s local specialties!`,
+      `📖 Scholarly wisdom granted access to ${targetRegion}'s resources!`,
+      `🔍 Your boost unlocked ${targetRegion}'s regional knowledge!`,
+      `📚 The Scholar's research revealed ${targetRegion}'s hidden wealth!`,
+      `🎓 Academic expertise made ${targetRegion}'s treasures accessible!`,
+      `📖 Your boost tapped into ${targetRegion}'s natural knowledge!`,
+      `🔍 Scholarly insight revealed ${targetRegion}'s local bounty!`
+    ],
+    Crafting: [
+      "📚 Scholarly research enhances your crafting, resulting in superior quality.",
+      "🎓 Academic knowledge improves your technique, creating exceptional items.",
+      "📖 Your studies pay off as you craft with scholarly precision.",
+      "🔍 Research-backed methods produce outstanding results."
+    ],
+    Exploring: [
+      "📚 Your scholarly knowledge guides your exploration, revealing hidden secrets.",
+      "🎓 Academic expertise enhances your discoveries, uncovering rare findings.",
+      "📖 The Scholar's wisdom illuminates your path through unknown territories.",
+      "🔍 Research-based exploration leads to exceptional discoveries."
+    ],
+    default: [
+      "📚 Scholarly knowledge enhances your abilities, providing an academic edge.",
+      "🎓 Your studies pay off as you perform with scholarly precision.",
+      "📖 Academic expertise improves your technique in all endeavors.",
+      "🔍 Research-backed methods produce superior results."
+    ]
+  },
+  Teacher: {
+    Gathering: [
+      "📚 The Teacher's wisdom guided your hand to this practical material.",
+      "🎓 Thanks to your Teacher's guidance, you found something truly useful.",
+      "📖 The Teacher's knowledge revealed the value in what others might overlook.",
+      "🔍 Your Teacher's insight led you to gather something worth crafting with.",
+      "📚 Practical wisdom ensured you collected materials that serve a purpose.",
+      "🎓 The Teacher's guidance helped you avoid junk and find real value.",
+      "📖 Your Teacher's knowledge revealed the hidden usefulness in this material.",
+      "🔍 Thanks to scholarly guidance, you gathered something worth keeping.",
+      "📚 The Teacher's wisdom ensured you found materials for crafting or daily life.",
+      "🎓 Your Teacher's insight led you to practical, valuable materials.",
+      "📖 Scholarly knowledge helped you distinguish useful items from junk.",
+      "🔍 The Teacher's guidance revealed materials that serve a real purpose.",
+      "📚 Thanks to your Teacher, you gathered something truly worthwhile.",
+      "🎓 The Teacher's wisdom ensured you found materials worth the effort.",
+      "📖 Your Teacher's knowledge led you to practical, usable materials.",
+      "🔍 Scholarly guidance helped you avoid waste and find real value."
+    ],
+    Crafting: [
+      "🎓 The Teacher's guidance improves your crafting technique, creating practical items.",
+      "📚 Educational wisdom enhances your ability to craft useful tools and gear.",
+      "📖 Your teaching experience pays off as you create items with practical value.",
+      "🔍 Practical knowledge ensures your crafted items serve real purposes."
+    ],
+    default: [
+      "🎓 The Teacher's wisdom enhances your abilities with practical knowledge.",
+      "📚 Educational experience improves your technique in all endeavors.",
+      "📖 Your teaching background provides practical insights for better results.",
+      "🔍 Practical wisdom ensures your efforts produce useful outcomes."
+    ]
+  },
+  Priest: {
+    Gathering: [
+      "🙏 Blessed by divine favor, this item radiates with sacred energy.",
+      "✨ A gift from the heavens, found after meeting with a priest.",
+      "🌟 Touched by the divine, this item carries ancient blessings.",
+      "💫 Sacred and pure, this item seems to glow with inner light.",
+      "🙏 The priest's blessing has revealed this divine treasure.",
+      "✨ Divine intervention has guided your hand to this sacred item.",
+      "🌟 Blessed by the gods, this item hums with spiritual power.",
+      "💫 A holy relic, discovered through divine guidance.",
+      "🙏 The priest's prayers have led you to this blessed find.",
+      "✨ Sacred energy flows through this divinely-gifted item.",
+      "🌟 A heavenly blessing has revealed this spiritual treasure.",
+      "💫 Touched by the divine, this item carries ancient wisdom.",
+      "🙏 Blessed by the priest's guidance, this sacred item is yours.",
+      "✨ Divine favor has shone upon your gathering efforts.",
+      "🌟 A holy blessing has revealed this spiritual artifact.",
+      "💫 Sacred and pure, this item glows with divine energy."
+    ],
+    Crafting: [
+      "🙏 Divine blessing enhances your crafting, creating items of sacred quality.",
+      "✨ Holy favor improves your technique, resulting in spiritually significant items.",
+      "🌟 Sacred energy guides your hands as you craft with divine inspiration.",
+      "💫 The Priest's blessing ensures your crafted items carry spiritual significance."
+    ],
+    default: [
+      "🙏 Divine blessing enhances your abilities with sacred power.",
+      "✨ Holy favor improves your technique with spiritual guidance.",
+      "🌟 Sacred energy illuminates your path to better results.",
+      "💫 The Priest's blessing ensures your efforts carry divine significance."
+    ]
+  },
+  Entertainer: {
+    Gathering: [
+      "🎭 The Entertainer's charm attracts extra treasures, leading to bonus discoveries.",
+      "🎪 Performance magic enhances your gathering, revealing additional valuable items.",
+      "🎨 Artistic flair guides your search, uncovering extra resources with style.",
+      "🎪 The Entertainer's presence brings good fortune, resulting in bonus finds.",
+      "🎭 Charismatic energy enhances your gathering, leading to extra discoveries.",
+      "🎪 Performance skills improve your luck, revealing additional valuable items.",
+      "🎨 Creative spirit guides your hands to bonus treasures.",
+      "🎪 The Entertainer's magic ensures you find extra resources with flair."
+    ],
+    default: [
+      "🎭 The Entertainer's charm enhances your abilities with extra flair.",
+      "🎪 Performance magic improves your technique with artistic style.",
+      "🎨 Creative energy guides your efforts to better results.",
+      "🎪 The Entertainer's presence brings good fortune to all endeavors."
+    ]
+  },
+  FortuneTeller: {
+    default: [
+      "🔮 Mystical insight enhances your abilities with prophetic knowledge.",
+      "✨ Fortune's favor improves your technique with magical guidance.",
+      "🌟 Mystical energy illuminates your path to better results.",
+      "💫 The Fortune Teller's vision ensures your efforts are blessed with good luck."
+    ]
+  },
+  default: [
+    "⚡ Boosted abilities enhance your performance with extra power.",
+    "✨ Enhanced skills improve your technique for better results.",
+    "🌟 Boosted energy guides your efforts to superior outcomes.",
+    "💫 Enhanced abilities ensure your actions are more effective."
+  ]
+};
+
+// ============================================================================
+// ------------------- Boost Flavor Text Generators -------------------
+// ============================================================================
+
+const generateBoostFlavorText = (boosterJob, category = 'default', targetRegion = null) => {
+  const jobMessages = BOOST_FLAVOR_MESSAGES[boosterJob] || BOOST_FLAVOR_MESSAGES.default;
+  let categoryMessages = jobMessages[category] || jobMessages.default || BOOST_FLAVOR_MESSAGES.default;
+
+  // Handle Scholar Gathering special case for targetRegion
+  if (boosterJob === 'Scholar' && category === 'Gathering' && typeof categoryMessages === 'function') {
+    return getRandomMessage(categoryMessages(targetRegion));
+  }
+  
+  return getRandomMessage(categoryMessages);
 };
 
 // ============================================================================
@@ -887,4 +965,6 @@ module.exports = {
   generateBlightSubmissionExpiryFlavorText,
   generateDivineItemFlavorText,
   generateTeacherGatheringFlavorText,
+  // Boost Flavor Text
+  generateBoostFlavorText,
 };

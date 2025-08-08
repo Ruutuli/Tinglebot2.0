@@ -820,9 +820,31 @@ const craftingFlavorText = generateCraftingFlavorText(
   typeof jobForFlavorText === 'string' ? jobForFlavorText.trim() : ''
 );
 
+// Add boost flavor text if character is boosted
+let boostFlavorText = '';
+let boosterJob = '';
+let boosterName = '';
+
+if (character.boostedBy) {
+  // Get boost details from the boost integration module
+  const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+  const boostStatus = await getCharacterBoostStatus(character.name);
+  
+  if (boostStatus && boostStatus.category === 'Crafting') {
+    boosterJob = boostStatus.boosterJob;
+    boosterName = boostStatus.boosterName;
+    
+    // Generate boost-specific flavor text
+    const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+    boostFlavorText = generateBoostFlavorText(boosterJob, 'Crafting');
+  }
+}
+
 const combinedFlavorText = flavorText?.trim()
-  ? `${craftingFlavorText}\n\n🌟 **Custom Flavor Text:** ${flavorText.trim()}`
-  : craftingFlavorText;
+  ? `${craftingFlavorText}\n\n${boostFlavorText ? `⚡ **Boost Effect:** ${boostFlavorText}\n\n` : ''}🌟 **Custom Flavor Text:** ${flavorText.trim()}`
+  : boostFlavorText 
+    ? `${craftingFlavorText}\n\n⚡ **Boost Effect:** ${boostFlavorText}`
+    : craftingFlavorText;
 
  const DEFAULT_EMOJI = ":small_blue_diamond:";
  let craftingMaterialText = "No materials used or invalid data format.";
@@ -896,6 +918,7 @@ const combinedFlavorText = flavorText?.trim()
   .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
   .setFooter({ 
     text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : 
+         character.boostedBy && boosterJob ? `⚡ Boosted by ${boosterJob} ${boosterName} (Crafting)` : 
          character.boostedBy ? `⚡ Boosted by: ${character.boostedBy}` : '✨ Successfully crafted!'
   });
 
@@ -1093,7 +1116,7 @@ function capitalizeFirst(str) {
 }
 
 // ------------------- Subsection Title ------------------- 
-const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null, scholarTargetVillage = null) => {
+const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null, scholarTargetVillage = null) => {
  const settings = getCommonEmbedSettings(character);
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
  const article = getArticleForItem(randomItem.itemName);
@@ -1123,8 +1146,34 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
    }
  }
 
+ // Add boost flavor text if character is boosted (for non-special cases)
+ let boostFlavorText = '';
+ let boosterJob = '';
+ let boosterName = '';
+
+ if (character.boostedBy && !isDivineItemWithPriestBoost && !isTeacherBoost) {
+   // Get boost details from the boost integration module
+   const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+   const boostStatus = await getCharacterBoostStatus(character.name);
+   
+   if (boostStatus && boostStatus.category === 'Gathering') {
+     boosterJob = boostStatus.boosterJob;
+     boosterName = boostStatus.boosterName;
+     
+     // Generate boost-specific flavor text
+     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+     boostFlavorText = generateBoostFlavorText(boosterJob, 'Gathering');
+   }
+ }
+
  // Add bonus item information if present
  let description = flavorText;
+ 
+ // Add boost flavor text if available
+ if (boostFlavorText) {
+   description += `\n\n⚡ **Boost Effect:** ${boostFlavorText}`;
+ }
+ 
  if (bonusItem) {
    const bonusArticle = getArticleForItem(bonusItem.itemName);
    const bonusEmoji = bonusItem.emoji || "🎁";
@@ -1197,7 +1246,9 @@ const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItem
  } else if (character.boostedBy) {
   // Add boost indicator to footer with boost type
   let footerText = `⚡ Boosted by: ${character.boostedBy}`;
-  if (boosterCharacter && boosterCharacter.job) {
+  if (boosterJob && boosterName) {
+    footerText = `⚡ Boosted by ${boosterJob} ${boosterName} (Gathering)`;
+  } else if (boosterCharacter && boosterCharacter.job) {
     // Get the boost effect name from the boosting module
     const { getBoostEffect } = require('../modules/boostingModule');
     const boostEffect = getBoostEffect(boosterCharacter.job, 'Gathering');
@@ -1336,7 +1387,7 @@ const createTradeEmbed = async (
 };
 
 // ------------------- Subsection Title ------------------- 
-const createMonsterEncounterEmbed = (
+const createMonsterEncounterEmbed = async (
  character,
  monster,
  outcomeMessage,
@@ -1377,6 +1428,26 @@ const createMonsterEncounterEmbed = (
   villageImages[capitalizeWords(character.currentVillage)] ||
   "https://via.placeholder.com/100x100";
 
+ // Add boost flavor text if character is boosted
+ let boostFlavorText = '';
+ let boosterJob = '';
+ let boosterName = '';
+
+ if (character.boostedBy) {
+   // Get boost details from the boost integration module
+   const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+   const boostStatus = await getCharacterBoostStatus(character.name);
+   
+   if (boostStatus && boostStatus.category === 'Looting') {
+     boosterJob = boostStatus.boosterJob;
+     boosterName = boostStatus.boosterName;
+     
+     // Generate boost-specific flavor text
+     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+     boostFlavorText = generateBoostFlavorText(boosterJob, 'Looting');
+   }
+ }
+
  // Add progress indicator if provided
  const progressField = currentMonster && totalMonsters ? {
   name: "⚔️ __Battle Progress__",
@@ -1416,18 +1487,36 @@ const createMonsterEncounterEmbed = (
   embed.addFields(progressField);
  }
 
+ // Add boost flavor text to outcome if available
+ let outcomeWithBoost = outcomeMessage || "No outcome specified.";
+ if (boostFlavorText) {
+   outcomeWithBoost += `\n\n⚡ **Boost Effect:** ${boostFlavorText}`;
+ }
+
  embed.addFields({
   name: "🔹 __Outcome__",
-  value: `> ${outcomeMessage || "No outcome specified."}${koMessage}`,
+  value: `> ${outcomeWithBoost}${koMessage}`,
   inline: false,
  });
 
+ // Build footer text
+ let footerText = `Tier: ${monster.tier}`;
+ if (isBloodMoon) {
+   footerText += " 🔴 Blood Moon Encounter";
+ }
+ if (character.jobVoucher && character.jobVoucherJob) {
+   footerText += ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}`;
+ }
+ if (character.boostedBy) {
+   if (boosterJob && boosterName) {
+     footerText += ` | ⚡ Boosted by ${boosterJob} ${boosterName} (Looting)`;
+   } else {
+     footerText += ` | ⚡ Boosted by: ${character.boostedBy}`;
+   }
+ }
+
  embed.setFooter({
-  text: `Tier: ${monster.tier}${
-   isBloodMoon ? " 🔴 Blood Moon Encounter" : ""
-  }${character.jobVoucher && character.jobVoucherJob ? ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}` : ""}${
-   character.boostedBy ? ` | ⚡ Boosted by: ${character.boostedBy}` : ""
-  }`,
+  text: footerText,
   iconURL: authorIconURL,
  });
 
@@ -1646,7 +1735,7 @@ const createRaidKOEmbed = (character) => {
 };
 
 // ------------------- Subsection Title ------------------- 
-const createHealEmbed = (
+const createHealEmbed = async (
  healerCharacter,
  characterToHeal,
  heartsToHeal,
@@ -1661,6 +1750,26 @@ const createHealEmbed = (
 
  const healerName = healerCharacter?.name || "Any available healer";
  const healerIcon = healerCharacter?.icon || DEFAULT_IMAGE_URL;
+
+ // Add boost flavor text if character is boosted
+ let boostFlavorText = '';
+ let boosterJob = '';
+ let boosterName = '';
+
+ if (characterToHeal.boostedBy) {
+   // Get boost details from the boost integration module
+   const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+   const boostStatus = await getCharacterBoostStatus(characterToHeal.name);
+   
+   if (boostStatus && boostStatus.category === 'Healers') {
+     boosterJob = boostStatus.boosterJob;
+     boosterName = boostStatus.boosterName;
+     
+     // Generate boost-specific flavor text
+     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+     boostFlavorText = generateBoostFlavorText(boosterJob, 'Healers');
+   }
+ }
 
  const settings = healerCharacter
   ? getCommonEmbedSettings(healerCharacter)
@@ -1717,10 +1826,15 @@ const createHealEmbed = (
   });
 
  if (isFulfilled) {
+  // Add boost flavor text to description if available
+  let description = `> ${healerName} has healed your character for ${heartsToHeal} hearts!`;
+  if (boostFlavorText) {
+    description += `\n\n⚡ **Boost Effect:** ${boostFlavorText}`;
+  }
+
   embed
    .setTitle('✅ Healing Request Fulfilled')
-   .setDescription(
-    `> ${healerName} has healed your character for ${heartsToHeal} hearts!`)
+   .setDescription(description)
    .addFields(
     {
      name: "__❤️ Hearts to Heal__",
@@ -1743,8 +1857,16 @@ const createHealEmbed = (
      inline: false,
     }
    )
-   .setFooter({
-    text: "Healing process successfully completed.",
+   // Build footer text
+   let footerText = "Healing process successfully completed.";
+   if (characterToHeal.boostedBy && boosterJob && boosterName) {
+     footerText += ` | ⚡ Boosted by ${boosterJob} ${boosterName} (Healing)`;
+   } else if (characterToHeal.boostedBy) {
+     footerText += ` | ⚡ Boosted by: ${characterToHeal.boostedBy}`;
+   }
+
+   embed.setFooter({
+    text: footerText,
     iconURL: healerCharacter ? healerIcon : null,
    })
    .setImage(DEFAULT_IMAGE_URL);
@@ -1775,8 +1897,16 @@ const createHealEmbed = (
      inline: false,
     }
    )
-   .setFooter({
-    text: "Waiting for a healer to fulfill this request.",
+   // Build footer text for pending state
+   let pendingFooterText = "Waiting for a healer to fulfill this request.";
+   if (characterToHeal.boostedBy && boosterJob && boosterName) {
+     pendingFooterText += ` | ⚡ Boosted by ${boosterJob} ${boosterName} (Healing)`;
+   } else if (characterToHeal.boostedBy) {
+     pendingFooterText += ` | ⚡ Boosted by: ${characterToHeal.boostedBy}`;
+   }
+
+   embed.setFooter({
+    text: pendingFooterText,
     iconURL: healerCharacter ? healerIcon : null,
    })
    .setImage(DEFAULT_IMAGE_URL);
@@ -1785,7 +1915,7 @@ const createHealEmbed = (
 };
 
 // ------------------- Subsection Title ------------------- 
-const createTravelMonsterEncounterEmbed = (
+const createTravelMonsterEncounterEmbed = async (
  character,
  monster,
  outcomeMessage,
@@ -1810,6 +1940,26 @@ const createTravelMonsterEncounterEmbed = (
   image: "https://via.placeholder.com/100x100",
  };
 
+ // Add boost flavor text if character is boosted
+ let boostFlavorText = '';
+ let boosterJob = '';
+ let boosterName = '';
+
+ if (character.boostedBy) {
+   // Get boost details from the boost integration module
+   const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+   const boostStatus = await getCharacterBoostStatus(character.name);
+   
+   if (boostStatus && boostStatus.category === 'Looting') {
+     boosterJob = boostStatus.boosterJob;
+     boosterName = boostStatus.boosterName;
+     
+     // Generate boost-specific flavor text
+     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+     boostFlavorText = generateBoostFlavorText(boosterJob, 'Looting');
+   }
+ }
+
  const embed = new EmbedBuilder()
   .setColor("#AA926A")
   .setTitle(
@@ -1823,14 +1973,30 @@ const createTravelMonsterEncounterEmbed = (
   })
   .setDescription(
    `**❤️ Hearts: ${character.currentHearts}/${character.maxHearts}**\n**🟩 Stamina: ${character.currentStamina}/${character.maxStamina}**`
-  )
-  .addFields({
+  );
+
+  // Add boost flavor text to outcome if available
+  let outcomeWithBoost = outcomeMessage;
+  if (boostFlavorText) {
+    outcomeWithBoost += `\n\n⚡ **Boost Effect:** ${boostFlavorText}`;
+  }
+
+  embed.addFields({
    name: "🔹 __Outcome__",
-   value: `> ${outcomeMessage}`,
+   value: `> ${outcomeWithBoost}`,
    inline: false,
-  })
-  .setFooter({ text: `Tier: ${monster.tier}` })
-  .setImage(PATH_IMAGES[currentPath] || settings.image.url);
+  });
+
+  // Build footer text
+  let footerText = `Tier: ${monster.tier}`;
+  if (character.boostedBy && boosterJob && boosterName) {
+    footerText += ` | ⚡ Boosted by ${boosterJob} ${boosterName} (Looting)`;
+  } else if (character.boostedBy) {
+    footerText += ` | ⚡ Boosted by: ${character.boostedBy}`;
+  }
+
+  embed.setFooter({ text: footerText })
+    .setImage(PATH_IMAGES[currentPath] || settings.image.url);
 
  if (lootItem) {
   embed.addFields({
