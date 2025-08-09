@@ -211,46 +211,64 @@ async function startRaid(monster, village, interaction = null) {
           
           // Mark raid as failed and KO all participants
           await currentRaid.failRaid();
-          
-          // Send failure message to thread if it exists
-          if (currentRaid.threadId && interaction?.client) {
-            try {
-              const thread = await interaction.client.channels.fetch(currentRaid.threadId);
-              if (thread) {
-                const failureEmbed = new EmbedBuilder()
-                  .setColor('#FF0000')
-                  .setTitle('💥 **Raid Failed!**')
-                  .setDescription(`The raid against **${currentRaid.monster.name}** has failed!`)
-                  .addFields(
-                    {
-                      name: '__Monster Status__',
-                      value: `💙 **Hearts:** ${currentRaid.monster.currentHearts}/${currentRaid.monster.maxHearts}`,
-                      inline: false
-                    },
-                    {
-                      name: '__Participants__',
-                      value: (currentRaid.participants && currentRaid.participants.length > 0)
-                        ? currentRaid.participants.map(p => `• **${p.name}** (${p.damage} hearts) - **KO'd**`).join('\n')
-                        : 'No participants',
-                      inline: false
-                    },
-                    {
-                      name: '__Failure__',
-                      value: (currentRaid.participants && currentRaid.participants.length > 0)
-                        ? `All participants have been knocked out! 💀`
-                        : `The monster caused havoc as no one defended the village from it and then ran off!`,
-                      inline: false
-                    }
-                  )
-                  .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-                  .setFooter({ text: `Raid ID: ${raidId}` })
-                  .setTimestamp();
-                
-                await thread.send({ embeds: [failureEmbed] });
-                console.log(`[raidModule.js]: 💬 Failure message sent to raid thread`);
+
+          // Compose failure embed (used for thread or channel fallback)
+          const buildFailureEmbed = () => new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('💥 **Raid Failed!**')
+            .setDescription(`The raid against **${currentRaid.monster.name}** has failed!`)
+            .addFields(
+              {
+                name: '__Monster Status__',
+                value: `💙 **Hearts:** ${currentRaid.monster.currentHearts}/${currentRaid.monster.maxHearts}`,
+                inline: false
+              },
+              {
+                name: '__Participants__',
+                value: (currentRaid.participants && currentRaid.participants.length > 0)
+                  ? currentRaid.participants.map(p => `• **${p.name}** (${p.damage} hearts) - **KO'd**`).join('\n')
+                  : 'No participants',
+                inline: false
+              },
+              {
+                name: '__Failure__',
+                value: (currentRaid.participants && currentRaid.participants.length > 0)
+                  ? `All participants have been knocked out! 💀`
+                  : `The monster caused havoc as no one defended the village from it and then ran off!`,
+                inline: false
               }
-            } catch (threadError) {
-              console.error(`[raidModule.js]: ❌ Error sending failure message to thread:`, threadError);
+            )
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+            .setFooter({ text: `Raid ID: ${raidId}` })
+            .setTimestamp();
+
+          // Try to send failure message to thread, else fall back to the original channel
+          if (interaction?.client) {
+            let sent = false;
+            if (currentRaid.threadId) {
+              try {
+                const thread = await interaction.client.channels.fetch(currentRaid.threadId);
+                if (thread) {
+                  await thread.send({ embeds: [buildFailureEmbed()] });
+                  console.log(`[raidModule.js]: 💬 Failure message sent to raid thread`);
+                  sent = true;
+                }
+              } catch (threadError) {
+                console.error(`[raidModule.js]: ❌ Error sending failure message to thread:`, threadError);
+              }
+            }
+
+            if (!sent && currentRaid.channelId) {
+              try {
+                const channel = await interaction.client.channels.fetch(currentRaid.channelId);
+                if (channel) {
+                  await channel.send({ embeds: [buildFailureEmbed()] });
+                  console.log(`[raidModule.js]: 💬 Failure message sent to raid channel (fallback)`);
+                  sent = true;
+                }
+              } catch (channelError) {
+                console.error(`[raidModule.js]: ❌ Error sending failure message to channel:`, channelError);
+              }
             }
           }
           
@@ -340,8 +358,8 @@ async function joinRaid(character, raidId) {
       }
       const baseHearts = raid.analytics.baseMonsterHearts || 0;
       const partySize = (raid.participants || []).length;
-      // +15% base hearts per extra participant beyond the first
-      const scaleMultiplier = Math.max(1, 1 + 0.15 * Math.max(0, partySize - 1));
+      // +10% base hearts per extra participant beyond the first (reduced)
+      const scaleMultiplier = Math.max(1, 1 + 0.10 * Math.max(0, partySize - 1));
       const oldMax = raid.monster.maxHearts;
       const oldCurrent = raid.monster.currentHearts;
       const damageDealtSoFar = Math.max(0, oldMax - oldCurrent);
@@ -406,11 +424,11 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
 
     // Generate random roll and apply raid difficulty penalty before calculating final value
     let diceRoll = Math.floor(Math.random() * 100) + 1;
-    // Party-size and tier-based penalty: -2 per extra participant, -1 per tier above 5 (capped total 25)
+    // Party-size and tier-based penalty: -1 per extra participant, -0.5 per tier above 5 (capped total 15)
     const partySize = (raid.participants || []).length;
-    const partyPenalty = Math.max(0, (partySize - 1) * 2);
-    const tierPenalty = Math.max(0, (raid.monster?.tier || 5) - 5);
-    const totalPenalty = Math.min(25, partyPenalty + tierPenalty);
+    const partyPenalty = Math.max(0, (partySize - 1) * 1);
+    const tierPenalty = Math.max(0, ((raid.monster?.tier || 5) - 5) * 0.5);
+    const totalPenalty = Math.min(15, partyPenalty + tierPenalty);
     diceRoll = Math.max(1, diceRoll - totalPenalty);
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateRaidFinalValue(character, diceRoll);
 
@@ -835,6 +853,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       
       // Update raid data without thread information
       raidData.messageId = raidMessage.id;
+      raidData.channelId = interaction.channel.id;
       await raidData.save();
       console.log(`[raidModule.js]: 💾 Updated raid data without thread information`);
     }
