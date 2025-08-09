@@ -161,6 +161,8 @@ const getBoostInfo = async (character, category) => {
    return {
      boosterJob: boostStatus.boosterJob,
      boosterName: boostStatus.boosterName,
+      boostName: boostStatus.boostName,
+      category: boostStatus.category,
      boostFlavorText: generateBoostFlavorText(boostStatus.boosterJob, category)
    };
  }
@@ -185,11 +187,15 @@ const buildFooterText = (baseText, character, boostInfo = null) => {
  }
  
  if (character.boostedBy) {
-   if (boostInfo?.boosterJob && boostInfo?.boosterName) {
-     footerText += ` | ⚡ Boosted by ${boostInfo.boosterJob} ${boostInfo.boosterName}`;
-   } else {
-     footerText += ` | ⚡ Boosted by: ${character.boostedBy}`;
-   }
+    if (boostInfo?.boosterJob && boostInfo?.boosterName) {
+      if (boostInfo?.boostName && boostInfo?.category) {
+        footerText += ` | Boost by: ${boostInfo.boosterJob} ${boostInfo.boosterName} - ${boostInfo.boostName} for ${boostInfo.category}`;
+      } else {
+        footerText += ` | Boost by: ${boostInfo.boosterJob} ${boostInfo.boosterName}`;
+      }
+    } else {
+      footerText += ` | Boost by: ${character.boostedBy}`;
+    }
  }
  
  return footerText;
@@ -2103,11 +2109,6 @@ const createBoostAppliedEmbed = (boostData) => {
     .setThumbnail(boostData.boostedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-applied-icon.png')
     .addFields(
       {
-        name: '🎭 **Boosted By**',
-        value: `> Boost by: ${boosterJob} ${boostedBy} - ${boostData.boostName || 'Unknown Boost'} for ${category}`,
-        inline: true
-      },
-      {
         name: '💼 **Booster Job**',
         value: `> ${boosterJob}`,
         inline: true
@@ -2139,7 +2140,9 @@ const createBoostAppliedEmbed = (boostData) => {
       },
       {
         name: '⚡ **Boost Effect**',
-        value: `> ${effect}`,
+        value:
+          `> ${effect}\n\n` +
+          `> Boost by: ${boosterJob} ${boostedBy} - ${boostData.boostName || 'Unknown Boost'} for ${category}`,
         inline: false
       }
     )
