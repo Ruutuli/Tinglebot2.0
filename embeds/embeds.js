@@ -1063,17 +1063,25 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
    }
  }
 
- // Get boost information for non-special cases
- const boostInfo = !isDivineItemWithPriestBoost && !isTeacherBoost ? await getBoostInfo(character, 'Gathering') : null;
- let description = addBoostFlavorText(flavorText, boostInfo);
+  // Get boost information for non-special cases, including Entertainer bonus item name
+  let boostInfo = !isDivineItemWithPriestBoost && !isTeacherBoost ? await getBoostInfo(character, 'Gathering') : null;
+  if (boostInfo && boostInfo.boosterJob === 'Entertainer' && bonusItem?.itemName) {
+    // Regenerate the boost flavor text to include the bonus item name
+    const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+    boostInfo = {
+      ...boostInfo,
+      boostFlavorText: generateBoostFlavorText('Entertainer', 'Gathering', { bonusItemName: bonusItem.itemName })
+    };
+  }
+  let description = addBoostFlavorText(flavorText, boostInfo);
  
  // Add bonus item information if present
  if (bonusItem) {
    const bonusArticle = getArticleForItem(bonusItem.itemName);
    const bonusEmoji = bonusItem.emoji || "🎁";
    
-   // Only Entertainer boost provides bonus items
-   const isEntertainerBoost = character.boostedBy && character.boostedBy.toLowerCase().includes('entertainer');
+    // Only Entertainer boost provides bonus items
+    const isEntertainerBoost = boosterCharacter && (boosterCharacter.job === 'Entertainer' || boosterCharacter.job?.toLowerCase() === 'entertainer');
    
    if (isEntertainerBoost) {
      description += `\n\n🎭 **Entertainer's Gift:** ${character.name} also found ${bonusArticle} ${bonusEmoji}${bonusItem.itemName}!`;

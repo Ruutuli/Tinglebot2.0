@@ -913,15 +913,22 @@ const BOOST_FLAVOR_MESSAGES = {
 // ------------------- Boost Flavor Text Generators -------------------
 // ============================================================================
 
-const generateBoostFlavorText = (boosterJob, category = 'default', targetRegion = null) => {
+const generateBoostFlavorText = (boosterJob, category = 'default', options = null) => {
   const jobMessages = BOOST_FLAVOR_MESSAGES[boosterJob] || BOOST_FLAVOR_MESSAGES.default;
   let categoryMessages = jobMessages[category] || jobMessages.default || BOOST_FLAVOR_MESSAGES.default;
 
-  // Handle Scholar Gathering special case for targetRegion
+  // Scholar Gathering: categoryMessages is a function expecting targetRegion
   if (boosterJob === 'Scholar' && category === 'Gathering' && typeof categoryMessages === 'function') {
+    const targetRegion = options?.targetRegion || null;
     return getRandomMessage(categoryMessages(targetRegion));
   }
-  
+
+  // Entertainer Gathering: append specific bonus item to the existing flavor text
+  if (boosterJob === 'Entertainer' && category === 'Gathering' && options?.bonusItemName) {
+    const baseMessage = getRandomMessage(categoryMessages);
+    return `${baseMessage} Bonus discovery: ${options.bonusItemName}.`;
+  }
+
   return getRandomMessage(categoryMessages);
 };
 
