@@ -542,15 +542,15 @@ module.exports = {
             attackSuccess,
             defenseSuccess
           );
-          if (outcome.hearts) {
-            await useHearts(character._id, outcome.hearts);
-            if (outcome.result === 'KO') {
-              await handleKO(character._id);
-            }
-          }
-          const heartsRemaining = Math.max(character.currentHearts - outcome.hearts, 0);
-          await updateCurrentHearts(character._id, heartsRemaining);
+          // Hearts are already applied inside getEncounterOutcome; fetch fresh value
+          const refreshedCharacter = await fetchCharacterByNameAndUserId(character.name, interaction.user.id);
+          const heartsRemaining = Math.max(
+            0,
+            refreshedCharacter?.currentHearts ?? (character.currentHearts - (outcome.hearts || 0))
+          );
           let outcomeMessage = generateOutcomeMessage(outcome);
+          // Ensure we can forward an Entertainer bonus item into the encounter embed
+          let entertainerBonusForEmbed = null;
 
           // ------------------- Apply Entertainer Bonus During Monster Encounter ------------------
           // If boosted by an Entertainer, still grant the gathering bonus item even on encounter
@@ -585,8 +585,8 @@ module.exports = {
                     'Gathering (Entertainer Bonus)'
                   );
 
-                  // Append bonus info to outcome message for visibility
-                  outcomeMessage += `\n\n🎭 Entertainer's Gift: ${character.name} also found ${bonusItem.itemName}!`;
+                  // Store bonus item to show in the encounter embed (gather-style presentation)
+                  entertainerBonusForEmbed = bonusItem;
 
                   // Clear used boost to match normal gathering behavior
                   character.boostedBy = null;
@@ -611,13 +611,18 @@ module.exports = {
               const lootedItem = generateLootedItem(encounteredMonster, weightedItems);
               const inventoryLink = character.inventory || character.inventoryLink;
               if (typeof inventoryLink !== 'string' || !isValidGoogleSheetsUrl(inventoryLink)) {
-                const embed = createMonsterEncounterEmbed(
+                const embed = await createMonsterEncounterEmbed(
                   character,
                   encounteredMonster,
                   outcomeMessage,
                   heartsRemaining,
                   lootedItem,
-                  bloodMoonActive
+                  bloodMoonActive,
+                  null,
+                  null,
+                  null,
+                  entertainerBonusForEmbed || null,
+                  'Gathering'
                 );
                 await safeReply({
                   content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
@@ -661,7 +666,12 @@ module.exports = {
                 outcomeMessage,
                 heartsRemaining,
                 lootedItem,
-                bloodMoonActive
+                bloodMoonActive,
+                null,
+                null,
+                null,
+                null,
+                'Gathering'
               );
               await safeReply({ embeds: [embed] });
               return;
@@ -673,7 +683,12 @@ module.exports = {
             outcomeMessage,
             heartsRemaining,
             null,
-            bloodMoonActive
+            bloodMoonActive,
+            null,
+            null,
+            null,
+            null,
+            'Gathering'
           );
           await safeReply({ embeds: [embed] });
           return;
