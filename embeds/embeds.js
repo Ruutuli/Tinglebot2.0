@@ -1416,11 +1416,11 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
 
 // ------------------- Function: createKOEmbed -------------------
 // Creates an embed for when a character is knocked out
-const createKOEmbed = (character) => {
+const createKOEmbed = (character, customDescription = null) => {
  const settings = getCommonEmbedSettings(character);
  const locationPrefix = getLocationPrefix(character);
 
- const embed = new EmbedBuilder()
+  const embed = new EmbedBuilder()
   .setColor("#FF0000")
   .setAuthor({
    name: `${character.name} 🔗`,
@@ -1428,10 +1428,13 @@ const createKOEmbed = (character) => {
    url: settings.author?.url,
   })
   .setTitle(`💥 ${locationPrefix}: ${character.name} is KO'd!`)
-  .setDescription(
-   `> KO status can only be healed by fairies or Healers.\n` +
-   `> Use </itemheal:1306176789755858979> or </heal request:1306176789755858977> to heal your character.`
-  )
+   .setDescription(
+    customDescription ||
+    (
+      `> KO status can only be healed by fairies or Healers.\n` +
+      `> Use </itemheal:1306176789755858979> or </heal request:1306176789755858977> to heal your character.`
+    )
+   )
   .setImage("https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png");
 
  return embed;
