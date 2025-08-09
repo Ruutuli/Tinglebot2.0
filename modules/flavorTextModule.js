@@ -923,12 +923,6 @@ const generateBoostFlavorText = (boosterJob, category = 'default', options = nul
     return getRandomMessage(categoryMessages(targetRegion));
   }
 
-  // Entertainer Gathering: append specific bonus item to the existing flavor text
-  if (boosterJob === 'Entertainer' && category === 'Gathering' && options?.bonusItemName) {
-    const baseMessage = getRandomMessage(categoryMessages);
-    return `${baseMessage} Bonus discovery: ${options.bonusItemName}.`;
-  }
-
   return getRandomMessage(categoryMessages);
 };
 
