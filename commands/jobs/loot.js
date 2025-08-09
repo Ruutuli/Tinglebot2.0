@@ -278,7 +278,11 @@ module.exports = {
 
    // ------------------- Step 2: Check Hearts and Job Validity -------------------
    if (character.currentHearts === 0) {
-    const embed = createKOEmbed(character);
+    const embed = createKOEmbed(
+      character,
+      '> **KO’d characters cannot loot! Please heal your character.**\n' +
+      '> Use </itemheal:1306176789755858979> or </heal request:1306176789755858977>.'
+    );
     await interaction.editReply({ embeds: [embed] });
     return;
    }
