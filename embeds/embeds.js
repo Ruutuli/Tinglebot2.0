@@ -11,9 +11,11 @@ const { getLastDebugValues } = require("../modules/buffModule");
 const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
 const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
 const { getMountEmoji, getMountThumbnail } = require("../modules/mountModule");
-const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap } = require("../modules/flavorTextModule");
+const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText } = require("../modules/flavorTextModule");
 const { convertCmToFeetInches, isValidImageUrl } = require("../utils/validation");
 const { validateInventorySheet } = require("../utils/googleSheetsUtils");
+const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Database Model Imports ------------------
 const Character = require("../models/CharacterModel");
@@ -153,11 +155,9 @@ const setThumbnailWithFallback = (embed, imageUrl, fallbackUrl = DEFAULT_THUMBNA
 const getBoostInfo = async (character, category) => {
  if (!character.boostedBy) return null;
  
- const { getCharacterBoostStatus } = require('../modules/boostIntegration');
- const boostStatus = await getCharacterBoostStatus(character.name);
+  const boostStatus = await getCharacterBoostStatus(character.name);
  
  if (boostStatus && boostStatus.category === category) {
-   const { generateBoostFlavorText } = require('../modules/flavorTextModule');
    return {
      boosterJob: boostStatus.boosterJob,
      boosterName: boostStatus.boosterName,
@@ -1052,12 +1052,10 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
  // Use divine flavor text if this is a divine item gathered with Priest boost
  let flavorText;
  if (isDivineItemWithPriestBoost) {
-   const { generateDivineItemFlavorText } = require('../modules/flavorTextModule');
-   flavorText = generateDivineItemFlavorText();
+    flavorText = generateDivineItemFlavorText();
  } else {
    if (isTeacherBoost) {
-     const { generateTeacherGatheringFlavorText } = require('../modules/flavorTextModule');
-     flavorText = generateTeacherGatheringFlavorText();
+      flavorText = generateTeacherGatheringFlavorText();
    } else {
      flavorText = generateGatherFlavorText(randomItem.type[0], isScholarBoost, targetRegion);
    }
@@ -1067,7 +1065,6 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
   let boostInfo = !isDivineItemWithPriestBoost && !isTeacherBoost ? await getBoostInfo(character, 'Gathering') : null;
   if (boostInfo && boostInfo.boosterJob === 'Entertainer' && bonusItem?.itemName) {
     // Regenerate the boost flavor text to include the bonus item name
-    const { generateBoostFlavorText } = require('../modules/flavorTextModule');
     boostInfo = {
       ...boostInfo,
       boostFlavorText: generateBoostFlavorText('Entertainer', 'Gathering', { bonusItemName: bonusItem.itemName })
@@ -1118,13 +1115,16 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
  let footerText = '';
  if (character.jobVoucher && character.jobVoucherJob) {
    footerText = `🎫 Job Voucher in use: ${character.jobVoucherJob}`;
- } else if (character.boostedBy) {
-   footerText = buildFooterText('', character, boostInfo);
+  } else if (character.boostedBy) {
+    footerText = buildFooterText('', character, boostInfo);
+    if (footerText && !footerText.startsWith('⚡')) {
+      footerText = `⚡ ${footerText}`;
+    }
  }
  
- if (footerText) {
-   embed.setFooter({ text: footerText });
- }
+  if (footerText) {
+    embed.setFooter({ text: `⚡ ${footerText}` });
+  }
 
  return embed;
 };
@@ -1897,10 +1897,6 @@ function createMountEncounterEmbed(encounter) {
 // ------------------- Function: createBoostRequestEmbed -------------------
 // Creates an embed for boost requests
 const createBoostRequestEmbed = (requestData, existingRequestId = null, status = 'pending') => {
-  const { generateUniqueId } = require('../utils/uniqueIdUtils');
-  const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
-  const { getVillageColorByName, getVillageEmojiByName } = require('../modules/locationsModule');
-
   // Use existing ID if provided, otherwise generate a unique ID for the request
   const requestId = existingRequestId || generateUniqueId('B'); // 'B' for Boost
   
@@ -2082,9 +2078,6 @@ const updateBoostRequestEmbed = async (client, requestData, newStatus = 'pending
 // ------------------- Function: createBoostAppliedEmbed -------------------
 // Creates an embed for when a boost is successfully applied
 const createBoostAppliedEmbed = (boostData) => {
-  const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
-  const { getVillageColorByName, getVillageEmojiByName } = require('../modules/locationsModule');
-
   // Format the data with proper capitalization
   const boostedBy = capitalizeFirstLetter(boostData.boostedBy || 'Unknown');
   const boosterJob = capitalizeWords(boostData.boosterJob || 'Unknown');
