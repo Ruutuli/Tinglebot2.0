@@ -550,7 +550,60 @@ module.exports = {
           }
           const heartsRemaining = Math.max(character.currentHearts - outcome.hearts, 0);
           await updateCurrentHearts(character._id, heartsRemaining);
-          const outcomeMessage = generateOutcomeMessage(outcome);
+          let outcomeMessage = generateOutcomeMessage(outcome);
+
+          // ------------------- Apply Entertainer Bonus During Monster Encounter ------------------
+          // If boosted by an Entertainer, still grant the gathering bonus item even on encounter
+          try {
+            if (character.boostedBy) {
+              const { fetchCharacterByName } = require('../../database/db');
+              const boosterCharacter = await fetchCharacterByName(character.boostedBy);
+              const isEntertainerBoost = boosterCharacter &&
+                (boosterCharacter.job === 'Entertainer' || boosterCharacter.job?.toLowerCase() === 'entertainer');
+
+              if (isEntertainerBoost) {
+                const itemsForBonus = await fetchAllItems();
+                const jobNormalized = normalizeJobName(job);
+                const regionKeyForBonus = region.toLowerCase();
+
+                const availableForBonus = itemsForBonus.filter(item => {
+                  const isJobMatch = item.allJobsTags?.some(j => normalizeJobName(j) === jobNormalized) || false;
+                  const isRegionMatch = item[regionKeyForBonus];
+                  return isJobMatch && isRegionMatch;
+                });
+
+                const entertainerItems = await applyGatheringBoost(character.name, availableForBonus);
+                if (Array.isArray(entertainerItems) && entertainerItems.length > 0) {
+                  const bonusIndex = Math.floor(Math.random() * entertainerItems.length);
+                  const bonusItem = entertainerItems[bonusIndex];
+
+                  await addItemInventoryDatabase(
+                    character._id,
+                    bonusItem.itemName,
+                    1,
+                    interaction,
+                    'Gathering (Entertainer Bonus)'
+                  );
+
+                  // Append bonus info to outcome message for visibility
+                  outcomeMessage += `\n\n🎭 Entertainer's Gift: ${character.name} also found ${bonusItem.itemName}!`;
+
+                  // Clear used boost to match normal gathering behavior
+                  character.boostedBy = null;
+                  await character.save();
+                }
+              }
+            }
+          } catch (bonusError) {
+            // Non-fatal: log but do not interrupt the encounter flow
+            handleError(bonusError, 'gather.js', {
+              commandName: '/gather',
+              operation: 'applyEntertainerBonusDuringEncounter',
+              userId: interaction.user.id,
+              characterName: character.name
+            });
+          }
+
           if (outcome.canLoot && !outcome.hearts) {
             const items = await fetchItemsByMonster(encounteredMonster.name);
             const weightedItems = createWeightedItemList(items, adjustedRandomValue);
