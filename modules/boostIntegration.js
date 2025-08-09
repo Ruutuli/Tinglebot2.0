@@ -180,10 +180,20 @@ async function getCharacterBoostStatus(characterName) {
       return null; // Boost expired
     }
 
+    // Derive boost name if available in stored effect string: "<name> — <description>"
+    let boostName = null;
+    if (typeof activeBoost.boostEffect === 'string') {
+      const parts = activeBoost.boostEffect.split(' — ');
+      if (parts.length > 0) {
+        boostName = parts[0].trim();
+      }
+    }
+
     return {
       boosterName: activeBoost.boostingCharacter,
       boosterJob: activeBoost.boosterJob,
       category: activeBoost.category,
+      boostName,
       expiresAt: activeBoost.boostExpiresAt,
       timeRemaining: activeBoost.boostExpiresAt - currentTime,
       targetVillage: activeBoost.targetVillage // For Scholar boosts
