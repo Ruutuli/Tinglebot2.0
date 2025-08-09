@@ -277,6 +277,29 @@ module.exports = {
       session.winningScore = roll;
       gameEnded = true;
 
+      // Persist winner immediately to prevent further rolls overriding state
+      try {
+        const winnerPersist = await RuuGame.findOneAndUpdate(
+          {
+            _id: session._id,
+            status: { $ne: 'finished' },
+            winner: null
+          },
+          {
+            $set: {
+              status: 'finished',
+              winner: userId,
+              winningScore: roll,
+              players: session.players
+            }
+          },
+          { new: true, runValidators: true }
+        );
+        if (winnerPersist) session = winnerPersist;
+      } catch (persistError) {
+        console.error('[RuuGame] Failed to persist winner immediately:', persistError);
+      }
+
       try {
         console.log(`[RuuGame] Awarding prize to user ${userId}`);
         console.log(`[RuuGame] Before awardRuuGamePrize - Session status: ${session.status}, winner: ${session.winner}`);
@@ -284,6 +307,23 @@ module.exports = {
         prizeAwarded = prizeCharacter !== null;
         console.log(`[RuuGame] After awardRuuGamePrize - Session status: ${session.status}, winner: ${session.winner}`);
         console.log(`[RuuGame] Prize awarded: ${prizeAwarded}, Character: ${prizeCharacter?.name || 'None'}`);
+
+        // Persist prize metadata if any
+        try {
+          await RuuGame.findOneAndUpdate(
+            { _id: session._id },
+            {
+              $set: {
+                prizeClaimed: session.prizeClaimed,
+                prizeClaimedBy: session.prizeClaimedBy,
+                prizeClaimedAt: session.prizeClaimedAt
+              }
+            },
+            { new: true, runValidators: true }
+          );
+        } catch (prizePersistError) {
+          console.error('[RuuGame] Failed to persist prize claim data:', prizePersistError);
+        }
       } catch (error) {
         console.error('Error awarding prize:', error);
         // Don't fail the game if prize awarding fails
@@ -305,7 +345,7 @@ module.exports = {
       // Try to save with findOneAndUpdate as fallback
       try {
         const updateResult = await RuuGame.findOneAndUpdate(
-          { _id: session._id },
+          { _id: session._id, status: { $ne: 'finished' } },
           {
             $set: {
               players: session.players,
