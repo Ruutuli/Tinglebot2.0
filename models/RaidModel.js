@@ -154,7 +154,12 @@ const raidSchema = new mongoose.Schema({
     },
     endTime: Date,
     duration: Number,
-    villageDamage: Number
+    villageDamage: Number,
+    baseMonsterHearts: {
+      type: Number,
+      default: 0,
+      min: 0
+    }
   },
   
   // Thread information

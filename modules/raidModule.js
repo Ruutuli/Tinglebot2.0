@@ -191,7 +191,8 @@ async function startRaid(monster, village, interaction = null) {
       expiresAt: new Date(Date.now() + raidDuration),
       analytics: {
         monsterTier: monster.tier,
-        village: village
+        village: village,
+        baseMonsterHearts: monster.hearts
       }
     });
 
@@ -330,6 +331,30 @@ async function joinRaid(character, raidId) {
     // Add participant to raid using the model method
     await raid.addParticipant(participant);
 
+    // ----- Dynamic HP scaling based on party size -----
+    try {
+      // Ensure we have a persistent base hearts value (for pre-existing raids)
+      if (!raid.analytics) raid.analytics = {};
+      if (!raid.analytics.baseMonsterHearts || raid.analytics.baseMonsterHearts <= 0) {
+        raid.analytics.baseMonsterHearts = raid.monster.maxHearts || 0;
+      }
+      const baseHearts = raid.analytics.baseMonsterHearts || 0;
+      const partySize = (raid.participants || []).length;
+      // +15% base hearts per extra participant beyond the first
+      const scaleMultiplier = Math.max(1, 1 + 0.15 * Math.max(0, partySize - 1));
+      const oldMax = raid.monster.maxHearts;
+      const oldCurrent = raid.monster.currentHearts;
+      const damageDealtSoFar = Math.max(0, oldMax - oldCurrent);
+      const newMax = Math.ceil(baseHearts * scaleMultiplier);
+      const newCurrent = Math.max(1, newMax - damageDealtSoFar);
+      raid.monster.maxHearts = newMax;
+      raid.monster.currentHearts = newCurrent;
+      await raid.save();
+      console.log(`[raidModule.js]: 📈 Raid ${raidId} scaled HP → partySize=${partySize}, base=${baseHearts}, max=${newMax}, current=${newCurrent}`);
+    } catch (scaleError) {
+      console.warn(`[raidModule.js]: ⚠️ Failed to scale raid HP: ${scaleError.message}`);
+    }
+
     console.log(`[raidModule.js]: 👤 ${character.name} joined raid ${raidId}`);
     
     return {
@@ -379,8 +404,14 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
 
     // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
 
-    // Generate random roll and calculate final value using raid-specific calculation
-    const diceRoll = Math.floor(Math.random() * 100) + 1;
+    // Generate random roll and apply raid difficulty penalty before calculating final value
+    let diceRoll = Math.floor(Math.random() * 100) + 1;
+    // Party-size and tier-based penalty: -2 per extra participant, -1 per tier above 5 (capped total 25)
+    const partySize = (raid.participants || []).length;
+    const partyPenalty = Math.max(0, (partySize - 1) * 2);
+    const tierPenalty = Math.max(0, (raid.monster?.tier || 5) - 5);
+    const totalPenalty = Math.min(25, partyPenalty + tierPenalty);
+    diceRoll = Math.max(1, diceRoll - totalPenalty);
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateRaidFinalValue(character, diceRoll);
 
     // Process the raid battle turn
