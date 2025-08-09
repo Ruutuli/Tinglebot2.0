@@ -612,32 +612,37 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     console.log(`[raidModule.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
     
     // ------------------- Global Raid Cooldown Check -------------------
-    // Check if we're still in global cooldown period (4 hours between raids)
-    const { getGlobalRaidCooldown, setGlobalRaidCooldown } = require('../scripts/randomMonsterEncounters');
-    const currentTime = Date.now();
-    const lastRaidTime = await getGlobalRaidCooldown();
-    const timeSinceLastRaid = currentTime - lastRaidTime;
-    const RAID_COOLDOWN = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
-    
-    if (timeSinceLastRaid < RAID_COOLDOWN) {
-      const remainingTime = RAID_COOLDOWN - timeSinceLastRaid;
-      const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
-      const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+    // For Blood Moon raids, skip cooldown entirely (do not check or set)
+    if (!isBloodMoon) {
+      // Check if we're still in global cooldown period (4 hours between raids)
+      const { getGlobalRaidCooldown, setGlobalRaidCooldown } = require('../scripts/randomMonsterEncounters');
+      const currentTime = Date.now();
+      const lastRaidTime = await getGlobalRaidCooldown();
+      const timeSinceLastRaid = currentTime - lastRaidTime;
+      const RAID_COOLDOWN = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
       
-      console.log(`[raidModule.js]: ⏰ Global raid cooldown active - ${remainingHours}h ${remainingMinutes}m remaining`);
-      console.log(`[raidModule.js]: ⏰ Last raid time: ${new Date(lastRaidTime).toISOString()}`);
-      console.log(`[raidModule.js]: ⏰ Current time: ${new Date(currentTime).toISOString()}`);
-      console.log(`[raidModule.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
+      if (timeSinceLastRaid < RAID_COOLDOWN) {
+        const remainingTime = RAID_COOLDOWN - timeSinceLastRaid;
+        const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
+        const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+        
+        console.log(`[raidModule.js]: ⏰ Global raid cooldown active - ${remainingHours}h ${remainingMinutes}m remaining`);
+        console.log(`[raidModule.js]: ⏰ Last raid time: ${new Date(lastRaidTime).toISOString()}`);
+        console.log(`[raidModule.js]: ⏰ Current time: ${new Date(currentTime).toISOString()}`);
+        console.log(`[raidModule.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
+        
+        return {
+          success: false,
+          error: `Raid cooldown active. Please wait ${remainingHours}h ${remainingMinutes}m before triggering another raid.`
+        };
+      }
       
-      return {
-        success: false,
-        error: `Raid cooldown active. Please wait ${remainingHours}h ${remainingMinutes}m before triggering another raid.`
-      };
+      // Update global raid cooldown (applies to all villages)
+      await setGlobalRaidCooldown(currentTime);
+      console.log(`[raidModule.js]: ⏰ Global raid cooldown started - next raid available in 4 hours`);
+    } else {
+      console.log('[raidModule.js]: 🌕 Blood Moon raid detected — bypassing global raid cooldown.');
     }
-    
-    // Update global raid cooldown (applies to all villages)
-    await setGlobalRaidCooldown(currentTime);
-    console.log(`[raidModule.js]: ⏰ Global raid cooldown started - next raid available in 4 hours`);
     
     // Start the raid
     const { raidId, raidData } = await startRaid(monster, villageId, interaction);
