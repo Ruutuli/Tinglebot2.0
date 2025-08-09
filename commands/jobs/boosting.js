@@ -2,21 +2,25 @@
 // ------------------- Imports and Dependencies -------------------
 // ============================================================================
 
-const { v4: uuidv4 } = require("uuid");
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { v4: uuidv4 } = require('uuid');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const {
  fetchCharacterByNameAndUserId,
  fetchCharacterByName,
  fetchModCharacterByNameAndUserId,
  fetchModCharacterByName,
-} = require("../../database/db");
-const { getBoostEffect } = require("../../modules/boostingModule");
-const { getJobPerk } = require("../../modules/jobsModule");
-const { useStamina } = require("../../modules/characterStatsModule");
+} = require('../../database/db');
+const { getBoostEffect } = require('../../modules/boostingModule');
+const { getJobPerk } = require('../../modules/jobsModule');
+const { useStamina } = require('../../modules/characterStatsModule');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
-const { createBoostRequestEmbed, createBoostAppliedEmbed, updateBoostRequestEmbed } = require('../../embeds/embeds');
-const TempData = require("../../models/TempDataModel");
+const TempData = require('../../models/TempDataModel');
 const { retrieveBoostingRequestFromStorageByCharacter } = require('../../utils/storage');
+const {
+  createBoostRequestEmbed,
+  updateBoostRequestEmbed,
+  createBoostAppliedEmbed,
+} = require('../../embeds/embeds');
 
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
@@ -622,8 +626,8 @@ async function handleBoostRequest(interaction) {
  await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
 
  // Create embed data and embed
- const embedData = createBoostRequestEmbedData(targetCharacter, boosterCharacter, category, village, boostEffectValidation.boost);
- const embed = createBoostRequestEmbed(embedData, requestData.boostRequestId);
+  const embedData = createBoostRequestEmbedData(targetCharacter, boosterCharacter, category, village, boostEffectValidation.boost);
+  const embed = createBoostRequestEmbed(embedData, requestData.boostRequestId);
 
  // Get the owner of the booster character and send reply
  const boosterOwnerId = boosterCharacter.userId;
@@ -752,11 +756,11 @@ async function handleBoostAccept(interaction) {
  await saveBoostingRequestToTempData(requestId, requestData);
 
  // Update the original boost request embed to show fulfilled status
- await updateBoostRequestEmbed(interaction.client, requestData, 'fulfilled');
+  await updateBoostRequestEmbed(interaction.client, requestData, 'fulfilled');
 
  // Create and send boost applied embed
- const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
- const embed = createBoostAppliedEmbed(embedData);
+  const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
+  const embed = createBoostAppliedEmbed(embedData);
 
  await interaction.reply({
   content: `Boost has been applied and will remain active for 24 hours!`,

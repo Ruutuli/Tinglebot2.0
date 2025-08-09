@@ -1123,7 +1123,7 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
  }
  
   if (footerText) {
-    embed.setFooter({ text: `⚡ ${footerText}` });
+    embed.setFooter({ text: footerText });
   }
 
  return embed;
@@ -1268,7 +1268,9 @@ const createMonsterEncounterEmbed = async (
  isBloodMoon = false,
  actualRoll = null,
  currentMonster = null,
- totalMonsters = null
+ totalMonsters = null,
+ entertainerBonusItem = null,
+ boostCategoryOverride = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1281,8 +1283,9 @@ const createMonsterEncounterEmbed = async (
   ? "\n> 💥 **KO! You have been defeated and can't continue!**"
   : "";
 
- // Get boost information
- const boostInfo = await getBoostInfo(character, 'Looting');
+ // Get boost information (allow override when encounter happens during other activities like Gathering)
+ const boostCategory = boostCategoryOverride || 'Looting';
+ const boostInfo = await getBoostInfo(character, boostCategory);
 
  // Add progress indicator if provided
  const progressField = currentMonster && totalMonsters ? {
@@ -1292,8 +1295,15 @@ const createMonsterEncounterEmbed = async (
  } : null;
 
  // Add boost flavor text to outcome if available
- let outcomeWithBoost = outcomeMessage || "No outcome specified.";
+ let outcomeWithBoost = outcomeMessage || 'No outcome specified.';
  outcomeWithBoost = addBoostFlavorText(outcomeWithBoost, boostInfo);
+
+ // Append Entertainer's Gift (for Gathering boost) if provided
+ if (entertainerBonusItem && entertainerBonusItem.itemName) {
+  const bonusArticle = getArticleForItem(entertainerBonusItem.itemName);
+  const bonusEmoji = entertainerBonusItem.emoji || '🎁';
+  outcomeWithBoost += `\n\n🎭 **Entertainer's Gift:** ${character.name} also found ${bonusArticle} ${bonusEmoji}${entertainerBonusItem.itemName}!`;
+ }
 
  const embed = new EmbedBuilder()
   .setColor(isBloodMoon ? "#FF4500" : settings.color || "#000000")

@@ -539,12 +539,9 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     outcomeMessage = generateFinalOutcomeMessage(damageValue, outcome.defenseSuccess, outcome.attackSuccess, adjustedRandomValue, damageValue);
   }
   
-  // Update hearts if damaged
-  let newHeartsRemaining = heartsRemaining;
-  if (outcome.hearts) {
-    newHeartsRemaining = Math.max(heartsRemaining - outcome.hearts, 0);
-    await updateCurrentHearts(character._id, newHeartsRemaining);
-  }
+  // Hearts are already applied in getEncounterOutcome; fetch refreshed value
+  const refreshedCharacter = await Character.findById(character._id);
+  const newHeartsRemaining = Math.max(0, refreshedCharacter?.currentHearts ?? heartsRemaining);
   
   // Process loot if available
   let lootedItem = null;

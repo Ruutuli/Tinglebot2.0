@@ -4,7 +4,6 @@
 // New file boostIntegration.js will be for applying effects to commands
 
 const { applyBoostEffect } = require('./boostingModule');
-const { isBoostActive, getActiveBoostEffect } = require('../commands/jobs/boosting');
 
 // ------------------- applyBoostToAction -------------------
 /**
@@ -18,6 +17,7 @@ const { isBoostActive, getActiveBoostEffect } = require('../commands/jobs/boosti
 async function applyBoostToAction(characterName, category, data, additionalData = null) {
   try {
     // Check if character has an active boost for this category
+    const { isBoostActive, getActiveBoostEffect } = require('../commands/jobs/boosting');
     const hasBoost = await isBoostActive(characterName, category);
     if (!hasBoost) {
       return data; // No boost active, return original data
