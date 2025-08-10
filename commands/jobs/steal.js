@@ -10,7 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchCharacterByName, getCharacterInventoryCollection, fetchItemRarityByName } = require('../../database/db');
 const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
-const { getNPCItems, NPCs } = require('../../modules/NPCsModule');
+const { getNPCItems, NPCs, getStealFlavorText } = require('../../modules/NPCsModule');
 const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/validation');
 const ItemModel = require('../../models/ItemModel');
@@ -273,9 +273,11 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
         const npcName = typeof targetCharacter === 'string' ? targetCharacter : targetCharacter.name;
         const npcData = NPCs[npcName];
         if (npcData) {
-            if (npcData.flavorText) {
-                npcFlavorText = `*${npcData.flavorText}*`;
-            } else {
+                    if (npcData.flavorText) {
+            // Use the new random flavor text function for variety
+            const randomFlavorText = getStealFlavorText(npcName);
+            npcFlavorText = `*${randomFlavorText}*`;
+        } else {
                 npcFlavorText = `*${npcName} ${isSuccess ? 'didn\'t notice you taking' : 'caught you trying to take'} something...*`;
             }
             // Use the actual NPC icon if available
@@ -1456,7 +1458,25 @@ module.exports = {
                     return;
                 }
 
-                const npcInventory = getNPCItems(mappedNPCName);
+                // ------------------- Special Peddler Logic -------------------
+                // Peddler can have ANY item from the database stolen from him
+                let npcInventory;
+                if (mappedNPCName === 'Peddler') {
+                    // For Peddler, fetch any item from the ItemModel.js database
+                    try {
+                        const Item = require('../../models/ItemModel');
+                        const allItems = await Item.find({}, 'itemName');
+                        npcInventory = allItems.map(item => item.itemName);
+                        console.log(`[steal.js]: 🎭 Peddler special logic - fetched ${npcInventory.length} items from database`);
+                    } catch (error) {
+                        console.error('[steal.js]: Error fetching items for Peddler:', error);
+                        await interaction.editReply({ content: '❌ **Error fetching items for Peddler. Please try again.**' });
+                        return;
+                    }
+                } else {
+                    // For other NPCs, use normal NPC items
+                    npcInventory = getNPCItems(mappedNPCName);
+                }
                 
                 // Filter out protected items (spirit orbs and vouchers) from NPC inventory
                 const protectedItems = ['spirit orb', 'voucher'];

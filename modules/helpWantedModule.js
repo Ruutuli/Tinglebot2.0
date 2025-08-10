@@ -10,7 +10,7 @@ const VillageShopItem = require('../models/VillageShopsModel');
 const { getAllVillages, locations } = require('./locationsModule');
 const moment = require('moment');
 const { EmbedBuilder } = require('discord.js');
-const { NPCs } = require('./NPCsModule');
+const { NPCs, getNPCQuestFlavor } = require('./NPCsModule');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ============================================================================
@@ -136,8 +136,7 @@ function shuffleArray(array) {
   return shuffled;
 }
 
-// Import getNPCQuestFlavor from NPCsModule
-const { getNPCQuestFlavor } = require('./NPCsModule');
+
 
 
 
@@ -711,7 +710,6 @@ async function formatQuestsAsEmbedsByVillage() {
       } else {
         // Add NPC icon as thumbnail for available quests
         try {
-          const { NPCs } = require('./NPCsModule');
           const npcData = NPCs[npcName];
           if (npcData && npcData.icon) {
             embed.setThumbnail(npcData.icon);
@@ -803,7 +801,6 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
       } else {
         // Add NPC icon as thumbnail for available quests
         try {
-          const { NPCs } = require('./NPCsModule');
           const npcData = NPCs[npcName];
           if (npcData && npcData.icon) {
             embed.setThumbnail(npcData.icon);
@@ -970,7 +967,6 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     } else if (!isExpired) {
       // Add NPC icon as thumbnail for available quests
       try {
-        const { NPCs } = require('./NPCsModule');
         const npcData = NPCs[npcName];
         if (npcData && npcData.icon) {
           updatedEmbed.setThumbnail(npcData.icon);
