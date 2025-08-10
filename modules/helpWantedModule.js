@@ -226,24 +226,24 @@ const NPC_QUEST_FLAVOR = {
   },
   'Lukan': {
     item: [
-      "Lukan the Gerudo Orchard Keeper's trees are suffering from a mysterious blight. He needs **{amount}x {item}** to treat the disease.",
+      "Lukan the Gerudo Orchard Keeper's trees are suffering from a mysterious blight. She needs **{amount}x {item}** to treat the disease.",
       "The orchard's irrigation system is failing. Lukan urgently needs **{amount}x {item}** to repair the water channels.",
-      "Lukan's fruit harvest is ready but he's short on storage containers. He needs **{amount}x {item}** to preserve the bounty."
+      "Lukan's fruit harvest is ready but she's short on storage containers. She needs **{amount}x {item}** to preserve the bounty."
     ],
     monster: [
-      "Lukan's orchard is being raided by **{amount}x {monster} (tier: {tier})** who are eating all the fruit. He needs them driven away.",
+      "Lukan's orchard is being raided by **{amount}x {monster} (tier: {tier})** who are eating all the fruit. She needs them driven away.",
       "The Gerudo orchard keeper spotted **{amount}x {monster} (tier: {tier})** nesting in his trees, damaging the branches. They must be removed.",
-      "Lukan's fruit trees are under attack by **{amount}x {monster} (tier: {tier})**. He can't harvest safely until they're eliminated."
+      "Lukan's fruit trees are under attack by **{amount}x {monster} (tier: {tier})**. She can't harvest safely until they're eliminated."
     ],
     escort: [
-      "Lukan has a wagon full of fresh fruit bound for **{location}** but bandits have been targeting merchant caravans. He needs protection.",
+      "Lukan has a wagon full of fresh fruit bound for **{location}** but bandits have been targeting merchant caravans. She needs protection.",
       "Lukan is heading to **{location}** to learn new cultivation techniques, but the journey is perilous.",
-      "Lukan's been invited to **{location}** to share his fruit-growing secrets, but he's nervous about traveling alone."
+      "Lukan's been invited to **{location}** to share her fruit-growing secrets, but she's nervous about traveling alone."
     ],
     crafting: [
-      "Lukan's orchard tools are worn out from years of use. He needs **{amount}x {item}** to maintain his grove properly.",
+      "Lukan's orchard tools are worn out from years of use. She needs **{amount}x {item}** to maintain her grove properly.",
       "The Gerudo orchard keeper wants to build a new greenhouse but requires **{amount}x {item}** for the construction.",
-      "Lukan's been developing new fruit varieties but needs **{amount}x {item}** to complete his research."
+      "Lukan's been developing new fruit varieties but needs **{amount}x {item}** to complete her research."
     ]
   },
   'Myti': {

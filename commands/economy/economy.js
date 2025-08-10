@@ -1234,27 +1234,7 @@ async function handleShopBuy(interaction) {
       await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
     }
 
-    // Log to inventory
-    if (character.inventory) {
-      const spreadsheetId = extractSpreadsheetId(character.inventory);
-      const auth = await authorizeSheets();
-      const inventoryRow = [
-        character.name,
-        itemName,
-        quantity.toString(),
-        itemDetails.category.join(", "),
-        itemDetails.type.join(", "),
-        itemDetails.subtype?.join(", ") || "",
-        "Purchase from shop",
-        character.job,
-        "",
-        character.currentVillage,
-        interactionUrl,
-        formattedDateTime,
-        uuidv4(),
-      ];
-      await appendSheetData(auth, spreadsheetId, "loggedInventory!A2:M", [inventoryRow]);
-    }
+    // Note: Google Sheets logging is handled automatically by addItemInventoryDatabase()
 
     // Update token balance
     await updateTokenBalance(interaction.user.id, -totalPrice);
@@ -1481,9 +1461,13 @@ if (quantity <= 0) {
    return interaction.editReply("❌ This item cannot be sold to the shop.");
   }
 
-  await inventoryCollection.updateOne(
-   { itemName },
-   { $inc: { quantity: -quantity } }
+  // Remove item from inventory using the proper function that handles Google Sheets logging
+  await removeItemInventoryDatabase(
+    character._id,
+    itemName,
+    quantity,
+    interaction,
+    'Sold to shop'
   );
   
   // Update shop stock with correct item data
@@ -1510,10 +1494,9 @@ if (quantity <= 0) {
 
   console.log(`[shops]: Token update for ${interaction.user.tag}: ${user.tokens} + ${totalPrice} = ${user.tokens + totalPrice}`);
 
+  // Log to token tracker
   let tokenTrackerLogged = false;
   if (user.tokenTracker) {
-   const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-   const auth = await authorizeSheets();
    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
    const tokenRow = [
     `${characterName} - Sold ${itemName} x${quantity}`,
@@ -1526,33 +1509,8 @@ if (quantity <= 0) {
    tokenTrackerLogged = true;
   }
 
-  let inventoryLogged = false;
-  if (character.inventory) {
-   const spreadsheetId = extractSpreadsheetId(character.inventory);
-   const auth = await authorizeSheets();
-   const formattedDateTime = new Date().toISOString();
-   const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-   const inventoryRow = [
-    character.name,
-    itemName,
-    `-${quantity}`,
-    itemDetails.category,
-    itemDetails.type,
-    "",
-    "Sold to shop",
-    character.job,
-    "",
-    character.currentVillage,
-    interactionUrl,
-    formattedDateTime,
-    uuidv4(),
-   ];
-   
-   await appendSheetData(auth, spreadsheetId, "loggedInventory!A2:M", [
-    inventoryRow,
-   ]);
-   inventoryLogged = true;
-  }
+  // Note: Google Sheets logging for inventory is handled automatically by removeItemInventoryDatabase()
+  const inventoryLogged = true;
 
   // Log sheet updates
   const updates = [];

@@ -28,15 +28,23 @@ const ItemSchema = new Schema(
 
     // --- Classification ---
     itemRarity: { type: Number, default: 1 },
-    category: { type: [String], default: ['Misc'] },   // e.g., "Armor", "Food"
-    categoryGear: { type: String, default: 'None' },   // e.g., "Armor", "Weapon"
-    type: { type: [String], default: ['Unknown'] },    // e.g., ["Material", "Food"]
-    subtype: { type: [String], default: ['None'] },    // e.g., ["Head", "Bow"]
+    category: { type: [String], default: ['Misc'] },   // e.g., 'Armor', 'Food'
+    categoryGear: { type: String, default: 'None' },   // e.g., 'Armor', 'Weapon'
+    type: { type: [String], default: ['Unknown'] },    // e.g., ['Material', 'Food']
+    subtype: { type: [String], default: ['None'] },    // e.g., ['Head', 'Bow']
     recipeTag: { type: [String], default: ['#Not Craftable'] },
 
     // --- Economics ---
     buyPrice: { type: Number, default: 0 },
     sellPrice: { type: Number, default: 0 },
+
+    // --- Effects / Stats ---
+    modifierHearts: { type: Number, default: 0 },
+    staminaRecovered: { type: Number, default: 0 },
+
+    // --- Stack Rules ---
+    stackable: { type: Boolean, default: false },
+    maxStackSize: { type: Number, default: 10 },
 
     // --- Crafting ---
     craftingMaterial: { type: [CraftingMaterialSchema], default: [] },
@@ -45,7 +53,7 @@ const ItemSchema = new Schema(
     craftingJobs: { type: [String], default: [] },
     craftingTags: { type: [String], default: [] },
 
-    // --- Activities / Obtain Methods ---
+    // --- Activities & Obtain ---
     gathering: { type: Boolean, default: false },
     looting: { type: Boolean, default: false },
     vending: { type: Boolean, default: false },
@@ -53,10 +61,10 @@ const ItemSchema = new Schema(
     exploring: { type: Boolean, default: false },
     obtain: { type: [String], default: [] },
     obtainTags: { type: [String], default: [] },
-
-    // --- Effects / Stats ---
-    modifierHearts: { type: Number, default: 0 },
-    staminaRecovered: { type: Number, default: 0 },
+    gatheringJobs: { type: [String], default: [] },
+    gatheringTags: { type: [String], default: [] },
+    lootingJobs: { type: [String], default: [] },
+    lootingTags: { type: [String], default: [] },
 
     // --- Weather (special conditions) ---
     specialWeather: {
@@ -84,28 +92,52 @@ const ItemSchema = new Schema(
     // --- Location Metadata ---
     locations: { type: [String], default: [] },
     locationsTags: { type: [String], default: [] },
+    centralHyrule: { type: Boolean, default: false },
+    eldin: { type: Boolean, default: false },
+    faron: { type: Boolean, default: false },
+    gerudo: { type: Boolean, default: false },
+    hebra: { type: Boolean, default: false },
+    lanayru: { type: Boolean, default: false },
+    pathOfScarletLeaves: { type: Boolean, default: false },
+    leafDewWay: { type: Boolean, default: false },
+    rudaniaImg: { type: String, default: '' },
+    inarikoImg: { type: String, default: '' },
+    vhintlImg: { type: String, default: '' },
 
-    // --- Stack Rules ---
-    stackable: { type: Boolean, default: false },
-    maxStackSize: { type: Number, default: 10 },
-
-    // --- Job Flags (simple booleans for quick checks) ---
+    // --- Job Flags ---
+    adventurer: { type: Boolean, default: false },
     artist: { type: Boolean, default: false },
+    beekeeper: { type: Boolean, default: false },
     blacksmith: { type: Boolean, default: false },
     cook: { type: Boolean, default: false },
     craftsman: { type: Boolean, default: false },
+    farmer: { type: Boolean, default: false },
+    fisherman: { type: Boolean, default: false },
+    forager: { type: Boolean, default: false },
+    gravekeeper: { type: Boolean, default: false },
+    guard: { type: Boolean, default: false },
     maskMaker: { type: Boolean, default: false },
+    rancher: { type: Boolean, default: false },
+    herbalist: { type: Boolean, default: false },
+    hunter: { type: Boolean, default: false },
+    hunterLooting: { type: Boolean, default: false },
+    mercenary: { type: Boolean, default: false },
+    miner: { type: Boolean, default: false },
     researcher: { type: Boolean, default: false },
+    scout: { type: Boolean, default: false },
     weaver: { type: Boolean, default: false },
     witch: { type: Boolean, default: false },
 
-    // --- Boost/Item Tags for Jobs ---
+    // --- Boost/Item Tags ---
     allJobs: { type: [String], default: ['None'] },
     allJobsTags: { type: [String], default: ['None'] },
-    entertainerItems: { type: Boolean, default: false }, // Entertainer boost items
-    divineItems: { type: Boolean, default: false },      // Priest boost items
+    entertainerItems: { type: Boolean, default: false },
+    divineItems: { type: Boolean, default: false },
 
-    // --- Monster Flags (flat booleans; left as-is for compatibility) ---
+    // --- Monsters ---
+    // Associated monsters list
+    monsterList: { type: [String], default: [] },
+    // Monster flags
     blackBokoblin: { type: Boolean, default: false },
     blueBokoblin: { type: Boolean, default: false },
     cursedBokoblin: { type: Boolean, default: false },
@@ -197,7 +229,17 @@ const ItemSchema = new Schema(
     gloomHands: { type: Boolean, default: false },
     bossBokoblin: { type: Boolean, default: false },
     mothGibdo: { type: Boolean, default: false },
-    littleFrox: { type: Boolean, default: false }
+    littleFrox: { type: Boolean, default: false },
+
+    // Normal-tier variants for monsters (compatibility)
+    normalBokoblin: { type: Boolean, default: false },
+    normalGibdo: { type: Boolean, default: false },
+    normalHinox: { type: Boolean, default: false },
+    normalHorriblin: { type: Boolean, default: false },
+    normalKeese: { type: Boolean, default: false },
+    normalLizalfos: { type: Boolean, default: false },
+    normalLynel: { type: Boolean, default: false },
+    normalMoblin: { type: Boolean, default: false }
   },
   { collection: 'items' }
 );
