@@ -46,7 +46,7 @@ const {
 } = require("../modules/modCharacters");
 const { normalPets, specialPets } = require("../modules/petModule");
 const { getAllRaces } = require("../modules/raceModule");
-const { NPCs } = require("../modules/stealingNPCSModule");
+const { NPCs } = require("../modules/NPCsModule");
 
 // ------------------- Utility Functions -------------------
 const { handleError } = require("../utils/globalErrorHandler");
