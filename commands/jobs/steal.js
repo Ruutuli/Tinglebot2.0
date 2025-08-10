@@ -82,7 +82,9 @@ const NPC_NAME_MAPPING = {
     'Jasz': 'Jasz',
     'Lecia': 'Lecia',
     'Tye': 'Tye',
-    'Lil Tim': 'Lil Tim'
+    'Lil Tim': 'Lil Tim',
+    'Zone': 'Zone',
+    'Peddler': 'Peddler'
 };
 
 // ============================================================================
