@@ -9,7 +9,7 @@ const Monster = require('../models/MonsterModel');
 const { getAllVillages, locations } = require('./locationsModule');
 const moment = require('moment');
 const { EmbedBuilder } = require('discord.js');
-const { NPCs } = require('./stealingNPCSModule');
+const { NPCs } = require('./NPCsModule');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ============================================================================
@@ -106,7 +106,7 @@ function getRandomElement(arr) {
 }
 
 // ------------------- Function: getRandomNPCName -------------------
-// Returns a random NPC name from the stealingNPCSModule
+// Returns a random NPC name from the NPCsModule
 function getRandomNPCName() {
   const npcNames = Object.keys(NPCs);
   if (npcNames.length === 0) {
@@ -137,43 +137,7 @@ function shuffleArray(array) {
 
 // ------------------- Function: getNPCQuestFlavor -------------------
 // Returns a random quest flavor text for the given NPC and quest type
-function getNPCQuestFlavor(npcName, questType, requirements) {
-  // ------------------- Special Walton Acorn Quest -------------------
-  if (npcName === 'Walton' && questType === 'item' && requirements.item === 'Acorn' && requirements.amount === 50) {
-    const specialAcornTexts = [
-      "Walton the Korok is preparing for a grand forest festival! He needs **50x Acorn** to create beautiful decorations for the celebration.",
-      "Walton discovered an ancient Korok tradition that requires **50x Acorn** for a sacred forest ritual. He needs help gathering these special acorns.",
-      "Walton's forest friends are planning a massive acorn feast! He needs **50x Acorn** to make sure everyone has enough to eat.",
-      "Walton found an old Korok recipe that calls for **50x Acorn** to make a legendary forest elixir. He's excited to try it!",
-      "Walton's tree friends are feeling lonely and want **50x Acorn** to plant new saplings. He needs help to grow the forest family.",
-      "Walton wishes to harass the peddler. Please give him **50x Acorn** to help him!"
-    ];
-    return getRandomElement(specialAcornTexts);
-  }
 
-  const npcFlavor = NPC_QUEST_FLAVOR[npcName];
-  if (!npcFlavor || !npcFlavor[questType]) {
-    // Fallback to generic flavor text if NPC or quest type not found
-    const fallbackTexts = {
-      item: `**${npcName} needs supplies:** Gather **${requirements.amount}x ${requirements.item}** for the village`,
-      monster: `**${npcName} seeks a hunter:** Defeat **${requirements.amount}x ${requirements.monster} (tier: ${requirements.tier})** threatening the area`,
-      escort: `**${npcName} needs protection:** Safely escort them to **${requirements.location}**`,
-      crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount}x ${requirements.item}**`
-    };
-    return fallbackTexts[questType] || `**${npcName} needs help:** Complete this quest for the village`;
-  }
-
-  const flavorOptions = npcFlavor[questType];
-  const selectedFlavor = getRandomElement(flavorOptions);
-  
-  // Replace placeholders with actual quest requirements
-  return selectedFlavor
-    .replace('{amount}', requirements.amount)
-    .replace('{item}', requirements.item)
-    .replace('{monster}', requirements.monster)
-    .replace('{tier}', requirements.tier)
-    .replace('{location}', requirements.location);
-}
 
 // ============================================================================
 // ------------------- NPC Quest Flavor Text Database -------------------
@@ -973,7 +937,7 @@ async function formatQuestsAsEmbedsByVillage() {
       } else {
         // Add NPC icon as thumbnail for available quests
         try {
-          const { NPCs } = require('./stealingNPCSModule');
+          const { NPCs } = require('./NPCsModule');
           const npcData = NPCs[npcName];
           if (npcData && npcData.icon) {
             embed.setThumbnail(npcData.icon);
@@ -1065,7 +1029,7 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
       } else {
         // Add NPC icon as thumbnail for available quests
         try {
-          const { NPCs } = require('./stealingNPCSModule');
+          const { NPCs } = require('./NPCsModule');
           const npcData = NPCs[npcName];
           if (npcData && npcData.icon) {
             embed.setThumbnail(npcData.icon);
@@ -1232,7 +1196,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     } else if (!isExpired) {
       // Add NPC icon as thumbnail for available quests
       try {
-        const { NPCs } = require('./stealingNPCSModule');
+        const { NPCs } = require('./NPCsModule');
         const npcData = NPCs[npcName];
         if (npcData && npcData.icon) {
           updatedEmbed.setThumbnail(npcData.icon);
