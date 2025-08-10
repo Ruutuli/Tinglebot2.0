@@ -60,7 +60,7 @@ const NPCs = {
     'Lil Tim': {
       items: ['Bird Egg', 'Cucco Feather'], // Specific items
       flavorText: "Lil Tim the Cucco clucks loudly, but you manage to grab some eggs and feathers before being chased away!",
-      icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Lil%20Tim.png"
+      icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Tim.png"
     }
   };
   
