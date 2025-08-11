@@ -633,6 +633,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   // Deduct stamina and start hunt
   const newStamina = Math.max(0, currentStamina - 1);
   character.currentStamina = newStamina;
+  character.lastStaminaUsage = new Date();
   await character.save();
   
   const startEmbed = new EmbedBuilder()
