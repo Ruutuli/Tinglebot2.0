@@ -596,13 +596,13 @@ async function getCurrentQuestSchedule() {
 // Gets quest turn-in instructions based on quest type
 function getQuestTurnInInstructions(type) {
   const instructions = {
-    item: '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1397274578530865313> when ready.',
-    monster: '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1397274578530865313> to complete this quest. **Costs 1 stamina per attempt.**',
-    escort: '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using </travel:1379850586987430009>, then use </helpwanted complete:1397274578530865313>.',
-    crafting: '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1397274578530865313>.'
+    item: '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1402779337270497370> when ready.',
+    monster: '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1402779337270497370> to complete this quest. **Costs 1 stamina per attempt.**',
+    escort: '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using </travel:1379850586987430009>, then use </helpwanted complete:1402779337270497370>.',
+    crafting: '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1402779337270497370>.'
   };
   
-  return instructions[type] || '• Use </helpwanted complete:1397274578530865313> to turn in your quest.';
+  return instructions[type] || '• Use </helpwanted complete:1402779337270497370> to turn in your quest.';
 }
 
 // ------------------- Function: formatQuestsAsEmbed -------------------

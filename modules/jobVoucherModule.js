@@ -76,7 +76,7 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             fields: [
                 { name: 'How to Use', value: 'Format your command like this:' },
                 { name: 'Example', value: '```/item charactername:YourCharacter itemname:Job Voucher jobname:Blacksmith```\nReplace `YourCharacter` with your character name and `Blacksmith` with the job you want to use.' },
-                { name: 'Available Jobs', value: 'General: Adventurer, Artist, Bandit, Cook, Courier, Craftsman, Farmer, Forager, Guard, Graveskeeper, Healer, Herbalist, Hunter, Merchant, Mercenary, Priest, Scout, Shopkeeper, Stablehand, Villager, Witch, Entertainer\n\nInariko: Fisherman, Researcher, Scholar, Teacher\nRudania: Rancher, Blacksmith, Miner\nVhintl: Beekeeper, Fortune Teller, Mask Maker, Weaver' }
+                { name: 'Available Jobs', value: '**General Jobs:**\nAdventurer, Artist, Bandit, Cook, Courier, Craftsman, Farmer, Forager, Guard, Graveskeeper, Healer, Herbalist, Hunter, Merchant, Mercenary, Priest, Scout, Shopkeeper, Stablehand, Villager, Witch, Entertainer\n\n**Inariko Jobs:**\nFisherman, Researcher, Scholar, Teacher\n\n**Rudania Jobs:**\nRancher, Blacksmith, Miner\n\n**Vhintl Jobs:**\nBeekeeper, Fortune Teller, Mask Maker, Weaver' }
             ],
             color: '#F1C40F'
         }
