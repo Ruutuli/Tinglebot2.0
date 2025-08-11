@@ -27,7 +27,7 @@ const { getVillageEmojiByName } = require('../../modules/locationsModule');
 const { createDebuffEmbed } = require('../../embeds/embeds');
 const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
-const { applyElixirBuff, getElixirInfo, removeExpiredBuffs } = require('../../modules/elixirModule');
+const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = require('../../modules/elixirModule');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
@@ -828,6 +828,12 @@ module.exports = {
 
         // Check if character already has an active buff
         if (character.buff?.active) {
+          // Get elixir info for display
+          const currentElixirInfo = getElixirInfo(character.buff.type);
+          const elixirName = Object.keys(ELIXIR_EFFECTS).find(key => 
+            ELIXIR_EFFECTS[key].type === character.buff.type
+          ) || character.buff.type;
+          
           return void await interaction.editReply({
             embeds: [{
               color: 0x8B4513,
@@ -835,14 +841,14 @@ module.exports = {
               description: `${character.name} already has an active buff and cannot use another elixir at this time.`,
               fields: [
                 { 
-                  name: '🧪 Current Active Buff', 
-                  value: `\`${character.buff.type}\` (Level ${character.buff.level})`, 
+                  name: '🧪 Elixir Used', 
+                  value: `**${elixirName}**`, 
                   inline: true 
                 },
                 { 
-                  name: '⏰ Remaining Time', 
-                  value: `${Math.ceil((new Date(character.buff.endDate) - new Date()) / (1000 * 60))} minutes`, 
-                  inline: true 
+                  name: '✨ Effect', 
+                  value: currentElixirInfo ? currentElixirInfo.description : 'Unknown effect', 
+                  inline: false 
                 }
               ],
               image: {
@@ -871,7 +877,18 @@ module.exports = {
             await updateCurrentStamina(character._id, character.currentStamina);
           }
           
-          applyElixirBuff(character, item.itemName);
+          // Special handling for Hearty Elixir - it expires immediately since it's just for healing
+          if (item.itemName === 'Hearty Elixir') {
+            // Don't set a buff, just apply the healing
+            character.buff = {
+              active: false,
+              type: null,
+              effects: {}
+            };
+          } else {
+            // Apply normal elixir buff for other elixirs
+            applyElixirBuff(character, item.itemName);
+          }
           
           // Update character in database
           const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
@@ -932,43 +949,51 @@ module.exports = {
         }
 
         // ------------------- Build and Send Elixir Embed -------------------
-        const buffEffects = character.buff.effects;
-        const effectFields = [];
+        let effectFields = [];
         
-        // Add effect fields based on what the elixir provides
-        if (buffEffects.blightResistance > 0) {
-          effectFields.push({ name: '🧿 Blight Resistance', value: `+${buffEffects.blightResistance}`, inline: true });
-        }
-        if (buffEffects.electricResistance > 0) {
-          effectFields.push({ name: '⚡ Electric Resistance', value: `+${buffEffects.electricResistance}`, inline: true });
-        }
-        if (buffEffects.staminaBoost > 0) {
-          effectFields.push({ name: '🟩 Stamina Boost', value: `+${buffEffects.staminaBoost}`, inline: true });
-        }
-        if (buffEffects.staminaRecovery > 0) {
-          effectFields.push({ name: '💚 Stamina Recovery', value: `+${buffEffects.staminaRecovery}`, inline: true });
-        }
+        // For Hearty Elixir, show that it's consumed immediately
+        if (item.itemName === 'Hearty Elixir') {
+          effectFields = [
+            { name: '💚 Effect', value: 'Healing applied immediately - no ongoing buff', inline: true }
+          ];
+        } else {
+          // For other elixirs, show their buff effects
+          const buffEffects = character.buff.effects;
+          
+          if (buffEffects.blightResistance > 0) {
+            effectFields.push({ name: '🧿 Blight Resistance', value: `+${buffEffects.blightResistance}`, inline: true });
+          }
+          if (buffEffects.electricResistance > 0) {
+            effectFields.push({ name: '⚡ Electric Resistance', value: `+${buffEffects.electricResistance}`, inline: true });
+          }
+          if (buffEffects.staminaBoost > 0) {
+            effectFields.push({ name: '🟩 Stamina Boost', value: `+${buffEffects.staminaBoost}`, inline: true });
+          }
+          if (buffEffects.staminaRecovery > 0) {
+            effectFields.push({ name: '💚 Stamina Recovery', value: `+${buffEffects.staminaRecovery}`, inline: true });
+          }
 
-        if (buffEffects.fireResistance > 0) {
-          effectFields.push({ name: '🔥 Fire Resistance', value: `+${buffEffects.fireResistance}`, inline: true });
-        }
-        if (buffEffects.speedBoost > 0) {
-          effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });
-        }
-        if (buffEffects.extraHearts > 0) {
-          effectFields.push({ name: '❤️ Extra Hearts', value: `+${buffEffects.extraHearts}`, inline: true });
-        }
-        if (buffEffects.attackBoost > 0) {
-          effectFields.push({ name: '⚔️ Attack Boost', value: `+${buffEffects.attackBoost}`, inline: true });
-        }
-        if (buffEffects.stealthBoost > 0) {
-          effectFields.push({ name: '👻 Stealth Boost', value: `+${buffEffects.stealthBoost}`, inline: true });
-        }
-        if (buffEffects.coldResistance > 0) {
-          effectFields.push({ name: '❄️ Cold Resistance', value: `+${buffEffects.coldResistance}`, inline: true });
-        }
-        if (buffEffects.defenseBoost > 0) {
-          effectFields.push({ name: '🛡️ Defense Boost', value: `+${buffEffects.defenseBoost}`, inline: true });
+          if (buffEffects.fireResistance > 0) {
+            effectFields.push({ name: '🔥 Fire Resistance', value: `+${buffEffects.fireResistance}`, inline: true });
+          }
+          if (buffEffects.speedBoost > 0) {
+            effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });
+          }
+          if (buffEffects.extraHearts > 0) {
+            effectFields.push({ name: '❤️ Extra Hearts', value: `+${buffEffects.extraHearts}`, inline: true });
+          }
+          if (buffEffects.attackBoost > 0) {
+            effectFields.push({ name: '⚔️ Attack Boost', value: `+${buffEffects.attackBoost}`, inline: true });
+          }
+          if (buffEffects.stealthBoost > 0) {
+            effectFields.push({ name: '👻 Stealth Boost', value: `+${buffEffects.stealthBoost}`, inline: true });
+          }
+          if (buffEffects.coldResistance > 0) {
+            effectFields.push({ name: '❄️ Cold Resistance', value: `+${buffEffects.coldResistance}`, inline: true });
+          }
+          if (buffEffects.defenseBoost > 0) {
+            effectFields.push({ name: '🛡️ Defense Boost', value: `+${buffEffects.defenseBoost}`, inline: true });
+          }
         }
 
         const elixirEmbed = new EmbedBuilder()
@@ -986,7 +1011,7 @@ module.exports = {
           .setThumbnail(item.image || character.icon)
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setFooter({ 
-            text: `Elixir effects active until used`,
+            text: item.itemName === 'Hearty Elixir' ? 'Hearty Elixir consumed immediately' : 'Elixir effects active until used',
             iconURL: character.icon
           });
 
