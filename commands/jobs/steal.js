@@ -58,6 +58,13 @@ const FAILURE_CHANCES = {
     rare: 80
 };
 
+// ------------------- NPC Difficulty Modifiers -------------------
+// Zone and Peddler are harder to steal from due to rare items
+const NPC_DIFFICULTY_MODIFIERS = {
+    Zone: 18,      // +18 to failure threshold (harder to succeed)
+    Peddler: 15    // +15 to failure threshold (harder to succeed)
+};
+
 // ------------------- Error Messages -------------------
 const ERROR_MESSAGES = {
     CHARACTER_NOT_FOUND: '❌ **Character not found.**',
@@ -334,6 +341,26 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
         embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
     }
 
+    return embed;
+}
+
+function createProtectionEmbed(targetName, timeLeftMinutes, isNPC = false) {
+    const embed = new EmbedBuilder()
+        .setColor(0x4169E1) // Royal blue color for protection
+        .setTitle('🛡️ Theft Protection Active')
+        .setDescription(`**${targetName}** is currently protected from theft!`)
+        .addFields(
+            { name: '⏰ Protection Duration', value: `Expires in **${timeLeftMinutes} minute${timeLeftMinutes !== 1 ? 's' : ''}**`, inline: false },
+            { name: '💡 What This Means', value: 'This target cannot be stolen from until the protection expires', inline: false }
+        )
+        .setThumbnail('https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg')
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setFooter({ 
+            text: 'Protection active',
+            iconURL: 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg'
+        })
+        .setTimestamp();
+    
     return embed;
 }
 
@@ -930,11 +957,21 @@ async function generateStealRoll(character = null) {
 
 // ------------------- Centralized Failure Threshold Calculation -------------------
 // Centralized failure threshold calculation to eliminate duplication
-async function calculateFailureThreshold(itemTier, character = null) {
+async function calculateFailureThreshold(itemTier, character = null, targetName = null) {
     let threshold = FAILURE_CHANCES[itemTier];
     
     // Apply Stealing boosts to the failure threshold
     threshold = await applyStealingJailBoost(character.name, threshold);
+    
+    // Apply NPC-specific difficulty modifiers
+    if (targetName && NPC_DIFFICULTY_MODIFIERS[targetName]) {
+        // Some NPCs are harder to steal from due to rare items
+        const difficultyBonus = NPC_DIFFICULTY_MODIFIERS[targetName];
+        threshold += difficultyBonus;
+        
+        // Cap the threshold at 95 to prevent impossible steals
+        threshold = Math.min(threshold, 95);
+    }
     
     return threshold;
 }
@@ -1277,18 +1314,6 @@ module.exports = {
                     });
                     return;
                 }
-
-                // Update daily steal AFTER all validations pass
-                try {
-                    await updateDailySteal(thiefCharacter, 'steal');
-                } catch (error) {
-                    console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
-                    await interaction.editReply({
-                        content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
-                        ephemeral: true
-                    });
-                    return;
-                }
             }
 
             // Validate target character
@@ -1451,6 +1476,20 @@ module.exports = {
                 return;
             }
 
+            // Update daily steal AFTER all validations and protection checks pass
+            if (!thiefCharacter.jobVoucher) {
+                try {
+                    await updateDailySteal(thiefCharacter, 'steal');
+                } catch (error) {
+                    console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                    await interaction.editReply({
+                        content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
+                        ephemeral: true
+                    });
+                    return;
+                }
+            }
+
             // Handle NPC stealing
             if (targetType === 'npc') {
                 const mappedNPCName = NPC_NAME_MAPPING[targetName];
@@ -1463,9 +1502,8 @@ module.exports = {
                 if (isProtected(mappedNPCName)) {
                     const timeLeft = getProtectionTimeLeft(mappedNPCName);
                     const timeLeftMinutes = Math.ceil(timeLeft / (60 * 1000));
-                    await interaction.editReply({ 
-                        content: `🛡️ **${mappedNPCName}** is currently protected from theft!\n⏰ Protection expires in ${timeLeftMinutes} minute${timeLeftMinutes !== 1 ? 's' : ''}.` 
-                    });
+                    const protectionEmbed = createProtectionEmbed(mappedNPCName, timeLeftMinutes, true);
+                    await interaction.editReply({ embeds: [protectionEmbed] });
                     return;
                 }
 
@@ -1478,7 +1516,6 @@ module.exports = {
                         const Item = require('../../models/ItemModel');
                         const allItems = await Item.find({}, 'itemName');
                         npcInventory = allItems.map(item => item.itemName);
-                        console.log(`[steal.js]: 🎭 Peddler special logic - fetched ${npcInventory.length} items from database`);
                     } catch (error) {
                         console.error('[steal.js]: Error fetching items for Peddler:', error);
                         await interaction.editReply({ content: '❌ **Error fetching items for Peddler. Please try again.**' });
@@ -1488,14 +1525,10 @@ module.exports = {
                                     // For other NPCs, use normal NPC items
                 npcInventory = await getNPCItems(mappedNPCName);
                 
-                // Add detailed logging for NPC inventory
-                console.log(`[steal.js]: NPC ${mappedNPCName} inventory:`, npcInventory);
-                console.log(`[steal.js]: NPC ${mappedNPCName} categories:`, NPCs[mappedNPCName]?.categories);
+
                 
                 // Check if we got a valid inventory
                 if (!Array.isArray(npcInventory) || npcInventory.length === 0) {
-                    console.warn(`[steal.js]: No items available for NPC: ${mappedNPCName}`);
-                    console.warn(`[steal.js]: NPC ${mappedNPCName} categories:`, NPCs[mappedNPCName]?.categories);
                     await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ This NPC may not have any stealable items.` });
                     return;
                 }
@@ -1524,7 +1557,7 @@ module.exports = {
 
                 const selectedItem = getRandomItemByWeight(filteredItems);
                 const roll = await generateStealRoll(thiefCharacter);
-                const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter);
+                const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, mappedNPCName);
                 const isSuccess = roll > failureThreshold;
 
                 if (isSuccess) {
@@ -1603,9 +1636,8 @@ module.exports = {
                 if (isProtected(targetCharacter._id)) {
                     const timeLeft = getProtectionTimeLeft(targetCharacter._id);
                     const timeLeftMinutes = Math.ceil(timeLeft / (60 * 1000));
-                    await interaction.editReply({ 
-                        content: `🛡️ **${targetCharacter.name}** is currently protected from theft!\n⏰ Protection expires in ${timeLeftMinutes} minute${timeLeftMinutes !== 1 ? 's' : ''}.` 
-                    });
+                    const protectionEmbed = createProtectionEmbed(targetCharacter.name, timeLeftMinutes, false);
+                    await interaction.editReply({ embeds: [protectionEmbed] });
                     return;
                 }
 
@@ -1666,7 +1698,7 @@ module.exports = {
 
                 const selectedItem = getRandomItemByWeight(filteredItemsPlayer);
                 const roll = await generateStealRoll(thiefCharacter);
-                const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter);
+                const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, targetCharacter.name);
                 const success = roll > failureThreshold;
 
                 if (success) {

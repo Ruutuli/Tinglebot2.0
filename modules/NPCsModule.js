@@ -325,13 +325,13 @@ const NPCs = {
     items: ['Bird Egg', 'Cucco Feather'],
     flavorText: [
       "Lil Tim the Cucco clucks loudly, but you manage to grab some eggs and feathers before being chased away!",
-      "The protective poultry keeper is too busy feeding his birds to notice you taking some eggs and feathers.",
+      "The protective Cucco is too busy feeding his fellow birds to notice you taking some eggs and feathers.",
       "Lil Tim's clucky nature has him preoccupied with settling a dispute between two roosters, allowing you to grab some goods.",
       "The Cucco is too busy collecting fresh eggs to see you pocketing some of his poultry products."
     ],
     failText: [
       "Lil Tim's Cucco instincts kick in! *BUK-BUK-BUK-BUKAAAAW!* *angry wing flapping*",
-      "The protective poultry keeper spots you! *SCREEEEEECH!* *defensive stance* *BUK-BUK-BUK!*",
+      "The protective Cucco spots you! *SCREEEEEECH!* *defensive stance* *BUK-BUK-BUK!*",
       "Lil Tim's clucky nature turns fierce! *ANGRY CLUCKING!* *threatening wing spread* *BUK-BUK-BUKAAAAW!*",
       "The Cucco's bird care skills catch you! *ALARM CLUCKS!* *protective squawking* *BUK-BUK-BUK!*"
     ],
@@ -378,19 +378,14 @@ const getNPCItems = async (npcName) => {
     return availableItems;
   }
   
-  // Handle NPCs with categories
-  if (npc.categories && Array.isArray(npc.categories)) {
-    console.log(`[NPCsModule.js]: Processing categories for NPC ${npcName}:`, npc.categories);
-    
-    for (const category of npc.categories) {
-      console.log(`[NPCsModule.js]: Checking category "${category}" for NPC ${npcName}`);
-      
-      // Check if it's a general category first
-      if (generalCategories[category] && Array.isArray(generalCategories[category])) {
-        // Add items from the specified general category
-        console.log(`[NPCsModule.js]: Found ${generalCategories[category].length} items in general category "${category}" for NPC ${npcName}`);
-        availableItems.push(...generalCategories[category]);
-      } else if (category === 'Weapons' || category === 'Armor') {
+                // Handle NPCs with categories
+              if (npc.categories && Array.isArray(npc.categories)) {
+                for (const category of npc.categories) {
+                  // Check if it's a general category first
+                  if (generalCategories[category] && Array.isArray(generalCategories[category])) {
+                    // Add items from the specified general category
+                    availableItems.push(...generalCategories[category]);
+                  } else if (category === 'Weapons' || category === 'Armor') {
         // Handle weapon/armor categories by querying the database
         try {
           // Ensure database connection
@@ -403,11 +398,10 @@ const getNPCItems = async (npcName) => {
             query = { $or: [{ category: 'Armor' }, { categoryGear: 'Armor' }] };
           }
           
-          const items = await ItemModel.find(query).select('itemName').lean();
-          const itemNames = items.map(item => item.itemName);
-          
-          console.log(`[NPCsModule.js]: Found ${itemNames.length} items in database category "${category}" for NPC ${npcName}`);
-          availableItems.push(...itemNames);
+                                const items = await ItemModel.find(query).select('itemName').lean();
+                      const itemNames = items.map(item => item.itemName);
+                      
+                      availableItems.push(...itemNames);
         } catch (error) {
           console.error(`[NPCsModule.js]: Error querying database for ${category} items:`, error);
           console.warn(`[NPCsModule.js]: Failed to get ${category} items from database for NPC ${npcName}`);
@@ -417,10 +411,9 @@ const getNPCItems = async (npcName) => {
         console.warn(`[NPCsModule.js]: Available general categories:`, Object.keys(generalCategories));
       }
     }
-  }
+                }
 
-  console.log(`[NPCsModule.js]: Final available items for NPC ${npcName}:`, availableItems.length, 'items');
-  return availableItems;
+              return availableItems;
 };
 
 // ------------------- Function to steal an item from an NPC -------------------
