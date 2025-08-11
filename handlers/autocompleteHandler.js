@@ -3526,9 +3526,8 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
             );
 
             const choices = filteredNPCs.map(npc => {
-                const flavorText = NPCs[npc].flavorText;
-                const roleMatch = flavorText.match(/, the ([^,]+),/);
-                let role = roleMatch ? roleMatch[1] : '';
+                const profession = NPCs[npc].profession;
+                let role = profession;
                 
                 if (npc === 'Lil Tim') {
                     role = 'Cucco';

@@ -1,4 +1,6 @@
 const generalCategories = require('../models/GeneralItemCategories');
+const ItemModel = require('../models/ItemModel');
+const { connectToTinglebot } = require('../database/db');
 
 // ============================================================================
 // ------------------- NPC Data Structure -------------------
@@ -42,6 +44,12 @@ const NPCs = {
       "The allergic herbalist is preoccupied with his runny nose, giving you the perfect opportunity to grab herbs.",
       "Hank's allergy attack provides the perfect distraction for you to snatch some healing plants."
     ],
+    failText: [
+      "Hank's sneezing fit suddenly stops as he spots you reaching for his herbs! 'Achoo! Hey, those are mine!'",
+      "The allergic herbalist's eyes water as he catches you red-handed! 'My precious herbs! You scoundrel!'",
+      "Hank's runny nose doesn't prevent him from seeing your thieving hands! 'Those are for the sick villagers!'",
+      "The herbalist's allergy attack clears just in time to catch you! 'My medicinal supplies are not for stealing!'"
+    ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Hank.jpg",
     pronouns: { subject: 'He', object: 'his', possessive: 'his' },
     specialty: 'medicinal supplies'
@@ -57,6 +65,12 @@ const NPCs = {
       "The focused Zora is too busy watching the water's surface to see you taking some of her catch.",
       "Sue's intense concentration on the river gives you the perfect chance to grab some fresh seafood.",
       "The determined fisherman is lost in thought about the perfect fishing spot, allowing you to pocket some fish."
+    ],
+    failText: [
+      "Sue's sharp Zora eyes catch your movement! 'That's my catch you're trying to steal!'",
+      "The focused fisherman's attention snaps to you! 'My fish are not for thieving hands!'",
+      "Sue's river-watching skills include spotting thieves! 'Those fish took me hours to catch!'",
+      "The determined Zora spots your thieving attempt! 'My fishing spot, my fish, my rules!'"
     ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Sue.png",
     pronouns: { subject: 'She', object: 'her', possessive: 'her' },
@@ -74,6 +88,12 @@ const NPCs = {
       "Lukan's nurturing nature keeps her focused on the orchard, giving you time to grab some fresh produce.",
       "The Gerudo is deep in conversation with her trees, providing the perfect cover for your fruit-gathering."
     ],
+    failText: [
+      "Lukan's proud Gerudo instincts kick in! 'My precious fruit trees are not for thieves!'",
+      "The orchard keeper's nurturing eyes spot you! 'Those fruits are my children's future!'",
+      "Lukan's tree-tending skills include thief detection! 'My orchard, my rules, no stealing!'",
+      "The proud Gerudo catches you red-handed! 'My fruit is grown with love, not for stealing!'"
+    ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Lukan.png",
     pronouns: { subject: 'She', object: 'her', possessive: 'her' },
     specialty: 'orchard supplies'
@@ -89,6 +109,12 @@ const NPCs = {
       "The curious Mogma is busy examining some interesting rock formations, allowing you to grab a lizard.",
       "Myti's adventurous spirit has them exploring a nearby cave entrance, giving you time to pocket some lizards.",
       "The scout is too busy mapping the underground terrain to see you taking some of their reptilian friends."
+    ],
+    failText: [
+      "Myti's Mogma instincts detect movement! 'My lizards are not for thieving hands!'",
+      "The curious scout's exploration skills include thief detection! 'Those are my reptilian companions!'",
+      "Myti's underground mapping reveals your presence! 'My cave friends are not for stealing!'",
+      "The adventurous Mogma spots your attempt! 'My lizards are my scouting partners!'"
     ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Myti.png",
     pronouns: { subject: 'He', object: 'him', possessive: 'his' },
@@ -106,6 +132,12 @@ const NPCs = {
       "Cree's vigilance is focused on the skies, allowing you to quietly collect some monster remains.",
       "The Rito is preoccupied with checking his hunting traps, giving you the perfect opportunity to grab parts."
     ],
+    failText: [
+      "Cree's Rito eyes spot your movement! 'My monster parts are trophies of my hunts!'",
+      "The brave hunter's vigilance extends to thieves! 'Those parts represent my victories!'",
+      "Cree's sky-scanning skills detect you! 'My hunting trophies are not for stealing!'",
+      "The vigilant Rito catches your attempt! 'My monster parts are proof of my bravery!'"
+    ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Cree.png",
     pronouns: { subject: 'He', object: 'him', possessive: 'his' },
     specialty: 'hunting gear'
@@ -122,7 +154,13 @@ const NPCs = {
       "Cece's knowledge of fungi keeps them preoccupied with documentation, allowing you to grab some mushrooms.",
       "The forager is muttering about spore patterns and doesn't notice you pocketing some of their finds."
     ],
-    icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Cece.jpg",
+    failText: [
+      "Cece's gloomy mood turns to anger! 'My carefully identified mushrooms are not for thieves!'",
+      "The knowledgeable forager spots your attempt! 'Those mushrooms took me hours to identify!'",
+      "Cece's fungal expertise includes thief detection! 'My spore collection is not for stealing!'",
+      "The gloomy forager's eyes narrow! 'My mushroom knowledge protects my collection!'"
+    ],
+    icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Cece.png",
     pronouns: { subject: 'She', object: 'her', possessive: 'her' },
     specialty: 'foraging supplies'
   },
@@ -138,6 +176,12 @@ const NPCs = {
       "Zone's protective nature has him focused on securing his shop, giving you time to grab some gear.",
       "The weapons dealer is preoccupied with inventory counts, allowing you to slip away with some equipment."
     ],
+    failText: [
+      "Zone's Keaton instincts detect theft! 'My weapons are not for thieving hands!'",
+      "The crafty weapons dealer spots you! 'My armor took me days to craft!'",
+      "Zone's protective nature extends to his merchandise! 'My shop, my rules, no stealing!'",
+      "The weapons dealer's craftiness catches you! 'My equipment is for paying customers only!'"
+    ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Zone.png",
     pronouns: { subject: 'He', object: 'him', possessive: 'his' },
     specialty: 'smithing materials'
@@ -152,6 +196,12 @@ const NPCs = {
       "The charismatic peddler is too busy haggling with another customer to notice you taking some goods.",
       "Peddler's shrewd business sense has him focused on a potential sale, allowing you to grab some items.",
       "The auctioneer is preoccupied with setting up his next auction, giving you the perfect opportunity to pocket some wares."
+    ],
+    failText: [
+      "Peddler's auctioneer voice booms! 'Thief! Thief in the marketplace!'",
+      "The shrewd businessman spots your attempt! 'My goods are for paying customers only!'",
+      "Peddler's charismatic charm turns to anger! 'My auction items are not for stealing!'",
+      "The auctioneer's business sense detects theft! 'My merchandise is worth gold, not thievery!'"
     ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Peddler.png",
     pronouns: { subject: 'He', object: 'him', possessive: 'his' },
@@ -169,6 +219,12 @@ const NPCs = {
       "Walton's playful nature has him chasing butterflies, giving you time to pocket some acorns.",
       "The Korok is too busy sharing ancient wisdom with the forest creatures to see you taking some nuts."
     ],
+    failText: [
+      "Walton's ancient wisdom reveals your presence! 'My forest gifts are not for thieves!'",
+      "The wise Korok spots your attempt! 'My acorns are the forest's future!'",
+      "Walton's playful nature turns serious! 'My nuts are for forest creatures, not thieves!'",
+      "The forest guardian's wisdom detects you! 'My acorns grow trees, not feed thieves!'"
+    ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Walton.png",
     pronouns: { subject: 'He', object: 'him', possessive: 'his' },
     specialty: 'forest supplies'
@@ -184,6 +240,12 @@ const NPCs = {
       "The strong miner is preoccupied with reinforcing mine supports, allowing you to grab some ore.",
       "Jengo's hardworking nature has him focused on a particularly stubborn rock, giving you time to pocket some minerals.",
       "The Goron is too busy checking the mine's structural integrity to notice you taking some ore samples."
+    ],
+    failText: [
+      "Jengo's Goron strength stops you! 'My ore is the result of hard work!'",
+      "The strong miner spots your attempt! 'My minerals took me days to extract!'",
+      "Jengo's hardworking nature detects theft! 'My ore is not for thieving hands!'",
+      "The Goron miner's strength catches you! 'My mine, my ore, my rules!'"
     ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Jengo.png",
     pronouns: { subject: 'He', object: 'him', possessive: 'his' },
@@ -201,6 +263,12 @@ const NPCs = {
       "Jasz's stealthy nature has him focused on maintaining his camouflage, giving you time to pocket some raw meat.",
       "The Twili is too busy adjusting to the daylight to see you taking some of his hunting trophies."
     ],
+    failText: [
+      "Jasz's stealthy nature extends to thieves! 'My hunting trophies are not for thieving hands!'",
+      "The mysterious hunter's stealth skills detect you! 'Those are my nocturnal companions!'",
+      "Jasz's darkness navigation reveals your presence! 'My cave friends are not for stealing!'",
+      "The stealthy Twili catches your attempt! 'My hunting trophies are my scouting partners!'"
+    ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Jasz.png",
     pronouns: { subject: 'He', object: 'him', possessive: 'his' },
     specialty: 'night hunting gear'
@@ -216,6 +284,12 @@ const NPCs = {
       "The intellectual scholar is too busy translating ancient texts to notice you taking some artifacts.",
       "Lecia's cautious nature has her focused on preserving delicate materials, giving you time to grab some ancient items.",
       "The Sheikah is preoccupied with cataloging historical findings, allowing you to pocket some ancient materials."
+    ],
+    failText: [
+      "Lecia's Sheikah instincts detect your presence! 'My ancient artifacts are priceless!'",
+      "The cautious scholar spots your attempt! 'My research materials are irreplaceable!'",
+      "Lecia's intellectual focus reveals you! 'My historical findings are not for thieves!'",
+      "The Sheikah's preservation skills catch you! 'My ancient materials are protected by knowledge!'"
     ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Lecia.png",
     pronouns: { subject: 'She', object: 'her', possessive: 'her' },
@@ -233,6 +307,12 @@ const NPCs = {
       "Tye's nurturing nature has her focused on tending to sick plants, allowing you to grab some materials.",
       "The Kokiri is preoccupied with greenhouse maintenance, giving you the perfect chance to pocket some organic items."
     ],
+    failText: [
+      "Tye's Kokiri nature detects your presence! 'My organic materials are for research!'",
+      "The curious botanist spots your attempt! 'My plant samples are carefully cultivated!'",
+      "Tye's nurturing instincts reveal you! 'My botanical experiments are not for thieves!'",
+      "The Kokiri's plant knowledge catches you! 'My greenhouse materials are protected by nature!'"
+    ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Tye.jpg",
     pronouns: { subject: 'She', object: 'her', possessive: 'her' },
     specialty: 'botanical supplies'
@@ -249,6 +329,12 @@ const NPCs = {
       "Lil Tim's clucky nature has him preoccupied with settling a dispute between two roosters, allowing you to grab some goods.",
       "The Cucco is too busy collecting fresh eggs to see you pocketing some of his poultry products."
     ],
+    failText: [
+      "Lil Tim's Cucco instincts kick in! *BUK-BUK-BUK-BUKAAAAW!* *angry wing flapping*",
+      "The protective poultry keeper spots you! *SCREEEEEECH!* *defensive stance* *BUK-BUK-BUK!*",
+      "Lil Tim's clucky nature turns fierce! *ANGRY CLUCKING!* *threatening wing spread* *BUK-BUK-BUKAAAAW!*",
+      "The Cucco's bird care skills catch you! *ALARM CLUCKS!* *protective squawking* *BUK-BUK-BUK!*"
+    ],
     icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Tim.png",
     pronouns: { subject: 'He', object: 'him', possessive: 'his' },
     specialty: 'poultry supplies'
@@ -261,13 +347,20 @@ const NPCs = {
 
 // ------------------- Helper function for random selection -------------------
 const getRandomElement = (arr) => {
+  if (!Array.isArray(arr) || arr.length === 0) {
+    console.warn('[NPCsModule.js]: getRandomElement called with invalid array:', arr);
+    return null;
+  }
   return arr[Math.floor(Math.random() * arr.length)];
 };
 
 // ------------------- Function to get available items from an NPC -------------------
-const getNPCItems = (npcName) => {
+const getNPCItems = async (npcName) => {
   const npc = NPCs[npcName];
-  if (!npc) return [];
+  if (!npc) {
+    console.warn(`[NPCsModule.js]: NPC not found: ${npcName}`);
+    return [];
+  }
 
   const availableItems = [];
   
@@ -280,37 +373,68 @@ const getNPCItems = (npcName) => {
   }
   
   // Handle NPCs with specific items (like Lil Tim)
-  if (npc.items) {
+  if (npc.items && Array.isArray(npc.items)) {
     availableItems.push(...npc.items);
     return availableItems;
   }
   
   // Handle NPCs with categories
-  if (npc.categories) {
-    npc.categories.forEach(category => {
-      if (category === 'Any Plant') {
-        // Add all plant items
-        Object.values(generalCategories.plants).forEach(plantArray => {
-          plantArray.forEach(plant => {
-            availableItems.push(plant);
-          });
-        });
-      } else if (generalCategories[category]) {
-        // Add items from the specified category
+  if (npc.categories && Array.isArray(npc.categories)) {
+    console.log(`[NPCsModule.js]: Processing categories for NPC ${npcName}:`, npc.categories);
+    
+    for (const category of npc.categories) {
+      console.log(`[NPCsModule.js]: Checking category "${category}" for NPC ${npcName}`);
+      
+      // Check if it's a general category first
+      if (generalCategories[category] && Array.isArray(generalCategories[category])) {
+        // Add items from the specified general category
+        console.log(`[NPCsModule.js]: Found ${generalCategories[category].length} items in general category "${category}" for NPC ${npcName}`);
         availableItems.push(...generalCategories[category]);
+      } else if (category === 'Weapons' || category === 'Armor') {
+        // Handle weapon/armor categories by querying the database
+        try {
+          // Ensure database connection
+          await connectToTinglebot();
+          
+          let query = {};
+          if (category === 'Weapons') {
+            query = { $or: [{ category: 'Weapon' }, { categoryGear: 'Weapon' }] };
+          } else if (category === 'Armor') {
+            query = { $or: [{ category: 'Armor' }, { categoryGear: 'Armor' }] };
+          }
+          
+          const items = await ItemModel.find(query).select('itemName').lean();
+          const itemNames = items.map(item => item.itemName);
+          
+          console.log(`[NPCsModule.js]: Found ${itemNames.length} items in database category "${category}" for NPC ${npcName}`);
+          availableItems.push(...itemNames);
+        } catch (error) {
+          console.error(`[NPCsModule.js]: Error querying database for ${category} items:`, error);
+          console.warn(`[NPCsModule.js]: Failed to get ${category} items from database for NPC ${npcName}`);
+        }
+      } else {
+        console.warn(`[NPCsModule.js]: Category not found or invalid: ${category} for NPC ${npcName}`);
+        console.warn(`[NPCsModule.js]: Available general categories:`, Object.keys(generalCategories));
       }
-    });
+    }
   }
 
+  console.log(`[NPCsModule.js]: Final available items for NPC ${npcName}:`, availableItems.length, 'items');
   return availableItems;
 };
 
 // ------------------- Function to steal an item from an NPC -------------------
-const stealFromNPC = (npcName) => {
-  const availableItems = getNPCItems(npcName);
-  if (availableItems.length === 0) return null;
+const stealFromNPC = async (npcName) => {
+  const availableItems = await getNPCItems(npcName);
+  if (!Array.isArray(availableItems) || availableItems.length === 0) return null;
 
-  return getRandomElement(availableItems);
+  const randomItem = getRandomElement(availableItems);
+  if (randomItem === null) {
+    console.warn(`[NPCsModule.js]: Failed to get random item for NPC: ${npcName}`);
+    return null;
+  }
+
+  return randomItem;
 };
 
 // ------------------- Function to get random flavor text when stealing from an NPC -------------------
@@ -319,12 +443,26 @@ const getStealFlavorText = (npcName) => {
   if (!npc || !npc.flavorText) return null;
   
   // If flavorText is an array, randomly select one
-  if (Array.isArray(npc.flavorText)) {
+  if (Array.isArray(npc.flavorText) && npc.flavorText.length > 0) {
     return getRandomElement(npc.flavorText);
   }
   
   // Fallback for legacy single string format
   return npc.flavorText;
+};
+
+// ------------------- Function to get random fail text when stealing from an NPC fails -------------------
+const getStealFailText = (npcName) => {
+  const npc = NPCs[npcName];
+  if (!npc || !npc.failText) return null;
+  
+  // If failText is an array, randomly select one
+  if (Array.isArray(npc.failText) && npc.failText.length > 0) {
+    return getRandomElement(npc.failText);
+  }
+  
+  // Fallback for legacy single string format
+  return npc.failText;
 };
 
 // ============================================================================
@@ -334,6 +472,11 @@ const getStealFlavorText = (npcName) => {
 // ------------------- Function: getNPCQuestFlavor -------------------
 // Returns a random quest flavor text for the given NPC and quest type
 function getNPCQuestFlavor(npcName, questType, requirements) {
+  // Validate parameters
+  if (!npcName || !questType || !requirements) {
+    console.warn('[NPCsModule.js]: getNPCQuestFlavor called with invalid parameters:', { npcName, questType, requirements });
+    return `**${npcName || 'Unknown NPC'} needs help:** Complete this quest for the village`;
+  }
   // ------------------- Special Walton Acorn Quest -------------------
   if (npcName === 'Walton' && questType === 'item' && requirements.item === 'Acorn' && requirements.amount === 50) {
     const specialAcornTexts = [
@@ -344,17 +487,22 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
       "Walton's tree friends are feeling lonely and want **50x Acorn** to plant new saplings. He needs help to grow the forest family.",
       "Walton wishes to harass the peddler. Please give him **50x Acorn** to help him!"
     ];
-    return getRandomElement(specialAcornTexts);
+    const specialText = getRandomElement(specialAcornTexts);
+    if (!specialText) {
+      console.warn('[NPCsModule.js]: Failed to get special Walton acorn text');
+      return "Walton the Korok needs **50x Acorn** for a special forest ritual. Please help him gather these acorns!";
+    }
+    return specialText;
   }
 
   const npcFlavor = NPC_QUEST_FLAVOR[npcName];
   if (!npcFlavor || !npcFlavor[questType]) {
     // Fallback to generic flavor text if NPC or quest type not found
     const fallbackTexts = {
-      item: `**${npcName} needs supplies:** Gather **${requirements.amount}x ${requirements.item}** for the village`,
-      monster: `**${npcName} seeks a hunter:** Defeat **${requirements.amount}x ${requirements.monster} (tier: ${requirements.tier})** threatening the area`,
-      escort: `**${npcName} needs protection:** Safely escort them to **${requirements.location}**`,
-      crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount}x ${requirements.item}**`
+      item: `**${npcName} needs supplies:** Gather **${requirements.amount || 'unknown'}x ${requirements.item || 'unknown item'}** for the village`,
+      monster: `**${npcName} seeks a hunter:** Defeat **${requirements.amount || 'unknown'}x ${requirements.monster || 'unknown monster'} (tier: ${requirements.tier || 'unknown'})** threatening the area`,
+      escort: `**${npcName} needs protection:** Safely escort them to **${requirements.location || 'unknown location'}**`,
+      crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount || 'unknown'}x ${requirements.item || 'unknown item'}**`
     };
     return fallbackTexts[questType] || `**${npcName} needs help:** Complete this quest for the village`;
   }
@@ -362,13 +510,20 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
   const flavorOptions = npcFlavor[questType];
   const selectedFlavor = getRandomElement(flavorOptions);
   
+  // Check if we got a valid flavor text
+  if (!selectedFlavor || typeof selectedFlavor !== 'string') {
+    console.warn(`[NPCsModule.js]: Failed to get flavor text for NPC: ${npcName}, quest type: ${questType}`);
+    // Return a fallback message
+    return `**${npcName} needs help:** Complete this quest for the village`;
+  }
+  
   // Replace placeholders with actual quest requirements
   return selectedFlavor
-    .replace('{amount}', requirements.amount)
-    .replace('{item}', requirements.item)
-    .replace('{monster}', requirements.monster)
-    .replace('{tier}', requirements.tier)
-    .replace('{location}', requirements.location);
+    .replace('{amount}', requirements.amount || 'unknown')
+    .replace('{item}', requirements.item || 'unknown item')
+    .replace('{monster}', requirements.monster || 'unknown monster')
+    .replace('{tier}', requirements.tier || 'unknown tier')
+    .replace('{location}', requirements.location || 'unknown location');
 }
 
 // ============================================================================
@@ -710,6 +865,7 @@ module.exports = {
   getNPCItems,
   stealFromNPC,
   getStealFlavorText,
+  getStealFailText, // New function for fail text
   
   // Quest flavor text functions
   getNPCQuestFlavor,

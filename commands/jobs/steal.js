@@ -10,7 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchCharacterByName, getCharacterInventoryCollection, fetchItemRarityByName } = require('../../database/db');
 const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
-const { getNPCItems, NPCs, getStealFlavorText } = require('../../modules/NPCsModule');
+const { getNPCItems, NPCs, getStealFlavorText, getStealFailText } = require('../../modules/NPCsModule');
 const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/validation');
 const ItemModel = require('../../models/ItemModel');
@@ -273,12 +273,23 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
         const npcName = typeof targetCharacter === 'string' ? targetCharacter : targetCharacter.name;
         const npcData = NPCs[npcName];
         if (npcData) {
-                    if (npcData.flavorText) {
-            // Use the new random flavor text function for variety
-            const randomFlavorText = getStealFlavorText(npcName);
-            npcFlavorText = `*${randomFlavorText}*`;
-        } else {
-                npcFlavorText = `*${npcName} ${isSuccess ? 'didn\'t notice you taking' : 'caught you trying to take'} something...*`;
+            if (isSuccess) {
+                // Use success flavor text for successful steals
+                if (npcData.flavorText) {
+                    // Use the new random flavor text function for variety
+                    const randomFlavorText = getStealFlavorText(npcName);
+                    npcFlavorText = `*${randomFlavorText}*`;
+                } else {
+                    npcFlavorText = `*${npcName} didn't notice you taking something...*`;
+                }
+            } else {
+                // Use fail text for failed steal attempts
+                if (npcData.failText) {
+                    const randomFailText = getStealFailText(npcName);
+                    npcFlavorText = `*${randomFailText}*`;
+                } else {
+                    npcFlavorText = `*${npcName} caught you trying to take something...*`;
+                }
             }
             // Use the actual NPC icon if available
             if (npcData.icon) {
@@ -1474,8 +1485,20 @@ module.exports = {
                         return;
                     }
                 } else {
-                    // For other NPCs, use normal NPC items
-                    npcInventory = getNPCItems(mappedNPCName);
+                                    // For other NPCs, use normal NPC items
+                npcInventory = await getNPCItems(mappedNPCName);
+                
+                // Add detailed logging for NPC inventory
+                console.log(`[steal.js]: NPC ${mappedNPCName} inventory:`, npcInventory);
+                console.log(`[steal.js]: NPC ${mappedNPCName} categories:`, NPCs[mappedNPCName]?.categories);
+                
+                // Check if we got a valid inventory
+                if (!Array.isArray(npcInventory) || npcInventory.length === 0) {
+                    console.warn(`[steal.js]: No items available for NPC: ${mappedNPCName}`);
+                    console.warn(`[steal.js]: NPC ${mappedNPCName} categories:`, NPCs[mappedNPCName]?.categories);
+                    await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ This NPC may not have any stealable items.` });
+                    return;
+                }
                 }
                 
                 // Filter out protected items (spirit orbs and vouchers) from NPC inventory
@@ -1656,7 +1679,13 @@ module.exports = {
             handleError(error, 'steal.js');
             console.error('[steal.js]: Error executing command:', error);
             console.warn(`[steal.js]: ⚠️ Steal attempt not counted due to error or timeout for user ${interaction.user.id}`);
-            await interaction.reply({ content: '❌ **An error occurred while processing the command.**', ephemeral: true });
+            
+            // Check if interaction has already been replied to
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: '❌ **An error occurred while processing the command.**', ephemeral: true });
+            } else {
+                await interaction.editReply({ content: '❌ **An error occurred while processing the command.**' });
+            }
         }
     },
 };
