@@ -75,8 +75,8 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             description: 'You must specify a job to use with your Job Voucher. This tells the system what temporary job you want to perform.',
             fields: [
                 { name: 'How to Use', value: 'Format your command like this:' },
-                { name: 'Example', value: '```/job voucher activate job:<job name>```\nReplace `<job name>` with the job you want to use.\n\nFor example:\n```/job voucher activate job:Blacksmith```' },
-                { name: 'Tip', value: 'You can view a list of available jobs with `/job list`.' }
+                { name: 'Example', value: '```/item charactername:YourCharacter itemname:Job Voucher jobname:Blacksmith```\nReplace `YourCharacter` with your character name and `Blacksmith` with the job you want to use.' },
+                { name: 'Available Jobs', value: 'General: Adventurer, Artist, Bandit, Cook, Courier, Craftsman, Farmer, Forager, Guard, Graveskeeper, Healer, Herbalist, Hunter, Merchant, Mercenary, Priest, Scout, Shopkeeper, Stablehand, Villager, Witch, Entertainer\n\nInariko: Fisherman, Researcher, Scholar, Teacher\nRudania: Rancher, Blacksmith, Miner\nVhintl: Beekeeper, Fortune Teller, Mask Maker, Weaver' }
             ],
             color: '#F1C40F'
         }
