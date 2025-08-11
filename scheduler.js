@@ -48,6 +48,7 @@ const Raid = require("./models/RaidModel");
 const RuuGame = require("./models/RuuGameModel");
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests } = require('./modules/helpWantedModule');
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+const { removeExpiredBuffs } = require('./modules/elixirModule');
 
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
 
@@ -369,6 +370,33 @@ async function handleDebuffExpiry(client) {
       await sendUserDM(
         character.userId,
         `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`,
+        client
+      );
+    }
+  }
+}
+
+async function handleBuffExpiry(client) {
+  const now = new Date();
+  const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const midnightEST = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 0, 0, 0, 0);
+  
+  const charactersWithActiveBuffs = await Character.find({
+    "buff.active": true,
+    "buff.endDate": { $lte: midnightEST },
+  });
+
+  if (charactersWithActiveBuffs.length > 0) {
+    console.log(`[scheduler.js]: 🧹 Expiring buffs for ${charactersWithActiveBuffs.length} characters`);
+    
+    for (const character of charactersWithActiveBuffs) {
+      character.buff.active = false;
+      character.buff.endDate = null;
+      await character.save();
+
+      await sendUserDM(
+        character.userId,
+        `Your character **${character.name}**'s buff has ended! You can now heal them with items or a Healer.`,
         client
       );
     }
@@ -964,6 +992,7 @@ function initializeScheduler(client) {
    }
 
    await handleDebuffExpiry(client);
+   await handleBuffExpiry(client);
    await checkAndGenerateDailyQuests();
    await checkAndPostMissedQuests(client);
    await handleQuestExpirationAtMidnight(client);
@@ -1015,6 +1044,9 @@ function initializeScheduler(client) {
  });
  createCronJob("0 0 * * *", "debuff expiry check", () =>
   handleDebuffExpiry(client)
+ );
+ createCronJob("0 0 * * *", "buff expiry check", () =>
+  handleBuffExpiry(client)
  );
  createCronJob("0 0 * * *", "birthday announcements", () =>
   executeBirthdayAnnouncements(client)
@@ -1093,6 +1125,7 @@ module.exports = {
  executeBirthdayAnnouncements,
  handleJailRelease,
  handleDebuffExpiry,
+ handleBuffExpiry,
  resetDailyRolls,
  resetPetLastRollDates,
  checkAndGenerateDailyQuests,

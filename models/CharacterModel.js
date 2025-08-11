@@ -97,6 +97,23 @@ const characterSchema = new Schema({
     active: { type: Boolean, default: false },
     endDate: { type: Date, default: null }
   },
+  buff: {
+    active: { type: Boolean, default: false },
+    type: { type: String, default: null }, // 'chilly', 'electro', 'enduring', 'energizing', 'fireproof', 'hasty', 'hearty', 'mighty', 'sneaky', 'spicy', 'tough'
+    effects: {
+      blightResistance: { type: Number, default: 0 }, // Chilly Elixir
+      electricResistance: { type: Number, default: 0 }, // Electro Elixir
+      staminaBoost: { type: Number, default: 0 }, // Enduring Elixir
+      staminaRecovery: { type: Number, default: 0 }, // Energizing Elixir
+      fireResistance: { type: Number, default: 0 }, // Fireproof Elixir
+      speedBoost: { type: Number, default: 0 }, // Hasty Elixir
+      extraHearts: { type: Number, default: 0 }, // Hearty Elixir
+      attackBoost: { type: Number, default: 0 }, // Mighty Elixir
+      stealthBoost: { type: Number, default: 0 }, // Sneaky Elixir
+      coldResistance: { type: Number, default: 0 }, // Spicy Elixir
+      defenseBoost: { type: Number, default: 0 } // Tough Elixir
+    }
+  },
   failedStealAttempts: { type: Number, default: 0 },
   failedFleeAttempts: { type: Number, default: 0 },
   inJail: { type: Boolean, default: false },

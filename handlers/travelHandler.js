@@ -367,6 +367,22 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
     console.log(`[travelHandler.js]: 🎲 Combat outcome: ${outcome.result}, Hearts: ${outcome.hearts}`);
 
+    // ------------------- Elixir Consumption Logic -------------------
+    // Check if elixirs should be consumed based on the travel encounter
+    try {
+      const { shouldConsumeElixir, consumeElixirBuff } = require('../modules/elixirModule');
+      if (shouldConsumeElixir(character, 'combat', { monster: monster })) {
+        consumeElixirBuff(character);
+        console.log(`[travelHandler.js]: 🧪 Elixir consumed for ${character.name} during travel encounter with ${monster.name}`);
+        
+        // Update character in database to persist the consumed elixir
+        await character.save();
+      }
+    } catch (elixirError) {
+      console.error(`[travelHandler.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
+      // Don't fail the travel if elixir consumption fails
+    }
+
     // ------------------- KO Branch -------------------
     if (outcome.result === 'KO') {
       console.log(`[travelHandler.js]: 💀 Character KO'd - Previous hearts: ${character.currentHearts}`);

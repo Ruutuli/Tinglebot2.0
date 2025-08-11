@@ -26,6 +26,7 @@ const {
 // ------------------- Database Models -------------------
 // const Mount = require('../../models/MountModel');
 const User = require('../../models/UserModel.js');
+const Character = require('../../models/CharacterModel.js');
 
 // ------------------- Embeds -------------------
 const {
@@ -53,6 +54,7 @@ const { enforceJail } = require('../../utils/jailCheck');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { retrieveAllByType } = require('../../utils/storage.js');
 const { getWeatherWithoutGeneration } = require('../../services/weatherService');
+const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
 
 // ------------------- External API Integrations -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
@@ -141,10 +143,23 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
 
   const key = `${currentVillage}-${destination}`;
   const reverseKey = `${destination}-${currentVillage}`;
-  const baseDuration = travelTimes[mode][key] || travelTimes[mode][reverseKey] || -1;
+  let baseDuration = travelTimes[mode][key] || travelTimes[mode][reverseKey] || -1;
 
+  // Apply DELIVERING perk
   if (baseDuration > 0 && hasPerk(character, 'DELIVERING')) {
-    return Math.max(1, Math.ceil(baseDuration / 2));
+    baseDuration = Math.max(1, Math.ceil(baseDuration / 2));
+  }
+
+  // Apply elixir speed buff
+  if (baseDuration > 0) {
+    const buffEffects = getActiveBuffEffects(character);
+    if (buffEffects.speedBoost > 0) {
+      // Hasty Elixir cuts travel time in half (minimum 1 day)
+      const originalDuration = baseDuration;
+      baseDuration = Math.max(1, Math.ceil(baseDuration / 2));
+      const speedReduction = originalDuration - baseDuration;
+      console.log(`[travel.js]: 🧪 Hasty Elixir applied - Travel time cut in half from ${originalDuration} to ${baseDuration} day(s)`);
+    }
   }
 
   return baseDuration;
@@ -225,45 +240,87 @@ module.exports = {
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
           await interaction.editReply({ content: alreadyMsg, ephemeral: false });
-        } else if (Math.random() < 0.75) {
-          const blightMsg =
-            "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
-            `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
-            "You can be healed by **Oracles, Sages & Dragons**  \n" +
-            "▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)  \n" +
-            "▹ [Currently Available Blight Healers](https://discord.com/channels/${process.env.GUILD_ID}/651614266046152705/845481974671736842)\n\n" +
-            "**STAGE 1:**  \n" +
-            "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
-            "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
-            "> *You will not be penalized for missing today's blight roll if you were just infected.*";
-          await interaction.editReply({ content: blightMsg, ephemeral: false });
-          // Update character in DB
-          character.blighted = true;
-          character.blightedAt = new Date();
-          character.blightStage = 1;
-          await character.save();
-          // Assign blighted role
-          const guild = interaction.guild;
-          if (guild) {
-            const member = await guild.members.fetch(interaction.user.id);
-            await member.roles.add('798387447967907910');
-          }
-          
-          // Update user's blightedcharacter status
-          const user = await User.findOne({ discordId: interaction.user.id });
-          if (user) {
-            user.blightedcharacter = true;
-            await user.save();
-          }
-          
-          // Add to travel log
-          travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(startingVillage)}**!`);
         } else {
-          const safeMsg =
-            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
-            `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n` +
-            "You feel lucky... but be careful out there.";
-          await interaction.editReply({ content: safeMsg, ephemeral: false });
+          // Check for resistance buffs
+          const buffEffects = getActiveBuffEffects(character);
+          let infectionChance = 0.75; // Base 75% chance
+          
+          // Apply resistance buffs
+          if (buffEffects.blightResistance > 0) {
+            infectionChance -= (buffEffects.blightResistance * 0.1); // Each level reduces by 10%
+            console.log(`[travel.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
+          }
+          if (buffEffects.fireResistance > 0) {
+            infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
+            console.log(`[travel.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
+          }
+          
+          // Consume elixirs after applying their effects
+          if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
+            consumeElixirBuff(character);
+            // Update character in database
+            const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+            await updateFunction(character._id, { buff: character.buff });
+          }
+          
+          // Ensure chance stays within reasonable bounds
+          infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
+          
+          if (Math.random() < infectionChance) {
+            const blightMsg =
+              "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
+              `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+              "You can be healed by **Oracles, Sages & Dragons**  \n" +
+              "▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)  \n" +
+              "▹ [Currently Available Blight Healers](https://discord.com/channels/${process.env.GUILD_ID}/651614266046152705/845481974671736842)\n\n" +
+              "**STAGE 1:**  \n" +
+              "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+              "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
+              "> *You will not be penalized for missing today's blight roll if you were just infected.*";
+            await interaction.editReply({ content: blightMsg, ephemeral: false });
+            // Update character in DB
+            character.blighted = true;
+            character.blightedAt = new Date();
+            character.blightStage = 1;
+            await character.save();
+            // Assign blighted role
+            const guild = interaction.guild;
+            if (guild) {
+              const member = await guild.members.fetch(interaction.user.id);
+              await member.roles.add('798387447967907910');
+            }
+            
+            // Update user's blightedcharacter status
+            const user = await User.findOne({ discordId: interaction.user.id });
+            if (user) {
+              user.blightedcharacter = true;
+              await user.save();
+            }
+            
+            // Add to travel log
+            travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(startingVillage)}**!`);
+          } else {
+            let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
+            
+            if (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0) {
+              safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
+              safeMsg += "The protective effects of your elixir kept you safe from the blight.";
+              
+              // Consume chilly or fireproof elixirs after use
+              if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
+                consumeElixirBuff(character);
+                // Update character in database
+                const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+                await updateFunction(character._id, { buff: character.buff });
+                safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
+              }
+            } else {
+              safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
+              safeMsg += "You feel lucky... but be careful out there.";
+            }
+            
+            await interaction.editReply({ content: safeMsg, ephemeral: false });
+          }
         }
       }
 
@@ -394,6 +451,29 @@ module.exports = {
 
       // ------------------- Calculate Travel Duration -------------------
       const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode, character);
+
+      // ------------------- Consume Hasty Elixir if Travel Time was Reduced -------------------
+      // Check if the Hasty Elixir was used to reduce travel time
+      const originalDuration = calculateTravelDuration(startingVillage, destination, mode, { ...character, buff: { active: false } });
+      if (totalTravelDuration < originalDuration) {
+        try {
+          if (shouldConsumeElixir(character, 'travel')) {
+            consumeElixirBuff(character);
+            console.log(`[travel.js]: 🧪 Hasty Elixir consumed for ${character.name} - Travel time reduced from ${originalDuration} to ${totalTravelDuration} days`);
+            
+            // Update character in database to persist the consumed elixir
+            if (character.isModCharacter) {
+              const ModCharacter = require('../../models/ModCharacterModel.js');
+              await ModCharacter.findByIdAndUpdate(character._id, { buff: character.buff });
+            } else {
+              await Character.findByIdAndUpdate(character._id, { buff: character.buff });
+            }
+          }
+        } catch (elixirError) {
+          console.error(`[travel.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
+          // Don't fail the travel if elixir consumption fails
+        }
+      }
 
       // if (mode === 'on mount') {
       //   if (!mount) {

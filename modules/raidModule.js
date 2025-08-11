@@ -131,6 +131,22 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       throw new Error('Failed to calculate raid battle outcome');
     }
 
+    // ------------------- Elixir Consumption Logic -------------------
+    // Check if elixirs should be consumed based on the raid encounter
+    try {
+      const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+      if (shouldConsumeElixir(character, 'raid', { monster: monster })) {
+        consumeElixirBuff(character);
+        console.log(`[raidModule.js]: 🧪 Elixir consumed for ${character.name} during raid against ${monster.name}`);
+        
+        // Update character in database to persist the consumed elixir
+        await character.save();
+      }
+    } catch (elixirError) {
+      console.error(`[raidModule.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
+      // Don't fail the raid if elixir consumption fails
+    }
+
     // Battle result logged only in debug mode
 
     return {

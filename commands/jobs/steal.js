@@ -20,6 +20,7 @@ const { hasPerk, getJobPerk, normalizeJobName, isValidJob } = require('../../mod
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { applyStealingBoost, applyStealingJailBoost, applyStealingLootBoost } = require('../../modules/boostIntegration');
+const { getActiveBuffEffects } = require('../../modules/elixirModule');
 
 // Add StealStats model
 const StealStats = require('../../models/StealStatsModel');
@@ -331,6 +332,18 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
             value: `> Using **${thiefCharacter.jobVoucherJob}** voucher`,
             inline: false
         });
+    }
+
+    // Add elixir buff indicator if active
+    if (thiefCharacter.buff?.active) {
+        const buffEffects = getActiveBuffEffects(thiefCharacter);
+        if (buffEffects.stealthBoost > 0) {
+            embed.addFields({
+                name: '🧪 Active Elixir',
+                value: `> **${thiefCharacter.buff.type}** buff (Level ${thiefCharacter.buff.level}) - Stealth +${buffEffects.stealthBoost}`,
+                inline: false
+            });
+        }
     }
 
     if (isSuccess) {
@@ -951,6 +964,15 @@ async function generateStealRoll(character = null) {
     
     // Apply Stealing boosts to the roll
     roll = await applyStealingBoost(character.name, roll);
+    
+    // Apply elixir stealth buff if active
+    if (character) {
+        const buffEffects = getActiveBuffEffects(character);
+        if (buffEffects.stealthBoost > 0) {
+            roll += buffEffects.stealthBoost;
+            console.log(`[steal.js]: 🧪 Stealth buff applied - Steal roll increased by ${buffEffects.stealthBoost} to ${roll}`);
+        }
+    }
     
     return roll;
 }

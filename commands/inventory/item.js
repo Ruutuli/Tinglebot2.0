@@ -27,6 +27,7 @@ const { getVillageEmojiByName } = require('../../modules/locationsModule');
 const { createDebuffEmbed } = require('../../embeds/embeds');
 const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
+const { applyElixirBuff, getElixirInfo, removeExpiredBuffs } = require('../../modules/elixirModule');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
@@ -801,6 +802,191 @@ module.exports = {
           });
 
         return void await interaction.editReply({ embeds: [compressionEmbed] });
+      }
+
+      // ------------------- Elixir Handling -------------------
+      // Specialized logic for Breath of the Wild elixirs: applies buffs and effects
+      const elixirInfo = getElixirInfo(item.itemName);
+      if (elixirInfo) {
+        // Force quantity to 1 for elixirs (they're powerful items)
+        if (quantity !== 1) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0x8B4513,
+              title: '🧪 Elixir Usage',
+              description: `❌ **Elixirs can only be used one at a time.**\nPlease use a quantity of 1.`,
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Elixir System'
+              }
+            }],
+            ephemeral: true
+          });
+        }
+
+        // Check if character already has an active buff
+        if (character.buff?.active) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0x8B4513,
+              title: '❌ Active Buff Found',
+              description: `${character.name} already has an active buff and cannot use another elixir at this time.`,
+              fields: [
+                { 
+                  name: '🧪 Current Active Buff', 
+                  value: `\`${character.buff.type}\` (Level ${character.buff.level})`, 
+                  inline: true 
+                },
+                { 
+                  name: '⏰ Remaining Time', 
+                  value: `${Math.ceil((new Date(character.buff.endDate) - new Date()) / (1000 * 60))} minutes`, 
+                  inline: true 
+                }
+              ],
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Please wait for your current buff to expire before using another elixir'
+              }
+            }],
+            ephemeral: true
+          });
+        }
+
+        // Apply the elixir buff
+        try {
+          applyElixirBuff(character, item.itemName);
+          
+          // Update character in database
+          const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+          await updateFunction(character._id, { buff: character.buff });
+          
+          // Update hearts and stamina if they were modified
+          if (character.currentHearts !== character.currentHearts) {
+            await updateCurrentHearts(character._id, character.currentHearts);
+          }
+          if (character.currentStamina !== character.currentStamina) {
+            await updateCurrentStamina(character._id, character.currentStamina);
+          }
+        } catch (error) {
+          handleError(error, 'item.js', {
+            commandName: 'item',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName,
+            itemName,
+            options: { elixirError: true }
+          });
+          
+          return void await interaction.editReply({
+            content: '❌ **Failed to apply elixir effect. Please try again later.**',
+            ephemeral: true
+          });
+        }
+
+        // Remove the elixir from inventory
+        await removeItemInventoryDatabase(character._id, item.itemName, 1, interaction);
+
+        // Log elixir usage to Google Sheets
+        const inventoryLink = character.inventory || character.inventoryLink;
+        if (typeof inventoryLink === 'string') {
+          const { category = [], type = [], subtype = [] } = item;
+          const formattedDateTime = new Date().toISOString();
+          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+          const values = [[
+            character.name,
+            item.itemName,
+            '-1',
+            Array.isArray(category) ? category.join(', ') : category,
+            Array.isArray(type) ? type.join(', ') : type,
+            Array.isArray(subtype) ? subtype.join(', ') : subtype,
+            `Used ${item.itemName} for buff effects`,
+            character.job,
+            '',
+            character.currentVillage,
+            interactionUrl,
+            formattedDateTime,
+            ''
+          ]];
+          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
+            skipValidation: true,
+            context: {
+              commandName: 'item',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              options: {
+                characterName,
+                itemName,
+                quantity
+              }
+            }
+          });
+        }
+
+        // ------------------- Build and Send Elixir Embed -------------------
+        const buffEffects = character.buff.effects;
+        const effectFields = [];
+        
+        // Add effect fields based on what the elixir provides
+        if (buffEffects.blightResistance > 0) {
+          effectFields.push({ name: '🧿 Blight Resistance', value: `+${buffEffects.blightResistance}`, inline: true });
+        }
+        if (buffEffects.electricResistance > 0) {
+          effectFields.push({ name: '⚡ Electric Resistance', value: `+${buffEffects.electricResistance}`, inline: true });
+        }
+        if (buffEffects.staminaBoost > 0) {
+          effectFields.push({ name: '🟩 Stamina Boost', value: `+${buffEffects.staminaBoost}`, inline: true });
+        }
+        if (buffEffects.staminaRecovery > 0) {
+          effectFields.push({ name: '💚 Stamina Recovery', value: `+${buffEffects.staminaRecovery}`, inline: true });
+        }
+
+        if (buffEffects.fireResistance > 0) {
+          effectFields.push({ name: '🔥 Fire Resistance', value: `+${buffEffects.fireResistance}`, inline: true });
+        }
+        if (buffEffects.speedBoost > 0) {
+          effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });
+        }
+        if (buffEffects.extraHearts > 0) {
+          effectFields.push({ name: '❤️ Extra Hearts', value: `+${buffEffects.extraHearts}`, inline: true });
+        }
+        if (buffEffects.attackBoost > 0) {
+          effectFields.push({ name: '⚔️ Attack Boost', value: `+${buffEffects.attackBoost}`, inline: true });
+        }
+        if (buffEffects.stealthBoost > 0) {
+          effectFields.push({ name: '👻 Stealth Boost', value: `+${buffEffects.stealthBoost}`, inline: true });
+        }
+        if (buffEffects.coldResistance > 0) {
+          effectFields.push({ name: '❄️ Cold Resistance', value: `+${buffEffects.coldResistance}`, inline: true });
+        }
+        if (buffEffects.defenseBoost > 0) {
+          effectFields.push({ name: '🛡️ Defense Boost', value: `+${buffEffects.defenseBoost}`, inline: true });
+        }
+
+        const elixirEmbed = new EmbedBuilder()
+          .setColor('#8B4513')
+          .setTitle('🧪 Elixir Consumed!')
+          .setDescription(
+            `**${character.name}** has consumed a **${item.itemName}**!\n\n` +
+            `${elixirInfo.description}\n\n` +
+            `**✨ Active Effects:**`
+          )
+          .addFields([
+            { name: '🧪 Elixir Type', value: `\`${elixirInfo.type}\``, inline: true },
+            { name: '⏰ Duration', value: `Until Used`, inline: true },
+            ...effectFields
+          ])
+          .setThumbnail(item.image || character.icon)
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setFooter({ 
+            text: `Elixir effects active until used`,
+            iconURL: character.icon
+          });
+
+        return void await interaction.editReply({ embeds: [elixirEmbed] });
       }
 
       // ------------------- Debuff and Inventory Sync Checks -------------------

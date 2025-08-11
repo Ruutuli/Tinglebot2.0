@@ -163,10 +163,39 @@ function calculateFinalValue(character, diceRoll) {
   const blightMultiplier = character.blightEffects?.rollMultiplier || 1.0;
   const adjustedDiceRoll = Math.floor(diceRoll * blightMultiplier);
   
+  // Get elixir buff effects
+  const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+  const buffEffects = getActiveBuffEffects(character);
+  
+  // Apply elixir buffs to the dice roll
+  let finalDiceRoll = adjustedDiceRoll;
+  
+  // Speed boost affects gathering and movement
+  if (buffEffects.speedBoost > 0) {
+    finalDiceRoll += buffEffects.speedBoost;
+    console.log(`[rngModule.js]: 🧪 Speed buff applied - +${buffEffects.speedBoost} to roll`);
+    
+    // Consume hasty elixir after use
+    if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot')) {
+      consumeElixirBuff(character);
+    }
+  }
+  
+  // Stealth boost affects gathering success
+  if (buffEffects.stealthBoost > 0) {
+    finalDiceRoll += buffEffects.stealthBoost;
+    console.log(`[rngModule.js]: 🧪 Stealth buff applied - +${buffEffects.stealthBoost} to roll`);
+    
+    // Consume sneaky elixir after use
+    if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot')) {
+      consumeElixirBuff(character);
+    }
+  }
+  
   const attackSuccess = calculateAttackBuff(character);
   const defenseSuccess = calculateDefenseBuff(character);
   const adjustedRandomValue = applyBuffs(
-    adjustedDiceRoll,
+    finalDiceRoll,
     attackSuccess,
     defenseSuccess,
     character.attack,
@@ -178,11 +207,17 @@ function calculateFinalValue(character, diceRoll) {
     console.log(`[rngModule.js]: 🎲 Blight multiplier applied - Original: ${diceRoll}, Multiplier: ${blightMultiplier}x, Adjusted: ${adjustedDiceRoll}`);
   }
   
+  // Log elixir buff effects if present
+  if (buffEffects.speedBoost > 0 || buffEffects.stealthBoost > 0) {
+    console.log(`[rngModule.js]: 🧪 Elixir buffs applied - Final roll: ${finalDiceRoll} (Original: ${adjustedDiceRoll})`);
+  }
+  
   return {
-    damageValue: adjustedDiceRoll,
+    damageValue: finalDiceRoll,
     adjustedRandomValue,
     attackSuccess,
-    defenseSuccess
+    defenseSuccess,
+    elixirBuffs: buffEffects
   };
 }
 
