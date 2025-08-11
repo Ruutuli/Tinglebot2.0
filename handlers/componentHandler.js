@@ -919,13 +919,26 @@ async function handleRuuGameRoll(interaction) {
         if (roll === GAME_CONFIG.TARGET_SCORE) {
           console.log(`[RuuGame Component] Winner detected! User ${userId} rolled ${roll}`);
           console.log(`[RuuGame Component] Before setting winner - Session status: ${session.status}, winner: ${session.winner}`);
-          session.status = 'finished';
-          session.winner = userId;
-          session.winningScore = roll;
-          console.log(`[RuuGame Component] After setting winner - Session status: ${session.status}, winner: ${session.winner}`);
           gameEnded = true;
 
-          // Persist finished state atomically BEFORE any long operations to block further rolls
+          // STEP 1: Post winner embed immediately to prevent further button clicks
+          const immediateWinnerEmbed = await createRuuGameEmbed(
+            session,
+            '🎉 WINNER!',
+            interaction.user,
+            null,
+            roll
+          );
+          immediateWinnerEmbed.setTitle(
+            `🎲 RuuGame - ${interaction.user.username} rolled a ${roll} and WON!`
+          );
+          
+          await interaction.editReply({
+            embeds: [immediateWinnerEmbed],
+            components: [] // Remove buttons immediately
+          });
+
+          // STEP 2: Persist winner state to database BEFORE awarding prize
           try {
             const winnerPersist = await RuuGame.findOneAndUpdate(
               {
@@ -948,32 +961,21 @@ async function handleRuuGameRoll(interaction) {
 
             if (winnerPersist) {
               session = winnerPersist;
+              console.log(`[RuuGame Component] Winner state persisted - Session status: ${session.status}, winner: ${session.winner}`);
             } else {
               // If another process already finished it, load latest
               session = await RuuGame.findById(session._id);
+              console.log(`[RuuGame Component] Session already finished by another process - Status: ${session.status}, winner: ${session.winner}`);
             }
+            
+            // Double-check the session state before proceeding
+            console.log(`[RuuGame Component] Session state before prize awarding - Status: ${session.status}, winner: ${session.winner}`);
           } catch (persistError) {
             console.error('[RuuGame Component] Failed to persist winner immediately:', persistError);
+            // Continue with prize awarding even if persistence fails
           }
 
-          // Immediately send winner announcement to prevent further button clicks
-          const immediateWinnerEmbed = await createRuuGameEmbed(
-            session,
-            '🎉 WINNER!',
-            interaction.user,
-            null,
-            roll
-          );
-          immediateWinnerEmbed.setTitle(
-            `🎲 RuuGame - ${interaction.user.username} rolled a ${roll} and WON!`
-          );
-          
-          await interaction.editReply({
-            embeds: [immediateWinnerEmbed],
-            components: [] // Remove buttons immediately
-          });
-
-          // Award prize in background (non-blocking)
+          // STEP 3: Award prize AFTER winner state is persisted
           try {
             console.log(`[RuuGame Component] Awarding prize to user ${userId}`);
             console.log(`[RuuGame Component] Before awardRuuGamePrize - Session status: ${session.status}, winner: ${session.winner}`);
@@ -993,13 +995,17 @@ async function handleRuuGameRoll(interaction) {
                 },
                 { new: true, runValidators: true }
               );
-              if (prizeUpdate) session = prizeUpdate;
+              if (prizeUpdate) {
+                session = prizeUpdate;
+                console.log(`[RuuGame Component] Prize metadata persisted - Session status: ${session.status}, winner: ${session.winner}`);
+              }
             } catch (prizePersistError) {
               console.error('[RuuGame Component] Failed to persist prize claim data:', prizePersistError);
             }
             
             // Update the embed with prize information if successful
             if (prizeCharacter) {
+              console.log(`[RuuGame Component] Creating final winner embed - Session status: ${session.status}, winner: ${session.winner}`);
               const finalWinnerEmbed = await createRuuGameEmbed(
                 session,
                 '🎉 WINNER!',
@@ -1027,79 +1033,84 @@ async function handleRuuGameRoll(interaction) {
           session.status = 'active';
         }
 
-        // Use findOneAndUpdate with optimistic concurrency control
-        console.log(`[RuuGame Component] Before findOneAndUpdate - Session ${session.sessionId} status: ${session.status}, winner: ${session.winner}`);
-        
-        // Prepare the update data
-        const updateData = {
-          players: session.players,
-          status: session.status,
-          winner: session.winner,
-          winningScore: session.winningScore,
-          prizeClaimed: session.prizeClaimed,
-          prizeClaimedBy: session.prizeClaimedBy,
-          prizeClaimedAt: session.prizeClaimedAt
-        };
-        
-        // Remove undefined values to prevent MongoDB errors
-        Object.keys(updateData).forEach(key => {
-          if (updateData[key] === undefined) {
-            delete updateData[key];
-          }
-        });
-        
-        const updateResult = await RuuGame.findOneAndUpdate(
-          { 
-            _id: session._id,
-            __v: session.__v, // Optimistic locking using version
-            status: { $ne: 'finished' }
-          },
-          {
-            $set: updateData,
-            $inc: { __v: 1 } // Increment version
-          },
-          { 
-            new: true, // Return the updated document
-            runValidators: true
-          }
-        );
-        
-        if (updateResult) {
-          console.log(`[RuuGame Component] After findOneAndUpdate - Session ${updateResult.sessionId} status: ${updateResult.status}, winner: ${updateResult.winner}`);
-          // Successfully updated - use the updated session
-          session = updateResult;
-        } else {
-          console.log(`[RuuGame Component] findOneAndUpdate returned null - version conflict or session not found`);
-          // Check if the session was finished by another process; if so, inform user and stop
-          try {
-            const latestSession = await RuuGame.findById(session._id);
-            if (latestSession && latestSession.status === 'finished') {
-              const endedEmbed = await createRuuGameEmbed(latestSession, 'Game Ended');
-              if (hasDeferred) {
-                await interaction.editReply({
-                  embeds: [endedEmbed],
-                  components: []
-                });
-              } else if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({
-                  embeds: [endedEmbed],
-                  components: [],
-                  flags: 64
-                });
-              }
-              break; // Stop retrying; game is over
+        // Skip final update if game is already finished (winner case)
+        if (!gameEnded) {
+          // Use findOneAndUpdate with optimistic concurrency control
+          console.log(`[RuuGame Component] Before findOneAndUpdate - Session ${session.sessionId} status: ${session.status}, winner: ${session.winner}`);
+          
+          // Prepare the update data
+          const updateData = {
+            players: session.players,
+            status: session.status,
+            winner: session.winner,
+            winningScore: session.winningScore,
+            prizeClaimed: session.prizeClaimed,
+            prizeClaimedBy: session.prizeClaimedBy,
+            prizeClaimedAt: session.prizeClaimedAt
+          };
+          
+          // Remove undefined values to prevent MongoDB errors
+          Object.keys(updateData).forEach(key => {
+            if (updateData[key] === undefined) {
+              delete updateData[key];
             }
-          } catch (checkError) {
-            console.error('[RuuGame Component] Failed checking latest session after version conflict:', checkError);
+          });
+          
+          const updateResult = await RuuGame.findOneAndUpdate(
+            { 
+              _id: session._id,
+              __v: session.__v, // Optimistic locking using version
+              status: { $ne: 'finished' }
+            },
+            {
+              $set: updateData,
+              $inc: { __v: 1 } // Increment version
+            },
+            { 
+              new: true, // Return the updated document
+              runValidators: true
+            }
+          );
+          
+          if (updateResult) {
+            console.log(`[RuuGame Component] After findOneAndUpdate - Session ${updateResult.sessionId} status: ${updateResult.status}, winner: ${updateResult.winner}`);
+            // Successfully updated - use the updated session
+            session = updateResult;
+          } else {
+            console.log(`[RuuGame Component] findOneAndUpdate returned null - version conflict or session not found`);
+            // Check if the session was finished by another process; if so, inform user and stop
+            try {
+              const latestSession = await RuuGame.findById(session._id);
+              if (latestSession && latestSession.status === 'finished') {
+                const endedEmbed = await createRuuGameEmbed(latestSession, 'Game Ended');
+                if (hasDeferred) {
+                  await interaction.editReply({
+                    embeds: [endedEmbed],
+                    components: []
+                  });
+                } else if (!interaction.replied && !interaction.deferred) {
+                  await interaction.reply({
+                    embeds: [endedEmbed],
+                    components: [],
+                    flags: 64
+                  });
+                }
+                break; // Stop retrying; game is over
+              }
+            } catch (checkError) {
+              console.error('[RuuGame Component] Failed checking latest session after version conflict:', checkError);
+            }
+            // Version conflict - retry
+            retryCount++;
+            if (retryCount >= maxRetries) {
+              throw new Error('Failed to update session after multiple retries due to concurrent modifications');
+            }
+            // Wait a bit before retrying to reduce contention
+            await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+            continue; // Retry the loop
           }
-          // Version conflict - retry
-          retryCount++;
-          if (retryCount >= maxRetries) {
-            throw new Error('Failed to update session after multiple retries due to concurrent modifications');
-          }
-          // Wait a bit before retrying to reduce contention
-          await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
-          continue; // Retry the loop
+        } else {
+          console.log(`[RuuGame Component] Skipping final update - game already finished`);
         }
 
         // Only send response if this wasn't a winning roll (winner response already sent)
@@ -1172,6 +1183,8 @@ async function handleRuuGameRoll(interaction) {
 // ------------------- Function: createRuuGameEmbed -------------------
 // Creates an embed showing game information
 async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCharacter = null, roll = null) {
+  console.log(`[createRuuGameEmbed] Creating embed - Session status: ${session.status}, winner: ${session.winner}, prizeCharacter: ${prizeCharacter?.name || 'None'}`);
+  
   // Fetch the actual item emoji from ItemModel
   const itemDetails = await ItemModel.findOne({ itemName: PRIZES[session.prizeType].itemName }).select('emoji');
   const itemEmoji = itemDetails?.emoji || PRIZES[session.prizeType].emoji; // Fallback to hardcoded emoji if not found
@@ -1203,6 +1216,7 @@ async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCha
   }
   
   if (session.winner) {
+    console.log(`[createRuuGameEmbed] Adding winner field - Winner: ${session.winner}, Winning Score: ${session.winningScore}, Prize Character: ${prizeCharacter?.name || 'None'}, Prize Claimed: ${session.prizeClaimed}`);
     const winner = session.players.find(p => p.discordId === session.winner);
     let winnerValue = `**${winner.username}** rolled a perfect **${session.winningScore}**!`;
     
@@ -1217,6 +1231,8 @@ async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCha
       value: winnerValue, 
       inline: false 
     });
+  } else {
+    console.log(`[createRuuGameEmbed] No winner yet - Session status: ${session.status}`);
   }
   
   return embed;

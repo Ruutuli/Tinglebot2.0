@@ -272,12 +272,9 @@ module.exports = {
 
     if (roll === GAME_CONFIG.TARGET_SCORE) {
       console.log(`[RuuGame] Winner detected! User ${userId} rolled ${roll}`);
-      session.status = 'finished';
-      session.winner = userId;
-      session.winningScore = roll;
       gameEnded = true;
 
-      // Persist winner immediately to prevent further rolls overriding state
+      // STEP 1: Persist winner state to database BEFORE awarding prize
       try {
         const winnerPersist = await RuuGame.findOneAndUpdate(
           {
@@ -295,11 +292,18 @@ module.exports = {
           },
           { new: true, runValidators: true }
         );
-        if (winnerPersist) session = winnerPersist;
+        if (winnerPersist) {
+          session = winnerPersist;
+          console.log(`[RuuGame] Winner state persisted - Session status: ${session.status}, winner: ${session.winner}`);
+        }
+        
+        // Double-check the session state before proceeding
+        console.log(`[RuuGame] Session state before prize awarding - Status: ${session.status}, winner: ${session.winner}`);
       } catch (persistError) {
         console.error('[RuuGame] Failed to persist winner immediately:', persistError);
       }
 
+      // STEP 2: Award prize AFTER winner state is persisted
       try {
         console.log(`[RuuGame] Awarding prize to user ${userId}`);
         console.log(`[RuuGame] Before awardRuuGamePrize - Session status: ${session.status}, winner: ${session.winner}`);
@@ -310,7 +314,7 @@ module.exports = {
 
         // Persist prize metadata if any
         try {
-          await RuuGame.findOneAndUpdate(
+          const prizeUpdate = await RuuGame.findOneAndUpdate(
             { _id: session._id },
             {
               $set: {
@@ -321,6 +325,10 @@ module.exports = {
             },
             { new: true, runValidators: true }
           );
+          if (prizeUpdate) {
+            session = prizeUpdate;
+            console.log(`[RuuGame] Prize metadata persisted - Session status: ${session.status}, winner: ${session.winner}`);
+          }
         } catch (prizePersistError) {
           console.error('[RuuGame] Failed to persist prize claim data:', prizePersistError);
         }
@@ -335,43 +343,49 @@ module.exports = {
       session.status = 'active';
     }
     
-    // Save the session with updated player data
-    console.log(`[RuuGame] Before save - Session ${session.sessionId} status: ${session.status}, winner: ${session.winner}`);
-    try {
-      await session.save();
-      console.log(`[RuuGame] Session ${session.sessionId} saved successfully. Status: ${session.status}`);
-    } catch (saveError) {
-      console.error('Error saving session:', saveError);
-      // Try to save with findOneAndUpdate as fallback
+    // Only save/update session if game hasn't ended (winner case already handled)
+    if (!gameEnded) {
+      // Save the session with updated player data
+      console.log(`[RuuGame] Before save - Session ${session.sessionId} status: ${session.status}, winner: ${session.winner}`);
       try {
-        const updateResult = await RuuGame.findOneAndUpdate(
-          { _id: session._id, status: { $ne: 'finished' } },
-          {
-            $set: {
-              players: session.players,
-              status: session.status,
-              winner: session.winner,
-              winningScore: session.winningScore,
-              prizeClaimed: session.prizeClaimed,
-              prizeClaimedBy: session.prizeClaimedBy,
-              prizeClaimedAt: session.prizeClaimedAt
-            }
-          },
-          { new: true, runValidators: true }
-        );
-        if (updateResult) {
-          session = updateResult;
-          console.log(`[RuuGame] Session ${session.sessionId} updated via findOneAndUpdate. Status: ${session.status}`);
+        await session.save();
+        console.log(`[RuuGame] Session ${session.sessionId} saved successfully. Status: ${session.status}`);
+      } catch (saveError) {
+        console.error('Error saving session:', saveError);
+        // Try to save with findOneAndUpdate as fallback
+        try {
+          const updateResult = await RuuGame.findOneAndUpdate(
+            { _id: session._id, status: { $ne: 'finished' } },
+            {
+              $set: {
+                players: session.players,
+                status: session.status,
+                winner: session.winner,
+                winningScore: session.winningScore,
+                prizeClaimed: session.prizeClaimed,
+                prizeClaimedBy: session.prizeClaimedBy,
+                prizeClaimedAt: session.prizeClaimedAt
+              }
+            },
+            { new: true, runValidators: true }
+          );
+          if (updateResult) {
+            session = updateResult;
+            console.log(`[RuuGame] Session ${updatedSession.sessionId} updated via findOneAndUpdate. Status: ${session.status}`);
+          }
+        } catch (updateError) {
+          console.error('Error updating session via findOneAndUpdate:', updateError);
         }
-      } catch (updateError) {
-        console.error('Error updating session via findOneAndUpdate:', updateError);
       }
+    } else {
+      console.log(`[RuuGame] Skipping session save - game already finished`);
     }
     
     // Fetch the updated session to ensure we have the latest data
     const updatedSession = await RuuGame.findById(session._id);
     console.log(`[RuuGame] After save - Session ${updatedSession.sessionId} status: ${updatedSession.status}, winner: ${updatedSession.winner}`);
     
+    console.log(`[RuuGame] Creating final embed - Session status: ${updatedSession.status}, winner: ${updatedSession.winner}, gameEnded: ${gameEnded}`);
     const embed = await createRuuGameEmbed(updatedSession, gameEnded ? '🎉 WINNER!' : 'Roll Result!', interaction.user, prizeCharacter, roll);
     
     // Add roll announcement for non-winner rolls
