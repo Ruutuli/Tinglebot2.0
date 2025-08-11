@@ -858,19 +858,24 @@ module.exports = {
 
         // Apply the elixir buff
         try {
+          // Apply immediate healing effects first
+          if (item.modifierHearts) {
+            const healAmount = Math.min(item.modifierHearts, character.maxHearts - character.currentHearts);
+            character.currentHearts += healAmount;
+            await updateCurrentHearts(character._id, character.currentHearts);
+          }
+          
+          if (item.staminaRecovered) {
+            const staminaRecovered = Math.min(item.staminaRecovered, character.maxStamina - character.currentStamina);
+            character.currentStamina += staminaRecovered;
+            await updateCurrentStamina(character._id, character.currentStamina);
+          }
+          
           applyElixirBuff(character, item.itemName);
           
           // Update character in database
           const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
           await updateFunction(character._id, { buff: character.buff });
-          
-          // Update hearts and stamina if they were modified
-          if (character.currentHearts !== character.currentHearts) {
-            await updateCurrentHearts(character._id, character.currentHearts);
-          }
-          if (character.currentStamina !== character.currentStamina) {
-            await updateCurrentStamina(character._id, character.currentStamina);
-          }
         } catch (error) {
           handleError(error, 'item.js', {
             commandName: 'item',
@@ -984,6 +989,23 @@ module.exports = {
             text: `Elixir effects active until used`,
             iconURL: character.icon
           });
+
+        // Add healing information if hearts or stamina were restored
+        if (item.modifierHearts || item.staminaRecovered) {
+          let healingInfo = '';
+          if (item.modifierHearts) {
+            healingInfo += `❤️ **Hearts restored: +${item.modifierHearts}**\n`;
+          }
+          if (item.staminaRecovered) {
+            healingInfo += `🟩 **Stamina restored: +${item.staminaRecovered}**\n`;
+          }
+          
+          elixirEmbed.addFields({
+            name: '💚 Immediate Effects',
+            value: healingInfo,
+            inline: false
+          });
+        }
 
         return void await interaction.editReply({ embeds: [elixirEmbed] });
       }
