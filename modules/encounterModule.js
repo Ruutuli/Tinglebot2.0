@@ -15,10 +15,9 @@
 // ============================================================================
 const { handleKO, useHearts } = require('./characterStatsModule');
 const Monster = require('../models/MonsterModel');
-const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('./buffModule');
+const { calculateAttackBuff, calculateDefenseBuff, applyBuffs, getDamageResistance } = require('./buffModule');
 const { handleError } = require('../utils/globalErrorHandler');
 const { retrieveFromStorage, saveToStorage } = require('../utils/storage');
-
 
 // ============================================================================
 // Utility Functions
@@ -29,6 +28,55 @@ function logBattleDetails(tier, characterName, monsterName, roll, damage, monste
     console.log(`[encounterModule.js]: ⚔️ ${characterName} vs ${monsterName} (T${tier}) - Roll: ${roll}/100`);
     if (damage > 0 || monsterDamage > 0) {
         console.log(`[encounterModule.js]: 💥 Damage - ${characterName}: ${damage}, ${monsterName}: ${monsterDamage}`);
+    }
+}
+
+// ------------------- Calculate Damage Function -------------------
+// Calculates damage with resistance considerations for electric enemies
+function calculateDamage(attacker, defender) {
+    try {
+        let baseDamage = 1; // Base damage is 1 heart
+        
+        // Check if this is a monster attacking a character (for resistance calculation)
+        if (defender.buff && defender.buff.active) {
+            const { getActiveBuffEffects } = require('./elixirModule');
+            const buffEffects = getActiveBuffEffects(defender);
+            
+            // Check if monster is electric type and character has electric resistance
+            if (attacker.name && attacker.name.includes('Electric') && buffEffects.electricResistance > 0) {
+                // Electric resistance reduces damage by 50% per level
+                const resistanceReduction = buffEffects.electricResistance * 0.5;
+                baseDamage = Math.max(0, baseDamage - resistanceReduction);
+                console.log(`[encounterModule.js]: ⚡ Electric resistance applied - Damage reduced from 1 to ${baseDamage} hearts`);
+                
+                // Consume electro elixir after use
+                const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+                if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
+                    consumeElixirBuff(defender);
+                    console.log(`[encounterModule.js]: 🧪 Electro Elixir consumed after electric resistance use`);
+                }
+            }
+            
+            // Check if monster is fire type and character has fire resistance
+            if (attacker.name && attacker.name.includes('Fire') && buffEffects.fireResistance > 0) {
+                // Fire resistance reduces damage by 50% per level
+                const resistanceReduction = buffEffects.fireResistance * 0.5;
+                baseDamage = Math.max(0, baseDamage - resistanceReduction);
+                console.log(`[encounterModule.js]: 🔥 Fire resistance applied - Damage reduced from 1 to ${baseDamage} hearts`);
+                
+                // Consume fireproof elixir after use
+                const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+                if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
+                    consumeElixirBuff(defender);
+                    console.log(`[encounterModule.js]: 🧪 Fireproof Elixir consumed after fire resistance use`);
+                }
+            }
+        }
+        
+        return Math.max(0, baseDamage); // Ensure damage is never negative
+    } catch (error) {
+        console.error(`[encounterModule.js]: ❌ Error in calculateDamage:`, error);
+        return 1; // Fallback to base damage
     }
 }
 
@@ -166,19 +214,19 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = 5;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️ 3 hearts!`;
-        characterDamage = 3;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️ 2 hearts!`;
-        characterDamage = 2;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = 1;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 45) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = 1;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 54) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
     } else if (adjustedRandomValue <= 63) {
@@ -256,22 +304,22 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
-        characterDamage = 6;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️ 4 hearts!`;
-        characterDamage = 4;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️ 3 hearts!`;
-        characterDamage = 3;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️ 2 hearts!`;
-        characterDamage = 2;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = 1;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = 1;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
     } else if (adjustedRandomValue <= 72) {
@@ -347,22 +395,22 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!`;
-        characterDamage = 7;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = 5;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️ 4 hearts!`;
-        characterDamage = 4;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️ 3 hearts!`;
-        characterDamage = 3;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️ 2 hearts!`;
-        characterDamage = 2;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = 1;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
     } else if (adjustedRandomValue <= 72) {
@@ -438,22 +486,22 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!`;
-        characterDamage = 8;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
-        characterDamage = 6;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = 5;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️ 4 hearts!`;
-        characterDamage = 4;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️ 3 hearts!`;
-        characterDamage = 3;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = 1;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
     } else if (adjustedRandomValue <= 72) {
@@ -529,22 +577,22 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️❤️ 9 hearts!`;
-        characterDamage = 9;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!`;
-        characterDamage = 7;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
-        characterDamage = 6;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = 5;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️ 4 hearts!`;
-        characterDamage = 4;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = 1;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
     } else if (adjustedRandomValue <= 72) {
@@ -620,22 +668,22 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️ 10 hearts!`;
-        characterDamage = 10;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!`;
-        characterDamage = 8;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!`;
-        characterDamage = 7;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
-        characterDamage = 6;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = 5;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = 1;
+        characterDamage = calculateDamage(monster, character);
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
     } else if (adjustedRandomValue <= 72) {
@@ -932,5 +980,6 @@ module.exports = {
     getTier7EncounterOutcome,
     getTier8EncounterOutcome,
     getTier9EncounterOutcome,
-    getTier10EncounterOutcome
+    getTier10EncounterOutcome,
+    calculateDamage
 }; 

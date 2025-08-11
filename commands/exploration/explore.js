@@ -1468,6 +1468,22 @@ module.exports = {
       defenseSuccess
      );
 
+     // ------------------- Elixir Consumption Logic -------------------
+     // Check if elixirs should be consumed based on the exploration encounter
+     try {
+       const { shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
+       if (shouldConsumeElixir(character, 'combat', { monster: selectedMonster })) {
+         consumeElixirBuff(character);
+         console.log(`[explore.js]: 🧪 Elixir consumed for ${character.name} during exploration encounter with ${selectedMonster.name}`);
+         
+         // Update character in database to persist the consumed elixir
+         await character.save();
+       }
+     } catch (elixirError) {
+       console.error(`[explore.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
+       // Don't fail the exploration if elixir consumption fails
+     }
+
      if (outcome.hearts > 0) {
       party.totalHearts = Math.max(0, party.totalHearts - outcome.hearts);
       character.currentHearts = Math.max(

@@ -514,6 +514,7 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   const { getEncounterOutcome } = require('../../modules/encounterModule.js');
   const { updateCurrentHearts } = require('../../modules/characterStatsModule.js');
   const { generateVictoryMessage, generateDamageMessage, generateHelpWantedDamageMessage, generateFinalOutcomeMessage, generateDefenseBuffMessage, generateAttackBuffMessage } = require('../../modules/flavorTextModule.js');
+  const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
   
   const monster = await fetchMonsterByName(monsterName);
   if (!monster) {
@@ -522,7 +523,7 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   
   const items = await fetchItemsByMonster(monsterName);
   const diceRoll = Math.floor(Math.random() * 100) + 1;
-  const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
+  const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, elixirBuffs } = calculateFinalValue(character, diceRoll);
   const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
   
   // Generate outcome message
@@ -537,6 +538,28 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     outcomeMessage = generateVictoryMessage(adjustedRandomValue, outcome.defenseSuccess, outcome.attackSuccess);
   } else {
     outcomeMessage = generateFinalOutcomeMessage(damageValue, outcome.defenseSuccess, outcome.attackSuccess, adjustedRandomValue, damageValue);
+  }
+  
+  // Add elixir buff information to the outcome message if active
+  if (elixirBuffs && (elixirBuffs.speedBoost > 0 || elixirBuffs.stealthBoost > 0 || elixirBuffs.attackBoost > 0 || elixirBuffs.defenseBoost > 0)) {
+    let buffInfo = '\n\n🧪 **Active Elixir Effects:**';
+    if (elixirBuffs.speedBoost > 0) buffInfo += `\n• Speed Boost: +${elixirBuffs.speedBoost}`;
+    if (elixirBuffs.stealthBoost > 0) buffInfo += `\n• Stealth Boost: +${elixirBuffs.stealthBoost}`;
+    if (elixirBuffs.attackBoost > 0) buffInfo += `\n• Attack Boost: +${elixirBuffs.attackBoost}`;
+    if (elixirBuffs.defenseBoost > 0) buffInfo += `\n• Defense Boost: +${elixirBuffs.defenseBoost}`;
+    outcomeMessage += buffInfo;
+  }
+  
+  // Check if elixirs should be consumed based on the encounter
+  if (shouldConsumeElixir(character, 'helpWanted', { monster: monster })) {
+    consumeElixirBuff(character);
+    // Update character in database
+    const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
+    const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+    await updateFunction(character._id, { buff: character.buff });
+    
+    // Add consumption message
+    outcomeMessage += '\n\n🧪 **Elixir consumed!** The protective effects have been used up.';
   }
   
   // Hearts are already applied in getEncounterOutcome; fetch refreshed value
@@ -558,7 +581,8 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     outcomeMessage,
     newHeartsRemaining,
     lootedItem,
-    adjustedRandomValue
+    adjustedRandomValue,
+    elixirBuffs
   };
 }
 

@@ -51,6 +51,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Modules -------------------
 const { handleKO, useHearts } = require('../modules/characterStatsModule');
 const { getGearModLevel } = require('../modules/gearModule');
+const { calculateAttackBuff, calculateDefenseBuff, getDamageResistance } = require('./buffModule');
 
 // ------------------- Utility Functions -------------------
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
@@ -208,6 +209,9 @@ function getTotalDefense(character) {
     total += shieldMod;
   }
   
+  // Apply elixir defense buff
+  total = calculateDefenseBuff(character, total);
+  
   return total;
 }
 
@@ -217,7 +221,12 @@ function getWeaponMod(character) {
     console.log(`[pvpCombatModule.js]: debug - ${character.name} has no gearWeapon defined, defaulting weapon mod to 0.`);
     return 0;
   }
-  return getGearModLevel(character.gearWeapon);
+  let weaponMod = getGearModLevel(character.gearWeapon);
+  
+  // Apply elixir attack buff
+  weaponMod = calculateAttackBuff(character, weaponMod);
+  
+  return weaponMod;
 }
 
 // ------------------- Check Flurry Trigger -------------------
@@ -244,6 +253,16 @@ async function takePvPTurn(battleId, attacker, defender) {
   const { total: rollTotal, rolls } = rollWeaponDice(weaponMod);
   const defense = getTotalDefense(defender || battleProgress.characters.defender);
 
+  // Check for elixir buff effects in the battle log
+  let buffInfo = '';
+  if (attacker.buff?.active) {
+    buffInfo += `\n🧪 **${attacker.name}** has active **${attacker.buff.type}** buff`;
+  }
+  if (defender?.buff?.active || battleProgress.characters.defender?.buff?.active) {
+    const defenderChar = defender || battleProgress.characters.defender;
+    buffInfo += `\n🧪 **${defenderChar.name}** has active **${defenderChar.buff.type}** buff`;
+  }
+
   const outcome = {
     attacker: attacker.name,
     defender: (defender || battleProgress.characters.defender).name,
@@ -257,7 +276,7 @@ async function takePvPTurn(battleId, attacker, defender) {
 
   await updateBattleProgress(battleId, 
     `${attacker.name} rolled ${rollTotal} (${rolls.join(', ')}) against ${outcome.defender}'s defense of ${defense}. ` +
-    `${outcome.success ? 'Hit!' : 'Miss!'}`, 
+    `${outcome.success ? 'Hit!' : 'Miss!'}${buffInfo}`, 
     outcome
   );
 
