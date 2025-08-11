@@ -315,12 +315,27 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
       console.error('[heal.js]: ❌ JOB_PERK_HEALING environment variable not set');
     }
     
-    const sentMessage = await interaction.followUp({
-      content: healerName
-        ? `🔔 <@${healerCharacter.userId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
-        : `🔔 <@&${healingRoleId || '1083191610478698547'}>, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
-      embeds: [embed],
-    });
+    let sentMessage;
+    
+    if (healerName) {
+      // Specific healer request - single message with user ping
+      sentMessage = await interaction.followUp({
+        content: `🔔 <@${healerCharacter.userId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`,
+        embeds: [embed],
+      });
+    } else {
+      // General healing request - double message approach for proper role pinging
+      // First message: ping the healing role
+      await interaction.followUp({
+        content: `🔔 <@&${healingRoleId || '1083191610478698547'}>`,
+      });
+      
+      // Second message: the actual healing request content
+      sentMessage = await interaction.followUp({
+        content: `Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
+        embeds: [embed],
+      });
+    }
 
     const healingRequestData = createHealingRequestData(
       characterToHeal,
