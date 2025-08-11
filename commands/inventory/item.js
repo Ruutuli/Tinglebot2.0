@@ -975,8 +975,7 @@ module.exports = {
             `**✨ Active Effects:**`
           )
           .addFields([
-            { name: '🧪 Elixir Type', value: `\`${elixirInfo.type}\``, inline: true },
-            { name: '⏰ Duration', value: `Until Used`, inline: true },
+            { name: '❤️ Current Hearts', value: `**${character.currentHearts}/${character.maxHearts}**`, inline: true },
             ...effectFields
           ])
           .setThumbnail(item.image || character.icon)
