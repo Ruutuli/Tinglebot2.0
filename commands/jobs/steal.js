@@ -1106,6 +1106,15 @@ module.exports = {
                     return;
                 }
 
+                // Prevent Bandits from disabling canBeStolenFrom
+                if (!enabled && character.job === 'Bandit') {
+                    await interaction.reply({ 
+                        content: '❌ **Bandits cannot disable the "can be stolen from" setting.** This is a permanent restriction for characters with the Bandit job.', 
+                        ephemeral: true 
+                    });
+                    return;
+                }
+
                 await interaction.deferReply();
 
                 character.canBeStolenFrom = enabled;
@@ -1449,6 +1458,15 @@ module.exports = {
                 return;
             }
 
+            // Prevent characters with canBeStolenFrom disabled from using job vouchers to steal
+            if (!thiefCharacter.canBeStolenFrom && thiefCharacter.jobVoucher) {
+                await interaction.editReply({ 
+                    content: '❌ **You cannot use a job voucher to steal while your "can be stolen from" setting is disabled.**\n🔒 You must enable this setting first before you can use job vouchers for stealing.', 
+                    ephemeral: true 
+                });
+                return;
+            }
+
             // Check if thief is debuffed or KO'd
             if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
                 await interaction.editReply({ 
@@ -1476,19 +1494,7 @@ module.exports = {
                 return;
             }
 
-            // Update daily steal AFTER all validations and protection checks pass
-            if (!thiefCharacter.jobVoucher) {
-                try {
-                    await updateDailySteal(thiefCharacter, 'steal');
-                } catch (error) {
-                    console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
-                    await interaction.editReply({
-                        content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
-                        ephemeral: true
-                    });
-                    return;
-                }
-            }
+            // Daily steal will be updated only when actually attempting the steal
 
             // Handle NPC stealing
             if (targetType === 'npc') {
@@ -1553,6 +1559,20 @@ module.exports = {
                         await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ Spirit Orbs and vouchers are protected from theft.` });
                     }
                     return;
+                }
+
+                // Update daily steal only when actually attempting the steal
+                if (!thiefCharacter.jobVoucher) {
+                    try {
+                        await updateDailySteal(thiefCharacter, 'steal');
+                    } catch (error) {
+                        console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                        await interaction.editReply({
+                            content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
+                            ephemeral: true
+                        });
+                        return;
+                    }
                 }
 
                 const selectedItem = getRandomItemByWeight(filteredItems);
@@ -1694,6 +1714,20 @@ module.exports = {
                         await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**\n🛡️ Spirit Orbs and vouchers are protected from theft.` });
                     }
                     return;
+                }
+
+                // Update daily steal only when actually attempting the steal
+                if (!thiefCharacter.jobVoucher) {
+                    try {
+                        await updateDailySteal(thiefCharacter, 'steal');
+                    } catch (error) {
+                        console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                        await interaction.editReply({
+                            content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
+                            ephemeral: true
+                        });
+                        return;
+                    }
                 }
 
                 const selectedItem = getRandomItemByWeight(filteredItemsPlayer);
