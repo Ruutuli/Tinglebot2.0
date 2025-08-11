@@ -2696,10 +2696,14 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
 // ------------------- Help Wanted Quest ID Autocomplete -------------------
 async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
   try {
-      // Fetch active Help Wanted quests from the database (not just today's)
+      // Fetch only available Help Wanted quests (not completed, not expired)
       const HelpWantedQuest = require('../models/HelpWantedQuestModel');
+      const now = new Date();
+      const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+      
       const quests = await HelpWantedQuest.find({ 
-        completed: false 
+        completed: false,
+        date: today
       }).lean();
       
       // Format quest choices for autocomplete
