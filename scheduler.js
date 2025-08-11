@@ -112,6 +112,21 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 }
 
 // ============================================================================
+// ------------------- Helper Functions -------------------
+// ============================================================================
+
+// Helper function to get the appropriate village channel ID
+function getVillageChannelId(villageName) {
+  const villageChannels = {
+    'Rudania': process.env.RUDANIA_TOWNHALL,
+    'Inariko': process.env.INARIKO_TOWNHALL,
+    'Vhintl': process.env.VHINTL_TOWNHALL
+  };
+  
+  return villageChannels[villageName] || process.env.HELP_WANTED_TEST_CHANNEL;
+}
+
+// ============================================================================
 // ------------------- Weather Functions -------------------
 // ============================================================================
 
@@ -652,7 +667,6 @@ async function checkAndPostMissedQuests(client) {
       return;
     }
     
-    const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
     let posted = 0;
     
     for (const quest of unpostedQuests) {
@@ -672,21 +686,29 @@ async function checkAndPostMissedQuests(client) {
         const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
         const embed = embedsByVillage[quest.village];
         if (embed) {
-          const message = await channel.send({ embeds: [embed] });
-          const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
-            { _id: quest._id, messageId: null },
-            { 
-              messageId: message.id,
-              channelId: channel.id
-            },
-            { new: true }
-          );
+          // Get the appropriate village channel
+          const villageChannelId = getVillageChannelId(quest.village);
+          const channel = await client.channels.fetch(villageChannelId);
           
-          if (updatedQuest) {
-            console.log(`[scheduler.js]: Posted missed quest ${quest.questId} for ${quest.village} (was scheduled for ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')})`);
-            posted++;
+          if (channel) {
+            const message = await channel.send({ embeds: [embed] });
+            const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
+              { _id: quest._id, messageId: null },
+              { 
+                messageId: message.id,
+                channelId: channel.id
+              },
+              { new: true }
+            );
+            
+            if (updatedQuest) {
+              console.log(`[scheduler.js]: Posted missed quest ${quest.questId} for ${quest.village} in ${quest.village} town hall (was scheduled for ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')})`);
+              posted++;
+            } else {
+              console.log(`[scheduler.js]: Quest ${quest.questId} was already posted by another process, skipping`);
+            }
           } else {
-            console.log(`[scheduler.js]: Quest ${quest.questId} was already posted by another process, skipping`);
+            console.log(`[scheduler.js]: Could not fetch channel for ${quest.village} (ID: ${villageChannelId})`);
           }
         }
       }
@@ -718,32 +740,39 @@ async function checkAndPostScheduledQuests(client, cronTime) {
       return;
     }
     
-    const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
     let posted = 0;
     
     for (const quest of questsToPost) {
       const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
       const embed = embedsByVillage[quest.village];
       if (embed) {
-        const message = await channel.send({ embeds: [embed] });
-        const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
-          { _id: quest._id, messageId: null },
-          { 
-            messageId: message.id,
-            channelId: channel.id
-          },
-          { new: true }
-        );
+        // Get the appropriate village channel
+        const villageChannelId = getVillageChannelId(quest.village);
+        const channel = await client.channels.fetch(villageChannelId);
         
-        const parts = cronTime.split(' ');
-        const scheduledMinute = parseInt(parts[0]);
-        const scheduledHour = parseInt(parts[1]);
-        
-        if (updatedQuest) {
-          console.log(`[scheduler.js]: Posted quest ${quest.questId} for ${quest.village} at ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (scheduled time: ${cronTime})`);
-          posted++;
+        if (channel) {
+          const message = await channel.send({ embeds: [embed] });
+          const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
+            { _id: quest._id, messageId: null },
+            { 
+              messageId: message.id,
+              channelId: channel.id
+            },
+            { new: true }
+          );
+          
+          const parts = cronTime.split(' ');
+          const scheduledMinute = parseInt(parts[0]);
+          const scheduledHour = parseInt(parts[1]);
+          
+          if (updatedQuest) {
+            console.log(`[scheduler.js]: Posted quest ${quest.questId} for ${quest.village} in ${quest.village} town hall at ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (scheduled time: ${cronTime})`);
+            posted++;
+          } else {
+            console.log(`[scheduler.js]: Quest ${quest.questId} was already posted by another process, skipping`);
+          }
         } else {
-          console.log(`[scheduler.js]: Quest ${quest.questId} was already posted by another process, skipping`);
+          console.log(`[scheduler.js]: Could not fetch channel for ${quest.village} (ID: ${villageChannelId})`);
         }
       }
     }
