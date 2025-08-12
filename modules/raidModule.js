@@ -141,6 +141,9 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
         
         // Update character in database to persist the consumed elixir
         await character.save();
+      } else if (character.buff?.active) {
+        // Log when elixir is not used due to conditions not met
+        console.log(`[raidModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
       }
     } catch (elixirError) {
       console.error(`[raidModule.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);

@@ -375,6 +375,9 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         
         // Update character in database to persist the consumed elixir
         await character.save();
+      } else if (character.buff?.active) {
+        // Log when elixir is not used due to conditions not met
+        console.log(`[travelHandler.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
       }
     } catch (elixirError) {
       console.error(`[travelHandler.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
@@ -631,106 +634,4 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
     const decision = `😴 ${randomFlavor}`;
     // Update embed
     const description = 
-      `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
-      `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
-      `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-    const embed = createUpdatedTravelEmbed({
-      encounterMessage,
-      character,
-      description,
-      fields: [],
-    });
-    if (typeof encounterMessage?.edit === 'function') {
-      await encounterMessage.edit({ embeds: [embed], components: [] });
-    }
-    return decision;
-  } catch (error) {
-    handleError(error, 'travelHandler.js (handleGather)');
-    throw error;
-  }
-}
-
-// ============================================================================
-// ------------------- Primary Handler -------------------
-// ============================================================================
-
-// ------------------- Interaction Routing -------------------
-// Routes button interactions to specific helpers based on customId.
-async function handleTravelInteraction(
-    interaction,
-    character,
-    pathEmoji,
-    currentPath,
-    encounterMessage,
-    monster,
-    travelLog,
-    startingVillage,
-    preGeneratedFlavor
-  ) {
-    try {
-      // Check if this is a button interaction and handle potential expiration
-      if (interaction?.isButton?.()) {
-        try {
-          await interaction.deferUpdate();
-        } catch (err) {
-          if (err.code === 10062) {
-            console.warn(`[travelHandler.js]: ⚠️ Interaction expired for user ${interaction.user?.id || 'unknown'}`);
-            return '❌ This interaction has expired. Please try again or reissue the command.';
-          } else if (err.code === 10008) {
-            console.warn(`[travelHandler.js]: ⚠️ Unknown interaction for user ${interaction.user?.id || 'unknown'}`);
-            return '❌ This interaction is no longer valid. Please try again or reissue the command.';
-          } else {
-            console.error(`[travelHandler.js]: ❌ Unexpected interaction error:`, err);
-            throw err;
-          }
-        }
-      }
-      
-      const customId = interaction.customId;
-      let result;
-  
-      switch (customId) {
-        case 'recover':
-          result = await handleRecover(interaction, character, encounterMessage, travelLog);
-          break;
-        case 'gather':
-          result = await handleGather(interaction, character, currentPath, encounterMessage, travelLog);
-          break;
-        case 'fight':
-          if (!monster) {
-            result = '❌ Could not resolve monster for this encounter.';
-            break;
-          }
-          result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
-          break;
-        case 'flee':
-          result = await handleFlee(interaction, character, encounterMessage, monster, travelLog);
-          break;
-        case 'do_nothing':
-          result = await handleDoNothing(interaction, character, encounterMessage, travelLog, preGeneratedFlavor);
-          break;
-        default:
-          if (monster) {
-            result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
-          } else {
-            result = await handleDoNothing(interaction, character, encounterMessage, travelLog, preGeneratedFlavor);
-          }
-      }
-  
-      return result;
-    } catch (error) {
-      handleError(error, 'travelHandler.js (main)');
-      throw error;
-    }
-  }
-  
-  // ============================================================================
-  // ------------------- Export the Function -------------------
-  // ============================================================================
-  
-  // Exports the primary handler for use in the command module.
-  module.exports = { 
-    handleTravelInteraction,
-    createFinalTravelEmbed,
-    assignVillageVisitingRole
-  };
+      `

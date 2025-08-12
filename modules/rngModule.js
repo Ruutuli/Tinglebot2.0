@@ -178,6 +178,9 @@ function calculateFinalValue(character, diceRoll) {
     // Consume hasty elixir after use
     if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot')) {
       consumeElixirBuff(character);
+    } else if (character.buff?.active) {
+      // Log when elixir is not used due to conditions not met
+      console.log(`[rngModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
     }
   }
   
@@ -189,6 +192,9 @@ function calculateFinalValue(character, diceRoll) {
     // Consume sneaky elixir after use
     if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot')) {
       consumeElixirBuff(character);
+    } else if (character.buff?.active) {
+      // Log when elixir is not used due to conditions not met
+      console.log(`[rngModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
     }
   }
   
