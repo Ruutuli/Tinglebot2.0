@@ -864,6 +864,10 @@ module.exports = {
 
         // Apply the elixir buff
         try {
+          // Store original values for display
+          const originalMaxHearts = character.maxHearts;
+          const originalMaxStamina = character.maxStamina;
+          
           // Apply immediate healing effects first
           if (item.modifierHearts) {
             const healAmount = Math.min(item.modifierHearts, character.maxHearts - character.currentHearts);
@@ -882,7 +886,7 @@ module.exports = {
             // Apply temporary extra hearts for immediate use
             const extraHearts = 3;
             character.currentHearts += extraHearts;
-            character.maxHearts += extraHearts;
+            // Don't modify maxHearts - just track the temporary addition
             
             // Don't set a buff, just apply the healing
             character.buff = {
@@ -1005,6 +1009,16 @@ module.exports = {
           }
         }
 
+        // Calculate display values for Hearty Elixir
+        let displayCurrentHearts = character.currentHearts;
+        let displayMaxHearts = originalMaxHearts; // Use original max hearts
+        
+        if (item.itemName === 'Hearty Elixir') {
+          // For Hearty Elixir, show current hearts (including temporary) / original max hearts
+          displayCurrentHearts = character.currentHearts;
+          displayMaxHearts = originalMaxHearts; // Use original max hearts
+        }
+        
         const elixirEmbed = new EmbedBuilder()
           .setColor('#8B4513')
           .setTitle('🧪 Elixir Consumed!')
@@ -1014,7 +1028,7 @@ module.exports = {
             `**✨ Active Effects:**`
           )
           .addFields([
-            { name: '❤️ Current Hearts', value: `**${character.currentHearts}/${character.maxHearts}**`, inline: false },
+            { name: '❤️ Current Hearts', value: `**${displayCurrentHearts}/${displayMaxHearts}**`, inline: false },
             ...effectFields
           ])
           .setThumbnail(item.image || character.icon)
