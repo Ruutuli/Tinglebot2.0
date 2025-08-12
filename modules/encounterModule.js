@@ -43,7 +43,7 @@ function calculateDamage(attacker, defender) {
             const buffEffects = getActiveBuffEffects(defender);
             
             // Check if monster is electric type and character has electric resistance
-            if (attacker.name && attacker.name.includes('Electric') && buffEffects.electricResistance > 0) {
+            if (attacker.name && attacker.name.includes('Electric') && buffEffects && buffEffects.electricResistance > 0) {
                 // Electric resistance reduces damage by 50% per level
                 const resistanceReduction = buffEffects.electricResistance * 0.5;
                 baseDamage = Math.max(0, baseDamage - resistanceReduction);
@@ -58,7 +58,7 @@ function calculateDamage(attacker, defender) {
             }
             
             // Check if monster is fire type and character has fire resistance
-            if (attacker.name && attacker.name.includes('Fire') && buffEffects.fireResistance > 0) {
+            if (attacker.name && attacker.name.includes('Fire') && buffEffects && buffEffects.fireResistance > 0) {
                 // Fire resistance reduces damage by 50% per level
                 const resistanceReduction = buffEffects.fireResistance * 0.5;
                 baseDamage = Math.max(0, baseDamage - resistanceReduction);

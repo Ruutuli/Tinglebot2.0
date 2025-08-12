@@ -8,7 +8,7 @@ function calculateAttackBuff(character, baseAttack) {
   let finalAttack = baseAttack;
 
   // Apply elixir attack boost
-  if (buffEffects.attackBoost > 0) {
+  if (buffEffects && buffEffects.attackBoost > 0) {
     finalAttack += buffEffects.attackBoost;
     
     // Consume mighty elixir after use
@@ -33,7 +33,7 @@ function calculateDefenseBuff(character, baseDefense) {
   let finalDefense = baseDefense;
 
   // Apply elixir defense boost
-  if (buffEffects.defenseBoost > 0) {
+  if (buffEffects && buffEffects.defenseBoost > 0) {
     finalDefense += buffEffects.defenseBoost;
     
     // Consume tough elixir after use
@@ -64,7 +64,7 @@ function calculateSpeedBuff(character, baseSpeed) {
   let finalSpeed = baseSpeed;
 
   // Apply elixir speed boost
-  if (buffEffects.speedBoost > 0) {
+  if (buffEffects && buffEffects.speedBoost > 0) {
     finalSpeed += buffEffects.speedBoost;
     
     // Consume hasty elixir after use
@@ -87,7 +87,7 @@ function calculateStealthBuff(character, baseStealth) {
   let finalStealth = baseStealth;
 
   // Apply elixir stealth boost
-  if (buffEffects.stealthBoost > 0) {
+  if (buffEffects && buffEffects.stealthBoost > 0) {
     finalStealth += buffEffects.stealthBoost;
     
     // Consume sneaky elixir after use
@@ -112,28 +112,28 @@ function getDamageResistance(character, damageType) {
   
   switch (damageType) {
     case 'blight':
-      resistance = buffEffects.blightResistance || 0;
+      resistance = buffEffects?.blightResistance || 0;
       // Consume chilly elixir after use
       if (resistance > 0 && shouldConsumeElixir(character, 'travel', { blightRain: true })) {
         consumeElixirBuff(character);
       }
       break;
     case 'cold':
-      resistance = buffEffects.coldResistance || 0;
+      resistance = buffEffects?.coldResistance || 0;
       // Consume spicy elixir after use
       if (resistance > 0 && shouldConsumeElixir(character, 'travel')) {
         consumeElixirBuff(character);
       }
       break;
     case 'electric':
-      resistance = buffEffects.electricResistance || 0;
+      resistance = buffEffects?.electricResistance || 0;
       // Consume electro elixir after use
       if (resistance > 0 && shouldConsumeElixir(character, 'combat')) {
         consumeElixirBuff(character);
       }
       break;
     case 'fire':
-      resistance = buffEffects.fireResistance || 0;
+      resistance = buffEffects?.fireResistance || 0;
       // Consume fireproof elixir after use
       if (resistance > 0 && shouldConsumeElixir(character, 'travel', { blightRain: true })) {
         consumeElixirBuff(character);
@@ -155,16 +155,16 @@ function calculateStaminaBuffs(character) {
   const buffEffects = getActiveBuffEffects(character);
   
   // Consume enduring and energizing elixirs after use
-  if (buffEffects.staminaBoost > 0 || buffEffects.staminaRecovery > 0) {
+  if (buffEffects && (buffEffects.staminaBoost > 0 || buffEffects.staminaRecovery > 0)) {
     if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot') || shouldConsumeElixir(character, 'travel')) {
       consumeElixirBuff(character);
     }
   }
   
   return {
-    staminaBoost: buffEffects.staminaBoost || 0,
-    staminaRecovery: buffEffects.staminaRecovery || 0,
-    extraHearts: buffEffects.extraHearts || 0
+    staminaBoost: buffEffects?.staminaBoost || 0,
+    staminaRecovery: buffEffects?.staminaRecovery || 0,
+    extraHearts: buffEffects?.extraHearts || 0
   };
 }
 

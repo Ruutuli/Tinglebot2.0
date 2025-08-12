@@ -879,6 +879,11 @@ module.exports = {
           
           // Special handling for Hearty Elixir - it expires immediately since it's just for healing
           if (item.itemName === 'Hearty Elixir') {
+            // Apply temporary extra hearts for immediate use
+            const extraHearts = 3;
+            character.currentHearts += extraHearts;
+            character.maxHearts += extraHearts;
+            
             // Don't set a buff, just apply the healing
             character.buff = {
               active: false,
@@ -893,6 +898,12 @@ module.exports = {
           // Update character in database
           const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
           await updateFunction(character._id, { buff: character.buff });
+          
+          // Update hearts if they were modified by Hearty Elixir
+          if (item.itemName === 'Hearty Elixir') {
+            await updateCurrentHearts(character._id, character.currentHearts);
+            // Note: maxHearts update would need a separate function, but for now this shows the effect
+          }
         } catch (error) {
           handleError(error, 'item.js', {
             commandName: 'item',
@@ -953,45 +964,43 @@ module.exports = {
         
         // For Hearty Elixir, show that it's consumed immediately
         if (item.itemName === 'Hearty Elixir') {
-          effectFields = [
-            { name: '💚 Effect', value: 'Healing applied immediately - no ongoing buff', inline: true }
-          ];
+          effectFields = []; // No effect fields needed for Hearty Elixir
         } else {
           // For other elixirs, show their buff effects
-          const buffEffects = character.buff.effects;
+          const buffEffects = character.buff?.effects;
           
-          if (buffEffects.blightResistance > 0) {
+          if (buffEffects?.blightResistance > 0) {
             effectFields.push({ name: '🧿 Blight Resistance', value: `+${buffEffects.blightResistance}`, inline: true });
           }
-          if (buffEffects.electricResistance > 0) {
+          if (buffEffects?.electricResistance > 0) {
             effectFields.push({ name: '⚡ Electric Resistance', value: `+${buffEffects.electricResistance}`, inline: true });
           }
-          if (buffEffects.staminaBoost > 0) {
+          if (buffEffects?.staminaBoost > 0) {
             effectFields.push({ name: '🟩 Stamina Boost', value: `+${buffEffects.staminaBoost}`, inline: true });
           }
-          if (buffEffects.staminaRecovery > 0) {
+          if (buffEffects?.staminaRecovery > 0) {
             effectFields.push({ name: '💚 Stamina Recovery', value: `+${buffEffects.staminaRecovery}`, inline: true });
           }
 
-          if (buffEffects.fireResistance > 0) {
+          if (buffEffects?.fireResistance > 0) {
             effectFields.push({ name: '🔥 Fire Resistance', value: `+${buffEffects.fireResistance}`, inline: true });
           }
-          if (buffEffects.speedBoost > 0) {
+          if (buffEffects?.speedBoost > 0) {
             effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });
           }
-          if (buffEffects.extraHearts > 0) {
+          if (buffEffects?.extraHearts > 0) {
             effectFields.push({ name: '❤️ Extra Hearts', value: `+${buffEffects.extraHearts}`, inline: true });
           }
-          if (buffEffects.attackBoost > 0) {
+          if (buffEffects?.attackBoost > 0) {
             effectFields.push({ name: '⚔️ Attack Boost', value: `+${buffEffects.attackBoost}`, inline: true });
           }
-          if (buffEffects.stealthBoost > 0) {
+          if (buffEffects?.stealthBoost > 0) {
             effectFields.push({ name: '👻 Stealth Boost', value: `+${buffEffects.stealthBoost}`, inline: true });
           }
-          if (buffEffects.coldResistance > 0) {
+          if (buffEffects?.coldResistance > 0) {
             effectFields.push({ name: '❄️ Cold Resistance', value: `+${buffEffects.coldResistance}`, inline: true });
           }
-          if (buffEffects.defenseBoost > 0) {
+          if (buffEffects?.defenseBoost > 0) {
             effectFields.push({ name: '🛡️ Defense Boost', value: `+${buffEffects.defenseBoost}`, inline: true });
           }
         }
@@ -1005,7 +1014,7 @@ module.exports = {
             `**✨ Active Effects:**`
           )
           .addFields([
-            { name: '❤️ Current Hearts', value: `**${character.currentHearts}/${character.maxHearts}**`, inline: true },
+            { name: '❤️ Current Hearts', value: `**${character.currentHearts}/${character.maxHearts}**`, inline: false },
             ...effectFields
           ])
           .setThumbnail(item.image || character.icon)

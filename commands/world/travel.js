@@ -153,7 +153,7 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
   // Apply elixir speed buff
   if (baseDuration > 0) {
     const buffEffects = getActiveBuffEffects(character);
-    if (buffEffects.speedBoost > 0) {
+    if (buffEffects && buffEffects.speedBoost > 0) {
       // Hasty Elixir cuts travel time in half (minimum 1 day)
       const originalDuration = baseDuration;
       baseDuration = Math.max(1, Math.ceil(baseDuration / 2));
@@ -246,11 +246,11 @@ module.exports = {
           let infectionChance = 0.75; // Base 75% chance
           
           // Apply resistance buffs
-          if (buffEffects.blightResistance > 0) {
+          if (buffEffects && buffEffects.blightResistance > 0) {
             infectionChance -= (buffEffects.blightResistance * 0.1); // Each level reduces by 10%
             console.log(`[travel.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
           }
-          if (buffEffects.fireResistance > 0) {
+          if (buffEffects && buffEffects.fireResistance > 0) {
             infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
             console.log(`[travel.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
           }
@@ -302,7 +302,7 @@ module.exports = {
           } else {
             let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
             
-            if (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0) {
+            if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
               safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
               safeMsg += "The protective effects of your elixir kept you safe from the blight.";
               
