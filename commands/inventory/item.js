@@ -942,44 +942,8 @@ module.exports = {
           });
         }
 
-        // Remove the elixir from inventory
-        await removeItemInventoryDatabase(character._id, item.itemName, 1, interaction);
-
-        // Log elixir usage to Google Sheets
-        const inventoryLink = character.inventory || character.inventoryLink;
-        if (typeof inventoryLink === 'string') {
-          const { category = [], type = [], subtype = [] } = item;
-          const formattedDateTime = new Date().toISOString();
-          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-          const values = [[
-            character.name,
-            item.itemName,
-            '-1',
-            Array.isArray(category) ? category.join(', ') : category,
-            Array.isArray(type) ? type.join(', ') : type,
-            Array.isArray(subtype) ? subtype.join(', ') : subtype,
-            `Used ${item.itemName} for buff effects`,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            ''
-          ]];
-          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
-            skipValidation: true,
-            context: {
-              commandName: 'item',
-              userTag: interaction.user.tag,
-              userId: interaction.user.id,
-              options: {
-                characterName,
-                itemName,
-                quantity
-              }
-            }
-          });
-        }
+        // Remove the elixir from inventory with proper logging
+        await removeItemInventoryDatabase(character._id, item.itemName, 1, interaction, `Used ${item.itemName} for buff effects`);
 
         // ------------------- Build and Send Elixir Embed -------------------
         let effectFields = [];
