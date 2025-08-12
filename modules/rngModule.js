@@ -171,7 +171,7 @@ function calculateFinalValue(character, diceRoll) {
   let finalDiceRoll = adjustedDiceRoll;
   
   // Speed boost affects gathering and movement
-  if (buffEffects.speedBoost > 0) {
+  if (buffEffects && buffEffects.speedBoost > 0) {
     finalDiceRoll += buffEffects.speedBoost;
     console.log(`[rngModule.js]: 🧪 Speed buff applied - +${buffEffects.speedBoost} to roll`);
     
@@ -182,7 +182,7 @@ function calculateFinalValue(character, diceRoll) {
   }
   
   // Stealth boost affects gathering success
-  if (buffEffects.stealthBoost > 0) {
+  if (buffEffects && buffEffects.stealthBoost > 0) {
     finalDiceRoll += buffEffects.stealthBoost;
     console.log(`[rngModule.js]: 🧪 Stealth buff applied - +${buffEffects.stealthBoost} to roll`);
     
@@ -208,7 +208,7 @@ function calculateFinalValue(character, diceRoll) {
   }
   
   // Log elixir buff effects if present
-  if (buffEffects.speedBoost > 0 || buffEffects.stealthBoost > 0) {
+  if (buffEffects && (buffEffects.speedBoost > 0 || buffEffects.stealthBoost > 0)) {
     console.log(`[rngModule.js]: 🧪 Elixir buffs applied - Final roll: ${finalDiceRoll} (Original: ${adjustedDiceRoll})`);
   }
   

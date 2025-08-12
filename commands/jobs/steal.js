@@ -337,7 +337,7 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
     // Add elixir buff indicator if active
     if (thiefCharacter.buff?.active) {
         const buffEffects = getActiveBuffEffects(thiefCharacter);
-        if (buffEffects.stealthBoost > 0) {
+        if (buffEffects && buffEffects.stealthBoost > 0) {
             embed.addFields({
                 name: '🧪 Active Elixir',
                 value: `> **${thiefCharacter.buff.type}** buff (Level ${thiefCharacter.buff.level}) - Stealth +${buffEffects.stealthBoost}`,
@@ -968,7 +968,7 @@ async function generateStealRoll(character = null) {
     // Apply elixir stealth buff if active
     if (character) {
         const buffEffects = getActiveBuffEffects(character);
-        if (buffEffects.stealthBoost > 0) {
+        if (buffEffects && buffEffects.stealthBoost > 0) {
             roll += buffEffects.stealthBoost;
             console.log(`[steal.js]: 🧪 Stealth buff applied - Steal roll increased by ${buffEffects.stealthBoost} to ${roll}`);
         }

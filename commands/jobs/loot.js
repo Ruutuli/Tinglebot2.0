@@ -371,11 +371,11 @@ module.exports = {
        let infectionChance = 0.75; // Base 75% chance
        
                  // Apply resistance buffs
-          if (buffEffects.blightResistance > 0) {
+          if (buffEffects && buffEffects.blightResistance > 0) {
             infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
             console.log(`[loot.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
           }
-       if (buffEffects.fireResistance > 0) {
+       if (buffEffects && buffEffects.fireResistance > 0) {
          infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
          console.log(`[loot.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
        }
@@ -426,7 +426,7 @@ module.exports = {
        } else {
          let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
          
-                   if (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0) {
+                   if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
            safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
            safeMsg += "The protective effects of your elixir kept you safe from the blight.";
            
