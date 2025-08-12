@@ -862,11 +862,12 @@ module.exports = {
           });
         }
 
+        // Store original values for display (moved to broader scope)
+        const originalMaxHearts = character.maxHearts;
+        const originalMaxStamina = character.maxStamina;
+
         // Apply the elixir buff
         try {
-          // Store original values for display
-          const originalMaxHearts = character.maxHearts;
-          const originalMaxStamina = character.maxStamina;
           
           // Apply immediate healing effects first
           if (item.modifierHearts) {
