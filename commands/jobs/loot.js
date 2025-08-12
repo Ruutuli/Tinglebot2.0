@@ -897,7 +897,7 @@ async function processLootingLogic(
  bloodMoonActive,
  shouldDeactivateVoucher = false
 ) {
- try {
+  try {
   const items = await fetchItemsByMonster(encounteredMonster.name);
 
   // Step 1: Calculate Encounter Outcome
@@ -1042,40 +1042,94 @@ async function processLootingLogic(
     // Don't fail the loot if elixir consumption fails
   }
 
-  // ------------------- Apply Damage Reduction Boosts -------------------
-  // Check if character is boosted and apply damage reduction (Entertainer boost)
-  if (outcome.hearts) {
-    outcome.hearts = await applyLootingDamageBoost(character.name, outcome.hearts);
+  // ------------------- Apply Elixir Roll Boost -------------------
+  // Apply elixir effects to the roll value BEFORE damage calculation
+  if (elixirBuffInfo && elixirBuffInfo.helped && outcome.adjustedRandomValue) {
+    const originalRoll = outcome.adjustedRandomValue;
     
-    // Update elixir buff info with damage reduction if applicable
-    if (elixirBuffInfo && elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'fireproof') {
-      // Calculate damage reduction from fire resistance (1.5x defense boost)
-      const originalDamage = Math.ceil(outcome.hearts * 1.5); // Reverse the 1.5x boost to get original damage
-      const damageReduced = originalDamage - outcome.hearts;
-      if (damageReduced > 0) {
+    if (elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'fireproof') {
+      // Fireproof elixir provides 1.5x roll multiplier (higher roll = less damage)
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
+      console.log(`[loot.js]: 🔥 Fireproof Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      
+      // Store original damage for comparison
+      const originalDamage = outcome.hearts;
+      
+      // Recalculate outcome using the boosted roll value
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      
+      if (boostedOutcome.hearts < originalDamage) {
+        const damageReduced = originalDamage - boostedOutcome.hearts;
         elixirBuffInfo.damageReduced = damageReduced;
+        outcome.hearts = boostedOutcome.hearts;
         console.log(`[loot.js]: 🔥 Fireproof Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
       }
-    } else if (elixirBuffInfo && elixirBuffInfo.encounterType === 'electric' && elixirBuffInfo.elixirType === 'electro') {
-      // Calculate damage reduction from electric resistance (1.5x defense boost)
-      const originalDamage = Math.ceil(outcome.hearts * 1.5);
-      const damageReduced = originalDamage - outcome.hearts;
-      if (damageReduced > 0) {
+    } else if (elixirBuffInfo.encounterType === 'electric' && elixirBuffInfo.elixirType === 'electro') {
+      // Electro elixir provides 1.5x roll multiplier (higher roll = less damage)
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
+      console.log(`[loot.js]: ⚡ Electro Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      
+      // Store original damage for comparison
+      const originalDamage = outcome.hearts;
+      
+      // Recalculate outcome using the boosted roll value
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      
+      if (boostedOutcome.hearts < originalDamage) {
+        const damageReduced = originalDamage - boostedOutcome.hearts;
         elixirBuffInfo.damageReduced = damageReduced;
+        outcome.hearts = boostedOutcome.hearts;
         console.log(`[loot.js]: ⚡ Electro Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
       }
-    } else if (elixirBuffInfo && elixirBuffInfo.encounterType === 'ice' && elixirBuffInfo.elixirType === 'spicy') {
-      // Calculate damage reduction from cold resistance (1.5x defense boost)
-      const originalDamage = Math.ceil(outcome.hearts * 1.5);
-      const damageReduced = originalDamage - outcome.hearts;
-      if (damageReduced > 0) {
+    } else if (elixirBuffInfo.encounterType === 'ice' && elixirBuffInfo.elixirType === 'spicy') {
+      // Spicy elixir provides 1.5x roll multiplier (higher roll = less damage)
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
+      console.log(`[loot.js]: ❄️ Spicy Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      
+      // Store original damage for comparison
+      const originalDamage = outcome.hearts;
+      
+      // Recalculate outcome using the boosted roll value
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      
+      if (boostedOutcome.hearts < originalDamage) {
+        const damageReduced = originalDamage - boostedOutcome.hearts;
         elixirBuffInfo.damageReduced = damageReduced;
+        outcome.hearts = boostedOutcome.hearts;
         console.log(`[loot.js]: ❄️ Spicy Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
       }
     }
   }
 
-  // Step 2: Handle KO Logic
+  // ------------------- Apply Other Damage Reduction Boosts -------------------
+  // Check if character is boosted and apply damage reduction (Entertainer boost)
+  if (outcome.hearts) {
+    outcome.hearts = await applyLootingDamageBoost(character.name, outcome.hearts);
+  }
+
+  try {
+    // Step 2: Handle KO Logic
   let updatedCharacter;
   if (character.isModCharacter) {
     const ModCharacter = require('../../models/ModCharacterModel.js');
@@ -1157,11 +1211,14 @@ async function processLootingLogic(
       console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name} in processLootingLogic`);
     }
   }
-
- } catch (error) {
-  console.error(`[loot.js]: ❌ Error in processLootingLogic:`, error);
-  await handleLootError(interaction, error, "processing loot");
- }
+  } catch (error) {
+    console.error(`[loot.js]: ❌ Error in processLootingLogic:`, error);
+    await handleLootError(interaction, error, "processing loot");
+  }
+  } catch (error) {
+    console.error(`[loot.js]: ❌ Error in processLootingLogic:`, error);
+    await handleLootError(interaction, error, "processing loot");
+  }
 }
 
 // New helper function for inventory updates
@@ -1288,3 +1345,5 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
 
  return lootedItem;
 }
+
+
