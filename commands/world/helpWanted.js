@@ -552,6 +552,25 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   
   // Check if elixirs should be consumed based on the encounter
   if (shouldConsumeElixir(character, 'helpWanted', { monster: monster })) {
+    const consumedElixirType = character.buff.type;
+    const consumedEffects = character.buff.effects;
+    
+    console.log(`[helpWanted.js]: 🧪 ${consumedElixirType} elixir consumed for ${character.name} during help wanted encounter with ${monster.name}`);
+    console.log(`[helpWanted.js]: 🧪 Consumed ${consumedElixirType} elixir with effects:`, consumedEffects);
+    
+    // Log what the elixir protected against
+    if (consumedElixirType === 'fireproof' && monster.name.includes('Fire')) {
+      console.log(`[helpWanted.js]: 🔥 Fireproof Elixir protected ${character.name} from fire damage during encounter with ${monster.name}`);
+    } else if (consumedElixirType === 'spicy' && monster.name.includes('Ice')) {
+      console.log(`[helpWanted.js]: ❄️ Spicy Elixir protected ${character.name} from ice damage during encounter with ${monster.name}`);
+    } else if (consumedElixirType === 'electro' && monster.name.includes('Electric')) {
+      console.log(`[helpWanted.js]: ⚡ Electro Elixir protected ${character.name} from electric damage during encounter with ${monster.name}`);
+    } else if (consumedElixirType === 'tough') {
+      console.log(`[helpWanted.js]: 🛡️ Tough Elixir provided defense boost for ${character.name} during encounter`);
+    } else if (consumedElixirType === 'mighty') {
+      console.log(`[helpWanted.js]: ⚔️ Mighty Elixir provided attack boost for ${character.name} during encounter`);
+    }
+    
     consumeElixirBuff(character);
     // Update character in database
     const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
@@ -560,6 +579,9 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     
     // Add consumption message
     outcomeMessage += '\n\n🧪 **Elixir consumed!** The protective effects have been used up.';
+  } else if (character.buff?.active) {
+    // Log when elixir is not used due to conditions not being met
+    console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
   }
   
   // Hearts are already applied in getEncounterOutcome; fetch refreshed value

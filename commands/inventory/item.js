@@ -946,47 +946,49 @@ module.exports = {
         await removeItemInventoryDatabase(character._id, item.itemName, 1, interaction, `Used ${item.itemName} for buff effects`);
 
         // ------------------- Build and Send Elixir Embed -------------------
+        // Build consistent effect fields for all elixirs
         let effectFields = [];
+        const buffEffects = character.buff?.effects;
         
-        // For Hearty and Enduring Elixirs, show that they're consumed immediately
-        if (item.itemName === 'Hearty Elixir' || item.itemName === 'Enduring Elixir') {
-          effectFields = []; // No effect fields needed for immediate consumption elixirs
-        } else {
-          // For other elixirs, show their buff effects
-          const buffEffects = character.buff?.effects;
-          
-          if (buffEffects?.blightResistance > 0) {
+        // Always show buff effects if they exist (for non-immediate elixirs)
+        if (buffEffects && Object.keys(buffEffects).length > 0) {
+          if (buffEffects.blightResistance > 0) {
             effectFields.push({ name: '🧿 Blight Resistance', value: `+${buffEffects.blightResistance}`, inline: true });
           }
-          if (buffEffects?.electricResistance > 0) {
+          if (buffEffects.electricResistance > 0) {
             effectFields.push({ name: '⚡ Electric Resistance', value: `+${buffEffects.electricResistance}`, inline: true });
           }
-          if (buffEffects?.staminaBoost > 0) {
+          if (buffEffects.staminaBoost > 0) {
             effectFields.push({ name: '🟩 Stamina Boost', value: `+${buffEffects.staminaBoost}`, inline: true });
           }
-          if (buffEffects?.staminaRecovery > 0) {
+          if (buffEffects.staminaRecovery > 0) {
             effectFields.push({ name: '💚 Stamina Recovery', value: `+${buffEffects.staminaRecovery}`, inline: true });
           }
-
-          if (buffEffects?.fireResistance > 0) {
+          if (buffEffects.fireResistance > 0) {
             effectFields.push({ name: '🔥 Fire Resistance', value: `+${buffEffects.fireResistance}`, inline: true });
           }
-          if (buffEffects?.speedBoost > 0) {
+          if (buffEffects.speedBoost > 0) {
             effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });
           }
-          if (buffEffects?.extraHearts > 0) {
+          if (buffEffects.extraHearts > 0) {
             effectFields.push({ name: '❤️ Extra Hearts', value: `+${buffEffects.extraHearts}`, inline: true });
           }
-          if (buffEffects?.attackBoost > 0) {
+          if (buffEffects.attackBoost > 0) {
             effectFields.push({ name: '⚔️ Attack Boost', value: `+${buffEffects.attackBoost}`, inline: true });
           }
-          if (buffEffects?.stealthBoost > 0) {
+          if (buffEffects.stealthBoost > 0) {
             effectFields.push({ name: '👻 Stealth Boost', value: `+${buffEffects.stealthBoost}`, inline: true });
           }
-          if (buffEffects?.coldResistance > 0) {
+          if (buffEffects.fleeBoost > 0) {
+            effectFields.push({ name: '🏃‍♂️ Flee Boost', value: `+${buffEffects.fleeBoost}`, inline: true });
+          }
+          if (buffEffects.coldResistance > 0) {
             effectFields.push({ name: '❄️ Cold Resistance', value: `+${buffEffects.coldResistance}`, inline: true });
           }
-          if (buffEffects?.defenseBoost > 0) {
+          if (buffEffects.iceEffectiveness > 0) {
+            effectFields.push({ name: '🧊 Ice Effectiveness', value: `+${buffEffects.iceEffectiveness}`, inline: true });
+          }
+          if (buffEffects.defenseBoost > 0) {
             effectFields.push({ name: '🛡️ Defense Boost', value: `+${buffEffects.defenseBoost}`, inline: true });
           }
         }
@@ -995,7 +997,7 @@ module.exports = {
         let displayCurrentHearts = character.currentHearts;
         let displayMaxHearts = originalMaxHearts;
         let displayCurrentStamina = character.currentStamina;
-        let displayMaxStamina = character.maxStamina; // Use current max stamina (may include buffs)
+        let displayMaxStamina = character.maxStamina;
         
         if (item.itemName === 'Hearty Elixir') {
           // For Hearty Elixir, show current hearts (including temporary) / original max hearts
@@ -1007,43 +1009,52 @@ module.exports = {
           displayMaxStamina = originalMaxStamina;
         }
         
+        // Build uniform elixir embed
         const elixirEmbed = new EmbedBuilder()
           .setColor('#8B4513')
           .setTitle('🧪 Elixir Consumed!')
           .setDescription(
             `**${character.name}** has consumed a **${item.itemName}**!\n\n` +
-            `${elixirInfo.description}\n\n` +
-            `**✨ Active Effects:**`
+            `${elixirInfo.description}`
           )
           .addFields([
             { name: '❤️ Current Hearts', value: `**${displayCurrentHearts}/${displayMaxHearts}**`, inline: true },
-            { name: '🟩 Current Stamina', value: `**${displayCurrentStamina}/${displayMaxStamina}**`, inline: true },
-            ...effectFields
+            { name: '🟩 Current Stamina', value: `**${displayCurrentStamina}/${displayMaxStamina}**`, inline: true }
           ])
           .setThumbnail(item.image || character.icon)
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-          .setFooter({ 
-            text: (item.itemName === 'Hearty Elixir' || item.itemName === 'Enduring Elixir') ? 
-              `${item.itemName} consumed immediately` : 'Elixir effects active until used',
-            iconURL: character.icon
-          });
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
-        // Add healing information if hearts or stamina were restored
+        // Add buff effects section if there are effects to show
+        if (effectFields.length > 0) {
+          elixirEmbed.addFields([
+            { name: '✨ Active Effects', value: 'The following effects are now active:', inline: false },
+            ...effectFields
+          ]);
+        }
+
+        // Add immediate effects section if there are healing/restoration effects
         if (item.modifierHearts || item.staminaRecovered) {
-          let healingInfo = '';
+          let immediateEffects = [];
           if (item.modifierHearts) {
-            healingInfo += `❤️ **Hearts restored: +${item.modifierHearts}**\n`;
+            immediateEffects.push(`❤️ **Hearts restored: +${item.modifierHearts}**`);
           }
           if (item.staminaRecovered) {
-            healingInfo += `🟩 **Stamina restored: +${item.staminaRecovered}**\n`;
+            immediateEffects.push(`🟩 **Stamina restored: +${item.staminaRecovered}**`);
           }
           
           elixirEmbed.addFields({
             name: '💚 Immediate Effects',
-            value: healingInfo,
+            value: immediateEffects.join('\n'),
             inline: false
           });
         }
+
+        // Set footer based on elixir type
+        const isImmediateElixir = item.itemName === 'Hearty Elixir' || item.itemName === 'Enduring Elixir';
+        elixirEmbed.setFooter({ 
+          text: isImmediateElixir ? `${item.itemName} consumed immediately` : 'Elixir effects active until used',
+          iconURL: character.icon
+        });
 
         return void await interaction.editReply({ embeds: [elixirEmbed] });
       }

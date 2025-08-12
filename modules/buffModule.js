@@ -14,6 +14,9 @@ function calculateAttackBuff(character, baseAttack) {
     // Consume mighty elixir after use
     if (shouldConsumeElixir(character, 'combat')) {
       consumeElixirBuff(character);
+    } else if (character.buff?.active) {
+      // Log when elixir is not used due to conditions not met
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
     }
   }
 
@@ -39,6 +42,9 @@ function calculateDefenseBuff(character, baseDefense) {
     // Consume tough elixir after use
     if (shouldConsumeElixir(character, 'combat')) {
       consumeElixirBuff(character);
+    } else if (character.buff?.active) {
+      // Log when elixir is not used due to conditions not met
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
     }
   }
 
@@ -70,6 +76,9 @@ function calculateSpeedBuff(character, baseSpeed) {
     // Consume hasty elixir after use
     if (shouldConsumeElixir(character, 'travel')) {
       consumeElixirBuff(character);
+    } else if (character.buff?.active) {
+      // Log when elixir is not used due to conditions not met
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
     }
   }
 
@@ -93,6 +102,9 @@ function calculateStealthBuff(character, baseStealth) {
     // Consume sneaky elixir after use
     if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot')) {
       consumeElixirBuff(character);
+    } else if (character.buff?.active) {
+      // Log when elixir is not used due to conditions not met
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
     }
   }
 
@@ -116,6 +128,9 @@ function getDamageResistance(character, damageType) {
       // Consume chilly elixir after use
       if (resistance > 0 && shouldConsumeElixir(character, 'travel', { blightRain: true })) {
         consumeElixirBuff(character);
+      } else if (character.buff?.active) {
+        // Log when elixir is not used due to conditions not met
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
       }
       break;
     case 'cold':
@@ -123,6 +138,9 @@ function getDamageResistance(character, damageType) {
       // Consume spicy elixir after use
       if (resistance > 0 && shouldConsumeElixir(character, 'travel')) {
         consumeElixirBuff(character);
+      } else if (character.buff?.active) {
+        // Log when elixir is not used due to conditions not met
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
       }
       break;
     case 'electric':
@@ -130,6 +148,9 @@ function getDamageResistance(character, damageType) {
       // Consume electro elixir after use
       if (resistance > 0 && shouldConsumeElixir(character, 'combat')) {
         consumeElixirBuff(character);
+      } else if (character.buff?.active) {
+        // Log when elixir is not used due to conditions not met
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
       }
       break;
     case 'fire':
@@ -137,6 +158,9 @@ function getDamageResistance(character, damageType) {
       // Consume fireproof elixir after use
       if (resistance > 0 && shouldConsumeElixir(character, 'travel', { blightRain: true })) {
         consumeElixirBuff(character);
+      } else if (character.buff?.active) {
+        // Log when elixir is not used due to conditions not met
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
       }
       break;
     default:
@@ -158,6 +182,9 @@ function calculateStaminaBuffs(character) {
   if (buffEffects && (buffEffects.staminaBoost > 0 || buffEffects.staminaRecovery > 0)) {
     if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot') || shouldConsumeElixir(character, 'travel')) {
       consumeElixirBuff(character);
+    } else if (character.buff?.active) {
+      // Log when elixir is not used due to conditions not met
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
     }
   }
   

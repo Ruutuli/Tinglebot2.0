@@ -387,6 +387,9 @@ module.exports = {
          const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
          const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
          await updateFunction(character._id, { buff: character.buff });
+       } else if (character.buff?.active) {
+         // Log when elixir is not used due to conditions not being met
+         console.log(`[loot.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
        }
        
        // Ensure chance stays within reasonable bounds
@@ -438,6 +441,9 @@ module.exports = {
              const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
              await updateFunction(character._id, { buff: character.buff });
              safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
+           } else if (character.buff?.active) {
+             // Log when elixir is not used due to conditions not being met
+             console.log(`[loot.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
            }
          } else {
            safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
@@ -918,18 +924,68 @@ async function processLootingLogic(
   // ------------------- Elixir Consumption Logic -------------------
   // Check if elixirs should be consumed based on the monster encounter
   try {
-    const { shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
+    const { shouldConsumeElixir, consumeElixirBuff, getActiveBuffEffects } = require('../../modules/elixirModule');
+    
+    // Check for active elixir buffs before consumption
+    const activeBuff = getActiveBuffEffects(character);
+    if (activeBuff) {
+      console.log(`[loot.js]: 🧪 ${character.name} has active elixir buff: ${character.buff.type} with effects:`, activeBuff);
+      
+      // Log specific elixir effects that might help
+      if (activeBuff.fireResistance > 0 && encounteredMonster.name.includes('Fire')) {
+        console.log(`[loot.js]: 🔥 Fireproof Elixir active! ${character.name} has +${activeBuff.fireResistance} fire resistance against ${encounteredMonster.name}`);
+      }
+      if (activeBuff.coldResistance > 0 && encounteredMonster.name.includes('Ice')) {
+        console.log(`[loot.js]: ❄️ Spicy Elixir active! ${character.name} has +${activeBuff.coldResistance} cold resistance against ${encounteredMonster.name}`);
+      }
+      if (activeBuff.electricResistance > 0 && encounteredMonster.name.includes('Electric')) {
+        console.log(`[loot.js]: ⚡ Electro Elixir active! ${character.name} has +${activeBuff.electricResistance} electric resistance against ${encounteredMonster.name}`);
+      }
+      if (activeBuff.blightResistance > 0) {
+        console.log(`[loot.js]: 🧿 Chilly Elixir active! ${character.name} has +${activeBuff.blightResistance} blight resistance`);
+      }
+      if (activeBuff.stealthBoost > 0) {
+        console.log(`[loot.js]: 👻 Sneaky Elixir active! ${character.name} has +${activeBuff.stealthBoost} stealth boost for looting`);
+      }
+      if (activeBuff.defenseBoost > 0) {
+        console.log(`[loot.js]: 🛡️ Tough Elixir active! ${character.name} has +${activeBuff.defenseBoost} defense boost`);
+      }
+      if (activeBuff.attackBoost > 0) {
+        console.log(`[loot.js]: ⚔️ Mighty Elixir active! ${character.name} has +${activeBuff.attackBoost} attack boost`);
+      }
+    }
+    
     if (shouldConsumeElixir(character, 'loot', { monster: encounteredMonster })) {
-      consumeElixirBuff(character);
+      const consumedElixirType = character.buff.type;
+      const consumedEffects = character.buff.effects;
+      
       console.log(`[loot.js]: 🧪 Elixir consumed for ${character.name} during loot encounter with ${encounteredMonster.name}`);
+      console.log(`[loot.js]: 🧪 Consumed ${consumedElixirType} elixir with effects:`, consumedEffects);
+      
+      // Log what the elixir protected against
+      if (consumedElixirType === 'fireproof' && encounteredMonster.name.includes('Fire')) {
+        console.log(`[loot.js]: 🔥 Fireproof Elixir protected ${character.name} from fire damage during encounter with ${encounteredMonster.name}`);
+      } else if (consumedElixirType === 'spicy' && encounteredMonster.name.includes('Ice')) {
+        console.log(`[loot.js]: ❄️ Spicy Elixir protected ${character.name} from ice damage during encounter with ${encounteredMonster.name}`);
+      } else if (consumedElixirType === 'electro' && encounteredMonster.name.includes('Electric')) {
+        console.log(`[loot.js]: ⚡ Electro Elixir protected ${character.name} from electric damage during encounter with ${encounteredMonster.name}`);
+      } else if (consumedElixirType === 'chilly') {
+        console.log(`[loot.js]: 🧿 Chilly Elixir protected ${character.name} from blight rain effects`);
+      } else if (consumedElixirType === 'sneaky') {
+        console.log(`[loot.js]: 👻 Sneaky Elixir helped ${character.name} with stealth during looting`);
+      } else if (consumedElixirType === 'tough') {
+        console.log(`[loot.js]: 🛡️ Tough Elixir provided defense boost for ${character.name} during encounter`);
+      } else if (consumedElixirType === 'mighty') {
+        console.log(`[loot.js]: ⚔️ Mighty Elixir provided attack boost for ${character.name} during encounter`);
+      }
+      
+      consumeElixirBuff(character);
       
       // Update character in database to persist the consumed elixir
-      if (character.isModCharacter) {
-        const ModCharacter = require('../../models/ModCharacterModel.js');
-        await ModCharacter.findByIdAndUpdate(character._id, { buff: character.buff });
-      } else {
-        await Character.findByIdAndUpdate(character._id, { buff: character.buff });
-      }
+      await Character.findByIdAndUpdate(character._id, { buff: character.buff });
+    } else if (character.buff?.active) {
+      // Log when elixir is not used due to conditions not being met
+      console.log(`[loot.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
     }
   } catch (elixirError) {
     console.error(`[loot.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);

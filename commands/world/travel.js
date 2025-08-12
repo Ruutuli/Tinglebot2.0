@@ -295,6 +295,9 @@ module.exports = {
             // Update character in database
             const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
             await updateFunction(character._id, { buff: character.buff });
+          } else if (character.buff?.active) {
+            // Log when elixir is not used due to conditions not being met
+            console.log(`[travel.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
           }
           
           // Ensure chance stays within reasonable bounds
@@ -347,6 +350,9 @@ module.exports = {
                 const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
                 await updateFunction(character._id, { buff: character.buff });
                 safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
+              } else if (character.buff?.active) {
+                // Log when elixir is not used due to conditions not being met
+                console.log(`[travel.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
               }
             } else {
               safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
@@ -492,8 +498,18 @@ module.exports = {
       if (totalTravelDuration < originalDuration) {
         try {
           if (shouldConsumeElixir(character, 'travel')) {
+            const consumedElixirType = character.buff.type;
+            const consumedEffects = character.buff.effects;
+            
+            console.log(`[travel.js]: 🧪 ${consumedElixirType} elixir consumed for ${character.name} during travel`);
+            console.log(`[travel.js]: 🧪 Travel time reduced: ${originalDuration} → ${totalTravelDuration} days`);
+            console.log(`[travel.js]: 🧪 Consumed ${consumedElixirType} elixir with effects:`, consumedEffects);
+            
+            if (consumedElixirType === 'hasty') {
+              console.log(`[travel.js]: 🏃 Hasty Elixir helped ${character.name} travel faster!`);
+            }
+            
             consumeElixirBuff(character);
-            console.log(`[travel.js]: 🧪 Hasty Elixir consumed: ${originalDuration} → ${totalTravelDuration} days`);
             
             // Update character in database to persist the consumed elixir
             if (character.isModCharacter) {
@@ -502,6 +518,9 @@ module.exports = {
             } else {
               await Character.findByIdAndUpdate(character._id, { buff: character.buff });
             }
+          } else if (character.buff?.active) {
+            // Log when elixir is not used due to conditions not being met
+            console.log(`[travel.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
           }
         } catch (elixirError) {
           console.error(`[travel.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);

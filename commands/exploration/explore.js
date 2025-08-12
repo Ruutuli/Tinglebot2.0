@@ -1471,13 +1471,58 @@ module.exports = {
      // ------------------- Elixir Consumption Logic -------------------
      // Check if elixirs should be consumed based on the exploration encounter
      try {
-       const { shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
+       const { shouldConsumeElixir, consumeElixirBuff, getActiveBuffEffects } = require('../../modules/elixirModule');
+       
+       // Check for active elixir buffs before consumption
+       const activeBuff = getActiveBuffEffects(character);
+       if (activeBuff) {
+         console.log(`[explore.js]: 🧪 ${character.name} has active elixir buff: ${character.buff.type} with effects:`, activeBuff);
+         
+         // Log specific elixir effects that might help
+         if (activeBuff.fireResistance > 0 && selectedMonster.name.includes('Fire')) {
+           console.log(`[explore.js]: 🔥 Fireproof Elixir active! ${character.name} has +${activeBuff.fireResistance} fire resistance against ${selectedMonster.name}`);
+         }
+         if (activeBuff.coldResistance > 0 && selectedMonster.name.includes('Ice')) {
+           console.log(`[explore.js]: ❄️ Spicy Elixir active! ${character.name} has +${activeBuff.coldResistance} cold resistance against ${selectedMonster.name}`);
+         }
+         if (activeBuff.electricResistance > 0 && selectedMonster.name.includes('Electric')) {
+           console.log(`[explore.js]: ⚡ Electro Elixir active! ${character.name} has +${activeBuff.electricResistance} electric resistance against ${selectedMonster.name}`);
+         }
+         if (activeBuff.defenseBoost > 0) {
+           console.log(`[explore.js]: 🛡️ Tough Elixir active! ${character.name} has +${activeBuff.defenseBoost} defense boost`);
+         }
+         if (activeBuff.attackBoost > 0) {
+           console.log(`[explore.js]: ⚔️ Mighty Elixir active! ${character.name} has +${activeBuff.attackBoost} attack boost`);
+         }
+       }
+       
        if (shouldConsumeElixir(character, 'combat', { monster: selectedMonster })) {
-         consumeElixirBuff(character);
+         const consumedElixirType = character.buff.type;
+         const consumedEffects = character.buff.effects;
+         
          console.log(`[explore.js]: 🧪 Elixir consumed for ${character.name} during exploration encounter with ${selectedMonster.name}`);
+         console.log(`[explore.js]: 🧪 Consumed ${consumedElixirType} elixir with effects:`, consumedEffects);
+         
+         // Log what the elixir protected against
+         if (consumedElixirType === 'fireproof' && selectedMonster.name.includes('Fire')) {
+           console.log(`[explore.js]: 🔥 Fireproof Elixir protected ${character.name} from fire damage during encounter with ${selectedMonster.name}`);
+         } else if (consumedElixirType === 'spicy' && selectedMonster.name.includes('Ice')) {
+           console.log(`[explore.js]: ❄️ Spicy Elixir protected ${character.name} from ice damage during encounter with ${selectedMonster.name}`);
+         } else if (consumedElixirType === 'electro' && selectedMonster.name.includes('Electric')) {
+           console.log(`[explore.js]: ⚡ Electro Elixir protected ${character.name} from electric damage during encounter with ${selectedMonster.name}`);
+         } else if (consumedElixirType === 'tough') {
+           console.log(`[explore.js]: 🛡️ Tough Elixir provided defense boost for ${character.name} during encounter`);
+         } else if (consumedElixirType === 'mighty') {
+           console.log(`[explore.js]: ⚔️ Mighty Elixir provided attack boost for ${character.name} during encounter`);
+         }
+         
+         consumeElixirBuff(character);
          
          // Update character in database to persist the consumed elixir
          await character.save();
+       } else if (character.buff?.active) {
+         // Log when elixir is not used due to conditions not being met
+         console.log(`[explore.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
        }
      } catch (elixirError) {
        console.error(`[explore.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
