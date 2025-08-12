@@ -1476,7 +1476,7 @@ module.exports = {
        // Check for active elixir buffs before consumption
        const activeBuff = getActiveBuffEffects(character);
        if (activeBuff) {
-         console.log(`[explore.js]: 🧪 ${character.name} has active elixir buff: ${character.buff.type} with effects:`, activeBuff);
+         console.log(`[explore.js]: 🧪 ${character.name} has active elixir buff: ${character.buff.type}`);
          
          // Log specific elixir effects that might help
          if (activeBuff.fireResistance > 0 && selectedMonster.name.includes('Fire')) {
