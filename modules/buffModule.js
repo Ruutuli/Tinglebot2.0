@@ -16,7 +16,7 @@ function calculateAttackBuff(character, baseAttack) {
       consumeElixirBuff(character);
     } else if (character.buff?.active) {
       // Log when elixir is not used due to conditions not met
-      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
 
@@ -44,7 +44,7 @@ function calculateDefenseBuff(character, baseDefense) {
       consumeElixirBuff(character);
     } else if (character.buff?.active) {
       // Log when elixir is not used due to conditions not met
-      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
 
@@ -78,7 +78,7 @@ function calculateSpeedBuff(character, baseSpeed) {
       consumeElixirBuff(character);
     } else if (character.buff?.active) {
       // Log when elixir is not used due to conditions not met
-      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
 
@@ -104,7 +104,7 @@ function calculateStealthBuff(character, baseStealth) {
       consumeElixirBuff(character);
     } else if (character.buff?.active) {
       // Log when elixir is not used due to conditions not met
-      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
 
@@ -130,7 +130,7 @@ function getDamageResistance(character, damageType) {
         consumeElixirBuff(character);
       } else if (character.buff?.active) {
         // Log when elixir is not used due to conditions not met
-        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
       }
       break;
     case 'cold':
@@ -140,7 +140,7 @@ function getDamageResistance(character, damageType) {
         consumeElixirBuff(character);
       } else if (character.buff?.active) {
         // Log when elixir is not used due to conditions not met
-        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
       }
       break;
     case 'electric':
@@ -150,7 +150,7 @@ function getDamageResistance(character, damageType) {
         consumeElixirBuff(character);
       } else if (character.buff?.active) {
         // Log when elixir is not used due to conditions not met
-        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
       }
       break;
     case 'fire':
@@ -160,7 +160,7 @@ function getDamageResistance(character, damageType) {
         consumeElixirBuff(character);
       } else if (character.buff?.active) {
         // Log when elixir is not used due to conditions not met
-        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
       }
       break;
     default:
@@ -184,7 +184,7 @@ function calculateStaminaBuffs(character) {
       consumeElixirBuff(character);
     } else if (character.buff?.active) {
       // Log when elixir is not used due to conditions not met
-      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
   

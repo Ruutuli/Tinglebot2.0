@@ -580,8 +580,8 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     // Add consumption message
     outcomeMessage += '\n\n🧪 **Elixir consumed!** The protective effects have been used up.';
   } else if (character.buff?.active) {
-    // Log when elixir is not used due to conditions not being met
-    console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+    // Log when elixir is not used due to conditions not met
+    console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
   }
   
   // Hearts are already applied in getEncounterOutcome; fetch refreshed value
