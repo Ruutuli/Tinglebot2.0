@@ -499,11 +499,9 @@ module.exports = {
         try {
           if (shouldConsumeElixir(character, 'travel')) {
             const consumedElixirType = character.buff.type;
-            const consumedEffects = character.buff.effects;
-            
             console.log(`[travel.js]: 🧪 ${consumedElixirType} elixir consumed for ${character.name} during travel`);
             console.log(`[travel.js]: 🧪 Travel time reduced: ${originalDuration} → ${totalTravelDuration} days`);
-            console.log(`[travel.js]: 🧪 Consumed ${consumedElixirType} elixir with effects:`, consumedEffects);
+      
             
             if (consumedElixirType === 'hasty') {
               console.log(`[travel.js]: 🏃 Hasty Elixir helped ${character.name} travel faster!`);
