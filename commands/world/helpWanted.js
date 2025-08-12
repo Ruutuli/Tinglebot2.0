@@ -716,14 +716,17 @@ async function handleMonsterHunt(interaction, questId, characterName) {
         
         const koEmbed = await createMonsterEncounterEmbed(
           character,
-          encounterResult.monster,
-          encounterResult.outcomeMessage,
-          0,
-          null,
-          false,
-          encounterResult.adjustedRandomValue,
-          i + 1, // currentMonster (1-based index)
-          monsterList.length // totalMonsters
+          monster,
+          `💀 ${character.name} has been defeated by the ${monster.name}!`,
+          newHeartsRemaining,
+          null, // lootItem
+          false, // isBloodMoon
+          adjustedRandomValue,
+          null, // currentMonster
+          null, // totalMonsters
+          null, // entertainerBonusItem
+          null, // boostCategoryOverride
+          null // elixirBuffInfo - not implemented for helpWanted yet
         );
         
         await interaction.followUp({ embeds: [koEmbed] });
@@ -770,14 +773,17 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       // Send battle embed
       const battleEmbed = await createMonsterEncounterEmbed(
         character,
-        encounterResult.monster,
-        encounterResult.outcomeMessage,
-        heartsRemaining,
-        null,
-        false,
-        encounterResult.adjustedRandomValue,
+        monster,
+        outcomeMessage,
+        newHeartsRemaining,
+        lootedItem,
+        false, // isBloodMoon
+        adjustedRandomValue,
         i + 1, // currentMonster (1-based index)
-        monsterList.length // totalMonsters
+        monsterList.length, // totalMonsters
+        null, // entertainerBonusItem
+        null, // boostCategoryOverride
+        null // elixirBuffInfo - not implemented for helpWanted yet
       );
       
       await interaction.followUp({ embeds: [battleEmbed] });

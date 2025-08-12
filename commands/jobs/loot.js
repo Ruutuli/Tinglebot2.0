@@ -926,6 +926,9 @@ async function processLootingLogic(
   try {
     const { shouldConsumeElixir, consumeElixirBuff, getActiveBuffEffects } = require('../../modules/elixirModule');
     
+    // Track elixir buff information for the embed
+    let elixirBuffInfo = null;
+    
     // Check for active elixir buffs before consumption
     const activeBuff = getActiveBuffEffects(character);
     if (activeBuff) {
@@ -934,24 +937,73 @@ async function processLootingLogic(
       // Log specific elixir effects that might help
       if (activeBuff.fireResistance > 0 && encounteredMonster.name.includes('Fire')) {
         console.log(`[loot.js]: 🔥 Fireproof Elixir active! ${character.name} has +${activeBuff.fireResistance} fire resistance against ${encounteredMonster.name}`);
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Fireproof Elixir',
+          elixirType: 'fireproof',
+          encounterType: 'fire',
+          damageReduced: 0
+        };
       }
       if (activeBuff.coldResistance > 0 && encounteredMonster.name.includes('Ice')) {
         console.log(`[loot.js]: ❄️ Spicy Elixir active! ${character.name} has +${activeBuff.coldResistance} cold resistance against ${encounteredMonster.name}`);
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Spicy Elixir',
+          elixirType: 'spicy',
+          encounterType: 'ice',
+          damageReduced: 0
+        };
       }
       if (activeBuff.electricResistance > 0 && encounteredMonster.name.includes('Electric')) {
         console.log(`[loot.js]: ⚡ Electro Elixir active! ${character.name} has +${activeBuff.electricResistance} electric resistance against ${encounteredMonster.name}`);
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Electro Elixir',
+          elixirType: 'electro',
+          encounterType: 'electric',
+          damageReduced: 0
+        };
       }
       if (activeBuff.blightResistance > 0) {
         console.log(`[loot.js]: 🧿 Chilly Elixir active! ${character.name} has +${activeBuff.blightResistance} blight resistance`);
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Chilly Elixir',
+          elixirType: 'chilly',
+          encounterType: 'blight',
+          damageReduced: 0
+        };
       }
       if (activeBuff.stealthBoost > 0) {
         console.log(`[loot.js]: 👻 Sneaky Elixir active! ${character.name} has +${activeBuff.stealthBoost} stealth boost for looting`);
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Sneaky Elixir',
+          elixirType: 'sneaky',
+          encounterType: 'general',
+          damageReduced: 0
+        };
       }
       if (activeBuff.defenseBoost > 0) {
         console.log(`[loot.js]: 🛡️ Tough Elixir active! ${character.name} has +${activeBuff.defenseBoost} defense boost`);
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Tough Elixir',
+          elixirType: 'tough',
+          encounterType: 'general',
+          damageReduced: 0
+        };
       }
       if (activeBuff.attackBoost > 0) {
         console.log(`[loot.js]: ⚔️ Mighty Elixir active! ${character.name} has +${activeBuff.attackBoost} attack boost`);
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Mighty Elixir',
+          elixirType: 'mighty',
+          encounterType: 'general',
+          damageReduced: 0
+        };
       }
     }
     
@@ -996,6 +1048,33 @@ async function processLootingLogic(
   // Check if character is boosted and apply damage reduction (Entertainer boost)
   if (outcome.hearts) {
     outcome.hearts = await applyLootingDamageBoost(character.name, outcome.hearts);
+    
+    // Update elixir buff info with damage reduction if applicable
+    if (elixirBuffInfo && elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'fireproof') {
+      // Calculate damage reduction from fire resistance (1.5x defense boost)
+      const originalDamage = Math.ceil(outcome.hearts * 1.5); // Reverse the 1.5x boost to get original damage
+      const damageReduced = originalDamage - outcome.hearts;
+      if (damageReduced > 0) {
+        elixirBuffInfo.damageReduced = damageReduced;
+        console.log(`[loot.js]: 🔥 Fireproof Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
+      }
+    } else if (elixirBuffInfo && elixirBuffInfo.encounterType === 'electric' && elixirBuffInfo.elixirType === 'electro') {
+      // Calculate damage reduction from electric resistance (1.5x defense boost)
+      const originalDamage = Math.ceil(outcome.hearts * 1.5);
+      const damageReduced = originalDamage - outcome.hearts;
+      if (damageReduced > 0) {
+        elixirBuffInfo.damageReduced = damageReduced;
+        console.log(`[loot.js]: ⚡ Electro Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
+      }
+    } else if (elixirBuffInfo && elixirBuffInfo.encounterType === 'ice' && elixirBuffInfo.elixirType === 'spicy') {
+      // Calculate damage reduction from cold resistance (1.5x defense boost)
+      const originalDamage = Math.ceil(outcome.hearts * 1.5);
+      const damageReduced = originalDamage - outcome.hearts;
+      if (damageReduced > 0) {
+        elixirBuffInfo.damageReduced = damageReduced;
+        console.log(`[loot.js]: ❄️ Spicy Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
+      }
+    }
   }
 
   // Step 2: Handle KO Logic
@@ -1035,7 +1114,12 @@ async function processLootingLogic(
      updatedCharacter.currentHearts,
      lootedItem,
      bloodMoonActive,
-     outcome.adjustedRandomValue
+     outcome.adjustedRandomValue,
+     null, // currentMonster
+     null, // totalMonsters
+     null, // entertainerBonusItem
+     null, // boostCategoryOverride
+     elixirBuffInfo // Pass elixirBuffInfo to the embed
     );
     await interaction.editReply({
      content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
@@ -1057,7 +1141,12 @@ async function processLootingLogic(
    updatedCharacter.currentHearts,
    outcome.canLoot && weightedItems.length > 0 ? lootedItem : null,
    bloodMoonActive,
-   outcome.adjustedRandomValue
+   outcome.adjustedRandomValue,
+   null, // currentMonster
+   null, // totalMonsters
+   null, // entertainerBonusItem
+   null, // boostCategoryOverride
+   elixirBuffInfo // Pass elixirBuffInfo to the embed
   );
   await interaction.editReply({ embeds: [embed] });
 
