@@ -882,7 +882,7 @@ module.exports = {
             await updateCurrentStamina(character._id, character.currentStamina);
           }
           
-          // Special handling for Hearty Elixir - it expires immediately since it's just for healing
+          // Special handling for Hearty and Enduring Elixirs - they expire immediately since they're just for healing/restoration
           if (item.itemName === 'Hearty Elixir') {
             // Apply temporary extra hearts for immediate use
             const extraHearts = 3;
@@ -890,6 +890,18 @@ module.exports = {
             // Don't modify maxHearts - just track the temporary addition
             
             // Don't set a buff, just apply the healing
+            character.buff = {
+              active: false,
+              type: null,
+              effects: {}
+            };
+          } else if (item.itemName === 'Enduring Elixir') {
+            // Apply immediate stamina restoration and temporary stamina boost
+            const staminaBoost = 1;
+            character.maxStamina += staminaBoost;
+            character.currentStamina += staminaBoost;
+            
+            // Don't set a buff, just apply the immediate effects
             character.buff = {
               active: false,
               type: null,
@@ -907,7 +919,12 @@ module.exports = {
           // Update hearts if they were modified by Hearty Elixir
           if (item.itemName === 'Hearty Elixir') {
             await updateCurrentHearts(character._id, character.currentHearts);
-            // Note: maxHearts update would need a separate function, but for now this shows the effect
+          }
+          
+          // Update stamina if it was modified by Enduring Elixir
+          if (item.itemName === 'Enduring Elixir') {
+            await updateCurrentStamina(character._id, character.currentStamina);
+            // Note: maxStamina update would need a separate function, but for now this shows the effect
           }
         } catch (error) {
           handleError(error, 'item.js', {
@@ -967,9 +984,9 @@ module.exports = {
         // ------------------- Build and Send Elixir Embed -------------------
         let effectFields = [];
         
-        // For Hearty Elixir, show that it's consumed immediately
-        if (item.itemName === 'Hearty Elixir') {
-          effectFields = []; // No effect fields needed for Hearty Elixir
+        // For Hearty and Enduring Elixirs, show that they're consumed immediately
+        if (item.itemName === 'Hearty Elixir' || item.itemName === 'Enduring Elixir') {
+          effectFields = []; // No effect fields needed for immediate consumption elixirs
         } else {
           // For other elixirs, show their buff effects
           const buffEffects = character.buff?.effects;
@@ -1010,14 +1027,20 @@ module.exports = {
           }
         }
 
-        // Calculate display values for Hearty Elixir
+        // Calculate display values for consistent display
         let displayCurrentHearts = character.currentHearts;
-        let displayMaxHearts = originalMaxHearts; // Use original max hearts
+        let displayMaxHearts = originalMaxHearts;
+        let displayCurrentStamina = character.currentStamina;
+        let displayMaxStamina = character.maxStamina; // Use current max stamina (may include buffs)
         
         if (item.itemName === 'Hearty Elixir') {
           // For Hearty Elixir, show current hearts (including temporary) / original max hearts
           displayCurrentHearts = character.currentHearts;
-          displayMaxHearts = originalMaxHearts; // Use original max hearts
+          displayMaxHearts = originalMaxHearts;
+        } else if (item.itemName === 'Enduring Elixir') {
+          // For Enduring Elixir, show current stamina (including temporary) / original max stamina
+          displayCurrentStamina = character.currentStamina;
+          displayMaxStamina = originalMaxStamina;
         }
         
         const elixirEmbed = new EmbedBuilder()
@@ -1029,13 +1052,15 @@ module.exports = {
             `**✨ Active Effects:**`
           )
           .addFields([
-            { name: '❤️ Current Hearts', value: `**${displayCurrentHearts}/${displayMaxHearts}**`, inline: false },
+            { name: '❤️ Current Hearts', value: `**${displayCurrentHearts}/${displayMaxHearts}**`, inline: true },
+            { name: '🟩 Current Stamina', value: `**${displayCurrentStamina}/${displayMaxStamina}**`, inline: true },
             ...effectFields
           ])
           .setThumbnail(item.image || character.icon)
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setFooter({ 
-            text: item.itemName === 'Hearty Elixir' ? 'Hearty Elixir consumed immediately' : 'Elixir effects active until used',
+            text: (item.itemName === 'Hearty Elixir' || item.itemName === 'Enduring Elixir') ? 
+              `${item.itemName} consumed immediately` : 'Elixir effects active until used',
             iconURL: character.icon
           });
 
