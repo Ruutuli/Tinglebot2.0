@@ -185,8 +185,43 @@ const updateJob = async (characterId, newJob) => {
 
 // Check if character has a specific perk
 const hasPerk = (character, perk) => {
-  const jobPerk = jobPerks.find(j => j.job.toLowerCase() === character.job.toLowerCase());
-  return jobPerk && jobPerk.perk.toUpperCase().includes(perk.toUpperCase());
+  // Safety check: ensure character and character.job exist
+  if (!character || !character.job || typeof character.job !== 'string') {
+    console.warn(`[jobsModule.js]: ⚠️ hasPerk called with invalid character data:`, {
+      character: character ? 'exists' : 'null/undefined',
+      characterType: typeof character,
+      characterJob: character?.job,
+      characterJobType: typeof character?.job,
+      perk: perk
+    });
+    return false;
+  }
+
+  // Additional safety check for jobPerks array
+  if (!Array.isArray(jobPerks) || jobPerks.length === 0) {
+    console.error('[jobsModule.js]: ❌ jobPerks array is invalid or empty');
+    return false;
+  }
+  
+  try {
+    const jobPerk = jobPerks.find(j => {
+      // Safety check for each job perk object
+      if (!j || !j.job || typeof j.job !== 'string') {
+        console.warn(`[jobsModule.js]: ⚠️ Invalid job perk object found:`, j);
+        return false;
+      }
+      return j.job.toLowerCase() === character.job.toLowerCase();
+    });
+    
+    if (!jobPerk || !jobPerk.perk || typeof jobPerk.perk !== 'string') {
+      return false;
+    }
+    
+    return jobPerk.perk.toUpperCase().includes(perk.toUpperCase());
+  } catch (error) {
+    console.error('[jobsModule.js]: ❌ Error in hasPerk function:', error);
+    return false;
+  }
 };
 
 
