@@ -1498,10 +1498,9 @@ module.exports = {
        
        if (shouldConsumeElixir(character, 'combat', { monster: selectedMonster })) {
          const consumedElixirType = character.buff.type;
-         const consumedEffects = character.buff.effects;
          
          console.log(`[explore.js]: 🧪 Elixir consumed for ${character.name} during exploration encounter with ${selectedMonster.name}`);
-         console.log(`[explore.js]: 🧪 Consumed ${consumedElixirType} elixir with effects:`, consumedEffects);
+   
          
          // Log what the elixir protected against
          if (consumedElixirType === 'fireproof' && selectedMonster.name.includes('Fire')) {

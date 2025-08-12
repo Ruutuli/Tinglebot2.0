@@ -921,13 +921,13 @@ async function processLootingLogic(
    defenseSuccess
   );
 
+  // Track elixir buff information for the embed
+  let elixirBuffInfo = null;
+
   // ------------------- Elixir Consumption Logic -------------------
   // Check if elixirs should be consumed based on the monster encounter
   try {
     const { shouldConsumeElixir, consumeElixirBuff, getActiveBuffEffects } = require('../../modules/elixirModule');
-    
-    // Track elixir buff information for the embed
-    let elixirBuffInfo = null;
     
     // Check for active elixir buffs before consumption
     const activeBuff = getActiveBuffEffects(character);
@@ -1009,10 +1009,8 @@ async function processLootingLogic(
     
     if (shouldConsumeElixir(character, 'loot', { monster: encounteredMonster })) {
       const consumedElixirType = character.buff.type;
-      const consumedEffects = character.buff.effects;
       
       console.log(`[loot.js]: 🧪 Elixir consumed for ${character.name} during loot encounter with ${encounteredMonster.name}`);
-      console.log(`[loot.js]: 🧪 Consumed ${consumedElixirType} elixir with effects:`, consumedEffects);
       
       // Log what the elixir protected against
       if (consumedElixirType === 'fireproof' && encounteredMonster.name.includes('Fire')) {
@@ -1213,7 +1211,7 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
 
 // ------------------- Helper Function: Generate Outcome Message -------------------
 function generateOutcomeMessage(outcome, character = null) {
- if (outcome.hearts) {
+ if (outcome.hearts && outcome.hearts > 0) {
   return outcome.result === "KO"
    ? generateDamageMessage("KO")
    : generateDamageMessage(outcome.hearts);

@@ -553,10 +553,9 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   // Check if elixirs should be consumed based on the encounter
   if (shouldConsumeElixir(character, 'helpWanted', { monster: monster })) {
     const consumedElixirType = character.buff.type;
-    const consumedEffects = character.buff.effects;
     
     console.log(`[helpWanted.js]: 🧪 ${consumedElixirType} elixir consumed for ${character.name} during help wanted encounter with ${monster.name}`);
-    console.log(`[helpWanted.js]: 🧪 Consumed ${consumedElixirType} elixir with effects:`, consumedEffects);
+    
     
     // Log what the elixir protected against
     if (consumedElixirType === 'fireproof' && monster.name.includes('Fire')) {
@@ -716,12 +715,12 @@ async function handleMonsterHunt(interaction, questId, characterName) {
         
         const koEmbed = await createMonsterEncounterEmbed(
           character,
-          monster,
-          `💀 ${character.name} has been defeated by the ${monster.name}!`,
-          newHeartsRemaining,
+          encounterResult.monster,
+          `💀 ${character.name} has been defeated by the ${encounterResult.monster.name}!`,
+          encounterResult.newHeartsRemaining,
           null, // lootItem
           false, // isBloodMoon
-          adjustedRandomValue,
+          encounterResult.adjustedRandomValue,
           null, // currentMonster
           null, // totalMonsters
           null, // entertainerBonusItem
@@ -773,12 +772,12 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       // Send battle embed
       const battleEmbed = await createMonsterEncounterEmbed(
         character,
-        monster,
-        outcomeMessage,
-        newHeartsRemaining,
-        lootedItem,
+        encounterResult.monster,
+        encounterResult.outcomeMessage,
+        encounterResult.newHeartsRemaining,
+        encounterResult.lootedItem,
         false, // isBloodMoon
-        adjustedRandomValue,
+        encounterResult.adjustedRandomValue,
         i + 1, // currentMonster (1-based index)
         monsterList.length, // totalMonsters
         null, // entertainerBonusItem

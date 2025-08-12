@@ -12,14 +12,14 @@ const ELIXIR_EFFECTS = {
     type: 'chilly',
     description: 'Grants blight rain resistance',
     effects: {
-      blightResistance: 1
+      blightResistance: 1.5
     }
   },
   'Electro Elixir': {
     type: 'electro',
     description: 'Provides resistance to electrical attacks from electric enemies',
     effects: {
-      electricResistance: 1,
+      electricResistance: 1.5,
       defenseBoost: 0.5 // Small defense boost against electric enemies
     }
   },
@@ -42,7 +42,7 @@ const ELIXIR_EFFECTS = {
     type: 'fireproof',
     description: 'Provides fire resistance against fire enemies',
     effects: {
-      fireResistance: 1
+      fireResistance: 1.5
     }
   },
   'Hasty Elixir': {
@@ -79,7 +79,7 @@ const ELIXIR_EFFECTS = {
     type: 'spicy',
     description: 'Provides cold resistance and effectiveness against ice monsters',
     effects: {
-      coldResistance: 1,
+      coldResistance: 1.5,
       iceEffectiveness: 1
     }
   },

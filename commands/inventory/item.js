@@ -953,10 +953,10 @@ module.exports = {
         // Always show buff effects if they exist (for non-immediate elixirs)
         if (buffEffects && Object.keys(buffEffects).length > 0) {
           if (buffEffects.blightResistance > 0) {
-            effectFields.push({ name: '🧿 Blight Resistance', value: `+${buffEffects.blightResistance}`, inline: true });
+            effectFields.push({ name: '🧿 Blight Resistance', value: `x${buffEffects.blightResistance}`, inline: true });
           }
           if (buffEffects.electricResistance > 0) {
-            effectFields.push({ name: '⚡ Electric Resistance', value: `+${buffEffects.electricResistance}`, inline: true });
+            effectFields.push({ name: '⚡ Electric Resistance', value: `x${buffEffects.electricResistance}`, inline: true });
           }
           if (buffEffects.staminaBoost > 0) {
             effectFields.push({ name: '🟩 Stamina Boost', value: `+${buffEffects.staminaBoost}`, inline: true });
@@ -965,7 +965,7 @@ module.exports = {
             effectFields.push({ name: '💚 Stamina Recovery', value: `+${buffEffects.staminaRecovery}`, inline: true });
           }
           if (buffEffects.fireResistance > 0) {
-            effectFields.push({ name: '🔥 Fire Resistance', value: `+${buffEffects.fireResistance}`, inline: true });
+            effectFields.push({ name: '🔥 Fire Resistance', value: `x${buffEffects.fireResistance}`, inline: true });
           }
           if (buffEffects.speedBoost > 0) {
             effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });
@@ -974,7 +974,7 @@ module.exports = {
             effectFields.push({ name: '❤️ Extra Hearts', value: `+${buffEffects.extraHearts}`, inline: true });
           }
           if (buffEffects.attackBoost > 0) {
-            effectFields.push({ name: '⚔️ Attack Boost', value: `+${buffEffects.attackBoost}`, inline: true });
+            effectFields.push({ name: '⚔️ Attack Boost', value: `x${buffEffects.attackBoost}`, inline: true });
           }
           if (buffEffects.stealthBoost > 0) {
             effectFields.push({ name: '👻 Stealth Boost', value: `+${buffEffects.stealthBoost}`, inline: true });
@@ -983,13 +983,13 @@ module.exports = {
             effectFields.push({ name: '🏃‍♂️ Flee Boost', value: `+${buffEffects.fleeBoost}`, inline: true });
           }
           if (buffEffects.coldResistance > 0) {
-            effectFields.push({ name: '❄️ Cold Resistance', value: `+${buffEffects.coldResistance}`, inline: true });
+            effectFields.push({ name: '❄️ Cold Resistance', value: `x${buffEffects.coldResistance}`, inline: true });
           }
           if (buffEffects.iceEffectiveness > 0) {
             effectFields.push({ name: '🧊 Ice Effectiveness', value: `+${buffEffects.iceEffectiveness}`, inline: true });
           }
           if (buffEffects.defenseBoost > 0) {
-            effectFields.push({ name: '🛡️ Defense Boost', value: `+${buffEffects.defenseBoost}`, inline: true });
+            effectFields.push({ name: '🛡️ Defense Boost', value: `x${buffEffects.defenseBoost}`, inline: true });
           }
         }
 
