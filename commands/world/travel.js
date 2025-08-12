@@ -999,7 +999,13 @@ async function processTravelDay(day, context) {
           `You encountered a ${monster.name}!\nWhat do you want to do? Fleeing costs 1 🟩 stamina!`,
           character.currentHearts,
           null,
-          isBloodMoon
+          false, // isBloodMoon
+          randomRoll, // adjustedRandomValue
+          null, // currentMonster
+          null, // totalMonsters
+          null, // entertainerBonusItem
+          null, // boostCategoryOverride
+          null // elixirBuffInfo - not implemented for travel yet
         );
         const buttons = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('fight').setLabel('⚔️ Fight').setStyle(ButtonStyle.Primary),

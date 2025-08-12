@@ -146,7 +146,8 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
       // Consume when encountering electric enemies
       return activity === 'combat' && context.monster?.name?.includes('Electric') ||
              activity === 'helpWanted' && context.monster?.name?.includes('Electric') ||
-             activity === 'raid' && context.monster?.name?.includes('Electric');
+             activity === 'raid' && context.monster?.name?.includes('Electric') ||
+             activity === 'loot' && context.monster?.name?.includes('Electric');
       
     case 'enduring':
       // Consume when using stamina for movement or actions
@@ -160,7 +161,8 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
       // Consume when encountering fire enemies
       return activity === 'combat' && context.monster?.name?.includes('Fire') ||
              activity === 'helpWanted' && context.monster?.name?.includes('Fire') ||
-             activity === 'raid' && context.monster?.name?.includes('Fire');
+             activity === 'raid' && context.monster?.name?.includes('Fire') ||
+             activity === 'loot' && context.monster?.name?.includes('Fire');
       
     case 'hasty':
       // Consume when moving or traveling
@@ -172,7 +174,7 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
       
     case 'mighty':
       // Consume when attacking
-      return activity === 'combat' || activity === 'helpWanted' || activity === 'raid';
+      return activity === 'combat' || activity === 'helpWanted' || activity === 'raid' || activity === 'loot';
       
     case 'sneaky':
       // Consume when gathering, looting, or traveling (stealth helps avoid encounters)
@@ -184,11 +186,12 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
              (activity === 'travel' && context.weather?.includes('Chilly')) ||
              (activity === 'combat' && context.monster?.name?.includes('Ice')) ||
              (activity === 'helpWanted' && context.monster?.name?.includes('Ice')) ||
-             (activity === 'raid' && context.monster?.name?.includes('Ice'));
+             (activity === 'raid' && context.monster?.name?.includes('Ice')) ||
+             (activity === 'loot' && context.monster?.name?.includes('Ice'));
       
     case 'tough':
       // Consume when taking damage
-      return activity === 'combat' || activity === 'helpWanted' || activity === 'raid';
+      return activity === 'combat' || activity === 'helpWanted' || activity === 'raid' || activity === 'loot';
       
     default:
       return false;

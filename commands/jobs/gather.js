@@ -669,11 +669,12 @@ module.exports = {
                   heartsRemaining,
                   lootedItem,
                   bloodMoonActive,
-                  null,
-                  null,
-                  null,
-                  entertainerBonusForEmbed || null,
-                  'Gathering'
+                  null, // adjustedRandomValue
+                  null, // currentMonster
+                  null, // totalMonsters
+                  entertainerBonusForEmbed || null, // entertainerBonusItem
+                  'Gathering', // boostCategoryOverride
+                  null // elixirBuffInfo - not implemented for gather yet
                 );
                 await safeReply({
                   content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
@@ -716,13 +717,14 @@ module.exports = {
                 encounteredMonster,
                 outcomeMessage,
                 heartsRemaining,
-                lootedItem,
+                null, // lootItem
                 bloodMoonActive,
-                null,
-                null,
-                null,
-                null,
-                'Gathering'
+                null, // adjustedRandomValue
+                null, // currentMonster
+                null, // totalMonsters
+                null, // entertainerBonusItem
+                'Gathering', // boostCategoryOverride
+                null // elixirBuffInfo - not implemented for gather yet
               );
               await safeReply({ embeds: [embed] });
               return;

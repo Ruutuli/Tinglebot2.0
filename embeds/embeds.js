@@ -1270,7 +1270,8 @@ const createMonsterEncounterEmbed = async (
  currentMonster = null,
  totalMonsters = null,
  entertainerBonusItem = null,
- boostCategoryOverride = null
+ boostCategoryOverride = null,
+ elixirBuffInfo = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1297,6 +1298,31 @@ const createMonsterEncounterEmbed = async (
  // Add boost flavor text to outcome if available
  let outcomeWithBoost = outcomeMessage || 'No outcome specified.';
  outcomeWithBoost = addBoostFlavorText(outcomeWithBoost, boostInfo);
+
+ // Add elixir buff information if available
+ if (elixirBuffInfo && elixirBuffInfo.helped) {
+   let elixirHelpText = '';
+   if (elixirBuffInfo.damageReduced > 0) {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Took ${elixirBuffInfo.damageReduced} less damage because of elixir buff!`;
+   } else if (elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'fireproof') {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Fire resistance protected against fire monster!`;
+   } else if (elixirBuffInfo.encounterType === 'electric' && elixirBuffInfo.elixirType === 'electro') {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Electric resistance protected against electric monster!`;
+   } else if (elixirBuffInfo.encounterType === 'ice' && elixirBuffInfo.elixirType === 'spicy') {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Cold resistance protected against ice monster!`;
+   } else if (elixirBuffInfo.elixirType === 'mighty') {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Attack boost improved combat performance!`;
+   } else if (elixirBuffInfo.elixirType === 'tough') {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Defense boost improved combat performance!`;
+   } else if (elixirBuffInfo.elixirType === 'sneaky') {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Stealth boost improved encounter success!`;
+   } else if (elixirBuffInfo.elixirType === 'hasty') {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Speed boost improved encounter performance!`;
+   } else {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Elixir buff improved encounter performance!`;
+   }
+   outcomeWithBoost += elixirHelpText;
+ }
 
  // Append Entertainer's Gift (for Gathering boost) if provided
  if (entertainerBonusItem && entertainerBonusItem.itemName) {
