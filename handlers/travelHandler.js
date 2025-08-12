@@ -154,7 +154,7 @@ async function assignVillageVisitingRole(interaction, destination, character = n
           if (member.roles.cache.has(roleId)) {
             try {
               await member.roles.remove(roleId);
-              console.log(`[travelHandler.js]: ✅ Removed visiting role ${roleId} from ${interaction.user.tag}`);
+              // Role removed silently
             } catch (error) {
               console.warn(`[travelHandler.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
             }
@@ -166,15 +166,15 @@ async function assignVillageVisitingRole(interaction, destination, character = n
           if (!member.roles.cache.has(destinationRoleId)) {
             try {
               await member.roles.add(destinationRoleId);
-              console.log(`[travelHandler.js]: ✅ Added ${capitalizeFirstLetter(destination)} visiting role to ${interaction.user.tag}`);
+              // Role added silently
             } catch (error) {
               console.warn(`[travelHandler.js]: ⚠️ Failed to add ${capitalizeFirstLetter(destination)} visiting role: ${error.message}`);
             }
           } else {
-            console.log(`[travelHandler.js]: ℹ️ ${interaction.user.tag} already has ${capitalizeFirstLetter(destination)} visiting role`);
+            // Role already exists
           }
         } else {
-          console.log(`[travelHandler.js]: ℹ️ ${interaction.user.tag} returned to home village ${capitalizeFirstLetter(destination)} - no visiting role assigned`);
+          // Returned to home village
         }
       } else {
         console.warn('[travelHandler.js]: ⚠️ Bot lacks ManageRoles permission - skipping role management');
@@ -357,15 +357,13 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
     }
 
-    console.log(`[travelHandler.js]: 🎯 Starting combat for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
-    console.log(`[travelHandler.js]: ❤️ Initial hearts: ${character.currentHearts}/${character.maxHearts}`);
+    console.log(`[travelHandler.js]: ⚔️ Combat: ${character.name} vs ${monster.name} (T${monster.tier}) - Hearts: ${character.currentHearts}/${character.maxHearts}`);
 
     const diceRoll = Math.floor(Math.random() * 100) + 1;
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
-    console.log(`[travelHandler.js]: ⚔️ Combat results - Damage: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
-
     const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
-    console.log(`[travelHandler.js]: 🎲 Combat outcome: ${outcome.result}, Hearts: ${outcome.hearts}`);
+    
+    console.log(`[travelHandler.js]: 🎲 Combat result: ${outcome.result} (${outcome.hearts} hearts lost)`);
 
     // ------------------- Elixir Consumption Logic -------------------
     // Check if elixirs should be consumed based on the travel encounter
@@ -373,7 +371,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       const { shouldConsumeElixir, consumeElixirBuff } = require('../modules/elixirModule');
       if (shouldConsumeElixir(character, 'combat', { monster: monster })) {
         consumeElixirBuff(character);
-        console.log(`[travelHandler.js]: 🧪 Elixir consumed for ${character.name} during travel encounter with ${monster.name}`);
+        console.log(`[travelHandler.js]: 🧪 Elixir consumed for ${character.name}`);
         
         // Update character in database to persist the consumed elixir
         await character.save();
@@ -385,7 +383,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
     // ------------------- KO Branch -------------------
     if (outcome.result === 'KO') {
-      console.log(`[travelHandler.js]: 💀 Character KO'd - Previous hearts: ${character.currentHearts}`);
+      console.log(`[travelHandler.js]: 💀 ${character.name} KO'd (${character.currentHearts} hearts)`);
       const koEmbed = createKOEmbed(character);
       await interaction.followUp({ embeds: [koEmbed] });
 
@@ -398,7 +396,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       // Check if this is a mod character (also check ModCharacter collection)
       const modCharacter = await ModCharacter.findById(character._id);
       if (modCharacter || character.isModCharacter) {
-        console.log(`[travelHandler.js]: 👑 Mod character ${character.name} is immune to debuff.`);
+        console.log(`[travelHandler.js]: 👑 ${character.name} immune to debuff`);
         // Mod characters are immune to debuff but still get KO'd for travel purposes
         character.debuff = { active: false, endDate: null };
       } else {
@@ -429,7 +427,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         outcome.hearts = 1;
         outcome.result = `💥⚔️ The monster attacks! You lose ❤️ 1 heart!`;
       }
-      console.log(`[travelHandler.js]: 💔 Applying damage - Hearts: ${character.currentHearts} → ${character.currentHearts - outcome.hearts}`);
+              console.log(`[travelHandler.js]: 💔 ${character.name} loses ${outcome.hearts} hearts`);
     }
 
     // ------------------- Sync Hearts & Stamina -------------------
@@ -560,7 +558,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           // Check if this is a mod character (also check ModCharacter collection)
           const modCharacter = await ModCharacter.findById(character._id);
           if (modCharacter || character.isModCharacter) {
-            console.log(`[travelHandler.js]: 👑 Mod character ${character.name} is immune to debuff.`);
+            console.log(`[travelHandler.js]: 👑 ${character.name} immune to debuff`);
             // Mod characters are immune to debuff but still get KO'd for travel purposes
             character.debuff = { active: false, endDate: null };
           } else {

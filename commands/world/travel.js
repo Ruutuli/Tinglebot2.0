@@ -130,15 +130,25 @@ const CommandData = new SlashCommandBuilder()
 // Determines number of travel days based on starting point, destination,
 // mode of travel, and character perks.
 function calculateTravelDuration(currentVillage, destination, mode, character) {
+  // Safety check: ensure character object is valid
+  if (!character || typeof character !== 'object') {
+    console.error('[travel.js]: ❌ Invalid character object passed to calculateTravelDuration');
+    return -1;
+  }
+
   const travelTimes = {
     'on foot': {
+      'inariko-rudania': 2,
+      'inariko-vhintl': 2,
       'rudania-inariko': 2,
-      'inariko-vhintl': 2
+      'vhintl-inariko': 2
+    },
+    'on mount': {
+      'inariko-rudania': 1,
+      'inariko-vhintl': 1,
+      'rudania-inariko': 1,
+      'vhintl-inariko': 1
     }
-    // 'on mount': { // Temporarily disabled
-    //   'rudania-inariko': 1,
-    //   'inariko-vhintl': 1
-    // }    
   };
 
   const key = `${currentVillage}-${destination}`;
@@ -146,7 +156,7 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
   let baseDuration = travelTimes[mode][key] || travelTimes[mode][reverseKey] || -1;
 
   // Apply DELIVERING perk
-  if (baseDuration > 0 && hasPerk(character, 'DELIVERING')) {
+  if (baseDuration > 0 && character.job && hasPerk(character, 'DELIVERING')) {
     baseDuration = Math.max(1, Math.ceil(baseDuration / 2));
   }
 
@@ -158,7 +168,7 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
       const originalDuration = baseDuration;
       baseDuration = Math.max(1, Math.ceil(baseDuration / 2));
       const speedReduction = originalDuration - baseDuration;
-      console.log(`[travel.js]: 🧪 Hasty Elixir applied - Travel time cut in half from ${originalDuration} to ${baseDuration} day(s)`);
+              console.log(`[travel.js]: 🧪 Hasty Elixir: ${originalDuration} → ${baseDuration} days`);
     }
   }
 
@@ -168,9 +178,15 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
 // ------------------- Wrong-Road Guard -------------------
 // Validates that user is on the correct Discord channel for the selected route.
 async function validateCorrectTravelChannel(interaction, character, startingVillage, destination, totalTravelDuration) {
+  // Safety check: ensure character object is valid
+  if (!character || typeof character !== 'object') {
+    console.error('[travel.js]: ❌ Invalid character object passed to validateCorrectTravelChannel');
+    return false;
+  }
+
   const currentChannel = interaction.channelId;
 
-  if (totalTravelDuration === 2 && !hasPerk(character, 'DELIVERING')) {
+  if (totalTravelDuration === 2 && character.job && !hasPerk(character, 'DELIVERING')) {
     if (
       (startingVillage === 'inariko' && destination === 'vhintl' && currentChannel !== PATH_CHANNELS.leafDewWay) ||
       (startingVillage === 'inariko' && destination === 'rudania' && currentChannel !== PATH_CHANNELS.pathOfScarletLeaves) ||
@@ -211,17 +227,35 @@ module.exports = {
       // ------------------- Fetch Character from Database -------------------
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        console.log(`[travel.js]: ❌ Character not found for ${userTag}`, {
-          characterName,
-          userId,
-          destination,
-          mode
-        });
+        console.log(`[travel.js]: ❌ Character not found for ${userTag}`);
         await interaction.editReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,
         });
         return;
       }
+
+      // Handle characters without jobs (legacy data issue)
+      if (!character.job || typeof character.job !== 'string') {
+        console.warn(`[travel.js]: ⚠️ Character ${character.name} has no job, setting default job to 'Villager'`);
+        character.job = 'Villager';
+        
+        // Update the character in the database
+        try {
+          if (character.isModCharacter) {
+            const ModCharacter = require('../../models/ModCharacterModel.js');
+            await ModCharacter.findByIdAndUpdate(character._id, { job: 'Villager' });
+          } else {
+            await Character.findByIdAndUpdate(character._id, { job: 'Villager' });
+          }
+          console.log(`[travel.js]: ✅ ${character.name} job set to 'Villager'`);
+        } catch (updateError) {
+          console.error(`[travel.js]: ❌ Failed to update character job:`, updateError);
+          // Continue with the default job for this session
+        }
+      }
+
+      // Log character loaded
+      console.log(`[travel.js]: 📋 Character loaded: ${character.name} (${character.job}) in ${character.currentVillage}`);
 
       // ---- Blight Rain Infection Check ----
       const startingVillage = character.currentVillage.toLowerCase();
@@ -248,11 +282,11 @@ module.exports = {
           // Apply resistance buffs
           if (buffEffects && buffEffects.blightResistance > 0) {
             infectionChance -= (buffEffects.blightResistance * 0.1); // Each level reduces by 10%
-            console.log(`[travel.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
+            console.log(`[travel.js]: 🧪 Blight resistance: ${infectionChance} chance`);
           }
           if (buffEffects && buffEffects.fireResistance > 0) {
             infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-            console.log(`[travel.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
+            console.log(`[travel.js]: 🧪 Fire resistance: ${infectionChance - (buffEffects.fireResistance * 0.05)} chance`);
           }
           
           // Consume elixirs after applying their effects
@@ -459,7 +493,7 @@ module.exports = {
         try {
           if (shouldConsumeElixir(character, 'travel')) {
             consumeElixirBuff(character);
-            console.log(`[travel.js]: 🧪 Hasty Elixir consumed for ${character.name} - Travel time reduced from ${originalDuration} to ${totalTravelDuration} days`);
+            console.log(`[travel.js]: 🧪 Hasty Elixir consumed: ${originalDuration} → ${totalTravelDuration} days`);
             
             // Update character in database to persist the consumed elixir
             if (character.isModCharacter) {
@@ -760,11 +794,14 @@ async function processTravelDay(day, context) {
           if (botMember.permissions.has('ManageRoles')) {
             // Remove all village visiting roles first
             const visitingRoleIds = Object.values(VILLAGE_VISITING_ROLES);
+            let rolesRemoved = 0;
+            let rolesAdded = 0;
+            
             for (const roleId of visitingRoleIds) {
               if (member.roles.cache.has(roleId)) {
                 try {
                   await member.roles.remove(roleId);
-                  console.log(`[travel.js]: ✅ Removed visiting role ${roleId} from ${interaction.user.tag}`);
+                  rolesRemoved++;
                 } catch (error) {
                   console.warn(`[travel.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
                 }
@@ -776,15 +813,20 @@ async function processTravelDay(day, context) {
               if (!member.roles.cache.has(destinationRoleId)) {
                 try {
                   await member.roles.add(destinationRoleId);
-                  console.log(`[travel.js]: ✅ Added ${capitalizeFirstLetter(destination)} visiting role to ${interaction.user.tag}`);
+                  rolesAdded++;
                 } catch (error) {
                   console.warn(`[travel.js]: ⚠️ Failed to add ${capitalizeFirstLetter(destination)} visiting role: ${error.message}`);
                 }
-              } else {
-                console.log(`[travel.js]: ℹ️ ${interaction.user.tag} already has ${capitalizeFirstLetter(destination)} visiting role`);
               }
+            }
+            
+            // Log role changes summary
+            if (rolesRemoved > 0 || rolesAdded > 0) {
+              console.log(`[travel.js]: 🔄 Role management: ${rolesRemoved} removed, ${rolesAdded} added for ${interaction.user.tag}`);
+            } else if (!isHomeVillage) {
+              console.log(`[travel.js]: ℹ️ ${interaction.user.tag} already has ${capitalizeFirstLetter(destination)} visiting role`);
             } else {
-              console.log(`[travel.js]: ℹ️ ${interaction.user.tag} returned to home village ${capitalizeFirstLetter(destination)} - no visiting role assigned`);
+              console.log(`[travel.js]: ℹ️ ${interaction.user.tag} returned to home village ${capitalizeFirstLetter(destination)}`);
             }
           } else {
             console.warn('[travel.js]: ⚠️ Bot lacks ManageRoles permission - skipping role management');
@@ -880,7 +922,7 @@ async function processTravelDay(day, context) {
     }
 
     // ------------------- Wrong-Road Validation -------------------
-    if (totalTravelDuration === 2 && !hasPerk(character, 'DELIVERING')) {
+    if (totalTravelDuration === 2 && character.job && !hasPerk(character, 'DELIVERING')) {
       if (
         (startingVillage === 'inariko' && destination === 'vhintl' && currentChannel !== PATH_CHANNELS.leafDewWay) ||
         (startingVillage === 'inariko' && destination === 'rudania' && currentChannel !== PATH_CHANNELS.pathOfScarletLeaves)
@@ -986,7 +1028,7 @@ async function processTravelDay(day, context) {
         collector.on('end', async (collected, reason) => {
           try {
             if (reason === 'time') {
-              console.log(`[travel.js]: ⏰ Collector timed out for monster encounter on day ${day}`);
+              console.log(`[travel.js]: ⏰ Monster encounter timeout on day ${day}`);
               const decision = await handleTravelInteraction(
                 { customId: 'do_nothing' },
                 character,
@@ -1078,7 +1120,7 @@ async function processTravelDay(day, context) {
       collector.on('end', async (collected, reason) => {
         try {
           if (reason === 'time') {
-            console.log(`[travel.js]: ⏰ Collector timed out for safe day on day ${day}`);
+            console.log(`[travel.js]: ⏰ Safe day timeout on day ${day}`);
             const decision = await handleTravelInteraction(
               { customId: 'do_nothing' },
               character,

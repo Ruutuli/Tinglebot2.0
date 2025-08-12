@@ -25,9 +25,9 @@ const { retrieveFromStorage, saveToStorage } = require('../utils/storage');
 
 // ------------------- Battle Logging Function -------------------
 function logBattleDetails(tier, characterName, monsterName, roll, damage, monsterDamage) {
-    console.log(`[encounterModule.js]: ⚔️ ${characterName} vs ${monsterName} (T${tier}) - Roll: ${roll}/100`);
+            console.log(`[encounterModule.js]: ⚔️ ${characterName} vs ${monsterName} (T${tier})`);
     if (damage > 0 || monsterDamage > 0) {
-        console.log(`[encounterModule.js]: 💥 Damage - ${characterName}: ${damage}, ${monsterName}: ${monsterDamage}`);
+        console.log(`[encounterModule.js]: 💥 ${characterName}: ${damage} hearts, ${monsterName}: ${monsterDamage} hearts`);
     }
 }
 
@@ -47,13 +47,12 @@ function calculateDamage(attacker, defender) {
                 // Electric resistance reduces damage by 50% per level
                 const resistanceReduction = buffEffects.electricResistance * 0.5;
                 baseDamage = Math.max(0, baseDamage - resistanceReduction);
-                console.log(`[encounterModule.js]: ⚡ Electric resistance applied - Damage reduced from 1 to ${baseDamage} hearts`);
+                console.log(`[encounterModule.js]: ⚡ Electric resistance: damage reduced to ${baseDamage} hearts`);
                 
                 // Consume electro elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
                 if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
                     consumeElixirBuff(defender);
-                    console.log(`[encounterModule.js]: 🧪 Electro Elixir consumed after electric resistance use`);
                 }
             }
             
@@ -62,13 +61,12 @@ function calculateDamage(attacker, defender) {
                 // Fire resistance reduces damage by 50% per level
                 const resistanceReduction = buffEffects.fireResistance * 0.5;
                 baseDamage = Math.max(0, baseDamage - resistanceReduction);
-                console.log(`[encounterModule.js]: 🔥 Fire resistance applied - Damage reduced from 1 to ${baseDamage} hearts`);
+                console.log(`[encounterModule.js]: 🔥 Fire resistance: damage reduced to ${baseDamage} hearts`);
                 
                 // Consume fireproof elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
                 if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
                     consumeElixirBuff(defender);
-                    console.log(`[encounterModule.js]: 🧪 Fireproof Elixir consumed after fire resistance use`);
                 }
             }
         }
@@ -91,11 +89,9 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
         const tier = monster.tier;
         let outcome;
 
-        console.log(`[encounterModule.js]: 📊 Initial values - Roll: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
-
         // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
         if (character.name === 'Aemu' || character.modTitle === 'Dragon') {
-            console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.modTitle || 'Oracle'}) - Always win and 1HKO!`);
+            console.log(`[encounterModule.js]: 👑 ${character.name} (${character.modTitle || 'Oracle'}) uses 1HKO ability!`);
             
             // Import flavor text module for mod character victory messages
             const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
@@ -112,8 +108,6 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
                 hearts: 0,
                 canLoot: true,
             };
-            
-            console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
             
             return {
                 ...outcome,
@@ -151,10 +145,8 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
             outcome = { result: 'Win!/Loot', canLoot: true, hearts: 0 };
         }
 
-        console.log(`[encounterModule.js]: 💥 Damage calculation - Tier: ${tier}, Hearts: ${outcome.hearts}, Can Loot: ${outcome.canLoot}`);
-
         if (outcome.hearts > 0) {
-            console.log(`[encounterModule.js]: ❤️ Applying damage - ${character.name} loses ${outcome.hearts} hearts`);
+            console.log(`[encounterModule.js]: 💔 ${character.name} loses ${outcome.hearts} hearts`);
             await useHearts(character._id, outcome.hearts);
         }
 
@@ -185,7 +177,7 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
 
     // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
     if (character.name === 'Aemu' || character.modTitle === 'Dragon') {
-        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.modTitle || 'Oracle'}) - Always win and 1HKO!`);
+        console.log(`[encounterModule.js]: 👑 ${character.name} (${character.modTitle || 'Oracle'}) uses 1HKO ability!`);
         
         // Import flavor text module for mod character victory messages
         const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
@@ -199,8 +191,6 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
         
         outcome = modFlavorText; // Use special mod character flavor text
         heartsLostForMonster = monster.currentHearts || 3; // 1HKO - take all monster hearts
-        
-        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
         
         return { 
             result: outcome, 
@@ -275,7 +265,7 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
 
     // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
     if (character.name === 'Aemu' || character.modTitle === 'Dragon') {
-        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.modTitle || 'Oracle'}) - Always win and 1HKO!`);
+        console.log(`[encounterModule.js]: 👑 ${character.name} (${character.modTitle || 'Oracle'}) uses 1HKO ability!`);
         
         // Import flavor text module for mod character victory messages
         const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
@@ -289,8 +279,6 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
         
         outcome = modFlavorText; // Use special mod character flavor text
         heartsLostForMonster = monster.currentHearts || 4; // 1HKO - take all monster hearts
-        
-        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
         
         return { 
             result: outcome, 
@@ -366,7 +354,7 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
 
     // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
     if (character.name === 'Aemu' || character.modTitle === 'Dragon') {
-        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.modTitle || 'Oracle'}) - Always win and 1HKO!`);
+        console.log(`[encounterModule.js]: 👑 ${character.name} (${character.modTitle || 'Oracle'}) uses 1HKO ability!`);
         
         // Import flavor text module for mod character victory messages
         const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
@@ -380,8 +368,6 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
         
         outcome = modFlavorText; // Use special mod character flavor text
         heartsLostForMonster = monster.currentHearts || 5; // 1HKO - take all monster hearts
-        
-        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
         
         return { 
             result: outcome, 
@@ -457,7 +443,7 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
 
     // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
     if (character.name === 'Aemu' || character.modTitle === 'Dragon') {
-        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.modTitle || 'Oracle'}) - Always win and 1HKO!`);
+        console.log(`[encounterModule.js]: 👑 ${character.name} (${character.modTitle || 'Oracle'}) uses 1HKO ability!`);
         
         // Import flavor text module for mod character victory messages
         const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
@@ -471,8 +457,6 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
         
         outcome = modFlavorText; // Use special mod character flavor text
         heartsLostForMonster = monster.currentHearts || 6; // 1HKO - take all monster hearts
-        
-        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
         
         return { 
             result: outcome, 
@@ -548,7 +532,7 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
 
     // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
     if (character.name === 'Aemu' || character.modTitle === 'Dragon') {
-        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.modTitle || 'Oracle'}) - Always win and 1HKO!`);
+        console.log(`[encounterModule.js]: 👑 ${character.name} (${character.modTitle || 'Oracle'}) uses 1HKO ability!`);
         
         // Import flavor text module for mod character victory messages
         const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
@@ -562,8 +546,6 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
         
         outcome = modFlavorText; // Use special mod character flavor text
         heartsLostForMonster = monster.currentHearts || 7; // 1HKO - take all monster hearts
-        
-        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
         
         return { 
             result: outcome, 
@@ -639,7 +621,7 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
 
     // --- SPECIAL RULE: Aemu and the Dragons always win and 1HKO ---
     if (character.name === 'Aemu' || character.modTitle === 'Dragon') {
-        console.log(`[encounterModule.js]: 👑 Special rule activated for ${character.name} (${character.modTitle || 'Oracle'}) - Always win and 1HKO!`);
+        console.log(`[encounterModule.js]: 👑 ${character.name} (${character.modTitle || 'Oracle'}) uses 1HKO ability!`);
         
         // Import flavor text module for mod character victory messages
         const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
@@ -653,8 +635,6 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
         
         outcome = modFlavorText; // Use special mod character flavor text
         heartsLostForMonster = monster.currentHearts || 8; // 1HKO - take all monster hearts
-        
-        console.log(`[encounterModule.js]: 💥 Special outcome - ${character.name} automatically wins and can loot`);
         
         return { 
             result: outcome, 
