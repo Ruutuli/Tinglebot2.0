@@ -377,7 +377,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         await character.save();
       } else if (character.buff?.active) {
         // Log when elixir is not used due to conditions not met
-        console.log(`[travelHandler.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+        console.log(`[travelHandler.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
       }
     } catch (elixirError) {
       console.error(`[travelHandler.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);

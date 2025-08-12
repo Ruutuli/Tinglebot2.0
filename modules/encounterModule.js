@@ -55,7 +55,7 @@ function calculateDamage(attacker, defender) {
                     consumeElixirBuff(defender);
                 } else if (defender.buff?.active) {
                     // Log when elixir is not used due to conditions not met
-                    console.log(`[encounterModule.js]: 🧪 Elixir not used for ${defender.name} - conditions not met. Active buff: ${defender.buff.type} with effects:`, defender.buff.effects);
+                    console.log(`[encounterModule.js]: 🧪 Elixir not used for ${defender.name} - conditions not met. Active buff: ${defender.buff.type}`);
                 }
             }
             
@@ -72,7 +72,7 @@ function calculateDamage(attacker, defender) {
                     consumeElixirBuff(defender);
                 } else if (defender.buff?.active) {
                     // Log when elixir is not used due to conditions not met
-                    console.log(`[encounterModule.js]: 🧪 Elixir not used for ${defender.name} - conditions not met. Active buff: ${defender.buff.type} with effects:`, defender.buff.effects);
+                    console.log(`[encounterModule.js]: 🧪 Elixir not used for ${defender.name} - conditions not met. Active buff: ${defender.buff.type}`);
                 }
             }
         }

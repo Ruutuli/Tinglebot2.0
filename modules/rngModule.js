@@ -180,7 +180,7 @@ function calculateFinalValue(character, diceRoll) {
       consumeElixirBuff(character);
     } else if (character.buff?.active) {
       // Log when elixir is not used due to conditions not met
-      console.log(`[rngModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+      console.log(`[rngModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
   
@@ -194,7 +194,7 @@ function calculateFinalValue(character, diceRoll) {
       consumeElixirBuff(character);
     } else if (character.buff?.active) {
       // Log when elixir is not used due to conditions not met
-      console.log(`[rngModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+      console.log(`[rngModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
   

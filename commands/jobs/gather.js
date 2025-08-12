@@ -382,8 +382,8 @@ module.exports = {
             const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
             await updateFunction(character._id, { buff: character.buff });
           } else if (character.buff?.active) {
-            // Log when elixir is not used due to conditions not being met
-            console.log(`[gather.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+            // Log when elixir is not used due to conditions not met
+            console.log(`[gather.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
           }
           
           // Ensure chance stays within reasonable bounds
@@ -436,7 +436,7 @@ module.exports = {
                 safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
               } else if (character.buff?.active) {
                 // Log when elixir is not used due to conditions not being met
-                console.log(`[gather.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type} with effects:`, character.buff.effects);
+                console.log(`[gather.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
               }
             } else {
               safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
