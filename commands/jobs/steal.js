@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Local Module Imports -------------------
 const { handleError } = require('../../utils/globalErrorHandler');
-const { fetchCharacterByName, getCharacterInventoryCollection, fetchItemRarityByName } = require('../../database/db');
+const { fetchCharacterByName, getCharacterInventoryCollection, fetchItemRarityByName, connectToInventoriesForItems } = require('../../database/db');
 const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
 const { getNPCItems, NPCs, getStealFlavorText, getStealFailText } = require('../../modules/NPCsModule');
 const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
@@ -74,26 +74,29 @@ const ERROR_MESSAGES = {
     PROTECTED: '🛡️ **This character is currently protected from theft!**',
     COOLDOWN: '⏰ **Please wait {time} seconds before attempting to steal again.**',
     NO_ITEMS: '❌ **No items available to steal!**',
-    INVALID_TARGET: '❌ **Invalid target selected!**'
+    INVALID_TARGET: '❌ **Invalid target selected!**',
+    INVALID_NPC_TARGET: '❌ **Invalid NPC target selected!**\n\n**Available NPCs:**\n{availableNPCs}\n\n**Tip:** Make sure to select an NPC from the dropdown menu, not type the name manually.',
+    INVALID_PLAYER_TARGET: '❌ **Invalid player target selected!**\n\n**Tip:** Make sure to select a character from the dropdown menu, not type the name manually.'
 };
 
 // ------------------- NPC Data -------------------
-const NPC_NAME_MAPPING = {
-    'Hank': 'Hank',
-    'Sue': 'Sue',
-    'Lukan': 'Lukan',
-    'Myti': 'Myti',
-    'Cree': 'Cree',
-    'Cece': 'Cece',
-    'Walton': 'Walton',
-    'Jengo': 'Jengo',
-    'Jasz': 'Jasz',
-    'Lecia': 'Lecia',
-    'Tye': 'Tye',
-    'Lil Tim': 'Lil Tim',
-    'Zone': 'Zone',
-    'Peddler': 'Peddler'
-};
+// Remove hardcoded mapping and use dynamic NPC lookup instead
+// const NPC_NAME_MAPPING = {
+//     'Hank': 'Hank',
+//     'Sue': 'Sue',
+//     'Lukan': 'Lukan',
+//     'Myti': 'Myti',
+//     'Cree': 'Cree',
+//     'Cece': 'Cece',
+//     'Walton': 'Walton',
+//     'Jengo': 'Jengo',
+//     'Jasz': 'Jasz',
+//     'Lecia': 'Lecia',
+//     'Tye': 'Tye',
+//     'Lil Tim': 'Lil Tim',
+//     'Zone': 'Zone',
+//     'Peddler': 'Peddler'
+// };
 
 // ============================================================================
 // ---- State Management ----
@@ -103,6 +106,62 @@ const NPC_NAME_MAPPING = {
 // const userCooldowns = new Map(); // Track user cooldowns
 const stealStreaks = new Map(); // Track successful steal streaks
 const stealProtection = new Map(); // Track protection after being stolen from (30 minutes)
+
+// ------------------- NPC Item Cache -------------------
+// Cache NPC items to avoid repeated database queries
+const npcItemCache = new Map();
+const NPC_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
+
+// ------------------- Preload Common NPC Items -------------------
+// Preload items for commonly used NPCs to avoid database queries
+const COMMON_NPC_CATEGORIES = {
+    'Lukan': ['Apple', 'Dazzlefruit', 'Fire Fruit', 'Fleet-Lotus Seeds', 'Golden Apple', 'Hearty Durian', 'Hydromelon', 'Ice Fruit', 'Mighty Bananas', 'Palm Fruit', 'Shock Fruit', 'Spicy Pepper', 'Splash Fruit', 'Thornberry', 'Voltfruit', 'Wild berry'],
+    'Hank': ['Swift Carrot', 'Endura Carrot', 'Hearty Radish', 'Mighty Thistle', 'Silent Princess', 'Sunshroom', 'Zapshroom', 'Rushroom', 'Razorshroom', 'Ironshroom', 'Stamellashroom', 'Chillshroom', 'Sunshroom', 'Zapshroom', 'Rushroom', 'Razorshroom', 'Ironshroom', 'Stamellashroom', 'Chillshroom'],
+    'Sue': ['Hearty Bass', 'Hyrule Bass', 'Staminoka Bass', 'Armored Carp', 'Mighty Carp', 'Sanke Carp', 'Bright-Eyed Crab', 'Ironshell Crab', 'Razorclaw Crab']
+};
+
+// Preload common NPC items on startup
+function preloadCommonNPCItems() {
+    for (const [npcName, items] of Object.entries(COMMON_NPC_CATEGORIES)) {
+        // Set default rarity of 1 (common) for preloaded items
+        const itemsWithRarity = items.map(itemName => ({
+            itemName,
+            itemRarity: 1,
+            quantity: Infinity,
+            isNPC: true
+        }));
+        setCachedNPCItems(npcName, itemsWithRarity);
+        console.log(`[steal.js]: 🚀 Preloaded ${items.length} items for ${npcName}`);
+    }
+}
+
+// Initialize preloaded items
+preloadCommonNPCItems();
+
+// ------------------- NPC Item Cache Management -------------------
+function getCachedNPCItems(npcName) {
+    const cacheEntry = npcItemCache.get(npcName);
+    if (cacheEntry && Date.now() - cacheEntry.timestamp < NPC_CACHE_DURATION) {
+        return cacheEntry.items;
+    }
+    return null;
+}
+
+function setCachedNPCItems(npcName, items) {
+    npcItemCache.set(npcName, {
+        items: items,
+        timestamp: Date.now()
+    });
+}
+
+function clearExpiredNPCCache() {
+    const now = Date.now();
+    for (const [npcName, cacheEntry] of npcItemCache.entries()) {
+        if (now - cacheEntry.timestamp >= NPC_CACHE_DURATION) {
+            npcItemCache.delete(npcName);
+        }
+    }
+}
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -434,6 +493,9 @@ function cleanupExpiredProtections() {
             stealProtection.delete(targetId);
         }
     }
+    
+    // Also clear expired NPC cache
+    clearExpiredNPCCache();
 }
 
 // ------------------- Statistics Functions -------------------
@@ -1000,8 +1062,80 @@ async function calculateFailureThreshold(itemTier, character = null, targetName 
 
 // ------------------- Centralized Item Processing -------------------
 // Centralized item processing with rarity to eliminate duplication
-// Updated to preserve quantity information for player items while handling NPC items
+// OPTIMIZED: Now batches database queries instead of individual calls
 async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries = null) {
+    if (!Array.isArray(itemNames) || itemNames.length === 0) {
+        return [];
+    }
+    
+    try {
+        if (isNPC) {
+            // NPC items: batch fetch all rarities at once
+            const uniqueItemNames = [...new Set(itemNames)]; // Remove duplicates
+            
+            // Batch fetch all item rarities in one database query
+            const db = await connectToInventoriesForItems();
+            const items = await db.collection("items").find({
+                itemName: { $in: uniqueItemNames.map(name => new RegExp(`^${name}$`, 'i')) }
+            }, { itemName: 1, itemRarity: 1 }).toArray();
+            
+            // Create a map for fast lookup
+            const rarityMap = new Map();
+            items.forEach(item => {
+                rarityMap.set(item.itemName.toLowerCase(), item.itemRarity);
+            });
+            
+            // Process items with batched rarities
+            return itemNames.map(itemName => {
+                const itemRarity = rarityMap.get(itemName.toLowerCase()) || 1; // Default to common if not found
+                return { 
+                    itemName, 
+                    itemRarity,
+                    quantity: Infinity, // NPCs have unlimited quantities
+                    isNPC: true
+                };
+            });
+        } else {
+            // Player items: preserve quantity information from inventory
+            const uniqueItemNames = [...new Set(itemNames)]; // Remove duplicates
+            
+            // Batch fetch all item rarities in one database query
+            const db = await connectToInventoriesForItems();
+            const items = await db.collection("items").find({
+                itemName: { $in: uniqueItemNames.map(name => new RegExp(`^${name}$`, 'i')) }
+            }, { itemName: 1, itemRarity: 1 }).toArray();
+            
+            // Create a map for fast lookup
+            const rarityMap = new Map();
+            items.forEach(item => {
+                rarityMap.set(item.itemName.toLowerCase(), item.itemRarity);
+            });
+            
+            // Process items with batched rarities and inventory quantities
+            return itemNames.map(itemName => {
+                const itemRarity = rarityMap.get(itemName.toLowerCase()) || 1; // Default to common if not found
+                const inventoryEntry = inventoryEntries?.find(entry => entry.itemName === itemName);
+                const quantity = inventoryEntry?.quantity || 1;
+                
+                return { 
+                    itemName, 
+                    itemRarity,
+                    quantity: quantity,
+                    isNPC: false
+                };
+            });
+        }
+    } catch (error) {
+        console.error('[steal.js]: ❌ Error in processItemsWithRarity:', error);
+        // Fallback to individual processing if batch fails
+        console.log('[steal.js]: ⚠️ Falling back to individual item processing');
+        return await processItemsWithRarityFallback(itemNames, isNPC, inventoryEntries);
+    }
+}
+
+// ------------------- Fallback Item Processing -------------------
+// Fallback method if batch processing fails
+async function processItemsWithRarityFallback(itemNames, isNPC = false, inventoryEntries = null) {
     if (isNPC) {
         // NPC items: convert strings to objects with unlimited quantity
         return await Promise.all(
@@ -1232,6 +1366,23 @@ module.exports = {
                 return;
             }
 
+            // Performance timing
+            const startTime = Date.now();
+            console.log(`[steal.js]: 🚀 Starting steal command execution at ${new Date().toISOString()}`);
+
+            // Debug logging for troubleshooting
+            console.log(`[steal.js]: 🎯 Steal command execution - targetName: "${targetName}", targetType: ${targetType}, rarity: ${raritySelection}`);
+            console.log(`[steal.js]: 🎯 Available NPCs: ${NPCs && typeof NPCs === 'object' ? Object.keys(NPCs).join(', ') : 'NPCs not loaded'}`);
+
+            // ---- Target Type Validation ----
+            if (targetType !== 'npc' && targetType !== 'player') {
+                await interaction.reply({ 
+                    content: `❌ **Invalid target type: "${targetType}"**\n\n**Valid target types:**\n• **NPC** - Steal from non-player characters\n• **Player** - Steal from other player characters\n\n**Tip:** Make sure to select a target type from the dropdown menu.`, 
+                    ephemeral: true 
+                });
+                return;
+            }
+
             // ---- Rarity Validation ----
             const allowedRarities = ['common', 'uncommon', 'rare'];
             if (!allowedRarities.includes(raritySelection)) {
@@ -1350,7 +1501,14 @@ module.exports = {
             // Validate target character
             const targetValidation = await validateCharacter(targetName, null);
             if (!targetValidation.valid && targetType === 'player') {
-                await interaction.editReply({ content: targetValidation.error });
+                // Debug logging for troubleshooting
+                console.log(`[steal.js]: ❌ Player target validation failed - targetName: "${targetName}", targetType: ${targetType}`);
+                
+                // Provide more helpful error message for invalid player targets
+                const errorMessage = targetValidation.error.includes('not found') 
+                    ? `❌ **Player target not found: "${targetName}"**\n\n**Tip:** Make sure to select a character from the dropdown menu, not type the name manually.`
+                    : targetValidation.error;
+                await interaction.editReply({ content: errorMessage });
                 return;
             }
 
@@ -1520,12 +1678,20 @@ module.exports = {
 
             // Handle NPC stealing
             if (targetType === 'npc') {
-                const mappedNPCName = NPC_NAME_MAPPING[targetName];
-                if (!mappedNPCName) {
-                    await interaction.editReply({ content: ERROR_MESSAGES.INVALID_TARGET });
+                // Debug logging for troubleshooting
+                console.log(`[steal.js]: 🎯 NPC target validation - targetName: "${targetName}", targetType: ${targetType}`);
+                
+                // Use the new NPC validation function
+                const npcValidation = validateNPCTarget(targetName);
+                if (!npcValidation.valid) {
+                    console.log(`[steal.js]: ❌ NPC validation failed - targetName: "${targetName}", availableNPCs: ${Object.keys(NPCs).join(', ')}`);
+                    await interaction.editReply({ content: npcValidation.error });
                     return;
                 }
-
+                
+                const mappedNPCName = npcValidation.npcName;
+                console.log(`[steal.js]: ✅ NPC validation successful - mappedNPCName: "${mappedNPCName}"`);
+                
                 // Check if NPC is protected (using NPC name as ID)
                 if (isProtected(mappedNPCName)) {
                     const timeLeft = getProtectionTimeLeft(mappedNPCName);
@@ -1550,63 +1716,79 @@ module.exports = {
                         return;
                     }
                 } else {
-                                    // For other NPCs, use normal NPC items
-                npcInventory = await getNPCItems(mappedNPCName);
-                
-
-                
-                // Check if we got a valid inventory
-                if (!Array.isArray(npcInventory) || npcInventory.length === 0) {
-                    await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ This NPC may not have any stealable items.` });
-                    return;
-                }
-                }
-                
-                // Filter out protected items (spirit orbs and vouchers) from NPC inventory
-                const protectedItems = ['spirit orb', 'voucher'];
-                const filteredNPCInventory = npcInventory.filter(itemName => {
-                    const lowerItemName = itemName.toLowerCase();
-                    return !protectedItems.some(protected => lowerItemName.includes(protected));
-                });
-                
-                const itemsWithRarity = await processItemsWithRarity(filteredNPCInventory, true);
-
-                const { items: filteredItems, selectedTier: npcSelectedTier, usedFallback: npcUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
-
-                if (filteredItems.length === 0) {
-                    const fallbackMessage = getFallbackMessage(raritySelection, npcSelectedTier);
-                    if (fallbackMessage) {
-                        await interaction.editReply({ content: fallbackMessage });
+                    // For other NPCs, use cached items or fetch from database
+                    const cachedItems = getCachedNPCItems(mappedNPCName);
+                    if (cachedItems) {
+                        console.log(`[steal.js]: 🚀 Using cached NPC items for ${mappedNPCName}`);
+                        npcInventory = cachedItems;
                     } else {
-                        await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ Spirit Orbs and vouchers are protected from theft.` });
+                        console.log(`[steal.js]: 📥 Fetching NPC items from database for ${mappedNPCName}`);
+                        npcInventory = await getNPCItems(mappedNPCName);
+                        
+                        // Cache the results for future use
+                        if (Array.isArray(npcInventory) && npcInventory.length > 0) {
+                            setCachedNPCItems(mappedNPCName, npcInventory);
+                            console.log(`[steal.js]: 💾 Cached ${npcInventory.length} items for ${mappedNPCName}`);
+                        }
                     }
-                    return;
-                }
-
-                // Update daily steal only when actually attempting the steal
-                if (!thiefCharacter.jobVoucher) {
-                    try {
-                        await updateDailySteal(thiefCharacter, 'steal');
-                    } catch (error) {
-                        console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
-                        await interaction.editReply({
-                            content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
-                            ephemeral: true
-                        });
+                    
+                    // Check if we got a valid inventory
+                    if (!Array.isArray(npcInventory) || npcInventory.length === 0) {
+                        await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ This NPC may not have any stealable items.` });
                         return;
                     }
-                }
+                    
+                    // Regular processing path for non-preloaded items
+                    // Filter out protected items (spirit orbs and vouchers) from NPC inventory
+                    const protectedItems = ['spirit orb', 'voucher'];
+                    const filteredNPCInventory = npcInventory.filter(itemName => {
+                        const lowerItemName = itemName.toLowerCase();
+                        return !protectedItems.some(protected => lowerItemName.includes(protected));
+                    });
+                    
+                    const itemsWithRarity = await processItemsWithRarity(filteredNPCInventory, true);
 
-                const selectedItem = getRandomItemByWeight(filteredItems);
-                const roll = await generateStealRoll(thiefCharacter);
-                const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, mappedNPCName);
-                const isSuccess = roll > failureThreshold;
+                    const { items: filteredItems, selectedTier: npcSelectedTier, usedFallback: npcUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
 
-                if (isSuccess) {
-                    const quantity = determineStealQuantity(selectedItem);
-                    await handleStealSuccess(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
-                } else {
-                    await handleStealFailure(thiefCharacter, mappedNPCName, selectedItem, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
+                    if (filteredItems.length === 0) {
+                        const fallbackMessage = getFallbackMessage(raritySelection, npcSelectedTier);
+                        if (fallbackMessage) {
+                            await interaction.editReply({ content: fallbackMessage });
+                        } else {
+                            await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ Spirit Orbs and vouchers are protected from theft.` });
+                        }
+                        return;
+                    }
+
+                    // Update daily steal only when actually attempting the steal
+                    if (!thiefCharacter.jobVoucher) {
+                        try {
+                            await updateDailySteal(thiefCharacter, 'steal');
+                        } catch (error) {
+                            console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                            await interaction.editReply({
+                                content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
+                                ephemeral: true
+                            });
+                            return;
+                        }
+                    }
+
+                    const selectedItem = getRandomItemByWeight(filteredItems);
+                    const roll = await generateStealRoll(thiefCharacter);
+                    const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, mappedNPCName);
+                    const isSuccess = roll > failureThreshold;
+
+                    if (isSuccess) {
+                        const quantity = determineStealQuantity(selectedItem);
+                        await handleStealSuccess(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
+                    } else {
+                        await handleStealFailure(thiefCharacter, mappedNPCName, selectedItem, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
+                    }
+                    
+                    // Performance timing for NPC steals
+                    const npcEndTime = Date.now();
+                    console.log(`[steal.js]: ✅ NPC steal completed in ${npcEndTime - startTime}ms`);
                 }
             }
 
@@ -1762,8 +1944,16 @@ module.exports = {
                 } else {
                     await handleStealFailure(thiefCharacter, targetCharacter, selectedItem, roll, failureThreshold, false, interaction, voucherCheck, playerUsedFallback, raritySelection, playerSelectedTier);
                 }
+                
+                // Performance timing for player steals
+                const playerEndTime = Date.now();
+                console.log(`[steal.js]: ✅ Player steal completed in ${playerEndTime - startTime}ms`);
             }
         } catch (error) {
+            const errorTime = Date.now();
+            const totalTime = errorTime - startTime;
+            console.log(`[steal.js]: ❌ Steal command failed after ${totalTime}ms`);
+            
             handleError(error, 'steal.js');
             console.error('[steal.js]: Error executing command:', error);
             console.warn(`[steal.js]: ⚠️ Steal attempt not counted due to error or timeout for user ${interaction.user.id}`);
@@ -1777,4 +1967,46 @@ module.exports = {
         }
     },
 };
+
+// ------------------- NPC Validation Helper -------------------
+function validateNPCTarget(targetName) {
+    // Safety check: ensure NPCs is available
+    if (!NPCs || typeof NPCs !== 'object') {
+        console.error('[steal.js]: ❌ Critical error - NPCs object is not available');
+        return { 
+            valid: false, 
+            error: '❌ **System Error: NPC data not available**\n\n**Please contact staff immediately.**\n\n**Error Details:** NPCs module failed to load properly.'
+        };
+    }
+    
+    // Check if the target name exists in the NPCs object
+    if (NPCs[targetName]) {
+        return { valid: true, npcName: targetName };
+    }
+    
+    // If not found, check if it might be a display name (e.g., "Lukan | Orchard Keeper")
+    // Extract the actual NPC name from the display format
+    if (targetName.includes(' | ')) {
+        const actualNPCName = targetName.split(' | ')[0];
+        if (NPCs[actualNPCName]) {
+            return { valid: true, npcName: actualNPCName };
+        }
+    }
+    
+    // If still not found, return available NPCs for error message
+    const availableNPCs = Object.keys(NPCs).map(npc => {
+        const profession = NPCs[npc].profession;
+        let role = profession;
+        if (npc === 'Lil Tim') {
+            role = 'Cucco';
+        }
+        return `• **${npc}** (${role})`;
+    }).join('\n');
+    
+    return { 
+        valid: false, 
+        availableNPCs,
+        error: `❌ **Invalid NPC target: "${targetName}"**\n\n**Available NPCs:**\n${availableNPCs}\n\n**Tip:** Make sure to select an NPC from the dropdown menu, not type the name manually.`
+    };
+}
 
