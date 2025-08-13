@@ -3,6 +3,40 @@ const ItemModel = require('../models/ItemModel');
 const { connectToTinglebot } = require('../database/db');
 
 // ============================================================================
+// ---- State Management ----
+// ============================================================================
+
+// ------------------- NPC Item Cache -------------------
+// Cache NPC items to avoid repeated database queries
+const npcItemCache = new Map();
+const NPC_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
+
+// ------------------- NPC Item Cache Management -------------------
+function getCachedNPCItems(npcName) {
+    const cacheEntry = npcItemCache.get(npcName);
+    if (cacheEntry && Date.now() - cacheEntry.timestamp < NPC_CACHE_DURATION) {
+        return cacheEntry.items;
+    }
+    return null;
+}
+
+function setCachedNPCItems(npcName, items) {
+    npcItemCache.set(npcName, {
+        items: items,
+        timestamp: Date.now()
+    });
+}
+
+function clearExpiredNPCCache() {
+    const now = Date.now();
+    for (const [npcName, cacheEntry] of npcItemCache.entries()) {
+        if (now - cacheEntry.timestamp >= NPC_CACHE_DURATION) {
+            npcItemCache.delete(npcName);
+        }
+    }
+}
+
+// ============================================================================
 // ------------------- NPC Data Structure -------------------
 // ============================================================================
 
@@ -342,7 +376,7 @@ const NPCs = {
 };
 
 // ============================================================================
-// ------------------- Utility Functions -------------------
+// ---- Helper Functions ----
 // ============================================================================
 
 // ------------------- Helper function for random selection -------------------
@@ -356,6 +390,15 @@ const getRandomElement = (arr) => {
 
 // ------------------- Function to get available items from an NPC -------------------
 const getNPCItems = async (npcName) => {
+  // Check cache first
+  const cachedItems = getCachedNPCItems(npcName);
+  if (cachedItems) {
+    console.log(`[NPCsModule.js]: 🚀 Using cached items for ${npcName}`);
+    return cachedItems;
+  }
+  
+  console.log(`[NPCsModule.js]: 📥 Fetching items for ${npcName} from database`);
+  
   const npc = NPCs[npcName];
   if (!npc) {
     console.warn(`[NPCsModule.js]: NPC not found: ${npcName}`);
@@ -375,6 +418,8 @@ const getNPCItems = async (npcName) => {
   // Handle NPCs with specific items (like Lil Tim)
   if (npc.items && Array.isArray(npc.items)) {
     availableItems.push(...npc.items);
+    // Cache the results
+    setCachedNPCItems(npcName, availableItems);
     return availableItems;
   }
   
@@ -413,6 +458,12 @@ const getNPCItems = async (npcName) => {
     }
                 }
 
+              // Cache the results before returning
+              if (availableItems.length > 0) {
+                setCachedNPCItems(npcName, availableItems);
+                console.log(`[NPCsModule.js]: 💾 Cached ${availableItems.length} items for ${npcName}`);
+              }
+              
               return availableItems;
 };
 
@@ -850,22 +901,14 @@ const getNPCQuestFlavorLegacy = (npcName, questType, requirements) => {
 // ============================================================================
 
 module.exports = {
-  // Core NPC data
   NPCs,
-  
-  // Utility functions
-  getRandomElement,
   getNPCItems,
   stealFromNPC,
   getStealFlavorText,
-  getStealFailText, // New function for fail text
-  
-  // Quest flavor text functions
+  getStealFailText,
   getNPCQuestFlavor,
-  generateQuestFlavorText,
-  getNPCQuestFlavorLegacy, // Legacy function for backward compatibility
-  
-  // Constants
-  QUEST_TEMPLATES,
-  NPC_QUEST_FLAVOR
+  getRandomElement,
+  getCachedNPCItems,
+  setCachedNPCItems,
+  clearExpiredNPCCache
 };
