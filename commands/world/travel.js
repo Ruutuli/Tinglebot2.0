@@ -20,7 +20,9 @@ const {
 // ------------------- Database Services -------------------
 const {
   fetchCharacterByNameAndUserId,
-  fetchCharactersByUserId
+  fetchCharactersByUserId,
+  updateCharacterById,
+  updateModCharacterById
 } = require('../../database/db.js');
 
 // ------------------- Database Models -------------------
