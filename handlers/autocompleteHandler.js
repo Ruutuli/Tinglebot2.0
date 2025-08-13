@@ -4184,21 +4184,34 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
 async function handleViewInventoryAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
-    // Fetch only characters owned by the user
-    const characters = await fetchCharactersByUserId(userId);
+    
+    // Fetch both regular characters and mod characters owned by the user
+    const [characters, modCharacters] = await Promise.all([
+      fetchCharactersByUserId(userId),
+      fetchModCharactersByUserId(userId)
+    ]);
 
-    // Map characters to autocomplete choices with formatted display
-    const choices = characters.map((character) => ({
+    // Map regular characters to autocomplete choices with formatted display
+    const regularChoices = characters.map((character) => ({
       name: `${character.name} | ${capitalize(character.currentVillage || 'No Village')} | ${capitalize(character.job || 'No Job')}`,
       value: character.name
     }));
 
+    // Map mod characters to autocomplete choices with formatted display (including mod title)
+    const modChoices = modCharacters.map((character) => ({
+      name: `${character.name} | ${capitalize(character.currentVillage || 'No Village')} | ${character.modTitle} (${character.modType})`,
+      value: character.name
+    }));
+
+    // Combine all choices
+    const allChoices = [...regularChoices, ...modChoices];
+
     // Sort choices alphabetically by name
-    choices.sort((a, b) => a.name.localeCompare(b.name));
+    allChoices.sort((a, b) => a.name.localeCompare(b.name));
 
     // Filter based on user input
     const searchQuery = focusedOption.value?.toLowerCase() || "";
-    const filteredChoices = choices.filter(choice => 
+    const filteredChoices = allChoices.filter(choice => 
       choice.name.toLowerCase().includes(searchQuery)
     );
 
