@@ -131,7 +131,7 @@ function preloadCommonNPCItems() {
             isNPC: true
         }));
         setCachedNPCItems(npcName, itemsWithRarity);
-        console.log(`[steal.js]: 🚀 Preloaded ${items.length} items for ${npcName}`);
+                    console.log(`[steal.js]: 💾 Preloaded ${items.length} items for ${npcName}`);
     }
 }
 
@@ -962,7 +962,7 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
-          console.log(`[steal.js] Clearing boost for ${thiefCharacter.name} after use`);
+          console.log(`[steal.js]: 🧪 Clearing boost for ${thiefCharacter.name}`);
           thiefCharacter.boostedBy = null;
           await thiefCharacter.save();
         }
@@ -1005,7 +1005,7 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
-          console.log(`[steal.js] Clearing boost for ${thiefCharacter.name} after use`);
+          console.log(`[steal.js]: 🧪 Clearing boost for ${thiefCharacter.name}`);
           thiefCharacter.boostedBy = null;
           await thiefCharacter.save();
         }
@@ -1242,6 +1242,9 @@ module.exports = {
 
     // ------------------- Main Execute Handler -------------------
     async execute(interaction) {
+        // Performance timing - declare at function start so it's available throughout
+        const startTime = Date.now();
+        
         try {
             // Clean up expired protections at the start of each command
             cleanupExpiredProtections();
@@ -1366,13 +1369,8 @@ module.exports = {
                 return;
             }
 
-            // Performance timing
-            const startTime = Date.now();
-            console.log(`[steal.js]: 🚀 Starting steal command execution at ${new Date().toISOString()}`);
-
-            // Debug logging for troubleshooting
-            console.log(`[steal.js]: 🎯 Steal command execution - targetName: "${targetName}", targetType: ${targetType}, rarity: ${raritySelection}`);
-            console.log(`[steal.js]: 🎯 Available NPCs: ${NPCs && typeof NPCs === 'object' ? Object.keys(NPCs).join(', ') : 'NPCs not loaded'}`);
+            // Performance timing log
+            console.log(`[steal.js]: 🚀 Starting steal command - ${targetType}: ${targetName}, rarity: ${raritySelection || 'any'}`);
 
             // ---- Target Type Validation ----
             if (targetType !== 'npc' && targetType !== 'player') {
@@ -1406,7 +1404,6 @@ module.exports = {
             const jailStatus = await checkAndUpdateJailStatus(thiefCharacter);
             
             // ---- Bandit Job or Voucher Restriction ----
-            console.log(`[steal.js]: job=${thiefCharacter.job}, voucher=${thiefCharacter.jobVoucher}, voucherJob=${thiefCharacter.jobVoucherJob}`);
             const isBanditJob = (thiefCharacter.job && thiefCharacter.job.toLowerCase() === 'bandit');
             const isBanditVoucher = (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob && thiefCharacter.jobVoucherJob.toLowerCase() === 'bandit');
             if (!isBanditJob && !isBanditVoucher) {
@@ -1432,7 +1429,7 @@ module.exports = {
                     content: '❌ **Bandit characters cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.', 
                     ephemeral: true 
                 });
-                console.log(`[steal.js]: ⚠️ Bandit character attempted to steal while debuffed: ${thiefCharacter.name}`);
+                console.log(`[steal.js]: ⚠️ Steal blocked - debuffed bandit: ${thiefCharacter.name}`);
                 return;
             }
 
@@ -1442,7 +1439,7 @@ module.exports = {
                     content: '❌ **Bandit characters cannot steal while KO\'d!**\n💀 You need to be healed first before you can steal.', 
                     ephemeral: true 
                 });
-                console.log(`[steal.js]: ⚠️ Bandit character attempted to steal while KO'd: ${thiefCharacter.name}`);
+                console.log(`[steal.js]: ⚠️ Steal blocked - KO'd bandit: ${thiefCharacter.name}`);
                 return;
             }
 
@@ -1502,7 +1499,7 @@ module.exports = {
             const targetValidation = await validateCharacter(targetName, null);
             if (!targetValidation.valid && targetType === 'player') {
                 // Debug logging for troubleshooting
-                console.log(`[steal.js]: ❌ Player target validation failed - targetName: "${targetName}", targetType: ${targetType}`);
+                console.log(`[steal.js]: ❌ Player target validation failed - targetName: "${targetName}"`);
                 
                 // Provide more helpful error message for invalid player targets
                 const errorMessage = targetValidation.error.includes('not found') 
@@ -1520,7 +1517,7 @@ module.exports = {
                     content: `❌ **You cannot steal from a mod character!**\n👑 ${targetCharacter.name} is a ${targetCharacter.modTitle} of ${targetCharacter.modType} and is immune to theft.`, 
                     ephemeral: true 
                 });
-                console.log(`[steal.js]: ⚠️ Attempted to steal from mod character: ${targetCharacter.name}`);
+                console.log(`[steal.js]: ⚠️ Steal blocked - mod character: ${targetCharacter.name}`);
                 return;
             }
 
@@ -1535,8 +1532,6 @@ module.exports = {
             let allowedChannel = villageChannels[currentVillage];
 
             // Debug logging
-            console.log(`[steal.js]: currentVillage=${currentVillage}, allowedChannel=${allowedChannel}`);
-            console.log(`[steal.js]: villageChannels=`, villageChannels);
 
             // If using a job voucher for a village-exclusive job, override to required village
             if (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) {
@@ -1545,7 +1540,7 @@ module.exports = {
                     const requiredVillage = capitalizeWords(voucherPerk.village);
                     currentVillage = requiredVillage;
                     allowedChannel = villageChannels[requiredVillage];
-                    console.log(`[steal.js]: voucher override - requiredVillage=${requiredVillage}, allowedChannel=${allowedChannel}`);
+                    console.log(`[steal.js]: 🎫 Voucher override - village: ${requiredVillage}`);
                 }
             }
 
@@ -1555,9 +1550,7 @@ module.exports = {
 
             // If allowedChannel is undefined, allow the command to proceed (for testing)
             if (!allowedChannel) {
-                console.log(`[steal.js]: WARNING - allowedChannel is undefined for village ${currentVillage}`);
-                // For now, allow the command to proceed if no channel is configured
-                console.log(`[steal.js]: Allowing command due to undefined allowedChannel`);
+                console.log(`[steal.js]: ⚠️ No channel configured for village ${currentVillage} - allowing command`);
             } else if (interaction.channelId !== allowedChannel && !isTestingChannel) {
                 const channelMention = `<#${allowedChannel}>`;
                 await interaction.editReply({
@@ -1602,7 +1595,7 @@ module.exports = {
                 voucherCheck = await validateJobVoucher(thiefCharacter, job, 'STEALING');
                 
                 if (voucherCheck.skipVoucher) {
-                    console.log(`[steal.js]: ✅ ${thiefCharacter.name} already has job "${job}" - skipping voucher`);
+                    console.log(`[steal.js]: ✅ Voucher skipped - ${thiefCharacter.name} already has job "${job}"`);
                 } else if (!voucherCheck.success) {
                     console.error(`[steal.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
                     await interaction.editReply({
@@ -1678,19 +1671,15 @@ module.exports = {
 
             // Handle NPC stealing
             if (targetType === 'npc') {
-                // Debug logging for troubleshooting
-                console.log(`[steal.js]: 🎯 NPC target validation - targetName: "${targetName}", targetType: ${targetType}`);
-                
                 // Use the new NPC validation function
                 const npcValidation = validateNPCTarget(targetName);
                 if (!npcValidation.valid) {
-                    console.log(`[steal.js]: ❌ NPC validation failed - targetName: "${targetName}", availableNPCs: ${Object.keys(NPCs).join(', ')}`);
+                    console.log(`[steal.js]: ❌ NPC validation failed - targetName: "${targetName}"`);
                     await interaction.editReply({ content: npcValidation.error });
                     return;
                 }
                 
                 const mappedNPCName = npcValidation.npcName;
-                console.log(`[steal.js]: ✅ NPC validation successful - mappedNPCName: "${mappedNPCName}"`);
                 
                 // Check if NPC is protected (using NPC name as ID)
                 if (isProtected(mappedNPCName)) {
@@ -1719,16 +1708,13 @@ module.exports = {
                     // For other NPCs, use cached items or fetch from database
                     const cachedItems = getCachedNPCItems(mappedNPCName);
                     if (cachedItems) {
-                        console.log(`[steal.js]: 🚀 Using cached NPC items for ${mappedNPCName}`);
                         npcInventory = cachedItems;
                     } else {
-                        console.log(`[steal.js]: 📥 Fetching NPC items from database for ${mappedNPCName}`);
                         npcInventory = await getNPCItems(mappedNPCName);
                         
                         // Cache the results for future use
                         if (Array.isArray(npcInventory) && npcInventory.length > 0) {
                             setCachedNPCItems(mappedNPCName, npcInventory);
-                            console.log(`[steal.js]: 💾 Cached ${npcInventory.length} items for ${mappedNPCName}`);
                         }
                     }
                     
@@ -1738,10 +1724,36 @@ module.exports = {
                         return;
                     }
                     
+                    // Additional safety check: ensure all items are valid
+                    if (npcInventory.some(item => item === null || item === undefined)) {
+                        console.warn(`[steal.js]: ⚠️ NPC inventory contains null/undefined items for ${mappedNPCName}:`, npcInventory);
+                        await interaction.editReply({ content: `❌ **Error: Invalid inventory data for ${mappedNPCName}. Please try again.**` });
+                        return;
+                    }
+                    
                     // Regular processing path for non-preloaded items
+                    // Normalize npcInventory to ensure all items are strings
+                    const normalizedNPCInventory = npcInventory.map(item => {
+                        if (typeof item === 'string') {
+                            return item;
+                        } else if (item && typeof item === 'object' && item.itemName) {
+                            return item.itemName;
+                        } else if (item && typeof item === 'object' && item.name) {
+                            return item.name;
+                        } else {
+                            console.warn(`[steal.js]: ⚠️ Unexpected item format in NPC inventory:`, item);
+                            return String(item);
+                        }
+                    }).filter(Boolean); // Remove any undefined/null items
+                    
+                    // Log normalization only if there were issues
+                    if (normalizedNPCInventory.length !== npcInventory.length) {
+                        console.warn(`[steal.js]: ⚠️ Normalized ${npcInventory.length} items to ${normalizedNPCInventory.length} valid items for ${mappedNPCName}`);
+                    }
+                    
                     // Filter out protected items (spirit orbs and vouchers) from NPC inventory
                     const protectedItems = ['spirit orb', 'voucher'];
-                    const filteredNPCInventory = npcInventory.filter(itemName => {
+                    const filteredNPCInventory = normalizedNPCInventory.filter(itemName => {
                         const lowerItemName = itemName.toLowerCase();
                         return !protectedItems.some(protected => lowerItemName.includes(protected));
                     });
@@ -1788,7 +1800,7 @@ module.exports = {
                     
                     // Performance timing for NPC steals
                     const npcEndTime = Date.now();
-                    console.log(`[steal.js]: ✅ NPC steal completed in ${npcEndTime - startTime}ms`);
+                    console.log(`[steal.js]: ✅ NPC steal completed (${npcEndTime - startTime}ms)`);
                 }
             }
 
@@ -1801,7 +1813,7 @@ module.exports = {
                     await interaction.editReply({ 
                         content: `❌ **You cannot steal from a character who is in jail!**\n⏰ ${targetCharacter.name} will be released in ${timeLeft}` 
                     });
-                    console.log(`[steal.js]: ⚠️ Attempted to steal from jailed character: ${targetCharacter.name}`);
+                    console.log(`[steal.js]: ⚠️ Steal blocked - jailed character: ${targetCharacter.name}`);
                     return;
                 }
 
@@ -1811,7 +1823,7 @@ module.exports = {
                         content: `❌ **You cannot steal from a character who is debuffed!**\n💊 ${targetCharacter.name} is currently under a debuff effect.`, 
                         ephemeral: true 
                     });
-                    console.log(`[steal.js]: ⚠️ Attempted to steal from debuffed character: ${targetCharacter.name}`);
+                    console.log(`[steal.js]: ⚠️ Steal blocked - debuffed character: ${targetCharacter.name}`);
                     return;
                 }
 
@@ -1821,7 +1833,7 @@ module.exports = {
                         content: `❌ **You cannot steal from a character who is KO'd!**\n💀 ${targetCharacter.name} is currently unconscious.`, 
                         ephemeral: true 
                     });
-                    console.log(`[steal.js]: ⚠️ Attempted to steal from KO'd character: ${targetCharacter.name}`);
+                    console.log(`[steal.js]: ⚠️ Steal blocked - KO'd character: ${targetCharacter.name}`);
                     return;
                 }
 
@@ -1831,7 +1843,7 @@ module.exports = {
                         content: `❌ **You cannot steal from a character whose inventory is not synced!**\n📦 ${targetCharacter.name} needs to sync their inventory first.`, 
                         ephemeral: true 
                     });
-                    console.log(`[steal.js]: ⚠️ Attempted to steal from character with unsynced inventory: ${targetCharacter.name}`);
+                    console.log(`[steal.js]: ⚠️ Steal blocked - unsynced inventory: ${targetCharacter.name}`);
                     return;
                 }
 
@@ -1947,7 +1959,7 @@ module.exports = {
                 
                 // Performance timing for player steals
                 const playerEndTime = Date.now();
-                console.log(`[steal.js]: ✅ Player steal completed in ${playerEndTime - startTime}ms`);
+                console.log(`[steal.js]: ✅ Player steal completed (${playerEndTime - startTime}ms)`);
             }
         } catch (error) {
             const errorTime = Date.now();
@@ -1956,7 +1968,6 @@ module.exports = {
             
             handleError(error, 'steal.js');
             console.error('[steal.js]: Error executing command:', error);
-            console.warn(`[steal.js]: ⚠️ Steal attempt not counted due to error or timeout for user ${interaction.user.id}`);
             
             // Check if interaction has already been replied to
             if (!interaction.replied && !interaction.deferred) {
