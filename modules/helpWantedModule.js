@@ -83,8 +83,8 @@ const cronToHour = (cronTime) => {
   return parseInt(parts[1]);
 };
 
-// Utility function to check if two hours are at least 6 hours apart
-const isHoursApart = (hour1, hour2, minHours = 6) => {
+// Utility function to check if two hours are at least minHours apart
+const isHoursApart = (hour1, hour2, minHours = 3) => {
   const hourDiff = Math.abs(hour1 - hour2);
   const minHourDiff = Math.min(hourDiff, 24 - hourDiff);
   return minHourDiff >= minHours;
@@ -419,13 +419,16 @@ async function generateDailyQuests() {
     }
     const availableNPCs = shuffleArray([...allNPCs]); // Shuffle for randomness
     
-    // Generate quest posting times with 6-hour buffer between each
-    const selectedTimes = selectTimesWithBuffer(FIXED_CRON_TIMES, VILLAGES.length);
+    // Randomize village order instead of always having Rudania first
+    const shuffledVillages = shuffleArray([...VILLAGES]);
+    
+    // Generate quest posting times with variable buffer (3-6 hours) between each
+    const selectedTimes = selectTimesWithVariableBuffer(FIXED_CRON_TIMES, VILLAGES.length);
     const quests = [];
     
     // Generate quests sequentially to ensure unique NPCs
-    for (let i = 0; i < VILLAGES.length; i++) {
-      const village = VILLAGES[i];
+    for (let i = 0; i < shuffledVillages.length; i++) {
+      const village = shuffledVillages[i];
       const quest = await generateQuestForVillage(village, date, pools, availableNPCs);
       
       // Remove the used NPC from the available pool
@@ -434,7 +437,7 @@ async function generateDailyQuests() {
         availableNPCs.splice(npcIndex, 1);
       }
       
-      // Assign a posting time with 6-hour buffer from the selected times
+      // Assign a posting time with variable buffer from the selected times
       quest.scheduledPostTime = selectedTimes[i];
       const hour = cronToHour(quest.scheduledPostTime);
       console.log(`[HelpWanted] Generated quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
@@ -467,11 +470,74 @@ async function generateDailyQuests() {
 }
 
 // ============================================================================
-// ------------------- Time Selection with Buffer -------------------
+// ------------------- Time Selection with Variable Buffer -------------------
+// ============================================================================
+
+// ------------------- Function: selectTimesWithVariableBuffer -------------------
+// Selects times from FIXED_CRON_TIMES ensuring variable buffer (3-6 hours) between each
+function selectTimesWithVariableBuffer(availableTimes, count) {
+  // Convert cron times to time slots with hour information
+  const timeSlots = availableTimes.map(cronTime => ({
+    cron: cronTime,
+    hour: cronToHour(cronTime)
+  }));
+
+  const selected = [];
+  const shuffled = shuffleArray([...timeSlots]); // Start with random order
+
+  for (const timeSlot of shuffled) {
+    // Check if this time slot is compatible with all already selected times
+    // Use a variable buffer between 3-6 hours for more randomness
+    const isCompatible = selected.every(selectedTime => {
+      const minBuffer = 3; // Minimum 3 hours between quests
+      const maxBuffer = 6; // Maximum 6 hours between quests
+      const buffer = Math.floor(Math.random() * (maxBuffer - minBuffer + 1)) + minBuffer;
+      return isHoursApart(timeSlot.hour, selectedTime.hour, buffer);
+    });
+
+    if (isCompatible) {
+      selected.push(timeSlot);
+      if (selected.length === count) {
+        break;
+      }
+    }
+  }
+
+  // If we couldn't find enough compatible times, fall back to fixed 3-hour buffer
+  if (selected.length < count) {
+    console.log(`[HelpWanted] Warning: Could only find ${selected.length} times with variable buffer, falling back to 3-hour minimum`);
+    selected.length = 0; // Reset and try again with fixed buffer
+    
+    for (const timeSlot of shuffled) {
+      const isCompatible = selected.every(selectedTime => 
+        isHoursApart(timeSlot.hour, selectedTime.hour, 3)
+      );
+
+      if (isCompatible) {
+        selected.push(timeSlot);
+        if (selected.length === count) {
+          break;
+        }
+      }
+    }
+  }
+
+  // Sort selected times by hour for better scheduling
+  selected.sort((a, b) => a.hour - b.hour);
+  
+  // Log the selected times in a readable format
+  const timeDisplay = selected.map(t => formatHour(t.hour)).join(', ');
+  console.log(`[HelpWanted] Selected times with variable buffer (3-6 hours): ${timeDisplay}`);
+  
+  return selected.map(timeSlot => timeSlot.cron);
+}
+
+// ============================================================================
+// ------------------- Legacy Time Selection with Buffer (kept for compatibility) -------------------
 // ============================================================================
 
 // ------------------- Function: selectTimesWithBuffer -------------------
-// Selects times from FIXED_CRON_TIMES ensuring at least 4-hour buffer between each
+// Selects times from FIXED_CRON_TIMES ensuring at least 6-hour buffer between each (legacy function)
 function selectTimesWithBuffer(availableTimes, count) {
   // Convert cron times to time slots with hour information
   const timeSlots = availableTimes.map(cronTime => ({
