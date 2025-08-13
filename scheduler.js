@@ -822,7 +822,7 @@ function setupHelpWantedFixedScheduler(client) {
   const { FIXED_CRON_TIMES } = require('./modules/helpWantedModule');
   
   // Schedule all 24 time slots for full 24-hour coverage
-  // The 6-hour buffer is handled in the quest generation logic
+  // The variable buffer (3-6 hours) is handled in the quest generation logic
   FIXED_CRON_TIMES.forEach(cronTime => {
     createCronJob(
       cronTime,
@@ -833,7 +833,7 @@ function setupHelpWantedFixedScheduler(client) {
     console.log(`[scheduler.js]: 📋 Scheduled Help Wanted board check for ${cronTime}`);
   });
   
-  console.log(`[scheduler.js]: ✅ Help Wanted scheduler configured with ${FIXED_CRON_TIMES.length} time slots (full 24-hour coverage with 6-hour buffer in quest generation)`);
+  console.log(`[scheduler.js]: ✅ Help Wanted scheduler configured with ${FIXED_CRON_TIMES.length} time slots (full 24-hour coverage with variable 3-6 hour buffer in quest generation)`);
 }
 
 // ============================================================================
