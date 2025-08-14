@@ -443,6 +443,11 @@ const getNPCItems = async (npcName) => {
             query = { $or: [{ category: 'Armor' }, { categoryGear: 'Armor' }] };
           }
           
+          // Exclude custom weapons from weapon categories
+          if (category === 'Weapons') {
+            query.$and = [{ $not: { category: 'Custom Weapon' } }];
+          }
+          
                                 const items = await ItemModel.find(query).select('itemName').lean();
                       const itemNames = items.map(item => item.itemName);
                       

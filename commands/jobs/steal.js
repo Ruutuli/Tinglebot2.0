@@ -594,11 +594,11 @@ async function getStealStats(characterId) {
 // ------------------- Item Management Functions -------------------
 async function getItemEmoji(itemName) {
     try {
-        const item = await ItemModel.findOne({ itemName: new RegExp(`^${itemName}$`, 'i') }).select('emoji').exec();
+        const item = await ItemModel.findOne({ itemName: new RegExp(`^${escapeRegexString(itemName)}$`, 'i') }).select('emoji').exec();
         if (item && item.emoji) {
             return item.emoji;
         }
-        const itemDetails = await ItemModel.findOne({ itemName: new RegExp(`^${itemName}$`, 'i') }).select('type category').exec();
+        const itemDetails = await ItemModel.findOne({ itemName: new RegExp(`^${escapeRegexString(itemName)}$`, 'i') }).select('type category').exec();
         if (itemDetails) {
             if (itemDetails.type?.includes('Weapon')) return '⚔️';
             if (itemDetails.type?.includes('Armor')) return '🛡️';
@@ -656,6 +656,26 @@ function getRandomItemByWeight(items) {
         if (randomValue <= 0) return item;
     }
     return null;
+}
+
+// ------------------- Custom Weapon Protection Functions -------------------
+// Function to check if an item is a custom weapon (protected from theft)
+async function isCustomWeapon(itemName) {
+    try {
+        const db = await connectToInventoriesForItems();
+        const item = await db.collection("items").findOne(
+            { itemName: new RegExp(`^${escapeRegexString(itemName)}$`, 'i') },
+            { category: 1 }
+        );
+        
+        if (item && item.category && Array.isArray(item.category)) {
+            return item.category.includes('Custom Weapon');
+        }
+        return false;
+    } catch (error) {
+        console.error('[steal.js]: ❌ Error checking if item is custom weapon:', error);
+        return false; // Default to allowing theft if check fails
+    }
 }
 
 // ------------------- Jail Management Functions -------------------
@@ -1063,6 +1083,12 @@ async function calculateFailureThreshold(itemTier, character = null, targetName 
 // ------------------- Centralized Item Processing -------------------
 // Centralized item processing with rarity to eliminate duplication
 // OPTIMIZED: Now batches database queries instead of individual calls
+
+// Helper function to escape regex special characters
+function escapeRegexString(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries = null) {
     if (!Array.isArray(itemNames) || itemNames.length === 0) {
         return [];
@@ -1076,7 +1102,7 @@ async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries
             // Batch fetch all item rarities in one database query
             const db = await connectToInventoriesForItems();
             const items = await db.collection("items").find({
-                itemName: { $in: uniqueItemNames.map(name => new RegExp(`^${name}$`, 'i')) }
+                itemName: { $in: uniqueItemNames.map(name => new RegExp(`^${escapeRegexString(name)}$`, 'i')) }
             }, { itemName: 1, itemRarity: 1 }).toArray();
             
             // Create a map for fast lookup
@@ -1102,7 +1128,7 @@ async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries
             // Batch fetch all item rarities in one database query
             const db = await connectToInventoriesForItems();
             const items = await db.collection("items").find({
-                itemName: { $in: uniqueItemNames.map(name => new RegExp(`^${name}$`, 'i')) }
+                itemName: { $in: uniqueItemNames.map(name => new RegExp(`^${escapeRegexString(name)}$`, 'i')) }
             }, { itemName: 1, itemRarity: 1 }).toArray();
             
             // Create a map for fast lookup
@@ -1699,6 +1725,22 @@ module.exports = {
                         const Item = require('../../models/ItemModel');
                         const allItems = await Item.find({}, 'itemName');
                         npcInventory = allItems.map(item => item.itemName);
+                        
+                        // Filter out custom weapons from Peddler inventory
+                        const peddlerInventoryWithoutCustomWeapons = [];
+                        for (const itemName of npcInventory) {
+                            const isCustom = await isCustomWeapon(itemName);
+                            if (!isCustom) {
+                                peddlerInventoryWithoutCustomWeapons.push(itemName);
+                            }
+                        }
+                        
+                        if (peddlerInventoryWithoutCustomWeapons.length === 0) {
+                            await interaction.editReply({ content: `❌ **No items available to steal from Peddler!**\n🛡️ All available items are protected from theft (Custom Weapons).` });
+                            return;
+                        }
+                        
+                        npcInventory = peddlerInventoryWithoutCustomWeapons;
                     } catch (error) {
                         console.error('[steal.js]: Error fetching items for Peddler:', error);
                         await interaction.editReply({ content: '❌ **Error fetching items for Peddler. Please try again.**' });
@@ -1751,14 +1793,28 @@ module.exports = {
                         console.warn(`[steal.js]: ⚠️ Normalized ${npcInventory.length} items to ${normalizedNPCInventory.length} valid items for ${mappedNPCName}`);
                     }
                     
-                    // Filter out protected items (spirit orbs and vouchers) from NPC inventory
+                    // Filter out protected items (spirit orbs, vouchers, and custom weapons) from NPC inventory
                     const protectedItems = ['spirit orb', 'voucher'];
                     const filteredNPCInventory = normalizedNPCInventory.filter(itemName => {
                         const lowerItemName = itemName.toLowerCase();
                         return !protectedItems.some(protected => lowerItemName.includes(protected));
                     });
                     
-                    const itemsWithRarity = await processItemsWithRarity(filteredNPCInventory, true);
+                    // Filter out custom weapons from NPC inventory
+                    const filteredNPCInventoryWithoutCustomWeapons = [];
+                    for (const itemName of filteredNPCInventory) {
+                        const isCustom = await isCustomWeapon(itemName);
+                        if (!isCustom) {
+                            filteredNPCInventoryWithoutCustomWeapons.push(itemName);
+                        }
+                    }
+                    
+                    if (filteredNPCInventoryWithoutCustomWeapons.length === 0) {
+                        await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ All available items are protected from theft (Custom Weapons, Spirit Orbs, and vouchers).` });
+                        return;
+                    }
+                    
+                    const itemsWithRarity = await processItemsWithRarity(filteredNPCInventoryWithoutCustomWeapons, true);
 
                     const { items: filteredItems, selectedTier: npcSelectedTier, usedFallback: npcUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
 
@@ -1767,7 +1823,7 @@ module.exports = {
                         if (fallbackMessage) {
                             await interaction.editReply({ content: fallbackMessage });
                         } else {
-                            await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ Spirit Orbs and vouchers are protected from theft.` });
+                            await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ Spirit Orbs, vouchers, and custom weapons are protected from theft.` });
                         }
                         return;
                     }
@@ -1910,7 +1966,7 @@ module.exports = {
                     targetCharacter.gearArmor?.legs?.name,
                 ].filter(Boolean);
 
-                // Filter out protected items (spirit orbs and vouchers)
+                // Filter out protected items (spirit orbs, vouchers, and custom weapons)
                 const protectedItems = ['spirit orb', 'voucher'];
                 const availableItemNames = rawItemNames.filter(itemName => {
                     const lowerItemName = itemName.toLowerCase();
@@ -1918,7 +1974,21 @@ module.exports = {
                     const isProtected = protectedItems.some(protected => lowerItemName.includes(protected));
                     return !isEquipped && !isProtected;
                 });
-                const itemsWithRarity = await processItemsWithRarity(availableItemNames, false, inventoryEntries);
+                
+                // Filter out custom weapons from player inventory
+                const availableItemNamesWithoutCustomWeapons = [];
+                for (const itemName of availableItemNames) {
+                    const isCustom = await isCustomWeapon(itemName);
+                    if (!isCustom) {
+                        availableItemNamesWithoutCustomWeapons.push(itemName);
+                    }
+                }
+                
+                if (availableItemNamesWithoutCustomWeapons.length === 0) {
+                    await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**\n🛡️ All available items are protected from theft (Custom Weapons, Spirit Orbs, and vouchers).` });
+                    return;
+                }
+                const itemsWithRarity = await processItemsWithRarity(availableItemNamesWithoutCustomWeapons, false, inventoryEntries);
 
                 const { items: filteredItemsPlayer, selectedTier: playerSelectedTier, usedFallback: playerUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
 
@@ -1927,7 +1997,7 @@ module.exports = {
                     if (fallbackMessage) {
                         await interaction.editReply({ content: fallbackMessage });
                     } else {
-                        await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**\n🛡️ Spirit Orbs and vouchers are protected from theft.` });
+                        await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**\n🛡️ Spirit Orbs, vouchers, and custom weapons are protected from theft.` });
                     }
                     return;
                 }
