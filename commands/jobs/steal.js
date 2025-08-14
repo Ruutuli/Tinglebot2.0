@@ -425,11 +425,9 @@ function createProtectionEmbed(targetName, timeLeftMinutes, isNPC = false) {
             { name: '⏰ Protection Duration', value: `Expires in **${timeLeftMinutes} minute${timeLeftMinutes !== 1 ? 's' : ''}**`, inline: false },
             { name: '💡 What This Means', value: 'This target cannot be stolen from until the protection expires', inline: false }
         )
-        .setThumbnail('https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg')
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ 
-            text: 'Protection active',
-            iconURL: 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg'
+            text: 'Protection active'
         })
         .setTimestamp();
     
@@ -1741,6 +1739,53 @@ module.exports = {
                         }
                         
                         npcInventory = peddlerInventoryWithoutCustomWeapons;
+                        
+                        // Process Peddler inventory through rarity selection and steal logic
+                        const itemsWithRarity = await processItemsWithRarity(npcInventory, true);
+                        const { items: filteredItems, selectedTier: npcSelectedTier, usedFallback: npcUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
+
+                        if (filteredItems.length === 0) {
+                            const fallbackMessage = getFallbackMessage(raritySelection, npcSelectedTier);
+                            if (fallbackMessage) {
+                                await interaction.editReply({ content: fallbackMessage });
+                            } else {
+                                await interaction.editReply({ content: `❌ **No items available to steal from Peddler!**\n🛡️ All available items are protected from theft (Custom Weapons).` });
+                            }
+                            return;
+                        }
+
+                        // Update daily steal only when actually attempting the steal
+                        if (!thiefCharacter.jobVoucher) {
+                            try {
+                                await updateDailySteal(thiefCharacter, 'steal');
+                            } catch (error) {
+                                console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                                await interaction.editReply({
+                                    content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
+                                    ephemeral: true
+                                });
+                                return;
+                            }
+                        }
+
+                        const selectedItem = getRandomItemByWeight(filteredItems);
+                        const roll = await generateStealRoll(thiefCharacter);
+                        const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, mappedNPCName);
+                        const isSuccess = roll > failureThreshold;
+
+                        if (isSuccess) {
+                            // Create item object with isNPC property for determineStealQuantity
+                            const itemForQuantity = { ...selectedItem, isNPC: true };
+                            const quantity = determineStealQuantity(itemForQuantity);
+                            await handleStealSuccess(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
+                        } else {
+                            await handleStealFailure(thiefCharacter, mappedNPCName, selectedItem, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
+                        }
+                        
+                        // Performance timing for Peddler steals
+                        const peddlerEndTime = Date.now();
+                        console.log(`[steal.js]: ✅ Peddler steal completed (${peddlerEndTime - startTime}ms)`);
+                        return; // Exit early for Peddler
                     } catch (error) {
                         console.error('[steal.js]: Error fetching items for Peddler:', error);
                         await interaction.editReply({ content: '❌ **Error fetching items for Peddler. Please try again.**' });
@@ -1971,8 +2016,8 @@ module.exports = {
                 const availableItemNames = rawItemNames.filter(itemName => {
                     const lowerItemName = itemName.toLowerCase();
                     const isEquipped = equippedItems.includes(itemName);
-                    const isProtected = protectedItems.some(protected => lowerItemName.includes(protected));
-                    return !isEquipped && !isProtected;
+                    const isItemProtected = protectedItems.some(protected => lowerItemName.includes(protected));
+                    return !isEquipped && !isItemProtected;
                 });
                 
                 // Filter out custom weapons from player inventory
