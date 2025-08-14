@@ -403,14 +403,10 @@ module.exports = {
       // Check if character has already gathered during special weather in this village today
       const isModerator = ['inarikomod', 'rudaniamod', 'vhintlmod'].includes(character.name.toLowerCase());
       if ((!isModerator && !character.isModCharacter) && !canUseSpecialWeather(character, channelVillage)) {
-        const lastUsage = character.specialWeatherUsage.get(channelVillage);
-        const nextGather = getNextAvailableTime(lastUsage);
-        const unixTimestamp = Math.floor(nextGather.getTime() / 1000);
-        
         await interaction.editReply({
           embeds: [{
             color: 0x008B8B, // Dark cyan color
-            description: `*${character.name} has found all the special weather had to offer in ${channelVillage} today!*\n\n**Daily special weather gathering limit reached for ${channelVillage}.**\nYou've already gathered during special weather in ${channelVillage} today. Special weather events are rare and unpredictable - keep an eye out for the next one!\n\n⏰ **Next available:** <t:${unixTimestamp}:R>`,
+            description: `*${character.name} has found all the special weather had to offer in ${channelVillage} today!*\n\n**Daily special weather gathering limit reached for ${channelVillage}.**\nYou've already gathered during special weather in ${channelVillage} today. Special weather events are rare and unpredictable - keep an eye out for the next one!`,
             image: {
               url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
             },
