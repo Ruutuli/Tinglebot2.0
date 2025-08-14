@@ -1033,6 +1033,8 @@ function capitalizeFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+
+
 // ------------------- Function: createGatherEmbed -------------------
 // Creates an embed for gathering activities with boost support and flavor text
 const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null, scholarTargetVillage = null) => {
@@ -1111,6 +1113,17 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
   .setThumbnail(thumbnailUrl)
   .setImage(villageImage);
 
+ // Fetch item rarity from database
+ let itemRarity = 1; // Default to common
+ try {
+   const itemFromDb = await ItemModel.findOne({ itemName: randomItem.itemName }).select('itemRarity');
+   if (itemFromDb && itemFromDb.itemRarity) {
+     itemRarity = itemFromDb.itemRarity;
+   }
+ } catch (error) {
+   console.error(`[embeds.js]: Error fetching item rarity for ${randomItem.itemName}:`, error);
+ }
+
  // Build footer text
  let footerText = '';
  if (character.jobVoucher && character.jobVoucherJob) {
@@ -1120,6 +1133,13 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
     if (footerText && !footerText.startsWith('⚡')) {
       footerText = `⚡ ${footerText}`;
     }
+ }
+ 
+ // Add rarity to footer
+ if (footerText) {
+   footerText += ` | Rarity: ${itemRarity}`;
+ } else {
+   footerText = `Rarity: ${itemRarity}`;
  }
  
   if (footerText) {
