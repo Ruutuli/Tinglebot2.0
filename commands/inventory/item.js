@@ -826,7 +826,9 @@ module.exports = {
           });
         }
 
-        // Check if character already has an active buff
+        // TEMPORARILY DISABLED: Check if character already has an active buff
+        // TODO: Re-implement proper elixir usage logic when ready
+        /*
         if (character.buff?.active) {
           // Get elixir info for display
           const currentElixirInfo = getElixirInfo(character.buff.type);
@@ -861,6 +863,7 @@ module.exports = {
             ephemeral: true
           });
         }
+        */
 
         // Store original values for display (moved to broader scope)
         const originalMaxHearts = character.maxHearts;
