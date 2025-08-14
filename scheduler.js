@@ -695,9 +695,12 @@ async function checkAndPostMissedQuests(client) {
       return;
     }
     
+    // Randomize the order of quests before posting to avoid always posting in the same order
+    const shuffledQuests = unpostedQuests.sort(() => Math.random() - 0.5);
+    
     let posted = 0;
     
-    for (const quest of unpostedQuests) {
+    for (const quest of shuffledQuests) {
       const scheduledTime = quest.scheduledPostTime;
       if (!scheduledTime) continue;
       
@@ -768,9 +771,12 @@ async function checkAndPostScheduledQuests(client, cronTime) {
       return;
     }
     
+    // Randomize the order of quests before posting to avoid always posting in the same order
+    const shuffledQuests = questsToPost.sort(() => Math.random() - 0.5);
+    
     let posted = 0;
     
-    for (const quest of questsToPost) {
+    for (const quest of shuffledQuests) {
       const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
       const embed = embedsByVillage[quest.village];
       if (embed) {
