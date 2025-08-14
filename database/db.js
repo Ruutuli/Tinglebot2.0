@@ -2111,7 +2111,7 @@ const connectToInventoriesForItems = async () => {
     try {
         if (!inventoriesClient) {
             const env = process.env.NODE_ENV || 'development';
-            const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
+            const uri = env === 'development' ? dbConfig.inventories : dbConfig.inventories;
             inventoriesClient = new MongoClient(uri, {
                 maxPoolSize: 10,
                 minPoolSize: 5,
@@ -2127,17 +2127,17 @@ const connectToInventoriesForItems = async () => {
                 family: 4
             });
             await inventoriesClient.connect();
-            // Use tinglebot database for items
-            inventoriesDb = inventoriesClient.db('tinglebot');
+            // Use inventories database for items
+            inventoriesDb = inventoriesClient.db('inventories');
         } else {
             // Try to ping the server to check connection
             try {
-                await inventoriesClient.db('tinglebot').command({ ping: 1 });
+                await inventoriesClient.db('inventories').command({ ping: 1 });
             } catch (error) {
                 // If ping fails, reconnect
                 await inventoriesClient.close();
                 const env = process.env.NODE_ENV || 'development';
-                const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
+                const uri = env === 'development' ? dbConfig.inventories : dbConfig.inventories;
                 inventoriesClient = new MongoClient(uri, {
                     maxPoolSize: 10,
                     minPoolSize: 5,
@@ -2153,7 +2153,7 @@ const connectToInventoriesForItems = async () => {
                     family: 4
                 });
                 await inventoriesClient.connect();
-                inventoriesDb = inventoriesClient.db('tinglebot');
+                inventoriesDb = inventoriesClient.db('inventories');
             }
         }
         return inventoriesDb;
