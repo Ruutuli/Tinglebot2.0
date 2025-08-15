@@ -57,6 +57,7 @@ const { characterExistsNotOwned } = require('../../utils/validation');
 // Data schemas for pet and character documents.
 const Pet = require("../../models/PetModel");
 const Character = require("../../models/CharacterModel");
+const ItemModel = require("../../models/ItemModel");
 
 // ------------------- Helper Functions -------------------
 // Calculates the upgrade cost based on the pet's new level.
@@ -985,6 +986,26 @@ module.exports = {
        text: `${pet.rollsRemaining} rolls left this week | Pet Rolls reset every Sunday at midnight!`,
        iconURL: character.icon
       });
+
+     // Add item rarity to footer if there's an item
+     if (randomItem && randomItem.itemName) {
+       let itemRarity = 1; // Default to common
+       try {
+         const itemFromDb = await ItemModel.findOne({ itemName: randomItem.itemName }).select('itemRarity');
+         if (itemFromDb && itemFromDb.itemRarity) {
+           itemRarity = itemFromDb.itemRarity;
+         }
+       } catch (error) {
+         console.error(`[pet.js]: Error fetching item rarity for ${randomItem.itemName}:`, error);
+       }
+       
+       // Update footer to include rarity
+       rollEmbed.setFooter({
+         text: `${pet.rollsRemaining} rolls left this week | Pet Rolls reset every Sunday at midnight! | Rarity: ${itemRarity}`,
+         iconURL: character.icon
+       });
+     }
+
      return interaction.editReply({ embeds: [rollEmbed] });
     }
 
