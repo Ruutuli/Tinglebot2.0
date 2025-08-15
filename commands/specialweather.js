@@ -11,6 +11,7 @@ const Jimp = require('jimp');
 
 // ------------------- Database Services -------------------
 const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../database/db.js');
+const ItemModel = require('../models/ItemModel');
 
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../modules/rngModule.js');
@@ -181,6 +182,20 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
       { name: 'Special Weather', value: `${weather.special.emoji || '✨'} ${weather.special.label}`, inline: true },
       { name: 'Location', value: currentVillage, inline: true }
     );
+
+  // Fetch item rarity from database
+  let itemRarity = 1; // Default to common
+  try {
+    const itemFromDb = await ItemModel.findOne({ itemName: item.itemName }).select('itemRarity');
+    if (itemFromDb && itemFromDb.itemRarity) {
+      itemRarity = itemFromDb.itemRarity;
+    }
+  } catch (error) {
+    console.error(`[specialweather.js]: Error fetching item rarity for ${item.itemName}:`, error);
+  }
+
+  // Add rarity to footer
+  embed.setFooter({ text: `Rarity: ${itemRarity}` });
 
   return { embed, files: [] };
 };

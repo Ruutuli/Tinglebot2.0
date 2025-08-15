@@ -1392,6 +1392,25 @@ const createMonsterEncounterEmbed = async (
  }
  footerText = buildFooterText(footerText, character, boostInfo);
 
+ // Add item rarity to footer if there's loot
+ if (lootItem) {
+   let itemRarity = 1; // Default to common
+   try {
+     const itemFromDb = await ItemModel.findOne({ itemName: lootItem.itemName }).select('itemRarity');
+     if (itemFromDb && itemFromDb.itemRarity) {
+       itemRarity = itemFromDb.itemRarity;
+     }
+   } catch (error) {
+     console.error(`[embeds.js]: Error fetching item rarity for ${lootItem.itemName}:`, error);
+   }
+   
+   if (footerText) {
+     footerText += ` | Rarity: ${itemRarity}`;
+   } else {
+     footerText = `Rarity: ${itemRarity}`;
+   }
+ }
+
  embed.setFooter({
   text: footerText,
   iconURL: settings.author?.iconURL || "https://via.placeholder.com/100x100",
@@ -1791,6 +1810,25 @@ const createTravelMonsterEncounterEmbed = async (
   // Build footer text
   let footerText = `Tier: ${monster.tier}`;
   footerText = buildFooterText(footerText, character, boostInfo);
+
+  // Add item rarity to footer if there's loot
+  if (lootItem) {
+    let itemRarity = 1; // Default to common
+    try {
+      const itemFromDb = await ItemModel.findOne({ itemName: lootItem.itemName }).select('itemRarity');
+      if (itemFromDb && itemFromDb.itemRarity) {
+        itemRarity = itemFromDb.itemRarity;
+      }
+    } catch (error) {
+      console.error(`[embeds.js]: Error fetching item rarity for ${lootItem.itemName}:`, error);
+    }
+    
+    if (footerText) {
+      footerText += ` | Rarity: ${itemRarity}`;
+    } else {
+      footerText = `Rarity: ${itemRarity}`;
+    }
+  }
 
   embed.setFooter({ text: footerText })
     .setImage(PATH_IMAGES[currentPath] || settings.image.url);
