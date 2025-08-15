@@ -31,7 +31,9 @@ async function handleError(error, source = "Unknown Source", context = {}) {
     error?.name === "MongoNetworkError" ||
     error?.code === 'ETIMEDOUT' ||
     (error?.message && error.message.includes('ETIMEDOUT')) ||
-    (error?.message && error.message.includes('Connect Timeout'))
+    (error?.message && error.message.includes('Connect Timeout')) ||
+    error?.name === "SocketError" ||
+    (error?.message && error.message.includes('other side closed'))
   ) {
     // Try to extract host/port from error message
     let hostPortMatch = message.match(/([\d.]+):(\d+)/);
@@ -39,7 +41,9 @@ async function handleError(error, source = "Unknown Source", context = {}) {
     let port = hostPortMatch ? hostPortMatch[2] : undefined;
     // Redact password in connection string
     const redact = (str) => str ? str.replace(/(mongodb(?:\+srv)?:\/\/)(.*:.*)@(.*)/, '$1[REDACTED]@$3') : '';
-    extraInfo += `\n🌐 **Mongo/Network Error Details:**\n`;
+    extraInfo += `\n🌐 **Network Error Details:**\n`;
+    if (error?.name === "SocketError") extraInfo += `• Error Type: SocketError\n`;
+    if (error?.message?.includes('other side closed')) extraInfo += `• Issue: Connection closed by remote server\n`;
     if (host) extraInfo += `• Host: ${host}\n`;
     if (port) extraInfo += `• Port: ${port}\n`;
     if (process.env.MONGODB_TINGLEBOT_URI) extraInfo += `• Tinglebot URI: ${redact(process.env.MONGODB_TINGLEBOT_URI)}\n`;
