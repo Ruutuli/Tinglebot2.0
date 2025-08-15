@@ -336,8 +336,9 @@ module.exports = {
               await user.save();
             }
             
-            // Add to travel log
-            travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(startingVillage)}**!`);
+            // Add to character's travel log
+            character.travelLog = character.travelLog || [];
+            character.travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(startingVillage)}**!`);
           } else {
             let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
             
@@ -898,7 +899,7 @@ async function processTravelDay(day, context) {
           }
           
           // Add to travel log
-          travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(destination)}**!`);
+          context.travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(destination)}**!`);
         } else {
           const safeMsg =
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
@@ -909,7 +910,7 @@ async function processTravelDay(day, context) {
       }
     
       // Filter out "fight: win & loot" logs from final summary
-      const filteredLog = travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
+      const filteredLog = context.travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
       const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
 
       const imageEmbed = new EmbedBuilder()
@@ -1032,7 +1033,7 @@ async function processTravelDay(day, context) {
               currentPath,
               encounterMessage,
               monster,
-              travelLog,
+              context.travelLog,
               startingVillage
             );
             // Only append the decision to the daily log if it's not a damage message
@@ -1061,20 +1062,20 @@ async function processTravelDay(day, context) {
                 currentPath,
                 encounterMessage,
                 monster,
-                travelLog,
+                context.travelLog,
                 startingVillage
               );
           
               dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
             }
             if (await checkAndHandleKO(character, channel, startingVillage)) return;
-            travelLog.push(dailyLogEntry);
+            context.travelLog.push(dailyLogEntry);
             await processTravelDay(day + 1, { ...context, channel });
           } catch (error) {
             console.error(`[travel.js]: ❌ Error in monster encounter collector end:`, error);
             // Continue with travel even if there's an error
             if (await checkAndHandleKO(character, channel, startingVillage)) return;
-            travelLog.push(dailyLogEntry);
+            context.travelLog.push(dailyLogEntry);
             await processTravelDay(day + 1, { ...context, channel });
           }
         });
@@ -1123,7 +1124,7 @@ async function processTravelDay(day, context) {
             currentPath,
             safeMessage,
             null,
-            travelLog,
+            context.travelLog,
             startingVillage,
             i.customId === 'do_nothing' ? doNothingFlavor : undefined
           );    
@@ -1153,7 +1154,7 @@ async function processTravelDay(day, context) {
               currentPath,
               safeMessage,
               null,
-              travelLog,
+              context.travelLog,
               startingVillage,
               doNothingFlavor
             );
@@ -1162,14 +1163,14 @@ async function processTravelDay(day, context) {
         
           if (await checkAndHandleKO(character, channel, startingVillage)) return;
         
-          travelLog.push(dailyLogEntry);
+          context.travelLog.push(dailyLogEntry);
 
           await processTravelDay(day + 1, { ...context, channel });
         } catch (error) {
           console.error(`[travel.js]: ❌ Error in safe day collector end:`, error);
           // Continue with travel even if there's an error
           if (await checkAndHandleKO(character, channel, startingVillage)) return;
-          travelLog.push(dailyLogEntry);
+          context.travelLog.push(dailyLogEntry);
           await processTravelDay(day + 1, { ...context, channel });
         }
       });
