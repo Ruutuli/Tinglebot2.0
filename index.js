@@ -204,7 +204,10 @@ async function initializeClient() {
             const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
             initializeRandomEncounterBot(client);
           } catch (error) {
-            handleError(error, "index.js");
+            handleError(error, "index.js", {
+              operation: 'initialization',
+              context: 'scheduler_and_encounters'
+            });
           }
         }
       );
@@ -222,7 +225,12 @@ async function initializeClient() {
           try {
             await command.execute(interaction);
           } catch (error) {
-            handleError(error, 'index.js');
+            handleError(error, 'index.js', {
+              commandName: interaction.commandName,
+              userTag: interaction.user?.tag,
+              userId: interaction.user?.id,
+              options: interaction.options?.data
+            });
             console.error(`[index.js]: Command execution error:`, error);
             
             // Check if it's a webhook token error
@@ -272,7 +280,12 @@ async function initializeClient() {
             try {
               await command.autocomplete(interaction);
             } catch (error) {
-              handleError(error, "index.js");
+              handleError(error, "index.js", {
+                commandName: interaction.commandName,
+                userTag: interaction.user?.tag,
+                userId: interaction.user?.id,
+                operation: 'autocomplete'
+              });
               console.error(
                 `[index.js]: ❌ Error in command autocomplete handler for '${interaction.commandName}':`,
                 error
@@ -289,7 +302,12 @@ async function initializeClient() {
           console.warn(`[index.js]: Unhandled interaction type: ${interaction.type}`);
         }
       } catch (error) {
-        handleError(error, "index.js");
+        handleError(error, "index.js", {
+          commandName: interaction?.commandName || 'Unknown',
+          userTag: interaction?.user?.tag || 'Unknown',
+          userId: interaction?.user?.id || 'Unknown',
+          interactionType: interaction?.type || 'Unknown'
+        });
         console.error("[index.js]: ❌ Interaction error:", error);
       }
     });
@@ -458,7 +476,10 @@ function logBloodMoonStatus() {
   try {
     isBloodMoon = isBloodMoonDay();
   } catch (error) {
-    handleError(error, "index.js");
+    handleError(error, "index.js", {
+      operation: 'blood_moon_check',
+      context: 'scheduler_and_encounters'
+    });
     console.error("[index.js]: ❌ Blood Moon check failed:", error.message);
   }
 
