@@ -751,9 +751,80 @@ module.exports = {
 
      // ------------------- Check Available Pet Rolls -------------------
      if (pet.rollsRemaining <= 0) {
-       return interaction.editReply(
-         "❌ Your pet has no rolls left this week. Rolls reset every Sunday. You can increase your roll limit by training your pet! [Learn more](#)"
-       );
+       // Calculate next Sunday reset time
+       const now = new Date();
+       const daysUntilSunday = (7 - now.getDay()) % 7;
+       const nextSunday = new Date(now);
+       nextSunday.setDate(now.getDate() + daysUntilSunday);
+       nextSunday.setHours(0, 0, 0, 0);
+       
+       // Format last roll date if available
+       let lastRollText = "Never";
+       let lastRollTime = "";
+       if (pet.lastRollDate) {
+         const lastRoll = new Date(pet.lastRollDate);
+         lastRollText = lastRoll.toLocaleDateString('en-US', { 
+           weekday: 'long', 
+           year: 'numeric', 
+           month: 'long', 
+           day: 'numeric' 
+         });
+         lastRollTime = lastRoll.toLocaleTimeString('en-US', { 
+           hour: '2-digit', 
+           minute: '2-digit', 
+           timeZone: 'America/New_York' 
+         });
+       }
+       
+       // Create embed for no rolls remaining
+       const noRollsEmbed = new EmbedBuilder()
+         .setAuthor({ name: character.name, iconURL: character.icon })
+         .setTitle("❌ No Rolls Remaining")
+         .setDescription(`${pet.name} has used all available rolls for this week.`)
+         .setThumbnail(sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl))
+         .addFields(
+           { 
+             name: "🐾 Pet Name", 
+             value: `> ${pet.name}`, 
+             inline: true 
+           },
+           { 
+             name: "🦊 Species", 
+             value: `> ${pet.species}`, 
+             inline: true 
+           },
+           { 
+             name: "📊 Level", 
+             value: `> Level ${pet.level}`, 
+             inline: true 
+           },
+           { 
+             name: "🎲 Rolls This Week", 
+             value: `> ${pet.rollsRemaining} rolls remaining`, 
+             inline: true 
+           },
+           { 
+             name: "📅 Last Roll", 
+             value: `> ${lastRollText}${lastRollTime !== "" ? ` at ${lastRollTime}` : ""}`, 
+             inline: true 
+           },
+           { 
+             name: "🔄 Next Reset", 
+             value: `> ${nextSunday.toLocaleDateString('en-US', { 
+               weekday: 'long', 
+               month: 'long', 
+               day: 'numeric' 
+             })} at midnight`, 
+             inline: true 
+           }
+         )
+         .setColor("#FF6B35")
+         .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+         .setFooter({ 
+           text: "Increase your roll limit by training your pet! Visit https://rootsofthewild.com/mechanics/pets for more info" 
+         });
+       
+       return interaction.editReply({ embeds: [noRollsEmbed], ephemeral: true });
      }
 
      // ------------------- Check Last Roll Date -------------------
