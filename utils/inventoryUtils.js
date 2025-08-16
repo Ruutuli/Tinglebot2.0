@@ -1091,5 +1091,6 @@ module.exports = {
   logMaterialsToGoogleSheets,
   refundJobVoucher,
   SOURCE_TYPES,
-  syncSheetDataToDatabase
+  syncSheetDataToDatabase,
+  escapeRegExp
 };
