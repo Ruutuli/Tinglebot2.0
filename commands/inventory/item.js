@@ -461,17 +461,46 @@ module.exports = {
         }
         // Create clickable command links with proper formatting
         const commandLinks = [];
-        if (jobPerkInfo.perks.includes('GATHERING')) {
+        
+        // Handle perks that may contain multiple values separated by "/"
+        const allPerks = jobPerkInfo.perks.flatMap(perk => perk.split(' / '));
+        
+        // Special case for "ALL" perk - show all available commands
+        if (allPerks.includes('ALL')) {
           commandLinks.push('🔍 **Gathering:** </gather:1372378304773881885>');
-        }
-        if (jobPerkInfo.perks.includes('CRAFTING')) {
           commandLinks.push('⚒️ **Crafting:** </crafting:1379838613067530387>');
-        }
-        if (jobPerkInfo.perks.includes('LOOTING')) {
           commandLinks.push('💎 **Looting:** </loot:1372378304773881887>');
-        }
-        if (jobPerkInfo.perks.includes('HEALING')) {
           commandLinks.push('💚 **Healing:** </heal fulfill:1372378304773881886>');
+          commandLinks.push('🦹 **Stealing:** </steal commit:1400281065674903612>');
+          commandLinks.push('📦 **Delivering:** </deliver:1372378304773881888>');
+          commandLinks.push('🏪 **Vending:** </vending:1372378304773881889>');
+          commandLinks.push('🚀 **Boosting:** </boosting:1372378304773881890>');
+        } else {
+          // Regular perk handling
+          if (allPerks.includes('GATHERING')) {
+            commandLinks.push('🔍 **Gathering:** </gather:1372378304773881885>');
+          }
+          if (allPerks.includes('CRAFTING')) {
+            commandLinks.push('⚒️ **Crafting:** </crafting:1379838613067530387>');
+          }
+          if (allPerks.includes('LOOTING')) {
+            commandLinks.push('💎 **Looting:** </loot:1372378304773881887>');
+          }
+          if (allPerks.includes('HEALING')) {
+            commandLinks.push('💚 **Healing:** </heal fulfill:1372378304773881886>');
+          }
+          if (allPerks.includes('STEALING')) {
+            commandLinks.push('🦹 **Stealing:** </steal commit:1400281065674903612>');
+          }
+          if (allPerks.includes('DELIVERING')) {
+            commandLinks.push('📦 **Delivering:** </deliver:1372378304773881888>');
+          }
+          if (allPerks.includes('VENDING')) {
+            commandLinks.push('🏪 **Vending:** </vending:1372378304773881889>');
+          }
+          if (allPerks.includes('BOOST')) {
+            commandLinks.push('🚀 **Boosting:** </boosting:1372378304773881890>');
+          }
         }
 
         // Build enhanced description with better formatting

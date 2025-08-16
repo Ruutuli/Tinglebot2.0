@@ -533,8 +533,22 @@ module.exports = {
       );
 
       if (specialWeatherItems.length === 0) {
+        // Create a warning embed for when no special items are available
+        const warningEmbed = {
+          color: 0x8B0000, // Dark red color for warning
+          title: `🌧️🧿 **${weather.special.label} Warning**`,
+          description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Looting** - Items may be contaminated\n• **Gathering** - Resources may be tainted\n• **Traveling** - Risk of blight exposure\n\n<:blight_eye:805576955725611058> The blighted rain creates dangerous conditions. Consider waiting for clearer weather.`,
+          thumbnail: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: `${currentVillage} Weather Advisory`
+          },
+          timestamp: new Date()
+        };
+
         await interaction.editReply({
-          content: `❌ **No special items available in ${currentVillage} during ${weather.special.label}.**`,
+          embeds: [warningEmbed]
         });
         return;
       }
