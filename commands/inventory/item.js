@@ -530,7 +530,7 @@ module.exports = {
           commandLinks.push('⚒️ **Crafting:** </crafting:1379838613067530387>');
           commandLinks.push('💎 **Looting:** </loot:1372378304773881887>');
           commandLinks.push('💚 **Healing:** </heal fulfill:1372378304773881886>');
-          commandLinks.push('🦹 **Stealing:** </steal commit:1400281065674903612>');
+          commandLinks.push(' **Stealing:** </steal commit:1400281065674903612>');
           commandLinks.push('📦 **Delivering:** </deliver:1372378304773881888>');
           commandLinks.push('🏪 **Vending:** </vending:1372378304773881889>');
           commandLinks.push('🚀 **Boosting:** </boosting:1372378304773881890>');
@@ -549,7 +549,7 @@ module.exports = {
             commandLinks.push('💚 **Healing:** </heal fulfill:1372378304773881886>');
           }
           if (allPerks.includes('STEALING')) {
-            commandLinks.push('🦹 **Stealing:** </steal commit:1400281065674903612>');
+            commandLinks.push(' **Stealing:** </steal commit:1400281065674903612>');
           }
           if (allPerks.includes('DELIVERING')) {
             commandLinks.push('📦 **Delivering:** </deliver:1372378304773881888>');
