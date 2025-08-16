@@ -26,7 +26,10 @@ const updateHearts = async (characterId, hearts) => {
   try {
     await Character.updateOne({ _id: characterId }, { $set: { currentHearts: hearts, maxHearts: hearts } });
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'update_hearts',
+      characterId: characterId
+    });
 
     throw error;
   }
@@ -38,7 +41,10 @@ const updateStamina = async (characterId, stamina) => {
   try {
     await Character.updateOne({ _id: characterId }, { $set: { currentStamina: stamina, maxStamina: stamina } });
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'update_stamina',
+      characterId: characterId
+    });
 
     throw error;
   }
@@ -51,7 +57,11 @@ const updateCurrentHearts = async (characterId, hearts) => {
     if (isNaN(hearts)) throw new Error(`Provided hearts value is NaN for character ID: ${characterId}`);
     await Character.updateOne({ _id: characterId }, { $set: { currentHearts: hearts } });
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'update_current_hearts',
+      characterId: characterId,
+      heartsValue: hearts
+    });
 
     throw error;
   }
@@ -65,7 +75,12 @@ const updateCurrentStamina = async (characterId, stamina, updateUsageDate = fals
     if (updateUsageDate) updateData.lastStaminaUsage = new Date();
     await Character.updateOne({ _id: characterId }, { $set: updateData });
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'update_current_stamina',
+      characterId: characterId,
+      staminaValue: stamina,
+      updateUsageDate: updateUsageDate
+    });
 
     throw error;
   }
@@ -105,7 +120,12 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
     await character.save();
     return createSimpleCharacterEmbed(character, `❤️ +${hearts} hearts recovered`);
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'recover_hearts',
+      characterId: characterId,
+      heartsToRecover: hearts,
+      healerId: healerId
+    });
 
     console.error(`[characterStatsModule.js]: logs Error in recoverHearts: ${error.message}`);
     throw error;
@@ -125,7 +145,11 @@ const recoverStamina = async (characterId, stamina) => {
 
     return createSimpleCharacterEmbed(character, `🟩 +${stamina} stamina recovered`);
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'recover_stamina',
+      characterId: characterId,
+      staminaToRecover: stamina
+    });
 
     throw error;
   }
@@ -136,7 +160,7 @@ const recoverStamina = async (characterId, stamina) => {
 // Usage Functions
 // ------------------- Use Hearts -------------------
 // Deducts hearts from a character. If hearts drop to 0, triggers KO handling.
-const useHearts = async (characterId, hearts) => {
+const useHearts = async (characterId, hearts, context = {}) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
@@ -162,12 +186,12 @@ const useHearts = async (characterId, hearts) => {
 
     if (newHearts === 0) {
       console.log(`[characterStatsModule.js]: 💀 Triggering KO for ${character.name}`);
-      await handleKO(characterId);
+      await handleKO(characterId, context);
     }
 
     return createSimpleCharacterEmbed(character, `❤️ -${hearts} hearts used`);
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', context);
 
     console.error(`[characterStatsModule.js]: logs Error in useHearts: ${error.message}`);
     throw error;
@@ -176,7 +200,7 @@ const useHearts = async (characterId, hearts) => {
 
 // ------------------- Use Stamina -------------------
 // Deducts stamina from a character. If stamina reaches 0, returns a message indicating exhaustion.
-const useStamina = async (characterId, stamina) => {
+const useStamina = async (characterId, stamina, context = {}) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
@@ -199,7 +223,7 @@ const useStamina = async (characterId, stamina) => {
 
     return { message: `🟩 -${stamina} stamina used`, exhausted: false };
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', context);
 
     throw error;
   }
@@ -210,7 +234,7 @@ const useStamina = async (characterId, stamina) => {
 // KO and Exchange Functions
 // ------------------- Handle KO -------------------
 // Handles a KO state by setting the character's KO flag and current hearts to 0.
-const handleKO = async (characterId) => {
+const handleKO = async (characterId, context = {}) => {
   try {
     console.log(`[characterStatsModule.js]: 💀 Handling KO for Character ID ${characterId}`);
     
@@ -225,7 +249,7 @@ const handleKO = async (characterId) => {
     await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
     console.log(`[characterStatsModule.js]: ✅ Character ID ${characterId} is KO'd.`);
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', context);
     console.error(`[characterStatsModule.js]: ❌ Error in handleKO: ${error.message}`);
     throw error;
   }
@@ -273,7 +297,12 @@ const exchangeSpiritOrbs = async (characterId, type) => {
     await character.save();
     return character;
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'exchange_spirit_orbs',
+      characterId: characterId,
+      orbType: type,
+      orbCount: orbCount
+    });
 
     console.error(`[characterStatsModule.js]: logs Error in exchangeSpiritOrbs: ${error.message}`);
     throw error;
@@ -330,7 +359,10 @@ const recoverDailyStamina = async () => {
       }
     }
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'recover_daily_stamina',
+      date: today
+    });
     throw error;
   }
 };
@@ -353,7 +385,11 @@ const healKoCharacter = async (characterId, healerId = null) => {
     await Character.updateOne({ _id: characterId }, { $set: { ko: false } });
     return createSimpleCharacterEmbed(character, `❤️ ${character.name} has been revived.`);
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'heal_ko_character',
+      characterId: characterId,
+      healerId: healerId
+    });
 
     throw error;
   }
@@ -381,7 +417,11 @@ const updateCharacterDefense = async (characterId) => {
 
     await Character.updateOne({ _id: characterId }, { $set: { defense: totalDefense } });
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'update_character_defense',
+      characterId: characterId,
+      totalDefense: totalDefense
+    });
 
     throw error;
   }
@@ -397,7 +437,11 @@ const updateCharacterAttack = async (characterId) => {
     const totalAttack = character.gearWeapon?.stats?.get('modifierHearts') || 0;
     await Character.updateOne({ _id: characterId }, { $set: { attack: totalAttack } });
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'update_character_attack',
+      characterId: characterId,
+      totalAttack: totalAttack
+    });
 
     throw error;
   }
@@ -427,7 +471,12 @@ const checkAndUseStamina = async (character, staminaCost) => {
       const updatedCharacter = await Character.findById(character._id);
       return updatedCharacter.currentStamina;
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'check_and_use_stamina',
+      characterId: character._id,
+      characterName: character.name,
+      staminaCost: staminaCost
+    });
 
       console.error(`[characterStatsModule.js]: logs Error updating stamina for character: ${error.message}`);
       throw error;
@@ -454,7 +503,10 @@ const handleZeroStamina = async (characterId) => {
     }
     return `${character.name} has ${character.currentStamina} stamina remaining.`;
   } catch (error) {
-    handleError(error, 'characterStatsModule.js');
+    handleError(error, 'characterStatsModule.js', {
+      operation: 'handle_zero_stamina',
+      characterId: characterId
+    });
 
     console.error(`[characterStatsModule.js]: logs Error checking stamina for character: ${error.message}`);
     throw error;
