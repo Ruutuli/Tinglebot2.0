@@ -93,7 +93,18 @@ module.exports = {
       
       if (!character) {
         await interaction.editReply({
-          content: `❌ **Character ${characterName} not found or does not belong to you.**`,
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Character Not Found',
+            description: `The character **"${characterName}"** was not found or does not belong to you.\n\n**Possible issues:**\n• Character name may be misspelled\n• Character may not exist\n• Character may belong to another user\n• Try using the autocomplete feature for accurate character names`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Character Validation Error'
+            }
+          }],
+          ephemeral: true
         });
         return;
       }
@@ -105,9 +116,25 @@ module.exports = {
         return;
       }
 
-      const item = await fetchItemByName(itemName);
+      // Clean the itemName to remove quantity suffix if present (e.g., "Job Voucher - Qty: 2" -> "Job Voucher")
+      const cleanItemName = itemName.replace(/\s*-\s*Qty:\s*\d+\s*$/i, '').trim();
+      
+      const item = await fetchItemByName(cleanItemName);
       if (!item) {
-        return void await interaction.editReply({ content: '❌ **Item not found.**' });
+        return void await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Item Not Found',
+            description: `The item **"${cleanItemName}"** does not exist in the database.\n\n**What you entered:** ${itemName}\n**What was searched:** ${cleanItemName}\n\n**Possible issues:**\n• Item name may be misspelled\n• Item may not exist in the game\n• Try using the autocomplete feature for accurate item names`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Item Validation Error'
+            }
+          }],
+          ephemeral: true
+        });
       }
 
       // ------------------- Inventory Initialization -------------------
@@ -115,7 +142,18 @@ module.exports = {
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       if (!inventoryCollection) {
         return void await interaction.editReply({
-          content: '❌ **Inventory not set up. Please initialize an inventory before using items.**'
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Inventory Not Set Up',
+            description: `${character.name} does not have an inventory initialized.\n\n**To fix this:**\n• Use the inventory command to set up your character's inventory\n• Contact a moderator if you need assistance`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Inventory Setup Required'
+            }
+          }],
+          ephemeral: true
         });
       }
 
@@ -123,11 +161,11 @@ module.exports = {
       // Confirm the character owns enough of the requested item.
       const inventoryItems = await inventoryCollection.find().toArray();
       
-      // Clean the itemName to remove quantity suffix if present (e.g., "Job Voucher - Qty: 1" -> "Job Voucher")
-      const cleanItemName = itemName.replace(/\s*-\s*Qty:\s*\d+\s*$/i, '').toLowerCase();
+      // Use the already cleaned item name for inventory lookup
+      const cleanItemNameForInventory = cleanItemName.toLowerCase();
       
       const ownedItem = inventoryItems.find(invItem =>
-        invItem.itemName?.toLowerCase() === cleanItemName
+        invItem.itemName?.toLowerCase() === cleanItemNameForInventory
       );
       
       // Skip inventory check for mod characters using job vouchers
@@ -138,7 +176,7 @@ module.exports = {
           embeds: [{
             color: 0xAA926A,
             title: '🎫 Job Voucher Usage',
-            description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(cleanItemName)}" in their inventory.`,
+            description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(cleanItemNameForInventory)}" in their inventory.`,
             image: {
               url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
             },
@@ -182,7 +220,17 @@ module.exports = {
           const jobPerkInfo = getJobPerk(jobName);
           if (!jobPerkInfo) {
             return void await interaction.editReply({
-              content: `❌ **"${capitalizeWords(jobName)}" is not a valid job.**\nPlease select a valid job from the suggestions.`,
+              embeds: [{
+                color: 0xFF0000,
+                title: '❌ Invalid Job',
+                description: `The job **"${capitalizeWords(jobName)}"** is not valid.\n\n**What you entered:** ${jobName}\n\n**To fix this:**\n• Use the autocomplete feature to select a valid job\n• Check the spelling of the job name\n• Ensure the job exists in the game`,
+                image: {
+                  url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                },
+                footer: {
+                  text: 'Job Validation Error'
+                }
+              }],
               ephemeral: true
             });
           }
@@ -374,7 +422,18 @@ module.exports = {
         const jobPerkInfo = getJobPerk(jobName);
         if (!jobPerkInfo) {
           return void await interaction.editReply({
-            content: `❌ **"${capitalizeWords(jobName)}" is not a valid job.**\nPlease select a valid job from the suggestions.`
+            embeds: [{
+              color: 0xFF0000,
+              title: '❌ Invalid Job',
+              description: `The job **"${capitalizeWords(jobName)}"** is not valid.\n\n**What you entered:** ${jobName}\n\n**To fix this:**\n• Use the autocomplete feature to select a valid job\n• Check the spelling of the job name\n• Ensure the job exists in the game`,
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Job Validation Error'
+              }
+            }],
+            ephemeral: true
           });
         }
 
@@ -677,7 +736,17 @@ module.exports = {
         
         if (!petTypeData) {
           return void await interaction.editReply({
-            content: '❌ **Error: Invalid Chuchu type generated. Please try again.**',
+            embeds: [{
+              color: 0xFF0000,
+              title: '❌ Chuchu Egg Error',
+              description: 'An error occurred while processing the Chuchu Egg.\n\n**What went wrong:**\n• Invalid Chuchu type was generated\n• Pet type data could not be found\n\n**To fix this:**\n• Please try using the Chuchu Egg again\n• If the problem persists, contact a moderator',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Pet System Error'
+              }
+            }],
             ephemeral: true
           });
         }
@@ -969,7 +1038,17 @@ module.exports = {
           });
           
           return void await interaction.editReply({
-            content: '❌ **Failed to apply elixir effect. Please try again later.**',
+            embeds: [{
+              color: 0xFF0000,
+              title: '❌ Elixir Application Failed',
+              description: 'Failed to apply the elixir effect to your character.\n\n**What went wrong:**\n• Elixir effect could not be processed\n• Character buff system encountered an error\n\n**To fix this:**\n• Please try using the elixir again\n• If the problem persists, contact a moderator',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Elixir System Error'
+              }
+            }],
             ephemeral: true
           });
         }
