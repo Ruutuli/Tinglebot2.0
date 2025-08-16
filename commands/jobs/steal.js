@@ -372,7 +372,7 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
         .addFields(
             { name: '📦 Item', value: `> **${itemEmoji} ${item.itemName}**${isSuccess ? ` x**${quantity}**` : ''}`, inline: false },
             { name: '🎲 Roll', value: `> ${successField}`, inline: false },
-            { name: '✨ Rarity', value: `> **${item.tier.toUpperCase()}**`, inline: false }
+            { name: '✨ Rarity', value: `> **${item.tier.toUpperCase()}** (${item.itemRarity})`, inline: false }
         )
         .setThumbnail(isNPC ? (npcIcon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg') : targetCharacter.icon)
         .setAuthor({ 
