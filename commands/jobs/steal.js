@@ -1331,14 +1331,20 @@ module.exports = {
                     return;
                 }
 
+                // Calculate midnight EST release time
+                const now = new Date();
+                const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+                const midnightEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + Math.ceil(jailStatus.timeLeft / (24 * 60 * 60 * 1000)), 0, 0, 0, 0);
+                
                 const embed = createBaseEmbed('⏰ Jail Time Remaining', '#ff0000')
                     .setDescription(`**${character.name}** is currently in jail.`)
                     .addFields(
-                        { name: 'Time Remaining', value: `<t:${Math.floor((Date.now() + jailStatus.timeLeft) / 1000)}:R>`, inline: false },
-                        { name: 'Release Time', value: `<t:${Math.floor((Date.now() + jailStatus.timeLeft) / 1000)}:F>`, inline: false },
-                        { name: 'Formatted Time', value: formatJailTimeLeft(jailStatus.timeLeft), inline: false }
+                        { name: '⏰ Time Remaining', value: `<t:${Math.floor((Date.now() + jailStatus.timeLeft) / 1000)}:R>`, inline: false },
+                        { name: '🕒 Release Time', value: `<t:${Math.floor(midnightEST.getTime() / 1000)}:F> (Midnight EST)`, inline: false },
+                        { name: '📅 Formatted Time', value: formatJailTimeLeftDaysHours(jailStatus.timeLeft), inline: false }
                     )
-                    .setThumbnail(character.icon);
+                    .setThumbnail(character.icon)
+                    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
                 await interaction.editReply({ embeds: [embed] });
                 return;
@@ -1910,7 +1916,7 @@ module.exports = {
                 // Check target character's jail status
                 const targetJailStatus = await checkAndUpdateJailStatus(targetCharacter);
                 if (targetJailStatus.isInJail) {
-                    const timeLeft = formatJailTimeLeft(targetJailStatus.timeLeft);
+                    const timeLeft = formatJailTimeLeftDaysHours(targetJailStatus.timeLeft);
                     await interaction.editReply({ 
                         content: `❌ **You cannot steal from a character who is in jail!**\n⏰ ${targetCharacter.name} will be released in ${timeLeft}` 
                     });

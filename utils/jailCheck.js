@@ -20,6 +20,13 @@ async function enforceJail(interaction, character) {
 
     // Create detailed error message
     const releaseTime = character.jailReleaseTime.getTime();
+    
+    // Calculate midnight EST release time
+    const now = new Date();
+    const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const timeLeft = releaseTime - now;
+    const midnightEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + Math.ceil(timeLeft / (24 * 60 * 60 * 1000)), 0, 0, 0, 0);
+    
     const jailEmbed = {
         title: '⛔ In Jail!',
         description: `**${character.name}** is currently serving time in jail and cannot perform this action.`,
@@ -32,12 +39,15 @@ async function enforceJail(interaction, character) {
             },
             {
                 name: '🕒 Release Time',
-                value: `<t:${Math.floor(releaseTime / 1000)}:F>`,
+                value: `<t:${Math.floor(midnightEST.getTime() / 1000)}:F> (Midnight EST)`,
                 inline: false
             },
         ],
         thumbnail: {
             url: character.icon
+        },
+        image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
         },
         footer: {
             text: 'You will be automatically released when your time is up.',
