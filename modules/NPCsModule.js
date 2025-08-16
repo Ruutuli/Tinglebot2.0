@@ -438,14 +438,14 @@ const getNPCItems = async (npcName) => {
           
           let query = {};
           if (category === 'Weapons') {
-            query = { $or: [{ category: 'Weapon' }, { categoryGear: 'Weapon' }] };
+            query = { 
+              $and: [
+                { $or: [{ category: 'Weapon' }, { categoryGear: 'Weapon' }] },
+                { $nor: [{ category: 'Custom Weapon' }] }
+              ]
+            };
           } else if (category === 'Armor') {
             query = { $or: [{ category: 'Armor' }, { categoryGear: 'Armor' }] };
-          }
-          
-          // Exclude custom weapons from weapon categories
-          if (category === 'Weapons') {
-            query.$and = [{ $not: { category: 'Custom Weapon' } }];
           }
           
                                 const items = await ItemModel.find(query).select('itemName').lean();
