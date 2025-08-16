@@ -444,12 +444,22 @@ async function attemptFlee(character, monster) {
     await character.save();
 
     const monsterDamage = calculateWeightedDamage(monster.tier);
-    await useHearts(character._id, monsterDamage);
+    await useHearts(character._id, monsterDamage, {
+      commandName: 'flee_attempt',
+      characterName: character.name,
+      userId: character.userId,
+      operation: 'flee_damage'
+    });
     character.currentHearts -= monsterDamage;
     
     if (character.currentHearts <= 0) {
       console.log(`[rngModule.js]: 💀 ${character.name} KO'd by ${monster.name} during flee`);
-      await handleKO(character._id);
+      await handleKO(character._id, {
+        commandName: 'flee_attempt',
+        characterName: character.name,
+        userId: character.userId,
+        operation: 'flee_ko'
+      });
       return {
         success: false,
         attacked: true,

@@ -135,9 +135,19 @@ async function updateBattleProgress(battleId, updatedProgress, outcome) {
   battleProgress[battleId].turnCount++;
 
   if (outcome.hearts > 0) {
-    await useHearts(outcome.character._id, outcome.hearts);
+    await useHearts(outcome.character._id, outcome.hearts, {
+      commandName: 'pvp_combat',
+      characterName: outcome.character.name,
+      userId: outcome.character.userId,
+      operation: 'pvp_combat_damage'
+    });
     if (outcome.character.currentHearts === 0) {
-      await handleKO(outcome.character._id);
+      await handleKO(outcome.character._id, {
+        commandName: 'pvp_combat',
+        characterName: outcome.character.name,
+        userId: outcome.character.userId,
+        operation: 'pvp_combat_ko'
+      });
       battleProgress[battleId].progress += `\n${outcome.character.name} has been KO'd!`;
     }
   }
