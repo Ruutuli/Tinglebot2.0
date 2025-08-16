@@ -2,6 +2,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { connectToTinglebot, getIngredientItems, getCharacterInventoryCollection} = require('../../database/db.js');
+const { escapeRegExp } = require('../../utils/inventoryUtils.js');
 const ItemModel = require('../../models/ItemModel.js');
 const Character = require('../../models/CharacterModel.js');
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
@@ -63,8 +64,11 @@ module.exports = {
 
 // ------------------- Handle item lookup -------------------
 async function handleItemLookup(interaction, itemName) {
+  // Escape special regex characters to prevent regex syntax errors
+  const escapedItemName = escapeRegExp(itemName);
+  
   const item = await ItemModel.findOne({ 
-    itemName: { $regex: new RegExp(`^${itemName}$`, "i") }
+    itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") }
   }).exec();
   
   if (!item) {
