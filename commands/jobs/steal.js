@@ -437,10 +437,25 @@ function createProtectionEmbed(targetName, timeLeftMinutes, isNPC = false) {
 // ------------------- Function: createJailBlockEmbed -------------------
 // Creates a roleplay-friendly embed for when stealing from jailed characters is blocked
 function createJailBlockEmbed(targetName, timeLeft) {
+    const jailMessages = [
+        `*${targetName} rattles their chains. Pretty bold of you to think you can rob someone behind iron bars.*`,
+        `*The guards glare at you. Sneaking into jail isn't exactly a stealthy move.*`,
+        `*${targetName} is already locked up—what more could you possibly take from them?*`,
+        `*You reach for ${targetName}'s pockets… but the bars say no.*`,
+        `*The jail cell smells like damp hay and regret. Not exactly prime looting grounds.*`,
+        `*A guard coughs loudly. Maybe don't test your luck by sticking your hands through the bars.*`,
+        `*${targetName} smirks from behind the cell door. "Good luck stealing from me in here."*`,
+        `*Chains clink as ${targetName} shifts. You realize robbing prisoners isn't just rude—it's dumb.*`,
+        `*Even bandits have standards… right?*`,
+        `*You'd have better luck stealing from the guards than from someone locked up.*`
+    ];
+    
+    const randomMessage = jailMessages[Math.floor(Math.random() * jailMessages.length)];
+    
     const embed = new EmbedBuilder()
         .setColor(0x8B4513) // Brown color for jail theme
         .setTitle('🚔 Jail Break Attempt Blocked!')
-        .setDescription(`*Um... ${targetName} is in jail? Maybe don't sneak into jail to steal from them?*`)
+        .setDescription(randomMessage)
         .addFields(
             { name: '⏰ Release Time', value: `${targetName} will be released in **${timeLeft}**`, inline: false },
             { name: '🕛 Release Schedule', value: 'Jail releases happen at **midnight EST**', inline: false },
