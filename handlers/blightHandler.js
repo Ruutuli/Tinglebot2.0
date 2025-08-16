@@ -71,9 +71,17 @@ const { sendUserDM } = require('../utils/messageUtils');
 // ------------------- Function: get8PMESTInUTC -------------------
 // Converts 8:00 PM EST to UTC for consistent time comparisons
 function get8PMESTInUTC(date = new Date()) {
-  const estDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  estDate.setHours(20, 0, 0, 0); // Set to 8:00 PM EST
-  return new Date(estDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  // Create a date string representing 8:00 PM EST on the given date
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  // Create ISO string for 8:00 PM EST (UTC-5)
+  // Note: EST is always UTC-5, regardless of DST
+  const estTimeString = `${year}-${month}-${day}T20:00:00-05:00`;
+  
+  // Parse and return UTC time
+  return new Date(estTimeString);
 }
 
 // ============================================================================
@@ -1522,16 +1530,15 @@ async function rollForBlightProgression(interaction, characterName) {
     }
 
     const lastRollDate = character.lastRollDate || new Date(0);
-    // Calculate last blight call
-    const lastBlightCall = new Date(today8PMUTC);
-    if (estNow.getHours() < 20) {
-      // If current time is before 8 PM, the last call was yesterday
-      lastBlightCall.setDate(lastBlightCall.getDate() - 1);
-    }
+    // Calculate last blight call (previous day's 8 PM EST)
+    const lastBlightCall = get8PMESTInUTC(new Date(now.getTime() - 24 * 60 * 60 * 1000));
     
     // Check if character has already rolled since the last blight call
     // A character can only roll once per "day" (8 PM to 8 PM window)
     if (character.lastRollDate && character.lastRollDate > lastBlightCall) {
+      // Debug logging
+      console.log(`[blightHandler]: ${characterName} already rolled - Last roll: ${character.lastRollDate.toISOString()}, Last blight call: ${lastBlightCall.toISOString()}, Current time: ${now.toISOString()}`);
+      
       const timeUntilNextRoll = nextCallStart - estNow;
       const hoursUntilNextRoll = Math.floor(timeUntilNextRoll / (1000 * 60 * 60));
       const minutesUntilNextRoll = Math.floor((timeUntilNextRoll % (1000 * 60 * 60)) / (1000 * 60));
@@ -1561,6 +1568,10 @@ async function rollForBlightProgression(interaction, characterName) {
 
     // ------------------- Roll & Stage Determination -------------------
     character.lastRollDate = new Date(); // Use UTC time consistently
+    
+    // Debug logging
+    console.log(`[blightHandler]: ${characterName} rolling for blight - Current time: ${now.toISOString()}, Last blight call: ${lastBlightCall.toISOString()}, Next blight call: ${nextCallStart.toISOString()}`);
+    
     const roll = Math.floor(Math.random() * 1000) + 1;
     let stage;
     let embedTitle;
@@ -2675,10 +2686,7 @@ async function checkMissedRolls(client) {
       const currentDayBlightCall = get8PMESTInUTC(new Date());
       
       // Calculate last blight call (8:00 PM EST previous day) in UTC
-      const lastBlightCall = get8PMESTInUTC(new Date());
-      if (nowEST.getHours() < 20 || (nowEST.getHours() === 20 && nowEST.getMinutes() < 0)) {
-        lastBlightCall.setDate(lastBlightCall.getDate() - 1);
-      }
+      const lastBlightCall = get8PMESTInUTC(new Date(Date.now() - 24 * 60 * 60 * 1000));
       
       // Skip if character was blighted today (before current blight call) or after last blight call
       // OR if character rolled after the last blight call
