@@ -436,7 +436,7 @@ function createProtectionEmbed(targetName, timeLeftMinutes, isNPC = false) {
 
 // ------------------- Function: createJailBlockEmbed -------------------
 // Creates a roleplay-friendly embed for when stealing from jailed characters is blocked
-function createJailBlockEmbed(targetName, timeLeft) {
+function createJailBlockEmbed(targetName, timeLeft, targetIcon, thiefIcon) {
     const jailMessages = [
         `*${targetName} rattles their chains. Pretty bold of you to think you can rob someone behind iron bars.*`,
         `*The guards glare at you. Sneaking into jail isn't exactly a stealthy move.*`,
@@ -454,13 +454,17 @@ function createJailBlockEmbed(targetName, timeLeft) {
     
     const embed = new EmbedBuilder()
         .setColor(0x8B4513) // Brown color for jail theme
-        .setTitle('🚔 Jail Break Attempt Blocked!')
+        .setTitle('Jail Break Attempt Blocked!')
         .setDescription(randomMessage)
         .addFields(
-            { name: '⏰ Release Time', value: `${targetName} will be released in **${timeLeft}**`, inline: false },
-            { name: '🕛 Release Schedule', value: 'Jail releases happen at **midnight EST**', inline: false },
+            { name: '⏰ Release Time', value: `${targetName} will be released in **${timeLeft}**\n🕛 Jail releases happen at **midnight EST**`, inline: false },
             { name: '💡 Stealing Tip', value: 'Try stealing from characters who are actually free to roam around!', inline: false }
         )
+        .setThumbnail(targetIcon || null)
+        .setAuthor({ 
+            name: 'Steal Attempt', 
+            iconURL: thiefIcon || null 
+        })
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ 
             text: 'Jail protection active - even thieves have standards!'
@@ -1952,7 +1956,7 @@ module.exports = {
                 const targetJailStatus = await checkAndUpdateJailStatus(targetCharacter);
                 if (targetJailStatus.isInJail) {
                     const timeLeft = formatJailTimeLeftDaysHours(targetJailStatus.timeLeft);
-                    const jailEmbed = createJailBlockEmbed(targetCharacter.name, timeLeft);
+                    const jailEmbed = createJailBlockEmbed(targetCharacter.name, timeLeft, targetCharacter.icon, thiefCharacter.icon);
                     await interaction.editReply({ embeds: [jailEmbed] });
                     console.log(`[steal.js]: ⚠️ Steal blocked - jailed character: ${targetCharacter.name}`);
                     return;
