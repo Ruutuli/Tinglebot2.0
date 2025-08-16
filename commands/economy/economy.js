@@ -1526,33 +1526,21 @@ if (quantity <= 0) {
   const saleEmbed = new EmbedBuilder()
    .setTitle("✅ Sale Successful!")
    .setDescription(
-    `**${characterName}** successfully sold **${itemName} x ${quantity}** for 🪙 ${totalPrice} tokens`
+    `**${characterName}** sold **${itemName} x${quantity}** for 🪙 **${totalPrice}** tokens`
    )
    .setThumbnail(itemDetails.image || "https://via.placeholder.com/150")
    .setAuthor({ name: characterName, iconURL: character.icon || "" })
    .setColor("#A48D68")
-   .setImage(
-    "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
-   )
    .addFields(
     {
      name: "💰 Price Details",
-     value: `**${priceType} Price**: 🪙 ${sellPrice} per item`,
-     inline: true,
+     value: `${priceType} Price: 🪙 ${sellPrice} per item`,
+     inline: false,
     },
     {
-     name: "📦 Inventory Link",
-     value: `[View Inventory](${
-      character.inventory || "https://example.com/inventory"
-     })`,
-     inline: true,
-    },
-    {
-     name: "🪙 Token Tracker",
-     value: `[View Tracker](${
-      user?.tokenTracker || "https://example.com/tokens"
-     })`,
-     inline: true,
+     name: "📦 Quick Links",
+     value: `[Inventory](${character.inventory || "https://example.com/inventory"}) • [Token Tracker](${user?.tokenTracker || "https://example.com/tokens"})`,
+     inline: false,
     }
    );
 
