@@ -374,7 +374,7 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
             { name: '🎲 Roll', value: `> ${successField}`, inline: false },
             { name: '✨ Rarity', value: `> **${item.tier.toUpperCase()}** (${item.itemRarity})`, inline: false }
         )
-        .setThumbnail(isNPC ? (npcIcon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg') : targetCharacter.icon)
+        .setThumbnail(isNPC ? (npcIcon || null) : targetCharacter.icon)
         .setAuthor({ 
             name: `${thiefCharacter.name} the ${thiefCharacter.job ? thiefCharacter.job.charAt(0).toUpperCase() + thiefCharacter.job.slice(1).toLowerCase() : 'No Job'}`, 
             iconURL: thiefCharacter.icon 
@@ -428,6 +428,27 @@ function createProtectionEmbed(targetName, timeLeftMinutes, isNPC = false) {
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ 
             text: 'Protection active'
+        })
+        .setTimestamp();
+    
+    return embed;
+}
+
+// ------------------- Function: createJailBlockEmbed -------------------
+// Creates a roleplay-friendly embed for when stealing from jailed characters is blocked
+function createJailBlockEmbed(targetName, timeLeft) {
+    const embed = new EmbedBuilder()
+        .setColor(0x8B4513) // Brown color for jail theme
+        .setTitle('🚔 Jail Break Attempt Blocked!')
+        .setDescription(`*Um... ${targetName} is in jail? Maybe don't sneak into jail to steal from them?*`)
+        .addFields(
+            { name: '⏰ Release Time', value: `${targetName} will be released in **${timeLeft}**`, inline: false },
+            { name: '🕛 Release Schedule', value: 'Jail releases happen at **midnight EST**', inline: false },
+            { name: '💡 Stealing Tip', value: 'Try stealing from characters who are actually free to roam around!', inline: false }
+        )
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setFooter({ 
+            text: 'Jail protection active - even thieves have standards!'
         })
         .setTimestamp();
     
@@ -1483,11 +1504,10 @@ module.exports = {
                     .addFields(
                         { name: '⏰ Time Remaining', value: timeLeft, inline: true }
                     )
-                    .setThumbnail(thiefCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg')
+                    .setThumbnail(thiefCharacter.icon || null)
                     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
                     .setFooter({ 
-                        text: 'Jail restriction active',
-                        iconURL: thiefCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg'
+                        text: 'Jail restriction active'
                     })
                     .setTimestamp();
                 
@@ -1917,9 +1937,8 @@ module.exports = {
                 const targetJailStatus = await checkAndUpdateJailStatus(targetCharacter);
                 if (targetJailStatus.isInJail) {
                     const timeLeft = formatJailTimeLeftDaysHours(targetJailStatus.timeLeft);
-                    await interaction.editReply({ 
-                        content: `❌ **You cannot steal from a character who is in jail!**\n⏰ ${targetCharacter.name} will be released in ${timeLeft}` 
-                    });
+                    const jailEmbed = createJailBlockEmbed(targetCharacter.name, timeLeft);
+                    await interaction.editReply({ embeds: [jailEmbed] });
                     console.log(`[steal.js]: ⚠️ Steal blocked - jailed character: ${targetCharacter.name}`);
                     return;
                 }
@@ -1964,11 +1983,10 @@ module.exports = {
                             { name: '📍 Target Location', value: `${targetCharacter.currentVillage}`, inline: true },
                             { name: '💡 Travel Tip', value: 'Use </travel:1379850586987430009> to travel between villages and access characters in different locations!', inline: false }
                         )
-                        .setThumbnail(thiefCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg')
+                        .setThumbnail(thiefCharacter.icon || null)
                         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
                         .setFooter({ 
-                            text: 'Village restriction active',
-                            iconURL: thiefCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg'
+                            text: 'Village restriction active'
                         })
                         .setTimestamp();
                     
@@ -1993,11 +2011,10 @@ module.exports = {
                             { name: '🛡️ Protection Status', value: 'This character is protected from theft', inline: false },
                             { name: '💡 Tip', value: 'Try stealing from other characters or NPCs instead', inline: false }
                         )
-                        .setThumbnail(targetCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg')
+                        .setThumbnail(targetCharacter.icon || null)
                         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
                         .setFooter({ 
-                            text: 'Steal protection active',
-                            iconURL: targetCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg'
+                            text: 'Steal protection active'
                         })
                         .setTimestamp();
                     
