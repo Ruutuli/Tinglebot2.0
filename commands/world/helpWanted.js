@@ -460,6 +460,73 @@ function createQuestCompletionEmbed(character, quest, userId) {
   return successEmbed;
 }
 
+// ------------------- Function: createQuestRequirementsEmbed -------------------
+// Creates an embed for quest requirements not met
+function createQuestRequirementsEmbed(requirementsCheck) {
+  const { EmbedBuilder } = require('discord.js');
+  
+  // Extract information from the message
+  const message = requirementsCheck.message;
+  
+  // Parse the message to extract details
+  let title, description, fields = [];
+  
+  if (message.includes('🔨 **Crafting Quest:**')) {
+    title = '🔨 Crafting Quest Requirements Not Met';
+    
+    // Extract character name, item, and quantities
+    const match = message.match(/❌ (.*?) has crafted (\d+)x (.*?) but needs (\d+)x/);
+    if (match) {
+      const [, characterName, craftedQty, itemName, requiredQty] = match;
+      description = `${characterName} needs to craft more **${itemName}** to complete this quest.`;
+      
+      fields = [
+        { name: '📊 Progress', value: `${craftedQty}/${requiredQty} crafted`, inline: true },
+        { name: '🎯 Still Needed', value: `${requiredQty - craftedQty}x ${itemName}`, inline: true },
+        { name: '💡 How to Complete', value: 'Use `/crafting` to craft more items', inline: false }
+      ];
+    } else {
+      description = 'You need to craft more items to complete this quest.';
+      fields = [
+        { name: '💡 How to Complete', value: 'Use `/crafting` to craft the required items', inline: false }
+      ];
+    }
+  } else if (message.includes('📦 **Item Quest:**')) {
+    title = '📦 Item Quest Requirements Not Met';
+    description = 'You need to collect more items to complete this quest.';
+    fields = [
+      { name: '💡 How to Complete', value: 'Gather, craft, or trade for the required items', inline: false }
+    ];
+  } else if (message.includes('🗡️ **Monster Quest:**')) {
+    title = '🗡️ Monster Quest Requirements Not Met';
+    description = 'This quest requires defeating monsters.';
+    fields = [
+      { name: '💡 How to Complete', value: 'Use `/helpwanted monsterhunt` instead', inline: false }
+    ];
+  } else if (message.includes('🚶 **Escort Quest:**')) {
+    title = '🚶 Escort Quest Requirements Not Met';
+    description = 'You need to travel to the required location to complete this quest.';
+    fields = [
+      { name: '💡 How to Complete', value: 'Travel to the specified location using `/travel`', inline: false }
+    ];
+  } else {
+    title = '❌ Quest Requirements Not Met';
+    description = requirementsCheck.message;
+  }
+  
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .setColor(0xFF6B35) // Orange color for warnings
+    .setTimestamp();
+  
+  if (fields.length > 0) {
+    embed.addFields(fields);
+  }
+  
+  return embed;
+}
+
 // ============================================================================
 // ------------------- Monster Hunt Functions -------------------
 // ============================================================================
@@ -1042,9 +1109,8 @@ module.exports = {
         // Validate quest requirements
         const requirementsCheck = await validateQuestRequirements(character, quest);
         if (!requirementsCheck.requirementsMet) {
-          return await interaction.editReply({ 
-            content: `❌ Quest requirements not met.\n\n${requirementsCheck.message}`
-          });
+          const requirementsEmbed = createQuestRequirementsEmbed(requirementsCheck);
+          return await interaction.editReply({ embeds: [requirementsEmbed] });
         }
 
         // Remove items if needed
