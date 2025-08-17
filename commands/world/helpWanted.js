@@ -434,6 +434,21 @@ function createQuestCompletionEmbed(character, quest, userId) {
     .setFooter({ text: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}) })
     .setTimestamp();
 
+  // Add the original quest description to show what was requested
+  try {
+    const { getNPCQuestFlavor } = require('../../modules/NPCsModule');
+    const questDescription = getNPCQuestFlavor(quest.npcName, quest.type, quest.requirements);
+    if (questDescription) {
+      successEmbed.addFields({ 
+        name: '📜 Quest Request', 
+        value: questDescription, 
+        inline: false 
+      });
+    }
+  } catch (error) {
+    console.error('[helpWanted.js]: Error getting quest description:', error);
+  }
+
   // Add quest-specific details
   let questDetails = '';
   switch (quest.type) {
@@ -455,6 +470,41 @@ function createQuestCompletionEmbed(character, quest, userId) {
 
   if (questDetails) {
     successEmbed.addFields({ name: '📋 Quest Details', value: questDetails, inline: false });
+  }
+
+  // Add NPC thumbnail
+  try {
+    const NPCs = require('../../modules/NPCsModule').NPCs;
+    const npcData = NPCs[quest.npcName];
+    if (npcData && npcData.icon) {
+      successEmbed.setThumbnail(npcData.icon);
+    }
+  } catch (error) {
+    console.error('[helpWanted.js]: Error setting NPC thumbnail:', error);
+  }
+
+  // Add character image as author icon
+  if (character.icon) {
+    successEmbed.setAuthor({
+      name: character.name,
+      iconURL: character.icon
+    });
+  }
+
+  // Add village image
+  try {
+    const VILLAGE_IMAGES = {
+      Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
+      Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
+      Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
+    };
+    
+    const villageImage = VILLAGE_IMAGES[quest.village];
+    if (villageImage) {
+      successEmbed.setImage(villageImage);
+    }
+  } catch (error) {
+    console.error('[helpWanted.js]: Error setting village image:', error);
   }
 
   return successEmbed;
