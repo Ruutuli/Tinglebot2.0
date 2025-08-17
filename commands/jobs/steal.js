@@ -2404,7 +2404,9 @@ function validateNPCTarget(targetName) {
 // ------------------- Module Exports -------------------
 // ============================================================================
 
+// Export both the command and the utility function
 module.exports = {
+    ...module.exports,
     resetGlobalStealProtections
 };
 

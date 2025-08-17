@@ -6,6 +6,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 const User = require('../../models/UserModel');
+const Character = require('../../models/CharacterModel');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
 const HelpWantedQuest = require('../../models/HelpWantedQuestModel');
 
