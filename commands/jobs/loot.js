@@ -281,7 +281,7 @@ module.exports = {
     const embed = createKOEmbed(
       character,
       '> **KO’d characters cannot loot! Please heal your character.**\n' +
-      '> Use </itemheal:1306176789755858979> or </heal request:1306176789755858977>.'
+      '> Use </item:1379838613067530385> or </heal:1390420428840894557>.'
     );
     await interaction.editReply({ embeds: [embed] });
     return;

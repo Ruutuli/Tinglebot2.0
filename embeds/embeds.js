@@ -1497,7 +1497,7 @@ const createKOEmbed = (character, customDescription = null) => {
     customDescription ||
     (
       `> KO status can only be healed by fairies or Healers.\n` +
-      `> Use </itemheal:1306176789755858979> or </heal request:1306176789755858977> to heal your character.`
+      `> Use </item:1379838613067530385> or </heal:1390420428840894557> to heal your character.`
     )
    )
   .setImage("https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png");
@@ -1569,8 +1569,8 @@ const createRaidKOEmbed = (character) => {
   .setDescription(
    `> **${character.name} is KO'd and cannot participate in raids.**\n\n` +
    `> **To heal your character and join raids:**\n` +
-   `> • Use </itemheal:1306176789755858979> with a healing item\n` +
-   `> • Use </heal request:1306176789755858977> to request healing from a Healer\n` +
+   `> • Use </item:1379838613067530385> with a healing item\n` +
+   `> • Use </heal:1390420428840894557> to request healing from a Healer\n` +
    `> **Current Status:** ${character.currentHearts}/${character.maxHearts} hearts`
   )
   .addFields(
@@ -1586,7 +1586,7 @@ const createRaidKOEmbed = (character) => {
    },
    {
     name: "__💊 Healing Options__",
-    value: `> • Item healing (</itemheal:1306176789755858979>)\n> • Healer request (</heal request:1306176789755858977>)\n>`,
+         value: `> • Item healing (</item:1379838613067530385>)\n> • Healer request (</heal:1390420428840894557>)\n>`,
     inline: false,
    }
   )
