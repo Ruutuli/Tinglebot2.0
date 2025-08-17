@@ -1318,6 +1318,21 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             });
         }
         
+        // Add target protection information
+        if (isNPC) {
+            embed.addFields({
+                name: '🛡️ Target Protection',
+                value: `> **${targetCharacter}** is now protected from theft until **midnight tonight** due to this successful steal!`,
+                inline: false
+            });
+        } else {
+            embed.addFields({
+                name: '🛡️ Target Protection',
+                value: `> **${targetCharacter.name}** is now protected from theft until **midnight tonight** due to this successful steal!`,
+                inline: false
+            });
+        }
+        
         // Add fallback message if needed
         if (usedFallback) {
             const fallbackMessage = getFallbackMessage(targetRarity, selectedTier);
