@@ -21,11 +21,9 @@ async function enforceJail(interaction, character) {
     // Create detailed error message
     const releaseTime = character.jailReleaseTime.getTime();
     
-    // Calculate midnight EST release time
-    const now = new Date();
-    const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const timeLeft = releaseTime - now;
-    const midnightEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + Math.ceil(timeLeft / (24 * 60 * 60 * 1000)), 0, 0, 0, 0);
+    // Convert the stored UTC release time to EST for display
+    const releaseDateEST = new Date(releaseTime).toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const estReleaseDate = new Date(releaseDateEST);
     
     const jailEmbed = {
         title: '⛔ In Jail!',
@@ -39,7 +37,7 @@ async function enforceJail(interaction, character) {
             },
             {
                 name: '🕒 Release Time',
-                value: `<t:${Math.floor(midnightEST.getTime() / 1000)}:F> (Midnight EST)`,
+                value: `<t:${Math.floor(estReleaseDate.getTime() / 1000)}:F> (Midnight EST)`,
                 inline: false
             },
         ],
