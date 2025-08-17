@@ -8,34 +8,16 @@ const NPCSchema = new mongoose.Schema({
     trim: true
   },
   
-  // Unified steal protection tracking
+  // Steal protection tracking
   stealProtection: {
-    // Local protection: 2-hour cooldown after successful steal from this specific NPC
-    localProtection: {
-      isProtected: {
-        type: Boolean,
-        default: false
-      },
-      protectionEndTime: {
-        type: Date,
-        default: null
-      }
+    // Protection: 2-hour cooldown after failed steal, midnight EST after successful steal
+    isProtected: {
+      type: Boolean,
+      default: false
     },
-    // Global protection: 24-hour cooldown after successful steal from ANY target, or 2-hour cooldown after failed steal
-    globalProtection: {
-      isProtected: {
-        type: Boolean,
-        default: false
-      },
-      protectionType: {
-        type: String,
-        enum: ['success', 'failure', null],
-        default: null
-      },
-      protectionEndTime: {
-        type: Date,
-        default: null
-      }
+    protectionEndTime: {
+      type: Date,
+      default: null
     }
   },
   
@@ -75,50 +57,37 @@ const NPCSchema = new mongoose.Schema({
 });
 
 // Index for efficient queries
-NPCSchema.index({ 'stealProtection.localProtection.isProtected': 1 });
-NPCSchema.index({ 'stealProtection.localProtection.protectionEndTime': 1 });
-NPCSchema.index({ 'stealProtection.globalProtection.isProtected': 1 });
-NPCSchema.index({ 'stealProtection.globalProtection.protectionEndTime': 1 });
+NPCSchema.index({ 'stealProtection.isProtected': 1 });
+NPCSchema.index({ 'stealProtection.protectionEndTime': 1 });
 
 // Static method to get all protected NPCs
 NPCSchema.statics.getProtectedNPCs = function() {
   return this.find({
-    $or: [
-      { 'stealProtection.localProtection.isProtected': true },
-      { 'stealProtection.globalProtection.isProtected': true }
-    ]
+    'stealProtection.isProtected': true
   });
 };
 
 // Static method to reset all protections
 NPCSchema.statics.resetAllProtections = function() {
   return this.updateMany(
-    {
-      $or: [
-        { 'stealProtection.localProtection.isProtected': true },
-        { 'stealProtection.globalProtection.isProtected': true }
-      ]
-    },
+    { 'stealProtection.isProtected': true },
     {
       $set: {
-        'stealProtection.localProtection.isProtected': false,
-        'stealProtection.localProtection.protectionEndTime': null,
-        'stealProtection.globalProtection.isProtected': false,
-        'stealProtection.globalProtection.protectionType': null,
-        'stealProtection.globalProtection.protectionEndTime': null
+        'stealProtection.isProtected': false,
+        'stealProtection.protectionEndTime': null
       }
     }
   );
 };
 
-// Static method to set local protection
-NPCSchema.statics.setLocalProtection = function(npcName, duration = 2 * 60 * 60 * 1000) { // Default 2 hours
+// Static method to set protection
+NPCSchema.statics.setProtection = function(npcName, duration) {
   return this.findOneAndUpdate(
     { name: npcName },
     {
       $set: {
-        'stealProtection.localProtection.isProtected': true,
-        'stealProtection.localProtection.protectionEndTime': new Date(Date.now() + duration),
+        'stealProtection.isProtected': true,
+        'stealProtection.protectionEndTime': new Date(Date.now() + duration),
         lastInteraction: new Date()
       }
     },
@@ -126,45 +95,14 @@ NPCSchema.statics.setLocalProtection = function(npcName, duration = 2 * 60 * 60 
   );
 };
 
-// Static method to set global protection
-NPCSchema.statics.setGlobalProtection = function(npcName, protectionType, endTime) {
+// Static method to clear protection
+NPCSchema.statics.clearProtection = function(npcName) {
   return this.findOneAndUpdate(
     { name: npcName },
     {
       $set: {
-        'stealProtection.globalProtection.isProtected': true,
-        'stealProtection.globalProtection.protectionType': protectionType,
-        'stealProtection.globalProtection.protectionEndTime': endTime,
-        lastInteraction: new Date()
-      }
-    },
-    { upsert: true, new: true }
-  );
-};
-
-// Static method to clear local protection
-NPCSchema.statics.clearLocalProtection = function(npcName) {
-  return this.findOneAndUpdate(
-    { name: npcName },
-    {
-      $set: {
-        'stealProtection.localProtection.isProtected': false,
-        'stealProtection.localProtection.protectionEndTime': null
-      }
-    },
-    { new: true }
-  );
-};
-
-// Static method to clear global protection
-NPCSchema.statics.clearGlobalProtection = function(npcName) {
-  return this.findOneAndUpdate(
-    { name: npcName },
-    {
-      $set: {
-        'stealProtection.globalProtection.isProtected': false,
-        'stealProtection.globalProtection.protectionType': null,
-        'stealProtection.globalProtection.protectionEndTime': null
+        'stealProtection.isProtected': false,
+        'stealProtection.protectionEndTime': null
       }
     },
     { new: true }
@@ -180,65 +118,35 @@ NPCSchema.statics.getOrCreateNPC = function(npcName) {
   );
 };
 
-// Instance method to check if local protection is expired
-NPCSchema.methods.isLocalProtectionExpired = function() {
-  if (!this.stealProtection.localProtection.isProtected) {
+// Instance method to check if protection is expired
+NPCSchema.methods.isProtectionExpired = function() {
+  if (!this.stealProtection.isProtected) {
     return true;
   }
   
-  if (!this.stealProtection.localProtection.protectionEndTime) {
+  if (!this.stealProtection.protectionEndTime) {
     return true;
   }
   
-  return new Date() >= this.stealProtection.localProtection.protectionEndTime;
+  return new Date() >= this.stealProtection.protectionEndTime;
 };
 
-// Instance method to check if global protection is expired
-NPCSchema.methods.isGlobalProtectionExpired = function() {
-  if (!this.stealProtection.globalProtection.isProtected) {
-    return true;
-  }
-  
-  if (!this.stealProtection.globalProtection.protectionEndTime) {
-    return true;
-  }
-  
-  return new Date() >= this.stealProtection.globalProtection.protectionEndTime;
-};
-
-// Instance method to get remaining local protection time
-NPCSchema.methods.getLocalProtectionTimeLeft = function() {
-  if (!this.stealProtection.localProtection.isProtected || !this.stealProtection.localProtection.protectionEndTime) {
+// Instance method to get remaining protection time
+NPCSchema.methods.getProtectionTimeLeft = function() {
+  if (!this.stealProtection.isProtected || !this.stealProtection.protectionEndTime) {
     return 0;
   }
   
-  const timeLeft = this.stealProtection.localProtection.protectionEndTime.getTime() - Date.now();
-  return timeLeft > 0 ? timeLeft : 0;
-};
-
-// Instance method to get remaining global protection time
-NPCSchema.methods.getGlobalProtectionTimeLeft = function() {
-  if (!this.stealProtection.globalProtection.isProtected || !this.stealProtection.globalProtection.protectionEndTime) {
-    return 0;
-  }
-  
-  const timeLeft = this.stealProtection.globalProtection.protectionEndTime.getTime() - Date.now();
+  const timeLeft = this.stealProtection.protectionEndTime.getTime() - Date.now();
   return timeLeft > 0 ? timeLeft : 0;
 };
 
 // Pre-save middleware to clean up expired protections
 NPCSchema.pre('save', function(next) {
-  // Clean up expired local protection
-  if (this.stealProtection.localProtection.isProtected && this.isLocalProtectionExpired()) {
-    this.stealProtection.localProtection.isProtected = false;
-    this.stealProtection.localProtection.protectionEndTime = null;
-  }
-  
-  // Clean up expired global protection
-  if (this.stealProtection.globalProtection.isProtected && this.isGlobalProtectionExpired()) {
-    this.stealProtection.globalProtection.isProtected = false;
-    this.stealProtection.globalProtection.protectionType = null;
-    this.stealProtection.globalProtection.protectionEndTime = null;
+  // Clean up expired protection
+  if (this.stealProtection.isProtected && this.isProtectionExpired()) {
+    this.stealProtection.isProtected = false;
+    this.stealProtection.protectionEndTime = null;
   }
   
   next();
