@@ -29,7 +29,9 @@ const userSchema = new mongoose.Schema({
       {
         date: { type: String }, // YYYY-MM-DD
         village: { type: String },
-        questType: { type: String }
+        questType: { type: String },
+        questId: { type: String },
+        timestamp: { type: Date }
       }
     ]
   }

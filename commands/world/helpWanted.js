@@ -5,7 +5,6 @@
 
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
-const Character = require('../../models/CharacterModel');
 const User = require('../../models/UserModel');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
 const HelpWantedQuest = require('../../models/HelpWantedQuestModel');
@@ -404,11 +403,13 @@ async function updateUserTracking(user, quest, userId) {
   
   user.helpWanted.lastCompletion = today;
   user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
-  user.helpWanted.completions.push({
-    date: today,
-    village: quest.village,
-    questType: quest.type
-  });
+          user.helpWanted.completions.push({
+          date: today,
+          village: quest.village,
+          questType: quest.type,
+          questId: quest.questId,
+          timestamp: new Date()
+        });
   await user.save();
 }
 
@@ -1330,15 +1331,10 @@ module.exports = {
       await interaction.deferReply();
       
       try {
-        // Fetch user and all their characters
+        // Fetch user data
         const user = await User.findOne({ discordId: interaction.user.id });
         if (!user) {
           return await interaction.editReply({ content: '❌ No user data found.' });
-        }
-
-        const characters = await Character.find({ userId: interaction.user.id });
-        if (!characters || characters.length === 0) {
-          return await interaction.editReply({ content: '❌ No characters found for this user.' });
         }
 
         const totalCompletions = user.helpWanted?.totalCompletions || 0;
@@ -1359,6 +1355,21 @@ module.exports = {
           return completionDate >= startOfWeek;
         }).length;
 
+        // Get last quest completion details
+        const lastCompletion = recentCompletions.length > 0 ? recentCompletions[recentCompletions.length - 1] : null;
+        
+        // Calculate village breakdown
+        const villageBreakdown = {};
+        recentCompletions.forEach(completion => {
+          villageBreakdown[completion.village] = (villageBreakdown[completion.village] || 0) + 1;
+        });
+        
+        // Calculate quest type breakdown
+        const questTypeBreakdown = {};
+        recentCompletions.forEach(completion => {
+          questTypeBreakdown[completion.questType] = (questTypeBreakdown[completion.questType] || 0) + 1;
+        });
+
         // ------------------- Build History Embed -------------------
         const embed = new EmbedBuilder()
           .setAuthor({ name: `${interaction.user.username} - Help Wanted History`, iconURL: interaction.user.displayAvatarURL() })
@@ -1367,30 +1378,61 @@ module.exports = {
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setDescription(`📜 **Help Wanted Quest History** for **${interaction.user.username}**`);
 
-                 // Add simplified stats
-         embed.addFields([
-           {
-             name: '📊 __Quest Statistics__',
-             value: `> **${totalCompletions}** total quests completed\n> **${characters.length}** characters have completed quests\n> **${todayCompletions}** quests completed today\n> **${weekCompletions}** quests completed this week`,
-             inline: false
-           }
-         ]);
+        // Add main statistics in a clean format
+        embed.addFields([
+          {
+            name: '__📊 Quest Statistics__',
+            value: `> **Total Completed:** ${totalCompletions}\n> **Today:** ${todayCompletions}\n> **This Week:** ${weekCompletions}`,
+            inline: false
+          }
+        ]);
 
-         // Add character breakdown
-         const characterBreakdown = characters.map(char => {
-           const charCompletions = recentCompletions.filter(c => 
-             c.characterId === char._id.toString()
-           ).length;
-           return `> **${char.name}** - completed **${charCompletions}** quests`;
-         }).join('\n');
+        // Add last quest completion details (simplified)
+        if (lastCompletion) {
+          const lastCompletionDate = new Date(lastCompletion.timestamp || lastCompletion.date + 'T00:00:00');
+          const formattedDate = lastCompletionDate.toLocaleDateString('en-US', { 
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'America/New_York'
+          });
+          
+          embed.addFields([
+            {
+              name: '__🕐 Last Quest__',
+              value: `> ${lastCompletion.questType.charAt(0).toUpperCase() + lastCompletion.questType.slice(1)} for **${lastCompletion.village}**\n> *${formattedDate}*`,
+              inline: false
+            }
+          ]);
+        }
 
-         embed.addFields([
-           {
-             name: '👥 __Character Breakdown__',
-             value: characterBreakdown || 'No characters have completed quests yet',
-             inline: false
-           }
-         ]);
+        // Add breakdowns in a cleaner format
+        if (Object.keys(villageBreakdown).length > 0) {
+          const villageStats = Object.entries(villageBreakdown)
+            .map(([village, count]) => `> **${village}:** ${count}`)
+            .join('\n');
+          
+          embed.addFields([
+            {
+              name: '__🏘️ Villages Helped__',
+              value: villageStats,
+              inline: false
+            }
+          ]);
+        }
+
+        if (Object.keys(questTypeBreakdown).length > 0) {
+          const questTypeStats = Object.entries(questTypeBreakdown)
+            .map(([type, count]) => `> **${type.charAt(0).toUpperCase() + type.slice(1)}:** ${count}`)
+            .join('\n');
+          
+          embed.addFields([
+            {
+              name: '__🎯 Quest Types__',
+              value: questTypeStats,
+              inline: false
+            }
+          ]);
+        }
 
         
 
