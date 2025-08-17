@@ -119,6 +119,19 @@ const characterSchema = new Schema({
   inJail: { type: Boolean, default: false },
   jailReleaseTime: { type: Date, default: null },
   canBeStolenFrom: { type: Boolean, default: true },
+  
+  // ------------------- Global Steal Protection -------------------
+  // Tracks global protection from all steal attempts (success/failure cooldowns)
+  globalStealProtection: {
+    isProtected: { type: Boolean, default: false },
+    protectionType: { 
+      type: String, 
+      enum: ['success', 'failure', null], 
+      default: null 
+    },
+    protectionEndTime: { type: Date, default: null }
+  },
+  
   dailyRoll: {
     type: Map,
     of: Schema.Types.Mixed,

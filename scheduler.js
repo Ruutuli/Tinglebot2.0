@@ -1066,6 +1066,18 @@ function initializeScheduler(client) {
   handleQuestExpirationAtMidnight(client)
  );
 
+ createCronJob("0 5 * * *", "reset global steal protections", () => {
+  console.log(`[scheduler.js]: 🛡️ Starting global steal protection reset`);
+  try {
+    // Import the steal command to access the global protection reset function
+    const { resetGlobalStealProtections } = require('./commands/jobs/steal.js');
+    resetGlobalStealProtections();
+    console.log(`[scheduler.js]: ✅ Global steal protections reset completed`);
+  } catch (error) {
+    console.error(`[scheduler.js]: ❌ Error resetting global steal protections:`, error);
+  }
+ }, "America/New_York");
+
  createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
   console.log(`[scheduler.js]: 🧹 Starting Blood Moon tracking cleanup`);
   cleanupOldTrackingData();
