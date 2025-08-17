@@ -454,9 +454,22 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
             cooldownText = `> **${minutesUntilEnd}m** until protection expires`;
         }
         
+        // Calculate failed attempts warning (accounting for current failure)
+        const currentFailedAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
+        const attemptsLeft = 3 - currentFailedAttempts;
+        let warningMessage = '';
+        
+        if (attemptsLeft === 1) {
+            warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
+        } else if (attemptsLeft <= 0) {
+            warningMessage = '⛔ **You have been sent to jail for 3 days!**';
+        } else {
+            warningMessage = '⚠️ **Warning:** Failed attempts are accumulating!';
+        }
+        
         embed.addFields({
-            name: '🛡️ Theft Protection Active',
-            value: `> **${thiefCharacter.name}** is now locked from stealing for **2 hours** due to this failed attempt!\n\n⏰ **Protection Duration:** ${cooldownText}\n\n💡 **What This Means:** You cannot attempt to steal from any target until the protection expires.`,
+            name: '🛡️ Target Protection & Failed Attempts',
+            value: `> **${isNPC ? targetCharacter : targetCharacter.name}** is now protected from theft for **2 hours** due to this failed attempt!\n\n📊 **Failed Attempts:** ${currentFailedAttempts}/3\n${warningMessage}`,
             inline: false
         });
     }
@@ -576,8 +589,8 @@ function resetStreak(userId) {
     stealStreaks.set(userId, 0);
 }
 
-// ------------------- Unified Protection Management Functions -------------------
-// Check if a target is protected (combines local and global protection)
+// ------------------- Protection Management Functions -------------------
+// Check if a target is protected
 async function isProtected(targetId) {
     try {
         if (typeof targetId === 'string' && !targetId.includes('_')) {
@@ -585,34 +598,17 @@ async function isProtected(targetId) {
             const npc = await NPC.findOne({ name: targetId });
             if (!npc) return { protected: false };
             
-            // Check global protection first (prioritize global over local)
-            if (npc.stealProtection?.globalProtection?.isProtected) {
-                if (npc.isGlobalProtectionExpired && npc.isGlobalProtectionExpired()) {
-                    await NPC.clearGlobalProtection(targetId);
+            // Check protection
+            if (npc.stealProtection?.isProtected) {
+                if (npc.isProtectionExpired && npc.isProtectionExpired()) {
+                    await NPC.clearProtection(targetId);
                 } else {
-                    const timeLeft = npc.getGlobalProtectionTimeLeft ? npc.getGlobalProtectionTimeLeft() : 0;
+                    const timeLeft = npc.getProtectionTimeLeft ? npc.getProtectionTimeLeft() : 0;
                     if (timeLeft > 0) {
                         return { 
                             protected: true, 
-                            type: 'global', 
-                            endTime: npc.stealProtection.globalProtection.protectionEndTime,
-                            timeLeft: timeLeft
-                        };
-                    }
-                }
-            }
-            
-            // Check local protection second
-            if (npc.stealProtection?.localProtection?.isProtected) {
-                if (npc.isLocalProtectionExpired && npc.isLocalProtectionExpired()) {
-                    await NPC.clearLocalProtection(targetId);
-                } else {
-                    const timeLeft = npc.getLocalProtectionTimeLeft ? npc.getLocalProtectionTimeLeft() : 0;
-                    if (timeLeft > 0) {
-                        return { 
-                            protected: true, 
-                            type: 'local', 
-                            endTime: npc.stealProtection.localProtection.protectionEndTime,
+                            type: 'protection', 
+                            endTime: npc.stealProtection.protectionEndTime,
                             timeLeft: timeLeft
                         };
                     }
@@ -623,51 +619,25 @@ async function isProtected(targetId) {
             const character = await Character.findById(targetId);
             if (!character) return { protected: false };
             
-            // Check global protection first (prioritize global over local)
-            if (character.stealProtection?.globalProtection?.isProtected) {
-                if (character.isGlobalProtectionExpired && character.isGlobalProtectionExpired()) {
-                    if (character.clearGlobalProtection) {
-                        character.clearGlobalProtection();
+            // Check protection
+            if (character.stealProtection?.isProtected) {
+                if (character.isProtectionExpired && character.isProtectionExpired()) {
+                    if (character.clearProtection) {
+                        character.clearProtection();
                         await character.save();
                     } else {
                         // Fallback if method doesn't exist
-                        character.stealProtection.globalProtection.isProtected = false;
-                        character.stealProtection.globalProtection.protectionType = null;
-                        character.stealProtection.globalProtection.protectionEndTime = null;
+                        character.stealProtection.isProtected = false;
+                        character.stealProtection.protectionEndTime = null;
                         await character.save();
                     }
                 } else {
-                    const timeLeft = character.stealProtection.globalProtection.protectionEndTime.getTime() - Date.now();
+                    const timeLeft = character.getProtectionTimeLeft ? character.getProtectionTimeLeft() : 0;
                     if (timeLeft > 0) {
                         return { 
                             protected: true, 
-                            type: 'global', 
-                            endTime: character.stealProtection.globalProtection.protectionEndTime,
-                            timeLeft: timeLeft
-                        };
-                    }
-                }
-            }
-            
-            // Check local protection second
-            if (character.stealProtection?.localProtection?.isProtected) {
-                if (character.isLocalProtectionExpired && character.isLocalProtectionExpired()) {
-                    if (character.clearLocalProtection) {
-                        character.clearLocalProtection();
-                        await character.save();
-                    } else {
-                        // Fallback if method doesn't exist
-                        character.stealProtection.localProtection.isProtected = false;
-                        character.stealProtection.localProtection.protectionEndTime = null;
-                        await character.save();
-                    }
-                } else {
-                    const timeLeft = character.getLocalProtectionTimeLeft ? character.getLocalProtectionTimeLeft() : 0;
-                    if (timeLeft > 0) {
-                        return { 
-                            protected: true, 
-                            type: 'local', 
-                            endTime: character.stealProtection.localProtection.protectionEndTime,
+                            type: 'protection', 
+                            endTime: character.stealProtection.protectionEndTime,
                             timeLeft: timeLeft
                         };
                     }
@@ -682,14 +652,28 @@ async function isProtected(targetId) {
     }
 }
 
-// Set local protection (2-hour cooldown after successful steal)
-async function setLocalProtection(targetId) {
+// Set protection (2-hour cooldown after failed steal, midnight EST after successful steal)
+async function setProtection(targetId, duration = '2hours') {
     try {
+        let protectionDuration;
+        
+        if (duration === 'midnight') {
+            // Calculate next midnight EST for successful steals
+            const now = new Date();
+            const tomorrow = new Date(now);
+            tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+            tomorrow.setUTCHours(5, 0, 0, 0); // 5 AM UTC = midnight EST
+            protectionDuration = tomorrow.getTime() - now.getTime();
+        } else {
+            // Default 2 hours for failed steals
+            protectionDuration = PROTECTION_DURATION;
+        }
+        
         if (typeof targetId === 'string' && !targetId.includes('_')) {
             // This is an NPC
-            const result = await NPC.setLocalProtection(targetId, PROTECTION_DURATION);
+            const result = await NPC.setProtection(targetId, protectionDuration);
             if (!result) {
-                console.error(`[steal.js]: Failed to set local protection for NPC: ${targetId}`);
+                console.error(`[steal.js]: Failed to set protection for NPC: ${targetId}`);
             }
         } else {
             // This is a player character
@@ -698,42 +682,42 @@ async function setLocalProtection(targetId) {
                 // Ensure the character has the new protection structure
                 if (!character.stealProtection) {
                     character.stealProtection = {
-                        localProtection: { isProtected: false, protectionEndTime: null },
-                        globalProtection: { isProtected: false, protectionType: null, protectionEndTime: null }
+                        isProtected: false,
+                        protectionEndTime: null
                     };
                 }
-                character.setLocalProtection(PROTECTION_DURATION);
+                character.setProtection(protectionDuration);
                 await character.save();
             } else {
-                console.error(`[steal.js]: Character not found for local protection: ${targetId}`);
+                console.error(`[steal.js]: Character not found for protection: ${targetId}`);
             }
         }
     } catch (error) {
-        console.error('[steal.js]: Error setting local protection:', error);
+        console.error('[steal.js]: Error setting protection:', error);
     }
 }
 
-// Clear local protection
-async function clearLocalProtection(targetId) {
+// Clear protection
+async function clearProtection(targetId) {
     try {
         if (typeof targetId === 'string' && !targetId.includes('_')) {
             // This is an NPC
-            const result = await NPC.clearLocalProtection(targetId);
+            const result = await NPC.clearProtection(targetId);
             if (!result) {
-                console.error(`[steal.js]: Failed to clear local protection for NPC: ${targetId}`);
+                console.error(`[steal.js]: Failed to clear protection for NPC: ${targetId}`);
             }
         } else {
             // This is a player character
             const character = await Character.findById(targetId);
             if (character) {
-                character.clearLocalProtection();
+                character.clearProtection();
                 await character.save();
             } else {
-                console.error(`[steal.js]: Character not found for clearing local protection: ${targetId}`);
+                console.error(`[steal.js]: Character not found for clearing protection: ${targetId}`);
             }
         }
     } catch (error) {
-        console.error('[steal.js]: Error clearing local protection:', error);
+        console.error('[steal.js]: Error clearing protection:', error);
     }
 }
 
@@ -762,19 +746,19 @@ async function setGlobalSuccessProtection(targetId) {
     
     if (typeof targetId === 'string' && !targetId.includes('_')) {
       // This is an NPC
-      await NPC.setGlobalProtection(targetId, 'success', endTime);
+      await NPC.setProtection(targetId, endTime.getTime() - Date.now());
     } else {
       // This is a player character
       const character = await Character.findById(targetId);
       if (character) {
-        // Ensure the character has the new protection structure
+        // Ensure the character has the protection structure
         if (!character.stealProtection) {
           character.stealProtection = {
-            localProtection: { isProtected: false, protectionEndTime: null },
-            globalProtection: { isProtected: false, protectionType: null, protectionEndTime: null }
+            isProtected: false,
+            protectionEndTime: null
           };
         }
-        character.setGlobalProtection('success', endTime);
+        character.setProtection(endTime.getTime() - Date.now());
         await character.save();
       }
     }
@@ -790,19 +774,19 @@ async function setGlobalFailureProtection(targetId) {
     
     if (typeof targetId === 'string' && !targetId.includes('_')) {
       // This is an NPC
-      await NPC.setGlobalProtection(targetId, 'failure', endTime);
+      await NPC.setProtection(targetId, endTime.getTime() - Date.now());
     } else {
       // This is a player character
       const character = await Character.findById(targetId);
       if (character) {
-        // Ensure the character has the new protection structure
+        // Ensure the character has the protection structure
         if (!character.stealProtection) {
           character.stealProtection = {
-            localProtection: { isProtected: false, protectionEndTime: null },
-            globalProtection: { isProtected: false, protectionType: null, protectionEndTime: null }
+            isProtected: false,
+            protectionEndTime: null
           };
         }
-        character.setGlobalProtection('failure', endTime);
+        character.setProtection(endTime.getTime() - Date.now());
         await character.save();
       }
     }
@@ -811,7 +795,7 @@ async function setGlobalFailureProtection(targetId) {
   }
 }
 
-// Note: getGlobalProtectionTimeLeft function removed - now handled by unified getProtectionTimeLeft function
+// Note: Protection methods simplified to use unified isProtectionExpired and getProtectionTimeLeft functions
 
 // Reset all protections (called by scheduler at midnight EST)
 async function resetAllStealProtections() {
@@ -824,19 +808,11 @@ async function resetAllStealProtections() {
     
     // Reset player character protections
     const characterResult = await Character.updateMany(
-      {
-        $or: [
-          { 'stealProtection.localProtection.isProtected': true },
-          { 'stealProtection.globalProtection.isProtected': true }
-        ]
-      },
+      { 'stealProtection.isProtected': true },
       {
         $set: {
-          'stealProtection.localProtection.isProtected': false,
-          'stealProtection.localProtection.protectionEndTime': null,
-          'stealProtection.globalProtection.isProtected': false,
-          'stealProtection.globalProtection.protectionType': null,
-          'stealProtection.globalProtection.protectionEndTime': null
+          'stealProtection.isProtected': false,
+          'stealProtection.protectionEndTime': null
         }
       }
     );
@@ -1286,15 +1262,15 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
     // Check for blight infection
     const blightResult = await checkBlightInfection(thiefCharacter, targetCharacter, isNPC, interaction);
     
-    // Set global protection to prevent steal abuse (until midnight EST next day)
+    // Set protection on target until midnight EST (prevents farming the same target)
     try {
         if (isNPC) {
-            await setGlobalSuccessProtection(targetCharacter); // targetCharacter is NPC name string
+            await setProtection(targetCharacter, 'midnight'); // targetCharacter is NPC name string
         } else {
-            await setGlobalSuccessProtection(targetCharacter._id);
+            await setProtection(targetCharacter._id, 'midnight');
         }
     } catch (error) {
-        console.error('[steal.js]: Error setting global protection after successful steal:', error);
+        console.error('[steal.js]: Error setting protection after successful steal:', error);
         // Continue with success logic even if protection setting fails
     }
     
@@ -1379,11 +1355,11 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
     resetStreak(interaction.user.id);
     await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
     
-    // Set global failure protection to prevent steal abuse
+    // Set protection on the target to prevent immediate retry from anyone
     if (isNPC) {
-        await setGlobalFailureProtection(targetCharacter); // targetCharacter is NPC name string
+        await setProtection(targetCharacter); // targetCharacter is NPC name string
     } else {
-        await setGlobalFailureProtection(targetCharacter._id);
+        await setProtection(targetCharacter._id);
     }
     
     try {
@@ -1397,8 +1373,9 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
             }
         }
         
-        // Handle failed attempts
-        await handleFailedAttempts(thiefCharacter, embed);
+        // Increment failed attempts counter (handled in protection field now)
+        thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
+        await thiefCharacter.save();
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {

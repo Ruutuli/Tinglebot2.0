@@ -120,24 +120,12 @@ const characterSchema = new Schema({
   jailReleaseTime: { type: Date, default: null },
   canBeStolenFrom: { type: Boolean, default: true },
   
-  // ------------------- Unified Steal Protection -------------------
-  // Tracks both local and global protection from steal attempts
+  // ------------------- Steal Protection -------------------
+  // Tracks protection from steal attempts
   stealProtection: {
-    // Local protection: 2-hour cooldown after successful steal from this specific character
-    localProtection: {
-      isProtected: { type: Boolean, default: false },
-      protectionEndTime: { type: Date, default: null }
-    },
-    // Global protection: 24-hour cooldown after successful steal from ANY target, or 2-hour cooldown after failed steal
-    globalProtection: {
-      isProtected: { type: Boolean, default: false },
-      protectionType: { 
-        type: String, 
-        enum: ['success', 'failure', null], 
-        default: null 
-      },
-      protectionEndTime: { type: Date, default: null }
-    }
+    // Protection: 2-hour cooldown after failed steal, midnight EST after successful steal
+    isProtected: { type: Boolean, default: false },
+    protectionEndTime: { type: Date, default: null }
   },
   
   dailyRoll: {
@@ -214,88 +202,46 @@ characterSchema.pre('save', function (next) {
 // ------------------- Protection Helper Methods -------------------
 // ============================================================================
 
-// Check if local protection is expired
-characterSchema.methods.isLocalProtectionExpired = function() {
-  if (!this.stealProtection.localProtection.isProtected) {
+// Check if protection is expired
+characterSchema.methods.isProtectionExpired = function() {
+  if (!this.stealProtection.isProtected) {
     return true;
   }
   
-  if (!this.stealProtection.localProtection.protectionEndTime) {
+  if (!this.stealProtection.protectionEndTime) {
     return true;
   }
   
-  return new Date() >= this.stealProtection.localProtection.protectionEndTime;
+  return new Date() >= this.stealProtection.protectionEndTime;
 };
 
-// Check if global protection is expired
-characterSchema.methods.isGlobalProtectionExpired = function() {
-  if (!this.stealProtection.globalProtection.isProtected) {
-    return true;
-  }
-  
-  if (!this.stealProtection.globalProtection.protectionEndTime) {
-    return true;
-  }
-  
-  return new Date() >= this.stealProtection.globalProtection.protectionEndTime;
-};
-
-// Get remaining local protection time
-characterSchema.methods.getLocalProtectionTimeLeft = function() {
-  if (!this.stealProtection.localProtection.isProtected || !this.stealProtection.localProtection.protectionEndTime) {
+// Get remaining protection time
+characterSchema.methods.getProtectionTimeLeft = function() {
+  if (!this.stealProtection.isProtected || !this.stealProtection.protectionEndTime) {
     return 0;
   }
   
-  const timeLeft = this.stealProtection.localProtection.protectionEndTime.getTime() - Date.now();
+  const timeLeft = this.stealProtection.protectionEndTime.getTime() - Date.now();
   return timeLeft > 0 ? timeLeft : 0;
 };
 
-// Get remaining global protection time
-characterSchema.methods.getGlobalProtectionTimeLeft = function() {
-  if (!this.stealProtection.globalProtection.isProtected || !this.stealProtection.globalProtection.protectionEndTime) {
-    return 0;
-  }
-  
-  const timeLeft = this.stealProtection.globalProtection.protectionEndTime.getTime() - Date.now();
-  return timeLeft > 0 ? timeLeft : 0;
+// Set protection
+characterSchema.methods.setProtection = function(duration = 2 * 60 * 60 * 1000) { // Default 2 hours
+  this.stealProtection.isProtected = true;
+  this.stealProtection.protectionEndTime = new Date(Date.now() + duration);
 };
 
-// Set local protection
-characterSchema.methods.setLocalProtection = function(duration = 2 * 60 * 60 * 1000) { // Default 2 hours
-  this.stealProtection.localProtection.isProtected = true;
-  this.stealProtection.localProtection.protectionEndTime = new Date(Date.now() + duration);
-};
-
-// Set global protection
-characterSchema.methods.setGlobalProtection = function(protectionType, endTime) {
-  this.stealProtection.globalProtection.isProtected = true;
-  this.stealProtection.globalProtection.protectionType = protectionType;
-  this.stealProtection.globalProtection.protectionEndTime = endTime;
-};
-
-// Clear local protection
-characterSchema.methods.clearLocalProtection = function() {
-  this.stealProtection.localProtection.isProtected = false;
-  this.stealProtection.localProtection.protectionEndTime = null;
-};
-
-// Clear global protection
-characterSchema.methods.clearGlobalProtection = function() {
-  this.stealProtection.globalProtection.isProtected = false;
-  this.stealProtection.globalProtection.protectionType = null;
-  this.stealProtection.globalProtection.protectionEndTime = null;
+// Clear protection
+characterSchema.methods.clearProtection = function() {
+  this.stealProtection.isProtected = false;
+  this.stealProtection.protectionEndTime = null;
 };
 
 // Pre-save middleware to clean up expired protections
 characterSchema.pre('save', function(next) {
-  // Clean up expired local protection
-  if (this.stealProtection.localProtection.isProtected && this.isLocalProtectionExpired()) {
-    this.clearLocalProtection();
-  }
-  
-  // Clean up expired global protection
-  if (this.stealProtection.globalProtection.isProtected && this.isGlobalProtectionExpired()) {
-    this.clearGlobalProtection();
+  // Clean up expired protection
+  if (this.stealProtection.isProtected && this.isProtectionExpired()) {
+    this.clearProtection();
   }
   
   next();
