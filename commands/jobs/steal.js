@@ -3,7 +3,7 @@
 // ============================================================================
 
 // ------------------- Third-party Library Imports -------------------
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Local Module Imports -------------------
@@ -25,6 +25,9 @@ const { getActiveBuffEffects } = require('../../modules/elixirModule');
 // Add StealStats model
 const StealStats = require('../../models/StealStatsModel');
 
+// Add NPC model for global steal protection tracking
+const NPC = require('../../models/NPCModel');
+
 // ============================================================================
 // ---- Constants ----
 // ============================================================================
@@ -34,6 +37,11 @@ const STEAL_COOLDOWN = 5 * 60 * 1000; // 5 minutes in milliseconds
 const STREAK_BONUS = 0.05; // 5% bonus per streak
 const MAX_STREAK = 5; // Maximum streak bonus
 const PROTECTION_DURATION = 30 * 60 * 1000; // 30 minutes protection
+
+// ------------------- Global Cooldown System -------------------
+// New system to prevent steal abuse, especially for NPCs with rare items
+const GLOBAL_FAILURE_COOLDOWN = 2 * 60 * 60 * 1000; // 2 hours global cooldown on failure
+const GLOBAL_SUCCESS_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours global cooldown on success (resets at midnight EST)
 
 // ------------------- Village Channels -------------------
 const villageChannels = {
@@ -72,6 +80,8 @@ const ERROR_MESSAGES = {
     INVENTORY_NOT_SYNCED: '❌ **Inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.',
     IN_JAIL: '⛔ **You are currently in jail and cannot steal!**',
     PROTECTED: '🛡️ **This character is currently protected from theft!**',
+    GLOBALLY_PROTECTED_SUCCESS: '🛡️ **This target is globally protected from theft until midnight EST due to a recent successful steal!**',
+    GLOBALLY_PROTECTED_FAILURE: '🛡️ **This target is globally protected from theft for 2 hours due to a recent failed steal attempt!**',
     COOLDOWN: '⏰ **Please wait {time} seconds before attempting to steal again.**',
     NO_ITEMS: '❌ **No items available to steal!**',
     INVALID_TARGET: '❌ **Invalid target selected!**',
@@ -106,6 +116,8 @@ const ERROR_MESSAGES = {
 // const userCooldowns = new Map(); // Track user cooldowns
 const stealStreaks = new Map(); // Track successful steal streaks
 const stealProtection = new Map(); // Track protection after being stolen from (30 minutes)
+
+
 
 // ------------------- NPC Item Cache -------------------
 // Cache NPC items to avoid repeated database queries
@@ -521,6 +533,168 @@ function getProtectionTimeLeft(targetId) {
     
     const timeLeft = protectionEnd - Date.now();
     return timeLeft > 0 ? timeLeft : 0;
+}
+
+// ------------------- Global Protection Management Functions -------------------
+// Check if a target is globally protected from all steal attempts
+async function isGloballyProtected(targetId) {
+  try {
+    // For NPCs, check the NPC model
+    if (typeof targetId === 'string' && !targetId.includes('_')) {
+      // This is likely an NPC name
+      const npc = await NPC.findOne({ name: targetId });
+      if (npc && npc.globalStealProtection.isProtected) {
+        if (npc.isProtectionExpired()) {
+          // Protection expired, clear it
+          await NPC.clearGlobalProtection(targetId);
+          return { protected: false };
+        }
+        return { 
+          protected: true, 
+          type: npc.globalStealProtection.protectionType, 
+          endTime: npc.globalStealProtection.protectionEndTime 
+        };
+      }
+      return { protected: false };
+    }
+    
+    // For players, check the Character model
+    const character = await Character.findById(targetId);
+    if (character && character.globalStealProtection && character.globalStealProtection.isProtected) {
+      if (character.globalStealProtection.protectionEndTime && new Date() >= character.globalStealProtection.protectionEndTime) {
+        // Protection expired, clear it
+        character.globalStealProtection.isProtected = false;
+        character.globalStealProtection.protectionType = null;
+        character.globalStealProtection.protectionEndTime = null;
+        await character.save();
+        return { protected: false };
+      }
+      return { 
+        protected: true, 
+        type: character.globalStealProtection.protectionType, 
+        endTime: character.globalStealProtection.protectionEndTime 
+      };
+    }
+    
+    return { protected: false };
+  } catch (error) {
+    console.error('[steal.js]: Error checking global protection:', error);
+    return { protected: false };
+  }
+}
+
+// Set global protection after successful steal (24 hour cooldown)
+async function setGlobalSuccessProtection(targetId) {
+  try {
+    // Calculate next midnight EST
+    // EST is UTC-5, so midnight EST = 5 AM UTC the next day
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(5, 0, 0, 0); // 5 AM UTC = midnight EST
+    
+    const endTime = tomorrow;
+    
+    if (typeof targetId === 'string' && !targetId.includes('_')) {
+      // This is an NPC
+      await NPC.setGlobalProtection(targetId, 'success', endTime);
+    } else {
+      // This is a player character
+      const character = await Character.findById(targetId);
+      if (character) {
+        if (!character.globalStealProtection) {
+          character.globalStealProtection = {};
+        }
+        character.globalStealProtection.isProtected = true;
+        character.globalStealProtection.protectionType = 'success';
+        character.globalStealProtection.protectionEndTime = endTime;
+        await character.save();
+      }
+    }
+  } catch (error) {
+    console.error('[steal.js]: Error setting global success protection:', error);
+  }
+}
+
+// Set global protection after failed steal (2 hour cooldown)
+async function setGlobalFailureProtection(targetId) {
+  try {
+    const endTime = new Date(Date.now() + GLOBAL_FAILURE_COOLDOWN);
+    
+    if (typeof targetId === 'string' && !targetId.includes('_')) {
+      // This is an NPC
+      await NPC.setGlobalProtection(targetId, 'failure', endTime);
+    } else {
+      // This is a player character
+      const character = await Character.findById(targetId);
+      if (character) {
+        if (!character.globalStealProtection) {
+          character.globalStealProtection = {};
+        }
+        character.globalStealProtection.isProtected = true;
+        character.globalStealProtection.protectionType = 'failure';
+        character.globalStealProtection.protectionEndTime = endTime;
+        await character.save();
+      }
+    }
+  } catch (error) {
+    console.error('[steal.js]: Error setting global failure protection:', error);
+  }
+}
+
+// Get remaining global protection time
+async function getGlobalProtectionTimeLeft(targetId) {
+  try {
+    if (typeof targetId === 'string' && !targetId.includes('_')) {
+      // This is an NPC
+      const npc = await NPC.findOne({ name: targetId });
+      if (npc && npc.globalStealProtection.isProtected) {
+        return npc.getProtectionTimeLeft();
+      }
+    } else {
+      // This is a player character
+      const character = await Character.findById(targetId);
+      if (character && character.globalStealProtection && character.globalStealProtection.isProtected) {
+        if (character.globalStealProtection.protectionEndTime) {
+          const timeLeft = character.globalStealProtection.protectionEndTime.getTime() - Date.now();
+          return timeLeft > 0 ? timeLeft : 0;
+        }
+      }
+    }
+    
+    return 0;
+  } catch (error) {
+    console.error('[steal.js]: Error getting global protection time left:', error);
+    return 0;
+  }
+}
+
+// Reset all global protections (called by scheduler at midnight EST)
+async function resetGlobalStealProtections() {
+  try {
+    console.log('[steal.js]: 🛡️ Starting global steal protection reset...');
+    
+    // Reset NPC protections
+    const npcResult = await NPC.resetAllGlobalProtections();
+    console.log(`[steal.js]: ✅ Reset ${npcResult.modifiedCount} NPC global protections`);
+    
+    // Reset player character protections
+    const characterResult = await Character.updateMany(
+      { 'globalStealProtection.isProtected': true },
+      {
+        $set: {
+          'globalStealProtection.isProtected': false,
+          'globalStealProtection.protectionType': null,
+          'globalStealProtection.protectionEndTime': null
+        }
+      }
+    );
+    console.log(`[steal.js]: ✅ Reset ${characterResult.modifiedCount} player global protections`);
+    
+    console.log('[steal.js]: 🛡️ Global steal protection reset completed');
+  } catch (error) {
+    console.error('[steal.js]: ❌ Error resetting global steal protections:', error);
+  }
 }
 
 // ------------------- Cleanup expired protections -------------------
@@ -966,6 +1140,13 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         setProtection(targetCharacter._id);
     }
     
+    // Set global protection to prevent steal abuse
+    if (isNPC) {
+        await setGlobalSuccessProtection(targetCharacter); // targetCharacter is NPC name string
+    } else {
+        await setGlobalSuccessProtection(targetCharacter._id);
+    }
+    
     const stolenItem = {
         itemName: selectedItem.itemName,
         quantity: quantity,
@@ -1046,6 +1227,13 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
 async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem, roll, failureThreshold, isNPC, interaction, voucherCheck, usedFallback, targetRarity, selectedTier) {
     resetStreak(interaction.user.id);
     await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
+    
+    // Set global failure protection to prevent steal abuse
+    if (isNPC) {
+        await setGlobalFailureProtection(targetCharacter); // targetCharacter is NPC name string
+    } else {
+        await setGlobalFailureProtection(targetCharacter._id);
+    }
     
     try {
         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, 0, roll, failureThreshold, false, isNPC);
@@ -1758,6 +1946,19 @@ module.exports = {
                     await interaction.editReply({ embeds: [protectionEmbed] });
                     return;
                 }
+                
+                // Check if NPC is globally protected from all steal attempts
+                const globalProtection = await isGloballyProtected(mappedNPCName);
+                if (globalProtection.protected) {
+                    let errorMessage;
+                    if (globalProtection.type === 'success') {
+                        errorMessage = ERROR_MESSAGES.GLOBALLY_PROTECTED_SUCCESS;
+                    } else {
+                        errorMessage = ERROR_MESSAGES.GLOBALLY_PROTECTED_FAILURE;
+                    }
+                    await interaction.editReply({ content: errorMessage, ephemeral: true });
+                    return;
+                }
 
                 // ------------------- Special Peddler Logic -------------------
                 // Peddler can have ANY item from the database stolen from him
@@ -2020,6 +2221,19 @@ module.exports = {
                     await interaction.editReply({ embeds: [protectionEmbed] });
                     return;
                 }
+                
+                // Check if player is globally protected from all steal attempts
+                const globalProtection = await isGloballyProtected(targetCharacter._id);
+                if (globalProtection.protected) {
+                    let errorMessage;
+                    if (globalProtection.type === 'success') {
+                        errorMessage = ERROR_MESSAGES.GLOBALLY_PROTECTED_SUCCESS;
+                    } else {
+                        errorMessage = ERROR_MESSAGES.GLOBALLY_PROTECTED_FAILURE;
+                    }
+                    await interaction.editReply({ content: errorMessage, ephemeral: true });
+                    return;
+                }
 
                 if (!targetCharacter.canBeStolenFrom) {
                     const embed = new EmbedBuilder()
@@ -2177,4 +2391,12 @@ function validateNPCTarget(targetName) {
         error: `❌ **Invalid NPC target: "${targetName}"**\n\n**Available NPCs:**\n${availableNPCs}\n\n**Tip:** Make sure to select an NPC from the dropdown menu, not type the name manually.`
     };
 }
+
+// ============================================================================
+// ------------------- Module Exports -------------------
+// ============================================================================
+
+module.exports = {
+    resetGlobalStealProtections
+};
 
