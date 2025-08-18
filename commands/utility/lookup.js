@@ -542,6 +542,15 @@ async function handleCraftingLookup(interaction, characterName) {
           value: `> Category: ${categoryText}\n${staminaText}\n${jobText}\n__Materials:__\n${materialsText}`,
           inline: false
         });
+
+        // Add separator field between items (except for the last item)
+        if (itemsToDisplay.indexOf(item) < itemsToDisplay.length - 1) {
+          embed.addFields({
+            name: '‎', // Invisible character for name
+            value: '━━━━━━━━━━━━━━━━━━━━━━━━━',
+            inline: false
+          });
+        }
       }
 
       return embed.setFooter({ text: `Page ${page + 1} of ${totalPages} • Total craftable: ${craftableItems.length}` });
