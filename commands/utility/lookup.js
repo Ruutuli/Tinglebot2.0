@@ -376,11 +376,11 @@ async function handleCraftingLookup(interaction, characterName) {
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
     const inventory = await inventoryCollection.find().toArray();
 
-    // Get all craftable items from the database
-    const allCraftableItems = await ItemModel.find({
-      crafting: true,
-      craftingMaterial: { $exists: true, $ne: [] }
-    }).select('itemName craftingMaterial emoji category staminaToCraft').lean();
+         // Get all craftable items from the database
+     const allCraftableItems = await ItemModel.find({
+       crafting: true,
+       craftingMaterial: { $exists: true, $ne: [] }
+     }).select('itemName craftingMaterial emoji category staminaToCraft allJobs').lean();
 
     // Check which items the character can currently craft
     const craftableItems = [];
@@ -412,15 +412,16 @@ async function handleCraftingLookup(interaction, characterName) {
         }
       }
 
-      if (canCraft) {
-        craftableItems.push({
-          name: item.itemName,
-          emoji: item.emoji || DEFAULT_EMOJI,
-          category: item.category,
-          staminaToCraft: item.staminaToCraft,
-          materials: item.craftingMaterial
-        });
-      }
+             if (canCraft) {
+         craftableItems.push({
+           name: item.itemName,
+           emoji: item.emoji || DEFAULT_EMOJI,
+           category: item.category,
+           staminaToCraft: item.staminaToCraft,
+           allJobs: item.allJobs,
+           materials: item.craftingMaterial
+         });
+       }
     }
 
     if (craftableItems.length === 0) {
@@ -456,21 +457,22 @@ async function handleCraftingLookup(interaction, characterName) {
         .setThumbnail(character.icon || null)
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
-      for (const item of itemsToDisplay) {
-        const categoryText = Array.isArray(item.category) ? item.category.join(', ') : item.category;
-        const staminaText = item.staminaToCraft ? ` | Stamina: ${item.staminaToCraft}` : '';
-        
-        const materialsText = item.materials.map(mat => {
-          const emoji = mat.emoji || DEFAULT_EMOJI;
-          return `${emoji} ${mat.itemName} x${mat.quantity}`;
-        }).join('\n');
+             for (const item of itemsToDisplay) {
+         const categoryText = Array.isArray(item.category) ? item.category.join(', ') : item.category;
+         const staminaText = item.staminaToCraft ? `> Stamina to Craft: ${item.staminaToCraft}` : '';
+         const jobText = item.allJobs && item.allJobs.length > 0 ? `> Job: ${item.allJobs.join(', ')}` : '';
+         
+         const materialsText = item.materials.map(mat => {
+           const emoji = mat.emoji || DEFAULT_EMOJI;
+           return `> ${emoji} ${mat.itemName} x${mat.quantity}`;
+         }).join('\n');
 
-        embed.addFields({
-          name: `${item.emoji} ${item.name}`,
-          value: `**Category:** ${categoryText}${staminaText}\n**Materials:**\n${materialsText}`,
-          inline: false
-        });
-      }
+         embed.addFields({
+           name: `__${item.emoji} ${item.name}__`,
+           value: `> Category: ${categoryText}\n${staminaText}\n${jobText}\n\n__Materials:__\n${materialsText}`,
+           inline: false
+         });
+       }
 
       return embed.setFooter({ text: `Page ${page + 1} of ${totalPages} • Total craftable: ${craftableItems.length}` });
     };
