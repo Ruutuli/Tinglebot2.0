@@ -19,23 +19,38 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('lookup')
     .setDescription('Look up details of a specific item or ingredient')
-    .addStringOption(option =>
-      option.setName('item')
-        .setDescription('The name of the item to look up')
-        .setAutocomplete(true)
-        .setRequired(false)
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('item')
+        .setDescription('Look up details of a specific item')
+        .addStringOption(option =>
+          option.setName('name')
+            .setDescription('The name of the item to look up')
+            .setAutocomplete(true)
+            .setRequired(true)
+        )
     )
-    .addStringOption(option =>
-      option.setName('ingredient')
-        .setDescription('The name of the ingredient to look up')
-        .setAutocomplete(true)
-        .setRequired(false)
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('ingredient')
+        .setDescription('Find items that can be crafted using an ingredient')
+        .addStringOption(option =>
+          option.setName('name')
+            .setDescription('The name of the ingredient to look up')
+            .setAutocomplete(true)
+            .setRequired(true)
+        )
     )
-    .addStringOption(option =>
-      option.setName('crafting')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('crafting')
         .setDescription('Check what items a character can currently craft')
-        .setAutocomplete(true)
-        .setRequired(false)
+        .addStringOption(option =>
+          option.setName('charactername')
+            .setDescription('The name of the character to check')
+            .setAutocomplete(true)
+            .setRequired(true)
+        )
     ),
 
   // ------------------- Main execute function for lookup -------------------
@@ -44,32 +59,16 @@ module.exports = {
       await interaction.deferReply({ flags: 64 });
       await connectToTinglebot();
   
-      const itemName = interaction.options.getString('item');
-      const ingredientName = interaction.options.getString('ingredient');
-      const characterName = interaction.options.getString('crafting');
+      const subcommand = interaction.options.getSubcommand();
   
-      // Check that exactly one option is provided
-      const providedOptions = [itemName, ingredientName, characterName].filter(Boolean);
-      
-      if (providedOptions.length === 0) {
-        return interaction.editReply({ 
-          content: '❌ Please provide either an item, ingredient, or character name to check crafting options.\n\n**Usage:**\n• `/lookup item:ItemName` - Look up item details\n• `/lookup ingredient:IngredientName` - Find items that use this ingredient\n• `/lookup crafting:CharacterName` - Show what your character can currently craft', 
-          ephemeral: true 
-        });
-      }
-      
-      if (providedOptions.length > 1) {
-        return interaction.editReply({ 
-          content: '❌ Please provide only one option at a time.\n\n**Usage:**\n• `/lookup item:ItemName` - Look up item details\n• `/lookup ingredient:IngredientName` - Find items that use this ingredient\n• `/lookup crafting:CharacterName` - Show what your character can currently craft', 
-          ephemeral: true 
-        });
-      }
-  
-      if (itemName) {
+      if (subcommand === 'item') {
+        const itemName = interaction.options.getString('name');
         await handleItemLookup(interaction, itemName);
-      } else if (ingredientName) {
+      } else if (subcommand === 'ingredient') {
+        const ingredientName = interaction.options.getString('name');
         await handleIngredientLookup(interaction, ingredientName);
-      } else if (characterName) {
+      } else if (subcommand === 'crafting') {
+        const characterName = interaction.options.getString('charactername');
         await handleCraftingLookup(interaction, characterName);
       }
     } catch (error) {
@@ -77,7 +76,7 @@ module.exports = {
         commandName: 'lookup',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
-        options: { itemName, ingredientName, characterName }
+        subcommand: interaction.options.getSubcommand()
       });
 
       console.error("❌ Error in lookup command:", error);

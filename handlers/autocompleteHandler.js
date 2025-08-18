@@ -2874,13 +2874,14 @@ async function handleHealAutocomplete(interaction, focusedOption) {
 async function handleLookupAutocomplete(interaction, focusedOption) {
   try {
     const focusedValue = focusedOption.value;
+    const subcommand = interaction.options.getSubcommand();
 
-    // Route based on the focused option name
-    if (focusedOption.name === 'item') {
+    // Route based on the subcommand and focused option name
+    if (subcommand === 'item' && focusedOption.name === 'name') {
       return await handleLookupItemAutocomplete(interaction, focusedValue);
-    } else if (focusedOption.name === 'ingredient') {
+    } else if (subcommand === 'ingredient' && focusedOption.name === 'name') {
       return await handleLookupIngredientAutocomplete(interaction, focusedValue);
-    } else if (focusedOption.name === 'crafting') {
+    } else if (subcommand === 'crafting' && focusedOption.name === 'charactername') {
       return await handleLookupCraftingAutocomplete(interaction, focusedValue);
     }
 
