@@ -2983,13 +2983,8 @@ async function handleLookupCraftingAutocomplete(interaction, focusedValue) {
       return await interaction.respond([]);
     }
 
-    // Create a focusedOption object to match the expected parameter
-    const focusedOption = {
-      value: focusedValue,
-      name: 'crafting'
-    };
-
-    return await respondWithFilteredChoices(interaction, focusedOption, choices);
+    // Respond with filtered choices (limit to 25)
+    await interaction.respond(choices.slice(0, 25));
   } catch (error) {
     console.error('[handleLookupCraftingAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
