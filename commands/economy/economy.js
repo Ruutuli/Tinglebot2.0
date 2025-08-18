@@ -8,6 +8,7 @@ const {
 } = require("discord.js");
 const { handleError } = require("../../utils/globalErrorHandler.js");
 const { handleTokenError } = require('../../utils/tokenUtils.js');
+const { enforceJail } = require('../../utils/jailCheck');
 const { v4: uuidv4 } = require("uuid");
 const {
  fetchCharacterByNameAndUserId,
@@ -37,6 +38,7 @@ const { checkInventorySync } = require("../../utils/characterUtils.js");
 const ItemModel = require("../../models/ItemModel.js");
 const ShopStock = require("../../models/VillageShopsModel");
 const User = require("../../models/UserModel");
+const CharacterModel = require("../../models/CharacterModel.js");
 const {
  createGiftEmbed,
  createTradeEmbed,
@@ -450,6 +452,11 @@ for (const { name } of cleanedItems) {
     return;
   }
   
+  // ------------------- Check if character is in jail -------------------
+  if (await enforceJail(interaction, fromCharacter)) {
+    return;
+  }
+
   // ------------------- NEW: Prevent gifting equipped items -------------------
   const equippedItems = [
     fromCharacter.gearArmor?.head?.name,
@@ -796,6 +803,34 @@ async function handleShopView(interaction) {
  try {
   await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
   
+  // Check if user has any jailed characters
+  const jailedCharacters = await CharacterModel.find({ 
+    userId: interaction.user.id, 
+    inJail: true 
+  }).select('name inJail jailReleaseTime').lean();
+  
+  if (jailedCharacters.length > 0) {
+    const jailEmbed = {
+      title: '⛔ Jailed Characters Detected',
+      description: 'You have characters currently serving time in jail. While you can view the shop, you cannot buy or sell items until they are released.',
+      color: 0xFFA500,
+      fields: jailedCharacters.map(char => ({
+        name: char.name,
+        value: `<t:${Math.floor(new Date(char.jailReleaseTime).getTime() / 1000)}:R>`,
+        inline: true
+      })),
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'You will be automatically released when your time is up.'
+      }
+    };
+    
+    await interaction.editReply({ embeds: [jailEmbed] });
+    return;
+  }
+  
   // Add error handling for database connection
   let items;
   try {
@@ -1014,6 +1049,11 @@ async function handleShopBuy(interaction) {
         }],
         ephemeral: true
       });
+    }
+
+    // ------------------- Check if character is in jail -------------------
+    if (await enforceJail(interaction, character)) {
+      return;
     }
 
     // ------------------- Check Inventory Sync -------------------
@@ -1357,6 +1397,11 @@ if (quantity <= 0) {
     });
   }
 
+  // ------------------- Check if character is in jail -------------------
+  if (await enforceJail(interaction, character)) {
+    return;
+  }
+
   // ------------------- Check Inventory Sync -------------------
   try {
     await checkInventorySync(character);
@@ -1676,6 +1721,11 @@ for (const { quantity } of cleanedItems) {
     ephemeral: true,
    });
    return;
+  }
+
+  // ------------------- Check if character is in jail -------------------
+  if (await enforceJail(interaction, fromCharacter)) {
+    return;
   }
 
   // ------------------- NEW: Prevent using equipped items -------------------
@@ -2063,6 +2113,11 @@ async function executeTrade(tradeData) {
     throw new Error('Character not found for trade execution');
   }
 
+  // Check if either character is in jail
+  if (initiatorChar.inJail || targetChar.inJail) {
+    throw new Error('Cannot execute trade: One or more characters are currently in jail');
+  }
+
   const uniqueSyncId = uuidv4();
 
   // Process items for both parties
@@ -2343,6 +2398,11 @@ async function handleTrade(interaction) {
       return;
     }
 
+    // ------------------- Check if character is in jail -------------------
+    if (await enforceJail(interaction, fromCharacter)) {
+      return;
+    }
+
     // ------------------- NEW: Check if characters are in the same village -------------------
     if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVillage.trim().toLowerCase()) {
       const fromVillageCapitalized = capitalizeWords(fromCharacter.currentVillage.trim());
@@ -2465,6 +2525,18 @@ async function handleTrade(interaction) {
           return;
         }
 
+        // Check if character is in jail before allowing trade completion
+        let currentCharacter;
+        if (tradeData.initiator.userId === userId) {
+          currentCharacter = await fetchCharacterByNameAndUserId(tradeData.initiator.characterName, userId);
+        } else {
+          currentCharacter = await fetchCharacterByNameAndUserId(tradeData.target.characterName, userId);
+        }
+        
+        if (currentCharacter && await enforceJail(interaction, currentCharacter)) {
+          return;
+        }
+
         // NEW: Verify character name matches the user's character in the trade
         if (
           (tradeData.initiator.userId === userId && tradeData.initiator.characterName !== characterName) ||
@@ -2521,6 +2593,17 @@ async function handleTrade(interaction) {
         // If both users have confirmed, execute the trade
         if (updatedTradeData.initiatorConfirmed && updatedTradeData.targetConfirmed) {
           console.log(`[trade.js]: 🔄 Executing trade ${tradeId}`);
+          
+          // Check if either character is in jail before executing trade
+          const initiatorChar = await fetchCharacterByNameAndUserId(updatedTradeData.initiator.characterName, updatedTradeData.initiator.userId);
+          const targetChar = await fetchCharacterByNameAndUserId(updatedTradeData.target.characterName, updatedTradeData.target.userId);
+          
+          if (initiatorChar && await enforceJail(interaction, initiatorChar)) {
+            return;
+          }
+          if (targetChar && await enforceJail(interaction, targetChar)) {
+            return;
+          }
           
           // Execute trade
           await executeTrade(updatedTradeData);
@@ -2595,6 +2678,11 @@ async function handleTrade(interaction) {
     } else {
       // ------------------- Handle Trade Initiation -------------------
       try {
+        // Check if character is in jail before allowing trade initiation
+        if (await enforceJail(interaction, fromCharacter)) {
+          return;
+        }
+
         // Validate items and quantities
         await validateTradeItems(fromCharacter, itemArray);
 
@@ -2675,6 +2763,18 @@ async function handleTrade(interaction) {
               // If both confirmed, complete trade
               if (updatedTradeData.initiatorConfirmed && updatedTradeData.targetConfirmed) {
                 collector.stop('both_confirmed');
+                
+                // Check if either character is in jail before executing trade
+                const initiatorChar = await fetchCharacterByNameAndUserId(updatedTradeData.initiator.characterName, updatedTradeData.initiator.userId);
+                const targetChar = await fetchCharacterByNameAndUserId(updatedTradeData.target.characterName, updatedTradeData.target.userId);
+                
+                if (initiatorChar && await enforceJail(interaction, initiatorChar)) {
+                  return;
+                }
+                if (targetChar && await enforceJail(interaction, targetChar)) {
+                  return;
+                }
+                
                 await executeTrade(updatedTradeData);
                 await TempData.deleteOne({ _id: latestTrade._id });
                 
