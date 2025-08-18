@@ -469,7 +469,7 @@ async function handleCraftingLookup(interaction, characterName) {
 
          embed.addFields({
            name: `__${item.emoji} ${item.name}__`,
-           value: `> Category: ${categoryText}\n${staminaText}\n${jobText}\n\n__Materials:__\n${materialsText}`,
+           value: `> Category: ${categoryText}\n${staminaText}\n${jobText}\n__Materials:__\n${materialsText}`,
            inline: false
          });
        }
