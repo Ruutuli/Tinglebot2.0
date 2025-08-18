@@ -187,7 +187,7 @@ async function handleItemLookup(interaction, itemName) {
   if (item.craftingMaterial && item.craftingMaterial.length > 0) {
     const filteredCraftingMaterials = item.craftingMaterial.filter(mat => !['#Raw Material', '#Not Craftable'].includes(mat.itemName));
     if (filteredCraftingMaterials.length > 0) {
-      embed.addFields({ name: '✂️ **__Crafting Materials:__**', value: craftingMaterialText, inline: false });
+      embed.addFields({ name: '✂️ **__Crafting Materials:__**', value: String(craftingMaterialText || 'No crafting materials'), inline: false });
     }
   }
 
@@ -309,7 +309,7 @@ async function handleIngredientLookup(interaction, ingredientName) {
       break;
     }
 
-    embed.addFields({ name: item.name, value: requirementsText });
+    embed.addFields({ name: String(item.name || 'Unknown Item'), value: String(requirementsText || 'No requirements') });
     totalEmbedLength += fieldLength;
   }
 
@@ -432,6 +432,11 @@ async function handleCraftingLookup(interaction, characterName) {
     // Get character's inventory
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
     const inventory = await inventoryCollection.find().toArray();
+    
+    console.log(`[lookup.js]: Found ${inventory.length} inventory items for character ${character.name}`);
+    if (inventory.length > 0) {
+      console.log(`[lookup.js]: Sample inventory item:`, JSON.stringify(inventory[0], null, 2));
+    }
 
     // Get all craftable items from the database
      const allCraftableItems = await ItemModel.find({
@@ -439,46 +444,86 @@ async function handleCraftingLookup(interaction, characterName) {
        craftingMaterial: { $exists: true, $ne: [] }
      }).select('itemName craftingMaterial emoji category staminaToCraft allJobs').lean();
 
+     console.log(`[lookup.js]: Found ${allCraftableItems.length} items with crafting data from database`);
+     if (allCraftableItems.length > 0) {
+       console.log(`[lookup.js]: Sample item structure:`, JSON.stringify(allCraftableItems[0], null, 2));
+     }
+
     // Check which items the character can currently craft
     const craftableItems = [];
     
     for (const item of allCraftableItems) {
-      let canCraft = true;
-      const missingMaterials = [];
-      
-      // Check each required material
-      for (const material of item.craftingMaterial) {
-        const requiredQty = material.quantity;
-        let ownedQty = 0;
-
-        if (generalCategories[material.itemName]) {
-          // Check category items (like "Any Fish", "Any Fruit", etc.)
-          ownedQty = inventory.filter(invItem => 
-            generalCategories[material.itemName].includes(invItem.itemName)
-          ).reduce((sum, inv) => sum + inv.quantity, 0);
-        } else {
-          // Check specific item
-          ownedQty = inventory.filter(invItem => 
-            invItem.itemName.toLowerCase() === material.itemName.toLowerCase()
-          ).reduce((sum, inv) => sum + inv.quantity, 0);
+      try {
+        // Validate item data structure
+        if (!item || !item.itemName || !item.craftingMaterial) {
+          console.warn(`[lookup.js]: Skipping invalid item data:`, item);
+          continue;
         }
 
-        if (ownedQty < requiredQty) {
-          canCraft = false;
-          missingMaterials.push(`${material.itemName} (Required: ${requiredQty}, Owned: ${ownedQty})`);
+        let canCraft = true;
+        const missingMaterials = [];
+        
+        // Check each required material
+        for (const material of item.craftingMaterial) {
+          if (!material || !material.itemName || typeof material.quantity !== 'number') {
+            console.warn(`[lookup.js]: Skipping invalid material data:`, material);
+            continue;
+          }
+
+          const requiredQty = material.quantity;
+          let ownedQty = 0;
+
+          if (generalCategories[material.itemName]) {
+            // Check category items (like "Any Fish", "Any Fruit", etc.)
+            ownedQty = inventory.filter(invItem => 
+              generalCategories[material.itemName].includes(invItem.itemName)
+            ).reduce((sum, inv) => sum + inv.quantity, 0);
+          } else {
+            // Check specific item
+            ownedQty = inventory.filter(invItem => 
+              invItem.itemName.toLowerCase() === material.itemName.toLowerCase()
+            ).reduce((sum, inv) => sum + inv.quantity, 0);
+          }
+
+          if (ownedQty < requiredQty) {
+            canCraft = false;
+            missingMaterials.push(`${material.itemName} (Required: ${requiredQty}, Owned: ${ownedQty})`);
+          }
         }
-      }
 
         if (canCraft) {
           craftableItems.push({
             name: item.itemName,
             emoji: item.emoji || DEFAULT_EMOJI,
-            category: item.category,
-            staminaToCraft: item.staminaToCraft,
-            allJobs: item.allJobs,
-            materials: item.craftingMaterial
+            category: item.category || 'Unknown Category',
+            staminaToCraft: item.staminaToCraft || null,
+            allJobs: item.allJobs || [],
+            materials: item.craftingMaterial || []
           });
         }
+      } catch (itemError) {
+        console.error(`[lookup.js]: Error processing item:`, item, itemError);
+        continue;
+      }
+    }
+
+    console.log(`[lookup.js]: Found ${craftableItems.length} craftable items for character ${character.name}`);
+    if (craftableItems.length > 0) {
+      console.log(`[lookup.js]: First craftable item:`, JSON.stringify(craftableItems[0], null, 2));
+    }
+
+    // Ensure we have valid items to process
+    if (!Array.isArray(craftableItems)) {
+      console.error(`[lookup.js]: craftableItems is not an array:`, typeof craftableItems, craftableItems);
+      try {
+        await interaction.editReply({ 
+          content: '❌ There was an error processing the data. Please try again later.', 
+          ephemeral: true 
+        });
+      } catch (replyError) {
+        console.error('[lookup.js]: Failed to send data processing error:', replyError);
+      }
+      return;
     }
 
     if (craftableItems.length === 0) {
@@ -503,12 +548,26 @@ async function handleCraftingLookup(interaction, characterName) {
 
     // Sort craftable items by category and name
     craftableItems.sort((a, b) => {
-      const categoryA = Array.isArray(a.category) ? a.category[0] : a.category;
-      const categoryB = Array.isArray(b.category) ? b.category[0] : b.category;
-      if (categoryA !== categoryB) {
-        return categoryA.localeCompare(categoryB);
+      try {
+        const categoryA = Array.isArray(a.category) ? a.category[0] : a.category;
+        const categoryB = Array.isArray(b.category) ? b.category[0] : b.category;
+        
+        // Ensure both categories are strings for comparison
+        const categoryAStr = String(categoryA || 'Unknown');
+        const categoryBStr = String(categoryB || 'Unknown');
+        
+        if (categoryAStr !== categoryBStr) {
+          return categoryAStr.localeCompare(categoryBStr);
+        }
+        
+        // Ensure both names are strings for comparison
+        const nameA = String(a.name || 'Unknown');
+        const nameB = String(b.name || 'Unknown');
+        return nameA.localeCompare(nameB);
+      } catch (sortError) {
+        console.error(`[lookup.js]: Error sorting items:`, sortError);
+        return 0; // Keep original order if sorting fails
       }
-      return a.name.localeCompare(b.name);
     });
 
     // Pagination logic for displaying craftable items
@@ -516,67 +575,172 @@ async function handleCraftingLookup(interaction, characterName) {
     const totalPages = Math.ceil(craftableItems.length / ITEMS_PER_PAGE);
 
     const generateEmbed = (page) => {
+      // Validate page number
+      if (typeof page !== 'number' || page < 0 || page >= totalPages) {
+        console.error(`[lookup.js]: Invalid page number: ${page}, totalPages: ${totalPages}`);
+        throw new Error(`Invalid page number: ${page}`);
+      }
+      
       const start = page * ITEMS_PER_PAGE;
       const end = start + ITEMS_PER_PAGE;
       const itemsToDisplay = craftableItems.slice(start, end);
+      
+      console.log(`[lookup.js]: Pagination: ${craftableItems.length} items, ${ITEMS_PER_PAGE} per page, ${Math.max(1, Math.ceil(craftableItems.length / ITEMS_PER_PAGE))} total pages`);
 
-      const embed = new EmbedBuilder()
-        .setTitle(`🛠️ Currently Craftable Items for ${character.name}`)
-        .setDescription(`Found **${craftableItems.length}** items you can craft right now!`)
-        .setColor('#A48D68')
-        .setThumbnail(character.icon || null)
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+      // Debug logging to help identify data issues
+      console.log(`[lookup.js]: Generating embed for page ${page}, items: ${itemsToDisplay.length}`);
+      if (itemsToDisplay.length > 0) {
+        console.log(`[lookup.js]: First item data:`, JSON.stringify(itemsToDisplay[0], null, 2));
+      }
+
+      const embed = new EmbedBuilder();
+      
+      try {
+        embed
+          .setTitle(`🛠️ Currently Craftable Items for ${character.name}`)
+          .setDescription(`Found **${craftableItems.length}** items you can craft right now!`)
+          .setColor('#A48D68')
+          .setThumbnail(character.icon || null)
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+      } catch (embedError) {
+        console.error(`[lookup.js]: Error setting embed properties:`, embedError);
+        // Set fallback values
+        embed
+          .setTitle('🛠️ Currently Craftable Items')
+          .setDescription('Found items you can craft right now!')
+          .setColor('#A48D68');
+      }
 
       for (const item of itemsToDisplay) {
-        const categoryText = Array.isArray(item.category) ? item.category.join(', ') : item.category;
-        const staminaText = item.staminaToCraft ? `> Stamina to Craft: ${item.staminaToCraft}` : '';
-        const jobText = item.allJobs && item.allJobs.length > 0 ? `> Job: ${item.allJobs.join(', ')}` : '';
-        
-        const materialsText = item.materials.map(mat => {
-          const emoji = mat.emoji || DEFAULT_EMOJI;
-          return `> ${emoji} ${mat.itemName} x${mat.quantity}`;
-        }).join('\n');
+        try {
+          // Ensure all values are properly converted to strings and handle undefined/null cases
+          const itemEmoji = String(item.emoji || DEFAULT_EMOJI);
+          const itemName = String(item.name || 'Unknown Item');
+          const categoryText = Array.isArray(item.category) ? item.category.join(', ') : String(item.category || 'Unknown Category');
+          const staminaText = item.staminaToCraft ? `> Stamina to Craft: ${item.staminaToCraft}` : '';
+          const jobText = item.allJobs && item.allJobs.length > 0 ? `> Job: ${item.allJobs.join(', ')}` : '';
+          
+          const materialsText = item.materials && Array.isArray(item.materials) ? item.materials.map(mat => {
+            try {
+              if (!mat || typeof mat !== 'object') {
+                console.warn(`[lookup.js]: Invalid material data:`, mat);
+                return '> Invalid material data';
+              }
+              
+              const emoji = String(mat.emoji || DEFAULT_EMOJI);
+              const itemName = String(mat.itemName || 'Unknown Material');
+              const quantity = String(mat.quantity || 0);
+              return `> ${emoji} ${itemName} x${quantity}`;
+            } catch (matError) {
+              console.error(`[lookup.js]: Error processing material:`, mat, matError);
+              return '> Error processing material';
+            }
+          }).join('\n') : '> No materials specified';
 
-        embed.addFields({
-          name: `__${item.emoji} ${item.name}__`,
-          value: `> Category: ${categoryText}\n${staminaText}\n${jobText}\n__Materials:__\n${materialsText}`,
-          inline: false
-        });
+          const fieldValue = `> Category: ${categoryText}\n${staminaText}\n${jobText}\n__Materials:__\n${materialsText}`;
+          const fieldName = `__${itemEmoji} ${itemName}__`;
+          
+          // Ensure field name doesn't exceed Discord's limit (256 characters)
+          if (fieldName.length > 256) {
+            console.warn(`[lookup.js]: Field name too long (${fieldName.length} chars), truncating`);
+            const truncatedName = fieldName.substring(0, 253) + '...';
+            embed.addFields({
+              name: truncatedName,
+              value: fieldValue,
+              inline: false
+            });
+          }
+          // Ensure field value doesn't exceed Discord's limit (1024 characters)
+          else if (fieldValue.length > 1024) {
+            console.warn(`[lookup.js]: Field value too long (${fieldValue.length} chars), truncating`);
+            const truncatedValue = fieldValue.substring(0, 1021) + '...';
+            embed.addFields({
+              name: fieldName,
+              value: truncatedValue,
+              inline: false
+            });
+          } else {
+            embed.addFields({
+              name: fieldName,
+              value: fieldValue,
+              inline: false
+            });
+          }
 
-        // Add separator field between items (except for the last item)
-        if (itemsToDisplay.indexOf(item) < itemsToDisplay.length - 1) {
+          // Add separator field between items (except for the last item)
+          if (itemsToDisplay.indexOf(item) < itemsToDisplay.length - 1) {
+            embed.addFields({
+              name: '‎', // Invisible character for name
+              value: '━━━━━━━━━━━━━━━━━━━━━━━━━',
+              inline: false
+            });
+          }
+        } catch (fieldError) {
+          console.error(`[lookup.js]: Error adding field for item:`, item, fieldError);
+          // Add a fallback field if there's an error
           embed.addFields({
-            name: '‎', // Invisible character for name
-            value: '━━━━━━━━━━━━━━━━━━━━━━━━━',
+            name: '❌ Error Displaying Item',
+            value: 'There was an error displaying this item\'s information.',
             inline: false
           });
         }
       }
 
-      return embed.setFooter({ text: `Page ${page + 1} of ${totalPages} • Total craftable: ${craftableItems.length}` });
+      let finalEmbed;
+      try {
+        finalEmbed = embed.setFooter({ text: `Page ${page + 1} of ${totalPages} • Total craftable: ${craftableItems.length}` });
+      } catch (footerError) {
+        console.error(`[lookup.js]: Error setting footer:`, footerError);
+        finalEmbed = embed;
+      }
+      
+      // Validate embed before returning
+      if (!finalEmbed.data.title || !finalEmbed.data.description) {
+        console.error(`[lookup.js]: Invalid embed data:`, finalEmbed.data);
+        throw new Error('Embed validation failed: missing required fields');
+      }
+      
+      return finalEmbed;
     };
 
-    const generatePaginationRow = () => new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('prev')
-        .setLabel('Previous')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(currentPage === 0),
-      new ButtonBuilder()
-        .setCustomId('next')
-        .setLabel('Next')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(currentPage === totalPages - 1)
-    );
+    const generatePaginationRow = () => {
+      try {
+        return new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('prev')
+            .setLabel('Previous')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(currentPage === 0),
+          new ButtonBuilder()
+            .setCustomId('next')
+            .setLabel('Next')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(currentPage === totalPages - 1)
+        );
+      } catch (buttonError) {
+        console.error(`[lookup.js]: Error creating pagination buttons:`, buttonError);
+        // Return empty row if button creation fails
+        return new ActionRowBuilder();
+      }
+    };
 
     let message;
     
     try {
+      console.log(`[lookup.js]: Attempting to create embed for page ${currentPage}`);
+      const embed = generateEmbed(currentPage);
+      console.log(`[lookup.js]: Embed created successfully, attempting to send message`);
+      
       message = await interaction.editReply({
-        embeds: [generateEmbed(currentPage)],
+        embeds: [embed],
         components: [generatePaginationRow()],
       });
+      
+      console.log(`[lookup.js]: Message sent successfully`);
     } catch (error) {
+      console.error(`[lookup.js]: Error creating or sending embed:`, error);
+      console.error(`[lookup.js]: Error stack:`, error.stack);
+      
       handleError(error, 'lookup.js', {
         commandName: 'craftingLookup',
         userTag: interaction.user.tag,
@@ -609,38 +773,60 @@ async function handleCraftingLookup(interaction, characterName) {
       return;
     }
     
-    collector = message.createMessageComponentCollector({ time: 600000 }); // 10 minutes
+    try {
+      collector = message.createMessageComponentCollector({ time: 600000 }); // 10 minutes
+      console.log(`[lookup.js]: Collector created successfully`);
+    } catch (collectorError) {
+      console.error(`[lookup.js]: Error creating collector:`, collectorError);
+      collector = null;
+    }
 
-    collector.on('collect', async i => {
-      if (i.user.id !== interaction.user.id) {
-        await i.reply({ content: '❌ **You cannot use these buttons.**', ephemeral: true });
-        return;
-      }
+    if (!collector) {
+      console.error(`[lookup.js]: Cannot create collector event listeners - collector is null`);
+      return;
+    }
 
-      try {
-        if (i.customId === 'prev') {
-          currentPage--;
-        } else if (i.customId === 'next') {
-          currentPage++;
+    try {
+      collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+          await i.reply({ content: '❌ **You cannot use these buttons.**', ephemeral: true });
+          return;
         }
 
-
-        if (message && !message.deleted) {
-          await i.update({
-            embeds: [generateEmbed(currentPage)],
-            components: [generatePaginationRow()],
-          });
-        } else {
-
-          if (collector && !collector.ended) {
-            collector.stop();
+        try {
+          if (i.customId === 'prev') {
+            currentPage = Math.max(0, currentPage - 1);
+          } else if (i.customId === 'next') {
+            currentPage = Math.min(totalPages - 1, currentPage + 1);
           }
-          await i.reply({ 
-            content: '❌ The display message was deleted. Please run the command again.', 
-            ephemeral: true 
-          });
-        }
-              } catch (error) {
+          
+          console.log(`[lookup.js]: Page navigation: ${i.customId} -> page ${currentPage}`);
+
+
+          if (message && !message.deleted) {
+            try {
+              const updatedEmbed = generateEmbed(currentPage);
+              await i.update({
+                embeds: [updatedEmbed],
+                components: [generatePaginationRow()],
+              });
+            } catch (embedError) {
+              console.error(`[lookup.js]: Error generating embed for page ${currentPage}:`, embedError);
+              await i.reply({ 
+                content: '❌ There was an error updating the display. Please try the command again.', 
+                ephemeral: true 
+              });
+            }
+          } else {
+            if (collector && !collector.ended) {
+              collector.stop();
+            }
+            await i.reply({ 
+              content: '❌ The display message was deleted. Please run the command again.', 
+              ephemeral: true 
+            });
+          }
+        } catch (error) {
           console.error(`[lookup.js]: Button interaction error for user: ${interaction.user.tag} (${interaction.user.id}):`, error);
           
           if (error.code === 10008) {
@@ -669,35 +855,45 @@ async function handleCraftingLookup(interaction, characterName) {
             }
           }
         }
-    });
+      });
+    } catch (collectorSetupError) {
+      console.error(`[lookup.js]: Error setting up collector event listeners:`, collectorSetupError);
+    }
 
-    collector.on('end', () => {
-      // Collector ended naturally
-    });
-    
+    try {
+      collector.on('end', () => {
+        // Collector ended naturally
+        console.log(`[lookup.js]: Collector ended naturally`);
+      });
+    } catch (endError) {
+      console.error(`[lookup.js]: Error setting up collector end listener:`, endError);
+    }
 
-    collector.on('error', (error) => {
-      console.error(`[lookup.js]: Collector error:`, error);
-    });
+    try {
+      collector.on('error', (error) => {
+        console.error(`[lookup.js]: Collector error:`, error);
+      });
+    } catch (errorListenerError) {
+      console.error(`[lookup.js]: Error setting up collector error listener:`, errorListenerError);
+    }
 
   } catch (error) {
+    console.error(`[lookup.js]: Main error in handleCraftingLookup:`, error);
+    console.error(`[lookup.js]: Error stack:`, error.stack);
 
     if (collector && !collector.ended) {
       collector.stop();
     }
     
-
-    
     handleError(error, 'lookup.js', {
       commandName: 'craftingLookup',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
-      characterName: characterName
+      characterName: characterName,
+      operation: 'mainFunction'
     });
     
     console.error(`[lookup.js]: Crafting lookup failed:`, error);
-    
-
     
     try {
       await interaction.editReply({ 
@@ -708,7 +904,6 @@ async function handleCraftingLookup(interaction, characterName) {
     } catch (replyError) {
       console.error(`[lookup.js]: Failed to send error reply:`, replyError);
 
-      
       try {
         await interaction.followUp({ 
           content: '❌ There was a critical error. Please try again later.', 
@@ -716,6 +911,16 @@ async function handleCraftingLookup(interaction, characterName) {
         });
       } catch (followUpError) {
         console.error(`[lookup.js]: Failed to send follow-up error message:`, followUpError);
+      }
+    }
+  } finally {
+    // Ensure collector is stopped if it exists
+    if (collector && !collector.ended) {
+      try {
+        collector.stop();
+        console.log(`[lookup.js]: Collector stopped in finally block`);
+      } catch (stopError) {
+        console.error(`[lookup.js]: Error stopping collector:`, stopError);
       }
     }
   }
