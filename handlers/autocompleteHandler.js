@@ -2880,6 +2880,8 @@ async function handleLookupAutocomplete(interaction, focusedOption) {
       return await handleLookupItemAutocomplete(interaction, focusedValue);
     } else if (focusedOption.name === 'ingredient') {
       return await handleLookupIngredientAutocomplete(interaction, focusedValue);
+    } else if (focusedOption.name === 'crafting') {
+      return await handleLookupCraftingAutocomplete(interaction, focusedValue);
     }
 
     return await interaction.respond([]);
@@ -2946,11 +2948,34 @@ async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
       return await interaction.respond([]);
     }
 
-    const choices = items
-      .filter(item => item.itemName.toLowerCase().includes(focusedValue.toLowerCase()))
-      .map(item => ({
-        name: capitalizeWords(item.itemName),
-        value: item.itemName
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleLookupIngredientAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleLookupCraftingAutocomplete -------------------
+// Provides autocomplete for character names when checking crafting options
+async function handleLookupCraftingAutocomplete(interaction, focusedValue) {
+  try {
+    const userId = interaction.user.id;
+    
+    // Get all characters belonging to the user
+    const characters = await Character.find({ userId })
+      .sort({ name: 1 })
+      .select('name icon')
+      .lean();
+
+    if (characters.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    const choices = characters
+      .filter(character => character.name.toLowerCase().includes(focusedValue.toLowerCase()))
+      .map(character => ({
+        name: `${character.icon} ${character.name}`,
+        value: character.name
       }));
 
     if (choices.length === 0) {
@@ -2960,12 +2985,12 @@ async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
     // Create a focusedOption object to match the expected parameter
     const focusedOption = {
       value: focusedValue,
-      name: 'ingredient'
+      name: 'crafting'
     };
 
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleLookupIngredientAutocomplete]: Error:', error);
+    console.error('[handleLookupCraftingAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
   }
 }
