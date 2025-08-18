@@ -816,7 +816,7 @@ async function handleShopView(interaction) {
       color: 0xFFA500,
       fields: jailedCharacters.map(char => ({
         name: char.name,
-        value: `<t:${Math.floor(new Date(char.jailReleaseTime).getTime() / 1000)}:R>`,
+        value: new Date(char.jailReleaseTime).toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
         inline: true
       })),
       image: {

@@ -1059,18 +1059,16 @@ async function sendToJail(character) {
     const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const releaseDateEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + 3, 0, 0, 0, 0);
     
-    // Convert back to UTC for storage
-    const releaseTimeUTC = new Date(releaseDateEST.toLocaleString('en-US', { timeZone: 'UTC' }));
-    
+    // Store the EST midnight time directly
     character.inJail = true;
-    character.jailReleaseTime = releaseTimeUTC;
+    character.jailReleaseTime = releaseDateEST;
     character.failedStealAttempts = 0; // Reset counter
     await character.save();
     
     return {
         success: true,
         releaseTime: character.jailReleaseTime,
-        timeLeft: releaseTimeUTC.getTime() - Date.now()
+        timeLeft: character.jailReleaseTime.getTime() - Date.now()
     };
 }
 
@@ -1702,16 +1700,14 @@ module.exports = {
                     return;
                 }
 
-                // Calculate midnight EST release time
-                // Convert the stored UTC release time to EST for display
-                const releaseDateEST = new Date(character.jailReleaseTime).toLocaleString('en-US', { timeZone: 'America/New_York' });
-                const estReleaseDate = new Date(releaseDateEST);
+                // The stored time is already in EST midnight
+                const estReleaseDate = new Date(character.jailReleaseTime);
                 
                 const embed = createBaseEmbed('⏰ Jail Time Remaining', '#ff0000')
                     .setDescription(`**${character.name}** is currently in jail.`)
                     .addFields(
                         { name: '⏰ Time Remaining', value: `<t:${Math.floor((Date.now() + jailStatus.timeLeft) / 1000)}:R>`, inline: false },
-                        { name: '🕒 Release Time', value: `<t:${Math.floor(estReleaseDate.getTime() / 1000)}:F> (Midnight EST)`, inline: false },
+                        { name: '📅 Release Date', value: `${estReleaseDate.toLocaleDateString('en-US', { timeZone: 'America/New_York' })} (Midnight EST)`, inline: false },
                         { name: '📅 Formatted Time', value: formatJailTimeLeftDaysHours(jailStatus.timeLeft), inline: false }
                     )
                     .setThumbnail(character.icon)
