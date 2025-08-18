@@ -48,22 +48,41 @@ module.exports = {
       const ingredientName = interaction.options.getString('ingredient');
       const characterName = interaction.options.getString('crafting');
   
+      // Check that exactly one option is provided
+      const providedOptions = [itemName, ingredientName, characterName].filter(Boolean);
+      
+      if (providedOptions.length === 0) {
+        return interaction.editReply({ 
+          content: '❌ Please provide either an item, ingredient, or character name to check crafting options.\n\n**Usage:**\n• `/lookup item:ItemName` - Look up item details\n• `/lookup ingredient:IngredientName` - Find items that use this ingredient\n• `/lookup crafting:CharacterName` - Show what your character can currently craft', 
+          ephemeral: true 
+        });
+      }
+      
+      if (providedOptions.length > 1) {
+        return interaction.editReply({ 
+          content: '❌ Please provide only one option at a time.\n\n**Usage:**\n• `/lookup item:ItemName` - Look up item details\n• `/lookup ingredient:IngredientName` - Find items that use this ingredient\n• `/lookup crafting:CharacterName` - Show what your character can currently craft', 
+          ephemeral: true 
+        });
+      }
+  
       if (itemName) {
         await handleItemLookup(interaction, itemName);
       } else if (ingredientName) {
         await handleIngredientLookup(interaction, ingredientName);
       } else if (characterName) {
         await handleCraftingLookup(interaction, characterName);
-      } else {
-        return interaction.editReply({ content: '❌ Please provide either an item, ingredient, or character name to check crafting options.', ephemeral: true });
       }
     } catch (error) {
-    handleError(error, 'lookup.js');
+      handleError(error, 'lookup.js', {
+        commandName: 'lookup',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        options: { itemName, ingredientName, characterName }
+      });
 
-      console.error("❌ Error in lookup command:", error);  // Log detailed error
+      console.error("❌ Error in lookup command:", error);
       return interaction.editReply({ content: '❌ There was an error while executing this command!', ephemeral: true });
     }
-  
   },
 
   // ------------------- Autocomplete function for lookup -------------------
