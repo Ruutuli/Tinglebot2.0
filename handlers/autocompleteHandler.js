@@ -2965,7 +2965,7 @@ async function handleLookupCraftingAutocomplete(interaction, focusedValue) {
     // Get all characters belonging to the user
     const characters = await Character.find({ userId })
       .sort({ name: 1 })
-      .select('name icon')
+      .select('name currentVillage job')
       .lean();
 
     if (characters.length === 0) {
@@ -2975,7 +2975,7 @@ async function handleLookupCraftingAutocomplete(interaction, focusedValue) {
     const choices = characters
       .filter(character => character.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(character => ({
-        name: `${character.icon} ${character.name}`,
+        name: `${character.name} | ${capitalize(character.currentVillage || 'Unknown')} | ${capitalize(character.job || 'Unknown')}`,
         value: character.name
       }));
 
