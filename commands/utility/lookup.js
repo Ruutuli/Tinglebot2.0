@@ -80,7 +80,17 @@ module.exports = {
       });
 
       console.error("❌ Error in lookup command:", error);
-      return interaction.editReply({ content: '❌ There was an error while executing this command!', ephemeral: true });
+      
+      try {
+        return await interaction.editReply({ content: '❌ There was an error while executing this command!', ephemeral: true });
+      } catch (replyError) {
+        console.error('[lookup.js]: Failed to send error reply:', replyError);
+        try {
+          await interaction.followUp({ content: '❌ There was an error while executing this command!', ephemeral: true });
+        } catch (followUpError) {
+          console.error('[lookup.js]: Failed to send follow-up error message:', followUpError);
+        }
+      }
     }
   },
 
@@ -92,7 +102,7 @@ module.exports = {
 
 // ------------------- Handle item lookup -------------------
 async function handleItemLookup(interaction, itemName) {
-  // Escape special regex characters to prevent regex syntax errors
+  
   const escapedItemName = escapeRegExp(itemName);
   
   const item = await ItemModel.findOne({ 
@@ -116,7 +126,6 @@ async function handleItemLookup(interaction, itemName) {
     } else {
       const materialItem = await ItemModel.findById(material._id).select('itemName emoji');
       
-      // Add null check and fallback to direct material info
       if (!materialItem) {
         return formatItemDetails(material.itemName, material.quantity, emoji);
       }
@@ -126,14 +135,14 @@ async function handleItemLookup(interaction, itemName) {
   }));
   const craftingMaterialText = craftingMaterials.filter(mat => mat !== null).map(mat => `> ${mat}`).join('\n');
 
-  // Handle item properties such as category, source, job, and locations
+
   const sourceText = item.obtain?.length > 0 ? item.obtain : item.obtainTags || [];
   const jobText = item.allJobs?.length > 0 ? item.allJobs : ['None'];
   const locationsFormatted = (item.locationsTags || []).join(', ');
   const sourceFormatted = sourceText.map(source => `${source}`).join('\n');
   const jobFormatted = jobText.join('\n');
 
-  // Create item embed
+
   let modifierHeartsLine = '';
   let staminaToCraftLine = '';
   let staminaRecoveredLine = '';
@@ -146,7 +155,7 @@ async function handleItemLookup(interaction, itemName) {
     staminaRecoveredLine = `**__💚 Stamina Recovered:__** ${item.staminaRecovered?.toString() || 'N/A'}`;
   }
 
-  // Build description string with proper formatting
+
   const description = [
     `**__✨ Category:__** ${Array.isArray(item.category) ? item.category.join(', ') : item.category || 'None'}`,
     `**__✨ Type:__** ${Array.isArray(item.type) ? item.type.join(', ') : item.type || 'None'}`,
@@ -174,7 +183,7 @@ async function handleItemLookup(interaction, itemName) {
       { name: '🛠️ **__Source:__**', value: `>>> ${sourceFormatted}`, inline: true }
     );
 
-  // Add crafting materials if available
+
   if (item.craftingMaterial && item.craftingMaterial.length > 0) {
     const filteredCraftingMaterials = item.craftingMaterial.filter(mat => !['#Raw Material', '#Not Craftable'].includes(mat.itemName));
     if (filteredCraftingMaterials.length > 0) {
@@ -358,25 +367,73 @@ async function handleIngredientLookup(interaction, ingredientName) {
 
 // ------------------- Handle crafting lookup -------------------
 async function handleCraftingLookup(interaction, characterName) {
+  // Declare variables in function scope so they're accessible in catch block
+  let message = null;
+  let collector = null;
+  
   try {
+    // Validate interaction and user
+    if (!interaction || !interaction.user) {
+      console.error('[lookup.js]: Invalid interaction or missing user object');
+      return;
+    }
+    
     // Get the user ID from the interaction
     const userId = interaction.user.id;
+    
+    // Validate character name
+    if (!characterName || typeof characterName !== 'string') {
+      console.error('[lookup.js]: Invalid character name provided:', characterName);
+      
+      try {
+        await interaction.editReply({ 
+          content: '❌ Invalid character name provided.', 
+          ephemeral: true 
+        });
+      } catch (replyError) {
+        console.error('[lookup.js]: Failed to send invalid character name error:', replyError);
+        try {
+          await interaction.followUp({ 
+            content: '❌ Invalid character name provided.', 
+            ephemeral: true 
+          });
+        } catch (followUpError) {
+          console.error('[lookup.js]: Failed to send follow-up for invalid character name:', followUpError);
+        }
+      }
+      return;
+    }
     
     // Fetch character by name and user ID
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     
     if (!character) {
-      return interaction.editReply({ 
-        content: `❌ Character "${characterName}" not found or does not belong to you.`, 
-        ephemeral: true 
-      });
+      console.log(`[lookup.js]: Character "${characterName}" not found for user: ${interaction.user.tag} (${interaction.user.id})`);
+      
+      try {
+        return await interaction.editReply({ 
+          content: `❌ Character "${characterName}" not found or does not belong to you.`, 
+          ephemeral: true 
+        });
+      } catch (replyError) {
+        console.error('[lookup.js]: Failed to send character not found error:', replyError);
+        try {
+          await interaction.followUp({ 
+            content: `❌ Character "${characterName}" not found or does not belong to you.`, 
+            ephemeral: true 
+          });
+        } catch (followUpError) {
+          console.error('[lookup.js]: Failed to send follow-up for character not found:', followUpError);
+        }
+      }
+      return;
     }
 
     // Get character's inventory
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
     const inventory = await inventoryCollection.find().toArray();
 
-         // Get all craftable items from the database
+    // Get all craftable items from the database
      const allCraftableItems = await ItemModel.find({
        crafting: true,
        craftingMaterial: { $exists: true, $ne: [] }
@@ -412,23 +469,36 @@ async function handleCraftingLookup(interaction, characterName) {
         }
       }
 
-             if (canCraft) {
-         craftableItems.push({
-           name: item.itemName,
-           emoji: item.emoji || DEFAULT_EMOJI,
-           category: item.category,
-           staminaToCraft: item.staminaToCraft,
-           allJobs: item.allJobs,
-           materials: item.craftingMaterial
-         });
-       }
+        if (canCraft) {
+          craftableItems.push({
+            name: item.itemName,
+            emoji: item.emoji || DEFAULT_EMOJI,
+            category: item.category,
+            staminaToCraft: item.staminaToCraft,
+            allJobs: item.allJobs,
+            materials: item.craftingMaterial
+          });
+        }
     }
 
     if (craftableItems.length === 0) {
-      return interaction.editReply({ 
-        content: `❌ **${character.name}** cannot currently craft any items.\n\nCheck your inventory for materials or gather more resources!`, 
-        ephemeral: true 
-      });
+      try {
+        return await interaction.editReply({ 
+          content: `❌ **${character.name}** cannot currently craft any items.\n\nCheck your inventory for materials or gather more resources!`, 
+          ephemeral: true 
+        });
+      } catch (replyError) {
+        console.error('[lookup.js]: Failed to send no craftable items error:', replyError);
+        try {
+          await interaction.followUp({ 
+            content: `❌ **${character.name}** cannot currently craft any items.\n\nCheck your inventory for materials or gather more resources!`, 
+            ephemeral: true 
+          });
+        } catch (followUpError) {
+          console.error('[lookup.js]: Failed to send follow-up for no craftable items:', followUpError);
+        }
+      }
+      return;
     }
 
     // Sort craftable items by category and name
@@ -457,22 +527,22 @@ async function handleCraftingLookup(interaction, characterName) {
         .setThumbnail(character.icon || null)
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
-             for (const item of itemsToDisplay) {
-         const categoryText = Array.isArray(item.category) ? item.category.join(', ') : item.category;
-         const staminaText = item.staminaToCraft ? `> Stamina to Craft: ${item.staminaToCraft}` : '';
-         const jobText = item.allJobs && item.allJobs.length > 0 ? `> Job: ${item.allJobs.join(', ')}` : '';
-         
-         const materialsText = item.materials.map(mat => {
-           const emoji = mat.emoji || DEFAULT_EMOJI;
-           return `> ${emoji} ${mat.itemName} x${mat.quantity}`;
-         }).join('\n');
+      for (const item of itemsToDisplay) {
+        const categoryText = Array.isArray(item.category) ? item.category.join(', ') : item.category;
+        const staminaText = item.staminaToCraft ? `> Stamina to Craft: ${item.staminaToCraft}` : '';
+        const jobText = item.allJobs && item.allJobs.length > 0 ? `> Job: ${item.allJobs.join(', ')}` : '';
+        
+        const materialsText = item.materials.map(mat => {
+          const emoji = mat.emoji || DEFAULT_EMOJI;
+          return `> ${emoji} ${mat.itemName} x${mat.quantity}`;
+        }).join('\n');
 
-         embed.addFields({
-           name: `__${item.emoji} ${item.name}__`,
-           value: `> Category: ${categoryText}\n${staminaText}\n${jobText}\n__Materials:__\n${materialsText}`,
-           inline: false
-         });
-       }
+        embed.addFields({
+          name: `__${item.emoji} ${item.name}__`,
+          value: `> Category: ${categoryText}\n${staminaText}\n${jobText}\n__Materials:__\n${materialsText}`,
+          inline: false
+        });
+      }
 
       return embed.setFooter({ text: `Page ${page + 1} of ${totalPages} • Total craftable: ${craftableItems.length}` });
     };
@@ -490,12 +560,47 @@ async function handleCraftingLookup(interaction, characterName) {
         .setDisabled(currentPage === totalPages - 1)
     );
 
-    const message = await interaction.editReply({
-      embeds: [generateEmbed(currentPage)],
-      components: [generatePaginationRow()],
-    });
+    let message;
+    
+    try {
+      message = await interaction.editReply({
+        embeds: [generateEmbed(currentPage)],
+        components: [generatePaginationRow()],
+      });
+    } catch (error) {
+      handleError(error, 'lookup.js', {
+        commandName: 'craftingLookup',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: character.name,
+        operation: 'initialMessageCreation'
+      });
+      
+      try {
+        await interaction.editReply({ 
+          content: '❌ There was an error creating the display. Please try again later.', 
+          ephemeral: true 
+        });
+      } catch (replyError) {
+        console.error('[lookup.js]: Failed to send display creation error:', replyError);
+        try {
+          await interaction.followUp({ 
+            content: '❌ There was an error creating the display. Please try again later.', 
+            ephemeral: true 
+          });
+        } catch (followUpError) {
+          console.error('[lookup.js]: Failed to send follow-up for display creation error:', followUpError);
+        }
+      }
+      return;
+    }
 
-    const collector = message.createMessageComponentCollector({ time: 600000 }); // 10 minutes
+    if (!message) {
+      console.error('[lookup.js]: Message creation failed, cannot create collector');
+      return;
+    }
+    
+    collector = message.createMessageComponentCollector({ time: 600000 }); // 10 minutes
 
     collector.on('collect', async i => {
       if (i.user.id !== interaction.user.id) {
@@ -503,32 +608,77 @@ async function handleCraftingLookup(interaction, characterName) {
         return;
       }
 
-      if (i.customId === 'prev') {
-        currentPage--;
-      } else if (i.customId === 'next') {
-        currentPage++;
-      }
+      try {
+        if (i.customId === 'prev') {
+          currentPage--;
+        } else if (i.customId === 'next') {
+          currentPage++;
+        }
 
-      await i.update({
-        embeds: [generateEmbed(currentPage)],
-        components: [generatePaginationRow()],
-      });
+
+        if (message && !message.deleted) {
+          await i.update({
+            embeds: [generateEmbed(currentPage)],
+            components: [generatePaginationRow()],
+          });
+        } else {
+
+          if (collector && !collector.ended) {
+            collector.stop();
+          }
+          await i.reply({ 
+            content: '❌ The display message was deleted. Please run the command again.', 
+            ephemeral: true 
+          });
+        }
+              } catch (error) {
+          console.error(`[lookup.js]: Button interaction error for user: ${interaction.user.tag} (${interaction.user.id}):`, error);
+          
+          if (error.code === 10008) {
+            // Message not found - stop collector
+            if (collector && !collector.ended) {
+              collector.stop();
+            }
+          } else {
+            handleError(error, 'lookup.js', {
+              commandName: 'craftingLookup',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              characterName: character.name,
+              interactionId: i.id,
+              customId: i.customId
+            });
+            
+
+            try {
+              await i.reply({ 
+                content: '❌ There was an error updating the display. Please try the command again.', 
+                ephemeral: true 
+              });
+            } catch (replyError) {
+              console.error('[lookup.js]: Failed to send error reply:', replyError);
+            }
+          }
+        }
     });
 
-    collector.on('end', async () => {
-      try {
-        await message.edit({ components: [] });
-      } catch (error) {
-        handleError(error, 'lookup.js', {
-          commandName: 'craftingLookup',
-          userTag: interaction.user.tag,
-          userId: interaction.user.id,
-          characterName: character.name
-        });
-      }
+    collector.on('end', () => {
+      // Collector ended naturally
+    });
+    
+
+    collector.on('error', (error) => {
+      console.error(`[lookup.js]: Collector error:`, error);
     });
 
   } catch (error) {
+
+    if (collector && !collector.ended) {
+      collector.stop();
+    }
+    
+
+    
     handleError(error, 'lookup.js', {
       commandName: 'craftingLookup',
       userTag: interaction.user.tag,
@@ -538,10 +688,27 @@ async function handleCraftingLookup(interaction, characterName) {
     
     console.error(`[lookup.js]: Crafting lookup failed:`, error);
     
-    await interaction.editReply({ 
-      content: '❌ There was an error while checking craftable items. Please try again later.', 
-      ephemeral: true 
-    });
+
+    
+    try {
+      await interaction.editReply({ 
+        content: '❌ There was an error while checking craftable items. Please try again later.', 
+        ephemeral: true 
+      });
+
+    } catch (replyError) {
+      console.error(`[lookup.js]: Failed to send error reply:`, replyError);
+
+      
+      try {
+        await interaction.followUp({ 
+          content: '❌ There was a critical error. Please try again later.', 
+          ephemeral: true 
+        });
+      } catch (followUpError) {
+        console.error(`[lookup.js]: Failed to send follow-up error message:`, followUpError);
+      }
+    }
   }
 }
 
