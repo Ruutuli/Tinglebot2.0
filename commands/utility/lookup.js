@@ -1,13 +1,14 @@
 // ------------------- Import necessary modules and functions -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { connectToTinglebot, getIngredientItems, getCharacterInventoryCollection} = require('../../database/db.js');
+const { connectToTinglebot, getIngredientItems, getCharacterInventoryCollection, fetchCharacterByNameAndUserId } = require('../../database/db.js');
 const { escapeRegExp } = require('../../utils/inventoryUtils.js');
 const ItemModel = require('../../models/ItemModel.js');
 const Character = require('../../models/CharacterModel.js');
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { getCategoryColor } = require('../../modules/formattingModule.js');
 const { formatItemDetails } = require('../../embeds/embeds.js');
+const generalCategories = require('../../models/GeneralItemCategories.js');
 
 // ------------------- Constants -------------------
 const ITEMS_PER_PAGE = 25;
@@ -29,6 +30,12 @@ module.exports = {
         .setDescription('The name of the ingredient to look up')
         .setAutocomplete(true)
         .setRequired(false)
+    )
+    .addStringOption(option =>
+      option.setName('crafting')
+        .setDescription('Check what items a character can currently craft')
+        .setAutocomplete(true)
+        .setRequired(false)
     ),
 
   // ------------------- Main execute function for lookup -------------------
@@ -39,13 +46,16 @@ module.exports = {
   
       const itemName = interaction.options.getString('item');
       const ingredientName = interaction.options.getString('ingredient');
+      const characterName = interaction.options.getString('crafting');
   
       if (itemName) {
         await handleItemLookup(interaction, itemName);
       } else if (ingredientName) {
         await handleIngredientLookup(interaction, ingredientName);
+      } else if (characterName) {
+        await handleCraftingLookup(interaction, characterName);
       } else {
-        return interaction.editReply({ content: '❌ Please provide either an item or ingredient to look up.', ephemeral: true });
+        return interaction.editReply({ content: '❌ Please provide either an item, ingredient, or character name to check crafting options.', ephemeral: true });
       }
     } catch (error) {
     handleError(error, 'lookup.js');
@@ -326,6 +336,193 @@ async function handleIngredientLookup(interaction, ingredientName) {
      // Error handling if needed
    }
  });
+}
+
+// ------------------- Handle crafting lookup -------------------
+async function handleCraftingLookup(interaction, characterName) {
+  try {
+    // Get the user ID from the interaction
+    const userId = interaction.user.id;
+    
+    // Fetch character by name and user ID
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    
+    if (!character) {
+      return interaction.editReply({ 
+        content: `❌ Character "${characterName}" not found or does not belong to you.`, 
+        ephemeral: true 
+      });
+    }
+
+    // Get character's inventory
+    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+    const inventory = await inventoryCollection.find().toArray();
+
+    // Get all craftable items from the database
+    const allCraftableItems = await ItemModel.find({
+      crafting: true,
+      craftingMaterial: { $exists: true, $ne: [] }
+    }).select('itemName craftingMaterial emoji category staminaToCraft').lean();
+
+    // Check which items the character can currently craft
+    const craftableItems = [];
+    
+    for (const item of allCraftableItems) {
+      let canCraft = true;
+      const missingMaterials = [];
+      
+      // Check each required material
+      for (const material of item.craftingMaterial) {
+        const requiredQty = material.quantity;
+        let ownedQty = 0;
+
+        if (generalCategories[material.itemName]) {
+          // Check category items (like "Any Fish", "Any Fruit", etc.)
+          ownedQty = inventory.filter(invItem => 
+            generalCategories[material.itemName].includes(invItem.itemName)
+          ).reduce((sum, inv) => sum + inv.quantity, 0);
+        } else {
+          // Check specific item
+          ownedQty = inventory.filter(invItem => 
+            invItem.itemName.toLowerCase() === material.itemName.toLowerCase()
+          ).reduce((sum, inv) => sum + inv.quantity, 0);
+        }
+
+        if (ownedQty < requiredQty) {
+          canCraft = false;
+          missingMaterials.push(`${material.itemName} (Required: ${requiredQty}, Owned: ${ownedQty})`);
+        }
+      }
+
+      if (canCraft) {
+        craftableItems.push({
+          name: item.itemName,
+          emoji: item.emoji || DEFAULT_EMOJI,
+          category: item.category,
+          staminaToCraft: item.staminaToCraft,
+          materials: item.craftingMaterial
+        });
+      }
+    }
+
+    if (craftableItems.length === 0) {
+      return interaction.editReply({ 
+        content: `❌ **${character.name}** cannot currently craft any items.\n\nCheck your inventory for materials or gather more resources!`, 
+        ephemeral: true 
+      });
+    }
+
+    // Sort craftable items by category and name
+    craftableItems.sort((a, b) => {
+      const categoryA = Array.isArray(a.category) ? a.category[0] : a.category;
+      const categoryB = Array.isArray(b.category) ? b.category[0] : b.category;
+      if (categoryA !== categoryB) {
+        return categoryA.localeCompare(categoryB);
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    // Pagination logic for displaying craftable items
+    let currentPage = 0;
+    const totalPages = Math.ceil(craftableItems.length / ITEMS_PER_PAGE);
+
+    const generateEmbed = (page) => {
+      const start = page * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const itemsToDisplay = craftableItems.slice(start, end);
+
+      const embed = new EmbedBuilder()
+        .setTitle(`🛠️ Currently Craftable Items for ${character.name}`)
+        .setDescription(`Found **${craftableItems.length}** items you can craft right now!`)
+        .setColor('#A48D68')
+        .setThumbnail(character.icon || null)
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+
+      for (const item of itemsToDisplay) {
+        const categoryText = Array.isArray(item.category) ? item.category.join(', ') : item.category;
+        const staminaText = item.staminaToCraft ? ` | Stamina: ${item.staminaToCraft}` : '';
+        
+        const materialsText = item.materials.map(mat => {
+          const emoji = mat.emoji || DEFAULT_EMOJI;
+          return `${emoji} ${mat.itemName} x${mat.quantity}`;
+        }).join('\n');
+
+        embed.addFields({
+          name: `${item.emoji} ${item.name}`,
+          value: `**Category:** ${categoryText}${staminaText}\n**Materials:**\n${materialsText}`,
+          inline: true
+        });
+      }
+
+      return embed.setFooter({ text: `Page ${page + 1} of ${totalPages} • Total craftable: ${craftableItems.length}` });
+    };
+
+    const generatePaginationRow = () => new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('prev')
+        .setLabel('Previous')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(currentPage === 0),
+      new ButtonBuilder()
+        .setCustomId('next')
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(currentPage === totalPages - 1)
+    );
+
+    const message = await interaction.editReply({
+      embeds: [generateEmbed(currentPage)],
+      components: [generatePaginationRow()],
+    });
+
+    const collector = message.createMessageComponentCollector({ time: 600000 }); // 10 minutes
+
+    collector.on('collect', async i => {
+      if (i.user.id !== interaction.user.id) {
+        await i.reply({ content: '❌ **You cannot use these buttons.**', ephemeral: true });
+        return;
+      }
+
+      if (i.customId === 'prev') {
+        currentPage--;
+      } else if (i.customId === 'next') {
+        currentPage++;
+      }
+
+      await i.update({
+        embeds: [generateEmbed(currentPage)],
+        components: [generatePaginationRow()],
+      });
+    });
+
+    collector.on('end', async () => {
+      try {
+        await message.edit({ components: [] });
+      } catch (error) {
+        handleError(error, 'lookup.js', {
+          commandName: 'craftingLookup',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          characterName: character.name
+        });
+      }
+    });
+
+  } catch (error) {
+    handleError(error, 'lookup.js', {
+      commandName: 'craftingLookup',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: characterName
+    });
+    
+    console.error(`[lookup.js]: Crafting lookup failed:`, error);
+    
+    await interaction.editReply({ 
+      content: '❌ There was an error while checking craftable items. Please try again later.', 
+      ephemeral: true 
+    });
+  }
 }
 
 // ------------------- Fetch characters with a specific item -------------------
