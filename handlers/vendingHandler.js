@@ -1864,17 +1864,17 @@ async function handleVendingViewVillage(interaction, villageKey) {
       rudania: {
         emoji: '<:rudania:899492917452890142>',
         color: '#d93e3e',
-        image: 'https://static.wixstatic.com/media/7573f4_a0d0d9c6b91644f3b67de8612a312e42~mv2.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20red.png'
+        image: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_red_bottom.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20red.png'
       },
       inariko: {
         emoji: '<:inariko:899493009073274920>',
         color: '#3e7ed9',
-        image: 'https://static.wixstatic.com/media/7573f4_c88757c19bf244aa9418254c43046978~mv2.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20blue.png'
+        image: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_blue_bottom.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20blue.png'
       },
       vhintl: {
         emoji: '<:vhintl:899492879205007450>',
         color: '#3ed96a',
-        image: 'https://static.wixstatic.com/media/7573f4_968160b5206e4d9aa1b254464d97f9a9~mv2.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20GREEN.png'
+        image: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_green_bottom.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20GREEN.png'
       },
       limited: {
         emoji: '🎁',
