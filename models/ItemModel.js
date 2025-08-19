@@ -20,13 +20,13 @@ const CraftingMaterialSchema = new Schema({
 // ============================================================================
 const ItemSchema = new Schema(
   {
-    // --- Identity & Display ---
+    // ------------------- Identity & Display -------------------
     itemName: { type: String, required: true },
     image: { type: String, default: 'No Image' },
     imageType: { type: String, default: 'No Image Type' },
     emoji: { type: String, default: '' },
 
-    // --- Classification ---
+    // ------------------- Classification -------------------
     itemRarity: { type: Number, default: 1 },
     category: { type: [String], default: ['Misc'] },   // e.g., 'Armor', 'Food'
     categoryGear: { type: String, default: 'None' },   // e.g., 'Armor', 'Weapon'
@@ -34,26 +34,26 @@ const ItemSchema = new Schema(
     subtype: { type: [String], default: ['None'] },    // e.g., ['Head', 'Bow']
     recipeTag: { type: [String], default: ['#Not Craftable'] },
 
-    // --- Economics ---
+    // ------------------- Economics -------------------
     buyPrice: { type: Number, default: 0 },
     sellPrice: { type: Number, default: 0 },
 
-    // --- Effects / Stats ---
+    // ------------------- Effects / Stats -------------------
     modifierHearts: { type: Number, default: 0 },
     staminaRecovered: { type: Number, default: 0 },
 
-    // --- Stack Rules ---
+    // ------------------- Stack Rules -------------------
     stackable: { type: Boolean, default: false },
     maxStackSize: { type: Number, default: 10 },
 
-    // --- Crafting ---
+    // ------------------- Crafting -------------------
     craftingMaterial: { type: [CraftingMaterialSchema], default: [] },
     staminaToCraft: { type: Schema.Types.Mixed, default: null },
     crafting: { type: Boolean, default: false },
     craftingJobs: { type: [String], default: [] },
     craftingTags: { type: [String], default: [] },
 
-    // --- Activities & Obtain ---
+    // ------------------- Activities & Obtain -------------------
     gathering: { type: Boolean, default: false },
     looting: { type: Boolean, default: false },
     vending: { type: Boolean, default: false },
@@ -66,7 +66,7 @@ const ItemSchema = new Schema(
     lootingJobs: { type: [String], default: [] },
     lootingTags: { type: [String], default: [] },
 
-    // --- Weather (special conditions) ---
+    // ------------------- Weather (special conditions) -------------------
     specialWeather: {
       muggy: { type: Boolean, default: false },
       flowerbloom: { type: Boolean, default: false },
@@ -77,7 +77,7 @@ const ItemSchema = new Schema(
       avalanche: { type: Boolean, default: false }
     },
 
-    // --- Pet Perks ---
+    // ------------------- Pet Perks -------------------
     petPerk: { type: Boolean, default: false },
     petperkobtain: { type: [String], default: ['None'] },
     petprey: { type: Boolean, default: false },
@@ -89,7 +89,7 @@ const ItemSchema = new Schema(
     peticechu: { type: Boolean, default: false },
     petelectricchu: { type: Boolean, default: false },
 
-    // --- Location Metadata ---
+    // ------------------- Location Metadata -------------------
     locations: { type: [String], default: [] },
     locationsTags: { type: [String], default: [] },
     centralHyrule: { type: Boolean, default: false },
@@ -100,11 +100,8 @@ const ItemSchema = new Schema(
     lanayru: { type: Boolean, default: false },
     pathOfScarletLeaves: { type: Boolean, default: false },
     leafDewWay: { type: Boolean, default: false },
-    rudaniaImg: { type: String, default: '' },
-    inarikoImg: { type: String, default: '' },
-    vhintlImg: { type: String, default: '' },
 
-    // --- Job Flags ---
+    // ------------------- Job Flags -------------------
     adventurer: { type: Boolean, default: false },
     artist: { type: Boolean, default: false },
     beekeeper: { type: Boolean, default: false },
@@ -128,13 +125,13 @@ const ItemSchema = new Schema(
     weaver: { type: Boolean, default: false },
     witch: { type: Boolean, default: false },
 
-    // --- Boost/Item Tags ---
+    // ------------------- Boost/Item Tags -------------------
     allJobs: { type: [String], default: ['None'] },
     allJobsTags: { type: [String], default: ['None'] },
     entertainerItems: { type: Boolean, default: false },
     divineItems: { type: Boolean, default: false },
 
-    // --- Monsters ---
+    // ------------------- Monsters -------------------
     // Associated monsters list
     monsterList: { type: [String], default: [] },
     // Monster flags
@@ -248,6 +245,92 @@ const ItemSchema = new Schema(
 // Indexes
 // ============================================================================
 ItemSchema.index({ itemName: 1 });
+
+// ============================================================================
+// Helper Functions for Job Categorization
+// ============================================================================
+
+// Import job data from jobsModule to categorize jobs properly
+const { jobPerks } = require('../modules/jobsModule');
+
+/**
+ * Get all jobs that have a specific perk type
+ * @param {string} perkType - The perk type to filter by (e.g., 'GATHERING', 'LOOTING', 'CRAFTING')
+ * @returns {string[]} Array of job names with that perk
+ */
+ItemSchema.statics.getJobsByPerk = function(perkType) {
+  if (!jobPerks || !Array.isArray(jobPerks)) {
+    console.warn('[ItemModel.js]: jobPerks not available, returning empty array');
+    return [];
+  }
+  
+  return jobPerks
+    .filter(job => job.perk && job.perk.toUpperCase().includes(perkType.toUpperCase()))
+    .map(job => job.job);
+};
+
+/**
+ * Get all gathering jobs (jobs with GATHERING perk)
+ * @returns {string[]} Array of gathering job names
+ */
+ItemSchema.statics.getGatheringJobs = function() {
+  return this.getJobsByPerk('GATHERING');
+};
+
+/**
+ * Get all looting jobs (jobs with LOOTING perk)
+ * @returns {string[]} Array of looting job names
+ */
+ItemSchema.statics.getLootingJobs = function() {
+  return this.getJobsByPerk('LOOTING');
+};
+
+/**
+ * Get all crafting jobs (jobs with CRAFTING perk)
+ * @returns {string[]} Array of crafting job names
+ */
+ItemSchema.statics.getCraftingJobs = function() {
+  return this.getJobsByPerk('CRAFTING');
+};
+
+/**
+ * Get all boosting jobs (jobs with BOOST perk)
+ * @returns {string[]} Array of boosting job names
+ */
+ItemSchema.statics.getBoostingJobs = function() {
+  return this.getJobsByPerk('BOOST');
+};
+
+/**
+ * Check if a specific job has a specific perk
+ * @param {string} jobName - The job name to check
+ * @param {string} perkType - The perk type to check for
+ * @returns {boolean} True if the job has that perk
+ */
+ItemSchema.statics.jobHasPerk = function(jobName, perkType) {
+  if (!jobPerks || !Array.isArray(jobPerks)) {
+    console.warn('[ItemModel.js]: jobPerks not available, returning false');
+    return false;
+  }
+  
+  const job = jobPerks.find(j => j.job.toLowerCase() === jobName.toLowerCase());
+  return job ? job.perk.toUpperCase().includes(perkType.toUpperCase()) : false;
+};
+
+/**
+ * Get the perk type for a specific job
+ * @param {string} jobName - The job name to get perk for
+ * @returns {string|null} The perk type or null if not found
+ */
+ItemSchema.statics.getJobPerk = function(jobName) {
+  if (!jobPerks || !Array.isArray(jobPerks)) {
+    console.warn('[ItemModel.js]: jobPerks not available, returning null');
+    return null;
+  }
+  
+  const job = jobPerks.find(j => j.job.toLowerCase() === jobName.toLowerCase());
+  return job ? job.perk : null;
+};
 
 // ============================================================================
 // Exports
