@@ -1001,7 +1001,7 @@ async function sendMonsterHuntSummary(interaction, character, questId, monsterLi
     )
     .setFooter({ text: `${character.currentVillage} Monster Hunt | Quest ID: ${questId} | ${new Date().toLocaleString('en-US', {timeZone: 'America/New_York'})}` })
     .setTimestamp()
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
   
   if (lootSummary) {
     summaryEmbed.addFields({ 
@@ -1376,7 +1376,7 @@ module.exports = {
           .setAuthor({ name: `${interaction.user.username} - Help Wanted History`, iconURL: interaction.user.displayAvatarURL() })
           .setColor('#AA926A')
           .setThumbnail(interaction.user.displayAvatarURL())
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setDescription(`📜 **Help Wanted Quest History** for **${interaction.user.username}**`);
 
         // Add main statistics in a clean format

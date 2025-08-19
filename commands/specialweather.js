@@ -423,7 +423,7 @@ module.exports = {
             color: 0x008B8B, // Dark cyan color
             description: `*${character.name} has found all the special weather had to offer in ${channelVillage} today!*\n\n**Daily special weather gathering limit reached for ${channelVillage}.**\nYou've already gathered during special weather in ${channelVillage} today. Special weather events are rare and unpredictable - keep an eye out for the next one!`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Daily Activity Limit'
@@ -447,7 +447,7 @@ module.exports = {
             color: 0x008B8B,
             description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nUnable to retrieve weather data for ${currentVillage}.\n\nPlease try again in a few moments.`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Weather Data Error'
@@ -465,7 +465,7 @@ module.exports = {
             color: 0x008B8B,
             description: `*${character.name} looks up at the sky...*\n\n**No Special Weather Detected**\nThere is no special weather in ${currentVillage} right now.\n\n✨ **Special weather is required to use this command.**`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Weather Check'
@@ -483,7 +483,7 @@ module.exports = {
             color: 0x008B8B,
             description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe special weather data for ${currentVillage} appears to be incomplete.\n\nPlease try again in a few moments.`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Weather Data Error'
@@ -503,7 +503,7 @@ module.exports = {
             color: 0x008B8B, // Dark cyan color
             description: `*${character.name} looks around confused...*\n\n**Wrong Village Location**\nYou must be in ${currentVillage} to gather during its special weather.\n\n🗺️ **Current Location:** ${character.currentVillage}`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Location Check'
@@ -539,7 +539,7 @@ module.exports = {
           title: `🌧️🧿 **${weather.special.label} Warning**`,
           description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Looting** - Items may be contaminated\n• **Gathering** - Resources may be tainted\n• **Traveling** - Risk of blight exposure\n\n<:blight_eye:805576955725611058> The blighted rain creates dangerous conditions. Consider waiting for clearer weather.`,
           thumbnail: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: `${currentVillage} Weather Advisory`
@@ -625,7 +625,7 @@ module.exports = {
               }
             ],
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Inventory Sync Required'

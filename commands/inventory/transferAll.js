@@ -88,7 +88,7 @@ module.exports = {
                 name: 'How to Fix',
                 value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
               })
-              .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
               .setFooter({ text: 'Inventory Sync Required' })
           ],
           ephemeral: true

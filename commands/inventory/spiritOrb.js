@@ -163,7 +163,7 @@ async function execute(interaction) {
         .setAuthor({ name: `${character.name} - Spirit Orb Exchange`, iconURL: character.icon })
         .setColor('#AA926A')
         .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setDescription(`💫 **[${character.name}](${character.inventory})** offers 4 <:spiritorb:1171310851748270121> Spirit Orbs to the Goddess Statue.\n\n${chosenFlavor}`)
 
         // ------------------- Visual Meter Display -------------------

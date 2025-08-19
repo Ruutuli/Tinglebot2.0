@@ -41,7 +41,7 @@ const { sendUserDM } = require("./utils/messageUtils");
 const { checkExpiredRequests } = require("./utils/expirationHandler");
 const { isValidImageUrl } = require("./utils/validation");
 const DEFAULT_IMAGE_URL =
- "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+ "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const { getCurrentWeather, generateWeatherEmbed } = require("./services/weatherService");
 const Pet = require("./models/PetModel");
 const Raid = require("./models/RaidModel");
@@ -325,7 +325,7 @@ async function handleJailRelease(client) {
    "Town Hall Proclamation",
    `The town hall doors creak open and a voice rings out:\n\n> **${character.name}** has served their time and is hereby released from jail.\n\nMay you walk the path of virtue henceforth.`,
    character.icon,
-   "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png",
+   "https://storage.googleapis.com/tinglebot/Graphics/border.png",
    "Town Hall Records • Reformed & Released"
   );
 

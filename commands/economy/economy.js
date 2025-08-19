@@ -384,7 +384,7 @@ for (const { quantity } of cleanedItems) {
         title: '❌ Invalid Quantity',
         description: 'You must gift a **positive quantity** of items. Negative numbers are not allowed.',
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Quantity Validation'
@@ -405,7 +405,7 @@ for (const { name } of cleanedItems) {
         title: '❌ Spirit Orb Protection',
         description: 'Spirit Orbs cannot be gifted. They are sacred items that can only be used by their original owner.',
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Item Protection'
@@ -474,7 +474,7 @@ for (const { name } of cleanedItems) {
           title: '❌ Item Equipped',
           description: `You cannot gift \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`,
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Equipment Check'
@@ -505,7 +505,7 @@ for (const { name } of cleanedItems) {
       title: '❌ Recipient Not Found',
       description: `Character \`${toCharacterName}\` not found or belongs to you.`,
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Character Validation'
@@ -536,7 +536,7 @@ for (const { name } of cleanedItems) {
           }
         ],
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Inventory Sync Required'
@@ -573,7 +573,7 @@ for (const { name } of cleanedItems) {
         }
       ],
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Village Check'
@@ -637,7 +637,7 @@ for (const { name } of cleanedItems) {
         }
       ],
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Inventory Check'
@@ -659,7 +659,7 @@ for (const { name } of cleanedItems) {
       title: '❌ Missing Inventory Link',
       description: 'Missing Google Sheets URL for character inventory.',
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Inventory Link Required'
@@ -680,7 +680,7 @@ for (const { name } of cleanedItems) {
       title: '❌ Invalid Inventory Link',
       description: 'Invalid Google Sheets URL for character inventory.',
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Valid URL Required'
@@ -788,7 +788,7 @@ for (const { name } of cleanedItems) {
       title: '❌ Gift Error',
       description: 'An error occurred while trying to gift the items.',
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Error Handling'
@@ -820,7 +820,7 @@ async function handleShopView(interaction) {
         inline: true
       })),
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'You will be automatically released when your time is up.'
@@ -883,7 +883,7 @@ async function handleShopView(interaction) {
     .setDescription(itemsList.join("\n\n"))
     .setColor("#A48D68")
     .setImage(
-     "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+     "https://storage.googleapis.com/tinglebot/Graphics/border.png"
     )
     .setFooter({ text: `Page ${page + 1} of ${pages}` });
   };
@@ -994,7 +994,7 @@ async function handleShopBuy(interaction) {
           title: '❌ Tokens Not Synced',
           description: 'Your tokens are not synced. Please sync your tokens to use this command.',
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Token Sync Required'
@@ -1016,7 +1016,7 @@ async function handleShopBuy(interaction) {
           title: '❌ Invalid Quantity',
           description: 'You must buy a **positive quantity** of items. Negative numbers are not allowed.',
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Quantity Validation'
@@ -1041,7 +1041,7 @@ async function handleShopBuy(interaction) {
           title: '❌ Character Not Found',
           description: 'Character not found or does not belong to you.',
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Character Validation'
@@ -1072,7 +1072,7 @@ async function handleShopBuy(interaction) {
             }
           ],
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Inventory Sync Required'
@@ -1095,7 +1095,7 @@ async function handleShopBuy(interaction) {
           title: '❌ Item Not Available',
           description: `Item "${itemName}" is not available in the shop.`,
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Shop Validation'
@@ -1114,7 +1114,7 @@ async function handleShopBuy(interaction) {
           title: '❌ Invalid Stock',
           description: 'Shop item quantity is invalid. Please try again later.',
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Shop Validation'
@@ -1131,7 +1131,7 @@ async function handleShopBuy(interaction) {
           title: '❌ Insufficient Stock',
           description: `Not enough stock available. Only ${shopQuantity} ${itemName} remaining in the shop.`,
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Shop Validation'
@@ -1178,7 +1178,7 @@ async function handleShopBuy(interaction) {
           title: '❌ Item Not For Sale',
           description: 'This item cannot be purchased from the shop.',
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Item Validation'
@@ -1215,7 +1215,7 @@ async function handleShopBuy(interaction) {
             }
           ],
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Token Balance Check'
@@ -1289,7 +1289,7 @@ async function handleShopBuy(interaction) {
       .setAuthor({ name: characterName, iconURL: character.icon || "" })
       .setColor("#A48D68")
       .setImage(
-        "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+        "https://storage.googleapis.com/tinglebot/Graphics/border.png"
       )
       .addFields(
         {
@@ -1315,7 +1315,7 @@ async function handleShopBuy(interaction) {
         title: '❌ Purchase Error',
         description: 'An error occurred while trying to buy the item. Please try again later.',
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Error Handling'
@@ -1368,7 +1368,7 @@ if (quantity <= 0) {
       title: '❌ Character Not Found',
       description: 'Character not found.',
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Character Validation'
@@ -1387,7 +1387,7 @@ if (quantity <= 0) {
         title: '❌ Not Your Character',
         description: 'You can only sell items for characters that belong to you.',
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Character Ownership'
@@ -1418,7 +1418,7 @@ if (quantity <= 0) {
           }
         ],
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Inventory Sync Required'
@@ -1665,7 +1665,7 @@ for (const { quantity } of cleanedItems) {
         title: '❌ Invalid Quantity',
         description: 'You must transfer a **positive quantity** of items. Negative numbers are not allowed.',
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Quantity Validation'
@@ -1712,7 +1712,7 @@ for (const { quantity } of cleanedItems) {
       title: '❌ Character Not Found',
       description: 'Either the source or destination character does not exist or does not belong to you.',
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Character Validation'
@@ -1745,7 +1745,7 @@ for (const { name } of cleanedItems) {
         title: '❌ Item Equipped',
         description: `You cannot transfer \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`,
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Equipment Check'
@@ -1775,7 +1775,7 @@ for (const { name } of cleanedItems) {
           }
         ],
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Inventory Sync Required'
@@ -1870,7 +1870,7 @@ for (const { name } of cleanedItems) {
         inline: true
       })),
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Inventory Check'
@@ -1892,7 +1892,7 @@ for (const { name } of cleanedItems) {
       title: '❌ Missing Inventory Link',
       description: 'Missing Google Sheets URL for character inventory.',
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Inventory Link Required'
@@ -1910,7 +1910,7 @@ for (const { name } of cleanedItems) {
       title: '❌ Invalid Inventory Link',
       description: 'Invalid Google Sheets URL for character inventory.',
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Valid URL Required'
@@ -2007,7 +2007,7 @@ for (const { name } of cleanedItems) {
       title: '❌ Transfer Error',
       description: 'An error occurred while trying to transfer the items.',
       image: {
-        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
       footer: {
         text: 'Error Handling'
@@ -2268,7 +2268,7 @@ async function handleTrade(interaction) {
             inline: true
           })),
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Item Validation'
@@ -2299,7 +2299,7 @@ async function handleTrade(interaction) {
             title: '❌ Invalid Quantity',
             description: 'You must trade a **positive quantity** of items. Negative numbers are not allowed.',
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Quantity Validation'
@@ -2332,7 +2332,7 @@ async function handleTrade(interaction) {
             title: '❌ Spirit Orb Protection',
             description: 'Spirit Orbs cannot be traded. They are sacred items that can only be used by their original owner.',
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Item Protection'
@@ -2420,7 +2420,7 @@ async function handleTrade(interaction) {
             }
           ],
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Village Check'
@@ -2448,7 +2448,7 @@ async function handleTrade(interaction) {
             }
           ],
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Inventory Sync Required'
@@ -2471,7 +2471,7 @@ async function handleTrade(interaction) {
               title: '❌ Invalid Trade',
               description: 'Invalid or expired trade ID.',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Trade Validation'
@@ -2490,7 +2490,7 @@ async function handleTrade(interaction) {
               title: '❌ Trade Expired',
               description: 'This trade has expired. Please initiate a new trade.',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Trade Timeout'
@@ -2514,7 +2514,7 @@ async function handleTrade(interaction) {
               title: '❌ Not Part of Trade',
               description: 'You are not part of this trade.',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Trade Validation'
@@ -2549,7 +2549,7 @@ async function handleTrade(interaction) {
               title: '❌ Character Mismatch',
               description: 'The character you provided does not match your character in this trade.',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Character Validation'
@@ -2570,7 +2570,7 @@ async function handleTrade(interaction) {
               title: '❌ Already Confirmed',
               description: 'You have already confirmed this trade.',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Trade Status'

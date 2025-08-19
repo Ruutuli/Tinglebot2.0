@@ -148,7 +148,7 @@ async function validateCharacterForLoot(interaction, characterName, userId) {
           title: '❌ Character Not Found',
           description: `Character \`${characterName}\` not found or does not belong to you.`,
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Character Validation'
@@ -185,7 +185,7 @@ async function validateJobForLoot(interaction, character, job) {
         color: 0x008B8B,
         description: `*${character.name} looks at their hands, unsure of how to proceed...*\n\n**Job Skill Mismatch**\n${character.name} cannot use the looting perk as a ${capitalizeWords(job)} because they lack the necessary looting skills.`,
         image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
           text: 'Job Skill Check'
@@ -326,7 +326,7 @@ module.exports = {
          color: 0x008B8B, // Dark cyan color
          description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
          image: {
-           url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+           url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
          },
          footer: {
            text: 'Channel Restriction'
@@ -472,7 +472,7 @@ module.exports = {
              }
            ],
            image: {
-             url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+             url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
            },
            footer: {
              text: 'Inventory Sync Required'
@@ -530,7 +530,7 @@ module.exports = {
            color: 0x008B8B,
            description: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to loot again today.*`,
            image: {
-             url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+             url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
            },
            footer: {
              text: 'Daily Activity Limit'
@@ -746,7 +746,7 @@ module.exports = {
             }
           ],
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
           footer: {
             text: 'Inventory Sync Required'

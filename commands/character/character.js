@@ -113,7 +113,7 @@ const {
 // ============================================================================
 
 const DEFAULT_IMAGE_URL =
- "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+ "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const EDIT_NOTIFICATION_CHANNEL_ID = '1381479893090566144';
 const characterEmojis = [
  "🍃",
@@ -1213,7 +1213,7 @@ async function handleEditCharacter(interaction) {
         { name: '⏳ Review Time', value: '> Please allow up to 48 hours for review.', inline: false },
         { name: '🔗 Request ID', value: `> \`${editId}\``, inline: false }
       )
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({
         text: 'Character Edit Request'
       })
@@ -1242,7 +1242,7 @@ function formatEditNotification(userTag, characterName, category, previous, upda
       { name: '✅ Requested Value', value: `> \`${typeof updated === 'object' ? JSON.stringify(updated) : updated}\``, inline: false },
       { name: '🔗 Request ID', value: `> \`${requestId}\``, inline: false }
     )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({
       text: 'Character Edit Request'
     })
@@ -1405,7 +1405,7 @@ async function handleViewCharacter(interaction) {
     color: parseInt(settings.color.replace("#", ""), 16),
     thumbnail: { url: getMountThumbnail(mount.species) },
     image: {
-     url: "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png",
+     url: "https://storage.googleapis.com/tinglebot/Graphics/border.png",
     },
     footer: {
      text: `${updatedCharacter.name}'s Mount Stats`,
@@ -1452,7 +1452,7 @@ async function handleViewCharacterList(interaction) {
    .setColor(getRandomColor())
    .setFooter({ text: "Click a character below to view more details!" })
    .setImage(
-    "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+    "https://storage.googleapis.com/tinglebot/Graphics/border.png"
    );
 
   const rows = [];

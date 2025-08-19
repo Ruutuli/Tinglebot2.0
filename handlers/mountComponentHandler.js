@@ -117,7 +117,7 @@
 //     ],
 //     color: 0xAA926A,
 //     image: {
-//       url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+//       url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png',
 //     },
 //     thumbnail: { url: mountThumbnail },
 //   };
@@ -287,8 +287,8 @@
 //         description: `🚫 Keep trying for that **natural 20**!\n\nUse \`\`\`/mount encounterid:${encounterId} charactername:\`\`\` to participate!`,
 //         color: 0xFFFF00,
 //         author: { name: character.name, icon_url: character.icon },
-//         thumbnail: { url: getMountThumbnail(encounter.mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
-//         image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//         thumbnail: { url: getMountThumbnail(encounter.mountType) || 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+//         image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //       }],
 //       components: [],
 //       ephemeral: false,
@@ -393,7 +393,7 @@
 //               description: `You do not have any items in your inventory that can distract a **${mountType}**. Try a different strategy!`,
 //               color: 0xFF0000,
 //               thumbnail: { url: getMountThumbnail(encounter.mountType) },
-//               image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//               image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //             }],
 //             components: [],
 //             flags: 0,
@@ -420,7 +420,7 @@
 //             description: `🛠️ Choose an item from your inventory to distract the **${mountType}**.`,
 //             color: 0xAA926A,
 //             thumbnail: { url: getMountThumbnail(encounter.mountType) },
-//             image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//             image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //           }],
 //           components: actionRows,
 //           flags: 0,
@@ -447,7 +447,7 @@
 //           description: `**${staminaResult.message}**\n\nThe mount fled as your character became too exhausted to continue the chase.`,
 //           color: 0xFF0000,
 //           thumbnail: { url: getMountThumbnail(encounter.mountType) },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //         }],
 //         components: []
 //       });
@@ -494,7 +494,7 @@
 //           color: 0xAA926A,
 //           author: { name: character.name, icon_url: character.icon },
 //           thumbnail: { url: getMountThumbnail(encounter.mountType) },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' }
 //         }],
 //         components: [actionRow],
 //         flags: 0
@@ -511,7 +511,7 @@
 //           color: 0xFFFF00,
 //           author: { name: character.name, icon_url: character.icon },
 //           thumbnail: { url: getMountThumbnail(encounter.mountType) },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' }
 //         }],
 //         components: [retryButtons],
 //         ephemeral: false
@@ -574,8 +574,8 @@
 //           title: '💔 Mount Escaped!',
 //           description: `**${character.name}** has become too exhausted to continue the chase!\n\n💡 **Tip:** Plan your actions carefully and ensure you have enough stamina for future encounters.`,
 //           color: 0xFF0000,
-//           thumbnail: { url: getMountThumbnail(encounter.mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//           thumbnail: { url: getMountThumbnail(encounter.mountType) || 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //         }],
 //         components: []
 //       });
@@ -618,7 +618,7 @@
 //           color: 0xAA926A,
 //           author: { name: character.name, icon_url: character.icon },
 //           thumbnail: { url: getMountThumbnail(encounter.mountType) },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' }
 //         }],
 //         components: [actionRow],
 //         flags: 0
@@ -727,7 +727,7 @@
 //           description: `${message}\n\n**Prepare to tame the mount!**`,
 //           color: 0xAA926A,
 //           thumbnail: { url: getMountThumbnail(mountType) },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //         }],
 //         components: [actionRow],
 //         ephemeral: false,
@@ -743,7 +743,7 @@
 //           description: message,
 //           color: 0xFF0000,
 //           thumbnail: { url: getMountThumbnail(mountType) },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //         }],
 //         components: [retryButtons],
 //         ephemeral: false,
@@ -822,8 +822,8 @@
 //       title: `${getMountEmoji(mountType)} 🎉 Mount Tamed!`,
 //       description: `🎉 **Congratulations!** You have successfully tamed a **${rarity}** mount!\n\nDo you want to customize any of its traits?`,
 //       color: rarity === 'Rare' ? 0xFFD700 : 0xAA926A,
-//       thumbnail: { url: getMountThumbnail(mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
-//       image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//       thumbnail: { url: getMountThumbnail(mountType) || 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+//       image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //     };
   
 //     const actionRow = new ActionRowBuilder().addComponents(
@@ -966,7 +966,7 @@
 //           description: `You successfully customized your **${mountType}** with **${customizationType}** for **${cost} tokens**.\n\n💳 **Remaining Tokens:** ${character.tokens}`,
 //           color: 0xAA926A,
 //           thumbnail: { url: getMountThumbnail(mountType) },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //         }],
 //         ephemeral: false,
 //       });
@@ -1031,7 +1031,7 @@
 //           description: `🛠️ **Select ${firstTrait.replace(/([A-Z])/g, ' $1')}** for your mount!\n\n💰 **Each option shows the token cost.**`,
 //           color: 0xAA926A,
 //           thumbnail: { url: getMountThumbnail(mountType) || 'https://example.com/default-thumbnail.png' },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //         }],
 //         components: actionRows,
 //         ephemeral: false,
@@ -1095,8 +1095,8 @@
 //         title: `${mountEmoji} 🎉 Traits for Your Tamed ${mountType}`,
 //         description: `👀 **Here's a detailed look at your mount's traits:**\n\n${traitDescriptions}\n\n🟢 **Ready to name and register your new companion?**`,
 //         color: 0xAA926A,
-//         thumbnail: { url: getMountThumbnail(mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
-//         image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//         thumbnail: { url: getMountThumbnail(mountType) || 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+//         image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 //         footer: { text: `Congratulations on your new ${mountType}!` },
 //       };
   
@@ -1236,7 +1236,7 @@
 //         description: `🛠️ **${traitKey.replace(/([A-Z])/g, ' $1')}** has been set to **${selectedValue}**!`,
 //         color: 0xAA926A,
 //         thumbnail: { url: getMountThumbnail(mountType) || 'https://example.com/default-thumbnail.png' },
-//         image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
+//         image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' }
 //       }],
 //       components: [],
 //     });
@@ -1276,7 +1276,7 @@
 //           title: `🎨 Customize Your ${mountType}`,
 //           description: `🛠️ Select **${nextTrait.replace(/([A-Z])/g, ' $1')}** for your mount`,
 //           color: 0xAA926A,
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' }
 //         }],
 //         components: actionRows,
 //         ephemeral: false,
@@ -1300,7 +1300,7 @@
 //           description: `🎉 **Here's your ${mountType} mount!**\n\n${traitDescriptions}\n\n💰 **Total Tokens Spent:** ${encounter.totalSpent}\n### Mount Details\n> **Mount Species**: ${mountType}\n> **Rarity**: It's a **${encounter.rarity}** mount!\n> **Mount Level**: ${encounter.mountLevel}\n> **Mount Stamina**: ${encounter.mountStamina}\n> **Village**: ${villageEmojis[encounter.village.toLowerCase()] || ''} ${encounter.village}`,
 //           color: 0xAA926A,
 //           thumbnail: { url: getMountThumbnail(mountType) || 'https://example.com/default-thumbnail.png' },
-//           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
+//           image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' }
 //         }],
 //         components: [registerButton],
 //       });
@@ -1479,8 +1479,8 @@
 //         title: `🎉 Mount Registered!`,
 //         description: `🐴 **Your mount "${mountName}" has been successfully registered to "${character.name}"!**\n\nEnjoy your adventures with your new companion!`,
 //         color: 0xAA926A,
-//         thumbnail: { url: getMountThumbnail(encounter.mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
-//         image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+//         thumbnail: { url: getMountThumbnail(encounter.mountType) || 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+//         image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
 //       }],
 //       ephemeral: false,
 //     });
@@ -1596,7 +1596,7 @@
 //       )
 //       .setColor(0xAA926A)
 //       .setThumbnail(getMountThumbnail(mount.species))
-//       .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+//       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
 //       .setFooter({ text: `${character.name}'s Mount Stats`, iconURL: character.icon })
 //       .setTimestamp();
 

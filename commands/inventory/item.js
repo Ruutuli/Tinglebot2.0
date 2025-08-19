@@ -98,7 +98,7 @@ module.exports = {
             title: '❌ Character Not Found',
             description: `The character **"${characterName}"** was not found or does not belong to you.\n\n**Possible issues:**\n• Character name may be misspelled\n• Character may not exist\n• Character may belong to another user\n• Try using the autocomplete feature for accurate character names`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Character Validation Error'
@@ -127,7 +127,7 @@ module.exports = {
             title: '❌ Item Not Found',
             description: `The item **"${cleanItemName}"** does not exist in the database.\n\n**What you entered:** ${itemName}\n**What was searched:** ${cleanItemName}\n\n**Possible issues:**\n• Item name may be misspelled\n• Item may not exist in the game\n• Try using the autocomplete feature for accurate item names`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Item Validation Error'
@@ -147,7 +147,7 @@ module.exports = {
             title: '❌ Inventory Not Set Up',
             description: `${character.name} does not have an inventory initialized.\n\n**To fix this:**\n• Use the inventory command to set up your character's inventory\n• Contact a moderator if you need assistance`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Inventory Setup Required'
@@ -178,7 +178,7 @@ module.exports = {
             title: '🎫 Job Voucher Usage',
             description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(cleanItemNameForInventory)}" in their inventory.`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Job Voucher System'
@@ -200,7 +200,7 @@ module.exports = {
               title: '🎫 Job Voucher Usage',
               description: '❌ **Job Vouchers can only be used one at a time.**\nPlease use a quantity of 1.',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Job Voucher System'
@@ -225,7 +225,7 @@ module.exports = {
                 title: '❌ Invalid Job',
                 description: `The job **"${capitalizeWords(jobName)}"** is not valid.\n\n**What you entered:** ${jobName}\n\n**To fix this:**\n• Use the autocomplete feature to select a valid job\n• Check the spelling of the job name\n• Ensure the job exists in the game`,
                 image: {
-                  url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                  url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
                 },
                 footer: {
                   text: 'Job Validation Error'
@@ -250,7 +250,7 @@ module.exports = {
                     { name: 'Required Location', value: capitalizeWords(jobPerkInfo.village), inline: true }
                   ],
                   image: {
-                    url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                    url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
                   },
                   footer: {
                     text: 'Location Requirement'
@@ -387,7 +387,7 @@ module.exports = {
               }
             )
             .setThumbnail(item.image || 'https://via.placeholder.com/150')
-            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
             .setFooter({ text: '✨ Mod characters can use job vouchers without consuming them! Click the commands above to start working!' });
 
           return void await interaction.editReply({ embeds: [voucherEmbed] });
@@ -400,7 +400,7 @@ module.exports = {
               title: '❌ Job Voucher Error',
               description: `**${character.name}** already has an active Job Voucher for **${character.jobVoucherJob} (Live)**.\n\nPlease complete the current job before using another voucher.`,
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Job Voucher System'
@@ -427,7 +427,7 @@ module.exports = {
               title: '❌ Invalid Job',
               description: `The job **"${capitalizeWords(jobName)}"** is not valid.\n\n**What you entered:** ${jobName}\n\n**To fix this:**\n• Use the autocomplete feature to select a valid job\n• Check the spelling of the job name\n• Ensure the job exists in the game`,
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Job Validation Error'
@@ -452,7 +452,7 @@ module.exports = {
                   { name: 'Required Location', value: capitalizeWords(jobPerkInfo.village), inline: true }
                 ],
                 image: {
-                  url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                  url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
                 },
                 footer: {
                   text: 'Location Requirement'
@@ -587,7 +587,7 @@ module.exports = {
             }
           )
           .setThumbnail(item.image || 'https://via.placeholder.com/150')
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ text: '✨ Click the commands above to start working in your new role!' });
 
         return void await interaction.editReply({ embeds: [voucherEmbed] });
@@ -662,7 +662,7 @@ module.exports = {
             { name: '🎫 Vouchers Used', value: `**${quantity}** Character Slot Voucher${quantity > 1 ? 's' : ''}`, inline: true }
           )
           .setThumbnail(item.image || 'https://via.placeholder.com/150')
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ text: '✨ You can now create more characters! Use /character create to get started!' });
 
         return void await interaction.editReply({ embeds: [voucherEmbed] });
@@ -679,7 +679,7 @@ module.exports = {
               title: '🥚 Chuchu Egg Usage',
               description: '❌ **Chuchu Eggs can only be used one at a time.**\nPlease use a quantity of 1.',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Pet System'
@@ -714,7 +714,7 @@ module.exports = {
                 }
               ],
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Please store your pet in the stables (feature coming soon) before hatching a new one'
@@ -741,7 +741,7 @@ module.exports = {
               title: '❌ Chuchu Egg Error',
               description: 'An error occurred while processing the Chuchu Egg.\n\n**What went wrong:**\n• Invalid Chuchu type was generated\n• Pet type data could not be found\n\n**To fix this:**\n• Please try using the Chuchu Egg again\n• If the problem persists, contact a moderator',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Pet System Error'
@@ -842,7 +842,7 @@ module.exports = {
             { name: '📝 Pet Description', value: petTypeData.description, inline: false }
           )
           .setThumbnail('https://cdn.wikimg.net/en/zeldawiki/images/thumb/c/c3/TotK_Chuchu_Model.png/1200px-TotK_Chuchu_Model.png')
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ 
             text: `Pet System`,
             iconURL: character.icon
@@ -863,7 +863,7 @@ module.exports = {
               title: '🥚 Chuchu Jelly Compression',
               description: `❌ **You need exactly 100 ${item.itemName} to compress into a Chuchu Egg.**\n\nYou currently have ${ownedItem.quantity} ${item.itemName}.`,
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Chuchu Jelly Compression'
@@ -893,7 +893,7 @@ module.exports = {
             { name: '__Process__', value: `> Compression`, inline: true }
           )
           .setThumbnail(item.image || 'https://via.placeholder.com/150')
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ 
             text: `Chuchu Jelly Compression System`,
             iconURL: character.icon
@@ -914,7 +914,7 @@ module.exports = {
               title: '🧪 Elixir Usage',
               description: `❌ **Elixirs can only be used one at a time.**\nPlease use a quantity of 1.`,
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Elixir System'
@@ -952,7 +952,7 @@ module.exports = {
                 }
               ],
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Please wait for your current buff to expire before using another elixir'
@@ -1043,7 +1043,7 @@ module.exports = {
               title: '❌ Elixir Application Failed',
               description: 'Failed to apply the elixir effect to your character.\n\n**What went wrong:**\n• Elixir effect could not be processed\n• Character buff system encountered an error\n\n**To fix this:**\n• Please try using the elixir again\n• If the problem persists, contact a moderator',
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Elixir System Error'
@@ -1133,7 +1133,7 @@ module.exports = {
             { name: '🟩 Current Stamina', value: `**${displayCurrentStamina}/${displayMaxStamina}**`, inline: true }
           ])
           .setThumbnail(item.image || character.icon)
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
         // Add buff effects section if there are effects to show
         if (effectFields.length > 0) {
@@ -1294,7 +1294,7 @@ module.exports = {
             }
           )
           .setThumbnail(item.image || character.icon)
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ text: 'Revival successful! 🌿' });
 
         return void await interaction.editReply({ embeds: [successEmbed] });
@@ -1345,7 +1345,7 @@ module.exports = {
           }
         )
         .setThumbnail(item.image || character.icon)
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setFooter({ text: 'Healing successful! 🌿' });
 
       return void await interaction.editReply({ embeds: [successEmbed] });

@@ -404,7 +404,7 @@ function createSubmissionEmbed(type, options = {}) {
     .setTitle(config.title)
     .setDescription(config.description)
     .addFields(config.fields)
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ text: config.footer })
     .setTimestamp();
 
@@ -573,12 +573,12 @@ function createPetEmbed(type, options = {}) {
     embed.setThumbnail(sanitizedPetImageUrl);
     console.log(`[mod.js]: Using pet image as thumbnail: "${sanitizedPetImageUrl}"`);
   } else {
-    embed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+    embed.setThumbnail("https://storage.googleapis.com/tinglebot/Graphics/border.png");
     console.log(`[mod.js]: Using default thumbnail for pet`);
   }
 
   // Set banner image
-  embed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+  embed.setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png");
   console.log(`[mod.js]: Using banner image for pet ${type}`);
 
   return embed;
@@ -1260,7 +1260,7 @@ async function handleGive(interaction) {
         }
       )
       .setThumbnail(validateAndSanitizeUrl(item.image, 'https://via.placeholder.com/100'))
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: 'Divine blessing bestowed by the Gods ✨' })
       .setTimestamp();
     
@@ -1725,7 +1725,7 @@ async function handleApproveEdit(interaction) {
       .setColor('#00FF00')
       .setTitle('✅ Character Edit Request Processed')
       .setDescription(`${character.name}'s ${pendingEdit.category} edit ${shouldApprove ? 'approved' : 'rejected'}!\nRequest ID: \`${requestId}\``)
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({
         text: `Processed by ${interaction.user.tag}`
       })
@@ -1794,7 +1794,7 @@ function formatApprovalNotification({ userTag, userId, characterName, category, 
       { name: '⏳ Status', value: `> ${status ? 'APPROVED' : 'REJECTED'} by ${userTag}`, inline: false },
       { name: '🔗 Request ID', value: `> \`${requestId}\``, inline: false }
     )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({
       text: 'Character Edit Request'
     })
@@ -1817,7 +1817,7 @@ function formatUserDM(characterName, category, previous, updated) {
       { name: '🔄 Previous Value', value: `> \`${prev}\``, inline: false },
       { name: '✅ New Value', value: `> \`${next}\``, inline: false }
     )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({
       text: 'Character Edit Request'
     })
@@ -2409,7 +2409,7 @@ async function handleShopAdd(interaction) {
             { name: '🏷️ Category', value: item.category?.join(', ') || 'Misc', inline: true },
             { name: '🎯 Type', value: item.type?.join(', ') || 'Unknown', inline: true }
           )
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ text: `Updated by ${interaction.user.tag}` })
           .setTimestamp()],
         ephemeral: true
@@ -2476,7 +2476,7 @@ async function handleShopAdd(interaction) {
             { name: '🏷️ Category', value: item.category?.join(', ') || 'Misc', inline: true },
             { name: '🎯 Type', value: item.type?.join(', ') || 'Unknown', inline: true }
           )
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ text: `Added by ${interaction.user.tag}` })
           .setTimestamp()],
         ephemeral: true
@@ -2502,7 +2502,7 @@ async function handleShopAdd(interaction) {
           { name: '🔍 Item Name', value: itemName, inline: true },
           { name: '📦 Stock', value: stock.toString(), inline: true }
         )
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setFooter({ text: 'Error Handling' })
         .setTimestamp()],
       ephemeral: true
@@ -2756,7 +2756,7 @@ async function handleBlightOverride(interaction) {
         { name: '📝 Reason', value: reason, inline: true },
         { name: '⏰ Timestamp', value: new Date().toLocaleString(), inline: true }
       )
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: 'Emergency Override - Use with caution' })
       .setTimestamp();
 

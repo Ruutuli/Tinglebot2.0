@@ -550,7 +550,7 @@ async function updateNotificationMessage(weaponSubmission, interaction) {
                 }
             ],
             image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
                 text: 'Custom Weapon Approved'
@@ -610,7 +610,7 @@ async function sendApprovalDM(user, weaponSubmission, craftingMaterials, stamina
             ],
             footer: { text: 'Your weapon has been added to the database!' },
             image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png',
             },
         };
 
@@ -1476,7 +1476,7 @@ const embed = {
         },
     ],
     footer: { text: 'Enjoy your new weapon!' },
-    image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+    image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
 };
 
 // Send the response with the embed
@@ -1753,7 +1753,7 @@ try {
                 }
             ],
             image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
                 text: 'Custom Weapon Approval Required'
@@ -2093,7 +2093,7 @@ try {
                         ],
                         footer: { text: 'Your weapon has been added to the database!' },
                         image: {
-                            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+                            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png',
                         },
                     },
                 ],

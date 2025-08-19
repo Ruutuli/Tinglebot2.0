@@ -121,7 +121,7 @@ const {
 // ============================================================================
 
 const DEFAULT_IMAGE_URL =
-  "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+  "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const EDIT_NOTIFICATION_CHANNEL_ID = '1381479893090566144';
 const characterEmojis = [
   "🍃",
@@ -667,7 +667,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
         { name: '🔗 __Application Link__', value: `> [Link](${characterData.appLink})`, inline: false }
       )
       .setThumbnail(iconUrl)
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: `Created by ${characterData.modOwner}` })
       .setTimestamp();
 
@@ -731,7 +731,7 @@ async function handleViewModCharacter(interaction) {
         { name: '🔗 __Application Link__', value: `> [Link](${modCharacter.appLink})`, inline: false }
       )
       .setThumbnail(modCharacter.icon || DEFAULT_IMAGE_URL)
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: `Mod Character - Created by ${modCharacter.modOwner}` })
       .setTimestamp();
 
