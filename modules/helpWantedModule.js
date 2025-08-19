@@ -145,19 +145,412 @@ function shuffleArray(array) {
 // ============================================================================
 
 // ------------------- Function: getItemQuestPool -------------------
-// Fetches all valid items for item quests
+// Fetches specific items for item quests from a curated list
 async function getItemQuestPool() {
   try {
+    // Specific list of item IDs that can be requested for item quests
+    const allowedItemIds = [
+      '667020c016d372f118977c5d', // Acorn
+      '667020be16d372f11897748b', // Amber
+      '667020be16d372f1189774cc', // Amber Relic
+      '667020be16d372f1189774e7', // Amethyst
+      '667020b816d372f118975975', // Ancient Arowana
+      '667020b116d372f118973b6c', // Ancient Arrow
+      '667020b216d372f118974195', // Ancient Battle Axe
+      '667020b316d372f1189745bc', // Ancient Bladesaw
+      '667020b316d372f118974601', // Ancient Bow
+      '667020b416d372f11897492a', // Ancient Core
+      '667020c116d372f118977f4e', // Ancient Flower
+      '667020b416d372f11897498c', // Ancient Gear
+      '667020b416d372f1189749d8', // Ancient Screw
+      '667020b416d372f118974a2c', // Ancient Shaft
+      '667020b116d372f118973bac', // Ancient Shield
+      '667020b116d372f118973bec', // Ancient Short Sword
+      '667020b316d372f118974655', // Ancient Spear
+      '667020b416d372f118974a56', // Ancient Spring
+      '667020b816d372f118975d08', // Apple
+      '667020c116d372f118977f7b', // Armoranth
+      '667020b716d372f1189755d0', // Armored Carp
+      '667020b716d372f118975614', // Armored Porgy
+      '667020b016d372f1189734e7', // Arrow
+      '667020be16d372f1189774fe', // Aurora Stone
+      '667020be16d372f1189772f4', // Bird Egg
+      '667020bd16d372f118976fc5', // Bird Feather
+      '667020b416d372f118974aa4', // Bladed Rhino Beetle
+      '667020b416d372f118974af7', // Blessed Butterfly
+      '667020be16d372f11897753a', // Blight Geodes
+      '667020b916d372f118975f4e', // Blin Bling
+      '667020bd16d372f11897700f', // Blue Bird Feather
+      '667020c016d372f118977cd1', // Blue Nightshade
+      '667020b216d372f118973d93', // Boko Bat
+      '667020b216d372f118973ddc', // Boko Bow
+      '667020b016d372f118973519', // Boko Club
+      '667020b016d372f11897354b', // Boko Shield
+      '667020b216d372f118973df6', // Boko Spear
+      '667020b016d372f11897359e', // Bokoblin Arm
+      '667020b916d372f118975f9f', // Bokoblin Fang
+      '667020b916d372f118976015', // Bokoblin Guts
+      '667020b916d372f118976049', // Bokoblin Horn
+      '667020b716d372f11897563e', // Bright-Eyed Crab
+      '667020c116d372f118978294', // Brightbloom Seed
+      '667020bd16d372f118976ebd', // Brightcap
+      '667020c116d372f118977fc8', // Cane Sugar
+      '667020be16d372f1189775a6', // Carmine Pearl
+      '667020c116d372f118978022', // Carrumpkin
+      '667020c016d372f118977d22', // Chickaloo Tree Nut
+      '667020bf16d372f1189775d3', // Chill Stone
+      '667020b716d372f118975684', // Chillfin Trout
+      '667020bc16d372f118976bde', // Chillshroom
+      '667020b916d372f11897608d', // Chuchu Egg
+      '667020b916d372f1189760cb', // Chuchu Jelly
+      '667020b416d372f118974b4a', // Cold Darner
+      '667020c016d372f118977d73', // Cool Safflina
+      '667020be16d372f1189773df', // Cotton
+      '667020be16d372f118977440', // Courser Bee Honey
+      '667020bf16d372f1189775fb', // Crystal Skull
+      '667020bd16d372f11897705b', // Cucco Feathers
+      '667020b816d372f118975a34', // Dazzlefruit
+      '667020b416d372f118974b81', // Deep Firefly
+      '667020b516d372f118974be3', // Deku Hornet
+      '667020b116d372f1189739df', // Demon Carver
+      '667020bf16d372f118977657', // Demon Fossil
+      '667020bf16d372f1189776a2', // Diamond
+      '667020c216d372f118978351', // Dinraal's Claw
+      '667020c216d372f11897837b', // Dinraal's Scale
+      '667020b216d372f1189741e7', // Dragon Bone Boko Bow
+      '667020b316d372f118974220', // Dragonbone Boko Bat
+      '667020b016d372f1189737c7', // Dragonbone Boko Club
+      '667020b016d372f1189737ff', // Dragonbone Boko Shield
+      '667020b216d372f118973e3d', // Dragonbone Boko Spear
+      '667020b316d372f1189743be', // Dragonbone Moblin Club
+      '667020b316d372f11897440d', // Dragonbone Moblin Spear
+      '667020b416d372f11897472a', // Duplex Bow
+      '667020bf16d372f1189776fa', // Dusk Relic
+      '667020bf16d372f118977729', // Eldin Ore
+      '667020b516d372f118974bff', // Eldin Roller
+      '667020b516d372f118974c47', // Electric Darner
+      '667020b916d372f118976116', // Electric Keese Wing
+      '667020c016d372f118977da7', // Electric Safflina
+      '667020bf16d372f118977767', // Emerald
+      '667020c116d372f118978056', // Endura Carrot
+      '667020bc16d372f118976c4d', // Endura Shroom
+      '667020b616d372f1189754bb', // Energetic Rhino Beetle
+      '667020b216d372f118973e74', // Enhanced Lizal Spear
+      '667020b516d372f118974c87', // Fabled Butterfly
+      '667020b616d372f118975449', // Fairy
+      '667020bf16d372f1189777a4', // Fairy Dust
+      '667020b516d372f118974cbd', // Faron Grasshopper
+      '667020c216d372f1189783a1', // Farosh's Claw
+      '667020c216d372f1189783d2', // Farosh's Scale
+      '667020b816d372f118975a57', // Fire Fruit
+      '667020b916d372f118976177', // Fire Keese Wing
+      '667020b116d372f118973d06', // Fire Rod
+      '667020b516d372f118974d00', // Fireproof Lizard
+      '667020b816d372f118975b6a', // Fleet-Lotus Seeds
+      '667020bf16d372f11897781b', // Flint
+      '667020b216d372f118973ec4', // Forked Lizal Spear
+      '667020c116d372f118978078', // Fortified Pumpkin
+      '667020ba16d372f1189761a5', // Freezard Water
+      '667020be16d372f118977376', // Fresh Milk
+      '667020b516d372f118974d30', // Gerudo Dragonfly
+      '667020b416d372f118974a75', // Giant Ancient Core
+      '667020ba16d372f1189761bb', // Gibdo Bandage
+      '667020ba16d372f1189761e5', // Gibdo Bone
+      '667020ba16d372f118976232', // Gibdo Guts
+      '667020ba16d372f11897626a', // Gibdo Wing
+      '667020b816d372f118975996', // Glowing Cave Fish
+      '667020be16d372f11897732e', // Goat Butter
+      '667020bf16d372f118977869', // Goddess Plume
+      '667020bf16d372f1189778a8', // Gold Dust
+      '667020bf16d372f1189778f0', // Gold Ore
+      '667020b916d372f118975daf', // Golden Apple
+      '667020b516d372f118974d66', // Golden Insect
+      '667020ba16d372f118976282', // Golden Skull
+      '667020bf16d372f11897791b', // Goron Ore
+      '667020b016d372f118973838', // Guardian Shield
+      '667020b216d372f118973eee', // Guardian Spear
+      '667020b016d372f118973867', // Guardian Sword
+      '667020b716d372f1189756a9', // Hearty Bass
+      '667020b716d372f11897555d', // Hearty Blueshell Snail
+      '667020b916d372f118975d30', // Hearty Durian
+      '667020b516d372f118974df6', // Hearty Lizard
+      '667020c116d372f1189780af', // Hearty Radish
+      '667020b816d372f118975955', // Hearty Salmon
+      '667020bd16d372f118976eeb', // Hearty Truffle
+      '667020b516d372f118974e38', // Hightail Lizard
+      '667020ba16d372f11897629f', // Hinox Guts
+      '667020ba16d372f1189762c8', // Hinox Toenail
+      '667020ba16d372f11897632a', // Hinox Tooth
+      '667020b516d372f118974e80', // Hornet Larvae
+      '667020ba16d372f118976371', // Horriblin Claw
+      '667020ba16d372f118976398', // Horriblin Guts
+      '667020ba16d372f1189763e9', // Horriblin Horn
+      '667020b516d372f118974ede', // Hot-Footed Frog
+      '667020b816d372f118975bb9', // Hydromelon
+      '667020c016d372f118977e08', // Hylian Rice
+      '667020bc16d372f118976c6f', // Hylian Shroom
+      '667020c116d372f1189782b8', // Hylian Tomato
+      '667020b716d372f118975728', // Hyrule Bass
+      '667020c116d372f11897811f', // Hyrule Herb
+      '667020b816d372f118975a8b', // Ice Fruit
+      '667020ba16d372f11897642c', // Ice Keese Wing
+      '667020b116d372f118973cdb', // Ice Rod
+      '667020c116d372f118978146', // Ice Rose
+      '667020ba16d372f11897644d', // Icy Lizalfos Tail
+      '667020b516d372f118974ef9', // Insect Parts
+      '667020b716d372f11897575b', // Ironshell Crab
+      '667020bc16d372f118976cb3', // Ironshroom
+      '667020bf16d372f11897794e', // Jade Relic
+      '667020bd16d372f118977093', // Job Voucher
+      '667020ba16d372f118976484', // Keese Eyeball
+      '667020ba16d372f1189764d0', // Keese Wing
+      '667020c116d372f118978176', // Kelp
+      '667020b416d372f1189748e1', // Korok Leaf
+      '667020b516d372f118974f27', // Lanayru Ant
+      '667020bf16d372f118977996', // Lava Drop
+      '667020bd16d372f1189770b0', // Leather
+      '667020b216d372f118973d3e', // Lightning Rod
+      '667020ba16d372f118976508', // Like Like Stone
+      '667020b016d372f1189735cf', // Lizal Boomerang
+      '667020b216d372f118973f67', // Lizal Bow
+      '667020b116d372f1189738a5', // Lizal Forked Boomerang
+      '667020b016d372f1189735f8', // Lizal Shield
+      '667020b216d372f118973fa1', // Lizal Spear
+      '667020b116d372f118973a02', // Lizal Tri-Boomerang
+      '667020b016d372f118973666', // Lizalfos Arm
+      '667020ba16d372f118976541', // Lizalfos Horn
+      '667020bb16d372f11897655b', // Lizalfos Tail
+      '667020bb16d372f118976599', // Lizalfos Talon
+      '667020b516d372f118974f7d', // Lizard Tail
+      '667020bf16d372f1189779e9', // Luminous Stone
+      '667020b416d372f11897478d', // Lynel Bow
+      '667020b316d372f11897425e', // Lynel Crusher
+      '667020bb16d372f1189765d9', // Lynel Guts
+      '667020bb16d372f118976624', // Lynel Hoof
+      '667020bb16d372f118976646', // Lynel Horn
+      '667020b116d372f118973902', // Lynel Shield
+      '667020b216d372f118973ff7', // Lynel Spear
+      '667020b116d372f118973937', // Lynel Sword
+      '667020b916d372f118975d65', // Mighty Bananas
+      '667020b716d372f1189757a2', // Mighty Carp
+      '667020b416d372f1189747d0', // Mighty Lynel Bow
+      '667020b316d372f118974494', // Mighty Lynel Crusher
+      '667020b116d372f118973a5c', // Mighty Lynel Shield
+      '667020b316d372f1189744d9', // Mighty Lynel Spear
+      '667020b116d372f118973ad4', // Mighty Lynel Sword
+      '667020b716d372f1189757ec', // Mighty Porgy
+      '667020c116d372f1189781d4', // Mighty Thistle
+      '667020b216d372f11897402b', // Moblin Arm
+      '667020b216d372f118974081', // Moblin Club
+      '667020bb16d372f118976687', // Moblin Fang
+      '667020bb16d372f1189766a5', // Moblin Guts
+      '667020bb16d372f118976716', // Moblin Horn
+      '667020b216d372f1189740b5', // Moblin Spear
+      '667020b516d372f118974fe3', // Mock Fairy
+      '667020bb16d372f11897675c', // Molduga Fin
+      '667020bb16d372f1189767c4', // Molduga Guts
+      '667020bb16d372f11897682f', // Monster Claw
+      '667020bb16d372f118976856', // Monster Extract
+      '667020bd16d372f118976f0', // Monster Fur
+      '667020bb16d372f118976881', // Monster Horn
+      '667020c016d372f118977e28', // Muddle Bud
+      '667020c216d372f118978431', // Naydra's Claw
+      '667020c216d372f118978470', // Naydra's Scale
+      '667020bb16d372f1189768b8', // Octo Balloon
+      '667020bb16d372f118976920', // Octorok Eyeball
+      '667020bb16d372f118976957', // Octorok Tentacle
+      '667020b416d372f118974884', // Old Shirt
+      '667020bf16d372f118977a46', // Opal
+      '667020bc16d372f118976982', // Ornamental Skull
+      '667020b816d372f118975be0', // Palm Fruit
+      '667020bd16d372f11897712e', // Papyrus
+      '667020bc16d372f1189769ad', // Poe Soul
+      '667020bd16d372f1189771b2', // Pretty Plume
+      '667020bc16d372f118976cee', // Puffshroom
+      '667020c016d372f118977a7b', // Rainbow Coral
+      '667020b916d372f118975dd7', // Raw Bird Drumstick
+      '667020b916d372f118975e29', // Raw Bird Thigh
+      '667020b916d372f118975f27', // Raw Gourmet Meat
+      '667020b916d372f118975e4c', // Raw Meat
+      '667020b916d372f118975e82', // Raw Prime Meat
+      '667020b916d372f118975ebc', // Raw Whole Bird
+      '667020b716d372f118975831', // Razorclaw Crab
+      '667020bc16d372f118976d52', // Razorshroom
+      '667020bc16d372f1189769dd', // Red Chuchu Jelly
+      '667020bc16d372f118976a2a', // Red Lizalfos Tail
+      '667020b116d372f118973962', // Reinforced Lizal Shield
+      '667020b616d372f1189754e5', // Restless Cricket
+      '667020c016d372f118977c25', // Rock Salt
+      '667020c016d372f118977aa8', // Ruby
+      '667020bc16d372f118976a65', // Rugged Horn
+      '667020b516d372f118975034', // Rugged Rhino Beetle
+      '667020bd16d372f118976d7f', // Rushroom
+      '667020b516d372f118975072', // Sand Cicada
+      '667020be16d372f1189771da', // Sandy Ribbon
+      '667020b716d372f11897586e', // Sanke Carp
+      '667020c016d372f118977aef', // Sapphire
+      '667020b416d372f118974825', // Savage Lynel Bow
+      '667020b316d372f11897468c', // Savage Lynel Crusher
+      '667020b116d372f118973c43', // Savage Lynel Shield
+      '667020b316d372f1189746f7', // Savage Lynel Spear
+      '667020b116d372f118973c97', // Savage Lynel Sword
+      '667020bc16d372f118976a86', // Serpent Fangs
+      '667020c216d372f118978494', // Shard of Dinraal's Fang
+      '667020c216d372f1189784bb', // Shard of Dinraal's Horn
+      '667020c216d372f11897852a', // Shard of Farosh's Fang
+      '667020c216d372f118978567', // Shard of Farosh's Horn
+      '667020c216d372f11897858f', // Shard of Naydra's Fang
+      '667020c216d372f1189785d2', // Shard of Naydra's Horn
+      '667020b816d372f118975ac7', // Shock Fruit
+      '667020c016d372f118977e5a', // Silent Princess
+      '667020bd16d372f118976db7', // Silent Shroom
+      '667020c016d372f118977b60', // Silver Dust
+      '667020c016d372f118977bb1', // Silver Ore
+      '667020b716d372f1189758b2', // Sizzlefin Trout
+      '667020b616d372f1189750a3', // Sky Stag Beetle
+      '667020b616d372f1189750ee', // Skyloft Mantis
+      '667020bd16d372f118976e02', // Skyshroom
+      '667020b616d372f118975113', // Smotherwing Butterfly
+      '667020b716d372f118975594', // Sneaky River Snail
+      '667020b816d372f118975c1e', // Spicy Pepper
+      '667020be16d372f118977200', // Spider Silk
+      '667020bc16d372f118976abe', // Spider's Eye
+      '667020b216d372f1189740f1', // Spiked Boko Bat
+      '667020b216d372f118974150', // Spiked Boko Bow
+      '667020b016d372f1189736b9', // Spiked Boko Club
+      '667020b016d372f118973706', // Spiked Boko Shield
+      '667020b316d372f1189742a7', // Spiked Boko Spear
+      '667020b316d372f1189742dc', // Spiked Moblin Club
+      '667020b316d372f118974328', // Spiked Moblin Spear
+      '667020b816d372f118975b48', // Splash Fruit
+      '667020b016d372f118973761', // Spring-Loaded Hammer
+      '667020bc16d372f118976aec', // Stal Skull
+      '667020c116d372f118978315', // Stambulb
+      '667020bd16d372f118976f83', // Stamella Shroom
+      '667020b816d372f1189759dc', // Staminoka Bass
+      '667020be16d372f11897741d', // Star Fragment
+      '667020b616d372f11897517d', // Starry Firefly
+      '667020b716d372f118975908', // Stealthfin Trout
+      '667020b316d372f11897454c', // Steel Lizal Bow
+      '667020b116d372f118973b22', // Steel Lizal Shield
+      '667020b616d372f1189751c4', // Sticky Frog
+      '667020b616d372f118975208', // Sticky Lizard
+      '667020b316d372f11897436e', // Strengthened Lizal Bow
+      '667020b616d372f118975236', // Summerwing Butterfly
+      '667020c116d372f11897820d', // Sundelion
+      '667020b616d372f1189752aa', // Sunset Firefly
+      '667020bd16d372f118976e35', // Sunshroom
+      '667020bd16d372f118976f27', // Sweet Shroom
+      '667020c116d372f11897824c', // Swift Carrot
+      '667020c016d372f118977e7e', // Swift Violet
+      '667020c016d372f118977ef2', // Tabantha Wheat
+      '667020b816d372f118975c41', // Thornberry
+      '667020b616d372f1189752ec', // Thunderwing Butterfly
+      '667020b616d372f118975514', // Tireless Frog
+      '667020c016d372f118977be1', // Topaz
+      '667020b016d372f11897377d', // Tree Branch
+      '667020b116d372f1189739b2', // Vicious Sickle
+      '667020b616d372f118975341', // Volcanic Ladybug
+      '667020b716d372f118975928', // Voltfin Trout
+      '667020b816d372f118975c71', // Voltfruit
+      '667020b616d372f1189753a1', // Warm Darner
+      '667020c116d372f118977f1d', // Warm Safflina
+      '667020b416d372f1189748c3', // Well-Worn Trousers
+      '667020bc16d372f118976b3d', // White Chuchu Jelly
+      '667020b816d372f118975cc9', // Wild berry
+      '667020b316d372f11897457f', // Windcleaver
+      '667020b616d372f1189753e7', // Winterwing Butterfly
+      '667020be16d372f118977251', // Wood
+      '667020b616d372f11897540f', // Woodland Rhino Beetle
+      '667020be16d372f11897727b', // Wool
+      '667020bc16d372f118976b70', // Yellow Chuchu Jelly
+      '667020bc16d372f118976ba0'  // Yellow Lizalfos Tail
+    ];
+
+    // Try to fetch items by ID first
     let items = await Item.find({
-      crafted: { $ne: true }
+      _id: { $in: allowedItemIds }
     }, 'itemName');
     
+    // If no items found by ID, fallback to searching by name
     if (items.length === 0) {
-      items = await Item.find({}, 'itemName');
-    }
-    
-    if (items.length === 0) {
-      throw new Error('No items found for item quests');
+      console.log('[HelpWanted] No items found by ID, falling back to name search');
+      
+      // List of item names as fallback
+      const allowedItemNames = [
+        'Acorn', 'Amber', 'Amber Relic', 'Amethyst', 'Ancient Arowana', 'Ancient Arrow',
+        'Ancient Battle Axe', 'Ancient Bladesaw', 'Ancient Bow', 'Ancient Core', 'Ancient Flower',
+        'Ancient Gear', 'Ancient Screw', 'Ancient Shaft', 'Ancient Shield', 'Ancient Short Sword',
+        'Ancient Spear', 'Ancient Spring', 'Apple', 'Armoranth', 'Armored Carp', 'Armored Porgy',
+        'Arrow', 'Aurora Stone', 'Bird Egg', 'Bird Feather', 'Bladed Rhino Beetle', 'Blessed Butterfly',
+        'Blight Geodes', 'Blin Bling', 'Blue Bird Feather', 'Blue Nightshade',
+        'Boko Bat', 'Boko Bow', 'Boko Club', 'Boko Shield', 'Boko Spear', 'Bokoblin Arm',
+        'Bokoblin Fang', 'Bokoblin Guts', 'Bokoblin Horn', 'Bright-Eyed Crab', 'Brightbloom Seed',
+        'Brightcap', 'Cane Sugar', 'Carmine Pearl', 'Carrumpkin',
+        'Chickaloo Tree Nut', 'Chill Stone', 'Chillfin Trout', 'Chillshroom', 'Chuchu Egg',
+        'Chuchu Jelly', 'Cold Darner', 'Cool Safflina', 'Cotton', 'Courser Bee Honey',
+        'Crystal Skull', 'Cucco Feathers', 'Dazzlefruit', 'Deep Firefly', 'Deku Hornet',
+        'Demon Carver', 'Demon Fossil', 'Diamond', 'Dinraal\'s Claw', 'Dinraal\'s Scale',
+        'Dragon Bone Boko Bow', 'Dragonbone Boko Bat', 'Dragonbone Boko Club', 'Dragonbone Boko Shield',
+        'Dragonbone Boko Spear', 'Dragonbone Moblin Club', 'Dragonbone Moblin Spear', 'Duplex Bow',
+        'Dusk Relic', 'Eldin Ore', 'Eldin Roller', 'Electric Darner', 'Electric Keese Wing',
+        'Electric Safflina', 'Emerald', 'Endura Carrot', 'Endura Shroom', 'Energetic Rhino Beetle',
+        'Enhanced Lizal Spear', 'Fabled Butterfly', 'Fairy', 'Fairy Dust', 'Faron Grasshopper',
+        'Farosh\'s Claw', 'Farosh\'s Scale', 'Fire Fruit', 'Fire Keese Wing', 'Fire Rod',
+        'Fireproof Lizard', 'Fleet-Lotus Seeds', 'Flint', 'Forked Lizal Spear', 'Fortified Pumpkin',
+        'Freezard Water', 'Fresh Milk', 'Gerudo Dragonfly', 'Giant Ancient Core', 'Gibdo Bandage',
+        'Gibdo Bone', 'Gibdo Guts', 'Gibdo Wing', 'Glowing Cave Fish', 'Goat Butter',
+        'Goddess Plume', 'Gold Dust', 'Gold Ore', 'Golden Apple', 'Golden Insect', 'Golden Skull',
+        'Goron Ore', 'Guardian Shield', 'Guardian Spear', 'Guardian Sword', 'Hearty Bass',
+        'Hearty Blueshell Snail', 'Hearty Durian', 'Hearty Lizard', 'Hearty Radish', 'Hearty Salmon',
+        'Hearty Truffle', 'Hightail Lizard', 'Hinox Guts', 'Hinox Toenail', 'Hinox Tooth',
+        'Hornet Larvae', 'Horriblin Claw', 'Horriblin Guts', 'Horriblin Horn', 'Hot-Footed Frog',
+        'Hydromelon', 'Hylian Rice', 'Hylian Shroom', 'Hylian Tomato', 'Hyrule Bass', 'Hyrule Herb',
+        'Ice Fruit', 'Ice Keese Wing', 'Ice Rod', 'Ice Rose', 'Icy Lizalfos Tail', 'Insect Parts',
+        'Ironshell Crab', 'Ironshroom', 'Jade Relic', 'Job Voucher', 'Keese Eyeball', 'Keese Wing',
+        'Kelp', 'Korok Leaf', 'Lanayru Ant', 'Lava Drop', 'Leather', 'Lightning Rod',
+        'Like Like Stone', 'Lizal Boomerang', 'Lizal Bow', 'Lizal Forked Boomerang', 'Lizal Shield',
+        'Lizal Spear', 'Lizal Tri-Boomerang', 'Lizalfos Arm', 'Lizalfos Horn', 'Lizalfos Tail',
+        'Lizalfos Talon', 'Lizard Tail', 'Luminous Stone', 'Lynel Bow', 'Lynel Crusher',
+        'Lynel Guts', 'Lynel Hoof', 'Lynel Horn', 'Lynel Shield', 'Lynel Spear', 'Lynel Sword',
+        'Mighty Bananas', 'Mighty Carp', 'Mighty Lynel Bow', 'Mighty Lynel Crusher', 'Mighty Lynel Shield',
+        'Mighty Lynel Spear', 'Mighty Lynel Sword', 'Mighty Porgy', 'Mighty Thistle', 'Moblin Arm',
+        'Moblin Club', 'Moblin Fang', 'Moblin Guts', 'Moblin Horn', 'Moblin Spear', 'Mock Fairy',
+        'Molduga Fin', 'Molduga Guts', 'Monster Claw', 'Monster Extract', 'Monster Fur', 'Monster Horn',
+        'Muddle Bud', 'Naydra\'s Claw', 'Naydra\'s Scale', 'Octo Balloon', 'Octorok Eyeball',
+        'Octorok Tentacle', 'Old Shirt', 'Opal', 'Ornamental Skull', 'Palm Fruit', 'Papyrus',
+        'Poe Soul', 'Pretty Plume', 'Puffshroom', 'Rainbow Coral', 'Raw Bird Drumstick', 'Raw Bird Thigh',
+        'Raw Gourmet Meat', 'Raw Meat', 'Raw Prime Meat', 'Raw Whole Bird', 'Razorclaw Crab',
+        'Razorshroom', 'Red Chuchu Jelly', 'Red Lizalfos Tail', 'Reinforced Lizal Shield',
+        'Restless Cricket', 'Rock Salt', 'Ruby', 'Rugged Horn', 'Rugged Rhino Beetle', 'Rushroom',
+        'Sand Cicada', 'Sandy Ribbon', 'Sanke Carp', 'Sapphire', 'Savage Lynel Bow', 'Savage Lynel Crusher',
+        'Savage Lynel Shield', 'Savage Lynel Spear', 'Savage Lynel Sword', 'Serpent Fangs',
+        'Shard of Dinraal\'s Fang', 'Shard of Dinraal\'s Horn', 'Shard of Farosh\'s Fang',
+        'Shard of Farosh\'s Horn', 'Shard of Naydra\'s Fang', 'Shard of Naydra\'s Horn',
+        'Shock Fruit', 'Silent Princess', 'Silent Shroom', 'Silver Dust', 'Silver Ore',
+        'Sizzlefin Trout', 'Sky Stag Beetle', 'Skyloft Mantis', 'Skyshroom', 'Smotherwing Butterfly',
+        'Sneaky River Snail', 'Spicy Pepper', 'Spider Silk', 'Spider\'s Eye', 'Spiked Boko Bat',
+        'Spiked Boko Bow', 'Spiked Boko Club', 'Spiked Boko Shield', 'Spiked Boko Spear',
+        'Spiked Moblin Club', 'Spiked Moblin Spear', 'Splash Fruit', 'Spring-Loaded Hammer',
+        'Stal Skull', 'Stambulb', 'Stamella Shroom', 'Staminoka Bass', 'Star Fragment', 'Starry Firefly',
+        'Stealthfin Trout', 'Steel Lizal Bow', 'Steel Lizal Shield', 'Sticky Frog', 'Sticky Lizard',
+        'Strengthened Lizal Bow', 'Summerwing Butterfly', 'Sundelion', 'Sunset Firefly', 'Sunshroom',
+        'Sweet Shroom', 'Swift Carrot', 'Swift Violet', 'Tabantha Wheat', 'Thornberry',
+        'Thunderwing Butterfly', 'Tireless Frog', 'Topaz', 'Tree Branch', 'Vicious Sickle',
+        'Volcanic Ladybug', 'Voltfin Trout', 'Voltfruit', 'Warm Darner', 'Warm Safflina',
+        'Well-Worn Trousers', 'White Chuchu Jelly', 'Wild berry', 'Windcleaver', 'Winterwing Butterfly',
+        'Wood', 'Woodland Rhino Beetle', 'Wool', 'Yellow Chuchu Jelly', 'Yellow Lizalfos Tail'
+      ];
+      
+      items = await Item.find({
+        itemName: { $in: allowedItemNames }
+      }, 'itemName');
+      
+      if (items.length === 0) {
+        throw new Error('No allowed items found for item quests by ID or name');
+      }
+      
+      console.log(`[HelpWanted] Found ${items.length} items by name fallback`);
     }
     
     return items;
