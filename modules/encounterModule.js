@@ -210,6 +210,14 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
         return { 
             result: outcome, 
             hearts: heartsLostForMonster, 
+            playerHearts: {
+                current: character.currentHearts,
+                max: character.maxHearts
+            },
+            monsterHearts: {
+                current: 0, // Monster is instantly defeated
+                max: monster.currentHearts || monster.maxHearts || 3
+            },
             adjustedRandomValue, 
             attackSuccess, 
             defenseSuccess,
@@ -268,7 +276,21 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
         monster.currentHearts -= heartsLostForMonster;
     }
 
-    return { result: outcome, hearts: heartsLostForMonster, adjustedRandomValue, attackSuccess, defenseSuccess };
+    return { 
+        result: outcome, 
+        hearts: heartsLostForMonster, 
+        playerHearts: {
+            current: character.currentHearts,
+            max: character.maxHearts
+        },
+        monsterHearts: {
+            current: monster.currentHearts,
+            max: monster.maxHearts
+        },
+        adjustedRandomValue, 
+        attackSuccess, 
+        defenseSuccess 
+    };
 };
 
 // ---- Function: getTier6EncounterOutcome ----
@@ -298,6 +320,14 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
         return { 
             result: outcome, 
             hearts: heartsLostForMonster, 
+            playerHearts: {
+                current: character.currentHearts,
+                max: character.maxHearts
+            },
+            monsterHearts: {
+                current: 0, // Monster is instantly defeated
+                max: monster.currentHearts || monster.maxHearts || 4
+            },
             adjustedRandomValue, 
             attackSuccess, 
             defenseSuccess,
@@ -357,7 +387,21 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
         monster.currentHearts -= heartsLostForMonster;
     }
 
-    return { result: outcome, hearts: heartsLostForMonster, adjustedRandomValue, attackSuccess, defenseSuccess };
+    return { 
+        result: outcome, 
+        hearts: heartsLostForMonster, 
+        playerHearts: {
+            current: character.currentHearts,
+            max: character.maxHearts
+        },
+        monsterHearts: {
+            current: monster.currentHearts,
+            max: monster.maxHearts
+        },
+        adjustedRandomValue, 
+        attackSuccess, 
+        defenseSuccess 
+    };
 };
 
 // ---- Function: getTier7EncounterOutcome ----
@@ -387,6 +431,14 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
         return { 
             result: outcome, 
             hearts: heartsLostForMonster, 
+            playerHearts: {
+                current: character.currentHearts,
+                max: character.maxHearts
+            },
+            monsterHearts: {
+                current: 0, // Monster is instantly defeated
+                max: monster.currentHearts || monster.maxHearts || 5
+            },
             adjustedRandomValue, 
             attackSuccess, 
             defenseSuccess,
@@ -446,7 +498,21 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
         monster.currentHearts -= heartsLostForMonster;
     }
 
-    return { result: outcome, hearts: heartsLostForMonster, adjustedRandomValue, attackSuccess, defenseSuccess };
+    return { 
+        result: outcome, 
+        hearts: heartsLostForMonster, 
+        playerHearts: {
+            current: character.currentHearts,
+            max: character.maxHearts
+        },
+        monsterHearts: {
+            current: monster.currentHearts,
+            max: monster.maxHearts
+        },
+        adjustedRandomValue, 
+        attackSuccess, 
+        defenseSuccess 
+    };
 };
 
 // ---- Function: getTier8EncounterOutcome ----
@@ -476,6 +542,14 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
         return { 
             result: outcome, 
             hearts: heartsLostForMonster, 
+            playerHearts: {
+                current: character.currentHearts,
+                max: character.maxHearts
+            },
+            monsterHearts: {
+                current: 0, // Monster is instantly defeated
+                max: monster.currentHearts || monster.maxHearts || 6
+            },
             adjustedRandomValue, 
             attackSuccess, 
             defenseSuccess,
@@ -535,7 +609,21 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
         monster.currentHearts -= heartsLostForMonster;
     }
 
-    return { result: outcome, hearts: heartsLostForMonster, adjustedRandomValue, attackSuccess, defenseSuccess };
+    return { 
+        result: outcome, 
+        hearts: heartsLostForMonster, 
+        playerHearts: {
+            current: character.currentHearts,
+            max: character.maxHearts
+        },
+        monsterHearts: {
+            current: monster.currentHearts,
+            max: monster.maxHearts
+        },
+        adjustedRandomValue, 
+        attackSuccess, 
+        defenseSuccess 
+    };
 };
 
 // ---- Function: getTier9EncounterOutcome ----
@@ -565,6 +653,14 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
         return { 
             result: outcome, 
             hearts: heartsLostForMonster, 
+            playerHearts: {
+                current: character.currentHearts,
+                max: character.maxHearts
+            },
+            monsterHearts: {
+                current: 0, // Monster is instantly defeated
+                max: monster.currentHearts || monster.maxHearts || 7
+            },
             adjustedRandomValue, 
             attackSuccess, 
             defenseSuccess,
@@ -624,7 +720,21 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
         monster.currentHearts -= heartsLostForMonster;
     }
 
-    return { result: outcome, hearts: heartsLostForMonster, adjustedRandomValue, attackSuccess, defenseSuccess };
+    return { 
+        result: outcome, 
+        hearts: heartsLostForMonster, 
+        playerHearts: {
+            current: character.currentHearts,
+            max: character.maxHearts
+        },
+        monsterHearts: {
+            current: monster.currentHearts,
+            max: monster.maxHearts
+        },
+        adjustedRandomValue, 
+        attackSuccess, 
+        defenseSuccess 
+    };
 };
 
 // ---- Function: getTier10EncounterOutcome ----
@@ -654,6 +764,14 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
         return { 
             result: outcome, 
             hearts: heartsLostForMonster, 
+            playerHearts: {
+                current: character.currentHearts,
+                max: character.maxHearts
+            },
+            monsterHearts: {
+                current: 0, // Monster is instantly defeated
+                max: monster.currentHearts || monster.maxHearts || 8
+            },
             adjustedRandomValue, 
             attackSuccess, 
             defenseSuccess,
@@ -713,7 +831,21 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
         monster.currentHearts -= heartsLostForMonster;
     }
 
-    return { result: outcome, hearts: heartsLostForMonster, adjustedRandomValue, attackSuccess, defenseSuccess };
+    return { 
+        result: outcome, 
+        hearts: heartsLostForMonster, 
+        playerHearts: {
+            current: character.currentHearts,
+            max: character.maxHearts
+        },
+        monsterHearts: {
+            current: monster.currentHearts,
+            max: monster.maxHearts
+        },
+        adjustedRandomValue, 
+        attackSuccess, 
+        defenseSuccess 
+    };
 };
 
 // ============================================================================

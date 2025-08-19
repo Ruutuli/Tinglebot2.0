@@ -476,6 +476,9 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     if (raid.monster.currentHearts <= 0) {
       await raid.completeRaid('defeated');
     } else {
+      // Update character object with new hearts value from battle result
+      character.currentHearts = battleResult.playerHearts.current;
+      
       // Ensure character's KO status is saved before advancing turn
       if (battleResult.playerHearts.current <= 0) {
         // Character was KO'd, make sure it's saved
@@ -483,6 +486,10 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
         character.currentHearts = 0;
         await character.save();
         console.log(`[raidModule.js]: 💀 Character ${character.name} KO'd and saved to database`);
+      } else {
+        // Save the updated hearts value for non-KO'd characters
+        await character.save();
+        console.log(`[raidModule.js]: 💔 Character ${character.name} hearts updated to ${character.currentHearts}/${character.maxHearts}`);
       }
       
       // Advance to next turn if monster is not defeated
