@@ -239,7 +239,7 @@ async function validateItemQuestRequirements(character, quest) {
     
     const dbItems = await inventoryCollection.find({
       characterId: character._id,
-      itemName: { $regex: new RegExp(quest.requirements.item, 'i') }
+      itemName: { $regex: new RegExp(`^${quest.requirements.item}$`, 'i') }
     }).toArray();
     
     const totalQuantity = dbItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
@@ -310,7 +310,7 @@ async function validateCraftingQuestRequirements(character, quest) {
     
     const dbItems = await inventoryCollection.find({
       characterId: character._id,
-      itemName: { $regex: new RegExp(quest.requirements.item, 'i') },
+      itemName: { $regex: new RegExp(`^${quest.requirements.item}$`, 'i') },
       obtain: { $regex: /crafting/i }
     }).toArray();
     
@@ -369,13 +369,13 @@ async function removeQuestItems(character, quest, interaction) {
     if (quest.type === 'crafting') {
       itemsToRemove = await inventoryCollection.find({
         characterId: character._id,
-        itemName: { $regex: new RegExp(quest.requirements.item, 'i') },
+        itemName: { $regex: new RegExp(`^${quest.requirements.item}$`, 'i') },
         obtain: { $regex: /crafting/i }
       }).toArray();
     } else if (quest.type === 'item') {
       itemsToRemove = await inventoryCollection.find({
         characterId: character._id,
-        itemName: { $regex: new RegExp(quest.requirements.item, 'i') }
+        itemName: { $regex: new RegExp(`^${quest.requirements.item}$`, 'i') }
       }).toArray();
     }
     
@@ -425,7 +425,7 @@ async function updateVillageShopsStock(itemName, amountUsed) {
     
     // Find the item in VillageShops and reduce stock
     const shopItem = await VillageShopItem.findOne({
-      itemName: { $regex: new RegExp(itemName, 'i') }
+      itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
     });
     
     if (shopItem && shopItem.stock > 0) {
