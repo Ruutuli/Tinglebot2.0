@@ -2009,8 +2009,8 @@ try {
             // Save Weapon to Database
             const newItem = new ItemModel({
                 itemName: weaponSubmission.weaponName,
-                image: weaponSubmission.image || 'https://static.wixstatic.com/media/7573f4_1fabe54755434389a9cfb24180c4538b~mv2.png',
-                imageType: 'https://static.wixstatic.com/media/7573f4_1fabe54755434389a9cfb24180c4538b~mv2.png',
+                image: weaponSubmission.image || 'https://storage.googleapis.com/tinglebot/Graphics/weapon_white.png',
+                imageType: 'https://storage.googleapis.com/tinglebot/Graphics/weapon_white.png',
                 category: ['Custom Weapon'],
                 categoryGear: 'Weapon',
                 type: [weaponSubmission.type],
