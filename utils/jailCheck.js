@@ -30,13 +30,8 @@ async function enforceJail(interaction, character) {
         color: 0xFF0000,
         fields: [
             {
-                name: '⏰ Time Remaining',
-                value: `<t:${Math.floor(releaseTime / 1000)}:R>`,
-                inline: false
-            },
-            {
                 name: '📅 Release Date',
-                value: `${estReleaseDate.toLocaleDateString('en-US', { timeZone: 'America/New_York' })} (Midnight EST)`,
+                value: `<t:${Math.floor(releaseTime / 1000)}:F>`,
                 inline: false
             },
         ],
