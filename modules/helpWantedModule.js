@@ -188,27 +188,113 @@ async function getMonsterQuestPool() {
 }
 
 // ------------------- Function: getCraftingQuestPool -------------------
-// Fetches all craftable items for crafting quests
+// Fetches specific craftable items for crafting quests with weighted selection
 async function getCraftingQuestPool() {
   try {
-    let items = await Item.find({
-      crafting: true,
-      itemRarity: { $lte: 4 },
-      category: { $nin: ['Quest', 'Event'] }
-    }, 'itemName');
-    
+    // Specific list of items that can be requested for crafting quests
+    const allowedCraftingItems = [
+      'Akkala Buns', 'Amber Earrings', 'Apple Pie', 'Archaic Warm Greaves', 'Baked Apple',
+      'Baked Fortified Pumpkin', 'Baked Palm Fruit', 'Blackened Crab', 'Blueshell Escargot',
+      'Boat Oar', 'Bokoblin Mask', 'Bomb Arrow', 'Boomerang', 'Buttered Stambulb',
+      'Campfire Egg', 'Cap of the Wild', 'Carrot Cake', 'Carrot Stew', 'Charred Pepper',
+      'Cheesy Baked Fish', 'Cheesy Tomato', 'Clam Chowder', 'Climber\'s Bandanna',
+      'Climbing Boots', 'Climbing Gear', 'Cobble Crusher', 'Cooked Stambulb',
+      'Copious Fish Skewers', 'Copious Fried Wild Greens', 'Copious Meat Skewers',
+      'Copious Mushroom Skewers', 'Copious Simmered Fruit', 'Crab Omelet With Rice',
+      'Crab Risotto', 'Crab Stir-fry', 'Cream Of Vegetable Soup', 'Creamy Heart Soup',
+      'Creamy Meat Soup', 'Curry Rice', 'Deep-Fried Bird Roast', 'Deep-Fried Drumstick',
+      'Deep-Fried Thigh', 'Desert Voe Headband', 'Desert Voe Spaulder', 'Desert Voe Trousers',
+      'Double Axe', 'Drillshaft', 'Egg Pudding', 'Egg Tart', 'Emblazoned Shield',
+      'Falcon Bow', 'Farmer\'s Pitchfork', 'Farming Hoe', 'Feathered Edge', 'Feathered Spear',
+      'Fire Arrow', 'Fish And Mushroom Skewer', 'Fish Pie', 'Fish Skewer', 'Fisherman\'s Shield',
+      'Fishing Harpoon', 'Forest Dweller\'s Bow', 'Forest Dweller\'s Shield',
+      'Forest Dweller\'s Spear', 'Forest Dweller\'s Sword', 'Fragrant Mushroom Sauté',
+      'Fried Bananas', 'Fried Egg And Rice', 'Fried Wild Greens', 'Fruit And Mushroom Mix',
+      'Fruit Cake', 'Fruit Pie', 'Gerudo Sirwal', 'Gerudo Top', 'Gerudo Veil',
+      'Giant Boomerang', 'Glazed Meat', 'Glazed Mushrooms', 'Glazed Seafood',
+      'Glazed Veggies', 'Goron Spice', 'Gourmet Meat And Rice Bowl', 'Gourmet Meat And Seafood Fry',
+      'Hard-boiled Egg', 'Hateno Cheese', 'Honey Candy', 'Honeyed Apple', 'Honeyed Fruits',
+      'Hot Buttered Apple', 'Hunter\'s Shield', 'Hylian Hood', 'Hylian Trousers',
+      'Hylian Tunic', 'Ice Arrow', 'Iron Sledgehammer', 'Island Lobster Shirt',
+      'Kite Shield', 'Knight\'s Bow', 'Knight\'s Broadsword', 'Knight\'s Halberd',
+      'Knight\'s Shield', 'Korok Mask', 'Lizalfos Mask', 'Lynel Mask', 'Mabe Soufflé',
+      'Meat & Mushroom Skewer', 'Meat And Rice Bowl', 'Meat And Seafood Fry',
+      'Meat Pie', 'Meat Skewer', 'Meat Stew', 'Meat-stuffed Pumpkins', 'Meaty Rice Balls',
+      'Melty Cheesy Bread', 'Moblin Mask', 'Mushroom Omelet', 'Mushroom Rice Balls',
+      'Mushroom Risotto', 'Mushroom Skewer', 'Noble Pursuit', 'Nut Cake', 'Oil Jar',
+      'Omelet', 'Opal Earrings', 'Pepper Seafood', 'Pepper Steak', 'Phrenic Bow',
+      'Porgy Meunière', 'Pot Lid', 'Poultry Curry', 'Poultry Pilaf', 'Prime Meat And Rice Bowl',
+      'Prime Meat And Seafood Fry', 'Prime Meat Stew', 'Prime Poultry Pilaf',
+      'Prime Spiced Meat Skewer', 'Pumpkin Pie', 'Pumpkin Stew', 'Radiant Mask',
+      'Radiant Shirt', 'Radiant Tights', 'Roasted Acorn', 'Roasted Armoranth',
+      'Roasted Bass', 'Roasted Bird Drumstick', 'Roasted Bird Thigh', 'Roasted Carp',
+      'Roasted Endura Carrot', 'Roasted Hearty Bass', 'Roasted Hearty Durian',
+      'Roasted Hearty Salmon', 'Roasted Hydromelon', 'Roasted Lotus Seeds',
+      'Roasted Mighty Bananas', 'Roasted Mighty Thistle', 'Roasted Porgy',
+      'Roasted Radish', 'Roasted Swift Carrot', 'Roasted Tree Nut', 'Roasted Trout',
+      'Roasted Voltfruit', 'Roasted Whole Bird', 'Roasted Wildberry', 'Rock-hard Food',
+      'Rubber Armor', 'Rubber Helm', 'Rubber Tights', 'Rusty Broadsword',
+      'Rusty Claymore', 'Rusty Halberd', 'Rusty Shield', 'Salmon Meunière',
+      'Salt-grilled Crab', 'Salt-grilled Fish', 'Salt-grilled Gourmet Meat',
+      'Salt-grilled Greens', 'Salt-grilled Meat', 'Salt-grilled Mushrooms',
+      'Salt-grilled Prime Meat', 'Sand Boots', 'Sapphire Circlet', 'Sautéed Nuts',
+      'Sea-Breeze Boomerang', 'Seafood Fried Rice', 'Seafood Meunière',
+      'Seafood Rice Balls', 'Seafood Skewer', 'Seared Gourmet Steak', 'Seared Prime Steak',
+      'Seared Steak', 'Serpentine Spear', 'Shield of the Mind\'s Eye', 'Shock Arrow',
+      'Silver Bow', 'Silver Shield', 'Silverscale Spear', 'Simmered Fruit',
+      'Simmered Tomato', 'Sneaky River Escargot', 'Snowquill Headdress',
+      'Snowquill Trousers', 'Snowquill Tunic', 'Soldier\'s Bow', 'Soldier\'s Broadsword',
+      'Soldier\'s Claymore', 'Soldier\'s Shield', 'Soldier\'s Spear', 'Soup Ladle',
+      'Spiced Meat Skewer', 'Spicy Sautéed Peppers', 'Stealth Chest Guard',
+      'Stealth Mask', 'Stealth Tights', 'Steamed Fish', 'Steamed Fruit',
+      'Steamed Meat', 'Stone Smasher', 'Swallow Bow', 'Sword', 'Tabantha Bake',
+      'Throwing Spear', 'Tingle\'s Hood', 'Tingle\'s Shirt', 'Tingle\'s Tights',
+      'Toasted Hearty Truffle', 'Toasty Chillshroom', 'Toasty Endura Shroom',
+      'Toasty Hylian Shroom', 'Toasty Ironshroom', 'Toasty Razorshroom',
+      'Toasty Rushroom', 'Toasty Silent Shroom', 'Toasty Skyshroom',
+      'Toasty Stamella Shroom', 'Toasty Sunshroom', 'Toasty Zapshroom',
+      'Tomato Mushroom Stew', 'Tomato Seafood Soup', 'Tomato Stew', 'Topaz Earrings',
+      'Torch', 'Traveler\'s Bow', 'Traveler\'s Claymore', 'Traveler\'s Shield',
+      'Traveler\'s Spear', 'Traveler\'s Sword', 'Trousers of the Wild',
+      'Tunic of the Wild', 'Vegetable Risotto', 'Veggie Cream Soup',
+      'Veggie Rice Balls', 'Warm Milk', 'Wheat Bread', 'Woodcutter\'s Axe',
+      'Wooden Bow', 'Wooden Mop', 'Wooden Shield', 'Zora Armor', 'Zora Greaves',
+      'Zora Helm', 'Zora Spear', 'Zora Sword'
+    ];
+
+    // Fetch the allowed items with their crafting data
+    const items = await Item.find({
+      itemName: { $in: allowedCraftingItems },
+      crafting: true
+    }, 'itemName staminaToCraft category');
+
     if (items.length === 0) {
-      items = await Item.find({
-        itemRarity: { $lte: 4 },
-        category: { $nin: ['Quest', 'Event'] }
-      }, 'itemName');
+      throw new Error('No allowed crafting items found for crafting quests');
     }
+
+    // Create weighted pool based on stamina and category
+    const weightedPool = [];
     
-    if (items.length === 0) {
-      throw new Error('No items found for crafting quests');
+    for (const item of items) {
+      let weight = 1;
+      
+      // Prioritize items with 3 or less stamina to craft
+      if (item.staminaToCraft && item.staminaToCraft <= 3) {
+        weight = 3;
+      }
+      
+      // Prioritize items with "recipe" category
+      if (item.category && item.category.includes('recipe')) {
+        weight = weight * 2;
+      }
+      
+      // Add item to pool with its weight (multiple entries for higher weight)
+      for (let i = 0; i < weight; i++) {
+        weightedPool.push(item);
+      }
     }
-    
-    return items;
+
+    return weightedPool;
   } catch (error) {
     console.error('[HelpWanted] Error fetching crafting quest pool:', error);
     throw error;
@@ -311,8 +397,19 @@ function generateQuestRequirements(type, pools, village) {
       if (!item?.itemName) {
         throw new Error(`Invalid crafting item selected for ${village} crafting quest`);
       }
-      const { minAmount, maxAmount } = QUEST_PARAMS.crafting;
-      return { item: item.itemName, amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount };
+      
+      // Check stamina to craft and adjust amount accordingly
+      let amount;
+      if (item.staminaToCraft && item.staminaToCraft > 4) {
+        // Items with more than 4 stamina to craft only ask for 1
+        amount = 1;
+      } else {
+        // Items with 4 or less stamina use normal amount range
+        const { minAmount, maxAmount } = QUEST_PARAMS.crafting;
+        amount = Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount;
+      }
+      
+      return { item: item.itemName, amount };
     }
     
     default:
