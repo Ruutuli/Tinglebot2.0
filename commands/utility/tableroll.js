@@ -401,7 +401,7 @@ module.exports = {
        }
        
        // Always show the default image
-       embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+       embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
              // Add footer with table info
        embed.setFooter({

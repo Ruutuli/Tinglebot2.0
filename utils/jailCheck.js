@@ -44,7 +44,7 @@ async function enforceJail(interaction, character) {
             url: character.icon
         },
         image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
         footer: {
             text: 'You will be automatically released when your time is up.',

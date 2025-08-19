@@ -43,7 +43,7 @@ const regionColors = {
  hebra: "#800080",
 };
 const regionImage =
- "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+ "https://storage.googleapis.com/tinglebot/Graphics/border.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
 
 // Helper function for calculating new location
 function calculateNewLocation(currentSquare, currentQuadrant, direction) {

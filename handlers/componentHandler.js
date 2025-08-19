@@ -364,7 +364,7 @@ async function handleConfirmation(interaction, userId, submissionData) {
           .setTitle(`${typeEmoji} PENDING ${submissionType} SUBMISSION!`)
           .setDescription('⏳ **Please approve within 24 hours!**')
           .addFields(notificationFields)
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ text: `${submissionType} Submission Approval Required` })
           .setTimestamp();
 
@@ -650,7 +650,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
             { name: '4️⃣ Get Started', value: 'After setup, you can:\n• Add items with `/vending add`\n• Edit your shop with `/vending edit`\n• View your shop with `/vending view`' }
           )
           .setColor('#AA926A')
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
         await interaction.followUp({
           embeds: [shopGuideEmbed],
@@ -1193,7 +1193,7 @@ async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCha
   const embed = new EmbedBuilder()
     .setTitle(`🎲 RuuGame - ${title}`)
     .setDescription(`**Roll a 20 to win a ${itemEmoji} ${prize.name}!**\n\n*Only members with set up characters can join!*\n*Prize will be added to a random character's inventory!*`)
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setColor(getRuuGameStatusColor(session.status))
     .setTimestamp();
   

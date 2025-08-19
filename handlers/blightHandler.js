@@ -753,7 +753,7 @@ function createBlightHealingEmbed(character, healer, healingRequirement, submiss
     .setAuthor({ name: character.name, iconURL: character.icon })
     .setThumbnail(healer.iconUrl)
     .addFields(createBlightHealingFields(healingRequirement, submissionId, expiresAt))
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ text: 'Use the Submission ID when you submit the task with /blight submit' })
     .setTimestamp();
 }
@@ -896,7 +896,7 @@ function createBlightHealingCompleteEmbed(character, healer, additionalFields = 
     .setDescription(healer.roleplayResponseAfter(character.name))
     .setThumbnail(healer.iconUrl)
     .setAuthor({ name: character.name, iconURL: character.icon })
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ text: 'Healing status successfully updated.' })
     .setTimestamp();
 
@@ -1554,7 +1554,7 @@ async function rollForBlightProgression(interaction, characterName) {
         )
         .setThumbnail(character.icon)
         .setAuthor({ name: `${characterName}'s Blight Status`, iconURL: interaction.user.displayAvatarURL() })
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setFooter({ text: 'Blight Roll Call', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
         .setTimestamp();
 
@@ -2009,7 +2009,7 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
       .setDescription(`Showing the last ${history.length} blight progression events.`)
       .setThumbnail(character.icon)
       .setAuthor({ name: characterName, iconURL: character.icon })
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: 'Blight History' })
       .setTimestamp();
 

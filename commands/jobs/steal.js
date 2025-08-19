@@ -476,10 +476,10 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
 
     if (isSuccess) {
         // Always use the default success image, NPC icon is only used for thumbnail
-        embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+        embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
     } else {
         // Add image for failed steals
-        embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+        embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
     }
 
     return embed;
@@ -520,7 +520,7 @@ function createProtectionEmbed(targetName, timeLeftMinutes, isNPC = false, prote
             { name: '⏰ Protection Duration', value: `Expires in ${timeDisplay}`, inline: false },
             { name: '💡 What This Means', value: 'This target cannot be stolen from until the protection expires', inline: false }
         )
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setFooter({ 
             text: footerText
         })
@@ -565,7 +565,7 @@ function createJailBlockEmbed(targetName, timeLeft, targetIcon, thiefIcon) {
             name: 'Steal Attempt', 
             iconURL: thiefIcon || null 
         })
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setFooter({ 
             text: 'Jail protection active - even thieves have standards!'
         })
@@ -1711,7 +1711,7 @@ module.exports = {
                         { name: '📅 Formatted Time', value: formatJailTimeLeftDaysHours(jailStatus.timeLeft), inline: false }
                     )
                     .setThumbnail(character.icon)
-                    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
                 await interaction.editReply({ embeds: [embed] });
                 return;
@@ -1809,7 +1809,7 @@ module.exports = {
                         color: 0x008B8B, // Dark cyan color
                         description: `*${thiefCharacter.name} looks at their hands, unsure of how to proceed...*\n\n**Job Skill Mismatch**\n${thiefCharacter.name} cannot use the stealing perk as a ${capitalizeWords(thiefCharacter.job)} because they lack the necessary stealing skills.\n\n💡 **Tip:** Only Bandits or those with a valid Bandit job voucher can steal!`,
                         image: {
-                            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
                         },
                         footer: {
                             text: 'Job Skill Check'
@@ -1851,7 +1851,7 @@ module.exports = {
                         { name: '⏰ Time Remaining', value: timeLeft, inline: true }
                     )
                     .setThumbnail(thiefCharacter.icon || null)
-                    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
                     .setFooter({ 
                         text: 'Jail restriction active'
                     })
@@ -1879,7 +1879,7 @@ module.exports = {
                             color: 0x008B8B, // Dark cyan color
                             description: `*${thiefCharacter.name} seems exhausted from their earlier stealing...*\n\n**Daily stealing limit reached.**\nThe next opportunity to steal will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to steal again today.*`,
                             image: {
-                                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
                             },
                             footer: {
                                 text: 'Daily Activity Limit'
@@ -1954,7 +1954,7 @@ module.exports = {
                         color: 0x008B8B, // Dark cyan color
                         description: `*${thiefCharacter.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(thiefCharacter.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
                         image: {
-                            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
                         },
                         footer: {
                             text: 'Channel Restriction'
@@ -2334,7 +2334,7 @@ module.exports = {
                             { name: '💡 Travel Tip', value: 'Use </travel:1379850586987430009> to travel between villages and access characters in different locations!', inline: false }
                         )
                         .setThumbnail(thiefCharacter.icon || null)
-                        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+                        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
                         .setFooter({ 
                             text: 'Village restriction active'
                         })
@@ -2366,7 +2366,7 @@ module.exports = {
                             { name: '💡 Tip', value: 'Try stealing from other characters or NPCs instead', inline: false }
                         )
                         .setThumbnail(targetCharacter.icon || null)
-                        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+                        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
                         .setFooter({ 
                             text: 'Steal protection active'
                         })

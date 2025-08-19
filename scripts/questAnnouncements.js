@@ -72,7 +72,7 @@ function formatQuestEmbed(quest) {
         .setTitle(`📜 ${quest.title}`)
         .setDescription(quest.description || 'No description provided.')
         .setColor(0xAA926A)
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
     // Dynamically add fields based on value
     if (quest.questType) embed.addFields({ name: '📖 Quest Type', value: quest.questType, inline: true });

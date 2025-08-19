@@ -278,7 +278,7 @@ module.exports = {
             color: 0x008B8B, // Dark cyan color
             description: `${character.name} can't gather as a ${capitalizeWords(job)} because they lack the necessary gathering skills.`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Job Skill Check'
@@ -311,7 +311,7 @@ module.exports = {
             color: 0x008B8B, // Dark cyan color
             description: `*${character.name} looks around confused...*\n\n**Wrong Village Location**\nYou must be physically present in ${channelVillage} to gather here.\n\n🗺️ **Current Location:** ${capitalizeWords(character.currentVillage)}`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Location Check'
@@ -333,7 +333,7 @@ module.exports = {
             color: 0x008B8B, // Dark cyan color
             description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Channel Restriction'
@@ -469,7 +469,7 @@ module.exports = {
               color: 0x008B8B, // Dark cyan color
               description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`,
               image: {
-                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
                 text: 'Daily Activity Limit'
@@ -970,7 +970,7 @@ module.exports = {
               }
             ],
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Inventory Sync Required'

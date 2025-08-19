@@ -393,7 +393,7 @@ module.exports = {
             }
           )
           .setColor("#FF6B35")
-          .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
+          .setImage(sanitizeUrl("https://storage.googleapis.com/tinglebot/Graphics/border.png"))
           .setFooter({ 
             text: "Please store your pet in the stables (feature coming soon) before adding a new one" 
           });
@@ -819,7 +819,7 @@ module.exports = {
            }
          )
          .setColor("#FF6B35")
-         .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+         .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
          .setFooter({ 
            text: "Increase your roll limit by training your pet! Visit https://rootsofthewild.com/mechanics/pets for more info" 
          });
@@ -875,7 +875,7 @@ module.exports = {
            }
          )
          .setColor("#FF6B35")
-         .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+         .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
          .setFooter({ 
            text: "Pets can only roll once per day and reset at 8:00 AM daily" 
          });
@@ -906,7 +906,7 @@ module.exports = {
              }
            )
            .setColor("#FF6B35")
-           .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+           .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
            .setFooter({ 
              text: "Please sync your inventory and try again" 
            });
@@ -1016,13 +1016,13 @@ module.exports = {
      // ------------------- Create and Send Roll Result Embed -------------------
      const rollEmbed = new EmbedBuilder()
       .setAuthor({ name: `${pet.name} the ${pet.species}`, iconURL: sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl) })
-      .setThumbnail(sanitizeUrl(randomItem.image || "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
+      .setThumbnail(sanitizeUrl(randomItem.image || "https://storage.googleapis.com/tinglebot/Graphics/border.png"))
       .setTitle(
        `${character.name}'s Pet Roll - ${pet.name} | Level ${pet.level}`
       )
       .setColor(embedColor)
       .setDescription(flavorTextMessage)
-      .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
+      .setImage(sanitizeUrl("https://storage.googleapis.com/tinglebot/Graphics/border.png"))
       .addFields(
        { name: "__Pet Name__", value: `> ${pet.name}`, inline: false },
        {
@@ -1158,7 +1158,7 @@ module.exports = {
       .setThumbnail(sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl))
       .setColor(embedColor)
       .setDescription(`🎉 **${pet.name}** has successfully advanced to **Level ${targetLevel}!**`)
-      .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
+      .setImage(sanitizeUrl("https://storage.googleapis.com/tinglebot/Graphics/border.png"))
              .addFields(
         { name: "__Pet Name__", value: `> ${pet.name}`, inline: true },
         { name: "__Owner__", value: `> ${character.name}`, inline: true },
@@ -1287,7 +1287,7 @@ module.exports = {
           .setTitle(`🐾 ${pet.name} — Pet Details`)
           .setThumbnail(sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl))
           .setColor(embedColor)
-          .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
+          .setImage(sanitizeUrl("https://storage.googleapis.com/tinglebot/Graphics/border.png"))
           .addFields(
             { name: "__Pet Name__", value: `> ${pet.name}`, inline: true },
             { name: "__Owner__", value: `> ${character.name}`, inline: true },

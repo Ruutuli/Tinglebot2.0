@@ -533,7 +533,7 @@ const command = {
       },
      ],
      image: {
-      url: "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png",
+      url: "https://storage.googleapis.com/tinglebot/Graphics/border.png",
      },
      timestamp: new Date(),
     };

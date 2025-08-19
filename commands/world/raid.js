@@ -104,7 +104,7 @@ module.exports = {
               }
             ],
             image: {
-              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
               text: 'Inventory Sync Required'
@@ -266,10 +266,10 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping]
     ? monsterMapping[monster.nameMapping]
     : { image: monster.image };
-  const monsterImage = monsterDetails.image || monster.image || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
+  const monsterImage = monsterDetails.image || monster.image || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
   // Get character icon (if available)
-  const characterIcon = character.icon || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
+  const characterIcon = character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
   // Build turn order list with current turn indicator
   const participants = raidData.participants || [];
@@ -383,7 +383,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
 
     )
     .setThumbnail(monsterImage)
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ 
       text: `Raid ID: ${raidId} • Use /raid to take your turn! • Use /item to heal characters!` 
     })
@@ -523,7 +523,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
     const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping] 
       ? monsterMapping[monster.nameMapping] 
       : { image: monster.image };
-    const monsterImage = monsterDetails.image || monster.image || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
+    const monsterImage = monsterDetails.image || monster.image || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
     
     // Create victory embed
     const victoryEmbed = new EmbedBuilder()
@@ -548,7 +548,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
         }
       )
       .setThumbnail(monsterImage)
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: `Raid ID: ${raidData.raidId}` })
       .setTimestamp();
     
