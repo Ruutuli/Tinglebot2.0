@@ -82,7 +82,7 @@ async function getVendingModel(characterName) {
 }
 
 // ------------------- Constants -------------------
-const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const MONTHLY_VENDING_POINTS = 500;
 const VIEW_SHOP_IMAGE_URL = DEFAULT_IMAGE_URL;
 
