@@ -55,22 +55,21 @@ const LIMITED_ITEMS_COUNT = 5;
 
 const VILLAGE_IMAGES = {
  Rudania:
-  "https://static.wixstatic.com/media/7573f4_a0d0d9c6b91644f3b67de8612a312e42~mv2.png",
+  "https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_red_bottom.png",
  Inariko:
-  "https://static.wixstatic.com/media/7573f4_c88757c19bf244aa9418254c43046978~mv2.png",
+  "https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_blue_bottom.png",
  Vhintl:
-  "https://static.wixstatic.com/media/7573f4_968160b5206e4d9aa1b254464d97f9a9~mv2.png",
+  "https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_green_bottom.png",
 };
 
 const VILLAGE_ICONS = {
- Rudania:
-  "https://static.wixstatic.com/media/7573f4_ffb523e41dbb43c183283a5afbbc74e1~mv2.png",
- Inariko:
-  "https://static.wixstatic.com/media/7573f4_066600957d904b1dbce10912d698f5a2~mv2.png",
- Vhintl:
-  "https://static.wixstatic.com/media/7573f4_15ac377e0dd643309853fc77250a86a1~mv2.png",
-};
-
+  Rudania:
+   "https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_rudania_.png",
+  Inariko:
+   "https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_inariko_.png",
+  Vhintl:
+   "https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_vhintl_.png",
+ };
 
 // ------------------- connectToTinglebot -------------------
 async function connectToTinglebot() {

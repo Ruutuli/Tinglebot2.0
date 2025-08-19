@@ -205,7 +205,7 @@ async function healBlight(interaction, characterName, healerName) {
         .setThumbnail(character.icon)
         .setAuthor({ name: `${character.name}'s Status`, iconURL: interaction.user.displayAvatarURL() })
         .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-        .setFooter({ text: 'Blight Status Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+        .setFooter({ text: 'Blight Status Check', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
         .setTimestamp();
 
       await interaction.editReply({ 
@@ -287,7 +287,7 @@ async function healBlight(interaction, characterName, healerName) {
         pendingEmbed
           .setThumbnail(character.icon)
           .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-          .setFooter({ text: 'Blight Healing Request', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'})
+          .setFooter({ text: 'Blight Healing Request', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png'})
           .setTimestamp();
 
         // Create instructions embed for art submissions (always show for existing requests too)
@@ -835,7 +835,7 @@ function createBlightSubmissionErrorEmbed(errorMessage) {
     .setDescription(description)
     .addFields(fields)
     .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
-    .setFooter({ text: footerText, iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+    .setFooter({ text: footerText, iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
     .setTimestamp();
 }
 
@@ -1159,7 +1159,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
           )
           .setThumbnail(healer.iconUrl)
           .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
-          .setFooter({ text: 'Healing Submission Error', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+          .setFooter({ text: 'Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
           .setTimestamp();
 
         await interaction.editReply({
@@ -1494,7 +1494,7 @@ async function rollForBlightProgression(interaction, characterName) {
         .setThumbnail(character.icon)
         .setAuthor({ name: `${characterName}'s Status`, iconURL: interaction.user.displayAvatarURL() })
         .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-        .setFooter({ text: 'Blight Status Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+        .setFooter({ text: 'Blight Status Check', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
         .setTimestamp();
 
       await interaction.editReply({ 
@@ -1555,7 +1555,7 @@ async function rollForBlightProgression(interaction, characterName) {
         .setThumbnail(character.icon)
         .setAuthor({ name: `${characterName}'s Blight Status`, iconURL: interaction.user.displayAvatarURL() })
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-        .setFooter({ text: 'Blight Roll Call', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+        .setFooter({ text: 'Blight Roll Call', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
         .setTimestamp();
 
       await interaction.editReply({ 
@@ -1739,7 +1739,7 @@ async function viewBlightStatus(interaction, characterName) {
         .setThumbnail(character.icon)
         .setAuthor({ name: `${characterName}'s Status`, iconURL: interaction.user.displayAvatarURL() })
         .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-        .setFooter({ text: 'Blight Status Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289f~mv2.png' })
+        .setFooter({ text: 'Blight Status Check', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/border_blight.png' })
         .setTimestamp();
 
       await interaction.editReply({ 
@@ -1982,7 +1982,7 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
         .setThumbnail(character.icon)
         .setAuthor({ name: `${characterName}'s History`, iconURL: interaction.user.displayAvatarURL() })
         .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-        .setFooter({ text: 'Blight History Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+        .setFooter({ text: 'Blight History Check', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
         .setTimestamp();
 
       await interaction.editReply({ 
@@ -2958,7 +2958,7 @@ async function checkMissedRolls(client) {
           .setFooter({ text: 'Missed roll - Blight progressed!' })
           .setAuthor({
             name: 'Blight Progression Alert',
-            iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+            iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png'
           })
           .setThumbnail(character.icon)
           .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
