@@ -111,7 +111,7 @@ async function execute(interaction) {
             .setColor('#AA926A')
             .setTitle(`<:spiritorb:1171310851748270121> Spirit Orb Check`)
             .setDescription(`✨ **[${character.name}](${character.inventory})** currently has **${orbCount} Spirit Orb(s)** in their inventory.`)
-            .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
+            .setThumbnail('https://storage.googleapis.com/tinglebot/Items/ROTWspiritorb.png')
         ],
         ephemeral: true
       });
@@ -162,7 +162,7 @@ async function execute(interaction) {
         const embed = new EmbedBuilder()
         .setAuthor({ name: `${character.name} - Spirit Orb Exchange`, iconURL: character.icon })
         .setColor('#AA926A')
-        .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
+        .setThumbnail('https://storage.googleapis.com/tinglebot/Items/ROTWspiritorb.png')
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setDescription(`💫 **[${character.name}](${character.inventory})** offers 4 <:spiritorb:1171310851748270121> Spirit Orbs to the Goddess Statue.\n\n${chosenFlavor}`)
 

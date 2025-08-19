@@ -1269,7 +1269,7 @@ module.exports = {
           const embed = new EmbedBuilder()
             .setAuthor({ name: `${character.name} - Quest Exchange`, iconURL: character.icon })
             .setColor('#AA926A')
-            .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
+            .setThumbnail('https://storage.googleapis.com/tinglebot/Items/ROTWspiritorb.png')
             .setDescription(`🎯 **[${character.name}](${character.inventory})** exchanges **50 Help Wanted quest completions** for a <:spiritorb:1171310851748270121> Spirit Orb.\n\n*A grateful villager hands you a glowing orb as thanks for your service.*`)
             .addFields([
               {
@@ -1296,7 +1296,7 @@ module.exports = {
           const embed = new EmbedBuilder()
             .setAuthor({ name: `${character.name} - Quest Exchange`, iconURL: character.icon })
             .setColor('#AA926A')
-            .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
+            .setThumbnail('https://storage.googleapis.com/tinglebot/Items/ROTWspiritorb.png')
             .setDescription(`🎯 **[${character.name}](${character.inventory})** exchanges **50 Help Wanted quest completions** for a 🎫 Character Slot Voucher.\n\n*The village elder grants you permission to create another character in recognition of your service.*`)
             .addFields([
               {
