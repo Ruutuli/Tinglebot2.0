@@ -30,6 +30,53 @@ const COOLDOWN_MESSAGES = {
 // ============================================================================
 
 /**
+ * Creates an embed for blight rejection with NPC icon and message
+ * @param {Object} character - Character object
+ * @returns {EmbedBuilder}
+ */
+function createBlightRejectionEmbed(character) {
+  const { EmbedBuilder } = require('discord.js');
+  const { getRandomNPCName } = require('../../modules/NPCsModule');
+  const NPCs = require('../../modules/NPCsModule').NPCs;
+  
+  // Get a random NPC name for the rejection message
+  const npcName = getRandomNPCName();
+  const npcData = NPCs[npcName];
+  
+  const embed = new EmbedBuilder()
+    .setColor('#8B0000') // Dark red for blight
+    .setTitle('💀 NPC Declines Help')
+    .setDescription(`**${npcName}** looks at **${character.name}** with concern, noticing the telltale signs of blight.`)
+    .addFields({
+      name: '🗣️ NPC Response',
+      value: `"I'm sorry, but I cannot accept help from someone who is blighted. Please seek healing from an Oracle, Sage, or Dragon first. Your health and safety come first."`,
+      inline: false
+    })
+    .addFields({
+      name: '💊 Next Steps',
+      value: '• Seek healing from an Oracle, Sage, or Dragon\n• Use `/blight heal` to request healing\n• Check the Community Board for available healers',
+      inline: false
+    })
+    .setFooter({ text: 'Blight Status Check', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+    .setTimestamp();
+  
+  // Add NPC icon as thumbnail if available
+  if (npcData && npcData.icon) {
+    embed.setThumbnail(npcData.icon);
+  }
+  
+  // Add character icon as author
+  if (character.icon) {
+    embed.setAuthor({
+      name: `${character.name} - Blighted`,
+      iconURL: character.icon
+    });
+  }
+  
+  return embed;
+}
+
+/**
  * Validates if a quest is still valid (not expired after midnight)
  * @param {Object} quest - Quest object
  * @returns {Promise<{canProceed: boolean, message?: string}>}
@@ -72,7 +119,7 @@ async function validateUserCooldowns(userId) {
 /**
  * Validates character eligibility for quest participation
  * @param {Object} character - Character object
- * @returns {Promise<{canProceed: boolean, message?: string}>}
+ * @returns {{canProceed: boolean, message?: string, embed?: EmbedBuilder}}
  */
 function validateCharacterEligibility(character) {
   // Mod characters are immune to negative effects and can always participate
@@ -97,7 +144,10 @@ function validateCharacterEligibility(character) {
   
   // Check if character is blighted
   if (character.blighted) {
-    return { canProceed: false, message: `💀 ${character.name} is blighted and cannot participate.` };
+    return { 
+      canProceed: false, 
+      embed: createBlightRejectionEmbed(character)
+    };
   }
   
   // Check blight effects that prevent monster fighting
@@ -112,7 +162,7 @@ function validateCharacterEligibility(character) {
  * Validates character location for quest completion
  * @param {Object} character - Character object
  * @param {Object} quest - Quest object
- * @returns {Promise<{canProceed: boolean, message?: string}>}
+ * @returns {{canProceed: boolean, embed?: EmbedBuilder}}
  */
 function validateCharacterLocation(character, quest) {
   const { createWrongVillageEmbed } = require('../../embeds/embeds');
@@ -779,7 +829,11 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   // Validate character eligibility
   const eligibilityCheck = validateCharacterEligibility(character);
   if (!eligibilityCheck.canProceed) {
-    return await interaction.editReply({ content: eligibilityCheck.message });
+    if (eligibilityCheck.embed) {
+      return await interaction.editReply({ embeds: [eligibilityCheck.embed] });
+    } else {
+      return await interaction.editReply({ content: eligibilityCheck.message });
+    }
   }
   
   // Validate character location
@@ -1149,7 +1203,11 @@ module.exports = {
         // Validate character eligibility
         const eligibilityCheck = validateCharacterEligibility(character);
         if (!eligibilityCheck.canProceed) {
-          return await interaction.editReply({ content: eligibilityCheck.message });
+          if (eligibilityCheck.embed) {
+            return await interaction.editReply({ embeds: [eligibilityCheck.embed] });
+          } else {
+            return await interaction.editReply({ content: eligibilityCheck.message });
+          }
         }
         
         // Validate character location
