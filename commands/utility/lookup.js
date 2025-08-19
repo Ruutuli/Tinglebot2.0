@@ -180,7 +180,7 @@ async function handleItemLookup(interaction, itemName) {
     .setDescription(description)
     .setThumbnail(imageUrl !== 'No Image' ? imageUrl : null)
     .setFooter({ text: `Locations: ${locationsFormatted}` })
-    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .addFields(
       { name: '🔍 **__Job:__**', value: `>>> ${jobFormatted}`, inline: true },
       { name: '\u200B', value: '\u200B', inline: true },
@@ -219,7 +219,7 @@ async function handleItemLookup(interaction, itemName) {
         .setColor(getCategoryColor(item.category || 'Unknown'))
         .setTitle(`Characters that have ${String(item.itemName || 'Unknown Item')}`)
         .setDescription(charactersFormatted)
-        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setFooter({ text: `Page ${Number(page || 0) + 1} of ${Number(totalPages || 1)}` });
     };
 
@@ -295,7 +295,7 @@ async function handleIngredientLookup(interaction, ingredientName) {
   const embed = new EmbedBuilder()
     .setTitle(`Items that can be crafted using ${ingredientName}`)
     .setColor('#A48D68')
-    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
   let totalEmbedLength = 0;
 
@@ -541,7 +541,7 @@ async function handleCraftingLookup(interaction, characterName) {
         .setDescription(`Found **${craftableItems.length}** items you can craft right now!`)
         .setColor('#A48D68')
         .setThumbnail(character.icon || null)
-        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
       for (const item of itemsToDisplay) {
         // Ensure all values are valid strings/numbers with fallbacks
