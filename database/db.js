@@ -979,12 +979,13 @@ const fetchItemsByMonster = async (monsterName) => {
             'Little Frox': 'littleFrox'
         };
         
-        const fieldName = monsterToFieldMap[monsterName] || monsterName;
+        const fieldName = monsterToFieldMap[monsterName] || toCamelCase(monsterName);
         const query = {
             $or: [
                 { monsterList: monsterName }, 
                 { monsterList: { $in: [monsterName] } },
-                { [fieldName]: true }
+                { [fieldName]: true },
+                { [monsterName]: true }  // Also check the original monster name as a field
             ],
         };
         const items = await db.collection("items").find(query).toArray();
