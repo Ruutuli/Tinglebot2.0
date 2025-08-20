@@ -583,6 +583,13 @@ const BLIGHT_MESSAGES = {
       "🌑 The dark influence within you drew you to ",
       "⚡ Your corrupted blood resonated with ",
       "🖤 The corruption in your veins attracted "
+    ],
+    rollBoost: [
+      "💀 The Blight's corruption surges through you, enhancing your combat prowess beyond normal limits.",
+      "🩸 Your feverish corruption sharpens your reflexes, making you faster and more precise.",
+      "🌑 The dark energy within you amplifies your strength, turning a mediocre roll into something formidable.",
+      "⚡ Your blight-stained blood burns with unnatural power, boosting your performance significantly.",
+      "🖤 The corruption in your veins resonates with the monster's essence, enhancing your combat abilities."
     ]
   },
   stage3: {
@@ -620,6 +627,13 @@ const BLIGHT_MESSAGES = {
       "🌑 The dark energy within you became a beacon for ",
       "⚡ Your blight-enhanced perception uncovered ",
       "🖤 The corruption in your blood resonated with "
+    ],
+    rollBoost: [
+      "💀 The Blight's corruption has intensified, dramatically amplifying your combat abilities beyond human limits.",
+      "🩸 Your feverish corruption has reached new heights, making you unnaturally fast and precise.",
+      "🌑 The dark energy within you has grown stronger, turning even a poor roll into a devastating attack.",
+      "⚡ Your blight-stained blood pulses with malevolent power, significantly boosting your performance.",
+      "🖤 The corruption in your veins has deepened, resonating powerfully with the monster's essence."
     ]
   },
   stage4: {
@@ -657,6 +671,13 @@ const BLIGHT_MESSAGES = {
       "🌑 The dark energy within you has become a powerful beacon for ",
       "⚡ Your blight-enhanced senses detected ",
       "🖤 The corruption in your blood has become a magnet for "
+    ],
+    rollBoost: [
+      "💀 The Blight's corruption has reached critical levels, transforming your combat abilities into something truly monstrous.",
+      "🩸 Your feverish corruption has become overwhelming, making you faster and stronger than any normal being.",
+      "🌑 The dark energy within you has reached its peak, turning even the weakest roll into a devastating force.",
+      "⚡ Your blight-stained blood burns with pure malevolence, dramatically amplifying your performance.",
+      "🖤 The corruption in your veins has become a force of pure darkness, resonating powerfully with all monsters."
     ]
   },
   stage5: {
@@ -694,6 +715,13 @@ const BLIGHT_MESSAGES = {
       "🌑 The dark energy within you has become an irresistible beacon for ",
       "⚡ Your blight-enhanced senses detected ",
       "🖤 The corruption in your blood has become an overwhelming magnet for "
+    ],
+    rollBoost: [
+      "💀 The Blight's corruption has reached terminal levels, making you a living weapon of pure destruction.",
+      "🩸 Your feverish corruption has become overwhelming, transforming you into something beyond human comprehension.",
+      "🌑 The dark energy within you has reached its absolute peak, making every action devastatingly effective.",
+      "⚡ Your blight-stained blood burns with pure malevolence, amplifying your abilities to supernatural levels.",
+      "🖤 The corruption in your veins has become an irresistible force of darkness that all monsters instinctively fear."
     ]
   }
 };
@@ -740,6 +768,24 @@ const generateBlightSubmissionExpiryFlavorText = (characterName, healerName, bli
   const consequence = taskConsequences[taskType] || ` Your healing task remains incomplete. Please use \`/blight heal\` to request a new healing task.`;
 
   return baseMessage + consequence;
+};
+
+const generateBlightRollBoostFlavorText = (blightStage, originalRoll, adjustedRoll) => {
+  const stageKey = `stage${blightStage}`;
+  const messages = BLIGHT_MESSAGES[stageKey]?.rollBoost || BLIGHT_MESSAGES.stage2.rollBoost;
+  const baseMessage = getRandomMessage(messages);
+  
+  // Calculate the improvement
+  const improvement = adjustedRoll - originalRoll;
+  const multiplier = (adjustedRoll / originalRoll).toFixed(1);
+  
+  // Add specific details about the improvement
+  let improvementText = '';
+  if (improvement > 0) {
+    improvementText = `\n\n💀 **Blight Boost Applied:** Your roll was enhanced from ${originalRoll} to ${adjustedRoll} (${multiplier}x multiplier). The corruption within you amplified your combat abilities, making you ${improvement} points stronger than normal.`;
+  }
+  
+  return baseMessage + improvementText;
 };
 
 // ============================================================================
@@ -964,6 +1010,7 @@ module.exports = {
   generateBlightVictoryFlavorText,
   generateBlightLootFlavorText,
   generateBlightSubmissionExpiryFlavorText,
+  generateBlightRollBoostFlavorText,
   generateDivineItemFlavorText,
   generateTeacherGatheringFlavorText,
   // Boost Flavor Text
