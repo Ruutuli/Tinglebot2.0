@@ -575,6 +575,9 @@ module.exports = {
    // ------------------- Step 4: Blood Moon Encounter Handling -------------------
    const bloodMoonActive = isBloodMoonActive(); // Determine Blood Moon status
    let encounteredMonster;
+   
+   // Generate the initial dice roll for the encounter (used for both normal and Blood Moon encounters)
+   const originalRoll = Math.floor(Math.random() * 100) + 1;
 
    if (bloodMoonActive) {
     try {
@@ -699,6 +702,7 @@ module.exports = {
      return; // Stop execution after "No Encounter"
     }
    }
+   
    await processLootingLogic(
     interaction,
     character,
