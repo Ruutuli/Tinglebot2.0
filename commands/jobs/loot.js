@@ -663,7 +663,8 @@ module.exports = {
        character,
        job,
        currentVillage,
-       true // Blood Moon status
+       true, // Blood Moon status
+       originalRoll // Pass originalRoll for blight boost display
       );
       return; // Stop if reroll is needed and executed
      }
@@ -703,7 +704,8 @@ module.exports = {
     character,
     encounteredMonster,
     bloodMoonActive,
-    character.jobVoucher && !voucherCheck?.skipVoucher // Deactivate job voucher if needed
+    character.jobVoucher && !voucherCheck?.skipVoucher, // Deactivate job voucher if needed
+    originalRoll // Pass originalRoll for blight boost display
    );
 
    
@@ -787,7 +789,8 @@ async function handleBloodMoonRerolls(
  character,
  job,
  currentVillage,
- bloodMoonActive
+ bloodMoonActive,
+ originalRoll = null
 ) {
  let rerollCount = 0;
  const maxRerolls = 5; // Limit the number of rerolls to prevent infinite loops
@@ -840,7 +843,8 @@ async function handleBloodMoonRerolls(
      character,
      encounteredMonster,
      bloodMoonActive,
-     true // Deactivate job voucher for reroll encounters
+     true, // Deactivate job voucher for reroll encounters
+     originalRoll // Pass originalRoll for blight boost display
     );
     return; // End reroll processing after looting
    }
@@ -895,22 +899,38 @@ async function processLootingLogic(
  character,
  encounteredMonster,
  bloodMoonActive,
- shouldDeactivateVoucher = false
+ shouldDeactivateVoucher = false,
+ originalRoll = null
 ) {
   try {
   const items = await fetchItemsByMonster(encounteredMonster.name);
 
   // Step 1: Calculate Encounter Outcome
   const diceRoll = Math.floor(Math.random() * 100) + 1;
+  // Store the original roll for blight boost display
+  originalRoll = diceRoll;
   let { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
    calculateFinalValue(character, diceRoll);
+  
+  // Store the blight-adjusted roll (before other boosts)
+  const blightAdjustedRoll = adjustedRandomValue;
+
+
+
+  // Log blight boost if applied
+  if (originalRoll && blightAdjustedRoll > originalRoll) {
+    const improvement = blightAdjustedRoll - originalRoll;
+    const multiplier = (blightAdjustedRoll / originalRoll).toFixed(1);
+    console.log(`[loot.js]: 💀 Blight boost applied to ${character.name} - Roll enhanced from ${originalRoll} to ${blightAdjustedRoll} (${multiplier}x multiplier, +${improvement} points)`);
+  }
 
   // ------------------- Apply Boosting Effects -------------------
   // Check if character is boosted and apply looting boosts
   adjustedRandomValue = await applyLootingBoost(character.name, adjustedRandomValue);
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
-  console.log(`[loot.js]: ⚔️ ${character.name} vs ${encounteredMonster.name} | Roll: ${diceRoll}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
+  const rollDisplay = originalRoll && blightAdjustedRoll > originalRoll ? `${originalRoll} → ${blightAdjustedRoll}` : `${originalRoll}`;
+  console.log(`[loot.js]: ⚔️ ${character.name} vs ${encounteredMonster.name} | Roll: ${rollDisplay}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
 
   const outcome = await getEncounterOutcome(
    character,
@@ -1128,8 +1148,7 @@ async function processLootingLogic(
     outcome.hearts = await applyLootingDamageBoost(character.name, outcome.hearts);
   }
 
-  try {
-    // Step 2: Handle KO Logic
+  // Step 2: Handle KO Logic
   let updatedCharacter;
   if (character.isModCharacter) {
     const ModCharacter = require('../../models/ModCharacterModel.js');
@@ -1166,12 +1185,13 @@ async function processLootingLogic(
      updatedCharacter.currentHearts,
      lootedItem,
      bloodMoonActive,
-     outcome.adjustedRandomValue,
+     blightAdjustedRoll, // Pass blightAdjustedRoll for blight boost detection
      null, // currentMonster
      null, // totalMonsters
      null, // entertainerBonusItem
      null, // boostCategoryOverride
-     elixirBuffInfo // Pass elixirBuffInfo to the embed
+     elixirBuffInfo, // Pass elixirBuffInfo to the embed
+     originalRoll // Pass originalRoll to the embed
     );
     await interaction.editReply({
      content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
@@ -1193,13 +1213,14 @@ async function processLootingLogic(
    updatedCharacter.currentHearts,
    outcome.canLoot && weightedItems.length > 0 ? lootedItem : null,
    bloodMoonActive,
-   outcome.adjustedRandomValue,
+   blightAdjustedRoll, // Pass blightAdjustedRoll for blight boost detection
    null, // currentMonster
    null, // totalMonsters
    null, // entertainerBonusItem
    null, // boostCategoryOverride
-   elixirBuffInfo // Pass elixirBuffInfo to the embed
-  );
+   elixirBuffInfo, // Pass elixirBuffInfo to the embed
+   originalRoll // Pass originalRoll to the embed
+   );
   await interaction.editReply({ embeds: [embed] });
 
   // ------------------- Deactivate Job Voucher if needed -------------------
@@ -1210,10 +1231,6 @@ async function processLootingLogic(
     } else {
       console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name} in processLootingLogic`);
     }
-  }
-  } catch (error) {
-    console.error(`[loot.js]: ❌ Error in processLootingLogic:`, error);
-    await handleLootError(interaction, error, "processing loot");
   }
   } catch (error) {
     console.error(`[loot.js]: ❌ Error in processLootingLogic:`, error);

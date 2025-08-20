@@ -11,7 +11,7 @@ const { getLastDebugValues } = require("../modules/buffModule");
 const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
 const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
 const { getMountEmoji, getMountThumbnail } = require("../modules/mountModule");
-const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText } = require("../modules/flavorTextModule");
+const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText, generateBlightRollBoostFlavorText } = require("../modules/flavorTextModule");
 const { convertCmToFeetInches, isValidImageUrl } = require("../utils/validation");
 const { validateInventorySheet } = require("../utils/googleSheetsUtils");
 const { getCharacterBoostStatus } = require('../modules/boostIntegration');
@@ -1291,7 +1291,8 @@ const createMonsterEncounterEmbed = async (
  totalMonsters = null,
  entertainerBonusItem = null,
  boostCategoryOverride = null,
- elixirBuffInfo = null
+ elixirBuffInfo = null,
+ originalRoll = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1342,6 +1343,20 @@ const createMonsterEncounterEmbed = async (
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Elixir buff improved encounter performance!`;
    }
    outcomeWithBoost += elixirHelpText;
+ }
+
+ // Add blight boost information if available
+ if (originalRoll && actualRoll && character.blighted && character.blightStage && actualRoll > originalRoll) {
+   try {
+     const blightBoostText = generateBlightRollBoostFlavorText(character.blightStage, originalRoll, actualRoll);
+     outcomeWithBoost += `\n\n${blightBoostText}`;
+   } catch (error) {
+     console.error(`[embeds.js]: Error generating blight boost text:`, error);
+     // Fallback blight boost message
+     const improvement = actualRoll - originalRoll;
+     const multiplier = (actualRoll / originalRoll).toFixed(1);
+     outcomeWithBoost += `\n\n💀 **Blight Boost Applied:** Your roll was enhanced from ${originalRoll} to ${actualRoll} (${multiplier}x multiplier). The corruption within you amplified your combat abilities, making you ${improvement} points stronger than normal.`;
+   }
  }
 
  // Append Entertainer's Gift (for Gathering boost) if provided

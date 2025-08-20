@@ -250,8 +250,8 @@ ItemSchema.index({ itemName: 1 });
 // Helper Functions for Job Categorization
 // ============================================================================
 
-// Import job data from jobsModule to categorize jobs properly
-const { jobPerks } = require('../modules/jobsModule');
+// Import job data from jobData to categorize jobs properly
+const { jobPerks } = require('../data/jobData');
 
 /**
  * Get all jobs that have a specific perk type
