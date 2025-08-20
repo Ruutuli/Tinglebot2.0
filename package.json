@@ -9,12 +9,7 @@
    "scripts": {
    "start": "node index.js",
    "dev": "nodemon index.js",
-   "deploy-commands": "node scripts/deploy-commands.js",
-   "reorder-items": "node scripts/reorder-items.js",
-   "reseed-items": "node scripts/reseedItems.js",
-   "reseed-and-reorder": "node scripts/reseedItems.js --apply",
-   "clean-job-tags": "node scripts/clean-duplicate-job-tags.js",
-   "remove-village-images": "node scripts/remove-village-images.js"
+   "deploy-commands": "node scripts/deploy-commands.js"
   },
  "author": "Ruu",
  "license": "ISC",

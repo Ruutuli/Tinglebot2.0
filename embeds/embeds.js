@@ -253,7 +253,8 @@ const createDebuffEmbed = (character) => {
       inline: false
     })
     .setThumbnail(character.icon)
-    .setFooter({ text: 'Debuff System' });
+    .setFooter({ text: 'Debuff System' })
+    .setImage(DEFAULT_IMAGE_URL);
 };
 
 // ------------------- Function: createCharacterEmbed -------------------
