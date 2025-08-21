@@ -9,6 +9,7 @@ const User = require('../../models/UserModel');
 const Character = require('../../models/CharacterModel');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
 const HelpWantedQuest = require('../../models/HelpWantedQuestModel');
+const { getWeatherWithoutGeneration } = require('../../services/weatherService');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -842,6 +843,110 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     return await interaction.editReply({ embeds: [locationCheck.embed] });
   }
   
+  // ------------------- Blight Rain Infection Check -------------------
+  const weather = await getWeatherWithoutGeneration(character.currentVillage);
+  if (weather?.special?.label === 'Blight Rain') {
+    // Mod characters are immune to blight infection
+    if (character.isModCharacter) {
+      const immuneMsg =
+        "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+        `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
+      await interaction.editReply({ content: immuneMsg, ephemeral: false });
+    } else if (character.blighted) {
+      const alreadyMsg =
+        "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+        `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
+      await interaction.editReply({ content: alreadyMsg, ephemeral: false });
+    } else {
+      // Check for resistance buffs
+      const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
+      const buffEffects = getActiveBuffEffects(character);
+      let infectionChance = 0.75; // Base 75% chance
+      
+      // Apply resistance buffs
+      if (buffEffects && buffEffects.blightResistance > 0) {
+        infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
+        console.log(`[helpWanted.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
+      }
+      if (buffEffects && buffEffects.fireResistance > 0) {
+        infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
+        console.log(`[helpWanted.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
+      }
+      
+      // Consume elixirs after applying their effects
+      if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
+        consumeElixirBuff(character);
+        // Update character in database
+        const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
+        const updateFunction = character.isModCharacter ? updateCharacterById : updateModCharacterById;
+        await updateFunction(character._id, { buff: character.buff });
+      } else if (character.buff?.active) {
+        // Log when elixir is not used due to conditions not met
+        console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+      }
+      
+      // Ensure chance stays within reasonable bounds
+      infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
+      
+      if (Math.random() < infectionChance) {
+        const blightMsg =
+          "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
+          `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+          "You can be healed by **Oracles, Sages & Dragons**  \n" +
+          "▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)  \n" +
+          "▹ [Currently Available Blight Healers](https://discord.com/channels/${process.env.GUILD_ID}/651614266046152705/845481974671736842)\n\n" +
+          "**STAGE 1:**  \n" +
+          "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+          "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
+          "> *You will not be penalized for missing today's blight roll if you were just infected.*";
+        await interaction.editReply({ content: blightMsg, ephemeral: false });
+        // Update character in DB
+        character.blighted = true;
+        character.blightedAt = new Date();
+        character.blightStage = 1;
+        await character.save();
+        // Assign blighted role
+        const guild = interaction.guild;
+        if (guild) {
+          const member = await guild.members.fetch(interaction.user.id);
+          await member.roles.add('798387447967907910');
+        }
+        
+        // Update user's blightedcharacter status
+        const user = await User.findOne({ discordId: interaction.user.id });
+        if (user) {
+          user.blightedcharacter = true;
+          await user.save();
+        }
+      } else {
+        let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
+        
+        if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+          safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
+          safeMsg += "The protective effects of your elixir kept you safe from the blight.";
+          
+          // Consume chilly or fireproof elixirs after use
+          if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
+            consumeElixirBuff(character);
+            // Update character in database
+            const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
+            const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+            await updateFunction(character._id, { buff: character.buff });
+            safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
+          } else if (character.buff?.active) {
+            // Log when elixir is not used due to conditions not being met
+            console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+          }
+        } else {
+          safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
+          safeMsg += "You feel lucky... but be careful out there.";
+        }
+        
+        await interaction.editReply({ content: safeMsg, ephemeral: false });
+      }
+    }
+  }
+  
   // Check stamina
   const currentStamina = parseInt(character.currentStamina) || 0;
   if (currentStamina < 1) {
@@ -1221,6 +1326,110 @@ module.exports = {
         if (!requirementsCheck.requirementsMet) {
           const requirementsEmbed = createQuestRequirementsEmbed(requirementsCheck);
           return await interaction.editReply({ embeds: [requirementsEmbed] });
+        }
+
+        // ------------------- Blight Rain Infection Check -------------------
+        const weather = await getWeatherWithoutGeneration(character.currentVillage);
+        if (weather?.special?.label === 'Blight Rain') {
+          // Mod characters are immune to blight infection
+          if (character.isModCharacter) {
+            const immuneMsg =
+              "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+              `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
+            await interaction.editReply({ content: immuneMsg, ephemeral: false });
+          } else if (character.blighted) {
+            const alreadyMsg =
+              "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+              `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
+            await interaction.editReply({ content: alreadyMsg, ephemeral: false });
+          } else {
+            // Check for resistance buffs
+            const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
+            const buffEffects = getActiveBuffEffects(character);
+            let infectionChance = 0.75; // Base 75% chance
+            
+            // Apply resistance buffs
+            if (buffEffects && buffEffects.blightResistance > 0) {
+              infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
+              console.log(`[helpWanted.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
+            }
+            if (buffEffects && buffEffects.fireResistance > 0) {
+              infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
+              console.log(`[helpWanted.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
+            }
+            
+            // Consume elixirs after applying their effects
+            if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
+              consumeElixirBuff(character);
+              // Update character in database
+              const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
+              const updateFunction = character.isModCharacter ? updateCharacterById : updateModCharacterById;
+              await updateFunction(character._id, { buff: character.buff });
+            } else if (character.buff?.active) {
+              // Log when elixir is not used due to conditions not met
+              console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+            }
+            
+            // Ensure chance stays within reasonable bounds
+            infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
+            
+            if (Math.random() < infectionChance) {
+              const blightMsg =
+                "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
+                `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+                "You can be healed by **Oracles, Sages & Dragons**  \n" +
+                "▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)  \n" +
+                "▹ [Currently Available Blight Healers](https://discord.com/channels/${process.env.GUILD_ID}/651614266046152705/845481974671736842)\n\n" +
+                "**STAGE 1:**  \n" +
+                "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+                "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
+                "> *You will not be penalized for missing today's blight roll if you were just infected.*";
+              await interaction.editReply({ content: blightMsg, ephemeral: false });
+              // Update character in DB
+              character.blighted = true;
+              character.blightedAt = new Date();
+              character.blightStage = 1;
+              await character.save();
+              // Assign blighted role
+              const guild = interaction.guild;
+              if (guild) {
+                const member = await guild.members.fetch(interaction.user.id);
+                await member.roles.add('798387447967907910');
+              }
+              
+              // Update user's blightedcharacter status
+              const user = await User.findOne({ discordId: interaction.user.id });
+              if (user) {
+                user.blightedcharacter = true;
+                await user.save();
+              }
+            } else {
+              let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
+              
+              if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+                safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
+                safeMsg += "The protective effects of your elixir kept you safe from the blight.";
+                
+                // Consume chilly or fireproof elixirs after use
+                if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
+                  consumeElixirBuff(character);
+                  // Update character in database
+                  const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
+                  const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+                  await updateFunction(character._id, { buff: character.buff });
+                  safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
+                } else if (character.buff?.active) {
+                  // Log when elixir is not used due to conditions not being met
+                  console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+                }
+              } else {
+                safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
+                safeMsg += "You feel lucky... but be careful out there.";
+              }
+              
+              await interaction.editReply({ content: safeMsg, ephemeral: false });
+            }
+          }
         }
 
         // Remove items if needed
