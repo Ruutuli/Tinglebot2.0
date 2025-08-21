@@ -1576,6 +1576,7 @@ if (quantity <= 0) {
    .setThumbnail(itemDetails.image || "https://via.placeholder.com/150")
    .setAuthor({ name: characterName, iconURL: character.icon || "" })
    .setColor("#A48D68")
+   .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
    .addFields(
     {
      name: "💰 Price Details",
