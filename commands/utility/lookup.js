@@ -236,11 +236,18 @@ async function handleItemLookup(interaction, itemName) {
         .setDisabled(currentPage === totalPages - 1)
     );
 
-    const message = await interaction.followUp({
-      embeds: [generateCharactersEmbed(currentPage)],
-      components: [generatePaginationRow()],
-      ephemeral: true
-    });
+    let message;
+    
+    try {
+      message = await interaction.followUp({
+        embeds: [generateCharactersEmbed(currentPage)],
+        components: [generatePaginationRow()],
+        ephemeral: true
+      });
+    } catch (error) {
+      handleError(error, 'lookup.js');
+      return;
+    }
 
     const collector = message.createMessageComponentCollector({ time: 600000 }); // 10 minutes
 
@@ -345,10 +352,17 @@ async function handleIngredientLookup(interaction, ingredientName) {
      .setDisabled(currentPage === totalPages - 1)
  );
 
- const message = await interaction.editReply({
-   embeds: [await generateEmbed(currentPage)],
-   components: [generatePaginationRow()],
- });
+ let message;
+ 
+ try {
+   message = await interaction.editReply({
+     embeds: [await generateEmbed(currentPage)],
+     components: [generatePaginationRow()],
+   });
+ } catch (error) {
+   handleError(error, 'lookup.js');
+   return;
+ }
 
  const collector = message.createMessageComponentCollector({ time: 600000 }); // 10 minutes
 
@@ -532,7 +546,9 @@ async function handleCraftingLookup(interaction, characterName) {
     const totalPages = Math.ceil(craftableItems.length / ITEMS_PER_PAGE);
 
     const generateEmbed = (page) => {
-      const start = page * ITEMS_PER_PAGE;
+      // Ensure page is a valid number and within bounds
+      const validPage = Math.max(0, Math.min(Number(page) || 0, totalPages - 1));
+      const start = validPage * ITEMS_PER_PAGE;
       const end = start + ITEMS_PER_PAGE;
       const itemsToDisplay = craftableItems.slice(start, end);
 
@@ -543,7 +559,20 @@ async function handleCraftingLookup(interaction, characterName) {
         .setThumbnail(character.icon || null)
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
+      let totalEmbedSize = 0;
+      const maxEmbedSize = 6000; // Discord's total embed size limit
+
       for (const item of itemsToDisplay) {
+        // Check if we're approaching the embed size limit
+        if (totalEmbedSize > maxEmbedSize - 500) {
+          embed.addFields({
+            name: '⚠️ Display Limit Reached',
+            value: '> Some items could not be displayed due to Discord embed size limits.',
+            inline: false
+          });
+          break;
+        }
+
         // Ensure all values are valid strings/numbers with fallbacks
         const itemName = String(item.name || 'Unknown Item');
         const itemEmoji = String(item.emoji || '❓');
@@ -558,19 +587,74 @@ async function handleCraftingLookup(interaction, characterName) {
           return `> ${emoji} ${itemName} x${quantity}`;
         }).join('\n') : '> No materials required';
 
-        embed.addFields({
-          name: `__${itemEmoji} ${itemName}__`,
-          value: `> Category: ${categoryText}\n${staminaText}\n${jobText}\n__Materials:__\n${materialsText}`,
-          inline: false
-        });
+        // Build the field value and ensure it doesn't exceed Discord's limit
+        let fieldValue = `> Category: ${categoryText}\n${staminaText}\n${jobText}\n__Materials:__\n${materialsText}`;
+        
+        // Sanitize the field value to remove any problematic characters
+        fieldValue = fieldValue.replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
+        
+        // Truncate if the value is too long (Discord limit is 1024 characters)
+        if (fieldValue.length > 1024) {
+          fieldValue = fieldValue.substring(0, 1021) + '...';
+        }
+
+        // Ensure the field name doesn't exceed Discord's limit (256 characters)
+        let fieldName = `__${itemEmoji} ${itemName}__`;
+        
+        // Sanitize the field name
+        fieldName = fieldName.replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
+        
+        if (fieldName.length > 256) {
+          fieldName = fieldName.substring(0, 253) + '...';
+        }
+
+        try {
+          embed.addFields({
+            name: fieldName,
+            value: fieldValue,
+            inline: false
+          });
+          
+          // Track embed size
+          totalEmbedSize += fieldName.length + fieldValue.length;
+        } catch (fieldError) {
+          console.error('[lookup.js]: Failed to add field for item:', item.name, fieldError);
+          // Add a simplified field if the original fails
+          try {
+            embed.addFields({
+              name: '❓ Item',
+              value: '> Unable to display full details due to length limits',
+              inline: false
+            });
+            totalEmbedSize += 50; // Approximate size for simplified field
+          } catch (simplifiedFieldError) {
+            console.error('[lookup.js]: Failed to add simplified field:', simplifiedFieldError);
+          }
+        }
 
         // Add separator field between items (except for the last item)
         if (itemsToDisplay.indexOf(item) < itemsToDisplay.length - 1) {
-          embed.addFields({
-            name: '‎', // Invisible character for name
-            value: '━━━━━━━━━━━━━━━━━━━━━━━━━',
-            inline: false
-          });
+          try {
+            embed.addFields({
+              name: '‎', // Invisible character for name
+              value: '━━━━━━━━━━━━━━━━━━━━━━━━━',
+              inline: false
+            });
+            totalEmbedSize += 30; // Approximate size for separator
+          } catch (separatorError) {
+            console.error('[lookup.js]: Failed to add separator field:', separatorError);
+            // Use a simpler separator if the em dash one fails
+            try {
+              embed.addFields({
+                name: '‎',
+                value: '---',
+                inline: false
+              });
+              totalEmbedSize += 10; // Approximate size for simple separator
+            } catch (simpleSeparatorError) {
+              console.error('[lookup.js]: Failed to add simple separator field:', simpleSeparatorError);
+            }
+          }
         }
       }
 
@@ -590,8 +674,6 @@ async function handleCraftingLookup(interaction, characterName) {
         .setDisabled(currentPage === totalPages - 1)
     );
 
-    let message;
-    
     try {
       message = await interaction.editReply({
         embeds: [generateEmbed(currentPage)],
@@ -606,23 +688,39 @@ async function handleCraftingLookup(interaction, characterName) {
         operation: 'initialMessageCreation'
       });
       
+      // Try to create a simplified embed as fallback
       try {
-        await interaction.editReply({ 
-          content: '❌ There was an error creating the display. Please try again later.', 
-          ephemeral: true 
+        const fallbackEmbed = new EmbedBuilder()
+          .setTitle(`🛠️ Craftable Items for ${character.name}`)
+          .setDescription(`Found **${craftableItems.length}** items you can craft.\n\n*Display limited due to technical constraints.*`)
+          .setColor('#A48D68')
+          .setFooter({ text: `Total craftable: ${Number(craftableItems.length || 0)}` });
+        
+        message = await interaction.editReply({
+          embeds: [fallbackEmbed],
+          content: '⚠️ **Note:** Some items could not be displayed due to length limits. Please check individual items for full details.',
         });
-      } catch (replyError) {
-        console.error('[lookup.js]: Failed to send display creation error:', replyError);
+      } catch (fallbackError) {
+        console.error('[lookup.js]: Fallback embed creation also failed:', fallbackError);
+        
         try {
-          await interaction.followUp({ 
+          await interaction.editReply({ 
             content: '❌ There was an error creating the display. Please try again later.', 
             ephemeral: true 
           });
-        } catch (followUpError) {
-          console.error('[lookup.js]: Failed to send follow-up for display creation error:', followUpError);
+        } catch (replyError) {
+          console.error('[lookup.js]: Failed to send display creation error:', replyError);
+          try {
+            await interaction.followUp({ 
+              content: '❌ There was an error creating the display. Please try again later.', 
+              ephemeral: true 
+            });
+          } catch (followUpError) {
+            console.error('[lookup.js]: Failed to send follow-up for display creation error:', followUpError);
+          }
         }
+        return;
       }
-      return;
     }
 
     if (!message) {
@@ -640,17 +738,49 @@ async function handleCraftingLookup(interaction, characterName) {
 
       try {
         if (i.customId === 'prev') {
-          currentPage--;
+          currentPage = Math.max(0, currentPage - 1);
         } else if (i.customId === 'next') {
-          currentPage++;
+          currentPage = Math.min(totalPages - 1, currentPage + 1);
         }
+
+        // Ensure currentPage is within valid bounds
+        currentPage = Math.max(0, Math.min(currentPage, totalPages - 1));
 
 
         if (message && !message.deleted) {
-          await i.update({
-            embeds: [generateEmbed(currentPage)],
-            components: [generatePaginationRow()],
-          });
+          try {
+            await i.update({
+              embeds: [generateEmbed(currentPage)],
+              components: [generatePaginationRow()],
+            });
+          } catch (updateError) {
+            console.error('[lookup.js]: Failed to update embed for button interaction:', updateError);
+            
+            // Try to create a simplified embed as fallback
+            try {
+              const fallbackEmbed = new EmbedBuilder()
+                .setTitle(`🛠️ Craftable Items for ${character.name}`)
+                .setDescription(`Found **${craftableItems.length}** items you can craft.\n\n*Display limited due to technical constraints.*`)
+                .setColor('#A48D68')
+                .setFooter({ text: `Page ${Number(currentPage || 0) + 1} of ${Number(totalPages || 1)} • Total craftable: ${Number(craftableItems.length || 0)}` });
+              
+              await i.update({
+                embeds: [fallbackEmbed],
+                content: '⚠️ **Note:** Some items could not be displayed due to length limits. Please check individual items for full details.',
+              });
+            } catch (fallbackUpdateError) {
+              console.error('[lookup.js]: Fallback embed update also failed:', fallbackUpdateError);
+              
+              try {
+                await i.reply({ 
+                  content: '❌ There was an error updating the display. Please try the command again.', 
+                  ephemeral: true 
+                });
+              } catch (replyError) {
+                console.error('[lookup.js]: Failed to send error reply for button interaction:', replyError);
+              }
+            }
+          }
         } else {
 
           if (collector && !collector.ended) {
