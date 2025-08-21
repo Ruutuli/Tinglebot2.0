@@ -257,6 +257,32 @@ const createDebuffEmbed = (character) => {
     .setImage(DEFAULT_IMAGE_URL);
 };
 
+// ------------------- Function: createGatherDebuffEmbed -------------------
+// Creates an embed for when a character is debuffed and cannot gather
+const createGatherDebuffEmbed = (character) => {
+  // Calculate the debuff expiration date and time
+  let debuffExpirationText = '**Midnight EST**';
+  
+  if (character.debuff?.endDate) {
+    const debuffEndDate = new Date(character.debuff.endDate);
+    const utcTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+    debuffExpirationText = `<t:${utcTimestamp}:D> (<t:${utcTimestamp}:R>)`;
+  }
+
+  return new EmbedBuilder()
+    .setColor('#FF0000')
+    .setTitle('⚠️ Debuff Active ⚠️')
+    .setDescription(`**${character.name}** is currently debuffed and cannot gather.`)
+    .addFields({
+      name: '🕒 Debuff Expires',
+      value: debuffExpirationText,
+      inline: false
+    })
+    .setThumbnail(character.icon)
+    .setFooter({ text: 'Debuff System' })
+    .setImage(DEFAULT_IMAGE_URL);
+};
+
 // ------------------- Function: createCharacterEmbed -------------------
 // Creates a detailed character information embed with all character stats and details
 const createCharacterEmbed = (character) => {
@@ -2335,6 +2361,7 @@ module.exports = {
  
  // ------------------- Embed Creation Functions ------------------
  createDebuffEmbed,
+ createGatherDebuffEmbed,
  createCharacterEmbed,
  createSimpleCharacterEmbed,
  createCharacterGearEmbed,

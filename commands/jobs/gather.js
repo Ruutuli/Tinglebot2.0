@@ -246,13 +246,11 @@ module.exports = {
 
       // Check if the character is debuffed.
       if (character.debuff?.active) {
-        const debuffEndDate = new Date(character.debuff.endDate);
-        
-        // Use the original endDate timestamp directly for Discord display
-        const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+        const { createGatherDebuffEmbed } = require('../../embeds/embeds');
+        const debuffEmbed = createGatherDebuffEmbed(character);
         
         await safeReply({
-          content: `❌ **${character.name}** is currently debuffed and cannot gather.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+          embeds: [debuffEmbed],
           ephemeral: true,
         });
         return;
