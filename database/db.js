@@ -973,13 +973,50 @@ const fetchItemsByMonster = async (monsterName) => {
     try {
         const db = await connectToInventoriesForItems();
         
-        // Map monster names to their corresponding item field names
-        const monsterToFieldMap = {
-            'Frox': 'littleFrox',
-            'Little Frox': 'littleFrox'
-        };
+        // Import monsterMapping to get the correct field names
+        const { monsterMapping } = require('../models/MonsterModel');
         
-        const fieldName = monsterToFieldMap[monsterName] || toCamelCase(monsterName);
+        // Find the monster mapping entry that matches the monster name
+        let fieldName = null;
+        for (const [key, value] of Object.entries(monsterMapping)) {
+            if (value.name === monsterName) {
+                fieldName = key;
+                break;
+            }
+        }
+        
+        // Fallback to manual mapping if not found in monsterMapping
+        if (!fieldName) {
+            const manualMapping = {
+                'Frox': 'littleFrox',
+                'Little Frox': 'littleFrox',
+                // Chuchu mappings
+                'Chuchu (Large)': 'chuchuLarge',
+                'Chuchu (Medium)': 'chuchuMedium', 
+                'Chuchu (Small)': 'chuchuSmall',
+                'Fire Chuchu (Large)': 'fireChuchuLarge',
+                'Fire Chuchu (Medium)': 'fireChuchuMedium',
+                'Fire Chuchu (Small)': 'fireChuchuSmall',
+                'Ice Chuchu (Large)': 'iceChuchuLarge',
+                'Ice Chuchu (Medium)': 'iceChuchuMedium',
+                'Ice Chuchu (Small)': 'iceChuchuSmall',
+                'Electric Chuchu (Large)': 'electricChuchuLarge',
+                'Electric Chuchu (Medium)': 'electricChuchuMedium',
+                'Electric Chuchu (Small)': 'electricChuchuSmall',
+                // Other monster mappings
+                'Fire-breath Lizalfos': 'fireBreathLizalfos',
+                'Ice-breath Lizalfos': 'iceBreathLizalfos',
+                'Blue-Maned Lynel': 'blueManedLynel',
+                'White-maned Lynel': 'whiteManedLynel',
+                'Like Like': 'likeLike',
+                'Gloom Hands': 'gloomHands',
+                'Boss Bokoblin': 'bossBokoblin',
+                'Moth Gibdo': 'mothGibdo',
+                'Little Frox': 'littleFrox'
+            };
+            fieldName = manualMapping[monsterName] || toCamelCase(monsterName);
+        }
+        
         const query = {
             $or: [
                 { monsterList: monsterName }, 
@@ -988,6 +1025,7 @@ const fetchItemsByMonster = async (monsterName) => {
                 { [monsterName]: true }  // Also check the original monster name as a field
             ],
         };
+        
         const items = await db.collection("items").find(query).toArray();
         return items.filter((item) => item.itemName && item.itemRarity);
     } catch (error) {
