@@ -324,15 +324,9 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
         embeds: [embed],
       });
     } else {
-      // General healing request - double message approach for proper role pinging
-      // First message: ping the healing role
-      await interaction.followUp({
-        content: `🔔 <@&${healingRoleId || '1083191610478698547'}>`,
-      });
-      
-      // Second message: the actual healing request content
+      // General healing request - single message with role ping and content
       sentMessage = await interaction.followUp({
-        content: `Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
+        content: `🔔 <@&${healingRoleId || '1083191610478698547'}> Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
         embeds: [embed],
       });
     }
