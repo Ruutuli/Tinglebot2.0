@@ -21,10 +21,7 @@ const QUEST_TYPE_EMOJIS = {
   'crafting': '🔨'
 };
 
-const COOLDOWN_MESSAGES = {
-  daily: '🕐 **Daily Quest Cooldown Active!**\n\nYou\'ve already completed a Help Wanted quest today. Each adventurer can only take on **one quest per day** to maintain balance in the realm.\n\n⏰ **Next Quest Available:** Tomorrow at midnight (EST)\n💡 **Tip:** Use this time to rest, gather resources, or help other adventurers!',
-  weekly: '📅 **Weekly Quest Limit Reached!**\n\nYou\'ve already completed **3 Help Wanted quests this week**. Each adventurer is limited to **3 quests per week** to maintain balance in the realm.\n\n⏰ **Next Quest Available:** Monday at midnight (EST)\n💡 **Tip:** Use this time to rest, gather resources, or help other adventurers!'
-};
+
 
 // ============================================================================
 // ------------------- Helper Functions -------------------
@@ -105,13 +102,13 @@ async function validateUserCooldowns(userId) {
   const dailyCompleted = await hasUserCompletedQuestToday(userId);
   
   if (dailyCompleted) {
-    return { canProceed: false, message: COOLDOWN_MESSAGES.daily };
+    return { canProceed: false, embed: createDailyCooldownEmbed() };
   }
   
   const weeklyLimitReached = await hasUserReachedWeeklyQuestLimit(userId);
   
   if (weeklyLimitReached) {
-    return { canProceed: false, message: COOLDOWN_MESSAGES.weekly };
+    return { canProceed: false, embed: createWeeklyCooldownEmbed() };
   }
   
   return { canProceed: true };
@@ -630,6 +627,56 @@ function createQuestRequirementsEmbed(requirementsCheck) {
   return embed;
 }
 
+/**
+ * Creates an embed for daily quest cooldown
+ * @returns {EmbedBuilder}
+ */
+function createDailyCooldownEmbed() {
+  const embed = new EmbedBuilder()
+    .setColor('#FF6B35') // Orange color for cooldown
+    .setTitle('🕐 Daily Quest Cooldown Active!')
+    .setDescription('You\'ve already completed a Help Wanted quest today. Each adventurer can only take on **one quest per day** to maintain balance in the realm.')
+    .addFields({
+      name: '⏰ Next Quest Available',
+      value: 'Tomorrow at midnight (EST)',
+      inline: false
+    })
+    .addFields({
+      name: '💡 Tip',
+      value: 'Use this time to rest, gather resources, or help other adventurers!',
+      inline: false
+    })
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+    .setTimestamp();
+  
+  return embed;
+}
+
+/**
+ * Creates an embed for weekly quest cooldown
+ * @returns {EmbedBuilder}
+ */
+function createWeeklyCooldownEmbed() {
+  const embed = new EmbedBuilder()
+    .setColor('#FF6B35') // Orange color for cooldown
+    .setTitle('📅 Weekly Quest Limit Reached!')
+    .setDescription('You\'ve already completed **3 Help Wanted quests this week**. Each adventurer is limited to **3 quests per week** to maintain balance in the realm.')
+    .addFields({
+      name: '⏰ Next Quest Available',
+      value: 'Monday at midnight (EST)',
+      inline: false
+    })
+    .addFields({
+      name: '💡 Tip',
+      value: 'Use this time to rest, gather resources, or help other adventurers!',
+      inline: false
+    })
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+    .setTimestamp();
+  
+  return embed;
+}
+
 // ============================================================================
 // ------------------- Monster Hunt Functions -------------------
 // ============================================================================
@@ -824,7 +871,11 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   // Validate cooldowns
   const cooldownCheck = await validateUserCooldowns(interaction.user.id);
   if (!cooldownCheck.canProceed) {
-    return await interaction.editReply({ content: cooldownCheck.message });
+    if (cooldownCheck.embed) {
+      return await interaction.editReply({ embeds: [cooldownCheck.embed] });
+    } else {
+      return await interaction.editReply({ content: cooldownCheck.message });
+    }
   }
   
   // Validate character eligibility
@@ -1295,7 +1346,11 @@ module.exports = {
         // Validate cooldowns
         const cooldownCheck = await validateUserCooldowns(interaction.user.id);
         if (!cooldownCheck.canProceed) {
-          return await interaction.editReply({ content: cooldownCheck.message });
+          if (cooldownCheck.embed) {
+            return await interaction.editReply({ embeds: [cooldownCheck.embed] });
+          } else {
+            return await interaction.editReply({ content: cooldownCheck.message });
+          }
         }
 
         // Check quest status
