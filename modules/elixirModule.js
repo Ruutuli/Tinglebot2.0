@@ -10,32 +10,16 @@
 const ELIXIR_EFFECTS = {
   'Chilly Elixir': {
     type: 'chilly',
-    description: 'Grants blight rain resistance',
+    description: 'Provides resistance to water attacks from wet enemies',
     effects: {
-      blightResistance: 1.5
+      waterResistance: 1.5
     }
   },
-  'Electro Elixir': {
-    type: 'electro',
-    description: 'Provides resistance to electrical attacks from electric enemies',
+  'Spicy Elixir': {
+    type: 'spicy',
+    description: 'Provides resistance to cold attacks from ice enemies',
     effects: {
-      electricResistance: 1.5,
-      defenseBoost: 0.5 // Small defense boost against electric enemies
-    }
-  },
-  'Enduring Elixir': {
-    type: 'enduring',
-    description: 'Temporarily extends stamina wheel by +1',
-    effects: {
-      staminaBoost: 1, // Adds +1 temporary stamina on top of max
-      staminaRecovery: 1
-    }
-  },
-  'Energizing Elixir': {
-    type: 'energizing',
-    description: 'Restores stamina for physical actions',
-    effects: {
-      staminaRecovery: 2
+      coldResistance: 1.5
     }
   },
   'Fireproof Elixir': {
@@ -45,12 +29,32 @@ const ELIXIR_EFFECTS = {
       fireResistance: 1.5
     }
   },
+  'Electro Elixir': {
+    type: 'electro',
+    description: 'Provides resistance to electrical attacks from electric enemies',
+    effects: {
+      electricResistance: 1.5
+    }
+  },
+  'Enduring Elixir': {
+    type: 'enduring',
+    description: 'Temporarily extends stamina wheel by +1',
+    effects: {
+      staminaBoost: 1 // Adds +1 temporary stamina on top of max
+    }
+  },
+  'Energizing Elixir': {
+    type: 'energizing',
+    description: 'Restores stamina for physical actions',
+    effects: {
+      staminaRecovery: 2
+    }
+  },
   'Hasty Elixir': {
     type: 'hasty',
     description: 'Cuts travel time in half',
     effects: {
-      speedBoost: 1,
-      staminaRecovery: 0.3
+      speedBoost: 1
     }
   },
   'Hearty Elixir': {
@@ -67,6 +71,13 @@ const ELIXIR_EFFECTS = {
       attackBoost: 1.5
     }
   },
+  'Tough Elixir': {
+    type: 'tough',
+    description: 'Boosts defense',
+    effects: {
+      defenseBoost: 1.5
+    }
+  },
   'Sneaky Elixir': {
     type: 'sneaky',
     description: 'Increases stealth ability for gathering, looting, and travel encounters, and boosts flee chance',
@@ -74,23 +85,9 @@ const ELIXIR_EFFECTS = {
       stealthBoost: 1,
       fleeBoost: 1
     }
-  },
-  'Spicy Elixir': {
-    type: 'spicy',
-    description: 'Provides cold resistance and effectiveness against ice monsters',
-    effects: {
-      coldResistance: 1.5,
-      iceEffectiveness: 1
-    }
-  },
-  'Tough Elixir': {
-    type: 'tough',
-    description: 'Boosts defense',
-    effects: {
-      defenseBoost: 1.5
-    }
   }
 };
+
 
 // ============================================================================
 // ------------------- Core Functions -------------------
@@ -139,8 +136,11 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
   
   switch (buffType) {
     case 'chilly':
-      // Consume when encountering blight rain
-      return context.blightRain === true;
+      // Consume when encountering water/wet enemies
+      return activity === 'combat' && context.monster?.name?.includes('Water') ||
+             activity === 'helpWanted' && context.monster?.name?.includes('Water') ||
+             activity === 'raid' && context.monster?.name?.includes('Water') ||
+             activity === 'loot' && context.monster?.name?.includes('Water');
       
     case 'electro':
       // Consume when encountering electric enemies
@@ -181,10 +181,8 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
       return activity === 'gather' || activity === 'loot' || activity === 'travel';
       
     case 'spicy':
-      // Consume when encountering cold weather or ice monsters
-      return (activity === 'travel' && context.weather?.includes('Cold')) ||
-             (activity === 'travel' && context.weather?.includes('Chilly')) ||
-             (activity === 'combat' && context.monster?.name?.includes('Ice')) ||
+      // Consume when encountering ice monsters
+      return (activity === 'combat' && context.monster?.name?.includes('Ice')) ||
              (activity === 'helpWanted' && context.monster?.name?.includes('Ice')) ||
              (activity === 'raid' && context.monster?.name?.includes('Ice')) ||
              (activity === 'loot' && context.monster?.name?.includes('Ice'));
@@ -233,7 +231,8 @@ const consumeElixirBuff = (character) => {
       fleeBoost: 0,
       coldResistance: 0,
       iceEffectiveness: 0,
-      defenseBoost: 0
+      defenseBoost: 0,
+      waterResistance: 0
     }
   };
   
