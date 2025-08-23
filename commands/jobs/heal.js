@@ -326,7 +326,7 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
     } else {
       // General healing request - ping individual users with the healing role
       const guild = interaction.guild;
-      let pingContent = `🔔 Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
+      let pingContent = `🔔 @Job Perk: Healing Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
       
       if (guild && healingRoleId) {
         try {
@@ -339,17 +339,17 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
                 .slice(0, 5)
                 .map(member => `<@${member.id}>`)
                 .join(' ');
-              pingContent = `🔔 ${userPings} Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
+              pingContent = `🔔 ${userPings} @Job Perk: Healing Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
             }
           }
         } catch (error) {
           console.error(`[heal.js]: ❌ Error fetching healing role members: ${error.message}`);
           // Fallback to role ping if user ping fails
-          pingContent = `🔔 <@&${healingRoleId}> Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
+          pingContent = `🔔 <@&${healingRoleId}> @Job Perk: Healing Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
         }
       } else {
         // Fallback to role ping if no role ID or guild
-        pingContent = `🔔 <@&${healingRoleId || '1083191610478698547'}> Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
+        pingContent = `🔔 <@&${healingRoleId || '1083191610478698547'}> @Job Perk: Healing Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
       }
       
       sentMessage = await interaction.followUp({
