@@ -1773,19 +1773,12 @@ module.exports = {
             }
 
             // Validate the thief character
-            const validationResult = await validateCharacter(characterName, interaction.user.id, true);
-            if (!validationResult.valid) {
-                await interaction.reply({ content: validationResult.error, ephemeral: true });
+            const thiefValidation = await validateThiefCharacter(characterName, interaction.user.id, interaction);
+            if (!thiefValidation.valid) {
                 return;
             }
 
-            const thiefCharacter = validationResult.character;
-
-            // Defer the reply immediately to prevent timeout
-            await interaction.deferReply();
-
-            // ---- Centralized Jail Status Check ----
-            const jailStatus = await checkAndUpdateJailStatus(thiefCharacter);
+            const { character: thiefCharacter, jailStatus } = thiefValidation;
             
             // ---- Bandit Job or Voucher Restriction ----
             const isBanditJob = (thiefCharacter.job && thiefCharacter.job.toLowerCase() === 'bandit');
@@ -1807,148 +1800,22 @@ module.exports = {
                 return;
             }
 
-            // Check if bandit character is debuffed
-            if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
-                await interaction.editReply({ 
-                    content: '❌ **Bandit characters cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.', 
-                    ephemeral: true 
-                });
-                console.log(`[steal.js]: ⚠️ Steal blocked - debuffed bandit: ${thiefCharacter.name}`);
-                return;
-            }
-
-            // Check if bandit character is KO'd
-            if (thiefCharacter.ko) {
-                await interaction.editReply({ 
-                    content: '❌ **Bandit characters cannot steal while KO\'d!**\n💀 You need to be healed first before you can steal.', 
-                    ephemeral: true 
-                });
-                console.log(`[steal.js]: ⚠️ Steal blocked - KO'd bandit: ${thiefCharacter.name}`);
-                return;
-            }
-
-            // Check if character is in jail
-            if (jailStatus.isInJail) {
-                const timeLeft = formatJailTimeLeftDaysHours(jailStatus.timeLeft);
-                const embed = new EmbedBuilder()
-                    .setColor(0x8B0000) // Dark red color for jail
-                    .setTitle('⛔ Jail Restriction')
-                    .setDescription('**You are currently in jail and cannot steal!**')
-                    .addFields(
-                        { name: '⏰ Time Remaining', value: timeLeft, inline: true }
-                    )
-                    .setThumbnail(thiefCharacter.icon || null)
-                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-                    .setFooter({ 
-                        text: 'Jail restriction active'
-                    })
-                    .setTimestamp();
-                
-                await interaction.editReply({ embeds: [embed], ephemeral: true });
-                return;
-            }
-
-            // Check daily steal limit AFTER job validation
-            if (!thiefCharacter.jobVoucher) {
-                // Check if steal has been used today
-                const canSteal = canUseDailySteal(thiefCharacter, 'steal');
-                
-                if (!canSteal) {
-                    const nextRollover = new Date();
-                    nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
-                    if (nextRollover < new Date()) {
-                        nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
-                    }
-                    const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
-                    
-                    await interaction.editReply({
-                        embeds: [{
-                            color: 0x008B8B, // Dark cyan color
-                            description: `*${thiefCharacter.name} seems exhausted from their earlier stealing...*\n\n**Daily stealing limit reached.**\nThe next opportunity to steal will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to steal again today.*`,
-                            image: {
-                                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-                            },
-                            footer: {
-                                text: 'Daily Activity Limit'
-                            }
-                        }],
-                        ephemeral: true
-                    });
+            // Basic target validation (detailed validation happens in validateStealTarget)
+            if (targetType === 'player') {
+                const targetValidation = await validateCharacter(targetName, null);
+                if (!targetValidation.valid) {
+                    console.log(`[steal.js]: ❌ Player target validation failed - targetName: "${targetName}"`);
+                    const errorMessage = targetValidation.error.includes('not found') 
+                        ? `❌ **Player target not found: "${targetName}"**\n\n**Tip:** Make sure to select a character from the dropdown menu, not type the name manually.`
+                        : targetValidation.error;
+                    await interaction.editReply({ content: errorMessage });
                     return;
                 }
             }
 
-            // Validate target character
-            const targetValidation = await validateCharacter(targetName, null);
-            if (!targetValidation.valid && targetType === 'player') {
-                // Debug logging for troubleshooting
-                console.log(`[steal.js]: ❌ Player target validation failed - targetName: "${targetName}"`);
-                
-                // Provide more helpful error message for invalid player targets
-                const errorMessage = targetValidation.error.includes('not found') 
-                    ? `❌ **Player target not found: "${targetName}"**\n\n**Tip:** Make sure to select a character from the dropdown menu, not type the name manually.`
-                    : targetValidation.error;
-                await interaction.editReply({ content: errorMessage });
-                return;
-            }
-
-            const targetCharacter = targetType === 'player' ? targetValidation.character : null;
-
-            // ---- Mod Character Immunity Check ----
-            if (targetType === 'player' && targetCharacter && targetCharacter.isModCharacter) {
-                await interaction.editReply({ 
-                    content: `❌ **You cannot steal from a mod character!**\n👑 ${targetCharacter.name} is a ${targetCharacter.modTitle} of ${targetCharacter.modType} and is immune to theft.`, 
-                    ephemeral: true 
-                });
-                console.log(`[steal.js]: ⚠️ Steal blocked - mod character: ${targetCharacter.name}`);
-                return;
-            }
-
-            // ---- Prevent Stealing from Self ----
-            if (targetType === 'player' && thiefCharacter._id.toString() === targetCharacter._id.toString()) {
-                await interaction.editReply({ content: '❌ **You cannot steal from yourself!**' });
-                return;
-            }
-
             // ------------------- Validate Interaction Channel -------------------
-            let currentVillage = capitalizeWords(thiefCharacter.currentVillage);
-            let allowedChannel = villageChannels[currentVillage];
-
-            // Debug logging
-
-            // If using a job voucher for a village-exclusive job, override to required village
-            if (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) {
-                const voucherPerk = getJobPerk(thiefCharacter.jobVoucherJob);
-                if (voucherPerk && voucherPerk.village) {
-                    const requiredVillage = capitalizeWords(voucherPerk.village);
-                    currentVillage = requiredVillage;
-                    allowedChannel = villageChannels[requiredVillage];
-                    console.log(`[steal.js]: 🎫 Voucher override - village: ${requiredVillage}`);
-                }
-            }
-
-            // Allow testing in specific channel
-            const testingChannelId = '1391812848099004578';
-            const isTestingChannel = interaction.channelId === testingChannelId;
-
-            // If allowedChannel is undefined, allow the command to proceed (for testing)
-            if (!allowedChannel) {
-                console.log(`[steal.js]: ⚠️ No channel configured for village ${currentVillage} - allowing command`);
-            } else if (interaction.channelId !== allowedChannel && !isTestingChannel) {
-                const channelMention = `<#${allowedChannel}>`;
-                await interaction.editReply({
-                    embeds: [{
-                        color: 0x008B8B, // Dark cyan color
-                        description: `*${thiefCharacter.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(thiefCharacter.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
-                        image: {
-                            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-                        },
-                        footer: {
-                            text: 'Channel Restriction'
-                        }
-                    }],
-                    ephemeral: true
-                });
+            const channelValidation = await validateChannelAccess(thiefCharacter, interaction);
+            if (!channelValidation.valid) {
                 return;
             }
 
@@ -1956,97 +1823,15 @@ module.exports = {
             let job = (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) ? thiefCharacter.jobVoucherJob : thiefCharacter.job;
 
             // ------------------- Job Voucher Validation and Activation -------------------
-            // Job vouchers allow characters to temporarily gain the "Bandit" job for stealing.
-            // 
-            // VOUCHER FLOW:
-            // 1. If character has jobVoucher = true, validate the voucher
-            // 2. validateJobVoucher() returns:
-            //    - { success: true, skipVoucher: false } = Valid voucher, needs activation
-            //    - { success: true, skipVoucher: true } = Character already has the job, skip activation
-            //    - { success: false, message: "error" } = Invalid voucher, show error
-            // 3. If valid and needs activation, fetch voucher item and activate
-            // 4. After steal attempt (success/failure), deactivate voucher
-            //
-            // VOUCHER STATES:
-            // - No voucher: character.jobVoucher = false, voucherCheck = undefined
-            // - Has voucher: character.jobVoucher = true, voucherCheck = validation result
-            // - Skip case: character already has the job, no activation needed
-            // - Activation case: voucher is activated for this steal attempt
-            let voucherCheck;
-            if (thiefCharacter.jobVoucher) {
-                console.log(`[steal.js]: 🎫 Validating job voucher for ${thiefCharacter.name}`);
-                voucherCheck = await validateJobVoucher(thiefCharacter, job, 'STEALING');
-                
-                if (voucherCheck.skipVoucher) {
-                    console.log(`[steal.js]: ✅ Voucher skipped - ${thiefCharacter.name} already has job "${job}"`);
-                } else if (!voucherCheck.success) {
-                    console.error(`[steal.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
-                    await interaction.editReply({
-                        content: voucherCheck.message,
-                        ephemeral: true,
-                    });
-                    return;
-                } else {
-                    // Fetch the job voucher item for activation
-                    const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-                    if (!itemSuccess) {
-                        await interaction.editReply({ content: itemError, ephemeral: true });
-                        return;
-                    }
-                    
-                    const activationResult = await activateJobVoucher(thiefCharacter, job, jobVoucherItem, 1, interaction);
-                    if (!activationResult.success) {
-                        await interaction.editReply({
-                            content: activationResult.message,
-                            ephemeral: true,
-                        });
-                        return;
-                    }
-                }
-            }
-
-            // Check if thief's inventory is set up
-            if (!thiefCharacter.inventorySynced) {
-                await interaction.editReply({ 
-                    content: '❌ **Your inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.', 
-                    ephemeral: true 
-                });
+            const voucherResult = await validateAndActivateJobVoucher(thiefCharacter, job, interaction);
+            if (!voucherResult.success) {
                 return;
             }
+            const voucherCheck = voucherResult.voucherCheck;
 
-            // Prevent characters with canBeStolenFrom disabled from using job vouchers to steal
-            if (!thiefCharacter.canBeStolenFrom && thiefCharacter.jobVoucher) {
-                await interaction.editReply({ 
-                    content: '❌ **You cannot use a job voucher to steal while your "can be stolen from" setting is disabled.**\n🔒 You must enable this setting first before you can use job vouchers for stealing.', 
-                    ephemeral: true 
-                });
-                return;
-            }
-
-            // Check if thief is debuffed or KO'd
-            if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
-                await interaction.editReply({ 
-                    content: '❌ **You cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.', 
-                    ephemeral: true 
-                });
-                return;
-            }
-
-            if (thiefCharacter.ko) {
-                await interaction.editReply({ 
-                    content: '❌ **You cannot steal while KO\'d!**\n💀 You need to be healed first before you can steal.', 
-                    ephemeral: true 
-                });
-                return;
-            }
-
-            // Check if thief has a valid inventory URL
-            const thiefInventoryLink = thiefCharacter.inventory || thiefCharacter.inventoryLink;
-            if (typeof thiefInventoryLink !== 'string' || !isValidGoogleSheetsUrl(thiefInventoryLink)) {
-                await interaction.editReply({ 
-                    content: `❌ **Invalid Google Sheets URL for "${thiefCharacter.name}".**`, 
-                    ephemeral: true 
-                });
+            // Validate character status
+            const statusValidation = await validateCharacterStatus(thiefCharacter, interaction);
+            if (!statusValidation.valid) {
                 return;
             }
 
@@ -2054,214 +1839,36 @@ module.exports = {
 
             // Handle NPC stealing
             if (targetType === 'npc') {
-                // Use the new NPC validation function
-                const npcValidation = validateNPCTarget(targetName);
-                if (!npcValidation.valid) {
-                    console.log(`[steal.js]: ❌ NPC validation failed - targetName: "${targetName}"`);
-                    await interaction.editReply({ content: npcValidation.error });
+                // Use centralized validation
+                const validationResult = await validateStealTarget(targetName, targetType, thiefCharacter, interaction);
+                if (!validationResult.valid) {
                     return;
                 }
                 
-                const mappedNPCName = npcValidation.npcName;
+                const mappedNPCName = validationResult.target;
                 
-                // Check if NPC is protected (using NPC name as ID)
-                const npcProtection = await isProtected(mappedNPCName);
-                if (npcProtection.protected) {
-                    const timeLeftMinutes = Math.ceil(npcProtection.timeLeft / (60 * 1000));
-                    // Get NPC icon for the thumbnail
-                    const npcIcon = NPCs[mappedNPCName]?.icon || null;
-                    const protectionEmbed = createProtectionEmbed(mappedNPCName, timeLeftMinutes, true, npcProtection.type, npcIcon);
-                    await interaction.editReply({ embeds: [protectionEmbed] });
+                // Process items for stealing
+                const itemResult = await processItemsForStealing(mappedNPCName, targetType, raritySelection);
+                if (!itemResult.success) {
+                    await interaction.editReply({ content: itemResult.error });
                     return;
                 }
                 
-
-
-                // ------------------- Special Peddler Logic -------------------
-                // Peddler can have ANY item from the database stolen from him
-                let npcInventory;
-                if (mappedNPCName === 'Peddler') {
-                    // For Peddler, fetch any item from the ItemModel.js database
-                    try {
-                        const Item = require('../../models/ItemModel');
-                        const allItems = await Item.find({}, 'itemName');
-                        npcInventory = allItems.map(item => item.itemName);
-                        
-                        // Filter out custom weapons from Peddler inventory
-                        const peddlerInventoryWithoutCustomWeapons = [];
-                        for (const itemName of npcInventory) {
-                            const isCustom = await isCustomWeapon(itemName);
-                            if (!isCustom) {
-                                peddlerInventoryWithoutCustomWeapons.push(itemName);
-                            }
-                        }
-                        
-                        if (peddlerInventoryWithoutCustomWeapons.length === 0) {
-                            await interaction.editReply({ content: `❌ **No items available to steal from Peddler!**\n🛡️ All available items are protected from theft (Custom Weapons).` });
-                            return;
-                        }
-                        
-                        npcInventory = peddlerInventoryWithoutCustomWeapons;
-                        
-                        // Process Peddler inventory through rarity selection and steal logic
-                        const itemsWithRarity = await processItemsWithRarity(npcInventory, true);
-                        const { items: filteredItems, selectedTier: npcSelectedTier, usedFallback: npcUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
-
-                        if (filteredItems.length === 0) {
-                            const fallbackMessage = getFallbackMessage(raritySelection, npcSelectedTier);
-                            if (fallbackMessage) {
-                                await interaction.editReply({ content: fallbackMessage });
-                            } else {
-                                await interaction.editReply({ content: `❌ **No items available to steal from Peddler!**\n🛡️ All available items are protected from theft (Custom Weapons).` });
-                            }
-                            return;
-                        }
-
-                        // Update daily steal only when actually attempting the steal
-                        if (!thiefCharacter.jobVoucher) {
-                            try {
-                                await updateDailySteal(thiefCharacter, 'steal');
-                            } catch (error) {
-                                console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
-                                await interaction.editReply({
-                                    content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
-                                    ephemeral: true
-                                });
-                                return;
-                            }
-                        }
-
-                        const selectedItem = getRandomItemByWeight(filteredItems);
-                        const roll = await generateStealRoll(thiefCharacter);
-                        const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, mappedNPCName);
-                        const isSuccess = roll > failureThreshold;
-
-                        if (isSuccess) {
-                            // Create item object with isNPC property for determineStealQuantity
-                            const itemForQuantity = { ...selectedItem, isNPC: true };
-                            const quantity = determineStealQuantity(itemForQuantity);
-                            await handleStealSuccess(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
-                        } else {
-                            await handleStealFailure(thiefCharacter, mappedNPCName, selectedItem, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
-                        }
-                        
-                        // Performance timing for Peddler steals
-                        const peddlerEndTime = Date.now();
-                        console.log(`[steal.js]: ✅ Peddler steal completed (${peddlerEndTime - startTime}ms)`);
-                        return; // Exit early for Peddler
-                    } catch (error) {
-                        console.error('[steal.js]: Error fetching items for Peddler:', error);
-                        await interaction.editReply({ content: '❌ **Error fetching items for Peddler. Please try again.**' });
-                        return;
-                    }
-                } else {
-                    // For other NPCs, use cached items or fetch from database
-                    const cachedItems = getCachedNPCItems(mappedNPCName);
-                    if (cachedItems) {
-                        npcInventory = cachedItems;
-                    } else {
-                        npcInventory = await getNPCItems(mappedNPCName);
-                        
-                        // Cache the results for future use
-                        if (Array.isArray(npcInventory) && npcInventory.length > 0) {
-                            setCachedNPCItems(mappedNPCName, npcInventory);
-                        }
-                    }
-                    
-                    // Check if we got a valid inventory
-                    if (!Array.isArray(npcInventory) || npcInventory.length === 0) {
-                        await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ This NPC may not have any stealable items.` });
-                        return;
-                    }
-                    
-                    // Additional safety check: ensure all items are valid
-                    if (npcInventory.some(item => item === null || item === undefined)) {
-                        console.warn(`[steal.js]: ⚠️ NPC inventory contains null/undefined items for ${mappedNPCName}:`, npcInventory);
-                        await interaction.editReply({ content: `❌ **Error: Invalid inventory data for ${mappedNPCName}. Please try again.**` });
-                        return;
-                    }
-                    
-                    // Regular processing path for non-preloaded items
-                    // Normalize npcInventory to ensure all items are strings
-                    const normalizedNPCInventory = npcInventory.map(item => {
-                        if (typeof item === 'string') {
-                            return item;
-                        } else if (item && typeof item === 'object' && item.itemName) {
-                            return item.itemName;
-                        } else if (item && typeof item === 'object' && item.name) {
-                            return item.name;
-                        } else {
-                            console.warn(`[steal.js]: ⚠️ Unexpected item format in NPC inventory:`, item);
-                            return String(item);
-                        }
-                    }).filter(Boolean); // Remove any undefined/null items
-                    
-                    // Log normalization only if there were issues
-                    if (normalizedNPCInventory.length !== npcInventory.length) {
-                        console.warn(`[steal.js]: ⚠️ Normalized ${npcInventory.length} items to ${normalizedNPCInventory.length} valid items for ${mappedNPCName}`);
-                    }
-                    
-                    // Filter out protected items (spirit orbs, vouchers, and custom weapons) from NPC inventory
-                    const protectedItems = ['spirit orb', 'voucher'];
-                    const filteredNPCInventory = normalizedNPCInventory.filter(itemName => {
-                        const lowerItemName = itemName.toLowerCase();
-                        return !protectedItems.some(protected => lowerItemName.includes(protected));
-                    });
-                    
-                    // Filter out custom weapons from NPC inventory
-                    const filteredNPCInventoryWithoutCustomWeapons = [];
-                    for (const itemName of filteredNPCInventory) {
-                        const isCustom = await isCustomWeapon(itemName);
-                        if (!isCustom) {
-                            filteredNPCInventoryWithoutCustomWeapons.push(itemName);
-                        }
-                    }
-                    
-                    if (filteredNPCInventoryWithoutCustomWeapons.length === 0) {
-                        await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ All available items are protected from theft (Custom Weapons, Spirit Orbs, and vouchers).` });
-                        return;
-                    }
-                    
-                    const itemsWithRarity = await processItemsWithRarity(filteredNPCInventoryWithoutCustomWeapons, true);
-
-                    const { items: filteredItems, selectedTier: npcSelectedTier, usedFallback: npcUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
-
-                    if (filteredItems.length === 0) {
-                        const fallbackMessage = getFallbackMessage(raritySelection, npcSelectedTier);
-                        if (fallbackMessage) {
-                            await interaction.editReply({ content: fallbackMessage });
-                        } else {
-                            await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ Spirit Orbs, vouchers, and custom weapons are protected from theft.` });
-                        }
-                        return;
-                    }
-
-                    // Update daily steal only when actually attempting the steal
-                    if (!thiefCharacter.jobVoucher) {
-                        try {
-                            await updateDailySteal(thiefCharacter, 'steal');
-                        } catch (error) {
-                            console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
-                            await interaction.editReply({
-                                content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
-                                ephemeral: true
-                            });
-                            return;
-                        }
-                    }
-
-                    const selectedItem = getRandomItemByWeight(filteredItems);
-                    const roll = await generateStealRoll(thiefCharacter);
-                    const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, mappedNPCName);
-                    const isSuccess = roll > failureThreshold;
-
-                    if (isSuccess) {
-                        const quantity = determineStealQuantity(selectedItem);
-                        await handleStealSuccess(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
-                    } else {
-                        await handleStealFailure(thiefCharacter, mappedNPCName, selectedItem, roll, failureThreshold, true, interaction, voucherCheck, npcUsedFallback, raritySelection, npcSelectedTier);
-                    }
-                    
+                // Execute the steal attempt
+                const success = await executeStealAttempt(
+                    thiefCharacter, 
+                    mappedNPCName, 
+                    targetType, 
+                    raritySelection, 
+                    null, 
+                    itemResult.items, 
+                    itemResult.selectedTier, 
+                    itemResult.usedFallback, 
+                    interaction, 
+                    voucherCheck
+                );
+                
+                if (success) {
                     // Performance timing for NPC steals
                     const npcEndTime = Date.now();
                     console.log(`[steal.js]: ✅ NPC steal completed (${npcEndTime - startTime}ms)`);
@@ -2270,175 +1877,40 @@ module.exports = {
 
             // Handle player stealing
             if (targetType === 'player') {
-                // Check target character's jail status
-                const targetJailStatus = await checkAndUpdateJailStatus(targetCharacter);
-                if (targetJailStatus.isInJail) {
-                    const timeLeft = formatJailTimeLeftDaysHours(targetJailStatus.timeLeft);
-                    const jailEmbed = createJailBlockEmbed(targetCharacter.name, timeLeft, targetCharacter.icon, thiefCharacter.icon);
-                    await interaction.editReply({ embeds: [jailEmbed] });
-                    console.log(`[steal.js]: ⚠️ Steal blocked - jailed character: ${targetCharacter.name}`);
-                    return;
-                }
-
-                // Check if target character is debuffed
-                if (targetCharacter.debuff && targetCharacter.debuff.active) {
-                    await interaction.editReply({ 
-                        content: `❌ **You cannot steal from a character who is debuffed!**\n💊 ${targetCharacter.name} is currently under a debuff effect.`, 
-                        ephemeral: true 
-                    });
-                    console.log(`[steal.js]: ⚠️ Steal blocked - debuffed character: ${targetCharacter.name}`);
-                    return;
-                }
-
-                // Check if target character is KO'd
-                if (targetCharacter.ko) {
-                    await interaction.editReply({ 
-                        content: `❌ **You cannot steal from a character who is KO'd!**\n💀 ${targetCharacter.name} is currently unconscious.`, 
-                        ephemeral: true 
-                    });
-                    console.log(`[steal.js]: ⚠️ Steal blocked - KO'd character: ${targetCharacter.name}`);
-                    return;
-                }
-
-                // Check if both characters have synced inventory
-                if (!targetCharacter.inventorySynced) {
-                    await interaction.editReply({ 
-                        content: `❌ **You cannot steal from a character whose inventory is not synced!**\n📦 ${targetCharacter.name} needs to sync their inventory first.`, 
-                        ephemeral: true 
-                    });
-                    console.log(`[steal.js]: ⚠️ Steal blocked - unsynced inventory: ${targetCharacter.name}`);
-                    return;
-                }
-
-                if (thiefCharacter.currentVillage !== targetCharacter.currentVillage && !isTestingChannel) {
-                    const embed = new EmbedBuilder()
-                        .setColor(0xFF6B35) // Orange color for warning
-                        .setTitle('📍 Village Restriction')
-                        .setDescription(`❌ **You can only steal from characters in the same village!**`)
-                        .addFields(
-                            { name: '📍 Your Location', value: `${thiefCharacter.currentVillage}`, inline: true },
-                            { name: '📍 Target Location', value: `${targetCharacter.currentVillage}`, inline: true },
-                            { name: '💡 Travel Tip', value: 'Use </travel:1379850586987430009> to travel between villages and access characters in different locations!', inline: false }
-                        )
-                        .setThumbnail(thiefCharacter.icon || null)
-                        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-                        .setFooter({ 
-                            text: 'Village restriction active'
-                        })
-                        .setTimestamp();
-                    
-                    await interaction.editReply({ embeds: [embed], ephemeral: true });
-                    return;
-                }
-
-                const playerProtection = await isProtected(targetCharacter._id);
-                if (playerProtection.protected) {
-                    const timeLeftMinutes = Math.ceil(playerProtection.timeLeft / (60 * 1000));
-                    // Get character icon for the thumbnail
-                    const characterIcon = targetCharacter.icon || null;
-                    const protectionEmbed = createProtectionEmbed(targetCharacter.name, timeLeftMinutes, false, playerProtection.type, characterIcon);
-                    await interaction.editReply({ embeds: [protectionEmbed] });
+                // Use centralized validation
+                const validationResult = await validateStealTarget(targetName, targetType, thiefCharacter, interaction);
+                if (!validationResult.valid) {
                     return;
                 }
                 
-
-
-                if (!targetCharacter.canBeStolenFrom) {
-                    const embed = new EmbedBuilder()
-                        .setColor(0xFF6B35) // Orange color for warning
-                        .setTitle('⚠️ Steal Blocked')
-                        .setDescription(`**${targetCharacter.name}** cannot be stolen from.`)
-                        .addFields(
-                            { name: '🛡️ Protection Status', value: 'This character is protected from theft', inline: false },
-                            { name: '💡 Tip', value: 'Try stealing from other characters or NPCs instead', inline: false }
-                        )
-                        .setThumbnail(targetCharacter.icon || null)
-                        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-                        .setFooter({ 
-                            text: 'Steal protection active'
-                        })
-                        .setTimestamp();
-                    
-                    await interaction.editReply({ embeds: [embed] });
-                    return;
-                }
-
-                const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
-                const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
-                const rawItemNames = inventoryEntries.map(entry => entry.itemName);
-
-                const equippedItems = [
-                    targetCharacter.gearWeapon?.name,
-                    targetCharacter.gearShield?.name,
-                    targetCharacter.gearArmor?.head?.name,
-                    targetCharacter.gearArmor?.chest?.name,
-                    targetCharacter.gearArmor?.legs?.name,
-                ].filter(Boolean);
-
-                // Filter out protected items (spirit orbs, vouchers, and custom weapons)
-                const protectedItems = ['spirit orb', 'voucher'];
-                const availableItemNames = rawItemNames.filter(itemName => {
-                    const lowerItemName = itemName.toLowerCase();
-                    const isEquipped = equippedItems.includes(itemName);
-                    const isItemProtected = protectedItems.some(protected => lowerItemName.includes(protected));
-                    return !isEquipped && !isItemProtected;
-                });
+                const targetCharacter = validationResult.target;
                 
-                // Filter out custom weapons from player inventory
-                const availableItemNamesWithoutCustomWeapons = [];
-                for (const itemName of availableItemNames) {
-                    const isCustom = await isCustomWeapon(itemName);
-                    if (!isCustom) {
-                        availableItemNamesWithoutCustomWeapons.push(itemName);
-                    }
+                // Process items for stealing
+                const itemResult = await processItemsForStealing(targetName, targetType, raritySelection, targetCharacter);
+                if (!itemResult.success) {
+                    await interaction.editReply({ content: itemResult.error });
+                    return;
                 }
                 
-                if (availableItemNamesWithoutCustomWeapons.length === 0) {
-                    await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**\n🛡️ All available items are protected from theft (Custom Weapons, Spirit Orbs, and vouchers).` });
-                    return;
-                }
-                const itemsWithRarity = await processItemsWithRarity(availableItemNamesWithoutCustomWeapons, false, inventoryEntries);
-
-                const { items: filteredItemsPlayer, selectedTier: playerSelectedTier, usedFallback: playerUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
-
-                if (filteredItemsPlayer.length === 0) {
-                    const fallbackMessage = getFallbackMessage(raritySelection, playerSelectedTier);
-                    if (fallbackMessage) {
-                        await interaction.editReply({ content: fallbackMessage });
-                    } else {
-                        await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**\n🛡️ Spirit Orbs, vouchers, and custom weapons are protected from theft.` });
-                    }
-                    return;
-                }
-
-                // Update daily steal only when actually attempting the steal
-                if (!thiefCharacter.jobVoucher) {
-                    try {
-                        await updateDailySteal(thiefCharacter, 'steal');
-                    } catch (error) {
-                        console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
-                        await interaction.editReply({
-                            content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
-                            ephemeral: true
-                        });
-                        return;
-                    }
-                }
-
-                const selectedItem = getRandomItemByWeight(filteredItemsPlayer);
-                const roll = await generateStealRoll(thiefCharacter);
-                const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, targetCharacter.name);
-                const success = roll > failureThreshold;
-
+                // Execute the steal attempt
+                const success = await executeStealAttempt(
+                    thiefCharacter, 
+                    targetName, 
+                    targetType, 
+                    raritySelection, 
+                    targetCharacter, 
+                    itemResult.items, 
+                    itemResult.selectedTier, 
+                    itemResult.usedFallback, 
+                    interaction, 
+                    voucherCheck
+                );
+                
                 if (success) {
-                    await handleStealSuccess(thiefCharacter, targetCharacter, selectedItem, determineStealQuantity(selectedItem), roll, failureThreshold, false, interaction, voucherCheck, playerUsedFallback, raritySelection, playerSelectedTier);
-                } else {
-                    await handleStealFailure(thiefCharacter, targetCharacter, selectedItem, roll, failureThreshold, false, interaction, voucherCheck, playerUsedFallback, raritySelection, playerSelectedTier);
+                    // Performance timing for player steals
+                    const playerEndTime = Date.now();
+                    console.log(`[steal.js]: ✅ Player steal completed (${playerEndTime - startTime}ms)`);
                 }
-                
-                // Performance timing for player steals
-                const playerEndTime = Date.now();
-                console.log(`[steal.js]: ✅ Player steal completed (${playerEndTime - startTime}ms)`);
             }
         } catch (error) {
             const errorTime = Date.now();
@@ -2511,6 +1983,642 @@ function validateNPCTarget(targetName) {
         availableNPCs,
         error: `❌ **Invalid NPC target: "${targetName}"**\n\n**Available NPCs:**\n${availableNPCs}\n\n**Tip:** Make sure to select an NPC from the dropdown menu, not type the name manually.`
     };
+}
+
+// ------------------- Centralized Target Validation -------------------
+// Centralized validation for both NPC and player targets to eliminate duplication
+async function validateStealTarget(targetName, targetType, thiefCharacter, interaction) {
+    try {
+        if (targetType === 'npc') {
+            const npcValidation = validateNPCTarget(targetName);
+            if (!npcValidation.valid) {
+                console.log(`[steal.js]: ❌ NPC validation failed - targetName: "${targetName}"`);
+                return { valid: false, error: npcValidation.error };
+            }
+            
+            const mappedNPCName = npcValidation.npcName;
+            
+            // Check if NPC is protected
+            const npcProtection = await isProtected(mappedNPCName);
+            if (npcProtection.protected) {
+                const timeLeftMinutes = Math.ceil(npcProtection.timeLeft / (60 * 1000));
+                const npcIcon = NPCs[mappedNPCName]?.icon || null;
+                const protectionEmbed = createProtectionEmbed(mappedNPCName, timeLeftMinutes, true, npcProtection.type, npcIcon);
+                await interaction.editReply({ embeds: [protectionEmbed] });
+                return { valid: false, error: 'NPC is protected' };
+            }
+            
+            return { valid: true, target: mappedNPCName, isNPC: true };
+        } else {
+            // Player target validation
+            const targetValidation = await validateCharacter(targetName, null);
+            if (!targetValidation.valid) {
+                console.log(`[steal.js]: ❌ Player target validation failed - targetName: "${targetName}"`);
+                const errorMessage = targetValidation.error.includes('not found') 
+                    ? `❌ **Player target not found: "${targetName}"**\n\n**Tip:** Make sure to select a character from the dropdown menu, not type the name manually.`
+                    : targetValidation.error;
+                return { valid: false, error: errorMessage };
+            }
+            
+            const targetCharacter = targetValidation.character;
+            
+            // Mod character immunity check
+            if (targetCharacter.isModCharacter) {
+                return { 
+                    valid: false, 
+                    error: `❌ **You cannot steal from a mod character!**\n👑 ${targetCharacter.name} is a ${targetCharacter.modTitle} of ${targetCharacter.modType} and is immune to theft.` 
+                };
+            }
+            
+            // Prevent stealing from self
+            if (thiefCharacter._id.toString() === targetCharacter._id.toString()) {
+                return { valid: false, error: '❌ **You cannot steal from yourself!**' };
+            }
+            
+            // Check target's jail status
+            const targetJailStatus = await checkAndUpdateJailStatus(targetCharacter);
+            if (targetJailStatus.isInJail) {
+                const timeLeft = formatJailTimeLeftDaysHours(targetJailStatus.timeLeft);
+                const jailEmbed = createJailBlockEmbed(targetCharacter.name, timeLeft, targetCharacter.icon, thiefCharacter.icon);
+                await interaction.editReply({ embeds: [jailEmbed] });
+                return { valid: false, error: 'Target is in jail' };
+            }
+            
+            // Check if target is debuffed
+            if (targetCharacter.debuff && targetCharacter.debuff.active) {
+                return { 
+                    valid: false, 
+                    error: `❌ **You cannot steal from a character who is debuffed!**\n💊 ${targetCharacter.name} is currently under a debuff effect.` 
+                };
+            }
+            
+            // Check if target is KO'd
+            if (targetCharacter.ko) {
+                return { 
+                    valid: false, 
+                    error: `❌ **You cannot steal from a character who is KO'd!**\n💀 ${targetCharacter.name} is currently unconscious.` 
+                };
+            }
+            
+            // Check if target has synced inventory
+            if (!targetCharacter.inventorySynced) {
+                return { 
+                    valid: false, 
+                    error: `❌ **You cannot steal from a character whose inventory is not synced!**\n📦 ${targetCharacter.name} needs to sync their inventory first.` 
+                };
+            }
+            
+            // Check village restriction
+            if (thiefCharacter.currentVillage !== targetCharacter.currentVillage && interaction.channelId !== '1391812848099004578') {
+                const embed = new EmbedBuilder()
+                    .setColor(0xFF6B35)
+                    .setTitle('📍 Village Restriction')
+                    .setDescription(`❌ **You can only steal from characters in the same village!**`)
+                    .addFields(
+                        { name: '📍 Your Location', value: `${thiefCharacter.currentVillage}`, inline: true },
+                        { name: '📍 Target Location', value: `${targetCharacter.currentVillage}`, inline: true },
+                        { name: '💡 Travel Tip', value: 'Use </travel:1379850586987430009> to travel between villages and access characters in different locations!', inline: false }
+                    )
+                    .setThumbnail(thiefCharacter.icon || null)
+                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                    .setFooter({ text: 'Village restriction active' })
+                    .setTimestamp();
+                
+                await interaction.editReply({ embeds: [embed], ephemeral: true });
+                return { valid: false, error: 'Village restriction' };
+            }
+            
+            // Check protection status
+            const playerProtection = await isProtected(targetCharacter._id);
+            if (playerProtection.protected) {
+                const timeLeftMinutes = Math.ceil(playerProtection.timeLeft / (60 * 1000));
+                const characterIcon = targetCharacter.icon || null;
+                const protectionEmbed = createProtectionEmbed(targetCharacter.name, timeLeftMinutes, false, playerProtection.type, characterIcon);
+                await interaction.editReply({ embeds: [protectionEmbed] });
+                return { valid: false, error: 'Target is protected' };
+            }
+            
+            // Check if target can be stolen from
+            if (!targetCharacter.canBeStolenFrom) {
+                const embed = new EmbedBuilder()
+                    .setColor(0xFF6B35)
+                    .setTitle('⚠️ Steal Blocked')
+                    .setDescription(`**${targetCharacter.name}** cannot be stolen from.`)
+                    .addFields(
+                        { name: '🛡️ Protection Status', value: 'This character is protected from theft', inline: false },
+                        { name: '💡 Tip', value: 'Try stealing from other characters or NPCs instead', inline: false }
+                    )
+                    .setThumbnail(targetCharacter.icon || null)
+                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                    .setFooter({ text: 'Steal protection active' })
+                    .setTimestamp();
+                
+                await interaction.editReply({ embeds: [embed] });
+                return { valid: false, error: 'Target cannot be stolen from' };
+            }
+            
+            return { valid: true, target: targetCharacter, isNPC: false };
+        }
+    } catch (error) {
+        console.error('[steal.js]: Error in validateStealTarget:', error);
+        return { valid: false, error: '❌ **An error occurred while validating the target.**' };
+    }
+}
+
+// ------------------- Centralized Item Processing for Stealing -------------------
+// Centralized function to process items for stealing from both NPCs and players
+async function processItemsForStealing(targetName, targetType, raritySelection, targetCharacter = null) {
+    try {
+        if (targetType === 'npc') {
+            // Handle Peddler special case
+            if (targetName === 'Peddler') {
+                const Item = require('../../models/ItemModel');
+                const allItems = await Item.find({}, 'itemName');
+                let npcInventory = allItems.map(item => item.itemName);
+                
+                // Filter out custom weapons from Peddler inventory
+                const peddlerInventoryWithoutCustomWeapons = [];
+                for (const itemName of npcInventory) {
+                    const isCustom = await isCustomWeapon(itemName);
+                    if (!isCustom) {
+                        peddlerInventoryWithoutCustomWeapons.push(itemName);
+                    }
+                }
+                
+                if (peddlerInventoryWithoutCustomWeapons.length === 0) {
+                    return { 
+                        success: false, 
+                        error: `❌ **No items available to steal from Peddler!**\n🛡️ All available items are protected from theft (Custom Weapons).` 
+                    };
+                }
+                
+                npcInventory = peddlerInventoryWithoutCustomWeapons;
+            } else {
+                // For other NPCs, use cached items or fetch from database
+                const cachedItems = getCachedNPCItems(targetName);
+                if (cachedItems) {
+                    npcInventory = cachedItems;
+                } else {
+                    npcInventory = await getNPCItems(targetName);
+                    
+                    // Cache the results for future use
+                    if (Array.isArray(npcInventory) && npcInventory.length > 0) {
+                        setCachedNPCItems(targetName, npcInventory);
+                    }
+                }
+                
+                // Check if we got a valid inventory
+                if (!Array.isArray(npcInventory) || npcInventory.length === 0) {
+                    return { 
+                        success: false, 
+                        error: `❌ **No items available to steal from ${targetName}!**\n🛡️ This NPC may not have any stealable items.` 
+                    };
+                }
+                
+                // Normalize npcInventory to ensure all items are strings
+                const normalizedNPCInventory = npcInventory.map(item => {
+                    if (typeof item === 'string') {
+                        return item;
+                    } else if (item && typeof item === 'object' && item.itemName) {
+                        return item.itemName;
+                    } else if (item && typeof item === 'object' && item.name) {
+                        return item.name;
+                    } else {
+                        console.warn(`[steal.js]: ⚠️ Unexpected item format in NPC inventory:`, item);
+                        return String(item);
+                    }
+                }).filter(Boolean);
+                
+                // Filter out protected items
+                const protectedItems = ['spirit orb', 'voucher'];
+                const filteredNPCInventory = normalizedNPCInventory.filter(itemName => {
+                    const lowerItemName = itemName.toLowerCase();
+                    return !protectedItems.some(protected => lowerItemName.includes(protected));
+                });
+                
+                // Filter out custom weapons
+                const filteredNPCInventoryWithoutCustomWeapons = [];
+                for (const itemName of filteredNPCInventory) {
+                    const isCustom = await isCustomWeapon(itemName);
+                    if (!isCustom) {
+                        filteredNPCInventoryWithoutCustomWeapons.push(itemName);
+                    }
+                }
+                
+                if (filteredNPCInventoryWithoutCustomWeapons.length === 0) {
+                    return { 
+                        success: false, 
+                        error: `❌ **No items available to steal from ${targetName}!**\n🛡️ All available items are protected from theft (Custom Weapons, Spirit Orbs, and vouchers).` 
+                    };
+                }
+                
+                npcInventory = filteredNPCInventoryWithoutCustomWeapons;
+            }
+            
+            // Process NPC items through rarity selection
+            const itemsWithRarity = await processItemsWithRarity(npcInventory, true);
+            const { items: filteredItems, selectedTier, usedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
+            
+            if (filteredItems.length === 0) {
+                const fallbackMessage = getFallbackMessage(raritySelection, selectedTier);
+                if (fallbackMessage) {
+                    return { success: false, error: fallbackMessage };
+                } else {
+                    return { 
+                        success: false, 
+                        error: `❌ **No items available to steal from ${targetName}!**\n🛡️ All available items are protected from theft.` 
+                    };
+                }
+            }
+            
+            return { 
+                success: true, 
+                items: filteredItems, 
+                selectedTier, 
+                usedFallback,
+                isNPC: true 
+            };
+        } else {
+            // Player target processing
+            const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
+            const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
+            const rawItemNames = inventoryEntries.map(entry => entry.itemName);
+
+            const equippedItems = [
+                targetCharacter.gearWeapon?.name,
+                targetCharacter.gearShield?.name,
+                targetCharacter.gearArmor?.head?.name,
+                targetCharacter.gearArmor?.chest?.name,
+                targetCharacter.gearArmor?.legs?.name,
+            ].filter(Boolean);
+
+            // Filter out protected items
+            const protectedItems = ['spirit orb', 'voucher'];
+            const availableItemNames = rawItemNames.filter(itemName => {
+                const lowerItemName = itemName.toLowerCase();
+                const isEquipped = equippedItems.includes(itemName);
+                const isItemProtected = protectedItems.some(protected => lowerItemName.includes(protected));
+                return !isEquipped && !isItemProtected;
+            });
+            
+            // Filter out custom weapons
+            const availableItemNamesWithoutCustomWeapons = [];
+            for (const itemName of availableItemNames) {
+                const isCustom = await isCustomWeapon(itemName);
+                if (!isCustom) {
+                    availableItemNamesWithoutCustomWeapons.push(itemName);
+                }
+            }
+            
+            if (availableItemNamesWithoutCustomWeapons.length === 0) {
+                return { 
+                    success: false, 
+                    error: `❌ **Looks like ${targetCharacter.name} didn't have any items to steal!**\n🛡️ All available items are protected from theft (Custom Weapons, Spirit Orbs, and vouchers).` 
+                };
+            }
+            
+            const itemsWithRarity = await processItemsWithRarity(availableItemNamesWithoutCustomWeapons, false, inventoryEntries);
+            const { items: filteredItems, selectedTier, usedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
+
+            if (filteredItems.length === 0) {
+                const fallbackMessage = getFallbackMessage(raritySelection, selectedTier);
+                if (fallbackMessage) {
+                    return { success: false, error: fallbackMessage };
+                } else {
+                    return { 
+                        success: false, 
+                        error: `❌ **Looks like ${targetCharacter.name} didn't have any items to steal!**\n🛡️ All available items are protected from theft.` 
+                    };
+                }
+            }
+            
+            return { 
+                success: true, 
+                items: filteredItems, 
+                selectedTier, 
+                usedFallback,
+                isNPC: false 
+            };
+        }
+    } catch (error) {
+        console.error('[steal.js]: Error in processItemsForStealing:', error);
+        return { 
+            success: false, 
+            error: '❌ **An error occurred while processing items for stealing.**' 
+        };
+    }
+}
+
+// ------------------- Centralized Steal Execution -------------------
+// Centralized function to execute the actual steal attempt for both NPCs and players
+async function executeStealAttempt(thiefCharacter, targetName, targetType, raritySelection, targetCharacter, items, selectedTier, usedFallback, interaction, voucherCheck) {
+    try {
+        // Update daily steal only when actually attempting the steal
+        if (!thiefCharacter.jobVoucher) {
+            try {
+                await updateDailySteal(thiefCharacter, 'steal');
+            } catch (error) {
+                console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                await interaction.editReply({
+                    content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
+                    ephemeral: true
+                });
+                return;
+            }
+        }
+
+        const selectedItem = getRandomItemByWeight(items);
+        const roll = await generateStealRoll(thiefCharacter);
+        const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, targetName);
+        const isSuccess = roll > failureThreshold;
+
+        if (isSuccess) {
+            const quantity = determineStealQuantity(selectedItem);
+            await handleStealSuccess(
+                thiefCharacter, 
+                targetType === 'npc' ? targetName : targetCharacter, 
+                selectedItem, 
+                quantity, 
+                roll, 
+                failureThreshold, 
+                targetType === 'npc', 
+                interaction, 
+                voucherCheck, 
+                usedFallback, 
+                raritySelection, 
+                selectedTier
+            );
+        } else {
+            await handleStealFailure(
+                thiefCharacter, 
+                targetType === 'npc' ? targetName : targetCharacter, 
+                selectedItem, 
+                roll, 
+                failureThreshold, 
+                targetType === 'npc', 
+                interaction, 
+                voucherCheck, 
+                usedFallback, 
+                raritySelection, 
+                selectedTier
+            );
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('[steal.js]: Error in executeStealAttempt:', error);
+        await handleStealError(error, interaction, `${targetType} steal execution`);
+        return false;
+    }
+}
+
+// ------------------- Channel Validation -------------------
+// Centralized function to validate if the command can be used in the current channel
+async function validateChannelAccess(thiefCharacter, interaction) {
+    try {
+        let currentVillage = capitalizeWords(thiefCharacter.currentVillage);
+        let allowedChannel = villageChannels[currentVillage];
+
+        // If using a job voucher for a village-exclusive job, override to required village
+        if (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) {
+            const voucherPerk = getJobPerk(thiefCharacter.jobVoucherJob);
+            if (voucherPerk && voucherPerk.village) {
+                const requiredVillage = capitalizeWords(voucherPerk.village);
+                currentVillage = requiredVillage;
+                allowedChannel = villageChannels[requiredVillage];
+                console.log(`[steal.js]: 🎫 Voucher override - village: ${requiredVillage}`);
+            }
+        }
+
+        // Allow testing in specific channel
+        const testingChannelId = '1391812848099004578';
+        const isTestingChannel = interaction.channelId === testingChannelId;
+
+        // If allowedChannel is undefined, allow the command to proceed (for testing)
+        if (!allowedChannel) {
+            console.log(`[steal.js]: ⚠️ No channel configured for village ${currentVillage} - allowing command`);
+            return { valid: true };
+        } else if (interaction.channelId !== allowedChannel && !isTestingChannel) {
+            const channelMention = `<#${allowedChannel}>`;
+            await interaction.editReply({
+                embeds: [{
+                    color: 0x008B8B, // Dark cyan color
+                    description: `*${thiefCharacter.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(thiefCharacter.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
+                    image: {
+                        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+                    },
+                    footer: {
+                        text: 'Channel Restriction'
+                    }
+                }],
+                ephemeral: true
+            });
+            return { valid: false, error: 'Channel restriction' };
+        }
+        
+        return { valid: true };
+    } catch (error) {
+        console.error('[steal.js]: Error in validateChannelAccess:', error);
+        return { valid: false, error: 'Channel validation error' };
+    }
+}
+
+// ------------------- Job Voucher Validation -------------------
+// Centralized function to validate and activate job vouchers for stealing
+async function validateAndActivateJobVoucher(thiefCharacter, job, interaction) {
+    try {
+        let voucherCheck;
+        if (thiefCharacter.jobVoucher) {
+            console.log(`[steal.js]: 🎫 Validating job voucher for ${thiefCharacter.name}`);
+            voucherCheck = await validateJobVoucher(thiefCharacter, job, 'STEALING');
+            
+            if (voucherCheck.skipVoucher) {
+                console.log(`[steal.js]: ✅ Voucher skipped - ${thiefCharacter.name} already has job "${job}"`);
+            } else if (!voucherCheck.success) {
+                console.error(`[steal.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
+                await interaction.editReply({
+                    content: voucherCheck.message,
+                    ephemeral: true,
+                });
+                return { success: false, error: voucherCheck.message };
+            } else {
+                // Fetch the job voucher item for activation
+                const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+                if (!itemSuccess) {
+                    await interaction.editReply({ content: itemError, ephemeral: true });
+                    return { success: false, error: itemError };
+                }
+                
+                const activationResult = await activateJobVoucher(thiefCharacter, job, jobVoucherItem, 1, interaction);
+                if (!activationResult.success) {
+                    await interaction.editReply({
+                        content: activationResult.message,
+                        ephemeral: true,
+                    });
+                    return { success: false, error: activationResult.message };
+                }
+            }
+        }
+        
+        return { success: true, voucherCheck };
+    } catch (error) {
+        console.error('[steal.js]: Error in validateAndActivateJobVoucher:', error);
+        return { success: false, error: '❌ **An error occurred while validating the job voucher.**' };
+    }
+}
+
+// ------------------- Character Status Validation -------------------
+// Centralized function to validate character status for stealing
+async function validateCharacterStatus(thiefCharacter, interaction) {
+    try {
+        // Check if thief's inventory is set up
+        if (!thiefCharacter.inventorySynced) {
+            await interaction.editReply({ 
+                content: '❌ **Your inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.', 
+                ephemeral: true 
+            });
+            return { valid: false, error: 'Inventory not synced' };
+        }
+
+        // Prevent characters with canBeStolenFrom disabled from using job vouchers to steal
+        if (!thiefCharacter.canBeStolenFrom && thiefCharacter.jobVoucher) {
+            await interaction.editReply({ 
+                content: '❌ **You cannot use a job voucher to steal while your "can be stolen from" setting is disabled.**\n🔒 You must enable this setting first before you can use job vouchers for stealing.', 
+                ephemeral: true 
+            });
+            return { valid: false, error: 'Cannot use voucher while protected' };
+        }
+
+        // Check if thief is debuffed or KO'd
+        if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
+            await interaction.editReply({ 
+                content: '❌ **You cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.', 
+                ephemeral: true 
+            });
+            return { valid: false, error: 'Character is debuffed' };
+        }
+
+        if (thiefCharacter.ko) {
+            await interaction.editReply({ 
+                content: '❌ **You cannot steal while KO\'d!**\n💀 You need to be healed first before you can steal.', 
+                ephemeral: true 
+            });
+            return { valid: false, error: 'Character is KO\'d' };
+        }
+
+        // Check if thief has a valid inventory URL
+        const thiefInventoryLink = thiefCharacter.inventory || thiefCharacter.inventoryLink;
+        if (typeof thiefInventoryLink !== 'string' || !isValidGoogleSheetsUrl(thiefInventoryLink)) {
+            await interaction.editReply({ 
+                content: `❌ **Invalid Google Sheets URL for "${thiefCharacter.name}".**`, 
+                ephemeral: true 
+            });
+            return { valid: false, error: 'Invalid inventory URL' };
+        }
+        
+        return { valid: true };
+    } catch (error) {
+        console.error('[steal.js]: Error in validateCharacterStatus:', error);
+        return { valid: false, error: '❌ **An error occurred while validating character status.**' };
+    }
+}
+
+// ------------------- Initial Character Validation -------------------
+// Centralized function to validate the thief character before any other checks
+async function validateThiefCharacter(characterName, userId, interaction) {
+    try {
+        // Validate the thief character
+        const validationResult = await validateCharacter(characterName, userId, true);
+        if (!validationResult.valid) {
+            await interaction.reply({ content: validationResult.error, ephemeral: true });
+            return { valid: false, error: validationResult.error };
+        }
+
+        const thiefCharacter = validationResult.character;
+
+        // Defer the reply immediately to prevent timeout
+        await interaction.deferReply();
+
+        // Check if bandit character is debuffed
+        if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
+            const errorMessage = '❌ **Bandit characters cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.';
+            await interaction.editReply({ 
+                content: errorMessage, 
+                ephemeral: true 
+            });
+            console.log(`[steal.js]: ⚠️ Steal blocked - debuffed bandit: ${thiefCharacter.name}`);
+            return { valid: false, error: errorMessage };
+        }
+
+        // Check if bandit character is KO'd
+        if (thiefCharacter.ko) {
+            const errorMessage = '❌ **Bandit characters cannot steal while KO\'d!**\n💀 You need to be healed first before you can steal.';
+            await interaction.editReply({ 
+                content: errorMessage, 
+                ephemeral: true 
+            });
+            console.log(`[steal.js]: ⚠️ Steal blocked - KO'd bandit: ${thiefCharacter.name}`);
+            return { valid: false, error: errorMessage };
+        }
+
+        // Check if character is in jail
+        const jailStatus = await checkAndUpdateJailStatus(thiefCharacter);
+        if (jailStatus.isInJail) {
+            const timeLeft = formatJailTimeLeftDaysHours(jailStatus.timeLeft);
+            const embed = new EmbedBuilder()
+                .setColor(0x8B0000) // Dark red color for jail
+                .setTitle('⛔ Jail Restriction')
+                .setDescription('**You are currently in jail and cannot steal!**')
+                .addFields(
+                    { name: '⏰ Time Remaining', value: timeLeft, inline: true }
+                )
+                .setThumbnail(thiefCharacter.icon || null)
+                .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                .setFooter({ 
+                    text: 'Jail restriction active'
+                })
+                .setTimestamp();
+            
+            await interaction.editReply({ embeds: [embed], ephemeral: true });
+            return { valid: false, error: 'Character is in jail' };
+        }
+
+        // Check daily steal limit AFTER job validation
+        if (!thiefCharacter.jobVoucher) {
+            // Check if steal has been used today
+            const canSteal = canUseDailySteal(thiefCharacter, 'steal');
+            
+            if (!canSteal) {
+                const nextRollover = new Date();
+                nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
+                if (nextRollover < new Date()) {
+                    nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+                }
+                const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
+                
+                const errorMessage = `Daily stealing limit reached. The next opportunity to steal will be available at <t:${unixTimestamp}:F>.`;
+                await interaction.editReply({
+                    embeds: [{
+                        color: 0x008B8B, // Dark cyan color
+                        description: `*${thiefCharacter.name} seems exhausted from their earlier stealing...*\n\n**Daily stealing limit reached.**\nThe next opportunity to steal will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to steal again today.*`,
+                        image: {
+                            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+                        },
+                        footer: {
+                            text: 'Daily Activity Limit'
+                        }
+                    }],
+                    ephemeral: true
+                });
+                return { valid: false, error: errorMessage };
+            }
+        }
+        
+        return { valid: true, character: thiefCharacter, jailStatus };
+    } catch (error) {
+        console.error('[steal.js]: Error in validateThiefCharacter:', error);
+        return { valid: false, error: '❌ **An error occurred while validating the thief character.**' };
+    }
 }
 
 
