@@ -503,12 +503,14 @@ module.exports = {
       // ------------------- Helper Functions ------------------
       // Helper function to generate outcome messages
       function generateOutcomeMessage(outcome) {
-        if (outcome.result === 'KO') {
-          return generateDamageMessage('KO');
+        // Handle damage outcomes (including KO)
+        if (outcome.hearts && outcome.hearts > 0) {
+          return outcome.result === "KO"
+            ? generateDamageMessage("KO")
+            : generateDamageMessage(outcome.hearts);
         }
-        if (outcome.hearts) {
-          return generateDamageMessage(outcome.hearts);
-        }
+        
+        // Handle defense success (blocked attack)
         if (outcome.defenseSuccess) {
           return generateDefenseBuffMessage(
             outcome.defenseSuccess,
@@ -516,6 +518,8 @@ module.exports = {
             outcome.damageValue
           );
         }
+        
+        // Handle attack success (critical hit)
         if (outcome.attackSuccess) {
           return generateAttackBuffMessage(
             outcome.attackSuccess,
@@ -523,19 +527,41 @@ module.exports = {
             outcome.damageValue
           );
         }
-        if (outcome.result === 'Win!/Loot') {
+        
+        // Handle victory outcomes
+        if (outcome.result === "Win!/Loot" || outcome.result === "Win!/Loot (1HKO)") {
           return generateVictoryMessage(
             outcome.adjustedRandomValue,
             outcome.defenseSuccess,
             outcome.attackSuccess
           );
         }
+        
+        // Handle other specific result types
+        if (outcome.result && typeof outcome.result === 'string') {
+          // If the result contains damage information, try to extract it
+          if (outcome.result.includes('HEART(S)')) {
+            const heartMatch = outcome.result.match(/(\d+)\s*HEART\(S\)/);
+            if (heartMatch) {
+              const heartCount = parseInt(heartMatch[1]);
+              return generateDamageMessage(heartCount);
+            }
+          }
+          
+          // If the result is a mod character victory message, return it directly
+          if (outcome.result.includes('divine power') || outcome.result.includes('legendary prowess') || 
+              outcome.result.includes('ancient') || outcome.result.includes('divine authority')) {
+            return outcome.result;
+          }
+        }
+        
+        // Fallback: generate a generic outcome message
         return generateFinalOutcomeMessage(
-          outcome.damageValue,
-          outcome.defenseSuccess,
-          outcome.attackSuccess,
-          outcome.adjustedRandomValue,
-          outcome.damageValue
+          outcome.damageValue || 0,
+          outcome.defenseSuccess || false,
+          outcome.attackSuccess || false,
+          outcome.adjustedRandomValue || 0,
+          outcome.damageValue || 0
         );
       }
 

@@ -1289,41 +1289,71 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
 
 // ------------------- Helper Function: Generate Outcome Message -------------------
 function generateOutcomeMessage(outcome, character = null) {
- if (outcome.hearts && outcome.hearts > 0) {
-  return outcome.result === "KO"
-   ? generateDamageMessage("KO")
-   : generateDamageMessage(outcome.hearts);
- } else if (outcome.defenseSuccess) {
-  return generateDefenseBuffMessage(
-   outcome.defenseSuccess,
-   outcome.adjustedRandomValue,
-   outcome.damageValue
-  );
- } else if (outcome.attackSuccess) {
-  return generateAttackBuffMessage(
-   outcome.attackSuccess,
-   outcome.adjustedRandomValue,
-   outcome.damageValue
-  );
- } else if (outcome.result === "Win!/Loot" || outcome.result === "Win!/Loot (1HKO)") {
-  // Check if this is a mod character victory
-  if (character && character.isModCharacter && outcome.result === "Win!/Loot (1HKO)") {
-   const { generateModCharacterVictoryMessage } = require("../../modules/flavorTextModule.js");
-   return generateModCharacterVictoryMessage(character.name, character.modTitle, character.modType);
+  // Handle damage outcomes (including KO)
+  if (outcome.hearts && outcome.hearts > 0) {
+    return outcome.result === "KO"
+      ? generateDamageMessage("KO")
+      : generateDamageMessage(outcome.hearts);
   }
-  return generateVictoryMessage(
-   outcome.adjustedRandomValue,
-   outcome.defenseSuccess,
-   outcome.attackSuccess
+  
+  // Handle defense success (blocked attack)
+  if (outcome.defenseSuccess) {
+    return generateDefenseBuffMessage(
+      outcome.defenseSuccess,
+      outcome.adjustedRandomValue,
+      outcome.damageValue
+    );
+  }
+  
+  // Handle attack success (critical hit)
+  if (outcome.attackSuccess) {
+    return generateAttackBuffMessage(
+      outcome.attackSuccess,
+      outcome.adjustedRandomValue,
+      outcome.damageValue
+    );
+  }
+  
+  // Handle victory outcomes
+  if (outcome.result === "Win!/Loot" || outcome.result === "Win!/Loot (1HKO)") {
+    // Check if this is a mod character victory
+    if (character && character.isModCharacter && outcome.result === "Win!/Loot (1HKO)") {
+      const { generateModCharacterVictoryMessage } = require("../../modules/flavorTextModule.js");
+      return generateModCharacterVictoryMessage(character.name, character.modTitle, character.modType);
+    }
+    return generateVictoryMessage(
+      outcome.adjustedRandomValue,
+      outcome.defenseSuccess,
+      outcome.attackSuccess
+    );
+  }
+  
+  // Handle other specific result types
+  if (outcome.result && typeof outcome.result === 'string') {
+    // If the result contains damage information, try to extract it
+    if (outcome.result.includes('HEART(S)')) {
+      const heartMatch = outcome.result.match(/(\d+)\s*HEART\(S\)/);
+      if (heartMatch) {
+        const heartCount = parseInt(heartMatch[1]);
+        return generateDamageMessage(heartCount);
+      }
+    }
+    
+    // If the result is a mod character victory message, return it directly
+    if (outcome.result.includes('divine power') || outcome.result.includes('legendary prowess') || 
+        outcome.result.includes('ancient') || outcome.result.includes('divine authority')) {
+      return outcome.result;
+    }
+  }
+  
+  // Fallback: generate a generic outcome message
+  return generateFinalOutcomeMessage(
+    outcome.damageValue || 0,
+    outcome.defenseSuccess || false,
+    outcome.attackSuccess || false,
+    outcome.adjustedRandomValue || 0,
+    outcome.damageValue || 0
   );
- }
- return generateFinalOutcomeMessage(
-  outcome.damageValue,
-  outcome.defenseSuccess,
-  outcome.attackSuccess,
-  outcome.adjustedRandomValue,
-  outcome.damageValue
- );
 }
 
 // ------------------- Helper Function: Generate Looted Item -------------------
