@@ -54,6 +54,46 @@ const COMBAT_MESSAGES = {
         "🛡️💔 A devastating blow! Lose ❤️❤️❤️ 3 hearts!",
         "⚡️😖 You reel from the force! Lose ❤️❤️❤️ 3 hearts!",
       ],
+      4: [
+        "💥💀 A brutal assault! You lose ❤️❤️❤️❤️ 4 hearts!",
+        "💥🌳 The monster's power is immense! Lose ❤️❤️❤️❤️ 4 hearts!",
+        "💥💀 You're battered by the attack! Lose ❤️❤️❤️❤️ 4 hearts!",
+        "💥⚔️ A crushing blow! Lose ❤️❤️❤️❤️ 4 hearts!",
+        "🛡️💔 Your defenses are overwhelmed! Lose ❤️❤️❤️❤️ 4 hearts!",
+        "⚡️😖 The impact is devastating! Lose ❤️❤️❤️❤️ 4 hearts!",
+      ],
+      5: [
+        "💥💀 An overwhelming attack! You lose ❤️❤️❤️❤️❤️ 5 hearts!",
+        "💥🌳 The monster's might is terrifying! Lose ❤️❤️❤️❤️❤️ 5 hearts!",
+        "💥💀 You're nearly knocked down! Lose ❤️❤️❤️❤️❤️ 5 hearts!",
+        "💥⚔️ A catastrophic strike! Lose ❤️❤️❤️❤️❤️ 5 hearts!",
+        "🛡️💔 Your armor offers no protection! Lose ❤️❤️❤️❤️❤️ 5 hearts!",
+        "⚡️😖 The force is unbearable! Lose ❤️❤️❤️❤️❤️ 5 hearts!",
+      ],
+      6: [
+        "💥💀 A devastating assault! You lose ❤️❤️❤️❤️❤️❤️ 6 hearts!",
+        "💥🌳 The monster's fury knows no bounds! Lose ❤️❤️❤️❤️❤️❤️ 6 hearts!",
+        "💥💀 You're thrown to the ground! Lose ❤️❤️❤️❤️❤️❤️ 6 hearts!",
+        "💥⚔️ An apocalyptic strike! Lose ❤️❤️❤️❤️❤️❤️ 6 hearts!",
+        "🛡️💔 Nothing can stop this attack! Lose ❤️❤️❤️❤️❤️❤️ 6 hearts!",
+        "⚡️😖 The world spins around you! Lose ❤️❤️❤️❤️❤️❤️ 6 hearts!",
+      ],
+      7: [
+        "💥💀 A cataclysmic attack! You lose ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!",
+        "💥🌳 The monster's power is beyond comprehension! Lose ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!",
+        "💥💀 You're completely overwhelmed! Lose ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!",
+        "💥⚔️ A world-ending strike! Lose ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!",
+        "🛡️💔 All defenses are shattered! Lose ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!",
+        "⚡️😖 Reality itself seems to bend! Lose ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!",
+      ],
+      8: [
+        "💥💀 An annihilation-level attack! You lose ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!",
+        "💥🌳 The monster's might defies reality! Lose ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!",
+        "💥💀 You're obliterated by the force! Lose ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!",
+        "💥⚔️ A universe-shattering strike! Lose ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!",
+        "🛡️💔 Existence itself offers no protection! Lose ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!",
+        "⚡️😖 Time and space seem to collapse! Lose ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!",
+      ],
       KO: [
         "💥💀 Everything seems to be going wrong... you lose all hearts and the fight...",
         "💥💀 You couldn't withstand the attack... all hearts lost!",
@@ -675,9 +715,9 @@ const BLIGHT_MESSAGES = {
     rollBoost: [
       "💀 The Blight's corruption has reached critical levels, transforming your combat abilities into something truly monstrous.",
       "🩸 Your feverish corruption has become overwhelming, making you faster and stronger than any normal being.",
-      "🌑 The dark energy within you has reached its peak, turning even the weakest roll into a devastating force.",
+      "🌑 The dark energy within you has reached its absolute peak, turning even the weakest roll into a devastating force.",
       "⚡ Your blight-stained blood burns with pure malevolence, dramatically amplifying your performance.",
-      "🖤 The corruption in your veins has become a force of pure darkness, resonating powerfully with all monsters."
+      "🖤 The corruption in your veins has become an irresistible force of darkness that all monsters instinctively fear."
     ]
   },
   stage5: {
