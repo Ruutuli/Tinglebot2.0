@@ -368,7 +368,7 @@ async function joinRaid(character, raidId) {
     // Add participant to raid using the model method
     await raid.addParticipant(participant);
 
-    // ----- Dynamic HP scaling based on party size -----
+    // ----- Dynamic HP scaling based on party size (starts at 5+ participants) -----
     try {
       // Ensure we have a persistent base hearts value (for pre-existing raids)
       if (!raid.analytics) raid.analytics = {};
@@ -377,8 +377,15 @@ async function joinRaid(character, raidId) {
       }
       const baseHearts = raid.analytics.baseMonsterHearts || 0;
       const partySize = (raid.participants || []).length;
-      // +10% base hearts per extra participant beyond the first (reduced)
-      const scaleMultiplier = Math.max(1, 1 + 0.10 * Math.max(0, partySize - 1));
+      
+      // Only scale hearts when 5+ participants join
+      let scaleMultiplier = 1;
+      if (partySize >= 5) {
+        // +10% base hearts per extra participant beyond the 4th (starts scaling at 5th participant)
+        const extraParticipants = partySize - 4;
+        scaleMultiplier = Math.max(1, 1 + 0.10 * extraParticipants);
+      }
+      
       const oldMax = raid.monster.maxHearts;
       const oldCurrent = raid.monster.currentHearts;
       const damageDealtSoFar = Math.max(0, oldMax - oldCurrent);
@@ -387,7 +394,12 @@ async function joinRaid(character, raidId) {
       raid.monster.maxHearts = newMax;
       raid.monster.currentHearts = newCurrent;
       await raid.save();
-      console.log(`[raidModule.js]: 📈 Raid ${raidId} scaled HP → partySize=${partySize}, base=${baseHearts}, max=${newMax}, current=${newCurrent}`);
+      
+      if (partySize >= 5) {
+        console.log(`[raidModule.js]: 📈 Raid ${raidId} scaled HP → partySize=${partySize}, base=${baseHearts}, max=${newMax}, current=${newCurrent} (scaling active)`);
+      } else {
+        console.log(`[raidModule.js]: 📊 Raid ${raidId} party size: ${partySize}/5 (scaling inactive)`);
+      }
     } catch (scaleError) {
       console.warn(`[raidModule.js]: ⚠️ Failed to scale raid HP: ${scaleError.message}`);
     }
