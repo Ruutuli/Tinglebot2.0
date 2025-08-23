@@ -454,22 +454,10 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
             cooldownText = `> **${minutesUntilEnd}m** until protection expires`;
         }
         
-        // Calculate failed attempts warning (accounting for current failure)
-        const currentFailedAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
-        const attemptsLeft = 3 - currentFailedAttempts;
-        let warningMessage = '';
-        
-        if (attemptsLeft === 1) {
-            warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
-        } else if (attemptsLeft <= 0) {
-            warningMessage = '⛔ **You have been sent to jail for 3 days!**';
-        } else {
-            warningMessage = '⚠️ **Warning:** Failed attempts are accumulating!';
-        }
-        
+        // Add target protection information (failed attempts handled separately)
         embed.addFields({
-            name: '🛡️ Target Protection & Failed Attempts',
-            value: `> **${isNPC ? targetCharacter : targetCharacter.name}** is now protected from theft for **2 hours** due to this failed attempt!\n\n📊 **Failed Attempts:** ${currentFailedAttempts}/3\n${warningMessage}`,
+            name: '🛡️ Target Protection',
+            value: `> **${isNPC ? targetCharacter : targetCharacter.name}** is now protected from theft for **2 hours** due to this failed attempt!`,
             inline: false
         });
     }
@@ -1174,9 +1162,9 @@ async function handleFailedAttempts(thiefCharacter, embed) {
         warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
         attemptsText = 'You have 1 attempt remaining before jail time!';
     } else if (attemptsLeft <= 0) {
-                    // Send to jail using centralized function
-            const jailResult = await sendToJail(thiefCharacter);
-            warningMessage = '⛔ **You have been sent to jail for 3 days!**';
+        // Send to jail using centralized function
+        const jailResult = await sendToJail(thiefCharacter);
+        warningMessage = '⛔ **You have been sent to jail for 3 days!**';
         attemptsText = 'Too many failed attempts!';
     } else {
         attemptsText = `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`;
@@ -1386,9 +1374,8 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
             }
         }
         
-        // Increment failed attempts counter (handled in protection field now)
-        thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
-        await thiefCharacter.save();
+        // Handle failed attempts and jail logic
+        await handleFailedAttempts(thiefCharacter, embed);
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
