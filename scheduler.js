@@ -202,25 +202,37 @@ async function checkAndPostWeatherIfNeeded(client) {
        continue;
       }
       
-      // Look for weather messages in the last hour (to account for timezone differences)
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-      const messages = await channel.messages.fetch({ limit: 10, after: oneHourAgo });
+      // Look for weather messages in recent messages
+      // Fetch more messages to ensure we don't miss weather posts
+      const messages = await channel.messages.fetch({ limit: 50 });
       
       // Check if any recent message contains weather-related content
       const hasWeatherMessage = messages.some(msg => {
        const content = msg.content.toLowerCase();
        const embedTitle = msg.embeds[0]?.title?.toLowerCase() || '';
-       return content.includes('weather') || 
-              content.includes('forecast') || 
-              embedTitle.includes('weather') || 
-              embedTitle.includes('forecast') ||
-              msg.embeds.some(embed => 
-               embed.fields?.some(field => 
-                field.name?.toLowerCase().includes('temperature') ||
-                field.name?.toLowerCase().includes('wind') ||
-                field.name?.toLowerCase().includes('precipitation')
-               )
-              );
+       
+       // Check message content and embed titles
+       if (content.includes('weather') || content.includes('forecast') || 
+           embedTitle.includes('weather') || embedTitle.includes('forecast')) {
+         return true;
+       }
+       
+       // Check embed fields for weather data
+       if (msg.embeds && msg.embeds.length > 0) {
+         return msg.embeds.some(embed => {
+           if (embed.fields && embed.fields.length > 0) {
+             return embed.fields.some(field => {
+               const fieldName = field.name?.toLowerCase() || '';
+               return fieldName.includes('temperature') || 
+                      fieldName.includes('wind') || 
+                      fieldName.includes('precipitation');
+             });
+           }
+           return false;
+         });
+       }
+       
+       return false;
       });
       
       if (hasWeatherMessage) {
@@ -303,25 +315,37 @@ async function checkAndPostWeatherOnRestart(client) {
        continue;
       }
       
-      // Look for weather messages in the last 24 hours to see if weather was posted today
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const messages = await channel.messages.fetch({ limit: 20, after: twentyFourHoursAgo });
+      // Look for weather messages in recent messages to see if weather was posted today
+      // Fetch more messages to ensure we don't miss weather posts
+      const messages = await channel.messages.fetch({ limit: 100 });
       
       // Check if any recent message contains weather-related content
       const hasWeatherMessage = messages.some(msg => {
        const content = msg.content.toLowerCase();
        const embedTitle = msg.embeds[0]?.title?.toLowerCase() || '';
-       return content.includes('weather') || 
-              content.includes('forecast') || 
-              embedTitle.includes('weather') || 
-              embedTitle.includes('forecast') ||
-              msg.embeds.some(embed => 
-               embed.fields?.some(field => 
-                field.name?.toLowerCase().includes('temperature') ||
-                field.name?.toLowerCase().includes('wind') ||
-                field.name?.toLowerCase().includes('precipitation')
-               )
-              );
+       
+       // Check message content and embed titles
+       if (content.includes('weather') || content.includes('forecast') || 
+           embedTitle.includes('weather') || embedTitle.includes('forecast')) {
+         return true;
+       }
+       
+       // Check embed fields for weather data
+       if (msg.embeds && msg.embeds.length > 0) {
+         return msg.embeds.some(embed => {
+           if (embed.fields && embed.fields.length > 0) {
+             return embed.fields.some(field => {
+               const fieldName = field.name?.toLowerCase() || '';
+               return fieldName.includes('temperature') || 
+                      fieldName.includes('wind') || 
+                      fieldName.includes('precipitation');
+             });
+           }
+           return false;
+         });
+       }
+       
+       return false;
       });
       
       if (hasWeatherMessage) {
