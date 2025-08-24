@@ -66,8 +66,11 @@ try {
 }
 
 // ============================================================================
-// ------------------- Utility Functions -------------------
+// ------------------- Cron Job Management -------------------
 // ============================================================================
+
+// Store references to all cron jobs for management
+const activeCronJobs = new Map();
 
 function createCronJob(
  schedule,
@@ -75,18 +78,76 @@ function createCronJob(
  jobFunction,
  timezone = "America/New_York"
 ) {
- return cron.schedule(
+ console.log(`[scheduler.js]: 📅 Creating cron job: ${jobName} with schedule: ${schedule} (${timezone})`);
+ 
+ const job = cron.schedule(
   schedule,
   async () => {
    try {
+    console.log(`[scheduler.js]: 🚀 Starting cron job: ${jobName}`);
     await jobFunction();
+    console.log(`[scheduler.js]: ✅ Completed cron job: ${jobName}`);
    } catch (error) {
     handleError(error, "scheduler.js");
-    console.error(`[scheduler.js]: ${jobName} failed:`, error.message);
+    console.error(`[scheduler.js]: ❌ Cron job ${jobName} failed:`, error.message);
    }
   },
   { timezone }
  );
+ 
+ // Store the job reference
+ activeCronJobs.set(jobName, {
+  job,
+  schedule,
+  timezone,
+  name: jobName,
+  created: new Date(),
+  lastRun: null,
+  runCount: 0
+ });
+ 
+ console.log(`[scheduler.js]: ✅ Cron job created: ${jobName}`);
+ return job;
+}
+
+function listActiveCronJobs() {
+ console.log(`[scheduler.js]: 📋 Active Cron Jobs (${activeCronJobs.size}):`);
+ 
+ if (activeCronJobs.size === 0) {
+  console.log(`[scheduler.js]: ⚠️ No active cron jobs found`);
+  return;
+ }
+ 
+ for (const [jobName, jobInfo] of activeCronJobs) {
+  const status = jobInfo.job.running ? '🟢 Running' : '🔴 Stopped';
+  const nextRun = jobInfo.job.nextDate();
+  const nextRunStr = nextRun ? nextRun.toLocaleString('en-US', { timeZone: jobInfo.timezone }) : 'Unknown';
+  
+  console.log(`[scheduler.js]: 📅 ${jobName}:`);
+  console.log(`   Status: ${status}`);
+  console.log(`   Schedule: ${jobInfo.schedule}`);
+  console.log(`   Timezone: ${jobInfo.timezone}`);
+  console.log(`   Created: ${jobInfo.created.toLocaleString()}`);
+  console.log(`   Next Run: ${nextRunStr}`);
+  console.log(`   Run Count: ${jobInfo.runCount}`);
+  console.log('');
+ }
+}
+
+function stopAllCronJobs() {
+ console.log(`[scheduler.js]: 🛑 Stopping all cron jobs...`);
+ 
+ for (const [jobName, jobInfo] of activeCronJobs) {
+  try {
+   jobInfo.job.stop();
+   console.log(`[scheduler.js]: ✅ Stopped cron job: ${jobName}`);
+  } catch (error) {
+   console.error(`[scheduler.js]: ❌ Error stopping cron job ${jobName}:`, error.message);
+  }
+ }
+ 
+ activeCronJobs.clear();
+ console.log(`[scheduler.js]: ✅ All cron jobs stopped`);
 }
 
 function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
@@ -141,37 +202,97 @@ async function postWeatherUpdate(client) {
  try {
   console.log(`[scheduler.js]: 🌤️ Starting weather update process`);
 
-  const villages = Object.keys(TOWNHALL_CHANNELS);
-  let postedCount = 0;
+  // Validate environment variables
+  const missingChannels = [];
+  const townhallChannels = {
+   Rudania: process.env.RUDANIA_TOWNHALL,
+   Inariko: process.env.INARIKO_TOWNHALL,
+   Vhintl: process.env.VHINTL_TOWNHALL,
+  };
 
-  for (const village of villages) {
-   try {
-    const weather = await getCurrentWeather(village);
-
-    if (!weather) {
-     console.error(`[scheduler.js]: Failed to get or generate weather for ${village}`);
-     continue;
-    }
-
-    const channelId = TOWNHALL_CHANNELS[village];
-    const channel = client.channels.cache.get(channelId);
-
-    if (!channel) {
-     console.error(`[scheduler.js]: Channel not found: ${channelId}`);
-     continue;
-    }
-
-    const { embed, files } = await generateWeatherEmbed(village, weather);
-    await channel.send({ embeds: [embed], files });
-    postedCount++;
-   } catch (error) {
-    console.error(`[scheduler.js]: Error posting weather for ${village}:`, error.message);
+  // Check for missing environment variables
+  for (const [village, channelId] of Object.entries(townhallChannels)) {
+   if (!channelId) {
+    missingChannels.push(village);
+    console.error(`[scheduler.js]: ❌ Missing environment variable for ${village}: RUDANIA_TOWNHALL, INARIKO_TOWNHALL, or VHINTL_TOWNHALL`);
    }
   }
 
+  if (missingChannels.length > 0) {
+   throw new Error(`Missing environment variables for villages: ${missingChannels.join(', ')}`);
+  }
+
+  const villages = Object.keys(townhallChannels);
+  let postedCount = 0;
+  let errorCount = 0;
+
+  console.log(`[scheduler.js]: 📍 Processing ${villages.length} villages: ${villages.join(', ')}`);
+
+  for (const village of villages) {
+   try {
+    console.log(`[scheduler.js]: 🌤️ Processing weather for ${village}...`);
+    
+    const weather = await getCurrentWeather(village);
+
+    if (!weather) {
+     console.error(`[scheduler.js]: ❌ Failed to get or generate weather for ${village}`);
+     errorCount++;
+     continue;
+    }
+
+    const channelId = townhallChannels[village];
+    const channel = client.channels.cache.get(channelId);
+
+    if (!channel) {
+     console.error(`[scheduler.js]: ❌ Channel not found for ${village}: ${channelId}`);
+     errorCount++;
+     continue;
+    }
+
+    console.log(`[scheduler.js]: 📤 Generating weather embed for ${village}...`);
+    const { embed, files } = await generateWeatherEmbed(village, weather);
+    
+    console.log(`[scheduler.js]: 📤 Sending weather to ${village} town hall...`);
+    await channel.send({ embeds: [embed], files });
+    
+    console.log(`[scheduler.js]: ✅ Weather posted successfully to ${village}`);
+    postedCount++;
+    
+   } catch (error) {
+    console.error(`[scheduler.js]: ❌ Error posting weather for ${village}:`, error.message);
+    errorCount++;
+    
+    // Log detailed error for debugging
+    handleError(error, "scheduler.js", {
+     commandName: "postWeatherUpdate",
+     village: village,
+     channelId: townhallChannels[village]
+    });
+   }
+  }
+
+  if (postedCount === 0) {
+   throw new Error(`Failed to post weather to any village. Errors: ${errorCount}`);
+  }
+
   console.log(`[scheduler.js]: ✅ Weather update completed - posted to ${postedCount}/${villages.length} villages`);
+  
+  if (errorCount > 0) {
+   console.warn(`[scheduler.js]: ⚠️ Weather update completed with ${errorCount} errors`);
+  }
+  
+  return { success: true, postedCount, errorCount };
+  
  } catch (error) {
-  console.error("[scheduler.js]: Weather update process failed:", error.message);
+  console.error("[scheduler.js]: ❌ Weather update process failed:", error.message);
+  
+  // Log the full error for debugging
+  handleError(error, "scheduler.js", {
+   commandName: "postWeatherUpdate",
+   operation: "weather_update_process"
+  });
+  
+  throw error;
  }
 }
 
@@ -593,9 +714,166 @@ async function setupBoostingScheduler(client) {
 // ============================================================================
 
 function setupWeatherScheduler(client) {
- createCronJob("0 8 * * *", "Daily Weather Update", () =>
-  postWeatherUpdate(client)
- );
+ console.log(`[scheduler.js]: 🌤️ Setting up weather scheduler...`);
+ 
+ // Primary weather update at 8:00 AM EST
+ const primaryWeatherJob = createCronJob("0 8 * * *", "Daily Weather Update", async () => {
+  try {
+   console.log(`[scheduler.js]: 🌤️ Starting scheduled weather update at 8:00 AM EST`);
+   await postWeatherUpdate(client);
+   console.log(`[scheduler.js]: ✅ Scheduled weather update completed successfully`);
+  } catch (error) {
+   handleError(error, "scheduler.js", {
+    commandName: "Daily Weather Update",
+    scheduledTime: "8:00 AM EST"
+   });
+   console.error(`[scheduler.js]: ❌ Scheduled weather update failed:`, error.message);
+  }
+ }, "America/New_York");
+ 
+ console.log(`[scheduler.js]: ✅ Primary weather cron job created: 0 8 * * * (8:00 AM EST)`);
+
+ // Backup weather update at 8:15 AM EST in case the 8:00 AM fails
+ const backupWeatherJob = createCronJob("15 8 * * *", "Backup Weather Update", async () => {
+  try {
+   console.log(`[scheduler.js]: 🌤️ Starting backup weather update at 8:15 AM EST`);
+   
+   // Check if weather was already posted today
+   const now = new Date();
+   const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+   const today = estTime.toISOString().slice(0, 10);
+   
+   // Check if any weather was posted today by looking at recent messages in town hall channels
+   let weatherAlreadyPosted = false;
+   const townhallChannels = [
+    process.env.RUDANIA_TOWNHALL,
+    process.env.INARIKO_TOWNHALL,
+    process.env.VHINTL_TOWNHALL
+   ];
+   
+   for (const channelId of townhallChannels) {
+    if (!channelId) continue;
+    
+    try {
+     const channel = client.channels.cache.get(channelId);
+     if (channel) {
+      const messages = await channel.messages.fetch({ limit: 10 });
+      const weatherMessage = messages.find(msg => 
+       msg.author.id === client.user.id && 
+       msg.embeds.length > 0 && 
+       msg.embeds[0].title && 
+       msg.embeds[0].title.includes("Weather Forecast") &&
+       msg.createdAt.toISOString().slice(0, 10) === today
+      );
+      
+      if (weatherMessage) {
+       console.log(`[scheduler.js]: ✅ Weather already posted today in ${channel.name} at ${weatherMessage.createdAt.toLocaleString()}`);
+       weatherAlreadyPosted = true;
+       break;
+      }
+     }
+    } catch (channelError) {
+     console.error(`[scheduler.js]: Error checking channel ${channelId}:`, channelError.message);
+    }
+   }
+   
+   if (weatherAlreadyPosted) {
+    console.log(`[scheduler.js]: ✅ Weather already posted today, skipping backup update`);
+    return;
+   }
+   
+   console.log(`[scheduler.js]: ⚠️ No weather found for today, proceeding with backup update`);
+   await postWeatherUpdate(client);
+   console.log(`[scheduler.js]: ✅ Backup weather update completed successfully`);
+   
+  } catch (error) {
+   handleError(error, "scheduler.js", {
+    commandName: "Backup Weather Update",
+    scheduledTime: "8:15 AM EST"
+   });
+   console.error(`[scheduler.js]: ❌ Backup weather update failed:`, error.message);
+  }
+ }, "America/New_York");
+ 
+ console.log(`[scheduler.js]: ✅ Backup weather cron job created: 15 8 * * * (8:15 AM EST)`);
+
+ // Additional check every hour to ensure weather is posted
+ const hourlyWeatherJob = createCronJob("0 * * * *", "Hourly Weather Check", async () => {
+  try {
+   const now = new Date();
+   const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+   const currentHour = estTime.getHours();
+   
+   // Only check during business hours (8 AM - 6 PM EST)
+   if (currentHour < 8 || currentHour >= 18) {
+    return;
+   }
+   
+   // Check if weather was posted today
+   const today = estTime.toISOString().slice(0, 10);
+   let weatherPosted = false;
+   const townhallChannels = [
+    process.env.RUDANIA_TOWNHALL,
+    process.env.INARIKO_TOWNHALL,
+    process.env.VHINTL_TOWNHALL
+   ];
+   
+   for (const channelId of townhallChannels) {
+    if (!channelId) continue;
+    
+    try {
+     const channel = client.channels.cache.get(channelId);
+     if (channel) {
+      const messages = await channel.messages.fetch({ limit: 20 });
+      const weatherMessage = messages.find(msg => 
+       msg.author.id === client.user.id && 
+       msg.embeds.length > 0 && 
+       msg.embeds[0].title && 
+       msg.embeds[0].title.includes("Weather Forecast") &&
+       msg.createdAt.toISOString().slice(0, 10) === today
+      );
+      
+      if (weatherMessage) {
+       weatherPosted = true;
+       break;
+      }
+     }
+    } catch (channelError) {
+     console.error(`[scheduler.js]: Error checking channel ${channelId}:`, channelError.message);
+    }
+   }
+   
+   if (!weatherPosted) {
+    console.log(`[scheduler.js]: ⚠️ No weather posted today at ${currentHour}:00, posting now`);
+    await postWeatherUpdate(client);
+    console.log(`[scheduler.js]: ✅ Emergency weather update completed at ${currentHour}:00`);
+   }
+   
+  } catch (error) {
+   handleError(error, "scheduler.js", {
+    commandName: "Hourly Weather Check"
+   });
+   console.error(`[scheduler.js]: ❌ Hourly weather check failed:`, error.message);
+  }
+ }, "America/New_York");
+ 
+ console.log(`[scheduler.js]: ✅ Hourly weather check cron job created: 0 * * * * (every hour)`);
+ 
+ // Test cron job to verify cron is working (runs every minute for 5 minutes after startup)
+ let testCounter = 0;
+ const testWeatherJob = createCronJob("* * * * *", "Weather Cron Test", () => {
+  testCounter++;
+  console.log(`[scheduler.js]: 🧪 Weather cron test ${testCounter}/5 - cron jobs are working`);
+  
+  if (testCounter >= 5) {
+   console.log(`[scheduler.js]: ✅ Weather cron test completed - cron system is functional`);
+   testWeatherJob.stop();
+  }
+ }, "America/New_York");
+ 
+ console.log(`[scheduler.js]: ✅ Weather cron test job created: * * * * * (every minute for 5 minutes)`);
+ 
+ console.log(`[scheduler.js]: 🌤️ Weather scheduler setup completed with ${4} cron jobs`);
 }
 
 // ============================================================================
@@ -957,6 +1235,146 @@ async function handleBloodMoonEnd(client) {
 }
 
 // ============================================================================
+// ------------------- Manual Weather Functions -------------------
+// ============================================================================
+
+async function postWeatherNow(client) {
+ try {
+  console.log(`[scheduler.js]: 🌤️ Manual weather update requested`);
+  const result = await postWeatherUpdate(client);
+  console.log(`[scheduler.js]: ✅ Manual weather update completed:`, result);
+  return result;
+ } catch (error) {
+  console.error(`[scheduler.js]: ❌ Manual weather update failed:`, error.message);
+  handleError(error, "scheduler.js", {
+   commandName: "postWeatherNow",
+   operation: "manual_weather_update"
+  });
+  throw error;
+ }
+}
+
+async function postWeatherImmediately(client) {
+ try {
+  console.log(`[scheduler.js]: 🌤️ Immediate weather update requested`);
+  
+  // Force weather generation and posting
+  const result = await postWeatherUpdate(client);
+  
+  if (result.success) {
+   console.log(`[scheduler.js]: ✅ Immediate weather update completed successfully`);
+   console.log(`[scheduler.js]: 📊 Posted to ${result.postedCount} villages with ${result.errorCount} errors`);
+  } else {
+   console.log(`[scheduler.js]: ⚠️ Immediate weather update completed with issues`);
+  }
+  
+  return result;
+ } catch (error) {
+  console.error(`[scheduler.js]: ❌ Immediate weather update failed:`, error.message);
+  handleError(error, "scheduler.js", {
+   commandName: "postWeatherImmediately",
+   operation: "immediate_weather_update"
+  });
+  throw error;
+ }
+}
+
+async function checkWeatherStatus(client) {
+ try {
+  console.log(`[scheduler.js]: 🔍 Checking weather status...`);
+  
+  const now = new Date();
+  const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const today = estTime.toISOString().slice(0, 10);
+  const currentHour = estTime.getHours();
+  const currentMinute = estTime.getMinutes();
+  
+  console.log(`[scheduler.js]: 📅 Current time: ${estTime.toLocaleString()} EST`);
+  console.log(`[scheduler.js]: 📅 Today's date: ${today}`);
+  
+  // Check if weather was posted today
+  const townhallChannels = [
+   process.env.RUDANIA_TOWNHALL,
+   process.env.INARIKO_TOWNHALL,
+   process.env.VHINTL_TOWNHALL
+  ];
+  
+  let weatherPosted = false;
+  let lastWeatherTime = null;
+  let lastWeatherChannel = null;
+  
+  for (const channelId of townhallChannels) {
+   if (!channelId) continue;
+   
+   try {
+    const channel = client.channels.cache.get(channelId);
+    if (channel) {
+     const messages = await channel.messages.fetch({ limit: 50 });
+     const weatherMessage = messages.find(msg => 
+      msg.author.id === client.user.id && 
+      msg.embeds.length > 0 && 
+      msg.embeds[0].title && 
+      msg.embeds[0].title.includes("Weather Forecast") &&
+      msg.createdAt.toISOString().slice(0, 10) === today
+     );
+     
+     if (weatherMessage) {
+      weatherPosted = true;
+      lastWeatherTime = weatherMessage.createdAt;
+      lastWeatherChannel = channel.name;
+      break;
+     }
+    }
+   } catch (channelError) {
+    console.error(`[scheduler.js]: Error checking channel ${channelId}:`, channelError.message);
+   }
+  }
+  
+  if (weatherPosted) {
+   const timeSinceWeather = now - lastWeatherTime;
+   const hoursSinceWeather = Math.floor(timeSinceWeather / (1000 * 60 * 60));
+   const minutesSinceWeather = Math.floor((timeSinceWeather % (1000 * 60 * 60)) / (1000 * 60));
+   
+   console.log(`[scheduler.js]: ✅ Weather posted today in ${lastWeatherChannel} at ${lastWeatherTime.toLocaleString()}`);
+   console.log(`[scheduler.js]: ⏰ Time since weather: ${hoursSinceWeather}h ${minutesSinceWeather}m`);
+  } else {
+   console.log(`[scheduler.js]: ❌ No weather posted today`);
+   
+   // Check if it's past 8 AM and weather should have been posted
+   if (currentHour > 8 || (currentHour === 8 && currentMinute > 0)) {
+    console.log(`[scheduler.js]: ⚠️ Weather should have been posted by now (past 8:00 AM EST)`);
+   }
+  }
+  
+  // Check environment variables
+  console.log(`[scheduler.js]: 🌤️ Environment variables:`);
+  console.log(`[scheduler.js]: RUDANIA_TOWNHALL: ${process.env.RUDANIA_TOWNHALL || 'MISSING'}`);
+  console.log(`[scheduler.js]: INARIKO_TOWNHALL: ${process.env.INARIKO_TOWNHALL || 'MISSING'}`);
+  console.log(`[scheduler.js]: VHINTL_TOWNHALL: ${process.env.VHINTL_TOWNHALL || 'MISSING'}`);
+  
+  return {
+   weatherPosted,
+   lastWeatherTime,
+   lastWeatherChannel,
+   currentTime: estTime,
+   environmentVariables: {
+    RUDANIA_TOWNHALL: !!process.env.RUDANIA_TOWNHALL,
+    INARIKO_TOWNHALL: !!process.env.INARIKO_TOWNHALL,
+    VHINTL_TOWNHALL: !!process.env.VHINTL_TOWNHALL
+   }
+  };
+  
+ } catch (error) {
+  console.error(`[scheduler.js]: ❌ Weather status check failed:`, error.message);
+  handleError(error, "scheduler.js", {
+   commandName: "checkWeatherStatus",
+   operation: "weather_status_check"
+  });
+  throw error;
+ }
+}
+
+// ============================================================================
 // ------------------- Scheduler Initialization -------------------
 // ============================================================================
 
@@ -972,6 +1390,22 @@ function initializeScheduler(client) {
  (async () => {
   try {
    console.log(`[scheduler.js]: 🚀 Running startup checks...`);
+   
+   // Validate weather environment variables
+   const weatherChannels = {
+    'Rudania': process.env.RUDANIA_TOWNHALL,
+    'Inariko': process.env.INARIKO_TOWNHALL,
+    'Vhintl': process.env.VHINTL_TOWNHALL
+   };
+   
+   console.log(`[scheduler.js]: 🌤️ Weather channel configuration:`);
+   for (const [village, channelId] of Object.entries(weatherChannels)) {
+    if (channelId) {
+     console.log(`[scheduler.js]: ✅ ${village}: ${channelId}`);
+    } else {
+     console.error(`[scheduler.js]: ❌ ${village}: MISSING ENVIRONMENT VARIABLE`);
+    }
+   }
    
    const isBloodMoonActive = isBloodMoonDay();
    if (isBloodMoonActive) {
@@ -1002,6 +1436,30 @@ function initializeScheduler(client) {
    await checkAndGenerateDailyQuests();
    await checkAndPostMissedQuests(client);
    await handleQuestExpirationAtMidnight(client);
+
+   // Check if weather needs to be posted today
+   console.log(`[scheduler.js]: 🌤️ Checking if weather needs to be posted today...`);
+   try {
+    const weatherStatus = await checkWeatherStatus(client);
+    
+    if (!weatherStatus.weatherPosted) {
+     const currentHour = weatherStatus.currentTime.getHours();
+     const currentMinute = weatherStatus.currentTime.getMinutes();
+     
+     // If it's past 8 AM and no weather was posted, post it now
+     if (currentHour > 8 || (currentHour === 8 && currentMinute > 0)) {
+      console.log(`[scheduler.js]: ⚠️ No weather posted today and it's past 8 AM, posting weather now...`);
+      await postWeatherUpdate(client);
+      console.log(`[scheduler.js]: ✅ Startup weather update completed`);
+     } else {
+      console.log(`[scheduler.js]: ✅ Weather not needed yet (before 8 AM EST)`);
+     }
+    } else {
+     console.log(`[scheduler.js]: ✅ Weather already posted today`);
+    }
+   } catch (weatherError) {
+    console.error(`[scheduler.js]: ❌ Error checking weather status during startup:`, weatherError.message);
+   }
 
    console.log(`[scheduler.js]: ✅ Startup checks completed`);
   } catch (error) {
@@ -1131,6 +1589,12 @@ function initializeScheduler(client) {
   "America/New_York"
  );
 
+ // List all active cron jobs for debugging
+ setTimeout(() => {
+  console.log(`[scheduler.js]: 📋 Listing all active cron jobs after initialization...`);
+  listActiveCronJobs();
+ }, 2000);
+
  console.log("[scheduler.js]: All scheduled tasks initialized");
 }
 
@@ -1140,6 +1604,8 @@ module.exports = {
  setupBoostingScheduler,
  setupWeatherScheduler,
  postWeatherUpdate,
+ postWeatherNow,
+ postWeatherImmediately,
  executeBirthdayAnnouncements,
  handleJailRelease,
  handleDebuffExpiry,
@@ -1150,4 +1616,7 @@ module.exports = {
  generateDailyQuestsAtMidnight,
  checkAndPostMissedQuests,
  cleanupOldRuuGameSessions,
+ checkWeatherStatus,
+ listActiveCronJobs,
+ stopAllCronJobs,
 };
