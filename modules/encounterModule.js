@@ -227,35 +227,41 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 5; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️ 3 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 3; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️ 2 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 2; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 1; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 45) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 1; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 54) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 63) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫`;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 72) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨\n⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 81) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else if (adjustedRandomValue <= 90) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙2 hearts!`;
         heartsLostForMonster = 2;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙💙3 hearts!`;
         heartsLostForMonster = 3;
+        characterDamage = 0; // Fixed: No damage when attacking
     }
 
     logBattleDetails(monster.tier, character.name, monster.name, adjustedRandomValue, characterDamage, heartsLostForMonster);
@@ -337,36 +343,41 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 6; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️ 4 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 4; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️ 3 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 3; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️ 2 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 2; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 1; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 1; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 72) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨\n⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 81) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else if (adjustedRandomValue <= 90) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙2 hearts!`;
         heartsLostForMonster = 2;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙💙3 hearts!`;
         heartsLostForMonster = 3;
+        characterDamage = 0; // Fixed: No damage when attacking
     }
 
     logBattleDetails(monster.tier, character.name, monster.name, adjustedRandomValue, characterDamage, heartsLostForMonster);
@@ -448,36 +459,41 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 7; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 5; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️ 4 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 4; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️ 3 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 3; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️ 2 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 2; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 1; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 72) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨\n⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 81) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else if (adjustedRandomValue <= 90) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙2 hearts!`;
         heartsLostForMonster = 2;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙💙3 hearts!`;
         heartsLostForMonster = 3;
+        characterDamage = 0; // Fixed: No damage when attacking
     }
 
     logBattleDetails(monster.tier, character.name, monster.name, adjustedRandomValue, characterDamage, heartsLostForMonster);
@@ -559,36 +575,41 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 8; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 6; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 5; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️ 4 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 4; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️ 3 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 3; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 1; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 72) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨\n⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 81) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else if (adjustedRandomValue <= 90) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙2 hearts!`;
         heartsLostForMonster = 2;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙💙3 hearts!`;
         heartsLostForMonster = 3;
+        characterDamage = 0; // Fixed: No damage when attacking
     }
 
     logBattleDetails(monster.tier, character.name, monster.name, adjustedRandomValue, characterDamage, heartsLostForMonster);
@@ -670,36 +691,41 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️❤️ 9 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 9; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 7; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 6; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 5; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️ 4 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 4; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 1; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 72) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨\n⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 81) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else if (adjustedRandomValue <= 90) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙2 hearts!`;
         heartsLostForMonster = 2;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙💙3 hearts!`;
         heartsLostForMonster = 3;
+        characterDamage = 0; // Fixed: No damage when attacking
     }
 
     logBattleDetails(monster.tier, character.name, monster.name, adjustedRandomValue, characterDamage, heartsLostForMonster);
@@ -781,36 +807,41 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
 
     if (adjustedRandomValue <= 9) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️ 10 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 10; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 18) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️❤️ 8 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 8; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 27) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️❤️ 7 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 7; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 36) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️❤️ 6 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 6; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 45) {
         outcome = `💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️❤️❤️❤️❤️ 5 hearts!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 5; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 54) {
         outcome = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫\n💥💀 The monster ${monster.name} attacks! ${character.name} loses ❤️ 1 heart!`;
-        characterDamage = calculateDamage(monster, character);
+        characterDamage = 1; // Fixed: Use actual damage from flavor text
     } else if (adjustedRandomValue <= 63) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨`;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 72) {
         outcome = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨\n⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when dodging
     } else if (adjustedRandomValue <= 81) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙1 heart!`;
         heartsLostForMonster = 1;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else if (adjustedRandomValue <= 90) {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙2 hearts!`;
         heartsLostForMonster = 2;
+        characterDamage = 0; // Fixed: No damage when attacking
     } else {
         outcome = `⚔️🏹 ${character.name} attacks! The monster loses 💙💙💙3 hearts!`;
         heartsLostForMonster = 3;
+        characterDamage = 0; // Fixed: No damage when attacking
     }
 
     logBattleDetails(monster.tier, character.name, monster.name, adjustedRandomValue, characterDamage, heartsLostForMonster);
