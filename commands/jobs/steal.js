@@ -1811,7 +1811,14 @@ module.exports = {
                 });
                 
                 // Add victims list
-                embed.addFields({ name: '__👥 Victims__', value: `> ${victimsList}`, inline: false });
+                const victimsFormatted = sortedVictims.length > 0 
+                    ? sortedVictims.map(v => {
+                        const npcIndicator = v.isNPC ? ' (NPC)' : '';
+                        return `> **${v.characterName}**${npcIndicator}: ${v.count} time${v.count > 1 ? 's' : ''}`;
+                    }).join('\n')
+                    : '> No successful steals yet';
+                
+                embed.addFields({ name: '__👥 Victims__', value: victimsFormatted, inline: false });
                 
                 await interaction.editReply({ embeds: [embed] });
                 return;
