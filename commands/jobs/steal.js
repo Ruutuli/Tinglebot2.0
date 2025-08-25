@@ -1799,7 +1799,7 @@ module.exports = {
                     );
                 
                 // Add jail status if applicable
-                if (jailStatus) {
+                if (jailStatus && jailStatus.trim() !== '') {
                     embed.addFields({ name: '__⛔ Jail Status__', value: `> ${jailStatus}`, inline: false });
                 }
                 
