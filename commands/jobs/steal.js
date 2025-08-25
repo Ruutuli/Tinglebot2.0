@@ -1713,7 +1713,12 @@ module.exports = {
                 const jailStatus = await checkAndUpdateJailStatus(character);
                 
                 if (!jailStatus.isInJail) {
-                    await interaction.editReply({ content: `✅ **${character.name}** is not in jail.` });
+                    const notInJailEmbed = createBaseEmbed('✅ Not in Jail', '#00ff00')
+                        .setDescription(`**${character.name}** is not currently in jail.`)
+                        .setThumbnail(character.icon)
+                        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+                    
+                    await interaction.editReply({ embeds: [notInJailEmbed] });
                     return;
                 }
 
