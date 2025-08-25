@@ -461,7 +461,7 @@ module.exports = {
         await interaction.editReply({
           embeds: [{
             color: 0x008B8B,
-            description: `*${character.name} looks up at the sky...*\n\n**No Special Weather Detected**\nThere is no special weather in ${currentVillage} right now.\n\n✨ **Special weather is required to use this command.**`,
+            description: `*${character.name} looks up at the sky...*\n\n**No Special Weather Today!**\nThere is no special weather in ${currentVillage} right now.\n\n⏰ **Wait until this village has special weather to use this command!**\n\nSpecial weather events are rare and unpredictable - keep an eye out for the next one!`,
             image: {
               url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
@@ -474,12 +474,13 @@ module.exports = {
         return;
       }
 
-      if (!weather.special.label) {
+      // Safety check for malformed special weather data (only if we have special weather)
+      if (weather.special && !weather.special.label) {
         console.error(`[specialweather.js]: ❌ Special weather object found but no label for ${currentVillage}`);
         await interaction.editReply({
           embeds: [{
             color: 0x008B8B,
-            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe special weather data for ${currentVillage} appears to be incomplete.\n\nPlease try again in a few moments.`,
+            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe special weather data for ${currentVillage} appears to be malformed.\n\nPlease try again in a few moments.`,
             image: {
               url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
