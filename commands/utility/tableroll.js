@@ -9,7 +9,7 @@ const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchItemByName } = r
 const TableRoll = require('../../models/TableRollModel');
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 const { safeAppendDataToSheet, extractSpreadsheetId, isValidGoogleSheetsUrl, authorizeSheets } = require('../../utils/googleSheetsUtils');
-const { DEFAULT_IMAGE_URL } = require('../../embeds/embeds');
+const { DEFAULT_IMAGE_URL } = require('../../embeds/embeds.js');
 const { 
   validateTableName, 
   parseCSVData

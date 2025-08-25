@@ -17,7 +17,7 @@ const { MessageFlags } = require('discord.js');
 const Character = require('../models/CharacterModel');
 const { createCharacterInventory, getOrCreateUser } = require('../database/db');
 const { isUniqueCharacterName, isValidGoogleSheetsUrl } = require('../utils/validation');
-const { createCharacterEmbed, createSetupInstructionsEmbed } = require('../embeds/embeds');
+const { createCharacterEmbed, createSetupInstructionsEmbed } = require('../embeds/embeds.js');
 const bucket = require('../config/gcsService');
 
 // ============================================================================

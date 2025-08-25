@@ -246,7 +246,7 @@ module.exports = {
 
       // Check if the character is debuffed.
       if (character.debuff?.active) {
-        const { createGatherDebuffEmbed } = require('../../embeds/embeds');
+        const { createGatherDebuffEmbed } = require('../../embeds/embeds.js');
         const debuffEmbed = createGatherDebuffEmbed(character);
         
         await safeReply({

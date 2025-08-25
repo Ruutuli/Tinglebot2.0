@@ -38,7 +38,7 @@ const {
   createCharacterEmbed,
   createCharacterGearEmbed,
   createArtSubmissionEmbed
-} = require('../embeds/embeds');
+} = require('../embeds/embeds.js');
 
 // ------------------- Modules -------------------
 const { getGeneralJobsPage, getJobPerk } = require('../modules/jobsModule');

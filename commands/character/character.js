@@ -88,7 +88,7 @@ const {
  createVendorEmbed,
  createCharacterGearEmbed,
  getCommonEmbedSettings,
-} = require("../../embeds/embeds");
+} = require("../../embeds/embeds.js");
 const {
  getMountEmoji,
  getMountThumbnail,

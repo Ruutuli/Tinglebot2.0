@@ -9,7 +9,7 @@
 const { EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
-const { createArtSubmissionEmbed } = require('../embeds/embeds');
+const { createArtSubmissionEmbed } = require('../embeds/embeds.js');
 // ============================================================================
 // Database Services
 // ============================================================================

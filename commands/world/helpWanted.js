@@ -163,7 +163,7 @@ function validateCharacterEligibility(character) {
  * @returns {{canProceed: boolean, embed?: EmbedBuilder}}
  */
 function validateCharacterLocation(character, quest) {
-  const { createWrongVillageEmbed } = require('../../embeds/embeds');
+  const { createWrongVillageEmbed } = require('../../embeds/embeds.js');
   
   if (quest.type === 'escort') {
     const requiredLocation = quest.requirements.location?.toLowerCase();

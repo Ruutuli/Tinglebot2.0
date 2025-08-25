@@ -135,9 +135,9 @@ const {
   createVendorEmbed,
   getCommonEmbedSettings,
   createDailyRollsResetEmbed
-} = require('../../embeds/embeds');
+} = require('../../embeds/embeds.js');
 
-const { createMountEncounterEmbed } = require('../../embeds/embeds');
+const { createMountEncounterEmbed } = require('../../embeds/embeds.js');
 const { generateWeatherEmbed } = require('../../services/weatherService');
 const WeatherService = require('../../services/weatherService');
 

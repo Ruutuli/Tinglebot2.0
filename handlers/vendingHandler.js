@@ -74,7 +74,7 @@ const {
   capitalizeFirstLetter
  } = require("../modules/formattingModule");
 
- const { createVendingSetupInstructionsEmbed } = require("../embeds/embeds");
+ const { createVendingSetupInstructionsEmbed } = require("../embeds/embeds.js");
 
 // ------------------- Vending Model Helper -------------------
 async function getVendingModel(characterName) {
