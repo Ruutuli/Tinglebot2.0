@@ -24,11 +24,25 @@ async function enforceJail(interaction, character) {
     // The stored time is already in EST midnight
     const estReleaseDate = new Date(releaseTime);
     
+    // Calculate the date when the character was jailed (3 days before release)
+    const jailedDate = new Date(releaseTime - (3 * 24 * 60 * 60 * 1000));
+    
     const jailEmbed = {
         title: '⛔ In Jail!',
         description: `**${character.name}** is currently serving time in jail and cannot perform this action.`,
         color: 0xFF0000,
         fields: [
+            {
+                name: '📅 Jailed Date',
+                value: jailedDate.toLocaleDateString('en-US', { 
+                    weekday: 'long',
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    timeZone: 'America/New_York'
+                }),
+                inline: false
+            },
             {
                 name: '📅 Release Date',
                 value: `<t:${Math.floor(releaseTime / 1000)}:F>`,

@@ -42,6 +42,10 @@ const stealStatsSchema = new mongoose.Schema({
         count: {
             type: Number,
             default: 1
+        },
+        isNPC: {
+            type: Boolean,
+            default: false
         }
     }]
 }, {

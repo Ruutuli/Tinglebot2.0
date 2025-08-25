@@ -820,7 +820,7 @@ function cleanupExpiredProtections() {
 }
 
 // ------------------- Statistics Functions -------------------
-async function updateStealStats(characterId, success, itemRarity, victimCharacter = null) {
+async function updateStealStats(characterId, success, itemRarity, victimCharacter = null, isNPC = false, npcName = null) {
     try {
         let stats = await StealStats.findOne({ characterId });
         
@@ -845,9 +845,10 @@ async function updateStealStats(characterId, success, itemRarity, victimCharacte
             stats.itemsByRarity[itemRarity]++;
             
             // Update victim tracking if this was a successful steal
-            if (victimCharacter) {
+            if (victimCharacter && !isNPC) {
+                // Player character victim
                 const victimIndex = stats.victims.findIndex(v => 
-                    v.characterId.toString() === victimCharacter._id.toString()
+                    v.characterId && v.characterId.toString() === victimCharacter._id.toString()
                 );
                 
                 if (victimIndex === -1) {
@@ -855,10 +856,29 @@ async function updateStealStats(characterId, success, itemRarity, victimCharacte
                     stats.victims.push({
                         characterId: victimCharacter._id,
                         characterName: victimCharacter.name,
-                        count: 1
+                        count: 1,
+                        isNPC: false
                     });
                 } else {
                     // Increment existing victim count
+                    stats.victims[victimIndex].count++;
+                }
+            } else if (isNPC && npcName) {
+                // NPC victim
+                const victimIndex = stats.victims.findIndex(v => 
+                    v.isNPC && v.characterName === npcName
+                );
+                
+                if (victimIndex === -1) {
+                    // Add new NPC victim
+                    stats.victims.push({
+                        characterId: null,
+                        characterName: npcName,
+                        count: 1,
+                        isNPC: true
+                    });
+                } else {
+                    // Increment existing NPC victim count
                     stats.victims[victimIndex].count++;
                 }
             }
@@ -874,18 +894,21 @@ async function updateStealStats(characterId, success, itemRarity, victimCharacte
 
 async function getStealStats(characterId) {
     try {
-        const stats = await StealStats.findOne({ characterId }) || {
-            totalAttempts: 0,
-            successfulSteals: 0,
-            failedSteals: 0,
-            successRate: 0,
-            itemsByRarity: {
-                common: 0,
-                uncommon: 0,
-                rare: 0
-            },
-            victims: []
-        };
+        const stats = await StealStats.findOne({ characterId });
+        if (!stats) {
+            return {
+                totalAttempts: 0,
+                successfulSteals: 0,
+                failedSteals: 0,
+                successRate: 0,
+                itemsByRarity: {
+                    common: 0,
+                    uncommon: 0,
+                    rare: 0
+                },
+                victims: []
+            };
+        }
         
         const successRate = stats.totalAttempts > 0 
             ? ((stats.successfulSteals / stats.totalAttempts) * 100).toFixed(1)
@@ -1029,7 +1052,14 @@ async function checkAndUpdateJailStatus(character) {
         return { isInJail: false, timeLeft: 0 };
     }
     
-    return { isInJail: true, timeLeft };
+    // Calculate the date when the character was jailed (3 days before release)
+    const jailedDate = new Date(releaseTime - (3 * 24 * 60 * 60 * 1000));
+    
+    return { 
+        isInJail: true, 
+        timeLeft,
+        jailedDate: jailedDate
+    };
 }
 
 async function sendToJail(character) {
@@ -1243,7 +1273,7 @@ async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, inte
 // Centralized success handling to eliminate duplication
 async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, isNPC, interaction, voucherCheck, usedFallback, targetRarity, selectedTier) {
     incrementStreak(interaction.user.id);
-    await updateStealStats(thiefCharacter._id, true, selectedItem.tier, isNPC ? null : targetCharacter);
+    await updateStealStats(thiefCharacter._id, true, selectedItem.tier, isNPC ? null : targetCharacter, isNPC, isNPC ? targetCharacter : null);
     
     // Check for blight infection
     const blightResult = await checkBlightInfection(thiefCharacter, targetCharacter, isNPC, interaction);
@@ -1695,6 +1725,7 @@ module.exports = {
                     .addFields(
                         { name: '⏰ Time Remaining', value: `<t:${Math.floor((Date.now() + jailStatus.timeLeft) / 1000)}:R>`, inline: false },
                         { name: '📅 Release Date', value: `${estReleaseDate.toLocaleDateString('en-US', { timeZone: 'America/New_York' })} (Midnight EST)`, inline: false },
+                        { name: '📅 Jailed Date', value: `${jailStatus.jailedDate.toLocaleDateString('en-US', { timeZone: 'America/New_York' })}`, inline: false },
                         { name: '📅 Formatted Time', value: formatJailTimeLeftDaysHours(jailStatus.timeLeft), inline: false }
                     )
                     .setThumbnail(character.icon)
@@ -1718,30 +1749,71 @@ module.exports = {
                 // Sort victims by count
                 const sortedVictims = stats.victims.sort((a, b) => b.count - a.count);
                 const victimsList = sortedVictims.length > 0 
-                    ? sortedVictims.map(v => `**${v.characterName}**: ${v.count} time${v.count > 1 ? 's' : ''}`).join('\n')
+                    ? sortedVictims.map(v => {
+                        const npcIndicator = v.isNPC ? ' (NPC)' : '';
+                        return `**${v.characterName}**${npcIndicator}: ${v.count} time${v.count > 1 ? 's' : ''}`;
+                    }).join('\n')
                     : 'No successful steals yet';
                 
                 // Check protection status
                 const isCharacterProtected = await isProtected(character._id);
                 const protectionTimeLeft = await getProtectionTimeLeft(character._id);
-                const protectionStatus = isCharacterProtected 
+                const protectionStatus = isCharacterProtected && protectionTimeLeft > 0
                     ? `🛡️ Protected (${Math.ceil(protectionTimeLeft / (60 * 1000))}m remaining)`
                     : '✅ Not protected';
                 
+                // Check jail status
+                let jailStatus = '';
+                if (character.inJail && character.jailReleaseTime) {
+                    const now = new Date();
+                    const releaseTime = new Date(character.jailReleaseTime);
+                    const timeUntilRelease = releaseTime.getTime() - now.getTime();
+                    
+                    if (timeUntilRelease > 0) {
+                        const daysUntilRelease = Math.ceil(timeUntilRelease / (24 * 60 * 60 * 1000));
+                        const jailedDate = releaseTime.toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric',
+                            timeZone: 'America/New_York'
+                        });
+                        jailStatus = `⛔ **In Jail** - Released on ${jailedDate} (${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''} remaining)`;
+                    } else {
+                        // Jail time is up, character should be released
+                        character.inJail = false;
+                        character.jailReleaseTime = null;
+                        await character.save();
+                    }
+                }
+                
                 const embed = createBaseEmbed('📊 Steal Statistics')
                     .setDescription(`Statistics for **${character.name}** the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`)
+                    .setThumbnail(character.icon)
+                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
                     .addFields(
                         { name: '🎯 Total Attempts', value: stats.totalAttempts.toString(), inline: true },
                         { name: '✅ Successful Steals', value: stats.successfulSteals.toString(), inline: true },
                         { name: '❌ Failed Steals', value: stats.failedSteals.toString(), inline: true },
                         { name: '📈 Success Rate', value: `${stats.successRate}%`, inline: true },
-                        { name: '🛡️ Protection Status', value: protectionStatus, inline: true },
-                        { name: '✨ Items by Rarity', value: 
-                            `Common: ${stats.itemsByRarity.common}\n` +
-                            `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
-                            `Rare: ${stats.itemsByRarity.rare}`, inline: false },
-                        { name: '👥 Victims', value: victimsList, inline: false }
+                        { name: '🛡️ Protection Status', value: protectionStatus, inline: true }
                     );
+                
+                // Add jail status if applicable
+                if (jailStatus) {
+                    embed.addFields({ name: '⛔ Jail Status', value: jailStatus, inline: false });
+                }
+                
+                // Add items by rarity
+                embed.addFields({ 
+                    name: '✨ Items by Rarity', 
+                    value: `Common: ${stats.itemsByRarity.common}\n` +
+                           `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
+                           `Rare: ${stats.itemsByRarity.rare}`, 
+                    inline: false 
+                });
+                
+                // Add victims list
+                embed.addFields({ name: '👥 Victims', value: victimsList, inline: false });
                 
                 await interaction.editReply({ embeds: [embed] });
                 return;
