@@ -27,7 +27,7 @@ const {
   pathEmojis,
   villageEmojis,
   DEFAULT_IMAGE_URL
-} = require('../embeds/embeds');
+} = require('../embeds/embeds.js');
 
 // ------------------- Modules -------------------
 const {

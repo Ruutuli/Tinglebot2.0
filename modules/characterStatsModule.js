@@ -15,7 +15,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
-const { createSimpleCharacterEmbed } = require('../embeds/embeds');
+const { createSimpleCharacterEmbed } = require('../embeds/embeds.js');
 
 
 // ============================================================================

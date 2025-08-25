@@ -90,7 +90,7 @@ const initializeReactionHandler = (client) => {
       if (reaction.emoji.name === '❌') {
         // Try to fetch healing request by message ID
         const { retrieveHealingRequestFromStorage, saveHealingRequestToStorage } = require('../utils/storage');
-        const { createHealEmbed } = require('../embeds/embeds');
+        const { createHealEmbed } = require('../embeds/embeds.js');
         const healingRequest = await retrieveHealingRequestFromStorage(reaction.message.id);
         if (healingRequest && healingRequest.status === 'pending') {
           healingRequest.status = 'cancelled';

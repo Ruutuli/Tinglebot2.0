@@ -35,7 +35,7 @@ const { enforceJail } = require('../../utils/jailCheck');
 
 
 // ------------------- Embed Imports -------------------
-const { createCraftingEmbed } = require('../../embeds/embeds');
+const { createCraftingEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- External API Integrations -------------------
 const { appendSheetData, authorizeSheets } = require('../../utils/googleSheetsUtils');

@@ -20,7 +20,7 @@ const {
   createBoostRequestEmbed,
   updateBoostRequestEmbed,
   createBoostAppliedEmbed,
-} = require('../../embeds/embeds');
+} = require('../../embeds/embeds.js');
 
 // ============================================================================
 // ------------------- Constants and Configuration -------------------

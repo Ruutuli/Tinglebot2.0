@@ -195,7 +195,7 @@ module.exports = {
         await interaction.editReply({ embeds: [embed] });
         
         // Send immediate victory embed before loot processing
-        const { createRaidVictoryEmbed } = require('../../embeds/embeds');
+        const { createRaidVictoryEmbed } = require('../../embeds/embeds.js');
         const victoryEmbed = createRaidVictoryEmbed(
           turnResult.raidData.monster.name, 
           turnResult.raidData.monster.image
