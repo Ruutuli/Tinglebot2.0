@@ -284,33 +284,113 @@ module.exports = {
           await interaction.editReply({ embeds: [embed] });
         } catch (error) {
           console.error('[blight.js]: ❌ Error fetching blighted roster:', error);
-          await interaction.editReply({
-            content: '❌ An error occurred while fetching the blighted roster.',
-            ephemeral: true
-          });
+          
+          let rosterErrorMessage = '❌ **Blighted Roster Error**\n\n';
+          rosterErrorMessage += '**Error Type**: Roster Fetch Error\n';
+          rosterErrorMessage += '**What Happened**: The system couldn\'t retrieve the blighted characters list.\n';
+          rosterErrorMessage += '**How to Fix**: Please try again in a few moments.\n\n';
+          
+          rosterErrorMessage += '**Troubleshooting Steps**:\n';
+          rosterErrorMessage += '1. Wait a few moments and try again\n';
+          rosterErrorMessage += '2. Check if the bot is responding in other channels\n';
+          rosterErrorMessage += '3. Contact a moderator if the issue persists\n\n';
+          
+          rosterErrorMessage += '**Technical Details** (for moderators):\n';
+          rosterErrorMessage += `- Error: ${error.message || 'Unknown error'}\n`;
+          rosterErrorMessage += `- User: ${interaction.user.tag} (${interaction.user.id})\n`;
+          rosterErrorMessage += `- Timestamp: ${new Date().toISOString()}`;
+          
+          try {
+            await interaction.editReply({ content: rosterErrorMessage, ephemeral: true });
+          } catch (replyError) {
+            console.error('[blight.js]: Failed to send roster error reply:', replyError);
+            try {
+              await interaction.followUp({ 
+                content: '❌ An error occurred while fetching the blighted roster. Please try again later.', 
+                ephemeral: true 
+              });
+            } catch (followUpError) {
+              console.error('[blight.js]: Failed to send roster error follow-up:', followUpError);
+            }
+          }
         }
       }
     } catch (error) {
       console.error(`[blight.js]: Error executing blight command:`, error);
       
       // Create a detailed error message
-      let errorMessage = '❌ An error occurred while processing your request.\n\n';
+      let errorMessage = '❌ **Blight Command Error**\n\n';
       
+      // Add specific error details based on error type
       if (error.code === 'InteractionAlreadyReplied') {
         errorMessage += '**Error Type**: Interaction Already Replied\n';
         errorMessage += '**What Happened**: The system tried to respond to your command multiple times.\n';
-        errorMessage += '**How to Fix**: Please try your command again. If the issue persists, wait a few moments before trying again.';
+        errorMessage += '**How to Fix**: Please try your command again. If the issue persists, wait a few moments before trying again.\n';
+      } else if (error.name === 'ValidationError') {
+        errorMessage += '**Error Type**: Data Validation Error\n';
+        errorMessage += '**What Happened**: The system couldn\'t validate your command data.\n';
+        errorMessage += '**How to Fix**: Please check your command parameters and try again.\n';
+      } else if (error.name === 'CastError') {
+        errorMessage += '**Error Type**: Data Type Error\n';
+        errorMessage += '**What Happened**: The system encountered an issue with data formatting.\n';
+        errorMessage += '**How to Fix**: Please ensure your command parameters are correct.\n';
+      } else if (error.message && error.message.includes('timeout')) {
+        errorMessage += '**Error Type**: Database Timeout\n';
+        errorMessage += '**What Happened**: The system took too long to process your request.\n';
+        errorMessage += '**How to Fix**: Please try again in a few moments.\n';
+      } else if (error.message && error.message.includes('connection')) {
+        errorMessage += '**Error Type**: Database Connection Error\n';
+        errorMessage += '**What Happened**: The system couldn\'t connect to the database.\n';
+        errorMessage += '**How to Fix**: Please try again later.\n';
       } else {
         errorMessage += '**Error Type**: Unexpected Error\n';
         errorMessage += '**What Happened**: Something went wrong while processing your request.\n';
-        errorMessage += '**How to Fix**: Please try your command again. If the issue persists, contact a moderator.';
+        errorMessage += '**How to Fix**: Please try again. If the issue persists, contact a moderator.\n';
       }
+      
+      // Add command details for debugging
+      errorMessage += '\n**Command Details**:\n';
+      errorMessage += `- Subcommand: ${interaction.options.getSubcommand() || 'None'}\n`;
+      errorMessage += `- User: ${interaction.user.tag} (${interaction.user.id})\n`;
+      errorMessage += `- Channel: ${interaction.channel?.name || 'Unknown'}\n`;
+      
+      // Add troubleshooting steps
+      errorMessage += '\n**Troubleshooting Steps**:\n';
+      errorMessage += '1. Check your command parameters\n';
+      errorMessage += '2. Ensure you have the required permissions\n';
+      errorMessage += '3. Try the command again in a few moments\n';
+      errorMessage += '4. Check if the bot is responding in other channels\n';
+      
+      // Add support information
+      errorMessage += '\n**Need Help?**\n';
+      errorMessage += '- Contact a moderator if the issue persists\n';
+      errorMessage += '- Check the bot status in the server\n';
+      errorMessage += '- Try using a different subcommand\n';
+      
+      // Add technical details for mods
+      errorMessage += '\n**Technical Details** (for moderators):\n';
+      errorMessage += `- Error: ${error.message || 'Unknown error'}\n`;
+      errorMessage += `- Command: ${interaction.commandName || 'blight'}\n`;
+      errorMessage += `- Timestamp: ${new Date().toISOString()}`;
 
       // Try to edit the reply if it exists, otherwise send a new reply
       try {
         await interaction.editReply({ content: errorMessage, ephemeral: true });
       } catch (editError) {
-        await interaction.reply({ content: errorMessage, ephemeral: true });
+        try {
+          await interaction.reply({ content: errorMessage, ephemeral: true });
+        } catch (replyError) {
+          console.error('[blight.js]: Failed to send error message:', replyError);
+          // Final fallback - try to follow up
+          try {
+            await interaction.followUp({ 
+              content: '❌ An error occurred while processing your request. Please contact a moderator.', 
+              ephemeral: true 
+            });
+          } catch (followUpError) {
+            console.error('[blight.js]: Failed to send follow-up error message:', followUpError);
+          }
+        }
       }
     }
   }

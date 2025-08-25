@@ -21,7 +21,7 @@ const {
   fetchModCharacterById,
   fetchItemByName,
   getCharacterInventoryCollection,
-  getTokenBalance,
+  getUserTokenData,
   updateTokenBalance,
   dbFunctions
 } = require('../database/db');
@@ -481,10 +481,71 @@ async function healBlight(interaction, characterName, healerName) {
     });
     console.error('[blightHandler]: Error healing blight:', error);
     
-    await interaction.editReply({ 
-      content: '❌ An error occurred while processing your request. Please try again or contact support if the issue persists.', 
-      ephemeral: true 
-    });
+    // Create detailed error message
+    let errorMessage = '❌ **Blight Healing Error**\n\n';
+    
+    // Add specific error details based on error type
+    if (error.name === 'ValidationError') {
+      errorMessage += '**Error Type**: Data Validation Error\n';
+      errorMessage += '**What Happened**: The system couldn\'t validate your healing request.\n';
+      errorMessage += '**How to Fix**: Please check your character name and healer selection.\n';
+    } else if (error.name === 'CastError') {
+      errorMessage += '**Error Type**: Data Type Error\n';
+      errorMessage += '**What Happened**: The system encountered an issue with data formatting.\n';
+      errorMessage += '**How to Fix**: Please ensure your character name is correct.\n';
+    } else if (error.message && error.message.includes('timeout')) {
+      errorMessage += '**Error Type**: Database Timeout\n';
+      errorMessage += '**What Happened**: The system took too long to process your request.\n';
+      errorMessage += '**How to Fix**: Please try again in a few moments.\n';
+    } else if (error.message && error.message.includes('connection')) {
+      errorMessage += '**Error Type**: Database Connection Error\n';
+      errorMessage += '**What Happened**: The system couldn\'t connect to the database.\n';
+      errorMessage += '**How to Fix**: Please try again later.\n';
+    } else {
+      errorMessage += '**Error Type**: Unexpected Error\n';
+      errorMessage += '**What Happened**: Something went wrong while processing your healing request.\n';
+      errorMessage += '**How to Fix**: Please try again. If the issue persists, contact a moderator.\n';
+    }
+    
+    // Add request details for debugging
+    errorMessage += '\n**Request Details**:\n';
+    errorMessage += `- Character: ${characterName || 'Not provided'}\n`;
+    errorMessage += `- Healer: ${healerName || 'Not provided'}\n`;
+    errorMessage += `- User: ${interaction.user.tag} (${interaction.user.id})\n`;
+    
+    // Add troubleshooting steps
+    errorMessage += '\n**Troubleshooting Steps**:\n';
+    errorMessage += '1. Verify your character name is correct\n';
+    errorMessage += '2. Ensure the healer is available\n';
+    errorMessage += '3. Check if your character is actually blighted\n';
+    errorMessage += '4. Try the command again in a few moments\n';
+    
+    // Add support information
+    errorMessage += '\n**Need Help?**\n';
+    errorMessage += '- Use </blight status:1306176789634355241> to check your character\'s blight status\n';
+    errorMessage += '- Contact a moderator if the issue persists\n';
+    errorMessage += '- Check the bot status in the server\n';
+    
+    // Add technical details for mods
+    errorMessage += '\n**Technical Details** (for moderators):\n';
+    errorMessage += `- Error: ${error.message || 'Unknown error'}\n`;
+    errorMessage += `- Command: ${interaction.commandName || 'heal'}\n`;
+    errorMessage += `- Timestamp: ${new Date().toISOString()}`;
+    
+    try {
+      await interaction.editReply({ content: errorMessage, ephemeral: true });
+    } catch (replyError) {
+      console.error('[blightHandler]: Failed to send detailed error reply:', replyError);
+      // Fallback to simple error message
+      try {
+        await interaction.followUp({ 
+          content: '❌ An error occurred while processing your healing request. Please contact a moderator.', 
+          ephemeral: true 
+        });
+      } catch (followUpError) {
+        console.error('[blightHandler]: Failed to send follow-up error message:', followUpError);
+      }
+    }
   }
 }
 
@@ -561,11 +622,14 @@ async function validateCharacterOwnership(interaction, characterName) {
     
     const errorEmbed = new EmbedBuilder()
       .setColor('#FF0000')
-      .setTitle('❌ System Error')
+      .setTitle('❌ **System Error**')
       .setDescription('An error occurred while validating character ownership.')
       .addFields(
-        { name: '🔧 Technical Details', value: 'The system encountered an unexpected error while processing your request.' },
-        { name: '💡 Suggestion', value: 'Please try again later or contact a moderator if the issue persists.' }
+        { name: '🔧 **Error Type**', value: 'Character Validation System Error' },
+        { name: '📝 **What Happened**', value: 'The system encountered an unexpected error while processing your request.' },
+        { name: '💡 **How to Fix**', value: 'Please try again later or contact a moderator if the issue persists.' },
+        { name: '🆘 **Need Help?**', value: 'Contact a moderator with the technical details below.' },
+        { name: '🔍 **Technical Details** (for moderators)', value: `Error: ${error.message || 'Unknown error'}\nUser: ${interaction.user.tag} (${interaction.user.id})\nCharacter: ${characterName}\nTimestamp: ${new Date().toISOString()}` }
       )
       .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
       .setFooter({ text: 'Character Validation' })
@@ -1050,9 +1114,9 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     // ========================================================================
     if (tokens) {
       const userId = interaction.user.id;
-      const userData = await getTokenBalance(userId);
-      const currentTokenBalance = userData.tokens;
-      const tokenTrackerLink = userData.tokenTracker;
+      const userData = await getUserTokenData(userId);
+      const currentTokenBalance = userData.tokens || 0;
+      const tokenTrackerLink = userData.tokenTracker || '';
 
       if (currentTokenBalance <= 0) {
         await interaction.editReply({
@@ -1063,28 +1127,42 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       }
 
       // Log token forfeiture
-      try {
-        const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
-        const auth = await authorizeSheets();
-        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-        const tokenRow = [[
-          'Blight Healing',
-          interactionUrl,
-          'blight healing',
-          'spent',
-          `-${currentTokenBalance}`
-        ]];
-        await safeAppendDataToSheet(tokenTrackerLink, user, 'loggedTracker!B7:F', tokenRow, undefined, { skipValidation: true });
-      } catch (sheetError) {
-        handleError(sheetError, 'blightHandler.js', {
-          operation: 'logTokenForfeiture',
-          commandName: interaction.commandName || 'submit',
-          userTag: interaction.user.tag,
-          userId: interaction.user.id,
-          submissionId
+      if (tokenTrackerLink && tokenTrackerLink.trim()) {
+        try {
+          const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
+          const auth = await authorizeSheets();
+          const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+          const tokenRow = [[
+            'Blight Healing',
+            interactionUrl,
+            'blight healing',
+            'spent',
+            `-${currentTokenBalance}`
+          ]];
+          await safeAppendDataToSheet(tokenTrackerLink, { discordId: userId }, 'loggedTracker!B7:F', tokenRow, undefined, { skipValidation: true });
+        } catch (sheetError) {
+          handleError(sheetError, 'blightHandler.js', {
+            operation: 'logTokenForfeiture',
+            commandName: interaction.commandName || 'submit',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            submissionId
+          });
+          console.error('[blightHandler]: Error logging token forfeiture', sheetError);
+        }
+      } else {
+        console.log(`[blightHandler]: Skipping token tracker logging for user ${userId} - no token tracker link configured`);
+      }
+
+      // Validate token balance before updating
+      if (isNaN(currentTokenBalance) || currentTokenBalance <= 0) {
+        console.error(`[blightHandler]: Invalid token balance: ${currentTokenBalance}`);
+        await interaction.editReply({
+          content: '❌ Invalid token balance. Please try again later.',
+          ephemeral: true
         });
-        console.error('[blightHandler]: Error logging token forfeiture', sheetError);
+        return;
       }
 
       await updateTokenBalance(userId, -currentTokenBalance);
@@ -1304,7 +1382,78 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       tokens
     });
     console.error('[blightHandler]: Error submitting healing task:', error);
-    await interaction.editReply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
+    
+    // Create detailed error message with specific guidance
+    let errorMessage = '❌ **Blight Submission Error**\n\n';
+    
+    // Add specific error details based on error type
+    if (error.name === 'ValidationError') {
+      errorMessage += '**Error Type**: Data Validation Error\n';
+      errorMessage += '**What Happened**: The system couldn\'t validate your submission data.\n';
+      errorMessage += '**How to Fix**: Please check your submission ID and try again.\n';
+    } else if (error.name === 'CastError') {
+      errorMessage += '**Error Type**: Data Type Error\n';
+      errorMessage += '**What Happened**: The system encountered an issue with data formatting.\n';
+      errorMessage += '**How to Fix**: Please ensure your submission ID is correct.\n';
+    } else if (error.code === 11000) {
+      errorMessage += '**Error Type**: Duplicate Submission\n';
+      errorMessage += '**What Happened**: This submission has already been processed.\n';
+      errorMessage += '**How to Fix**: Check if you\'ve already submitted this task.\n';
+    } else if (error.message && error.message.includes('timeout')) {
+      errorMessage += '**Error Type**: Database Timeout\n';
+      errorMessage += '**What Happened**: The system took too long to process your request.\n';
+      errorMessage += '**How to Fix**: Please try again in a few moments.\n';
+    } else if (error.message && error.message.includes('connection')) {
+      errorMessage += '**Error Type**: Database Connection Error\n';
+      errorMessage += '**What Happened**: The system couldn\'t connect to the database.\n';
+      errorMessage += '**How to Fix**: Please try again later.\n';
+    } else {
+      errorMessage += '**Error Type**: Unexpected Error\n';
+      errorMessage += '**What Happened**: Something went wrong while processing your submission.\n';
+      errorMessage += '**How to Fix**: Please try again. If the issue persists, contact a moderator.\n';
+    }
+    
+    // Add submission details for debugging
+    errorMessage += '\n**Submission Details**:\n';
+    errorMessage += `- Submission ID: \`${submissionId}\`\n`;
+    errorMessage += `- Item: ${item ? `\`${item}\`` : 'Not provided'}\n`;
+    errorMessage += `- Link: ${link ? 'Provided' : 'Not provided'}\n`;
+    errorMessage += `- Tokens: ${tokens ? 'Yes' : 'No'}\n`;
+    
+    // Add troubleshooting steps
+    errorMessage += '\n**Troubleshooting Steps**:\n';
+    errorMessage += '1. Verify your submission ID is correct\n';
+    errorMessage += '2. Check if the submission hasn\'t expired\n';
+    errorMessage += '3. Ensure you\'re using the correct command format\n';
+    errorMessage += '4. Try the command again in a few moments\n';
+    
+    // Add support information
+    errorMessage += '\n**Need Help?**\n';
+    errorMessage += '- Use </blight heal:1306176789634355241> to request a new healing task\n';
+    errorMessage += '- Contact a moderator if the issue persists\n';
+    errorMessage += '- Check the bot status in the server\n';
+    
+    // Add technical details for mods
+    errorMessage += '\n**Technical Details** (for moderators):\n';
+    errorMessage += `- Error: ${error.message || 'Unknown error'}\n`;
+    errorMessage += `- User: ${interaction.user.tag} (${interaction.user.id})\n`;
+    errorMessage += `- Command: ${interaction.commandName || 'submit'}\n`;
+    errorMessage += `- Timestamp: ${new Date().toISOString()}`;
+    
+    try {
+      await interaction.editReply({ content: errorMessage, ephemeral: true });
+    } catch (replyError) {
+      console.error('[blightHandler]: Failed to send detailed error reply:', replyError);
+      // Fallback to simple error message
+      try {
+        await interaction.followUp({ 
+          content: '❌ An error occurred while processing your request. Please contact a moderator.', 
+          ephemeral: true 
+        });
+      } catch (followUpError) {
+        console.error('[blightHandler]: Failed to send follow-up error message:', followUpError);
+      }
+    }
   }
 }
 

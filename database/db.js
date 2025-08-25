@@ -1479,6 +1479,24 @@ async function getTokenBalance(userId) {
  }
 }
 
+// ------------------- getUserTokenData -------------------
+async function getUserTokenData(userId) {
+ try {
+  const user = await User.findOne({ discordId: userId });
+  if (!user) {
+    return { tokens: 0, tokenTracker: '' };
+  }
+  return {
+    tokens: user.tokens || 0,
+    tokenTracker: user.tokenTracker || ''
+  };
+ } catch (error) {
+  handleError(error, "tokenService.js");
+  console.error("[tokenService.js]: ❌ Error fetching user token data:", error);
+  throw error;
+ }
+}
+
 // ------------------- getOrCreateToken -------------------
 async function getOrCreateToken(userId, tokenTrackerLink = "") {
  await connectToTinglebot();
@@ -2388,6 +2406,7 @@ module.exports = {
  appendSpentTokens,
  getUserGoogleSheetId,
  getTokenBalance,
+ getUserTokenData,
  getOrCreateUser,
  getUserById,
  updateUserTokens,
