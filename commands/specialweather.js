@@ -351,7 +351,25 @@ module.exports = {
       const validChannels = Object.values(VILLAGE_CHANNELS);
       if (!validChannels.includes(channelId)) {
         await interaction.editReply({
-          content: `❌ **This command can only be used in a village's town hall channel.**\n🏛️ **Valid channels:**\n- <#${VILLAGE_CHANNELS.Rudania}> (Rudania)\n- <#${VILLAGE_CHANNELS.Inariko}> (Inariko)\n- <#${VILLAGE_CHANNELS.Vhintl}> (Vhintl)`,
+          embeds: [{
+            color: 0xFF6B6B, // Red color for error
+            title: '❌ Invalid Channel',
+            description: '**This command can only be used in a village\'s town hall channel.**',
+            fields: [
+              {
+                name: '🏛️ Valid Town Hall Channels',
+                value: `🔥 <#${VILLAGE_CHANNELS.Rudania}> (Rudania)\n💧 <#${VILLAGE_CHANNELS.Inariko}> (Inariko)\n🌱 <#${VILLAGE_CHANNELS.Vhintl}> (Vhintl)`,
+                inline: false
+              }
+            ],
+            image: {
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+            },
+            footer: {
+              text: 'Channel Restriction'
+            },
+            timestamp: new Date()
+          }],
           ephemeral: true
         });
         return;
