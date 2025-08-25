@@ -381,7 +381,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       const now = new Date();
       const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
       // Set to midnight EST 7 days from now (date only, no time)
-      const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 0, 0, 0, 0);
+      // Convert to UTC to ensure proper storage and retrieval
+      const debuffEndDate = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 5, 0, 0, 0)); // 5 AM UTC = midnight EST
       
       character.debuff = { active: true, endDate: debuffEndDate };
       character.currentVillage = startingVillage || character.homeVillage;
@@ -533,7 +534,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           const now = new Date();
           const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
           // Set to midnight EST 7 days from now (date only, no time)
-          const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 0, 0, 0, 0);
+          // Convert to UTC to ensure proper storage and retrieval
+          const debuffEndDate = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 5, 0, 0, 0)); // 5 AM UTC = midnight EST
           
           character.debuff = { active: true, endDate: debuffEndDate };
           character.currentVillage = ['rudania','vhintl'].includes(character.currentVillage)?'inariko':character.homeVillage;
