@@ -1667,10 +1667,10 @@ module.exports = {
         const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
         const todayCompletions = recentCompletions.filter(c => c.date === today).length;
         
-        // Calculate this week's completions (Monday to Sunday)
+        // Calculate this week's completions (Sunday to Saturday)
         const now = new Date();
         const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay() + 1); // Monday
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
         startOfWeek.setHours(0, 0, 0, 0);
         
         const weekCompletions = recentCompletions.filter(c => {

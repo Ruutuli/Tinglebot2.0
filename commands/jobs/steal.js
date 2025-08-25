@@ -1791,29 +1791,27 @@ module.exports = {
                     .setThumbnail(character.icon)
                     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
                     .addFields(
-                        { name: '🎯 Total Attempts', value: stats.totalAttempts.toString(), inline: true },
-                        { name: '✅ Successful Steals', value: stats.successfulSteals.toString(), inline: true },
-                        { name: '❌ Failed Steals', value: stats.failedSteals.toString(), inline: true },
-                        { name: '📈 Success Rate', value: `${stats.successRate}%`, inline: true },
-                        { name: '🛡️ Protection Status', value: protectionStatus, inline: true }
+                        { name: '__🎯 Total Attempts__', value: `> ${stats.totalAttempts}`, inline: true },
+                        { name: '__✅ Successful Steals__', value: `> ${stats.successfulSteals}`, inline: true },
+                        { name: '__❌ Failed Steals__', value: `> ${stats.failedSteals}`, inline: true },
+                        { name: '__📈 Success Rate__', value: `> ${stats.successRate}%`, inline: true },
+                        { name: '__🛡️ Protection Status__', value: `> ${protectionStatus}`, inline: true }
                     );
                 
                 // Add jail status if applicable
                 if (jailStatus) {
-                    embed.addFields({ name: '⛔ Jail Status', value: jailStatus, inline: false });
+                    embed.addFields({ name: '__⛔ Jail Status__', value: `> ${jailStatus}`, inline: false });
                 }
                 
                 // Add items by rarity
                 embed.addFields({ 
-                    name: '✨ Items by Rarity', 
-                    value: `Common: ${stats.itemsByRarity.common}\n` +
-                           `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
-                           `Rare: ${stats.itemsByRarity.rare}`, 
+                    name: '__✨ Items by Rarity__', 
+                    value: `> Common: ${stats.itemsByRarity.common}\n> Uncommon: ${stats.itemsByRarity.uncommon}\n> Rare: ${stats.itemsByRarity.rare}`, 
                     inline: false 
                 });
                 
                 // Add victims list
-                embed.addFields({ name: '👥 Victims', value: victimsList, inline: false });
+                embed.addFields({ name: '__👥 Victims__', value: `> ${victimsList}`, inline: false });
                 
                 await interaction.editReply({ embeds: [embed] });
                 return;
