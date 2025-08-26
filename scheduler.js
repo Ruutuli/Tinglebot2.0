@@ -537,8 +537,6 @@ async function handleJailRelease(client) {
   return;
  }
 
- const testChannel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
-
  let releasedCount = 0;
 
  for (const character of charactersToRelease) {
@@ -555,12 +553,23 @@ async function handleJailRelease(client) {
    "Town Hall Records • Reformed & Released"
   );
 
-  if (testChannel) {
-   await testChannel.send({
-    content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
-    embeds: [releaseEmbed],
-   });
-   releasedCount++;
+  // Post announcement in character's home village town hall channel
+  try {
+   const villageChannelId = getVillageChannelId(character.homeVillage);
+   const villageChannel = await client.channels.fetch(villageChannelId);
+   
+   if (villageChannel) {
+    await villageChannel.send({
+     content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
+     embeds: [releaseEmbed],
+    });
+    releasedCount++;
+    console.log(`[scheduler.js]: 🔓 Posted jail release for ${character.name} in ${character.homeVillage} town hall`);
+   } else {
+    console.error(`[scheduler.js]: ❌ Could not find town hall channel for ${character.homeVillage} (ID: ${villageChannelId})`);
+   }
+  } catch (error) {
+   console.error(`[scheduler.js]: ❌ Error posting jail release for ${character.name} in ${character.homeVillage}:`, error.message);
   }
 
   await sendUserDM(
