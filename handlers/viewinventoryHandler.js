@@ -77,7 +77,7 @@ module.exports = {
       }
 
       // ------------------- Combine and Alphabetize Inventory Items -------------------
-      // Merge duplicate items by summing their quantities, then sort items alphabetically.
+      // Merge duplicate items by summing their quantities, filter out zero quantities, then sort items alphabetically.
       const combinedItems = inventoryItems.reduce((acc, item) => {
         const existingItem = acc.find(i => i.name === item.name);
         if (existingItem) {
@@ -86,7 +86,9 @@ module.exports = {
           acc.push({ name: item.name, quantity: item.quantity, type: item.type });
         }
         return acc;
-      }, []).sort((a, b) => a.name.localeCompare(b.name));
+      }, [])
+      .filter(item => item.quantity > 0) // Remove items with zero quantity
+      .sort((a, b) => a.name.localeCompare(b.name));
 
       // ------------------- Group Items by Type -------------------
       // Group combined items by their type for organized display.
