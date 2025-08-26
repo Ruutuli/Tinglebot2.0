@@ -438,8 +438,17 @@ async function handleRaidVictory(interaction, raidData, monster) {
         }
         
         // Generate loot for this participant based on damage dealt
-        const lootedItem = generateLootedItem(monster, weightedItems, participant.damage);
+        const lootedItem = await generateLootedItem(monster, weightedItems, participant.damage);
         
+        if (!lootedItem) {
+          console.log(`[raid.js]: ⚠️ No lootable items found for ${participant.name}, skipping loot`);
+          failedCharacters.push({
+            name: participant.name,
+            reason: 'No lootable items found'
+          });
+          continue;
+        }
+
         // Add to inventory if character has valid inventory link
         if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
           try {
@@ -624,45 +633,16 @@ async function handleRaidVictory(interaction, raidData, monster) {
 
 // ---- Function: generateLootedItem ----
 // Generates looted item for raid participants based on damage dealt
-function generateLootedItem(monster, weightedItems, damageDealt = 0) {
-  if (weightedItems.length === 0) {
-    return {
-      itemName: 'nothing',
-      quantity: 0,
-      category: ['Misc'],
-      type: ['Misc'],
-      subtype: ['Misc'],
-      emoji: ''
-    };
+async function generateLootedItem(monster, weightedItems, damageDealt = 0) {
+  const randomIndex = Math.floor(Math.random() * weightedItems.length);
+  const selectionPool = weightedItems.filter(item => item.itemRarity <= 3);
+  
+  if (selectionPool.length === 0) {
+    return null;
   }
   
-  // Calculate damage-based loot multiplier
-  // More damage = better chance of rare items
-  let lootMultiplier = 1;
-  if (damageDealt >= 10) {
-    lootMultiplier = 3; // High damage dealers get 3x better loot chances
-  } else if (damageDealt >= 5) {
-    lootMultiplier = 2; // Medium damage dealers get 2x better loot chances
-  } else if (damageDealt >= 2) {
-    lootMultiplier = 1.5; // Low damage dealers get 1.5x better loot chances
-  }
-  // 0-1 damage = 1x multiplier (base chance)
-  
-  // Create weighted selection based on damage
-  const weightedSelection = [];
-  for (let i = 0; i < weightedItems.length; i++) {
-    const item = weightedItems[i];
-    // Higher damage = more copies of rare items in the selection pool
-    const copies = Math.floor(lootMultiplier * (item.itemRarity || 1));
-    for (let j = 0; j < copies; j++) {
-      weightedSelection.push(item);
-    }
-  }
-  
-  // If no items in weighted selection, fall back to original
-  const selectionPool = weightedSelection.length > 0 ? weightedSelection : weightedItems;
-  const randomIndex = Math.floor(Math.random() * selectionPool.length);
-  const lootedItem = { ...selectionPool[randomIndex] };
+  const randomIndex2 = Math.floor(Math.random() * selectionPool.length);
+  const lootedItem = { ...selectionPool[randomIndex2] };
 
   // Handle Chuchu special case
   if (monster.name.includes("Chuchu")) {
@@ -683,8 +663,18 @@ function generateLootedItem(monster, weightedItems, damageDealt = 0) {
       : 1;
     lootedItem.itemName = jellyType;
     lootedItem.quantity = quantity;
-    // Use the emoji from the database item instead of hardcoding it
-    // The database should have the correct emoji for each jelly type
+    
+    // Fetch the correct emoji from the database for the jelly type
+    try {
+      const ItemModel = require('../../models/ItemModel');
+      const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
+      if (jellyItem && jellyItem.emoji) {
+        lootedItem.emoji = jellyItem.emoji;
+      }
+    } catch (error) {
+      console.error(`[raid.js]: Error fetching emoji for ${jellyType}:`, error);
+      // Keep the original emoji if there's an error
+    }
   } else {
     lootedItem.quantity = 1; // Default quantity for non-Chuchu items
   }

@@ -566,7 +566,7 @@ module.exports = {
       }
 
       // Helper function to generate looted items
-      function generateLootedItem(encounteredMonster, weightedItems) {
+      async function generateLootedItem(encounteredMonster, weightedItems) {
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
         const lootedItem = { ...weightedItems[randomIndex] };
         if (encounteredMonster.name.includes('Chuchu')) {
@@ -574,6 +574,18 @@ module.exports = {
           const quantity = determineJellyQuantity(encounteredMonster.name);
           lootedItem.itemName = jellyType;
           lootedItem.quantity = quantity;
+          
+          // Fetch the correct emoji from the database for the jelly type
+          try {
+            const ItemModel = require('../../models/ItemModel');
+            const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
+            if (jellyItem && jellyItem.emoji) {
+              lootedItem.emoji = jellyItem.emoji;
+            }
+          } catch (error) {
+            console.error(`[gather.js]: Error fetching emoji for ${jellyType}:`, error);
+            // Keep the original emoji if there's an error
+          }
         } else {
           lootedItem.quantity = 1;
         }
@@ -683,7 +695,7 @@ module.exports = {
             const items = await fetchItemsByMonster(encounteredMonster.name);
             const weightedItems = createWeightedItemList(items, adjustedRandomValue);
             if (weightedItems.length > 0) {
-              const lootedItem = generateLootedItem(encounteredMonster, weightedItems);
+              const lootedItem = await generateLootedItem(encounteredMonster, weightedItems);
               const inventoryLink = character.inventory || character.inventoryLink;
               if (typeof inventoryLink !== 'string' || !isValidGoogleSheetsUrl(inventoryLink)) {
                 const embed = await createMonsterEncounterEmbed(
