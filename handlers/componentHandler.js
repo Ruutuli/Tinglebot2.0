@@ -1318,6 +1318,131 @@ async function awardRuuGamePrize(session, userId, interaction) {
 }
 
 // =============================================================================
+// ------------------- Minigame Button Handlers -------------------
+// Handles button interactions for minigames
+// =============================================================================
+
+// ------------------- Function: handleMinigameJoin -------------------
+// Handles join game button clicks for minigames
+async function handleMinigameJoin(interaction) {
+  try {
+    const sessionId = interaction.customId.replace('minigame_join_', '');
+    const userId = interaction.user.id;
+    const username = interaction.user.username;
+    
+    // Find the minigame session
+    const Minigame = require('../models/MinigameModel');
+    const session = await Minigame.findOne({ sessionId: sessionId });
+    
+    if (!session) {
+      return await interaction.reply({
+        content: '❌ Game session not found or has expired.',
+        flags: 64
+      });
+    }
+    
+    // Check if player already joined
+    const alreadyJoined = session.players.find(p => p.discordId === userId);
+    if (alreadyJoined) {
+      return await interaction.reply({
+        content: '✅ You\'re already in the game!',
+        flags: 64
+      });
+    }
+    
+    // Add player to game
+    session.players.push({
+      discordId: userId,
+      username: username,
+      joinedAt: new Date()
+    });
+    
+    await session.save();
+    
+    await interaction.reply({
+      content: `🎮 **${username}** joined the game!`,
+      flags: 64
+    });
+    
+  } catch (error) {
+    handleError(error, 'componentHandler.js', {
+      action: 'minigame_join',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id
+    });
+    
+    await interaction.reply({
+      content: '❌ An error occurred while joining the game.',
+      flags: 64
+    });
+  }
+}
+
+// ------------------- Function: handleMinigameStatus -------------------
+// Handles view status button clicks for minigames
+async function handleMinigameStatus(interaction) {
+  try {
+    const sessionId = interaction.customId.replace('minigame_status_', '');
+    
+    // Find the minigame session
+    const Minigame = require('../models/MinigameModel');
+    const session = await Minigame.findOne({ sessionId: sessionId });
+    
+    if (!session) {
+      return await interaction.reply({
+        content: '❌ Game session not found or has expired.',
+        flags: 64
+      });
+    }
+    
+    // Import the minigame module to create the embed
+    const { getAlienDefenseGameStatus } = require('../modules/minigameModule');
+    
+    // Create status embed based on game type
+    let embed;
+    if (session.gameType === 'theycame') {
+      const status = getAlienDefenseGameStatus(session.gameData);
+      
+      embed = new EmbedBuilder()
+        .setTitle(`👽 They Came for the Cows - Game Status`)
+        .setDescription('Current game status and progress')
+        .setColor(0x00ff00)
+        .setTimestamp()
+        .addFields(
+          { name: '📊 Game Progress', value: status.gameProgress, inline: true },
+          { name: '👥 Players', value: session.players.length.toString(), inline: true },
+          { name: '🐄 Animals Saved', value: status.villageAnimals.toString(), inline: true },
+          { name: '👾 Active Aliens', value: `Outer: ${status.ringStatus.outerRing} | Middle: ${status.ringStatus.middleRing} | Inner: ${status.ringStatus.innerRing}`, inline: false },
+          { name: '💀 Defeated Aliens', value: status.defeatedAliens.toString(), inline: true },
+          { name: '🚨 Animals Lost', value: status.animalsLost.toString(), inline: true }
+        );
+    } else {
+      embed = new EmbedBuilder()
+        .setTitle('🎮 Minigame Status')
+        .setDescription('Unknown game type')
+        .setColor(0x808080);
+    }
+    
+    await interaction.reply({
+      embeds: [embed],
+      flags: 64
+    });
+    
+  } catch (error) {
+    handleError(error, 'componentHandler.js', {
+      action: 'minigame_status',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id
+    });
+    
+    await interaction.reply({
+      content: '❌ An error occurred while fetching game status.',
+      flags: 64
+    });
+  }
+}
+
+// =============================================================================
 // ------------------- Component Interaction Handler -------------------
 // Routes all customId interactions.
 // =============================================================================
@@ -1345,6 +1470,15 @@ async function handleComponentInteraction(interaction) {
       
       if (interaction.customId.startsWith('ruugame_roll_')) {
         return await handleRuuGameRoll(interaction);
+      }
+    }
+
+    // Handle Minigame buttons
+    if (interaction.customId.startsWith('minigame_')) {
+      if (interaction.customId.startsWith('minigame_join_')) {
+        return await handleMinigameJoin(interaction);
+      } else if (interaction.customId.startsWith('minigame_status_')) {
+        return await handleMinigameStatus(interaction);
       }
     }
 
@@ -1433,5 +1567,7 @@ module.exports = {
   getRollEmojis,
   GAME_CONFIG,
   PRIZES,
-  awardRuuGamePrize
+  awardRuuGamePrize,
+  handleMinigameJoin,
+  handleMinigameStatus
 };
