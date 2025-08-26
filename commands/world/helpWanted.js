@@ -1320,10 +1320,20 @@ module.exports = {
       await interaction.deferReply();
       
       try {
-        // Fetch quest
+        // Fetch quest with debugging
+        console.log(`[helpWanted.js]: Searching for quest with ID: "${questId}"`);
         const quest = await HelpWantedQuest.findOne({ questId });
+        console.log(`[helpWanted.js]: Quest lookup result:`, quest ? `Found quest ${quest.questId} for ${quest.village}` : 'No quest found');
+        
         if (!quest) {
-          return await interaction.editReply({ content: '❌ Quest not found.' });
+          // Try to find any quests for today to help debug
+          const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+          const todaysQuests = await HelpWantedQuest.find({ date: today }).lean();
+          console.log(`[helpWanted.js]: Available quests for today (${today}):`, todaysQuests.map(q => ({ questId: q.questId, village: q.village, type: q.type })));
+          
+          return await interaction.editReply({ 
+            content: `❌ Quest not found.\n\n**Quest ID:** ${questId}\n**Available quests today:** ${todaysQuests.length > 0 ? todaysQuests.map(q => q.questId).join(', ') : 'None'}\n\nPlease check the quest ID and try again.` 
+          });
         }
 
         // Validate quest expiration
