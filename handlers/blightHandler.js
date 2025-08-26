@@ -668,7 +668,7 @@ function validateHealerPermission(healer, blightStage) {
 
 // ------------------- Function: completeBlightHealing -------------------
 // Applies healing effects and resets blight status.
-async function completeBlightHealing(character) {
+async function completeBlightHealing(character, interaction = null) {
   // Save healing completion to blight history
   await saveBlightEventToHistory(character, 'Healing Completed', {
     notes: `Character healed from blight - Stage ${character.blightStage} to 0`,
@@ -690,6 +690,34 @@ async function completeBlightHealing(character) {
   };
   
   await character.save();
+
+  // Check if user has any other blighted characters and manage blighted role
+  try {
+    const otherBlightedCharacters = await Character.find({
+      userId: character.userId,
+      blighted: true,
+      _id: { $ne: character._id } // Exclude the current character
+    });
+
+    // If no other blighted characters, remove the blighted role
+    if (otherBlightedCharacters.length === 0) {
+      if (interaction && interaction.guild) {
+        try {
+          const member = await interaction.guild.members.fetch(character.userId);
+          await member.roles.remove('798387447967907910');
+          console.log(`[blightHandler.js]: ✅ Removed blighted role from user ${character.userId} - no other blighted characters`);
+        } catch (roleError) {
+          console.warn(`[blightHandler.js]: ⚠️ Could not remove blighted role from user ${character.userId}:`, roleError);
+        }
+      } else {
+        console.log(`[blightHandler.js]: ✅ User ${character.userId} has no other blighted characters - blighted role should be removed (no interaction context)`);
+      }
+    } else {
+      console.log(`[blightHandler.js]: ✅ User ${character.userId} still has ${otherBlightedCharacters.length} other blighted character(s) - keeping blighted role`);
+    }
+  } catch (roleError) {
+    console.warn(`[blightHandler.js]: ⚠️ Could not check for other blighted characters for user ${character.userId}:`, roleError);
+  }
 }
 
 // ------------------- Function: createBlightHealingFields -------------------
@@ -1172,7 +1200,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       submission.forfeitTokens = true;
 
       await deleteBlightRequestFromStorage(submissionId);
-      await completeBlightHealing(character);
+      await completeBlightHealing(character, interaction);
 
       const embed = createBlightHealingCompleteEmbed(character, healer, [
         {
@@ -1307,7 +1335,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       // Item removal is now automatically logged to Google Sheets by removeItemInventoryDatabase function
 
       await deleteBlightRequestFromStorage(submissionId);
-      await completeBlightHealing(character);
+      await completeBlightHealing(character, interaction);
 
       const embed = createBlightHealingCompleteEmbed(character, healer, [
         {
@@ -1347,7 +1375,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       submission.status = 'completed';
       submission.submittedAt = new Date().toISOString();
       await deleteBlightRequestFromStorage(submissionId);
-      await completeBlightHealing(character);
+      await completeBlightHealing(character, interaction);
 
       const embed = createBlightHealingCompleteEmbed(character, healer, [
         {
