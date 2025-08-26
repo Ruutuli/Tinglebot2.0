@@ -1379,8 +1379,18 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
    : 1;
   lootedItem.itemName = jellyType;
   lootedItem.quantity = quantity;
-  // Use the emoji from the database item instead of hardcoding it
-  // The database should have the correct emoji for each jelly type
+  
+  // Fetch the correct emoji from the database for the jelly type
+  try {
+    const ItemModel = require('../../models/ItemModel');
+    const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
+    if (jellyItem && jellyItem.emoji) {
+      lootedItem.emoji = jellyItem.emoji;
+    }
+  } catch (error) {
+    console.error(`[loot.js]: Error fetching emoji for ${jellyType}:`, error);
+    // Keep the original emoji if there's an error
+  }
  } else {
   lootedItem.quantity = 1; // Default quantity for non-Chuchu items
  }

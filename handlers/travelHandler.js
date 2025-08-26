@@ -436,6 +436,18 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           }
           item.itemName = jellyType;
           item.quantity = qty;
+          
+          // Fetch the correct emoji from the database for the jelly type
+          try {
+            const ItemModel = require('../models/ItemModel');
+            const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
+            if (jellyItem && jellyItem.emoji) {
+              item.emoji = jellyItem.emoji;
+            }
+          } catch (error) {
+            console.error(`[travelHandler.js]: Error fetching emoji for ${jellyType}:`, error);
+            // Keep the original emoji if there's an error
+          }
         } else if (item) {
           item.quantity = 1;
         }
