@@ -830,12 +830,18 @@ module.exports = {
      // ------------------- Check Last Roll Date -------------------
      const now = new Date();
      const lastRoll = pet.lastRollDate ? new Date(pet.lastRollDate) : null;
-     const isSameDay = lastRoll && 
-       lastRoll.getFullYear() === now.getFullYear() &&
-       lastRoll.getMonth() === now.getMonth() &&
-       lastRoll.getDate() === now.getDate();
+     
+     // Compute the most recent 12:00 UTC (8am EST) rollover
+     const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+     if (now < rollover) {
+       // If before today's 12:00 UTC, use yesterday's 12:00 UTC
+       rollover.setUTCDate(rollover.getUTCDate() - 1);
+     }
+     
+     // Check if last roll was after the rollover time
+     const hasRolledToday = lastRoll && lastRoll >= rollover;
 
-     if (isSameDay) {
+     if (hasRolledToday) {
        // Create a beautiful embed for the pet cooldown error
        const cooldownEmbed = new EmbedBuilder()
          .setAuthor({ name: character.name, iconURL: character.icon })
@@ -865,19 +871,19 @@ module.exports = {
            },
            { 
              name: "⏰ Last Roll", 
-             value: `> Today at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })}`, 
+             value: `> ${lastRoll.toLocaleDateString('en-US', { timeZone: 'America/New_York' })} at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })}`, 
              inline: true 
            },
            { 
              name: "🔄 Next Available", 
-             value: `> Tomorrow at 8:00 AM`, 
+             value: `> ${new Date(rollover.getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { timeZone: 'America/New_York' })} at 8:00 AM EST`, 
              inline: true 
            }
          )
          .setColor("#FF6B35")
          .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
          .setFooter({ 
-           text: "Pets can only roll once per day and reset at 8:00 AM daily" 
+           text: "Pets can only roll once per day and reset at 8:00 AM EST daily" 
          });
        
        return interaction.editReply({ embeds: [cooldownEmbed], ephemeral: true });
@@ -1241,15 +1247,21 @@ module.exports = {
         // ------------------- Check Roll Status -------------------
         const now = new Date();
         const lastRoll = pet.lastRollDate ? new Date(pet.lastRollDate) : null;
-        const isSameDay = lastRoll && 
-          lastRoll.getFullYear() === now.getFullYear() &&
-          lastRoll.getMonth() === now.getMonth() &&
-          lastRoll.getDate() === now.getDate();
+        
+        // Compute the most recent 12:00 UTC (8am EST) rollover
+        const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+        if (now < rollover) {
+          // If before today's 12:00 UTC, use yesterday's 12:00 UTC
+          rollover.setUTCDate(rollover.getUTCDate() - 1);
+        }
+        
+        // Check if last roll was after the rollover time
+        const hasRolledToday = lastRoll && lastRoll >= rollover;
         
         let rollStatus = "🟢 Available";
         let rollStatusDescription = "Ready to roll today!";
         
-        if (isSameDay) {
+        if (hasRolledToday) {
           rollStatus = "🔴 Used Today";
           rollStatusDescription = `Last rolled at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })}`;
         } else if (pet.rollsRemaining <= 0) {
@@ -1259,7 +1271,7 @@ module.exports = {
 
         // ------------------- Calculate Rolls Display Based on Today's Usage -------------------
         let rollsDisplay;
-        if (isSameDay) {
+        if (hasRolledToday) {
           // If pet rolled today, show remaining rolls as available (🔔) and one as used (🔕)
           // For a Level 3 pet that rolled today: should show 🔔🔔🔕 (2 remaining, 1 used today)
           // The pet has used 1 roll today, so show (level - 1) available bells + 1 used bell
