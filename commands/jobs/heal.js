@@ -324,33 +324,8 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
         embeds: [embed],
       });
     } else {
-      // General healing request - ping individual users with the healing role
-      const guild = interaction.guild;
-      let pingContent = `🔔 @Job Perk: Healing Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
-      
-      if (guild && healingRoleId) {
-        try {
-          const healingRole = await guild.roles.fetch(healingRoleId);
-          if (healingRole) {
-            const membersWithRole = healingRole.members;
-            if (membersWithRole.size > 0) {
-              // Ping individual users with the role (limit to first 5 to avoid spam)
-              const userPings = Array.from(membersWithRole.values())
-                .slice(0, 5)
-                .map(member => `<@${member.id}>`)
-                .join(' ');
-              pingContent = `🔔 ${userPings} @Job Perk: Healing Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
-            }
-          }
-        } catch (error) {
-          console.error(`[heal.js]: ❌ Error fetching healing role members: ${error.message}`);
-          // Fallback to role ping if user ping fails
-          pingContent = `🔔 <@&${healingRoleId}> @Job Perk: Healing Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
-        }
-      } else {
-        // Fallback to role ping if no role ID or guild
-        pingContent = `🔔 <@&${healingRoleId || '1083191610478698547'}> @Job Perk: Healing Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
-      }
+      // General healing request - ping the healing role
+      let pingContent = `🔔 <@&${healingRoleId || '1083191610478698547'}> Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
       
       sentMessage = await interaction.followUp({
         content: pingContent,
