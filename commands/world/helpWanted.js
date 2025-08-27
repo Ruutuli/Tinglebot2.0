@@ -423,9 +423,16 @@ async function updateVillageShopsStock(itemName, amountUsed) {
     const VillageShopItem = require('../../models/VillageShopsModel');
     
     // Find the item in VillageShops and reduce stock
-    const shopItem = await VillageShopItem.findOne({
-      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-    });
+    let shopItem;
+    if (itemName.includes('+')) {
+      shopItem = await VillageShopItem.findOne({
+        itemName: itemName
+      });
+    } else {
+      shopItem = await VillageShopItem.findOne({
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
+      });
+    }
     
     if (shopItem && shopItem.stock > 0) {
       const newStock = Math.max(0, shopItem.stock - amountUsed);

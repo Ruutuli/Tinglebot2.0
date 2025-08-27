@@ -197,10 +197,18 @@ module.exports = {
       // ------------------- Validate Item in Inventory -------------------
       // Retrieve character inventory and ensure the item exists.
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
-      const inventoryItems = await inventoryCollection.find({ 
-        characterId: character._id, 
-        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-      }).toArray();
+      let inventoryItems;
+      if (itemName.includes('+')) {
+        inventoryItems = await inventoryCollection.find({ 
+          characterId: character._id, 
+          itemName: itemName
+        }).toArray();
+      } else {
+        inventoryItems = await inventoryCollection.find({ 
+          characterId: character._id, 
+          itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
+        }).toArray();
+      }
       if (!inventoryItems.length) {
         await interaction.editReply({ 
           embeds: [new EmbedBuilder()
@@ -221,7 +229,12 @@ module.exports = {
 
       // ------------------- Fetch Item Details -------------------
       // Get item details from the item database.
-      const itemDetail = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } });
+      let itemDetail;
+      if (itemName.includes('+')) {
+        itemDetail = await ItemModel.findOne({ itemName: itemName });
+      } else {
+        itemDetail = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } });
+      }
       if (!itemDetail) {
         await interaction.editReply({ content: `❌ **Item ${itemName} not found in the item database.**`, flags: [MessageFlags.Ephemeral] });
         return;

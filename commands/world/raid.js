@@ -24,6 +24,16 @@ const { v4: uuidv4 } = require('uuid');
 const { checkInventorySync } = require('../../utils/characterUtils');
 
 // ============================================================================
+// ---- Raid Loot System ----
+// ============================================================================
+// High damage dealers in raids are guaranteed high rarity items:
+// - 8+ hearts damage: Legendary items (rarity 10)
+// - 6+ hearts damage: Rare items (rarity 8+)
+// - 4+ hearts damage: Uncommon items (rarity 6+)
+// - 2+ hearts damage: Better common items (rarity 4+)
+// - Each participant gets weighted items based on their damage performance
+
+// ============================================================================
 // ---- Constants ----
 // ============================================================================
 // Village resident role IDs
@@ -411,7 +421,6 @@ async function handleRaidVictory(interaction, raidData, monster) {
     
     // Fetch items for the monster
     const items = await fetchItemsByMonster(monster.name);
-    const weightedItems = createWeightedItemList(items, 50); // Use middle-range roll for raid loot
     
     // Process loot for each participant
     const lootResults = [];
@@ -436,6 +445,12 @@ async function handleRaidVictory(interaction, raidData, monster) {
           });
           continue;
         }
+        
+        // Create weighted items based on this participant's damage performance
+        // Higher damage = better final value = better item pool
+        // This ensures high damage dealers get access to higher rarity items
+        const finalValue = Math.min(100, Math.max(1, participant.damage * 10)); // Scale damage to 1-100 range
+        const weightedItems = createWeightedItemList(items, finalValue);
         
         // Generate loot for this participant based on damage dealt
         const lootedItem = await generateLootedItem(monster, weightedItems, participant.damage);
@@ -633,16 +648,48 @@ async function handleRaidVictory(interaction, raidData, monster) {
 
 // ---- Function: generateLootedItem ----
 // Generates looted item for raid participants based on damage dealt
+// High damage dealers are guaranteed high rarity items
 async function generateLootedItem(monster, weightedItems, damageDealt = 0) {
-  const randomIndex = Math.floor(Math.random() * weightedItems.length);
-  const selectionPool = weightedItems.filter(item => item.itemRarity <= 3);
+  // Determine target rarity based on damage dealt
+  let targetRarity = 1; // Default to common
+  
+  if (damageDealt >= 8) {
+    targetRarity = 10; // Legendary items for top damage dealers
+  } else if (damageDealt >= 6) {
+    targetRarity = 8; // Rare items for high damage dealers
+  } else if (damageDealt >= 4) {
+    targetRarity = 6; // Uncommon items for medium damage dealers
+  } else if (damageDealt >= 2) {
+    targetRarity = 4; // Better common items for low damage dealers
+  }
+  
+  // Filter items by target rarity, with fallback to lower rarities if needed
+  let selectionPool = weightedItems.filter(item => item.itemRarity >= targetRarity);
+  
+  // If no items found at target rarity, fallback to lower rarities
+  if (selectionPool.length === 0) {
+    // Try to find items at least 2 rarity levels below target
+    const fallbackRarity = Math.max(1, targetRarity - 2);
+    selectionPool = weightedItems.filter(item => item.itemRarity >= fallbackRarity);
+    
+    // If still no items, use all available items
+    if (selectionPool.length === 0) {
+      selectionPool = weightedItems;
+    }
+    
+    console.log(`[raid.js]: ⚠️ Fallback loot selection for ${damageDealt} damage - target: ${targetRarity}, fallback: ${fallbackRarity}, available: ${selectionPool.length} items`);
+  }
   
   if (selectionPool.length === 0) {
     return null;
   }
   
-  const randomIndex2 = Math.floor(Math.random() * selectionPool.length);
-  const lootedItem = { ...selectionPool[randomIndex2] };
+  // Select item from the filtered pool
+  const randomIndex = Math.floor(Math.random() * selectionPool.length);
+  const lootedItem = { ...selectionPool[randomIndex] };
+  
+  // Log the rarity selection for debugging
+  console.log(`[raid.js]: 🎯 Loot selection for ${damageDealt} damage - Target rarity: ${targetRarity}, Selected rarity: ${lootedItem.itemRarity}, Item: ${lootedItem.itemName}`);
 
   // Handle Chuchu special case
   if (monster.name.includes("Chuchu")) {
