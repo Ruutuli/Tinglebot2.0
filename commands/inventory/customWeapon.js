@@ -14,7 +14,7 @@ const mongoose = require('mongoose'); // Add mongoose import
 const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes, fetchAllWeapons } = require('../../database/db');
 
 // ------------------- Utility Functions -------------------
-const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase, escapeRegExp } = require('../../utils/inventoryUtils');
 const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
 const { retrieveWeaponSubmissionFromStorage, saveWeaponSubmissionToStorage, updateWeaponSubmissionData, deleteWeaponSubmissionFromStorage, saveSubmissionToStorage, deleteSubmissionFromStorage } = require('../../utils/storage');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils');
@@ -427,7 +427,7 @@ async function parseAndValidateMaterials(materialsString, interaction) {
 
                 // Fetch the item from the database using case-insensitive search
                 const item = await ItemModel.findOne({ 
-                    itemName: { $regex: new RegExp(`^${cleanItemName}$`, 'i') }
+                    itemName: { $regex: new RegExp(`^${escapeRegExp(cleanItemName)}$`, 'i') }
                 });
                 if (!item) {
                     throw new Error(

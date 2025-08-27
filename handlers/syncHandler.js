@@ -28,7 +28,8 @@ const ItemModel = require('../models/ItemModel');
 // ============================================================================
 
 function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Note: We don't escape the + character as it's commonly used in item names
+    return string.replace(/[.*?^${}()|[\]\\]/g, '\\$&');
 }
 
 const { handleError } = require('../utils/globalErrorHandler');

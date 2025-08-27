@@ -940,7 +940,8 @@ async function fetchItemByName(itemName) {
     try {
         const db = await connectToInventoriesForItems();
         const normalizedItemName = itemName.trim();
-        const escapedName = normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+        // Note: We don't escape the + character as it's commonly used in item names
+        const escapedName = normalizedItemName.replace(/[-\/\\^$*?.()|[\]{}]/g, "\\$&");
         const item = await db.collection("items").findOne({
             itemName: new RegExp(`^${escapedName}$`, "i"),
         });
