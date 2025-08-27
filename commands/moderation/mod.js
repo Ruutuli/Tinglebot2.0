@@ -56,7 +56,7 @@ const { monsterMapping } = require('../../models/MonsterModel');
 
 // ------------------- Utility Functions -------------------
 const { handleError } = require('../../utils/globalErrorHandler');
-const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { addItemInventoryDatabase, escapeRegExp } = require('../../utils/inventoryUtils');
 const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('../../utils/interactionUtils');
 const {
   authorizeSheets,
@@ -2373,7 +2373,7 @@ async function handleShopAdd(interaction) {
   try {
     // Fetch the item from the database to get all its properties
     const item = await ItemModel.findOne({ 
-      itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
     });
     
     if (!item) {
@@ -2386,7 +2386,7 @@ async function handleShopAdd(interaction) {
 
     // Check if item already exists in shop
     const existingShopItem = await VillageShopsModel.findOne({ 
-      itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
     });
 
     if (existingShopItem) {

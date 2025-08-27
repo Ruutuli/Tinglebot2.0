@@ -98,8 +98,9 @@ function formatDateTime(date) {
 
 // ---- Function: escapeRegExp ----
 // Escapes special characters in strings for regex use
+// Note: We don't escape the + character as it's commonly used in item names
 function escapeRegExp(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return string.replace(/[.*?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ============================================================================

@@ -58,7 +58,8 @@ const {
 } = require("../utils/googleSheetsUtils.js");
 
 const {
-  addItemToVendingInventory
+  addItemToVendingInventory,
+  escapeRegExp
 } = require("../utils/inventoryUtils.js");
 
 const {
@@ -849,7 +850,7 @@ async function handleFulfill(interaction) {
           const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
           
           // Get item details for proper categorization
-          const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+          const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } });
           
           // Add purchase to buyer's inventory sheet
           const purchaseRow = [
@@ -901,7 +902,7 @@ async function handleFulfill(interaction) {
       // Add to buyer's inventory
       const buyerInventory = await getInventoryCollection(buyer.name);
       // Fetch item details for full inventory record
-      const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+      const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } });
       if (itemDetails) {
         await buyerInventory.insertOne({
           characterId: buyer._id,

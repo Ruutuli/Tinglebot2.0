@@ -1469,8 +1469,9 @@ async function calculateFailureThreshold(itemTier, character = null, targetName 
 // OPTIMIZED: Now batches database queries instead of individual calls
 
 // Helper function to escape regex special characters
+// Note: We don't escape the + character as it's commonly used in item names
 function escapeRegexString(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replace(/[.*?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries = null) {

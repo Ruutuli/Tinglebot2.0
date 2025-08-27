@@ -5,6 +5,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
+const { escapeRegExp } = require('../../utils/inventoryUtils');
 const User = require('../../models/UserModel');
 const Character = require('../../models/CharacterModel');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
@@ -423,7 +424,7 @@ async function updateVillageShopsStock(itemName, amountUsed) {
     
     // Find the item in VillageShops and reduce stock
     const shopItem = await VillageShopItem.findOne({
-      itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
     });
     
     if (shopItem && shopItem.stock > 0) {

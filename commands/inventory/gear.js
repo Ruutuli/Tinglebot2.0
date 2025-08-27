@@ -8,6 +8,7 @@ const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js'
 
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
+const { escapeRegExp } = require('../../utils/inventoryUtils.js');
 // ------------------- Database Services -------------------
 // Import character-related database services for fetching and updating character data.
 const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../database/db.js');
@@ -198,7 +199,7 @@ module.exports = {
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       const inventoryItems = await inventoryCollection.find({ 
         characterId: character._id, 
-        itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
       }).toArray();
       if (!inventoryItems.length) {
         await interaction.editReply({ 
@@ -220,7 +221,7 @@ module.exports = {
 
       // ------------------- Fetch Item Details -------------------
       // Get item details from the item database.
-      const itemDetail = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+      const itemDetail = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } });
       if (!itemDetail) {
         await interaction.editReply({ content: `❌ **Item ${itemName} not found in the item database.**`, flags: [MessageFlags.Ephemeral] });
         return;
