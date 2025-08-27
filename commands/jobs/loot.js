@@ -263,6 +263,8 @@ module.exports = {
  // ------------------- Main Execution Logic -------------------
  async execute(interaction) {
   try {
+   console.log(`[loot.js]: 🚀 Starting loot command for user ${interaction.user.tag} (${interaction.user.id})`);
+   
    await interaction.deferReply();
 
    // ------------------- Step 1: Validate Character -------------------
@@ -280,7 +282,7 @@ module.exports = {
    if (character.currentHearts === 0) {
     const embed = createKOEmbed(
       character,
-      '> **KO’d characters cannot loot! Please heal your character.**\n' +
+      '> **KO\'d characters cannot loot! Please heal your character.**\n' +
       '> Use </item:1379838613067530385> or </heal:1390420428840894557>.'
     );
     await interaction.editReply({ embeds: [embed] });
@@ -359,11 +361,13 @@ module.exports = {
          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
          `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
        await interaction.editReply({ content: immuneMsg, ephemeral: false });
+       return; // Add return here to prevent further execution
      } else if (character.blighted) {
        const alreadyMsg =
          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
          `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
        await interaction.editReply({ content: alreadyMsg, ephemeral: false });
+       return; // Add return here to prevent further execution
      } else {
        // Check for resistance buffs
        const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
@@ -426,6 +430,7 @@ module.exports = {
            user.blightedcharacter = true;
            await user.save();
          }
+         return; // Add return here to prevent further execution
        } else {
          let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
          
@@ -451,6 +456,7 @@ module.exports = {
          }
          
          await interaction.editReply({ content: safeMsg, ephemeral: false });
+         return; // Add return here to prevent further execution
        }
      }
    }
@@ -866,24 +872,36 @@ async function handleBloodMoonRerolls(
 
 // ------------------- Normal Encounter Logic -------------------
 async function handleNormalEncounter(interaction, currentVillage, job, character, bloodMoonActive) {
+  console.log(`[loot.js]: 🌅 handleNormalEncounter called for ${character.name} in ${currentVillage} with job ${job}`);
+  
   // Check for blight stage 3 effect (no monsters)
   if (character.blightEffects?.noMonsters) {
+    console.log(`[loot.js]: 🧿 Character ${character.name} has blight stage 3 - no monsters allowed`);
     const embed = createNoEncounterEmbed(character, bloodMoonActive);
     await interaction.editReply({ embeds: [embed] });
+    console.log(`[loot.js]: ✅ Blight stage 3 no encounter embed sent`);
     return null;
   }
 
   const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
+  console.log(`[loot.js]: 🌅 Found ${monstersByCriteria.length} monsters for ${currentVillage} with job ${job}`);
+  
   if (monstersByCriteria.length === 0) {
+    console.log(`[loot.js]: 🌅 No monsters found for criteria - sending no encounter embed`);
     const embed = createNoEncounterEmbed(character, bloodMoonActive); // Send "No Encounter" embed
     await interaction.editReply({ embeds: [embed] });
+    console.log(`[loot.js]: ✅ No monsters criteria no encounter embed sent`);
     return null;
   }
 
   const encounterResult = await getMonsterEncounterFromList(monstersByCriteria);
+  console.log(`[loot.js]: 🌅 Encounter result: ${encounterResult.encounter}`);
+  
   if (encounterResult.encounter === "No Encounter") {
+    console.log(`[loot.js]: 🌅 Encounter roll resulted in no encounter - sending no encounter embed`);
     const embed = createNoEncounterEmbed(character, bloodMoonActive); // Send "No Encounter" embed
     await interaction.editReply({ embeds: [embed] });
+    console.log(`[loot.js]: ✅ Encounter roll no encounter embed sent`);
     return null;
   }
 
@@ -891,6 +909,8 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
     encounterResult.monsters[
       Math.floor(Math.random() * encounterResult.monsters.length)
     ];
+  
+  console.log(`[loot.js]: 🌅 Selected monster from encounter: ${encounteredMonster.name}`);
 
   // Return the final encountered monster
   return encounteredMonster;
