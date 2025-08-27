@@ -81,14 +81,32 @@ module.exports = {
 
       console.error("❌ Error in lookup command:", error);
       
-      try {
-        return await interaction.editReply({ content: '❌ There was an error while executing this command!', ephemeral: true });
-      } catch (replyError) {
-        console.error('[lookup.js]: Failed to send error reply:', replyError);
+      // Check if interaction is still valid before attempting to respond
+      if (interaction && !interaction.replied && !interaction.deferred) {
         try {
-          await interaction.followUp({ content: '❌ There was an error while executing this command!', ephemeral: true });
-        } catch (followUpError) {
-          console.error('[lookup.js]: Failed to send follow-up error message:', followUpError);
+          await interaction.reply({ 
+            content: '❌ There was an error while executing this command!', 
+            ephemeral: true 
+          });
+        } catch (replyError) {
+          console.error('[lookup.js]: Failed to send error reply:', replyError);
+        }
+      } else if (interaction && (interaction.replied || interaction.deferred)) {
+        try {
+          await interaction.editReply({ 
+            content: '❌ There was an error while executing this command!', 
+            ephemeral: true 
+          });
+        } catch (editError) {
+          console.error('[lookup.js]: Failed to edit error reply:', editError);
+          try {
+            await interaction.followUp({ 
+              content: '❌ There was an error while executing this command!', 
+              ephemeral: true 
+            });
+          } catch (followUpError) {
+            console.error('[lookup.js]: Failed to send follow-up error message:', followUpError);
+          }
         }
       }
     }
@@ -415,20 +433,32 @@ async function handleCraftingLookup(interaction, characterName) {
     if (!characterName || typeof characterName !== 'string') {
       console.error('[lookup.js]: Invalid character name provided:', characterName);
       
-      try {
-        await interaction.editReply({ 
-          content: '❌ Invalid character name provided.', 
-          ephemeral: true 
-        });
-      } catch (replyError) {
-        console.error('[lookup.js]: Failed to send invalid character name error:', replyError);
+      // Check if interaction is still valid before attempting to respond
+      if (interaction && !interaction.replied && !interaction.deferred) {
         try {
-          await interaction.followUp({ 
+          await interaction.reply({ 
             content: '❌ Invalid character name provided.', 
             ephemeral: true 
           });
-        } catch (followUpError) {
-          console.error('[lookup.js]: Failed to send follow-up for invalid character name:', followUpError);
+        } catch (replyError) {
+          console.error('[lookup.js]: Failed to send invalid character name error:', replyError);
+        }
+      } else if (interaction && (interaction.replied || interaction.deferred)) {
+        try {
+          await interaction.editReply({ 
+            content: '❌ Invalid character name provided.', 
+            ephemeral: true 
+          });
+        } catch (editError) {
+          console.error('[lookup.js]: Failed to edit invalid character name error:', editError);
+          try {
+            await interaction.followUp({ 
+              content: '❌ Invalid character name provided.', 
+              ephemeral: true 
+            });
+          } catch (followUpError) {
+            console.error('[lookup.js]: Failed to send follow-up for invalid character name:', followUpError);
+          }
         }
       }
       return;
@@ -440,20 +470,32 @@ async function handleCraftingLookup(interaction, characterName) {
     if (!character) {
       console.log(`[lookup.js]: Character "${characterName}" not found for user: ${interaction.user.tag} (${interaction.user.id})`);
       
-      try {
-        return await interaction.editReply({ 
-          content: `❌ Character "${characterName}" not found or does not belong to you.`, 
-          ephemeral: true 
-        });
-      } catch (replyError) {
-        console.error('[lookup.js]: Failed to send character not found error:', replyError);
+      // Check if interaction is still valid before attempting to respond
+      if (interaction && !interaction.replied && !interaction.deferred) {
         try {
-          await interaction.followUp({ 
+          return await interaction.reply({ 
             content: `❌ Character "${characterName}" not found or does not belong to you.`, 
             ephemeral: true 
           });
-        } catch (followUpError) {
-          console.error('[lookup.js]: Failed to send follow-up for character not found:', followUpError);
+        } catch (replyError) {
+          console.error('[lookup.js]: Failed to send character not found error:', replyError);
+        }
+      } else if (interaction && (interaction.replied || interaction.deferred)) {
+        try {
+          return await interaction.editReply({ 
+            content: `❌ Character "${characterName}" not found or does not belong to you.`, 
+            ephemeral: true 
+          });
+        } catch (editError) {
+          console.error('[lookup.js]: Failed to edit character not found error:', editError);
+          try {
+            await interaction.followUp({ 
+              content: `❌ Character "${characterName}" not found or does not belong to you.`, 
+              ephemeral: true 
+            });
+          } catch (followUpError) {
+            console.error('[lookup.js]: Failed to send follow-up for character not found:', followUpError);
+          }
         }
       }
       return;
@@ -914,23 +956,32 @@ async function handleCraftingLookup(interaction, characterName) {
     
 
     
-    try {
-      await interaction.editReply({ 
-        content: '❌ There was an error while checking craftable items. Please try again later.', 
-        ephemeral: true 
-      });
-
-    } catch (replyError) {
-      console.error(`[lookup.js]: Failed to send error reply:`, replyError);
-
-      
+    // Check if interaction is still valid before attempting to respond
+    if (interaction && !interaction.replied && !interaction.deferred) {
       try {
-        await interaction.followUp({ 
-          content: '❌ There was a critical error. Please try again later.', 
+        await interaction.reply({ 
+          content: '❌ There was an error while checking craftable items. Please try again later.', 
           ephemeral: true 
         });
-      } catch (followUpError) {
-        console.error(`[lookup.js]: Failed to send follow-up error message:`, followUpError);
+      } catch (replyError) {
+        console.error(`[lookup.js]: Failed to send error reply:`, replyError);
+      }
+    } else if (interaction && (interaction.replied || interaction.deferred)) {
+      try {
+        await interaction.editReply({ 
+          content: '❌ There was an error while checking craftable items. Please try again later.', 
+          ephemeral: true 
+        });
+      } catch (editError) {
+        console.error(`[lookup.js]: Failed to edit error reply:`, editError);
+        try {
+          await interaction.followUp({ 
+            content: '❌ There was a critical error. Please try again later.', 
+            ephemeral: true 
+          });
+        } catch (followUpError) {
+          console.error(`[lookup.js]: Failed to send follow-up error message:`, followUpError);
+        }
       }
     }
   }

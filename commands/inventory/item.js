@@ -398,7 +398,7 @@ module.exports = {
             embeds: [{
               color: 0xFF0000,
               title: '❌ Job Voucher Error',
-              description: `**${character.name}** already has an active Job Voucher for **${character.jobVoucherJob} (Live)**.\n\nPlease complete the current job before using another voucher.`,
+              description: `**${character.name}** already has an active Job Voucher for **${character.jobVoucherJob}**.\n\nPlease complete the current job before using another voucher.`,
               image: {
                 url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
