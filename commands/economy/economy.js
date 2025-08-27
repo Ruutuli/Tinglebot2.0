@@ -26,6 +26,7 @@ const {
  addItemInventoryDatabase,
  removeItemInventoryDatabase,
  syncToInventoryDatabase,
+ escapeRegExp,
 } = require("../../utils/inventoryUtils.js");
 const {
  authorizeSheets,
