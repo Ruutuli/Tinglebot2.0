@@ -426,9 +426,16 @@ async function parseAndValidateMaterials(materialsString, interaction) {
                 }
 
                 // Fetch the item from the database using case-insensitive search
-                const item = await ItemModel.findOne({ 
-                    itemName: { $regex: new RegExp(`^${escapeRegExp(cleanItemName)}$`, 'i') }
-                });
+                let item;
+                if (cleanItemName.includes('+')) {
+                    item = await ItemModel.findOne({ 
+                        itemName: cleanItemName
+                    });
+                } else {
+                    item = await ItemModel.findOne({ 
+                        itemName: { $regex: new RegExp(`^${escapeRegExp(cleanItemName)}$`, 'i') }
+                    });
+                }
                 if (!item) {
                     throw new Error(
                         `Item "${cleanItemName}" does not exist in the database. Please ensure the item name is correct.`

@@ -52,9 +52,16 @@ const DEFAULT_EMOJI = "🔹";
 
 async function getItemEmoji(itemName) {
   try {
-    const item = await ItemModel.findOne({ 
-      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, "i") }
-    }).select("emoji").exec()
+    let item;
+    if (itemName.includes('+')) {
+      item = await ItemModel.findOne({ 
+        itemName: itemName
+      }).select("emoji").exec();
+    } else {
+      item = await ItemModel.findOne({ 
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, "i") }
+      }).select("emoji").exec();
+    }
     const emoji = item && item.emoji ? item.emoji : DEFAULT_EMOJI;
     return emoji;
   } catch (error) {
@@ -1085,9 +1092,16 @@ async function handleShopBuy(interaction) {
     }
 
     // ------------------- Validate Shop Item -------------------
-    const shopItem = await ShopStock.findOne({ 
-      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-    }).lean();
+    let shopItem;
+    if (itemName.includes('+')) {
+      shopItem = await ShopStock.findOne({ 
+        itemName: itemName
+      }).lean();
+    } else {
+      shopItem = await ShopStock.findOne({ 
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
+      }).lean();
+    }
     
     if (!shopItem) {
       return interaction.editReply({
@@ -1143,11 +1157,20 @@ async function handleShopBuy(interaction) {
     }
 
     // ------------------- Validate Item Details -------------------
-    const itemDetails = await ItemModel.findOne({ 
-      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-    })
-     .select("buyPrice sellPrice category type image craftingJobs itemRarity")
-     .lean();
+    let itemDetails;
+    if (itemName.includes('+')) {
+      itemDetails = await ItemModel.findOne({ 
+        itemName: itemName
+      })
+       .select("buyPrice sellPrice category type image craftingJobs itemRarity")
+       .lean();
+    } else {
+      itemDetails = await ItemModel.findOne({ 
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
+      })
+       .select("buyPrice sellPrice category type image craftingJobs itemRarity")
+       .lean();
+    }
     if (!itemDetails) {
      console.error(`[shops]: Item details not found in database: ${itemName}`);
      
@@ -1243,16 +1266,29 @@ async function handleShopBuy(interaction) {
     console.log(`[economy.js]: 📦 Updated inventory for characterId: ${character._id}, item: ${itemName}, quantity: +${quantity}`);
 
     // Update shop stock
-    await ShopStock.updateOne(
-      { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } },
-      { $set: { stock: shopQuantity - quantity } }
-    );
+    if (itemName.includes('+')) {
+      await ShopStock.updateOne(
+        { itemName: itemName },
+        { $set: { stock: shopQuantity - quantity } }
+      );
+    } else {
+      await ShopStock.updateOne(
+        { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } },
+        { $set: { stock: shopQuantity - quantity } }
+      );
+    }
 
     // Delete item if stock reaches 0
     if (shopQuantity - quantity <= 0) {
-      await ShopStock.deleteOne({ 
-        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } 
-      });
+      if (itemName.includes('+')) {
+        await ShopStock.deleteOne({ 
+          itemName: itemName
+        });
+      } else {
+        await ShopStock.deleteOne({ 
+          itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } 
+        });
+      }
     }
 
     // ------------------- Log Transaction -------------------
@@ -1471,9 +1507,16 @@ if (quantity <= 0) {
   const obtainMethod = inventoryItem.obtain.toLowerCase();
   const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
 
-  const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } })
-   .select("buyPrice sellPrice category type image craftingJobs itemRarity")
-   .lean();
+  let itemDetails;
+  if (itemName.includes('+')) {
+    itemDetails = await ItemModel.findOne({ itemName: itemName })
+     .select("buyPrice sellPrice category type image craftingJobs itemRarity")
+     .lean();
+  } else {
+    itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } })
+     .select("buyPrice sellPrice category type image craftingJobs itemRarity")
+     .lean();
+  }
   
   if (!itemDetails) {
    console.error(`[shops]: Item not found in database: ${itemName}`);
@@ -1517,22 +1560,41 @@ if (quantity <= 0) {
   );
   
   // Update shop stock with correct item data
-  await ShopStock.updateOne(
-   { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } },
-   { 
-     $inc: { stock: quantity },
-     $set: {
-       itemName: itemName, // Ensure correct case
-       buyPrice: itemDetails.buyPrice,
-       sellPrice: itemDetails.sellPrice,
-       category: itemDetails.category,
-       type: itemDetails.type,
-       image: itemDetails.image || 'No Image',
-       itemRarity: itemDetails.itemRarity || 1
-     }
-   },
-   { upsert: true }
-  );
+  if (itemName.includes('+')) {
+    await ShopStock.updateOne(
+     { itemName: itemName },
+     { 
+       $inc: { stock: quantity },
+       $set: {
+         itemName: itemName, // Ensure correct case
+         buyPrice: itemDetails.buyPrice,
+         sellPrice: itemDetails.sellPrice,
+         category: itemDetails.category,
+         type: itemDetails.type,
+         image: itemDetails.image || 'No Image',
+         itemRarity: itemDetails.itemRarity || 1
+       }
+     },
+     { upsert: true }
+    );
+  } else {
+    await ShopStock.updateOne(
+     { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } },
+     { 
+       $inc: { stock: quantity },
+       $set: {
+         itemName: itemName, // Ensure correct case
+         buyPrice: itemDetails.buyPrice,
+         sellPrice: itemDetails.sellPrice,
+         category: itemDetails.category,
+         type: itemDetails.type,
+         image: itemDetails.image || 'No Image',
+         itemRarity: itemDetails.itemRarity || 1
+       }
+     },
+     { upsert: true }
+    );
+  }
 
   const totalPrice = sellPrice * quantity;
 
@@ -1822,9 +1884,17 @@ for (const { name } of cleanedItems) {
    const baseItemName = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
 
    // Find the canonical item name from the database first
-   const itemDetails = await ItemModel.findOne({
-     itemName: { $regex: new RegExp(`^${escapeRegExp(baseItemName)}$`, "i") }
-   }).exec();
+   // Handle items with + in their names by using exact match instead of regex
+   let itemDetails;
+   if (baseItemName.includes('+')) {
+     itemDetails = await ItemModel.findOne({
+       itemName: baseItemName
+     }).exec();
+   } else {
+     itemDetails = await ItemModel.findOne({
+       itemName: { $regex: new RegExp(`^${escapeRegExp(baseItemName)}$`, "i") }
+     }).exec();
+   }
 
    if (!itemDetails) {
      console.log(`[transfer.js:logs] Item not found in database: ${baseItemName}`);
@@ -1836,9 +1906,17 @@ for (const { name } of cleanedItems) {
    // Use the canonical item name from the database
    const canonicalName = itemDetails.itemName;
 
-   const fromInventoryEntries = await fromInventoryCollection
-    .find({ itemName: { $regex: new RegExp(`^${canonicalName}$`, "i") } })
-    .toArray();
+   // Handle items with + in their names by using exact match instead of regex
+   let fromInventoryEntries;
+   if (canonicalName.includes('+')) {
+     fromInventoryEntries = await fromInventoryCollection
+      .find({ itemName: canonicalName })
+      .toArray();
+   } else {
+     fromInventoryEntries = await fromInventoryCollection
+      .find({ itemName: { $regex: new RegExp(`^${canonicalName}$`, "i") } })
+      .toArray();
+   }
    const totalQuantity = fromInventoryEntries.reduce(
     (sum, entry) => sum + entry.quantity,
     0

@@ -121,11 +121,17 @@ module.exports = {
 // ------------------- Handle item lookup -------------------
 async function handleItemLookup(interaction, itemName) {
   
-  const escapedItemName = escapeRegExp(itemName);
-  
-  const item = await ItemModel.findOne({ 
-    itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") }
-  }).exec();
+  let item;
+  if (itemName.includes('+')) {
+    item = await ItemModel.findOne({ 
+      itemName: itemName
+    }).exec();
+  } else {
+    const escapedItemName = escapeRegExp(itemName);
+    item = await ItemModel.findOne({ 
+      itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") }
+    }).exec();
+  }
   
   if (!item) {
       return interaction.editReply({ content: '❌ No item found with this name.', ephemeral: true });

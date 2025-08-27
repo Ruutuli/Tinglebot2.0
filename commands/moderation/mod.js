@@ -2372,9 +2372,16 @@ async function handleShopAdd(interaction) {
 
   try {
     // Fetch the item from the database to get all its properties
-    const item = await ItemModel.findOne({ 
-      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-    });
+    let item;
+    if (itemName.includes('+')) {
+      item = await ItemModel.findOne({ 
+        itemName: itemName
+      });
+    } else {
+      item = await ItemModel.findOne({ 
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
+      });
+    }
     
     if (!item) {
       return interaction.editReply(`❌ Item **${itemName}** does not exist in the database.`);
@@ -2385,9 +2392,16 @@ async function handleShopAdd(interaction) {
     const finalSellPrice = item.sellPrice || 0;
 
     // Check if item already exists in shop
-    const existingShopItem = await VillageShopsModel.findOne({ 
-      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-    });
+    let existingShopItem;
+    if (itemName.includes('+')) {
+      existingShopItem = await VillageShopsModel.findOne({ 
+        itemName: itemName
+      });
+    } else {
+      existingShopItem = await VillageShopsModel.findOne({ 
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
+      });
+    }
 
     if (existingShopItem) {
       // Update existing shop item

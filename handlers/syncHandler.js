@@ -330,9 +330,16 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                             const { inventoryItem, updatedRowData } = result;
                             
                             // Only update existing items in the database
-                            const existingItem = await ItemModel.findOne({ 
-                                itemName: { $regex: new RegExp(`^${escapeRegExp(inventoryItem.itemName)}$`, 'i') }
-                            });
+                            let existingItem;
+                            if (inventoryItem.itemName.includes('+')) {
+                                existingItem = await ItemModel.findOne({ 
+                                    itemName: inventoryItem.itemName
+                                });
+                            } else {
+                                existingItem = await ItemModel.findOne({ 
+                                    itemName: { $regex: new RegExp(`^${escapeRegExp(inventoryItem.itemName)}$`, 'i') }
+                                });
+                            }
                             if (!existingItem) {
                                 skippedItems.push({ name: inventoryItem.itemName, reason: 'Item not found in database' });
                                 continue;

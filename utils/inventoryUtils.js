@@ -346,10 +346,18 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       throw new Error(`Item with name "${itemName}" not found`);
     }
 
-    const inventoryItem = await inventoryCollection.findOne({
-      characterId,
-      itemName: new RegExp(`^${escapeRegExp(itemName.trim())}$`, "i"),
-    });
+    let inventoryItem;
+    if (itemName.includes('+')) {
+      inventoryItem = await inventoryCollection.findOne({
+        characterId,
+        itemName: itemName.trim(),
+      });
+    } else {
+      inventoryItem = await inventoryCollection.findOne({
+        characterId,
+        itemName: new RegExp(`^${escapeRegExp(itemName.trim())}$`, "i"),
+      });
+    }
 
     if (inventoryItem) {
       await inventoryCollection.updateOne(
@@ -463,13 +471,21 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     const inventoryCollection = db.collection(collectionName);
 
     // First try exact match
-    let inventoryItem = await inventoryCollection.findOne({
-      characterId: character._id,
-      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
-    });
+    let inventoryItem;
+    if (itemName.includes('+')) {
+      inventoryItem = await inventoryCollection.findOne({
+        characterId: character._id,
+        itemName: itemName.trim()
+      });
+    } else {
+      inventoryItem = await inventoryCollection.findOne({
+        characterId: character._id,
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
+      });
+    }
 
-    // If no exact match, try case-insensitive match
-    if (!inventoryItem) {
+    // If no exact match, try case-insensitive match (only for non-+ items)
+    if (!inventoryItem && !itemName.includes('+')) {
       inventoryItem = await inventoryCollection.findOne({
         characterId: character._id,
         itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
