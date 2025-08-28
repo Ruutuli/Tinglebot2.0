@@ -472,44 +472,7 @@ module.exports = {
           character.jobVoucher = updatedCharacter.jobVoucher;
           character.jobVoucherJob = updatedCharacter.jobVoucherJob;
         }
-        await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction);
-
-        // Log job voucher usage to Google Sheets
-        const inventoryLink = character.inventory || character.inventoryLink;
-        if (typeof inventoryLink === 'string') {
-          const { category = [], type = [], subtype = [] } = item;
-          const formattedDateTime = new Date().toISOString();
-          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-          const values = [[
-            character.name,
-            'Job Voucher',
-            '-1',
-            Array.isArray(category) ? category.join(', ') : category,
-            Array.isArray(type) ? type.join(', ') : type,
-            Array.isArray(subtype) ? subtype.join(', ') : subtype,
-            `Used for job voucher: ${jobName}`,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            ''
-          ]];
-          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
-            skipValidation: true,
-            context: {
-              commandName: 'item',
-              userTag: interaction.user.tag,
-              userId: interaction.user.id,
-              options: {
-                characterName,
-                itemName,
-                quantity,
-                jobName: interaction.options.getString('jobname')
-              }
-            }
-          });
-        }
+        await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction, `Used for job voucher: ${jobName}`);
 
         // ------------------- Build and Send Voucher Embed -------------------
         const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
@@ -611,43 +574,7 @@ module.exports = {
         await user.save();
 
         // Remove the vouchers from inventory
-        await removeItemInventoryDatabase(character._id, 'Character Slot Voucher', quantity, interaction);
-
-        // Log character slot voucher usage to Google Sheets
-        const inventoryLink = character.inventory || character.inventoryLink;
-        if (typeof inventoryLink === 'string') {
-          const { category = [], type = [], subtype = [] } = item;
-          const formattedDateTime = new Date().toISOString();
-          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-          const values = [[
-            character.name,
-            'Character Slot Voucher',
-            `-${quantity}`,
-            Array.isArray(category) ? category.join(', ') : category,
-            Array.isArray(type) ? type.join(', ') : type,
-            Array.isArray(subtype) ? subtype.join(', ') : subtype,
-            `Used ${quantity} character slot voucher(s)`,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            ''
-          ]];
-          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
-            skipValidation: true,
-            context: {
-              commandName: 'item',
-              userTag: interaction.user.tag,
-              userId: interaction.user.id,
-              options: {
-                characterName,
-                itemName,
-                quantity
-              }
-            }
-          });
-        }
+        await removeItemInventoryDatabase(character._id, 'Character Slot Voucher', quantity, interaction, `Used ${quantity} character slot voucher(s)`);
 
                  // ------------------- Build and Send Voucher Embed -------------------
          const voucherEmbed = new EmbedBuilder()
@@ -770,43 +697,7 @@ module.exports = {
         await updateCharacterById(character._id, { currentActivePet: newPet._id });
 
         // Remove the egg from inventory
-        await removeItemInventoryDatabase(character._id, 'Chuchu Egg', 1, interaction);
-
-        // Log chuchu egg usage to Google Sheets
-        const inventoryLink = character.inventory || character.inventoryLink;
-        if (typeof inventoryLink === 'string') {
-          const { category = [], type = [], subtype = [] } = item;
-          const formattedDateTime = new Date().toISOString();
-          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-          const values = [[
-            character.name,
-            'Chuchu Egg',
-            '-1',
-            Array.isArray(category) ? category.join(', ') : category,
-            Array.isArray(type) ? type.join(', ') : type,
-            Array.isArray(subtype) ? subtype.join(', ') : subtype,
-                         `Hatched into ${randomPetName} the ${chuchuType}`,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            ''
-          ]];
-          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
-            skipValidation: true,
-            context: {
-              commandName: 'item',
-              userTag: interaction.user.tag,
-              userId: interaction.user.id,
-              options: {
-                characterName,
-                itemName,
-                quantity
-              }
-            }
-          });
-        }
+        await removeItemInventoryDatabase(character._id, 'Chuchu Egg', 1, interaction, `Hatched into ${randomPetName} the ${chuchuType}`);
 
         // ------------------- Build and Send Hatching Embed -------------------
         const petEmoji = getPetEmoji(chuchuType.toLowerCase());
