@@ -8,7 +8,13 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Local Module Imports -------------------
 const { handleError } = require('../../utils/globalErrorHandler');
-const { fetchCharacterByName, getCharacterInventoryCollection, fetchItemRarityByName, connectToInventoriesForItems } = require('../../database/db');
+const { 
+    fetchCharacterByName, 
+    getCharacterInventoryCollection, 
+    fetchItemRarityByName, 
+    connectToInventoriesForItems,
+    fetchModCharacterByNameAndUserId 
+} = require('../../database/db');
 const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
 const { getNPCItems, NPCs, getStealFlavorText, getStealFailText } = require('../../modules/NPCsModule');
 const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
@@ -216,6 +222,14 @@ async function updateDailySteal(character, activity) {
     await character.save();
   } catch (error) {
     console.error(`[steal.js]: ❌ Failed to update daily steal for ${character.name}:`, error);
+    
+            // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'updateDailySteal',
+            characterName: character?.name
+        });
+    
     throw error;
   }
 }
@@ -308,7 +322,6 @@ async function validateCharacter(characterName, userId, requireInventorySync = f
         
         // If not found as regular character, try as mod character
         if (!character) {
-            const { fetchModCharacterByNameAndUserId } = require('../../database/db');
             character = await fetchModCharacterByNameAndUserId(characterName, userId);
         }
         
@@ -327,6 +340,15 @@ async function validateCharacter(characterName, userId, requireInventorySync = f
         return { valid: true, character };
     } catch (error) {
         console.error(`[steal.js]: ❌ Error validating character "${characterName}":`, error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'validateCharacter',
+            characterName: characterName,
+            userId: userId
+        });
+        
         return { valid: false, error: `❌ **An error occurred while validating character "${characterName}".** Please try again later.` };
     }
 }
@@ -636,6 +658,14 @@ async function isProtected(targetId) {
         return { protected: false };
     } catch (error) {
         console.error('[steal.js]: Error checking protection:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'isProtected check',
+            targetId: targetId
+        });
+        
         return { protected: false };
     }
 }
@@ -682,6 +712,14 @@ async function setProtection(targetId, duration = '2hours') {
         }
     } catch (error) {
         console.error('[steal.js]: Error setting protection:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'setProtection',
+            targetId: targetId,
+            duration: duration
+        });
     }
 }
 
@@ -706,6 +744,13 @@ async function clearProtection(targetId) {
         }
     } catch (error) {
         console.error('[steal.js]: Error clearing protection:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'clearProtection',
+            targetId: targetId
+        });
     }
 }
 
@@ -752,6 +797,13 @@ async function setGlobalSuccessProtection(targetId) {
     }
   } catch (error) {
     console.error('[steal.js]: Error setting global success protection:', error);
+    
+            // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'setGlobalSuccessProtection',
+            targetId: targetId
+        });
   }
 }
 
@@ -780,6 +832,13 @@ async function setGlobalFailureProtection(targetId) {
     }
   } catch (error) {
     console.error('[steal.js]: Error setting global failure protection:', error);
+    
+            // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'setGlobalFailureProtection',
+            targetId: targetId
+        });
   }
 }
 
@@ -809,6 +868,12 @@ async function resetAllStealProtections() {
     console.log('[steal.js]: 🛡️ All steal protection reset completed');
   } catch (error) {
     console.error('[steal.js]: ❌ Error resetting steal protections:', error);
+    
+            // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'resetAllStealProtections'
+        });
   }
 }
 
@@ -889,6 +954,15 @@ async function updateStealStats(characterId, success, itemRarity, victimCharacte
         await stats.save();
     } catch (error) {
         console.error('[steal.js]: Error updating steal stats:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'updateStealStats',
+            characterId: characterId,
+            success: success,
+            itemRarity: itemRarity
+        });
     }
 }
 
@@ -920,6 +994,14 @@ async function getStealStats(characterId) {
         };
     } catch (error) {
         console.error('[steal.js]: Error getting steal stats:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'getStealStats',
+            characterId: characterId
+        });
+        
         return {
             totalAttempts: 0,
             successfulSteals: 0,
@@ -953,6 +1035,14 @@ async function getItemEmoji(itemName) {
         return '📦';
     } catch (error) {
         console.error('[steal.js]: Error getting item emoji:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'getItemEmoji',
+            itemName: itemName
+        });
+        
         return '📦';
     }
 }
@@ -1018,6 +1108,14 @@ async function isCustomWeapon(itemName) {
         return false;
     } catch (error) {
         console.error('[steal.js]: ❌ Error checking if item is custom weapon:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'isCustomWeapon check',
+            itemName: itemName
+        });
+        
         return false; // Default to allowing theft if check fails
     }
 }
@@ -1135,14 +1233,58 @@ function formatJailTimeLeftDaysHours(timeLeft) {
 // Centralized error handling for steal operations to eliminate duplication
 async function handleStealError(error, interaction, operationType) {
     console.error(`[steal.js]: ❌ Critical error during ${operationType} flow:`, error);
+    
+    // Call global error handler with enhanced context
+    handleError(error, 'steal.js', {
+        commandName: 'steal',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        subcommand: interaction.options?.getSubcommand?.() || 'unknown',
+        operationType: operationType,
+        options: {
+            characterName: interaction.options?.getString('charactername'),
+            targetType: interaction.options?.getString('targettype'),
+            targetName: interaction.options?.getString('target'),
+            raritySelection: interaction.options?.getString('rarity')
+        }
+    });
+    
+    // Provide more specific error messages based on the error type
+    let errorMessage = '❌ **An error occurred while processing the steal.**';
+    
+    if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+        if (error.code === 11000) {
+            errorMessage = '❌ **Database duplicate key error during steal processing.**\n🔄 Please try again in a moment.';
+        } else if (error.code === 121) {
+            errorMessage = '❌ **Database validation error during steal processing.**\n🔄 Please try again in a moment.';
+        } else {
+            errorMessage = `❌ **Database error during steal processing (Code: ${error.code}).**\n🔄 Please try again in a moment.`;
+        }
+    } else if (error.name === 'TypeError') {
+        if (error.message.includes('Cannot read properties of undefined') || error.message.includes('Cannot read properties of null')) {
+            errorMessage = '❌ **Data structure error during steal processing.**\n🔄 The target may have invalid data. Please try again or contact a mod and submit an error report.';
+        } else {
+            errorMessage = '❌ **Data type error during steal processing.**\n🔄 Please try again or contact a mod and submit an error report.';
+        }
+    } else if (error.name === 'ReferenceError') {
+        errorMessage = '❌ **System configuration error during steal processing.**\n🔄 Please contact a mod immediately and submit an error report.';
+    } else if (error.message && error.message.includes('timeout')) {
+        errorMessage = '❌ **Database operation timed out during steal processing.**\n🔄 Please try again in a moment.';
+    } else if (error.message && error.message.includes('network')) {
+        errorMessage = '❌ **Network error during steal processing.**\n🔄 Please check your connection and try again.';
+    }
+    
+    // Add debugging information for staff
+    const debugInfo = `\n\n**Debug Info:**\n• Operation: ${operationType}\n• Error: ${error.name}: ${error.message}`;
+    
     try {
         if (interaction.replied || interaction.deferred) {
             await interaction.editReply({ 
-                content: '❌ **An error occurred while processing the steal. If you see an item in your inventory that shouldn\'t be there, please contact staff.**' 
+                content: errorMessage + debugInfo + '\n\n⚠️ **Note:** If you see an item in your inventory that shouldn\'t be there, please contact a mod immediately and submit an error report.' 
             });
         } else {
             await interaction.reply({ 
-                content: '❌ **An error occurred while processing the steal. If you see an item in your inventory that shouldn\'t be there, please contact staff.**', 
+                content: errorMessage + debugInfo + '\n\n⚠️ **Note:** If you see an item in your inventory that shouldn\'t be there, please contact a mod immediately and submit an error report.', 
                 ephemeral: true 
             });
         }
@@ -1265,6 +1407,15 @@ async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, inte
         };
     } catch (error) {
         console.error(`[steal.js]: ❌ Failed to infect ${thiefCharacter.name} with blight:`, error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'blight infection',
+            thiefCharacterName: thiefCharacter?.name,
+            targetCharacterName: targetCharacter?.name
+        });
+        
         return { infected: false, message: null };
     }
 }
@@ -1287,6 +1438,21 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         }
     } catch (error) {
         console.error('[steal.js]: Error setting protection after successful steal:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            subcommand: interaction.options?.getSubcommand?.() || 'commit',
+            operationType: 'set protection after successful steal',
+            options: {
+                targetType: isNPC ? 'NPC' : 'player',
+                targetName: isNPC ? targetCharacter : targetCharacter?.name,
+                characterName: thiefCharacter?.name
+            }
+        });
+        
         // Continue with success logic even if protection setting fails
     }
     
@@ -1376,6 +1542,20 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             });
         }
     } catch (error) {
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            subcommand: interaction.options?.getSubcommand?.() || 'commit',
+            operationType: isNPC ? 'NPC steal success' : 'player steal success',
+            options: {
+                targetType: isNPC ? 'NPC' : 'player',
+                targetName: isNPC ? targetCharacter : targetCharacter?.name,
+                characterName: thiefCharacter?.name
+            }
+        });
+        
         await handleStealError(error, interaction, isNPC ? 'NPC steal success' : 'player steal success');
     }
 }
@@ -1419,6 +1599,20 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
         
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            subcommand: interaction.options?.getSubcommand?.() || 'commit',
+            operationType: isNPC ? 'NPC steal failure' : 'player steal failure',
+            options: {
+                targetType: isNPC ? 'NPC' : 'player',
+                targetName: isNPC ? targetCharacter : targetCharacter?.name,
+                characterName: thiefCharacter?.name
+            }
+        });
+        
         await handleStealError(error, interaction, isNPC ? 'NPC steal failure' : 'player steal failure');
     }
 }
@@ -1469,9 +1663,9 @@ async function calculateFailureThreshold(itemTier, character = null, targetName 
 // OPTIMIZED: Now batches database queries instead of individual calls
 
 // Helper function to escape regex special characters
-// Note: We don't escape the + character as it's commonly used in item names
+// Properly escape all regex special characters including +
 function escapeRegexString(str) {
-  return str.replace(/[.*?^${}()|[\]\\]/g, '\\$&');
+  return str.replace(/[.*?^${}()|[\]\\+]/g, '\\$&');
 }
 
 async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries = null) {
@@ -1538,6 +1732,18 @@ async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries
         }
     } catch (error) {
         console.error('[steal.js]: ❌ Error in processItemsWithRarity:', error);
+        
+        // Log additional context for debugging
+        console.log(`[steal.js]: 📊 Debug info - Item names: ${JSON.stringify(itemNames)}, isNPC: ${isNPC}`);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'processItemsWithRarity',
+            itemNames: itemNames,
+            isNPC: isNPC
+        });
+        
         // Fallback to individual processing if batch fails
         console.log('[steal.js]: ⚠️ Falling back to individual item processing');
         return await processItemsWithRarityFallback(itemNames, isNPC, inventoryEntries);
@@ -2000,24 +2206,55 @@ module.exports = {
             const totalTime = errorTime - startTime;
             console.log(`[steal.js]: ❌ Steal command failed after ${totalTime}ms`);
             
+            // Enhanced error context for better debugging
             handleError(error, 'steal.js', {
                 commandName: 'steal',
                 userTag: interaction.user.tag,
                 userId: interaction.user.id,
                 characterName: characterName,
+                subcommand: interaction.options.getSubcommand(),
                 options: {
                     targetType,
                     targetName,
-                    raritySelection
+                    raritySelection,
+                    characterName
                 }
             });
             console.error('[steal.js]: Error executing command:', error);
             
+            // Provide more specific error messages based on the error type
+            let errorMessage = '❌ **An error occurred while processing the steal command.**';
+            
+            if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+                if (error.code === 11000) {
+                    errorMessage = '❌ **Database duplicate key error.**\n🔄 Please try again in a moment.';
+                } else if (error.code === 121) {
+                    errorMessage = '❌ **Database validation error.**\n🔄 Please try again in a moment.';
+                } else {
+                    errorMessage = `❌ **Database error (Code: ${error.code}).**\n🔄 Please try again in a moment.`;
+                }
+            } else if (error.name === 'TypeError') {
+                if (error.message.includes('Cannot read properties of undefined') || error.message.includes('Cannot read properties of null')) {
+                                errorMessage = '❌ **Data structure error.**\n🔄 The target may have invalid data. Please try again or contact a mod and submit an error report.';
+        } else {
+            errorMessage = '❌ **Data type error.**\n🔄 Please try again or contact a mod and submit an error report.';
+        }
+    } else if (error.name === 'ReferenceError') {
+        errorMessage = '❌ **System configuration error.**\n🔄 Please contact a mod immediately and submit an error report.';
+            } else if (error.message && error.message.includes('timeout')) {
+                errorMessage = '❌ **Database operation timed out.**\n🔄 Please try again in a moment.';
+            } else if (error.message && error.message.includes('network')) {
+                errorMessage = '❌ **Network error.**\n🔄 Please check your connection and try again.';
+            }
+            
+            // Add debugging information for mods
+            const debugInfo = `\n\n**Debug Info:**\n• Character: ${characterName}\n• Target: ${targetName}\n• Type: ${targetType}\n• Rarity: ${raritySelection}\n• Error: ${error.name}: ${error.message}`;
+            
             // Check if interaction has already been replied to
             if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: '❌ **An error occurred while processing the command.**', ephemeral: true });
+                await interaction.reply({ content: errorMessage + debugInfo, ephemeral: true });
             } else {
-                await interaction.editReply({ content: '❌ **An error occurred while processing the command.**' });
+                await interaction.editReply({ content: errorMessage + debugInfo });
             }
         }
     },
@@ -2033,7 +2270,7 @@ function validateNPCTarget(targetName) {
         console.error('[steal.js]: ❌ Critical error - NPCs object is not available');
         return { 
             valid: false, 
-            error: '❌ **System Error: NPC data not available**\n\n**Please contact staff immediately.**\n\n**Error Details:** NPCs module failed to load properly.'
+            error: '❌ **System Error: NPC data not available**\n\n**Please contact a mod immediately and submit an error report.**\n\n**Error Details:** NPCs module failed to load properly.'
         };
     }
     
@@ -2080,6 +2317,44 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
             }
             
             const mappedNPCName = npcValidation.npcName;
+            
+            // Special validation for Zone NPC to catch common issues
+            if (mappedNPCName === 'Zone') {
+                try {
+                    // Check if Zone NPC data is properly loaded
+                    if (!NPCs || !NPCs[mappedNPCName]) {
+                        console.error('[steal.js]: ❌ Zone NPC data not available');
+                        return { 
+                            valid: false, 
+                            error: '❌ **Zone NPC data is currently unavailable.**\n🔄 Please try again in a moment or contact a mod and submit an error report if the issue persists.' 
+                        };
+                    }
+                    
+                    // Check if Zone has any items available
+                    const zoneItems = await getNPCItems(mappedNPCName);
+                    if (!zoneItems || zoneItems.length === 0) {
+                        console.log('[steal.js]: ⚠️ Zone NPC has no items available');
+                        return { 
+                            valid: false, 
+                            error: '❌ **Zone currently has no items available to steal.**\n🔄 Please try again later or try stealing from a different NPC.' 
+                        };
+                    }
+                } catch (zoneError) {
+                    console.error('[steal.js]: ❌ Error validating Zone NPC:', zoneError);
+                    
+                    // Call global error handler for tracking
+                    handleError(zoneError, 'steal.js', {
+                        commandName: 'steal',
+                        operationType: 'Zone NPC validation',
+                        targetName: 'Zone'
+                    });
+                    
+                    return { 
+                        valid: false, 
+                        error: '❌ **Error validating Zone NPC data.**\n🔄 Please try again in a moment or contact a mod and submit an error report if the issue persists.' 
+                    };
+                }
+            }
             
             // Check if NPC is protected
             const npcProtection = await isProtected(mappedNPCName);
@@ -2204,6 +2479,16 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
         }
     } catch (error) {
         console.error('[steal.js]: Error in validateStealTarget:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'validateStealTarget',
+            targetName: targetName,
+            targetType: targetType,
+            thiefCharacterName: thiefCharacter?.name
+        });
+        
         return { valid: false, error: '❌ **An error occurred while validating the target.**' };
     }
 }
@@ -2215,47 +2500,109 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
         if (targetType === 'npc') {
             // Handle Peddler special case
             if (targetName === 'Peddler') {
-                const Item = require('../../models/ItemModel');
-                const allItems = await Item.find({}, 'itemName');
-                let npcInventory = allItems.map(item => item.itemName);
-                
-                // Filter out custom weapons from Peddler inventory
-                const peddlerInventoryWithoutCustomWeapons = [];
-                for (const itemName of npcInventory) {
-                    const isCustom = await isCustomWeapon(itemName);
-                    if (!isCustom) {
-                        peddlerInventoryWithoutCustomWeapons.push(itemName);
+                try {
+                    const allItems = await ItemModel.find({}, 'itemName');
+                    let npcInventory = allItems.map(item => item.itemName);
+                    
+                    // Filter out custom weapons from Peddler inventory
+                    const peddlerInventoryWithoutCustomWeapons = [];
+                    for (const itemName of npcInventory) {
+                        try {
+                            const isCustom = await isCustomWeapon(itemName);
+                            if (!isCustom) {
+                                peddlerInventoryWithoutCustomWeapons.push(itemName);
+                            }
+                        } catch (customWeaponError) {
+                            console.error(`[steal.js]: ❌ Error checking if Peddler item is custom weapon: ${itemName}`, customWeaponError);
+                            
+                            // Call global error handler for tracking
+                            handleError(customWeaponError, 'steal.js', {
+                                commandName: 'steal',
+                                operationType: 'Peddler custom weapon check',
+                                itemName: itemName,
+                                targetName: 'Peddler'
+                            });
+                            
+                            // Continue processing other items instead of failing completely
+                            peddlerInventoryWithoutCustomWeapons.push(itemName);
+                        }
                     }
-                }
-                
-                if (peddlerInventoryWithoutCustomWeapons.length === 0) {
+                    
+                    if (peddlerInventoryWithoutCustomWeapons.length === 0) {
+                        return { 
+                            success: false, 
+                            error: `❌ **No items available to steal from Peddler!**\n🛡️ All available items are protected from theft (Custom Weapons).` 
+                        };
+                    }
+                    
+                    npcInventory = peddlerInventoryWithoutCustomWeapons;
+                } catch (peddlerError) {
+                    console.error(`[steal.js]: ❌ Error processing Peddler inventory:`, peddlerError);
+                    
+                    // Call global error handler for tracking
+                    handleError(peddlerError, 'steal.js', {
+                        commandName: 'steal',
+                        operationType: 'Peddler inventory processing',
+                        targetName: 'Peddler'
+                    });
+                    
                     return { 
                         success: false, 
-                        error: `❌ **No items available to steal from Peddler!**\n🛡️ All available items are protected from theft (Custom Weapons).` 
+                        error: `❌ **Error processing Peddler inventory!**\n🔄 Please try again in a moment.\n\n**Debug Info:**\n• NPC: Peddler\n• Error: ${peddlerError.name}: ${peddlerError.message}\n\n**Tip:** This may indicate a system issue. Please contact a mod and submit an error report if the problem persists.` 
                     };
                 }
-                
-                npcInventory = peddlerInventoryWithoutCustomWeapons;
             } else {
                 // For other NPCs, use cached items or fetch from database
                 const cachedItems = getCachedNPCItems(targetName);
                 if (cachedItems) {
                     npcInventory = cachedItems;
                 } else {
-                    npcInventory = await getNPCItems(targetName);
-                    
-                    // Cache the results for future use
-                    if (Array.isArray(npcInventory) && npcInventory.length > 0) {
-                        setCachedNPCItems(targetName, npcInventory);
+                    try {
+                        npcInventory = await getNPCItems(targetName);
+                        
+                        // Cache the results for future use
+                        if (Array.isArray(npcInventory) && npcInventory.length > 0) {
+                            setCachedNPCItems(targetName, npcInventory);
+                        }
+                    } catch (npcError) {
+                        console.error(`[steal.js]: ❌ Error fetching items for NPC ${targetName}:`, npcError);
+                        
+                        // Call global error handler for tracking
+                        handleError(npcError, 'steal.js', {
+                            commandName: 'steal',
+                            operationType: 'NPC items fetch',
+                            targetName: targetName
+                        });
+                        
+                        // Special handling for Zone NPC
+                        if (targetName === 'Zone') {
+                            return { 
+                                success: false, 
+                                error: `❌ **Error fetching items from Zone!**\n🔄 Please try again in a moment.\n\n**Debug Info:**\n• NPC: ${targetName}\n• Error: ${npcError.name}: ${npcError.message}\n\n**Tip:** This may indicate a system issue. Please contact a mod and submit an error report if the problem persists.` 
+                            };
+                        } else {
+                            return { 
+                                success: false, 
+                                error: `❌ **Error fetching items from ${targetName}!**\n🔄 Please try again in a moment.\n\n**Debug Info:**\n• NPC: ${targetName}\n• Error: ${npcError.name}: ${npcError.message}` 
+                            };
+                        }
                     }
                 }
                 
                 // Check if we got a valid inventory
                 if (!Array.isArray(npcInventory) || npcInventory.length === 0) {
-                    return { 
-                        success: false, 
-                        error: `❌ **No items available to steal from ${targetName}!**\n🛡️ This NPC may not have any stealable items.` 
-                    };
+                    // Special handling for Zone NPC
+                    if (targetName === 'Zone') {
+                        return { 
+                            success: false, 
+                            error: `❌ **No items available to steal from Zone!**\n🛡️ This NPC may not have any stealable items.\n\n**Debug Info:**\n• NPC: ${targetName}\n• Inventory type: ${typeof npcInventory}\n• Inventory length: ${Array.isArray(npcInventory) ? npcInventory.length : 'N/A'}\n\n**Tip:** This may indicate a system issue. Please contact a mod and submit an error report if the problem persists.` 
+                        };
+                    } else {
+                        return { 
+                            success: false, 
+                            error: `❌ **No items available to steal from ${targetName}!**\n🛡️ This NPC may not have any stealable items.` 
+                        };
+                    }
                 }
                 
                 // Normalize npcInventory to ensure all items are strings
@@ -2282,8 +2629,14 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                 // Filter out custom weapons
                 const filteredNPCInventoryWithoutCustomWeapons = [];
                 for (const itemName of filteredNPCInventory) {
-                    const isCustom = await isCustomWeapon(itemName);
-                    if (!isCustom) {
+                    try {
+                        const isCustom = await isCustomWeapon(itemName);
+                        if (!isCustom) {
+                            filteredNPCInventoryWithoutCustomWeapons.push(itemName);
+                        }
+                    } catch (customWeaponError) {
+                        console.error(`[steal.js]: ❌ Error checking if item is custom weapon: ${itemName}`, customWeaponError);
+                        // Continue processing other items instead of failing completely
                         filteredNPCInventoryWithoutCustomWeapons.push(itemName);
                     }
                 }
@@ -2299,18 +2652,57 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
             }
             
             // Process NPC items through rarity selection
-            const itemsWithRarity = await processItemsWithRarity(npcInventory, true);
-            const { items: filteredItems, selectedTier, usedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
+            let itemsWithRarity, filteredItems, selectedTier, usedFallback;
+            
+            try {
+                itemsWithRarity = await processItemsWithRarity(npcInventory, true);
+                const fallbackResult = await selectItemsWithFallback(itemsWithRarity, raritySelection);
+                filteredItems = fallbackResult.items;
+                selectedTier = fallbackResult.selectedTier;
+                usedFallback = fallbackResult.usedFallback;
+            } catch (rarityError) {
+                console.error(`[steal.js]: ❌ Error processing items with rarity for NPC ${targetName}:`, rarityError);
+                
+                // Call global error handler for tracking
+                handleError(rarityError, 'steal.js', {
+                    commandName: 'steal',
+                    operationType: 'NPC rarity processing',
+                    targetName: targetName,
+                    raritySelection: raritySelection,
+                    npcInventoryLength: npcInventory.length
+                });
+                
+                // Special handling for Zone NPC
+                if (targetName === 'Zone') {
+                    return { 
+                        success: false, 
+                        error: `❌ **Error processing items with rarity from Zone!**\n🔄 Please try again in a moment.\n\n**Debug Info:**\n• NPC: ${targetName}\n• Inventory length: ${npcInventory.length}\n• Rarity: ${raritySelection}\n• Error: ${rarityError.name}: ${rarityError.message}\n\n**Tip:** This may indicate a system issue. Please contact a mod and submit an error report if the problem persists.` 
+                    };
+                } else {
+                    return { 
+                        success: false, 
+                        error: `❌ **Error processing items with rarity from ${targetName}!**\n🔄 Please try again in a moment.\n\n**Debug Info:**\n• NPC: ${targetName}\n• Error: ${rarityError.name}: ${rarityError.message}` 
+                    };
+                }
+            }
             
             if (filteredItems.length === 0) {
                 const fallbackMessage = getFallbackMessage(raritySelection, selectedTier);
                 if (fallbackMessage) {
                     return { success: false, error: fallbackMessage };
                 } else {
-                    return { 
-                        success: false, 
-                        error: `❌ **No items available to steal from ${targetName}!**\n🛡️ All available items are protected from theft.` 
-                    };
+                    // Special message for Zone NPC to help with debugging
+                    if (targetName === 'Zone') {
+                        return { 
+                            success: false, 
+                            error: `❌ **No items available to steal from Zone!**\n🛡️ All available items are protected from theft.\n\n**Debug Info:**\n• Total items found: ${npcInventory.length}\n• Items after rarity filtering: ${filteredItems.length}\n• Selected tier: ${selectedTier}\n• Used fallback: ${usedFallback}\n\n**Tip:** This may indicate a system issue. Please contact a mod and submit an error report if the problem persists.` 
+                        };
+                    } else {
+                        return { 
+                            success: false, 
+                            error: `❌ **No items available to steal from ${targetName}!**\n🛡️ All available items are protected from theft.` 
+                        };
+                    }
                 }
             }
             
@@ -2323,9 +2715,28 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
             };
         } else {
             // Player target processing
-            const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
-            const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
-            const rawItemNames = inventoryEntries.map(entry => entry.itemName);
+            let targetInventoryCollection, inventoryEntries, rawItemNames;
+            
+            try {
+                targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
+                inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
+                rawItemNames = inventoryEntries.map(entry => entry.itemName);
+            } catch (inventoryError) {
+                console.error(`[steal.js]: ❌ Error fetching player inventory for ${targetCharacter.name}:`, inventoryError);
+                
+                // Call global error handler for tracking
+                handleError(inventoryError, 'steal.js', {
+                    commandName: 'steal',
+                    operationType: 'player inventory fetch',
+                    targetCharacterName: targetCharacter.name,
+                    targetCharacterId: targetCharacter._id
+                });
+                
+                return { 
+                    success: false, 
+                    error: `❌ **Error fetching inventory from ${targetCharacter.name}!**\n🔄 Please try again in a moment.\n\n**Debug Info:**\n• Target: ${targetCharacter.name}\n• Error: ${inventoryError.name}: ${inventoryError.message}\n\n**Tip:** This may indicate a system issue. Please contact a mod and submit an error report if the problem persists.` 
+                };
+            }
 
             const equippedItems = [
                 targetCharacter.gearWeapon?.name,
@@ -2347,8 +2758,23 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
             // Filter out custom weapons
             const availableItemNamesWithoutCustomWeapons = [];
             for (const itemName of availableItemNames) {
-                const isCustom = await isCustomWeapon(itemName);
-                if (!isCustom) {
+                try {
+                    const isCustom = await isCustomWeapon(itemName);
+                    if (!isCustom) {
+                        availableItemNamesWithoutCustomWeapons.push(itemName);
+                    }
+                } catch (customWeaponError) {
+                    console.error(`[steal.js]: ❌ Error checking if item is custom weapon: ${itemName}`, customWeaponError);
+                    
+                    // Call global error handler for tracking
+                    handleError(customWeaponError, 'steal.js', {
+                        commandName: 'steal',
+                        operationType: 'custom weapon check',
+                        itemName: itemName,
+                        targetCharacterName: targetCharacter.name
+                    });
+                    
+                    // Continue processing other items instead of failing completely
                     availableItemNamesWithoutCustomWeapons.push(itemName);
                 }
             }
@@ -2360,8 +2786,31 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                 };
             }
             
-            const itemsWithRarity = await processItemsWithRarity(availableItemNamesWithoutCustomWeapons, false, inventoryEntries);
-            const { items: filteredItems, selectedTier, usedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
+            let itemsWithRarity, filteredItems, selectedTier, usedFallback;
+            
+            try {
+                itemsWithRarity = await processItemsWithRarity(availableItemNamesWithoutCustomWeapons, false, inventoryEntries);
+                const fallbackResult = await selectItemsWithFallback(itemsWithRarity, raritySelection);
+                filteredItems = fallbackResult.items;
+                selectedTier = fallbackResult.selectedTier;
+                usedFallback = fallbackResult.usedFallback;
+            } catch (rarityError) {
+                console.error(`[steal.js]: ❌ Error processing items with rarity for player ${targetCharacter.name}:`, rarityError);
+                
+                // Call global error handler for tracking
+                handleError(rarityError, 'steal.js', {
+                    commandName: 'steal',
+                    operationType: 'player rarity processing',
+                    targetCharacterName: targetCharacter.name,
+                    availableItemsCount: availableItemNamesWithoutCustomWeapons.length,
+                    raritySelection: raritySelection
+                });
+                
+                return { 
+                    success: false, 
+                    error: `❌ **Error processing items with rarity from ${targetCharacter.name}!**\n🔄 Please try again in a moment.\n\n**Debug Info:**\n• Target: ${targetCharacter.name}\n• Available items: ${availableItemNamesWithoutCustomWeapons.length}\n• Rarity: ${raritySelection}\n• Error: ${rarityError.name}: ${rarityError.message}\n\n**Tip:** This may indicate a system issue. Please contact a mod and submit an error report if the problem persists.` 
+                };
+            }
 
             if (filteredItems.length === 0) {
                 const fallbackMessage = getFallbackMessage(raritySelection, selectedTier);
@@ -2385,9 +2834,47 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
         }
     } catch (error) {
         console.error('[steal.js]: Error in processItemsForStealing:', error);
+        
+        // Provide more specific error messages based on the error type
+        let errorMessage = '❌ **An error occurred while processing items for stealing.**';
+        
+        if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+            if (error.code === 11000) {
+                errorMessage = '❌ **Database duplicate key error while processing items.**\n🔄 Please try again in a moment.';
+            } else if (error.code === 121) {
+                errorMessage = '❌ **Database validation error while processing items.**\n🔄 Please try again in a moment.';
+            } else {
+                errorMessage = `❌ **Database error while processing items (Code: ${error.code}).**\n🔄 Please try again in a moment.`;
+            }
+        } else if (error.name === 'TypeError') {
+            if (error.message.includes('Cannot read properties of undefined') || error.message.includes('Cannot read properties of null')) {
+                            errorMessage = '❌ **Data structure error while processing items.**\n🔄 The target may have invalid inventory data. Please try again or contact a mod and submit an error report.';
+        } else {
+            errorMessage = '❌ **Data type error while processing items.**\n🔄 Please try again or contact a mod and submit an error report.';
+        }
+        } else if (error.name === 'ReferenceError') {
+            errorMessage = '❌ **System configuration error while processing items.**\n🔄 Please contact a mod immediately and submit an error report.';
+        } else if (error.message && error.message.includes('timeout')) {
+            errorMessage = '❌ **Database operation timed out while processing items.**\n🔄 Please try again in a moment.';
+        } else if (error.message && error.message.includes('network')) {
+            errorMessage = '❌ **Network error while processing items.**\n🔄 Please check your connection and try again.';
+        }
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'processItemsForStealing',
+            targetName: targetName,
+            targetType: targetType,
+            raritySelection: raritySelection
+        });
+        
+        // Add debugging information for mods
+        const debugInfo = `\n\n**Debug Info:**\n• Target: ${targetName}\n• Type: ${targetType}\n• Rarity: ${raritySelection}\n• Error: ${error.name}: ${error.message}`;
+        
         return { 
             success: false, 
-            error: '❌ **An error occurred while processing items for stealing.**' 
+            error: errorMessage + debugInfo
         };
     }
 }
@@ -2402,6 +2889,14 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
                 await updateDailySteal(thiefCharacter, 'steal');
             } catch (error) {
                 console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                
+                // Call global error handler for tracking
+                handleError(error, 'steal.js', {
+                    commandName: 'steal',
+                    operationType: 'daily steal update',
+                    characterName: thiefCharacter?.name
+                });
+                
                 await interaction.editReply({
                     content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
                     ephemeral: true
@@ -2502,6 +2997,16 @@ async function validateChannelAccess(thiefCharacter, interaction) {
         return { valid: true };
     } catch (error) {
         console.error('[steal.js]: Error in validateChannelAccess:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'validateChannelAccess',
+            characterName: thiefCharacter?.name,
+            currentVillage: thiefCharacter?.currentVillage,
+            channelId: interaction.channelId
+        });
+        
         return { valid: false, error: 'Channel validation error' };
     }
 }
@@ -2546,6 +3051,15 @@ async function validateAndActivateJobVoucher(thiefCharacter, job, interaction) {
         return { success: true, voucherCheck };
     } catch (error) {
         console.error('[steal.js]: Error in validateAndActivateJobVoucher:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'validateAndActivateJobVoucher',
+            characterName: thiefCharacter?.name,
+            job: job
+        });
+        
         return { success: false, error: '❌ **An error occurred while validating the job voucher.**' };
     }
 }
@@ -2602,6 +3116,14 @@ async function validateCharacterStatus(thiefCharacter, interaction) {
         return { valid: true };
     } catch (error) {
         console.error('[steal.js]: Error in validateCharacterStatus:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'validateCharacterStatus',
+            characterName: thiefCharacter?.name
+        });
+        
         return { valid: false, error: '❌ **An error occurred while validating character status.**' };
     }
 }
@@ -2700,6 +3222,15 @@ async function validateThiefCharacter(characterName, userId, interaction) {
         return { valid: true, character: thiefCharacter, jailStatus };
     } catch (error) {
         console.error('[steal.js]: Error in validateThiefCharacter:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            operationType: 'validateThiefCharacter',
+            characterName: characterName,
+            userId: userId
+        });
+        
         return { valid: false, error: '❌ **An error occurred while validating the thief character.**' };
     }
 }
