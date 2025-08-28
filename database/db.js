@@ -1116,7 +1116,8 @@ const fetchItemRarityByName = async (itemName) => {
     try {
         const db = await connectToInventoriesForItems();
         const normalizedItemName = itemName.trim().toLowerCase();
-        const escapedName = normalizedItemName.replace(/[-\/\\^$*?.()|[\]{}]/g, "\\$&");
+        // Properly escape all regex special characters including +
+        const escapedName = normalizedItemName.replace(/[.*?^${}()|[\]\\+]/g, "\\$&");
         const item = await db.collection("items").findOne({
             itemName: new RegExp(`^${escapedName}$`, "i"),
         });
