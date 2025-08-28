@@ -2715,6 +2715,18 @@ async function handleGearAutocomplete(interaction, focusedOption) {
    value: item.itemName,
   }));
 
+  console.log(`[handleGearAutocomplete]: Generated items:`, items.map(item => ({ name: item.name, value: item.value })));
+  
+  // Debug: Log specific items with + character
+  const plusItems = items.filter(item => item.value.includes('+'));
+  if (plusItems.length > 0) {
+    console.log(`[handleGearAutocomplete]: Items with + character:`, plusItems.map(item => ({
+      name: item.name,
+      value: item.value,
+      valueCharCodes: Array.from(item.value).map(c => c.charCodeAt(0)).join(', ')
+    })));
+  }
+
   await respondWithFilteredChoices(interaction, focusedOption, items);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");

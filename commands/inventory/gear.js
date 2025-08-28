@@ -78,9 +78,21 @@ module.exports = {
       const itemNameRaw = interaction.options.getString('itemname');
       const status = interaction.options.getString('status');
 
+      // Debug: Log what we received from Discord
+      console.log(`[gear.js]: Raw interaction data - itemNameRaw: "${itemNameRaw}"`);
+      console.log(`[gear.js]: itemNameRaw type: ${typeof itemNameRaw}`);
+      console.log(`[gear.js]: itemNameRaw length: ${itemNameRaw ? itemNameRaw.length : 0}`);
+      console.log(`[gear.js]: itemNameRaw char codes: ${itemNameRaw ? Array.from(itemNameRaw).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
+
       // ------------------- Clean Item Name from Copy-Paste -------------------
       // Remove quantity information from item names if users copy-paste autocomplete text
       const itemName = itemNameRaw ? itemNameRaw.replace(/\s*\(Qty:\s*\d+\)/i, '').trim() : null;
+
+      console.log(`[gear.js]: After processing - itemName: "${itemName}"`);
+      console.log(`[gear.js]: itemName type: ${typeof itemName}`);
+      console.log(`[gear.js]: itemName length: ${itemName ? itemName.length : 0}`);
+      console.log(`[gear.js]: itemName char codes: ${itemName ? Array.from(itemName).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
+      console.log(`[gear.js]: itemName includes '+': ${itemName ? itemName.includes('+') : 'null'}`);
 
       // Validate status
       if (status && status !== 'equip' && status !== 'unequip') {
@@ -195,15 +207,24 @@ module.exports = {
       }
 
       // ------------------- Validate Item in Inventory -------------------
+      // Debug: Log the itemName at this point
+      console.log(`[gear.js]: About to validate inventory - itemName: "${itemName}"`);
+      console.log(`[gear.js]: itemName includes '+': ${itemName ? itemName.includes('+') : 'null'}`);
+      console.log(`[gear.js]: itemName type: ${typeof itemName}`);
+      console.log(`[gear.js]: itemName length: ${itemName ? itemName.length : 0}`);
+      console.log(`[gear.js]: itemName char codes: ${itemName ? Array.from(itemName).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
+      
       // Retrieve character inventory and ensure the item exists.
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       let inventoryItems;
       if (itemName.includes('+')) {
+        console.log(`[gear.js]: Using exact match for itemName with +: "${itemName}"`);
         inventoryItems = await inventoryCollection.find({ 
           characterId: character._id, 
           itemName: itemName
         }).toArray();
       } else {
+        console.log(`[gear.js]: Using regex match for itemName without +: "${itemName}"`);
         inventoryItems = await inventoryCollection.find({ 
           characterId: character._id, 
           itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
