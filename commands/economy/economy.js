@@ -614,9 +614,17 @@ for (const { name } of cleanedItems) {
   }
 
   for (const { name, quantity } of aggregatedItems) {
-   const fromInventory = await fromInventoryCollection.findOne({
-    itemName: { $regex: new RegExp(`^${name}$`, "i") },
-   });
+   // Handle items with + in their names by using exact match instead of regex
+   let fromInventory;
+   if (name.includes('+')) {
+     fromInventory = await fromInventoryCollection.findOne({
+       itemName: name
+     });
+   } else {
+     fromInventory = await fromInventoryCollection.findOne({
+       itemName: { $regex: new RegExp(`^${escapeRegExp(name)}$`, "i") }
+     });
+   }
 
    if (!fromInventory || fromInventory.quantity < quantity) {
     allItemsAvailable = false;
@@ -1174,10 +1182,10 @@ async function handleShopBuy(interaction) {
     if (!itemDetails) {
      console.error(`[shops]: Item details not found in database: ${itemName}`);
      
-     // Try a partial search to see if there are similar items
-     const similarItems = await ItemModel.find({ 
-       itemName: { $regex: new RegExp(itemName, 'i') }
-     }).select("itemName buyPrice sellPrice").limit(5).lean();
+           // Try a partial search to see if there are similar items
+      const similarItems = await ItemModel.find({ 
+        itemName: { $regex: new RegExp(escapeRegExp(itemName), 'i') }
+      }).select("itemName buyPrice sellPrice").limit(5).lean();
      
      if (similarItems.length > 0) {
        console.log(`[shops]: 🔍 Similar items found:`, similarItems.map(item => ({
@@ -1914,7 +1922,7 @@ for (const { name } of cleanedItems) {
       .toArray();
    } else {
      fromInventoryEntries = await fromInventoryCollection
-      .find({ itemName: { $regex: new RegExp(`^${canonicalName}$`, "i") } })
+      .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalName)}$`, "i") } })
       .toArray();
    }
    const totalQuantity = fromInventoryEntries.reduce(
@@ -2015,9 +2023,17 @@ for (const { name } of cleanedItems) {
 
   for (const { name, quantity } of aggregatedItems) {
     // Find the canonical item name from the database
-    const itemDetails = await ItemModel.findOne({
-      itemName: new RegExp(`^${name}$`, "i"),
-    }).exec();
+    // Handle items with + in their names by using exact match instead of regex
+    let itemDetails;
+    if (name.includes('+')) {
+      itemDetails = await ItemModel.findOne({
+        itemName: name
+      }).exec();
+    } else {
+      itemDetails = await ItemModel.findOne({
+        itemName: { $regex: new RegExp(`^${escapeRegExp(name)}$`, "i") }
+      }).exec();
+    }
 
     if (!itemDetails) {
       console.error(`[transfer.js:logs] Item not found in database: ${name}`);
@@ -2212,9 +2228,17 @@ async function executeTrade(tradeData) {
 // ------------------- Trade Item Processing -------------------
 async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
   for (const item of items) {
-    const itemDetails = await ItemModel.findOne({
-      itemName: new RegExp(`^${item.name}$`, "i"),
-    }).exec();
+    // Handle items with + in their names by using exact match instead of regex
+    let itemDetails;
+    if (item.name.includes('+')) {
+      itemDetails = await ItemModel.findOne({
+        itemName: item.name
+      }).exec();
+    } else {
+      itemDetails = await ItemModel.findOne({
+        itemName: { $regex: new RegExp(`^${escapeRegExp(item.name)}$`, "i") }
+      }).exec();
+    }
 
     const category = itemDetails?.category.join(", ") || "";
     const type = itemDetails?.type.join(", ") || "";
@@ -2283,9 +2307,17 @@ async function validateTradeItems(character, items) {
   const characterInventoryCollection = await getCharacterInventoryCollectionWithModSupport(character);
   const unavailableItems = [];
   for (const item of items) {
-    const itemInventory = await characterInventoryCollection.findOne({
-      itemName: { $regex: new RegExp(`^${item.name}$`, "i") },
-    });
+    // Handle items with + in their names by using exact match instead of regex
+    let itemInventory;
+    if (item.name.includes('+')) {
+      itemInventory = await characterInventoryCollection.findOne({
+        itemName: item.name
+      });
+    } else {
+      itemInventory = await characterInventoryCollection.findOne({
+        itemName: { $regex: new RegExp(`^${escapeRegExp(item.name)}$`, "i") }
+      });
+    }
     if (!itemInventory || itemInventory.quantity < item.quantity) {
       unavailableItems.push({
         name: item.name,
@@ -2333,7 +2365,13 @@ async function handleTrade(interaction) {
     const itemNamesToCheck = [item1, item2, item3].filter(Boolean);
     const missingItems = [];
     for (const name of itemNamesToCheck) {
-      const exists = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${name}$`, "i") } }).lean();
+      // Handle items with + in their names by using exact match instead of regex
+      let exists;
+      if (name.includes('+')) {
+        exists = await ItemModel.findOne({ itemName: name }).lean();
+      } else {
+        exists = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(name)}$`, "i") } }).lean();
+      }
       if (!exists) missingItems.push(name);
     }
     if (missingItems.length > 0) {
