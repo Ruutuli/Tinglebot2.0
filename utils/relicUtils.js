@@ -132,7 +132,10 @@ async function checkExpiredRelics(client) {
         // Notify discoverer
         if (relic.discovererId) {
           try {
-            await sendUserDM(relic.discovererId, `Your relic discovery "${relic.name}" has expired and will be removed from the system.`, client);
+            const dmSent = await sendUserDM(relic.discovererId, `Your relic discovery "${relic.name}" has expired and will be removed from the system.`, client);
+            if (!dmSent) {
+              console.log(`[relicUtils]: ℹ️ Could not send relic expiry DM to user ${relic.discovererId} for relic "${relic.name}" - user may have blocked DMs`);
+            }
           } catch (error) {
             console.error('[relicUtils]: Error sending DM:', error);
           }

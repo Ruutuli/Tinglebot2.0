@@ -572,11 +572,15 @@ async function handleJailRelease(client) {
    console.error(`[scheduler.js]: ❌ Error posting jail release for ${character.name} in ${character.homeVillage}:`, error.message);
   }
 
-  await sendUserDM(
+  const dmSent = await sendUserDM(
    character.userId,
    `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`,
    client
   );
+  
+  if (!dmSent) {
+    console.log(`[scheduler.js]: ℹ️ Could not send jail release DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
+  }
  }
 
  if (releasedCount > 0) {
@@ -602,11 +606,15 @@ async function handleDebuffExpiry(client) {
       character.debuff.endDate = null;
       await character.save();
 
-      await sendUserDM(
+      const dmSent = await sendUserDM(
         character.userId,
         `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`,
         client
       );
+      
+      if (!dmSent) {
+        console.log(`[scheduler.js]: ℹ️ Could not send debuff expiry DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
+      }
     }
   }
 }
@@ -629,11 +637,15 @@ async function handleBuffExpiry(client) {
       character.buff.endDate = null;
       await character.save();
 
-      await sendUserDM(
+      const dmSent = await sendUserDM(
         character.userId,
         `Your character **${character.name}**'s buff has ended! You can now heal them with items or a Healer.`,
         client
       );
+      
+      if (!dmSent) {
+        console.log(`[scheduler.js]: ℹ️ Could not send buff expiry DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
+      }
     }
   }
 }
