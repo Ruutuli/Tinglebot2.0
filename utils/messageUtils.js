@@ -46,9 +46,30 @@ async function sendUserDM(userId, message, client) {
     }
     return false;
   } catch (error) {
-    handleError(error, 'messageUtils.js');
-    console.error(`[messageUtils]❌ Failed to send DM to user ${userId}:`, error.message);
-    return false;
+    // Handle specific Discord API errors
+    if (error.code === 50007) {
+      // Cannot send messages to this user (blocked, DMs disabled, etc.)
+      console.log(`[messageUtils] ℹ️ Cannot send DM to user ${userId}: User has blocked bot or disabled DMs`);
+      return false;
+    } else if (error.code === 10013) {
+      // Unknown user
+      console.log(`[messageUtils] ℹ️ Cannot send DM to user ${userId}: User not found`);
+      return false;
+    } else if (error.code === 50001) {
+      // Missing access
+      console.log(`[messageUtils] ℹ️ Cannot send DM to user ${userId}: Missing access to user`);
+      return false;
+    } else {
+      // Other errors - log with handleError for monitoring
+      handleError(error, 'messageUtils.js', {
+        operation: 'sendUserDM',
+        userId: userId,
+        errorCode: error.code,
+        errorMessage: error.message
+      });
+      console.error(`[messageUtils] ❌ Failed to send DM to user ${userId}:`, error.message);
+      return false;
+    }
   }
 }
 

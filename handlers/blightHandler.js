@@ -2349,24 +2349,28 @@ async function sendBlightReminders(client) {
             // Send the reminder
             try {
               const { sendUserDM } = require('../utils/messageUtils');
-              await sendUserDM(character.userId, `🚨 **DEATH REMINDER** for ${character.name}`, client);
+              const dmSent = await sendUserDM(character.userId, `🚨 **DEATH REMINDER** for ${character.name}`, client);
               
-              // Record the reminder
-              await TempData.create({
-                type: 'death_reminder',
-                key: reminderKey,
-                data: {
-                  characterName: character.name,
-                  userId: character.userId,
-                  reminderType,
-                  sentAt: new Date().toISOString()
-                },
-                createdAt: new Date(),
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-              });
-              
-              deathWarnings++;
-              console.log(`[blightHandler]: Sent ${reminderType} death reminder to ${character.userId} for ${character.name}`);
+              if (dmSent) {
+                // Record the reminder only if DM was sent successfully
+                await TempData.create({
+                  type: 'death_reminder',
+                  key: reminderKey,
+                  data: {
+                    characterName: character.name,
+                    userId: character.userId,
+                    reminderType,
+                    sentAt: new Date().toISOString()
+                  },
+                  createdAt: new Date(),
+                  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+                });
+                
+                deathWarnings++;
+                console.log(`[blightHandler]: Sent ${reminderType} death reminder to ${character.userId} for ${character.name}`);
+              } else {
+                console.log(`[blightHandler]: Could not send death reminder to ${character.userId} for ${character.name} - user may have blocked DMs`);
+              }
             } catch (dmError) {
               console.error(`[blightHandler]: Failed to send death reminder to ${character.userId}:`, dmError);
             }
@@ -2457,25 +2461,29 @@ async function sendBlightReminders(client) {
                 .setFooter({ text: 'Blight Healing Expiration Warning' })
                 .setTimestamp();
               
-              await sendUserDM(submissionData.userId, `🚨 **HEALING TASK EXPIRATION WARNING** for ${submissionData.characterName}`, client);
+              const dmSent = await sendUserDM(submissionData.userId, `🚨 **HEALING TASK EXPIRATION WARNING** for ${submissionData.characterName}`, client);
               
-              // Record the warning
-              await TempData.create({
-                type: 'healing_warning',
-                key: warningKey,
-                data: {
-                  submissionId: submissionData.submissionId,
-                  userId: submissionData.userId,
-                  characterName: submissionData.characterName,
-                  warningType,
-                  warnedAt: new Date().toISOString()
-                },
-                createdAt: new Date(),
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-              });
-              
-              submissionWarnings++;
-              console.log(`[blightHandler]: Sent ${warningType} healing warning to ${submissionData.userId} for ${submissionData.characterName}`);
+              if (dmSent) {
+                // Record the warning only if DM was sent successfully
+                await TempData.create({
+                  type: 'healing_warning',
+                  key: warningKey,
+                  data: {
+                    submissionId: submissionData.submissionId,
+                    userId: submissionData.userId,
+                    characterName: submissionData.characterName,
+                    warningType,
+                    warnedAt: new Date().toISOString()
+                  },
+                  createdAt: new Date(),
+                  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+                });
+                
+                submissionWarnings++;
+                console.log(`[blightHandler]: Sent ${warningType} healing warning to ${submissionData.userId} for ${submissionData.characterName}`);
+              } else {
+                console.log(`[blightHandler]: Could not send healing warning to ${submissionData.userId} for ${submissionData.characterName} - user may have blocked DMs`);
+              }
             }
           }
         }
@@ -2561,23 +2569,27 @@ async function checkExpiringBlightRequests(client) {
                     .setFooter({ text: 'Blight Healing Expiration Warning' })
                     .setTimestamp();
                   
-                  await sendUserDM(submissionData.userId, `Your blight healing request is expiring soon!`, client);
+                  const dmSent = await sendUserDM(submissionData.userId, `Your blight healing request is expiring soon!`, client);
                   
-                  // Record that we've warned this user
-                  await TempData.create({
-                    type: 'blight_warning',
-                    key: lastWarningKey,
-                    data: {
-                      submissionId: submissionData.submissionId,
-                      userId: submissionData.userId,
-                      warnedAt: new Date().toISOString()
-                    },
-                    createdAt: new Date(),
-                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-                  });
-                  
-                  warnedUsers++;
-                  console.log(`[blightHandler]: Sent warning DM to user ${submissionData.userId} for ${submissionData.characterName}`);
+                  if (dmSent) {
+                    // Record that we've warned this user only if DM was sent successfully
+                    await TempData.create({
+                      type: 'blight_warning',
+                      key: lastWarningKey,
+                      data: {
+                        submissionId: submissionData.submissionId,
+                        userId: submissionData.userId,
+                        warnedAt: new Date().toISOString()
+                      },
+                      createdAt: new Date(),
+                      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+                    });
+                    
+                    warnedUsers++;
+                    console.log(`[blightHandler]: Sent warning DM to user ${submissionData.userId} for ${submissionData.characterName}`);
+                  } else {
+                    console.log(`[blightHandler]: Could not send warning DM to user ${submissionData.userId} for ${submissionData.characterName} - user may have blocked DMs`);
+                  }
                 } catch (dmError) {
                   console.error(`[blightHandler]: Failed to send warning DM to user ${submissionData.userId}:`, dmError);
                 }
@@ -2707,10 +2719,14 @@ async function cleanupExpiredBlightRequests(client) {
                 .setFooter({ text: 'Blight Healing Expiration Notice' })
                 .setTimestamp();
               
-              await sendUserDM(submissionData.userId, `Your blight healing request has expired.`, client);
+              const dmSent = await sendUserDM(submissionData.userId, `Your blight healing request has expired.`, client);
               
-              notifiedUsers++;
-              console.log(`[blightHandler]: ✅ Sent expiration DM to user ${submissionData.userId} for ${submissionData.characterName}`);
+              if (dmSent) {
+                notifiedUsers++;
+                console.log(`[blightHandler]: ✅ Sent expiration DM to user ${submissionData.userId} for ${submissionData.characterName}`);
+              } else {
+                console.log(`[blightHandler]: ℹ️ Could not send expiration DM to user ${submissionData.userId} for ${submissionData.characterName} - user may have blocked DMs`);
+              }
             } catch (dmError) {
               console.error(`[blightHandler]: ❌ Failed to send expiration DM to user ${submissionData.userId}:`, dmError);
             }
@@ -2838,13 +2854,17 @@ async function checkMissedRolls(client) {
               .setFooter({ text: 'Blight Healing Expiration Notice' })
               .setTimestamp();
             
-            await sendUserDM(submission.userId, `Your blight healing request has expired.`, client);
+            const dmSent = await sendUserDM(submission.userId, `Your blight healing request has expired.`, client);
             
-            // Log the lore text for administrators
-            console.log(`[blightHandler]: 📜 Blight submission expired for ${submission.characterName}:`);
-            console.log(`[blightHandler]: ${loreText}`);
-            
-            console.log(`[blightHandler]: Sent expiration DM to user ${submission.userId}`);
+            if (dmSent) {
+              // Log the lore text for administrators
+              console.log(`[blightHandler]: 📜 Blight submission expired for ${submission.characterName}:`);
+              console.log(`[blightHandler]: ${loreText}`);
+              
+              console.log(`[blightHandler]: Sent expiration DM to user ${submission.userId}`);
+            } else {
+              console.log(`[blightHandler]: ℹ️ Could not send expiration DM to user ${submission.userId} for ${submission.characterName} - user may have blocked DMs`);
+            }
           } catch (error) {
             console.error('[blightHandler]: ❌ Error sending DM:', error);
           }
