@@ -14,3 +14,4 @@ testingCode/
 .tmp.driveupload/
 .tmp.drivedownload/
 .dashboard/.env
+cursor-rules.mdc

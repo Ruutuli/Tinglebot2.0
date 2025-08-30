@@ -80,6 +80,12 @@ const characterSchema = new Schema({
   blightedAt: { type: Date, default: null },
   blightStage: { type: Number, default: 0 },
   blightPaused: { type: Boolean, default: false },
+  blightPauseInfo: {
+    pausedAt: { type: Date, default: null },
+    pausedBy: { type: String, default: null },
+    pausedByUsername: { type: String, default: null },
+    reason: { type: String, default: null }
+  },
   lastRollDate: { type: Date, default: null },
   deathDeadline: { type: Date, default: null },
   blightEffects: {

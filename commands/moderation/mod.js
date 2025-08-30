@@ -770,19 +770,47 @@ const modCommand = new SlashCommandBuilder()
 .addSubcommand(sub =>
   sub
     .setName('blightpause')
-    .setDescription('⏸️ Pause or unpause blight progression for a character')
+    .setDescription('⏸️ Pause blight progression for a character')
     .addStringOption(opt =>
       opt
         .setName('character')
-        .setDescription('Name of the character to pause/unpause')
+        .setDescription('Name of the character to pause')
         .setRequired(true)
         .setAutocomplete(true)
     )
-    .addBooleanOption(opt =>
+    .addStringOption(opt =>
       opt
-        .setName('paused')
-        .setDescription('True to pause, false to unpause')
+        .setName('reason')
+        .setDescription('Reason for pausing blight progression')
+        .setRequired(false)
+    )
+)
+
+// ------------------- Subcommand: blightunpause -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('blightunpause')
+    .setDescription('▶️ Unpause blight progression for a character')
+    .addStringOption(opt =>
+      opt
+        .setName('character')
+        .setDescription('Name of the character to unpause')
         .setRequired(true)
+        .setAutocomplete(true)
+    )
+)
+
+// ------------------- Subcommand: blightstatus -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('blightstatus')
+    .setDescription('📊 View detailed blight status for a character')
+    .addStringOption(opt =>
+      opt
+        .setName('character')
+        .setDescription('Name of the character to check')
+        .setRequired(true)
+        .setAutocomplete(true)
     )
 )
 
@@ -1109,6 +1137,10 @@ async function execute(interaction) {
       
     } else if (subcommand === 'blightpause') {
         return await handleBlightPause(interaction);
+    } else if (subcommand === 'blightunpause') {
+        return await handleBlightUnpause(interaction);
+    } else if (subcommand === 'blightstatus') {
+        return await handleBlightStatus(interaction);
     } else if (subcommand === 'kick_travelers') {
         return await handleKickTravelers(interaction);      
     } else if (subcommand === 'tokens') {
@@ -1987,10 +2019,10 @@ async function handleInactivityReport(interaction) {
 
   
   // ------------------- Function: handleBlightPause -------------------
-// Pauses or unpauses blight progression for a given character.
+// Pauses blight progression for a given character.
 async function handleBlightPause(interaction) {
   const charName = interaction.options.getString('character');
-  const pauseState = interaction.options.getBoolean('paused');
+  const reason = interaction.options.getString('reason') || 'No reason provided';
 
   try {
     const character = await fetchCharacterByName(charName);
@@ -1998,16 +2030,192 @@ async function handleBlightPause(interaction) {
       return interaction.editReply(`❌ Character **${charName}** not found.`);
     }
 
-    character.blightPaused = pauseState;
+    // Check if already paused and update the pause info
+    const wasAlreadyPaused = character.blightPaused;
+    
+    // Store/update pause information
+    character.blightPaused = true;
+    character.blightPauseInfo = {
+      pausedAt: new Date(),
+      pausedBy: interaction.user.id,
+      pausedByUsername: interaction.user.username,
+      reason: reason
+    };
     await character.save();
 
-    const emoji = pauseState ? '⏸️' : '▶️';
-    const verb = pauseState ? 'paused' : 'unpaused';
+    // Get user mention
+    const userMention = `<@${character.userId}>`;
+    
+    // Create embed response
+    const pauseEmbed = new EmbedBuilder()
+      .setColor('#FFA500') // Orange color for pause
+      .setTitle(wasAlreadyPaused ? '⏸️ Blight Pause Updated' : '⏸️ Blight Progression Paused')
+      .setDescription(wasAlreadyPaused ? 
+        `Blight pause information has been updated for this character.` : 
+        `Blight progression has been successfully paused for this character.`)
+      .addFields(
+        { name: '👤 Character', value: character.name, inline: true },
+        { name: '👥 User', value: userMention, inline: true },
+        { name: '🏥 Blight Stage', value: `Stage ${character.blightStage}`, inline: true },
+        { name: '⏰ Paused At', value: character.blightPauseInfo.pausedAt.toLocaleString(), inline: false },
+        { name: '🛡️ Paused By', value: interaction.user.username, inline: true },
+        { name: '📝 Reason', value: reason, inline: true }
+      )
+      .addFields(
+        { name: '💡 To Unpause', value: `Use \`/mod blightunpause character:${character.name}\``, inline: false }
+      )
+      .setThumbnail(character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png')
+      .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+      .setFooter({ text: 'Blight Pause Management', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+      .setTimestamp();
 
-    return interaction.editReply(`${emoji} Blight progression for **${character.name}** has been **${verb}**.`);
+    return interaction.editReply({ embeds: [pauseEmbed] });
   } catch (error) {
     handleError(error, 'mod.js');
     console.error('[mod.js]: Error in handleBlightPause', error);
+    return interaction.editReply('❌ An error occurred while processing your request.');
+  }
+}
+
+// ------------------- Function: handleBlightUnpause -------------------
+// Unpauses blight progression for a given character.
+async function handleBlightUnpause(interaction) {
+  const charName = interaction.options.getString('character');
+
+  try {
+    const character = await fetchCharacterByName(charName);
+    if (!character) {
+      return interaction.editReply(`❌ Character **${charName}** not found.`);
+    }
+
+    if (!character.blightPaused) {
+      return interaction.editReply(`▶️ Blight progression for **${character.name}** is not currently paused.`);
+    }
+
+    // Get pause information before clearing it
+    const pauseInfo = character.blightPauseInfo || {};
+    const pauseDuration = pauseInfo.pausedAt ? 
+      Math.floor((Date.now() - pauseInfo.pausedAt.getTime()) / (1000 * 60 * 60 * 24)) : 0; // Days
+
+    // Clear pause information
+    character.blightPaused = false;
+    character.blightPauseInfo = undefined;
+    await character.save();
+
+    // Get user mention
+    const userMention = `<@${character.userId}>`;
+    
+    // Create embed response
+    const unpauseEmbed = new EmbedBuilder()
+      .setColor('#00FF00') // Green color for unpause
+      .setTitle('▶️ Blight Progression Unpaused')
+      .setDescription(`Blight progression has been successfully resumed for this character.`)
+      .addFields(
+        { name: '👤 Character', value: character.name, inline: true },
+        { name: '👥 User', value: userMention, inline: true },
+        { name: '🏥 Blight Stage', value: `Stage ${character.blightStage}`, inline: true },
+        { name: '⏸️ Was Paused For', value: `${pauseDuration} day(s)`, inline: true },
+        { name: '🔄 Unpaused At', value: new Date().toLocaleString(), inline: true },
+        { name: '🛡️ Unpaused By', value: interaction.user.username, inline: true }
+      )
+      .addFields(
+        { name: '📝 Original Reason', value: pauseInfo.reason || 'No reason provided', inline: false }
+      )
+      .setThumbnail(character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png')
+      .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+      .setFooter({ text: 'Blight Pause Management', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [unpauseEmbed] });
+  } catch (error) {
+    handleError(error, 'mod.js');
+    console.error('[mod.js]: Error in handleBlightUnpause', error);
+    return interaction.editReply('❌ An error occurred while processing your request.');
+  }
+}
+
+// ------------------- Function: handleBlightStatus -------------------
+// Shows detailed blight status for a given character.
+async function handleBlightStatus(interaction) {
+  const charName = interaction.options.getString('character');
+
+  try {
+    const character = await fetchCharacterByName(charName);
+    if (!character) {
+      return interaction.editReply(`❌ Character **${charName}** not found.`);
+    }
+
+    if (!character.blighted) {
+      return interaction.editReply(`✅ **${character.name}** is not currently afflicted with blight.`);
+    }
+
+    // Get user mention
+    const userMention = `<@${character.userId}>`;
+    
+    // Calculate time since blight started
+    const blightStartDate = character.blightedAt;
+    const daysSinceBlight = blightStartDate ? 
+      Math.floor((Date.now() - blightStartDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    
+    // Calculate time since last roll
+    const lastRollDate = character.lastRollDate;
+    const daysSinceLastRoll = lastRollDate ? 
+      Math.floor((Date.now() - lastRollDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    
+    // Calculate time to death deadline
+    const deathDeadline = character.deathDeadline;
+    const daysToDeath = deathDeadline ? 
+      Math.floor((deathDeadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+
+    // Create embed response
+    const statusEmbed = new EmbedBuilder()
+      .setColor(character.blightPaused ? '#FFA500' : '#AD1457') // Orange for paused, purple for active
+      .setTitle(`📊 Blight Status Report - ${character.name}`)
+      .setDescription(`Comprehensive blight status information for this character.`)
+      .addFields(
+        { name: '👤 Character', value: character.name, inline: true },
+        { name: '👥 User', value: userMention, inline: true },
+        { name: '🏘️ Current Village', value: character.currentVillage, inline: true },
+        { name: '🏥 Blight Stage', value: `Stage ${character.blightStage}`, inline: true },
+        { name: '📅 Blight Started', value: blightStartDate ? blightStartDate.toLocaleString() : 'Unknown', inline: true },
+        { name: '⏰ Days Since Blight', value: `${daysSinceBlight} day(s)`, inline: true },
+        { name: '🎲 Last Roll Date', value: lastRollDate ? lastRollDate.toLocaleString() : 'Never', inline: true },
+        { name: '⏳ Days Since Last Roll', value: `${daysSinceLastRoll} day(s)`, inline: true },
+        { name: '💀 Death Deadline', value: deathDeadline ? deathDeadline.toLocaleString() : 'Not set', inline: true },
+        { name: '⏰ Days Until Death', value: daysToDeath > 0 ? `${daysToDeath} day(s)` : 'Overdue', inline: true }
+      );
+
+    // Add pause information if paused
+    if (character.blightPaused) {
+      const pauseInfo = character.blightPauseInfo || {};
+      const pauseDuration = pauseInfo.pausedAt ? 
+        Math.floor((Date.now() - pauseInfo.pausedAt.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+      
+      statusEmbed.addFields(
+        { name: '⏸️ Status', value: '**PAUSED**', inline: false },
+        { name: '⏰ Paused At', value: pauseInfo.pausedAt ? pauseInfo.pausedAt.toLocaleString() : 'Unknown', inline: true },
+        { name: '🛡️ Paused By', value: pauseInfo.pausedByUsername || 'Unknown', inline: true },
+        { name: '⏸️ Pause Duration', value: `${pauseDuration} day(s)`, inline: true },
+        { name: '📝 Reason', value: pauseInfo.reason || 'No reason provided', inline: false },
+        { name: '💡 To Unpause', value: `Use \`/mod blightunpause character:${character.name}\``, inline: false }
+      );
+    } else {
+      statusEmbed.addFields(
+        { name: '▶️ Status', value: '**ACTIVE** - Blight progression is currently active.', inline: false },
+        { name: '💡 To Pause', value: `Use \`/mod blightpause character:${character.name} reason:your_reason\``, inline: false }
+      );
+    }
+
+    statusEmbed
+      .setThumbnail(character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png')
+      .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+      .setFooter({ text: 'Blight Status Report', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [statusEmbed] });
+  } catch (error) {
+    handleError(error, 'mod.js');
+    console.error('[mod.js]: Error in handleBlightStatus', error);
     return interaction.editReply('❌ An error occurred while processing your request.');
   }
 }
