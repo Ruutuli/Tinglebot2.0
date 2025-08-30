@@ -296,6 +296,18 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "character") {
                   await handleModBlightCharacterAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "blightpause") {
+                if (focusedOption.name === "character") {
+                  await handleModBlightedCharacterAutocomplete(interaction, focusedOption);
+                }
+              } else if (modSubcommand === "blightunpause") {
+                if (focusedOption.name === "character") {
+                  await handleModBlightedCharacterAutocomplete(interaction, focusedOption);
+                }
+              } else if (modSubcommand === "blightstatus") {
+                if (focusedOption.name === "character") {
+                  await handleModBlightedCharacterAutocomplete(interaction, focusedOption);
+                }
               } else if (modSubcommand === "blightoverride") {
                 if (focusedOption.name === "target") {
                   await handleBlightOverrideTargetAutocomplete(interaction, focusedOption);
@@ -814,6 +826,39 @@ async function handleModBlightCharacterAutocomplete(interaction, focusedOption) 
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleModBlightCharacterAutocomplete]: Error occurred:", error);
+    await safeRespondWithError(interaction, error);
+  }
+}
+
+// ------------------- Mod Blighted Character Autocomplete -------------------
+// Provides character suggestions for blight-related commands by fetching
+// only blighted characters from the database for moderators to select from.
+async function handleModBlightedCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    // For blightpause/blightunpause commands, show only blighted characters
+    const allCharacters = await fetchAllCharacters();
+    const blightedCharacters = allCharacters.filter(character => character.blighted);
+    
+    const choices = blightedCharacters.map((character) => {
+      let status = '';
+      if (character.blightPaused) {
+        const pauseInfo = character.blightPauseInfo || {};
+        const reason = pauseInfo.reason ? ` | ${pauseInfo.reason}` : '';
+        status = ` | ⏸️ PAUSED${reason}`;
+      } else {
+        status = ` | ▶️ ACTIVE`;
+      }
+      
+      return {
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)} | Blight Stage ${character.blightStage}${status}`,
+        value: character.name,
+      };
+    });
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleModBlightedCharacterAutocomplete]: Error occurred:", error);
     await safeRespondWithError(interaction, error);
   }
 }

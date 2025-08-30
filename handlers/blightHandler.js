@@ -2908,6 +2908,12 @@ async function checkMissedRolls(client) {
         continue;
       }
 
+      // ---- SKIP missed roll progression if blight is paused ----
+      if (character.blightPaused) {
+        console.log(`[blightHandler]: Skipping missed roll for ${character.name} - blight progression is paused.`);
+        continue;
+      }
+
       // ========================================================================
       // ------------------- STAGE 5: Death Watch -------------------
       // ========================================================================
