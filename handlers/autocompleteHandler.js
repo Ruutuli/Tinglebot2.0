@@ -2106,7 +2106,14 @@ async function handleShopCharacterAutocomplete(interaction, focusedValue) {
                   name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
                   value: char.name
                 }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+    
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'character'
+    };
+    
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleShopCharacterAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
@@ -2132,7 +2139,14 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
       name: `${item.itemName} (Qty: ${item.quantity})`,
       value: item.itemName
     }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+    
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'item'
+    };
+    
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleShopItemAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
@@ -3007,6 +3021,23 @@ async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
     if (items.length === 0) {
       return await interaction.respond([]);
     }
+
+    const choices = items
+      .filter(item => item.itemName.toLowerCase().includes(focusedValue.toLowerCase()))
+      .map(item => ({
+        name: capitalizeWords(item.itemName),
+        value: item.itemName
+      }));
+
+    if (choices.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'ingredient'
+    };
 
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
