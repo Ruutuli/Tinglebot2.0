@@ -109,10 +109,24 @@ function normalizeVillageName(name) {
 function getCurrentSeason() {
   const now = new Date();
   const month = now.getMonth() + 1;
+  const day = now.getDate();
   
-  if (month >= 3 && month <= 5) return 'spring';
-  if (month >= 6 && month <= 8) return 'summer';
-  if (month >= 9 && month <= 11) return 'fall';
+  // Spring: March 21 - June 20
+  if (month === 3 && day >= 21) return 'spring';
+  if (month >= 4 && month <= 5) return 'spring';
+  if (month === 6 && day <= 20) return 'spring';
+  
+  // Summer: June 21 - September 20
+  if (month === 6 && day >= 21) return 'summer';
+  if (month >= 7 && month <= 8) return 'summer';
+  if (month === 9 && day <= 20) return 'summer';
+  
+  // Fall: September 21 - December 20
+  if (month === 9 && day >= 21) return 'fall';
+  if (month >= 10 && month <= 11) return 'fall';
+  if (month === 12 && day <= 20) return 'fall';
+  
+  // Winter: December 21 - March 20
   return 'winter';
 }
 
@@ -125,6 +139,7 @@ function normalizeSeason(season) {
   if (!season) return 'spring';
   const s = season.toLowerCase();
   if (s === 'autumn') return 'fall';
+  if (s === 'fall') return 'autumn';
   return s;
 }
 
@@ -384,7 +399,9 @@ async function simulateWeightedWeather(village, season, options = {}) {
     validateResult = true
   } = options;
   
-  const seasonKey = capitalizeFirstLetter(season);
+  // Convert 'fall' to 'autumn' for data lookup since seasonsData uses 'Autumn'
+  const lookupSeason = season === 'fall' ? 'autumn' : season;
+  const seasonKey = capitalizeFirstLetter(lookupSeason);
   const villageData = seasonsData[village];
   if (!villageData || !villageData.seasons[seasonKey]) {
     console.error(`[weatherService.js]: No season data found for ${village} in ${seasonKey}`);
@@ -392,6 +409,7 @@ async function simulateWeightedWeather(village, season, options = {}) {
   }
   
   const seasonInfo = villageData.seasons[seasonKey];
+  // Use the lookup season key for weight modifiers since they use 'Autumn'
   const weightModifiers = weatherWeightModifiers[village]?.[seasonKey] || {};
   
   // Get history based on configuration
@@ -831,7 +849,8 @@ function specialWeatherFlavorText(weatherType) {
 // ------------------- Generate Weather Embed -------------------
 async function generateWeatherEmbed(village, weather, options = {}) {
   try {
-    const seasonKey = normalizeSeason(weather.season);
+    // Use the original season for icon lookup since SEASON_ICONS expects 'fall'
+    const seasonKey = weather.season || 'spring';
     const seasonIconPath = SEASON_ICONS[seasonKey];
     const seasonIconName = `${seasonKey}.png`;
     const seasonAttachment = new AttachmentBuilder(seasonIconPath, { name: seasonIconName });
