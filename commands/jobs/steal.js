@@ -1001,8 +1001,7 @@ async function getStealStats(characterId) {
             successRate: 0,
             itemsByRarity: {
                 common: 0,
-                uncommon: 0,
-                rare: 0
+                uncommon: 0
             },
             victims: []
         };
