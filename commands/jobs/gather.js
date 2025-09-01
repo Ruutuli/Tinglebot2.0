@@ -160,36 +160,41 @@ module.exports = {
     // ------------------- Helper Function: Safe Reply ------------------
     // Helper function to safely respond to interaction
     const safeReply = async (content, options = {}) => {
-      if (hasResponded || interaction.replied || interaction.deferred) {
-        try {
-          await interaction.editReply(content);
-        } catch (error) {
-          if (error.code === 10062) {
-            // Interaction has expired, try followUp instead
-            try {
-              await interaction.followUp(content);
-            } catch (followUpError) {
-              console.error('[gather.js]: Failed to send followUp message:', followUpError);
-            }
-          } else {
-            throw error;
-          }
+      try {
+        // Check if interaction is still valid
+        if (!interaction.isRepliable()) {
+          console.error('[gather.js]: Cannot reply to interaction - interaction is not repliable');
+          return;
         }
-      } else {
-        try {
+        
+        if (hasResponded || interaction.replied || interaction.deferred) {
+          await interaction.editReply(content);
+        } else {
           await interaction.reply(content);
           hasResponded = true;
-        } catch (error) {
-          if (error.code === 10062) {
-            console.error('[gather.js]: Interaction expired before initial response');
-          } else {
-            throw error;
+        }
+      } catch (error) {
+        if (error.code === 10062) {
+          // Interaction has expired, try followUp instead
+          try {
+            await interaction.followUp(content);
+          } catch (followUpError) {
+            console.error('[gather.js]: Failed to send followUp message:', followUpError);
           }
+        } else {
+          throw error;
         }
       }
     };
 
     try {
+      // Check if interaction is still valid before proceeding
+      if (!interaction.isRepliable()) {
+        console.error('[gather.js]: Cannot reply to interaction - interaction is not repliable');
+        return;
+      }
+      
+      // Defer the reply immediately to prevent interaction timeout
       await interaction.deferReply();
 
       const characterName = interaction.options.getString('charactername');
@@ -209,7 +214,24 @@ module.exports = {
       }
 
       // Check inventory sync before proceeding
-      await checkInventorySync(character);
+      // Add timeout protection for long operations
+      const inventorySyncPromise = checkInventorySync(character);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Inventory sync timeout')), 25000)
+      );
+      
+      try {
+        await Promise.race([inventorySyncPromise, timeoutPromise]);
+      } catch (syncError) {
+        if (syncError.message === 'Inventory sync timeout') {
+          await safeReply({
+            content: '❌ **Inventory sync is taking too long. Please try again.**',
+            flags: 64
+          });
+          return;
+        }
+        throw syncError;
+      }
 
       // Initialize job variable
       job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
@@ -225,7 +247,7 @@ module.exports = {
       if (character.blightEffects?.noGathering) {
         await safeReply({
           content: `❌ **${character.name}** cannot gather items due to advanced blight stage.`,
-          ephemeral: true
+          flags: 64
         });
         return;
       }
@@ -239,7 +261,7 @@ module.exports = {
       if (character.isKO) {
         await safeReply({
           content: `❌ **${character.name}** is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
-          ephemeral: true,
+          flags: 64,
         });
         return;
       }
@@ -251,7 +273,7 @@ module.exports = {
         
         await safeReply({
           embeds: [debuffEmbed],
-          ephemeral: true,
+          flags: 64,
         });
         return;
       }
@@ -263,7 +285,7 @@ module.exports = {
             characterName: character.name,
             jobName: job || "None"
           }).message,
-          ephemeral: true,
+          flags: 64,
         });
         return;
       }
@@ -319,7 +341,7 @@ module.exports = {
               text: 'Location Check'
             }
           }],
-          ephemeral: true
+          flags: 64
         });
         return;
       }
@@ -337,7 +359,7 @@ module.exports = {
               text: 'Channel Restriction'
             }
           }],
-          ephemeral: true,
+          flags: 64,
         });
         return;
       }
@@ -473,7 +495,7 @@ module.exports = {
                 text: 'Daily Activity Limit'
               }
             }],
-            ephemeral: true,
+            flags: 64,
           });
           return;
         }
@@ -485,7 +507,7 @@ module.exports = {
           console.error(`[Gather Command]: ❌ Failed to update daily roll:`, error);
           await safeReply({
             content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
-            ephemeral: true,
+            flags: 64,
           });
           return;
         }
@@ -965,6 +987,12 @@ module.exports = {
       }
 
     } catch (error) {
+      // Handle interaction expiration specifically
+      if (error.code === 10062) {
+        console.error('[gather.js]: Interaction expired during gathering process');
+        return; // Can't respond to expired interaction
+      }
+      
       // Only log errors that aren't inventory sync related
       if (!error.message.includes('inventory is not synced')) {
         handleError(error, 'gather.js', {
@@ -991,6 +1019,12 @@ module.exports = {
         });
       }
 
+      // Check if interaction is still valid before trying to respond
+      if (!interaction.isRepliable()) {
+        console.error('[gather.js]: Cannot reply to interaction - interaction is not repliable');
+        return;
+      }
+      
       // Provide more specific error messages based on the error type
       let errorMessage;
       if (error.message.includes('inventory is not synced')) {
@@ -1012,7 +1046,7 @@ module.exports = {
               text: 'Inventory Sync Required'
             }
           }],
-          ephemeral: true
+          flags: 64
         });
         return;
       } else if (error.message.includes('MongoDB')) {
@@ -1030,10 +1064,18 @@ module.exports = {
       }
 
       if (errorMessage) {
-        await safeReply({
-          content: errorMessage,
-          ephemeral: true
-        });
+        try {
+          await safeReply({
+            content: errorMessage,
+            flags: 64
+          });
+        } catch (replyError) {
+          if (replyError.code === 10062) {
+            console.error('[gather.js]: Failed to send error message - interaction expired');
+          } else {
+            console.error('[gather.js]: Failed to send error message:', replyError);
+          }
+        }
       }
     }
   },

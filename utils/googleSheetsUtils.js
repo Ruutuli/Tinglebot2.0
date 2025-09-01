@@ -1307,6 +1307,58 @@ async function getPendingSheetOperationsCount() {
   }
 }
 
+// ------------------- Function: diagnoseGoogleSheetsSetup -------------------
+// Provides diagnostic information about Google Sheets setup and common issues
+function diagnoseGoogleSheetsSetup() {
+  try {
+    const credentials = getServiceAccountCredentials();
+    const env = process.env.NODE_ENV || 'development';
+    
+    console.log(`[googleSheetsUtils.js]: 🔍 **Google Sheets Setup Diagnostic**`);
+    console.log(`[googleSheetsUtils.js]: 📊 Environment: ${env}`);
+    console.log(`[googleSheetsUtils.js]: 📧 Service Account Email: ${credentials.client_email}`);
+    console.log(`[googleSheetsUtils.js]: 🆔 Project ID: ${credentials.project_id}`);
+    console.log(`[googleSheetsUtils.js]: 🔑 Private Key: ${credentials.private_key ? '✅ Present' : '❌ Missing'}`);
+    console.log(`[googleSheetsUtils.js]: 🏷️ Private Key ID: ${credentials.private_key_id ? '✅ Present' : '❌ Missing'}`);
+    
+    // Check environment variables
+    if (env === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+      console.log(`[googleSheetsUtils.js]: 🌐 Railway Environment: ${process.env.RAILWAY_ENVIRONMENT ? '✅ Yes' : '❌ No'}`);
+      console.log(`[googleSheetsUtils.js]: 🔐 GOOGLE_CLIENT_EMAIL: ${process.env.GOOGLE_CLIENT_EMAIL ? '✅ Set' : '❌ Missing'}`);
+      console.log(`[googleSheetsUtils.js]: 🔑 GOOGLE_PRIVATE_KEY: ${process.env.GOOGLE_PRIVATE_KEY ? '✅ Set' : '❌ Missing'}`);
+      console.log(`[googleSheetsUtils.js]: 🆔 GOOGLE_PROJECT_ID: ${process.env.GOOGLE_PROJECT_ID ? '✅ Set' : '❌ Missing'}`);
+    } else {
+      console.log(`[googleSheetsUtils.js]: 📁 Local Environment: Using service_account.json file`);
+      console.log(`[googleSheetsUtils.js]: 📂 Service Account Path: ${SERVICE_ACCOUNT_PATH}`);
+    }
+    
+    console.log(`[googleSheetsUtils.js]: 📋 **Common Permission Issues & Solutions:**`);
+    console.log(`[googleSheetsUtils.js]: 1. ❌ "The caller does not have permission"`);
+    console.log(`[googleSheetsUtils.js]:    → Solution: Share spreadsheet with ${credentials.client_email} as Editor`);
+    console.log(`[googleSheetsUtils.js]: 2. ❌ "Sheet not found"`);
+    console.log(`[googleSheetsUtils.js]:    → Solution: Check sheet tab names (loggedInventory, loggedTracker)`);
+    console.log(`[googleSheetsUtils.js]: 3. ❌ "Rate limit exceeded"`);
+    console.log(`[googleSheetsUtils.js]:    → Solution: Wait a few minutes, retries are automatic`);
+    console.log(`[googleSheetsUtils.js]: 4. ❌ "Service unavailable"`);
+    console.log(`[googleSheetsUtils.js]:    → Solution: Google Sheets API is down, try again later`);
+    
+    return {
+      success: true,
+      serviceAccountEmail: credentials.client_email,
+      projectId: credentials.project_id,
+      environment: env,
+      hasPrivateKey: !!credentials.private_key,
+      hasPrivateKeyId: !!credentials.private_key_id
+    };
+  } catch (error) {
+    console.error(`[googleSheetsUtils.js]: ❌ Diagnostic failed: ${error.message}`);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 // ============================================================================
 // ------------------- Exports -------------------
 // Module exports grouped by functionality
@@ -1344,5 +1396,6 @@ module.exports = {
     parseSheetData,
     storePendingSheetOperation,
     retryPendingSheetOperations,
-    getPendingSheetOperationsCount
+    getPendingSheetOperationsCount,
+    diagnoseGoogleSheetsSetup
 };

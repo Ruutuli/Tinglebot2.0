@@ -45,7 +45,7 @@ const MAX_STREAK = 5; // Maximum streak bonus
 const PROTECTION_DURATION = 2 * 60 * 60 * 1000; // 2 hours protection
 
 // ------------------- Global Cooldown System -------------------
-// New system to prevent steal abuse, especially for NPCs with rare items
+// New system to prevent steal abuse, especially for NPCs with uncommon items
 const GLOBAL_FAILURE_COOLDOWN = 2 * 60 * 60 * 1000; // 2 hours global cooldown on failure
 const GLOBAL_SUCCESS_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours global cooldown on success (resets at midnight EST)
 
@@ -59,22 +59,20 @@ const villageChannels = {
 // ------------------- Rarity Constants -------------------
 const RARITY_COOLDOWN_MULTIPLIERS = {
     common: 1,
-    uncommon: 1.5,
-    rare: 2
+    uncommon: 1.5
 };
 
 const RARITY_WEIGHTS = {
-    '1': 20, '2': 18, '3': 15, '4': 13, '5': 11, '6': 9, '7': 7, '8': 5, '9': 2, '10': 1
+    '1': 20, '2': 18, '3': 15, '4': 13, '5': 11
 };
 
 const FAILURE_CHANCES = {
     common: 10,
-    uncommon: 50,
-    rare: 80
+    uncommon: 50
 };
 
 // ------------------- NPC Difficulty Modifiers -------------------
-// Zone and Peddler are harder to steal from due to rare items
+// Zone and Peddler are harder to steal from due to uncommon items
 const NPC_DIFFICULTY_MODIFIERS = {
     Zone: 18,      // +18 to failure threshold (harder to succeed)
     Peddler: 15    // +15 to failure threshold (harder to succeed)
@@ -238,35 +236,32 @@ async function updateDailySteal(character, activity) {
 // Centralized item selection system that handles rarity-based fallback logic
 // 
 // FALLBACK HIERARCHY:
-// - Rare items (rarity 8-10): rare -> uncommon -> common -> any available
-// - Uncommon items (rarity 5-7): uncommon -> common -> any available  
+// - Uncommon items (rarity 5): uncommon -> common -> any available  
 // - Common items (rarity 1-4): common -> any available
 //
 // This system ensures that if the requested rarity isn't available, the system
 // gracefully falls back to lower rarities rather than failing completely.
 // The fallback is transparent to the user but provides feedback when it occurs.
 async function selectItemsWithFallback(itemsWithRarity, targetRarity) {
-    // Rarity mapping: 1-4 = common, 5-7 = uncommon, 8-10 = rare
+    // Rarity mapping: 1-4 = common, 5 = uncommon (only rarity 1-5 allowed)
     const RARITY_MAPPING = {
         common: { min: 1, max: 4 },
-        uncommon: { min: 5, max: 7 },
-        rare: { min: 8, max: 10 }
+        uncommon: { min: 5, max: 5 }
     };
     
-    // Fallback hierarchy: rare -> uncommon -> common -> any available
+    // Fallback hierarchy: uncommon -> common -> any available (no rare items)
     const FALLBACK_HIERARCHY = {
-        rare: ['rare', 'uncommon', 'common', 'any'],
         uncommon: ['uncommon', 'common', 'any'],
         common: ['common', 'any']
     };
     
     // Process items with rarity and tier assignment
+    // Filter out items with rarity 6+ (only allow rarity 1-5)
     const processedItems = itemsWithRarity
-        .filter(({ itemRarity }) => itemRarity)
+        .filter(({ itemRarity }) => itemRarity && itemRarity <= 5)
         .map(({ itemName, itemRarity }) => {
             let tier = 'common';
-            if (itemRarity >= 8) tier = 'rare';
-            else if (itemRarity >= 5) tier = 'uncommon';
+            if (itemRarity >= 5) tier = 'uncommon';
             return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
         });
     
@@ -308,7 +303,6 @@ function getFallbackMessage(targetRarity, selectedTier) {
     if (targetRarity === selectedTier) return null;
     
     const messages = {
-        rare: '⚠️ No rare items found! But you did find something else...',
         uncommon: '⚠️ No uncommon items found! But you did find something else...'
     };
     
@@ -897,8 +891,7 @@ async function updateStealStats(characterId, success, itemRarity, victimCharacte
                 failedSteals: 0,
                 itemsByRarity: {
                     common: 0,
-                    uncommon: 0,
-                    rare: 0
+                    uncommon: 0
                 },
                 victims: []
             });
@@ -977,8 +970,7 @@ async function getStealStats(characterId) {
                 successRate: 0,
                 itemsByRarity: {
                     common: 0,
-                    uncommon: 0,
-                    rare: 0
+                    uncommon: 0
                 },
                 victims: []
             };
@@ -1057,8 +1049,6 @@ function determineStealQuantity(item) {
             quantityToSteal = Math.floor(Math.random() * 3) + 1; // 1-3
         } else if (item.tier === 'uncommon') {
             quantityToSteal = Math.floor(Math.random() * 2) + 1; // 1-2
-        } else if (item.tier === 'rare') {
-            quantityToSteal = 1;
         }
         return quantityToSteal;
     }
@@ -1071,8 +1061,6 @@ function determineStealQuantity(item) {
         quantityToSteal = Math.min(availableQuantity, Math.floor(Math.random() * 3) + 1);
     } else if (item.tier === 'uncommon') {
         quantityToSteal = Math.min(availableQuantity, Math.floor(Math.random() * 2) + 1);
-    } else if (item.tier === 'rare') {
-        quantityToSteal = Math.min(availableQuantity, 1);
     }
     
     return quantityToSteal;
@@ -1647,7 +1635,7 @@ async function calculateFailureThreshold(itemTier, character = null, targetName 
     
     // Apply NPC-specific difficulty modifiers
     if (targetName && NPC_DIFFICULTY_MODIFIERS[targetName]) {
-        // Some NPCs are harder to steal from due to rare items
+        // Some NPCs are harder to steal from due to uncommon items
         const difficultyBonus = NPC_DIFFICULTY_MODIFIERS[targetName];
         threshold += difficultyBonus;
         
@@ -2018,7 +2006,7 @@ module.exports = {
                 // Add items by rarity
                 embed.addFields({ 
                     name: '__✨ Items by Rarity__', 
-                    value: `> Common: ${stats.itemsByRarity.common}\n> Uncommon: ${stats.itemsByRarity.uncommon}\n> Rare: ${stats.itemsByRarity.rare}`, 
+                    value: `> Common: ${stats.itemsByRarity.common}\n> Uncommon: ${stats.itemsByRarity.uncommon}`, 
                     inline: false 
                 });
                 
@@ -2055,7 +2043,7 @@ module.exports = {
             }
 
             // ---- Rarity Validation ----
-            const allowedRarities = ['common', 'uncommon', 'rare'];
+            const allowedRarities = ['common', 'uncommon'];
             if (!allowedRarities.includes(raritySelection)) {
                 await interaction.reply({ content: '❌ **Invalid rarity. Please select a rarity from the dropdown menu.**', ephemeral: true });
                 return;
