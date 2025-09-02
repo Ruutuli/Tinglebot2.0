@@ -49,7 +49,7 @@ const RuuGame = require("./models/RuuGameModel");
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests } = require('./modules/helpWantedModule');
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
 const { removeExpiredBuffs } = require('./modules/elixirModule');
-const { postMonthlyQuests } = require('./scripts/monthlyQuestScheduler');
+// const { postMonthlyQuests } = require('./scripts/monthlyQuestScheduler'); // Monthly quests not yet implemented
 
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
 
@@ -1320,17 +1320,17 @@ function initializeScheduler(client) {
   handleQuestExpirationAtMidnight(client)
  );
 
- // Monthly quest posting - 1st of each month at 12:00 AM EST (5:00 AM UTC)
- createCronJob("0 5 1 * *", "monthly quest posting", async () => {
-  console.log('[scheduler.js]: 📅 Starting monthly quest posting...');
-  try {
-   await postMonthlyQuests();
-   console.log('[scheduler.js]: ✅ Monthly quest posting completed');
-  } catch (error) {
-   handleError(error, 'scheduler.js');
-   console.error('[scheduler.js]: ❌ Monthly quest posting failed:', error.message);
-  }
- }, "America/New_York");
+ // Monthly quest posting - 1st of each month at 12:00 AM EST (5:00 AM UTC) - DISABLED
+ // createCronJob("0 5 1 * *", "monthly quest posting", async () => {
+ //  console.log('[scheduler.js]: 📅 Starting monthly quest posting...');
+ //  try {
+ //   await postMonthlyQuests();
+ //   console.log('[scheduler.js]: ✅ Monthly quest posting completed');
+ //  } catch (error) {
+ //   handleError(error, 'scheduler.js');
+ //   console.error('[scheduler.js]: ❌ Monthly quest posting failed:', error.message);
+ //  }
+ // }, "America/New_York");
 
  createCronJob("0 5 * * *", "reset global steal protections", () => {
   console.log(`[scheduler.js]: 🛡️ Starting global steal protection reset`);
