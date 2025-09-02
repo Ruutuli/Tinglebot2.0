@@ -192,7 +192,7 @@ async function healBlight(interaction, characterName, healerName) {
     if (!character) {
       await interaction.editReply({
         content: `❌ You can only perform this action for your **own** characters!`,
-        ephemeral: true
+        flags: [4096]
       });
       return;
     }
@@ -208,18 +208,18 @@ async function healBlight(interaction, characterName, healerName) {
         .setFooter({ text: 'Blight Status Check', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
         .setTimestamp();
 
-      await interaction.editReply({ 
-        content: `<@${interaction.user.id}>`,
-        embeds: [notBlightedEmbed],
-        ephemeral: true 
-      });
+              await interaction.editReply({ 
+          content: `<@${interaction.user.id}>`,
+          embeds: [notBlightedEmbed],
+          flags: [4096]
+        });
       return;
     }
 
     if (character.blightPaused) {
       await interaction.editReply({
         content: `⏸️ Blight progression is currently **paused** for **${character.name}**.`,
-        ephemeral: true
+        flags: [4096]
       });
       return;
     }
@@ -299,14 +299,14 @@ async function healBlight(interaction, characterName, healerName) {
         // Reply in-channel with pending embed (non-ephemeral)
         await interaction.editReply({
           embeds: [pendingEmbed],
-          ephemeral: false
+          flags: []
         });
 
         // Send instructions embed separately as ephemeral
         if (instructionsEmbed) {
           await interaction.followUp({
             embeds: [instructionsEmbed],
-            ephemeral: true
+            flags: [4096]
           });
         }
 
@@ -339,7 +339,7 @@ async function healBlight(interaction, characterName, healerName) {
     if (!healer) {
       await interaction.editReply({ 
         content: `❌ Healer "${healerName}" not found.`, 
-        ephemeral: true 
+        flags: [4096]
       });
       return;
     }
@@ -347,7 +347,7 @@ async function healBlight(interaction, characterName, healerName) {
     if (character.currentVillage.toLowerCase() !== healer.village.toLowerCase()) {
       await interaction.editReply({
         content: `⚠️ **${healer.name}** cannot heal **${character.name}** because they are from different villages.`,
-        ephemeral: true,
+        flags: [4096],
       });
       return;
     }
@@ -362,7 +362,7 @@ async function healBlight(interaction, characterName, healerName) {
       
       await interaction.editReply({
         content: `⚠️ **${healer.name}** cannot heal **${character.name}** at Blight Stage ${blightStage}. Only ${allowedHealers} can heal this stage.`,
-        ephemeral: true,
+        flags: [4096],
       });
       return;
     }
@@ -439,14 +439,14 @@ async function healBlight(interaction, characterName, healerName) {
     await interaction.editReply({
       content: replyContent,
       embeds: [embed],
-      ephemeral: false,
+      flags: [],
     });
 
     // Send instructions embed separately as ephemeral
     if (instructionsEmbed) {
       await interaction.followUp({
         embeds: [instructionsEmbed],
-        ephemeral: true
+        flags: [4096]
       });
     }
 
@@ -533,14 +533,14 @@ async function healBlight(interaction, characterName, healerName) {
     errorMessage += `- Timestamp: ${new Date().toISOString()}`;
     
     try {
-      await interaction.editReply({ content: errorMessage, ephemeral: true });
+      await interaction.editReply({ content: errorMessage, flags: [4096] });
     } catch (replyError) {
       console.error('[blightHandler]: Failed to send detailed error reply:', replyError);
       // Fallback to simple error message
       try {
         await interaction.followUp({ 
           content: '❌ An error occurred while processing your healing request. Please contact a moderator.', 
-          ephemeral: true 
+          flags: [4096] 
         });
       } catch (followUpError) {
         console.error('[blightHandler]: Failed to send follow-up error message:', followUpError);
@@ -587,7 +587,7 @@ async function validateCharacterOwnership(interaction, characterName) {
 
         await interaction.editReply({
           embeds: [errorEmbed],
-          ephemeral: true
+          flags: [4096]
         });
       } else {
         const errorEmbed = new EmbedBuilder()
@@ -604,7 +604,7 @@ async function validateCharacterOwnership(interaction, characterName) {
 
         await interaction.editReply({
           embeds: [errorEmbed],
-          ephemeral: true
+          flags: [4096]
         });
       }
       return null;
@@ -637,7 +637,7 @@ async function validateCharacterOwnership(interaction, characterName) {
 
     await interaction.editReply({
       embeds: [errorEmbed],
-      ephemeral: true
+      flags: [4096]
     });
     return null;
   }
@@ -1010,7 +1010,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
   try {
     // ------------------- Validate Submission ID -------------------
     if (!submissionId || typeof submissionId !== 'string') {
-      await interaction.editReply({ content: '❌ Invalid submission ID provided.', ephemeral: true });
+      await interaction.editReply({ content: '❌ Invalid submission ID provided.', flags: [4096] });
       return;
     }
 
@@ -1057,7 +1057,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       
       await interaction.editReply({
         embeds: [expiredEmbed],
-        ephemeral: true
+        flags: [4096]
       });
       return;
     }
@@ -1085,7 +1085,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
 
       await interaction.editReply({ 
         embeds: [errorEmbed],
-        ephemeral: true 
+        flags: [4096] 
       });
       return;
     }
@@ -1107,7 +1107,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       const allowedHealers = permissionCheck.allowedCategories.map(c => c.toLowerCase()).join(' or ');
       await interaction.editReply({
         content: `❌ **${healer.name}** cannot heal **${character.name}** at Blight Stage ${character.blightStage}. Only ${allowedHealers} can heal this stage. Please request a new healing task from an eligible healer.`,
-        ephemeral: true
+        flags: [4096]
       });
       return;
     }
@@ -1132,7 +1132,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
             text: 'Inventory System'
           }
         }],
-        ephemeral: true
+        flags: [4096]
       });
       return;
     }
@@ -1149,7 +1149,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       if (currentTokenBalance <= 0) {
         await interaction.editReply({
           content: '❌ You do not have enough tokens to forfeit. You must have more than 0 tokens to use this option.',
-          ephemeral: true
+          flags: [4096]
         });
         return;
       }
@@ -1188,7 +1188,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         console.error(`[blightHandler]: Invalid token balance: ${currentTokenBalance}`);
         await interaction.editReply({
           content: '❌ Invalid token balance. Please try again later.',
-          ephemeral: true
+          flags: [4096]
         });
         return;
       }
@@ -1221,7 +1221,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       if (!item || typeof item !== 'string' || !item.trim()) {
         await interaction.editReply({
           content: `❌ You must provide an item in the format: Item Name xQuantity (e.g., Bright-Eyed Crab x4).`,
-          ephemeral: true
+          flags: [4096]
         });
         return;
       }
@@ -1229,7 +1229,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       if (!itemMatch) {
         await interaction.editReply({
           content: `❌ Invalid item format. Please use: Item Name xQuantity (e.g., Bright-Eyed Crab x4).`,
-          ephemeral: true
+          flags: [4096]
         });
         return;
       }
@@ -1238,7 +1238,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       if (!itemName || isNaN(itemQuantityInt) || itemQuantityInt <= 0) {
         await interaction.editReply({
           content: `❌ Invalid item or quantity. Please use: Item Name xQuantity (e.g., Bright-Eyed Crab x4).`,
-          ephemeral: true
+          flags: [4096]
         });
         return;
       }
@@ -1270,7 +1270,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
 
         await interaction.editReply({
           embeds: [invalidRequirementEmbed],
-          ephemeral: true
+          flags: [4096]
         });
         return;
       }
@@ -1278,7 +1278,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       if (itemQuantityInt !== requiredItem.quantity) {
         await interaction.editReply({
           content: `❌ **${healer.name}** requires exactly **${requiredItem.quantity}** of **${requiredItem.name}**, but you provided **${itemQuantityInt}**.`,
-          ephemeral: true
+          flags: [4096]
         });
         return;
       }
@@ -1322,7 +1322,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       if (!validationResult.available) {
         await interaction.editReply({
           content: `❌ **${character.name}** only has **${validationResult.quantity}** of **${requiredItem.name}**, but **${requiredItem.quantity}** is needed.`,
-          ephemeral: true
+          flags: [4096]
         });
         return;
       }
@@ -1348,7 +1348,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         }
       ]);
 
-      await interaction.editReply({ embeds: [embed], ephemeral: false });
+      await interaction.editReply({ embeds: [embed], flags: [] });
       return;
     }
 
@@ -1367,7 +1367,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         const errorEmbed = createBlightSubmissionErrorEmbed(linkValidation.error);
         await interaction.editReply({ 
           embeds: [errorEmbed],
-          ephemeral: true 
+          flags: [4096] 
         });
         return;
       }
@@ -1394,7 +1394,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         }
       ]);
 
-      await interaction.editReply({ embeds: [embed], ephemeral: false });
+      await interaction.editReply({ embeds: [embed], flags: [] });
       return;
     }
 
@@ -1469,14 +1469,14 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     errorMessage += `- Timestamp: ${new Date().toISOString()}`;
     
     try {
-      await interaction.editReply({ content: errorMessage, ephemeral: true });
+      await interaction.editReply({ content: errorMessage, flags: [4096] });
     } catch (replyError) {
       console.error('[blightHandler]: Failed to send detailed error reply:', replyError);
       // Fallback to simple error message
       try {
         await interaction.followUp({ 
           content: '❌ An error occurred while processing your request. Please contact a moderator.', 
-          ephemeral: true 
+          flags: [4096] 
         });
       } catch (followUpError) {
         console.error('[blightHandler]: Failed to send follow-up error message:', followUpError);
@@ -1653,13 +1653,13 @@ async function rollForBlightProgression(interaction, characterName) {
   try {
     // ------------------- Input Validation -------------------
     if (!characterName || typeof characterName !== 'string') {
-      await interaction.editReply({ content: '❌ Invalid character name provided.', ephemeral: true });
+      await interaction.editReply({ content: '❌ Invalid character name provided.', flags: [4096] });
       return;
     }
 
     const character = await Character.findOne({ name: characterName });
     if (!character) {
-      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, flags: [4096] });
       return;
     }
 
@@ -1677,7 +1677,7 @@ async function rollForBlightProgression(interaction, characterName) {
       await interaction.editReply({ 
         content: `<@${interaction.user.id}>`,
         embeds: [notBlightedEmbed],
-        ephemeral: true 
+        flags: [4096] 
       });
       return;
     }
@@ -1687,7 +1687,7 @@ async function rollForBlightProgression(interaction, characterName) {
       await interaction.editReply({
         content: `⚠️ **${characterName}** is at Stage 5 Blight and cannot roll anymore.\n\n` +
           `You have until <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F> to be healed by a Dragon or your character will die.`,
-        ephemeral: true,
+        flags: [4096],
       });
       return;
     }
@@ -1738,7 +1738,7 @@ async function rollForBlightProgression(interaction, characterName) {
       await interaction.editReply({ 
         content: `<@${interaction.user.id}>`,
         embeds: [alreadyRolledEmbed],
-        ephemeral: true 
+        flags: [4096] 
       });
       return;
     }
@@ -1850,7 +1850,7 @@ async function rollForBlightProgression(interaction, characterName) {
       characterName
     });
     console.error('[blightHandler]: Error rolling for blight progression:', error);
-    await interaction.editReply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
+    await interaction.editReply({ content: '❌ An error occurred while processing your request.', flags: [4096] });
   }
 }
 
@@ -1903,7 +1903,7 @@ async function viewBlightStatus(interaction, characterName) {
   try {
     const character = await Character.findOne({ name: characterName });
     if (!character) {
-      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, flags: [4096] });
       return;
     }
 
@@ -1922,7 +1922,7 @@ async function viewBlightStatus(interaction, characterName) {
       await interaction.editReply({ 
         content: `<@${interaction.user.id}>`,
         embeds: [notBlightedEmbed],
-        ephemeral: true 
+        flags: [4096] 
       });
       return;
     }
@@ -2065,7 +2065,7 @@ async function viewBlightStatus(interaction, characterName) {
     await interaction.editReply({ 
       content: `<@${interaction.user.id}>`,
       embeds: [embed],
-      ephemeral: true 
+      flags: [4096] 
     });
   } catch (error) {
     handleError(error, 'blightHandler.js', {
@@ -2078,7 +2078,7 @@ async function viewBlightStatus(interaction, characterName) {
     console.error('[blightHandler]: Error viewing blight status:', error);
     await interaction.editReply({ 
       content: '❌ An error occurred while fetching the blight status.',
-      ephemeral: true 
+      flags: [4096] 
     });
   }
 }
@@ -2146,7 +2146,7 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
   try {
     const character = await Character.findOne({ name: characterName });
     if (!character) {
-      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, flags: [4096] });
       return;
     }
 
@@ -2165,7 +2165,7 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
       await interaction.editReply({ 
         content: `<@${interaction.user.id}>`,
         embeds: [neverBlightedEmbed],
-        ephemeral: true 
+        flags: [4096] 
       });
       return;
     }
@@ -2175,7 +2175,7 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
     if (history.length === 0) {
       await interaction.editReply({
         content: `📜 **${characterName}** has no recorded blight history.`,
-        ephemeral: true
+        flags: [4096]
       });
       return;
     }
@@ -2237,7 +2237,7 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
     console.error('[blightHandler]: Error viewing blight history:', error);
     await interaction.editReply({ 
       content: '❌ An error occurred while fetching the blight history.',
-      ephemeral: true 
+      flags: [4096] 
     });
   }
 }
