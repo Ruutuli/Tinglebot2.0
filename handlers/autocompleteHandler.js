@@ -181,46 +181,11 @@ async function safeRespondWithValidation(interaction, choices) {
 
 async function safeRespondWithError(interaction, error) {
   try {
-    // Check if interaction is still valid
-    if (!interaction.isAutocomplete()) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction is not an autocomplete interaction');
-      return;
-    }
-
-    // Check if already responded
-    if (interaction.responded) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
-      return;
-    }
-
-    if (error && error.code === 10062) {
-      console.warn("[autocompleteHandler.js]: ⚠️ Interaction expired or already responded to");
-      return;
-    }
-
-    if (error) {
-      handleError(error, 'autocompleteHandler.js', {
-        operation: 'safeRespondWithError',
-        interactionId: interaction.id,
-        errorCode: error.code,
-        errorMessage: error.message
-      });
-
-      console.error("[autocompleteHandler.js]: ❌ Error handling autocomplete:", error);
-    }
-
-    // Only respond if we haven't already and interaction is still valid
     if (!interaction.responded && interaction.isAutocomplete()) {
-      await interaction.respond([]).catch(() => {});
+      await interaction.respond([]);
     }
-  } catch (replyError) {
-    handleError(replyError, 'autocompleteHandler.js', {
-      operation: 'safeRespondWithError',
-      interactionId: interaction.id,
-      originalError: error?.message || 'Unknown error',
-      errorCode: replyError.code
-    });
-    console.error("[autocompleteHandler.js]: ❌ Error sending error response:", replyError);
+  } catch (respondError) {
+    // Ignore respond errors - interaction likely expired
   }
 }
 
@@ -233,51 +198,25 @@ async function safeRespondWithError(interaction, error) {
 // ------------------- Function: handleAutocomplete -------------------
 // Routes autocomplete requests to appropriate handlers based on command and focused option
 async function handleAutocomplete(interaction) {
-    // Set a timeout for the entire autocomplete handling
-    const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Autocomplete handling timeout')), 2000)
-    );
-
     try {
-        // Validate interaction
-        if (!interaction || !interaction.isAutocomplete()) {
-            console.log('[autocompleteHandler.js]: ⚠️ Invalid or non-autocomplete interaction');
-            return;
-        }
-
-        // Check if already responded
-        if (interaction.responded) {
-            console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
+        // Simple validation
+        if (!interaction?.isAutocomplete() || interaction.responded) {
             return;
         }
 
         const commandName = interaction.commandName;
         const focusedOption = interaction.options.getFocused(true);
 
-        // Add a check for interaction validity
-        if (!interaction.isAutocomplete()) {
-            console.log('[autocompleteHandler.js]: ⚠️ Not an autocomplete interaction');
-            return;
-        }
-
-        // Race between the actual handling and the timeout
-        await Promise.race([
-            handleAutocompleteInternal(interaction, commandName, focusedOption),
-            timeoutPromise
-        ]);
+        // Route to internal handler
+        await handleAutocompleteInternal(interaction, commandName, focusedOption);
     } catch (error) {
-        if (error.message === 'Autocomplete handling timeout') {
-            console.warn('[autocompleteHandler.js]: ⚠️ Autocomplete handling timed out');
-            try {
-                if (!interaction.responded && interaction.isAutocomplete()) {
-                    await interaction.respond([]).catch(() => {});
-                }
-            } catch (e) {
-                console.error('[autocompleteHandler.js]: ❌ Error sending timeout response:', e);
+        // Simple error handling
+        try {
+            if (!interaction.responded) {
+                await interaction.respond([]);
             }
-        } else {
-            console.error('[autocompleteHandler.js]: ❌ Error in handleAutocomplete:', error);
-            await safeRespondWithError(interaction, error);
+        } catch (respondError) {
+            // Ignore respond errors - interaction likely expired
         }
     }
 }
@@ -692,8 +631,14 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
           break;
         }
     } catch (error) {
-        console.error('[autocompleteHandler.js]: ❌ Error in handleAutocompleteInternal:', error);
-        await safeRespondWithError(interaction, error);
+        // Simple error handling
+        try {
+            if (!interaction.responded) {
+                await interaction.respond([]);
+            }
+        } catch (respondError) {
+            // Ignore respond errors - interaction likely expired
+        }
     }
 }
 
@@ -4681,9 +4626,14 @@ async function handleModCharacterNameAutocomplete(interaction, focusedOption) {
 
     await interaction.respond(filteredChoices.slice(0, 25));
   } catch (error) {
-    handleError(error, "autocompleteHandler.js");
-    console.error("[handleModCharacterNameAutocomplete]: Error:", error);
-    await safeRespondWithError(interaction);
+    // Simple error handling - just try to respond with empty array
+    try {
+      if (!interaction.responded) {
+        await interaction.respond([]);
+      }
+    } catch (respondError) {
+      // Ignore respond errors - interaction likely expired
+    }
   }
 }
 
