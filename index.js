@@ -14,7 +14,7 @@ const figlet = require("figlet");
 const { Client, GatewayIntentBits } = require("discord.js");
 
 // ------------------- Database Connections -------------------
-const { connectToTinglebot, connectToInventories, checkDatabaseHealth, reconnectDatabases } = require("./database/db");
+const { connectToTinglebot, connectToInventories } = require("./database/db");
 const TempData = require("./models/TempDataModel");
 
 // ------------------- Handlers -------------------
@@ -65,109 +65,63 @@ process.on('warning', (warning) => {
 // ----------------------------------------------------------------------------
 // ──────────────────── Database Initialization ──────────────────────────────
 // ----------------------------------------------------------------------------
-async function initializeDatabases(maxRetries = 3, retryDelay = 5000) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`[index.js]: 🔄 Database connection attempt ${attempt}/${maxRetries}...`);
-      
-      // Add timeout to database connections (increased to 60 seconds)
-      const connectionTimeout = setTimeout(() => {
-        console.error(`[index.js]: Database connection timeout after 60 seconds (attempt ${attempt}/${maxRetries})`);
-        throw new Error('Connection timeout');
-      }, 60000);
+async function initializeDatabases() {
+  try {
+    console.log("[index.js]: Connecting to databases...");
+    
+    // Add timeout to database connections (increased to 60 seconds)
+    const connectionTimeout = setTimeout(() => {
+      console.error("[index.js]: Database connection timeout after 60 seconds");
+      process.exit(1);
+    }, 60000);
 
-      await connectToTinglebot();
-      await connectToInventories();
-      
-      clearTimeout(connectionTimeout);
-      
-      // Clean up expired temp data and entries without expiration dates
-      const [expiredResult, noExpirationResult] = await Promise.all([
-        TempData.cleanup(),
-        TempData.deleteMany({ expiresAt: { $exists: false } })
-      ]);
-      console.log(`[index.js]: 🧹 Cleaned up ${expiredResult.deletedCount} expired temp data entries`);
-      console.log(`[index.js]: 🧹 Cleaned up ${noExpirationResult.deletedCount} entries without expiration dates`);
-      
-      // Clean up expired and fulfilled boosting data
-      const boostingCleanupResult = await TempData.deleteMany({
-        type: 'boosting',
-        $or: [
-          { expiresAt: { $lt: new Date() } },
-          { 'data.status': 'expired' },
-          { 'data.status': 'fulfilled', 'data.boostExpiresAt': { $lt: Date.now() } }
-        ]
-      });
-      console.log(`[index.js]: 🧹 Cleaned up ${boostingCleanupResult.deletedCount} expired/fulfilled boosting entries`);
-      
-          console.log("[index.js]: ✅ Databases connected successfully");
+    await connectToTinglebot();
+    await connectToInventories();
     
-    // Start periodic health checks
-    startDatabaseHealthChecks();
+    clearTimeout(connectionTimeout);
     
-    return; // Success, exit the retry loop
-      
-    } catch (err) {
-      console.error(`[index.js]: ❌ Database connection attempt ${attempt}/${maxRetries} failed:`, err.message);
-      
-      if (attempt === maxRetries) {
-        console.error("[index.js]: ❌ All database connection attempts failed. Exiting...");
-        console.error("[index.js]: ❌ Final error details:", {
-          name: err.name,
-          message: err.message,
-          stack: err.stack
-        });
-        process.exit(1);
-      }
-      
-      console.log(`[index.js]: ⏳ Retrying in ${retryDelay/1000} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, retryDelay));
-      
-      // Increase delay for next attempt (exponential backoff)
-      retryDelay = Math.min(retryDelay * 1.5, 30000);
-    }
+    // Clean up expired temp data and entries without expiration dates
+    const [expiredResult, noExpirationResult] = await Promise.all([
+      TempData.cleanup(),
+      TempData.deleteMany({ expiresAt: { $exists: false } })
+    ]);
+    console.log(`[index.js]: 🧹 Cleaned up ${expiredResult.deletedCount} expired temp data entries`);
+    console.log(`[index.js]: 🧹 Cleaned up ${noExpirationResult.deletedCount} entries without expiration dates`);
+    
+    // Clean up expired and fulfilled boosting data
+    const boostingCleanupResult = await TempData.deleteMany({
+      type: 'boosting',
+      $or: [
+        { expiresAt: { $lt: new Date() } },
+        { 'data.status': 'expired' },
+        { 'data.status': 'fulfilled', 'data.boostExpiresAt': { $lt: Date.now() } }
+      ]
+    });
+    console.log(`[index.js]: 🧹 Cleaned up ${boostingCleanupResult.deletedCount} expired/fulfilled boosting entries`);
+    
+    console.log("[index.js]: ✅ Databases connected successfully");
+  } catch (err) {
+    console.error("[index.js]: ❌ Database initialization error:", err);
+    console.error("[index.js]: ❌ Error details:", {
+      name: err.name,
+      message: err.message,
+      stack: err.stack
+    });
+    process.exit(1);
   }
 }
 
-// ------------------- Database Health Monitoring -------------------
-function startDatabaseHealthChecks() {
-  // Check database health every 5 minutes
-  setInterval(async () => {
-    try {
-      const health = await checkDatabaseHealth();
-      const allHealthy = health.tinglebot && health.inventories && health.vending;
-      
-      if (!allHealthy) {
-        console.log("[index.js]: ⚠️ Database health check failed:", health);
-        
-        // Attempt reconnection if any database is unhealthy
-        const reconnected = await reconnectDatabases();
-        if (reconnected) {
-          console.log("[index.js]: ✅ Database reconnection successful");
-        } else {
-          console.log("[index.js]: ❌ Database reconnection failed");
-        }
-      } else {
-        console.log("[index.js]: ✅ Database health check passed");
-      }
-    } catch (error) {
-      console.error("[index.js]: ❌ Database health check error:", error.message);
-    }
-  }, 5 * 60 * 1000); // 5 minutes
-}
+
 
 // Add process error handlers
 process.on('uncaughtException', (error) => {
   console.error('[index.js]: ❌ Uncaught Exception:', error);
-  console.error('[index.js]: Stack trace:', error.stack);
-  // Don't exit immediately, give time for cleanup
-  setTimeout(() => process.exit(1), 1000);
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[index.js]: ❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  // Don't exit immediately, give time for cleanup
-  setTimeout(() => process.exit(1), 1000);
+  process.exit(1);
 });
 
 // Add graceful shutdown handler
@@ -239,25 +193,13 @@ async function initializeClient() {
     // Add error handler for Discord client
     client.on('error', error => {
       console.error('[index.js]: Discord client error:', error);
-      // Don't exit immediately, try to recover
-      setTimeout(() => {
-        if (client && client.readyState === 0) {
-          console.log('[index.js]: Attempting to reconnect Discord client...');
-          client.login(process.env.DISCORD_TOKEN);
-        }
-      }, 5000);
+      process.exit(1);
     });
 
     // Add error handler for Discord connection
     client.on('disconnect', () => {
-      console.log('[index.js]: Discord client disconnected, attempting to reconnect...');
-      // Don't exit immediately, try to recover
-      setTimeout(() => {
-        if (client && client.readyState === 0) {
-          console.log('[index.js]: Attempting to reconnect Discord client...');
-          client.login(process.env.DISCORD_TOKEN);
-        }
-      }, 5000);
+      console.log('[index.js]: Discord client disconnected');
+      process.exit(1);
     });
 
     module.exports = { client };
