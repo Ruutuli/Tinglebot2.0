@@ -1,7 +1,7 @@
 // ------------------- Import Section: Grouped based on standard and local modules -------------------
 // Standard libraries (Discord.js builders)
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, InteractionResponseType } = require('discord.js');
 
 // Local modules (blight handlers)
 const { 
@@ -18,6 +18,71 @@ const { getModCharacterByName } = require('../../modules/modCharacters');
 const { retrieveBlightRequestFromStorage } = require('../../utils/storage');
 const Character = require('../../models/CharacterModel');
 const { handleError } = require('../../utils/globalErrorHandler');
+
+// ------------------- Helper function to safely respond to interactions -------------------
+async function safeInteractionResponse(interaction, content, options = {}) {
+  try {
+    // Check if interaction is still valid
+    if (!interaction.isRepliable()) {
+      console.log('[blight.js]: Interaction is no longer repliable');
+      return false;
+    }
+
+    // If we haven't replied yet, try to defer
+    if (!interaction.deferred && !interaction.replied) {
+      try {
+        await interaction.deferReply({ flags: options.ephemeral ? [4096] : [] });
+        return true;
+      } catch (deferError) {
+        console.error('[blight.js]: Failed to defer reply:', deferError);
+        // If defer fails, try immediate reply
+        try {
+          await interaction.reply({ 
+            content, 
+            flags: options.ephemeral ? [4096] : [] // 4096 = MessageFlags.Ephemeral
+          });
+          return true;
+        } catch (replyError) {
+          console.error('[blight.js]: Failed to reply:', replyError);
+          return false;
+        }
+      }
+    }
+
+    // If already deferred, edit the reply
+    if (interaction.deferred && !interaction.replied) {
+      try {
+        await interaction.editReply({ 
+          content, 
+          flags: options.ephemeral ? [4096] : []
+        });
+        return true;
+      } catch (editError) {
+        console.error('[blight.js]: Failed to edit reply:', editError);
+        return false;
+      }
+    }
+
+    // If already replied, try follow up
+    if (interaction.replied) {
+      try {
+        await interaction.followUp({ 
+          content, 
+          flags: options.ephemeral ? [4096] : []
+        });
+        return true;
+      } catch (followUpError) {
+        console.error('[blight.js]: Failed to follow up:', followUpError);
+        return false;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('[blight.js]: Error in safeInteractionResponse:', error);
+    return false;
+  }
+}
 
 // ------------------- Define the Blight Command -------------------
 // This command manages blight progression, healing, and submission of healing tasks.
@@ -102,57 +167,54 @@ module.exports = {
             .setDescription('Number of history entries to show (default: 10)')
             .setRequired(false)
             .setMinValue(1)
-            .setMaxValue(25)))
-
-    // ------------------- Subcommand: View blighted roster -------------------
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('roster')
-        .setDescription('View a list of all currently blighted characters')
-        .addBooleanOption(option =>
-          option.setName('show_expired')
-            .setDescription('Include expired healing requests (default: false)')
-            .setRequired(false)))
+            .setMaxValue(50)))
 
     // ------------------- Subcommand: View blight status -------------------
     .addSubcommand(subcommand =>
       subcommand
         .setName('status')
-        .setDescription('View current blight status, submission progress, and deadlines for a character')
+        .setDescription('View the current blight status for a character')
         .addStringOption(option =>
           option.setName('character_name')
             .setDescription('The name of the character to view blight status for')
             .setRequired(true)
-            .setAutocomplete(true))),
+            .setAutocomplete(true)))
 
-  // ------------------- Command Execution Logic -------------------
+    // ------------------- Subcommand: View blighted characters roster -------------------
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('roster')
+        .setDescription('View all currently blighted characters in the world')
+        .addBooleanOption(option =>
+          option.setName('show_expired')
+            .setDescription('Show expired healing submissions (default: false)')
+            .setRequired(false))),
+
+  // ------------------- Execute the command -------------------
   async execute(interaction) {
-    const communityBoardChannelId = process.env.COMMUNITY_BOARD;
-
-    // Check if the command is executed in the Community Board channel
-    if (interaction.channelId !== communityBoardChannelId) {
-      const errorEmbed = new EmbedBuilder()
-        .setColor('#FF0000')
-        .setTitle('❌ Channel Restriction')
-        .setDescription('This command can only be used in the Community Board channel.')
-        .addFields(
-          { name: '📍 Required Channel', value: `<#${communityBoardChannelId}>`, inline: true },
-          { name: '💡 How to Fix', value: 'Please navigate to the Community Board channel to use this command.', inline: false }
-        )
-        .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
-        .setFooter({ text: 'Channel Validation Error' })
-        .setTimestamp();
-
-      await interaction.reply({
-        embeds: [errorEmbed],
-        ephemeral: true,
-      });
+    // Check if interaction is still valid
+    if (!interaction.isRepliable()) {
+      console.log('[blight.js]: Interaction is no longer repliable, skipping execution');
       return;
     }
 
     try {
       // Defer reply immediately for all subcommands to prevent timeout
-      await interaction.deferReply();
+      try {
+        await interaction.deferReply({ flags: [] });
+      } catch (deferError) {
+        console.error('[blight.js]: Failed to defer reply:', deferError);
+        // If defer fails, try immediate reply
+        try {
+          await interaction.reply({ 
+            content: '⚠️ Processing your request...', 
+            flags: []
+          });
+        } catch (replyError) {
+          console.error('[blight.js]: Failed to reply after defer failure:', replyError);
+          return; // Can't proceed if we can't respond
+        }
+      }
 
       const subcommand = interaction.options.getSubcommand();
       
@@ -201,7 +263,7 @@ module.exports = {
           if (blightedCharacters.length === 0) {
             await interaction.editReply({
               content: '✅ There are currently no blighted characters in the world.',
-              ephemeral: true
+              flags: []
             });
             return;
           }
@@ -300,19 +362,7 @@ module.exports = {
           rosterErrorMessage += `- User: ${interaction.user.tag} (${interaction.user.id})\n`;
           rosterErrorMessage += `- Timestamp: ${new Date().toISOString()}`;
           
-          try {
-            await interaction.editReply({ content: rosterErrorMessage, ephemeral: true });
-          } catch (replyError) {
-            console.error('[blight.js]: Failed to send roster error reply:', replyError);
-            try {
-              await interaction.followUp({ 
-                content: '❌ An error occurred while fetching the blighted roster. Please try again later.', 
-                ephemeral: true 
-              });
-            } catch (followUpError) {
-              console.error('[blight.js]: Failed to send roster error follow-up:', followUpError);
-            }
-          }
+          await safeInteractionResponse(interaction, rosterErrorMessage, { ephemeral: true });
         }
       }
     } catch (error) {
@@ -373,25 +423,8 @@ module.exports = {
       errorMessage += `- Command: ${interaction.commandName || 'blight'}\n`;
       errorMessage += `- Timestamp: ${new Date().toISOString()}`;
 
-      // Try to edit the reply if it exists, otherwise send a new reply
-      try {
-        await interaction.editReply({ content: errorMessage, ephemeral: true });
-      } catch (editError) {
-        try {
-          await interaction.reply({ content: errorMessage, ephemeral: true });
-        } catch (replyError) {
-          console.error('[blight.js]: Failed to send error message:', replyError);
-          // Final fallback - try to follow up
-          try {
-            await interaction.followUp({ 
-              content: '❌ An error occurred while processing your request. Please contact a moderator.', 
-              ephemeral: true 
-            });
-          } catch (followUpError) {
-            console.error('[blight.js]: Failed to send follow-up error message:', followUpError);
-          }
-        }
-      }
+      // Use the safe interaction response function
+      await safeInteractionResponse(interaction, errorMessage, { ephemeral: true });
     }
   }
 };
