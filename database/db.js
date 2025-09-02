@@ -77,46 +77,70 @@ async function connectToTinglebot() {
   if (!tinglebotDbConnection || mongoose.connection.readyState === 0) {
    mongoose.set("strictQuery", false);
    const uri = dbConfig.tinglebot;
+   
+   // Check if URI is valid
+   if (!uri) {
+     throw new Error('Missing MongoDB URI for tinglebot database');
+   }
+   
    try {
     tinglebotDbConnection = await mongoose.connect(uri, {
-     serverSelectionTimeoutMS: 30000,
-     socketTimeoutMS: 45000,
-     connectTimeoutMS: 30000,
+     serverSelectionTimeoutMS: 60000, // Increased from 30000
+     socketTimeoutMS: 60000,          // Increased from 45000
+     connectTimeoutMS: 60000,         // Increased from 30000
      maxPoolSize: 10,
      minPoolSize: 5,
      retryWrites: true,
      retryReads: true,
      w: 'majority',
-     wtimeoutMS: 2500,
+     wtimeoutMS: 5000,               // Increased from 2500
      heartbeatFrequencyMS: 10000,
      maxIdleTimeMS: 60000,
-     family: 4
+     family: 4,
+     bufferCommands: false,           // Disable buffering for better error handling
+     bufferMaxEntries: 0
     });
+    
+    // Test the connection
+    await mongoose.connection.db.admin().ping();
+    console.log("[db.js]: ✅ Tinglebot database connection established and tested");
+    
    } catch (connectError) {
-    // Try to reconnect once
+    console.error("[db.js]: ❌ Initial connection failed, attempting retry...");
+    
+    // Try to reconnect once with same settings
     try {
      tinglebotDbConnection = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-      connectTimeoutMS: 30000,
+      serverSelectionTimeoutMS: 60000,
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 60000,
       maxPoolSize: 10,
       minPoolSize: 5,
       retryWrites: true,
       retryReads: true,
       w: 'majority',
-      wtimeoutMS: 2500,
+      wtimeoutMS: 5000,
       heartbeatFrequencyMS: 10000,
       maxIdleTimeMS: 60000,
-      family: 4
+      family: 4,
+      bufferCommands: false,
+      bufferMaxEntries: 0
      });
+     
+     // Test the retry connection
+     await mongoose.connection.db.admin().ping();
+     console.log("[db.js]: ✅ Tinglebot database retry connection successful");
+     
     } catch (retryError) {
+     console.error("[db.js]: ❌ Retry connection also failed");
      throw retryError;
     }
    }
   }
   return tinglebotDbConnection;
  } catch (error) {
-  handleError(error, "connection.js");
+  handleError(error, "db.js");
+  console.error("[db.js]: ❌ Failed to connect to tinglebot database:", error.message);
   throw error;
  }
 }
@@ -132,26 +156,33 @@ async function connectToInventories() {
    }
    
    inventoriesDbConnection = await mongoose.createConnection(uri, {
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
+    serverSelectionTimeoutMS: 60000, // Increased from 30000
+    socketTimeoutMS: 60000,          // Increased from 45000
+    connectTimeoutMS: 60000,         // Increased from 30000
     maxPoolSize: 10,
     minPoolSize: 5,
     retryWrites: true,
     retryReads: true,
     w: 'majority',
-    wtimeoutMS: 2500,
+    wtimeoutMS: 5000,               // Increased from 2500
     heartbeatFrequencyMS: 10000,
     maxIdleTimeMS: 60000,
-    family: 4
+    family: 4,
+    bufferCommands: false,           // Disable buffering for better error handling
+    bufferMaxEntries: 0
    });
 
    // Set the database name
    inventoriesDbConnection.useDb('inventories');
+   
+   // Test the connection
+   await inventoriesDbConnection.db.admin().ping();
+   console.log("[db.js]: ✅ Inventories database connection established and tested");
   }
   return inventoriesDbConnection;
  } catch (error) {
   handleError(error, "db.js");
+  console.error("[db.js]: ❌ Failed to connect to inventories database:", error.message);
   throw error;
  }
 }
@@ -168,19 +199,29 @@ const connectToInventoriesNative = async () => {
   const client = new MongoClient(uri, {
     maxPoolSize: 10,
     minPoolSize: 5,
-    serverSelectionTimeoutMS: 30000,
-    connectTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
+    serverSelectionTimeoutMS: 60000, // Increased from 30000
+    connectTimeoutMS: 60000,         // Increased from 30000
+    socketTimeoutMS: 60000,          // Increased from 45000
     retryWrites: true,
     retryReads: true,
     w: 'majority',
-    wtimeoutMS: 2500,
+    wtimeoutMS: 5000,               // Increased from 2500
     heartbeatFrequencyMS: 10000,
     maxIdleTimeMS: 60000,
     family: 4
   });
-  await client.connect();
-  inventoriesDbNativeConnection = client.db('inventories');
+  
+  try {
+    await client.connect();
+    inventoriesDbNativeConnection = client.db('inventories');
+    
+    // Test the connection
+    await inventoriesDbNativeConnection.admin().ping();
+    console.log("[db.js]: ✅ Native inventories database connection established and tested");
+  } catch (error) {
+    await client.close();
+    throw error;
+  }
  }
  return inventoriesDbNativeConnection;
 };
@@ -200,27 +241,36 @@ async function connectToVending() {
  try {
   if (!vendingDbConnection) {
    const uri = dbConfig.vending;
+   
+   if (!uri) {
+     throw new Error('Missing MongoDB URI for vending database');
+   }
+   
    vendingDbConnection = await mongoose.createConnection(uri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
+    serverSelectionTimeoutMS: 60000, // Increased from 30000
+    socketTimeoutMS: 60000,          // Increased from 45000
+    connectTimeoutMS: 60000,         // Increased from 30000
     maxPoolSize: 10,
     minPoolSize: 5,
     retryWrites: true,
     retryReads: true,
     w: 'majority',
-    wtimeoutMS: 2500,
+    wtimeoutMS: 5000,               // Increased from 2500
     heartbeatFrequencyMS: 10000,
     maxIdleTimeMS: 60000,
-    family: 4
+    family: 4,
+    bufferCommands: false,           // Disable buffering for better error handling
+    bufferMaxEntries: 0
    });
+   
+   // Test the connection
+   await vendingDbConnection.db.admin().ping();
+   console.log("[db.js]: ✅ Vending database connection established and tested");
   }
   return vendingDbConnection;
  } catch (error) {
   handleError(error, "db.js");
-  console.error("❌ Error in connectToVending:", error);
+  console.error("[db.js]: ❌ Error in connectToVending:", error.message);
   throw error;
  }
 }
@@ -2170,16 +2220,21 @@ const connectToInventoriesForItems = async () => {
         if (!inventoriesClient) {
             const env = process.env.NODE_ENV || 'development';
             const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
+            
+            if (!uri) {
+                throw new Error('Missing MongoDB URI for items database');
+            }
+            
             inventoriesClient = new MongoClient(uri, {
                 maxPoolSize: 10,
                 minPoolSize: 5,
-                serverSelectionTimeoutMS: 30000,
-                connectTimeoutMS: 30000,
-                socketTimeoutMS: 45000,
+                serverSelectionTimeoutMS: 60000, // Increased from 30000
+                connectTimeoutMS: 60000,         // Increased from 30000
+                socketTimeoutMS: 60000,          // Increased from 45000
                 retryWrites: true,
                 retryReads: true,
                 w: 'majority',
-                wtimeoutMS: 2500,
+                wtimeoutMS: 5000,               // Increased from 2500
                 heartbeatFrequencyMS: 10000,
                 maxIdleTimeMS: 60000,
                 family: 4
@@ -2187,11 +2242,16 @@ const connectToInventoriesForItems = async () => {
             await inventoriesClient.connect();
             // Use tinglebot database for items
             inventoriesDb = inventoriesClient.db('tinglebot');
+            
+            // Test the connection
+            await inventoriesDb.admin().ping();
+            console.log("[db.js]: ✅ Items database connection established and tested");
         } else {
             // Try to ping the server to check connection
             try {
                 await inventoriesClient.db('tinglebot').command({ ping: 1 });
             } catch (error) {
+                console.log("[db.js]: 🔄 Items database ping failed, reconnecting...");
                 // If ping fails, reconnect
                 await inventoriesClient.close();
                 const env = process.env.NODE_ENV || 'development';
@@ -2199,25 +2259,29 @@ const connectToInventoriesForItems = async () => {
                 inventoriesClient = new MongoClient(uri, {
                     maxPoolSize: 10,
                     minPoolSize: 5,
-                    serverSelectionTimeoutMS: 30000,
-                    connectTimeoutMS: 30000,
-                    socketTimeoutMS: 45000,
+                    serverSelectionTimeoutMS: 60000,
+                    connectTimeoutMS: 60000,
+                    socketTimeoutMS: 60000,
                     retryWrites: true,
                     retryReads: true,
                     w: 'majority',
-                    wtimeoutMS: 2500,
+                    wtimeoutMS: 5000,
                     heartbeatFrequencyMS: 10000,
                     maxIdleTimeMS: 60000,
                     family: 4
                 });
                 await inventoriesClient.connect();
                 inventoriesDb = inventoriesClient.db('tinglebot');
+                
+                // Test the reconnection
+                await inventoriesDb.admin().ping();
+                console.log("[db.js]: ✅ Items database reconnection successful");
             }
         }
         return inventoriesDb;
     } catch (error) {
-        handleError(error, "itemService.js");
-        console.error("[itemService.js]: ❌ Error connecting to Items database:", error);
+        handleError(error, "db.js");
+        console.error("[db.js]: ❌ Error connecting to Items database:", error.message);
         throw error;
     }
 };
@@ -2295,6 +2359,93 @@ const getUserBlightHistory = async (userId, limit = 20) => {
     handleError(error, 'db.js');
     console.error(`[blightService]: Error fetching user blight history: ${error.message}`);
     throw error;
+  }
+};
+
+// ============================================================================
+// ------------------- Connection Health Check Functions -------------------
+// Functions to monitor and maintain database connection health.
+// ============================================================================
+
+// ------------------- checkDatabaseHealth -------------------
+const checkDatabaseHealth = async () => {
+  try {
+    const healthStatus = {
+      tinglebot: false,
+      inventories: false,
+      vending: false,
+      timestamp: new Date()
+    };
+
+    // Check tinglebot connection
+    try {
+      if (mongoose.connection.readyState === 1) {
+        await mongoose.connection.db.admin().ping();
+        healthStatus.tinglebot = true;
+      }
+    } catch (error) {
+      console.log("[db.js]: ⚠️ Tinglebot connection health check failed:", error.message);
+    }
+
+    // Check inventories connection
+    try {
+      if (inventoriesDbConnection && inventoriesDbConnection.readyState === 1) {
+        await inventoriesDbConnection.db.admin().ping();
+        healthStatus.inventories = true;
+      }
+    } catch (error) {
+      console.log("[db.js]: ⚠️ Inventories connection health check failed:", error.message);
+    }
+
+    // Check vending connection
+    try {
+      if (vendingDbConnection && vendingDbConnection.readyState === 1) {
+        await vendingDbConnection.db.admin().ping();
+        healthStatus.vending = true;
+      }
+    } catch (error) {
+      console.log("[db.js]: ⚠️ Vending connection health check failed:", error.message);
+    }
+
+    return healthStatus;
+  } catch (error) {
+    console.error("[db.js]: ❌ Database health check error:", error.message);
+    return {
+      tinglebot: false,
+      inventories: false,
+      vending: false,
+      timestamp: new Date(),
+      error: error.message
+    };
+  }
+};
+
+// ------------------- reconnectDatabases -------------------
+const reconnectDatabases = async () => {
+  console.log("[db.js]: 🔄 Attempting to reconnect to all databases...");
+  
+  try {
+    // Reset connection variables
+    tinglebotDbConnection = null;
+    inventoriesDbConnection = null;
+    vendingDbConnection = null;
+    inventoriesDbNativeConnection = null;
+    
+    // Close existing connections
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.disconnect();
+    }
+    
+    // Reconnect
+    await connectToTinglebot();
+    await connectToInventories();
+    await connectToVending();
+    
+    console.log("[db.js]: ✅ Database reconnection successful");
+    return true;
+  } catch (error) {
+    console.error("[db.js]: ❌ Database reconnection failed:", error.message);
+    return false;
   }
 };
 
@@ -2431,5 +2582,8 @@ module.exports = {
  connectToVending,
  addItemToInventory,
  restorePetLevel,
- forceResetPetRolls
+ forceResetPetRolls,
+ // Connection health functions
+ checkDatabaseHealth,
+ reconnectDatabases
 };
