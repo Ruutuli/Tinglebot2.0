@@ -39,15 +39,15 @@ const NPC = require('../../models/NPCModel');
 // ============================================================================
 
 // ------------------- System Constants -------------------
-const STEAL_COOLDOWN = 5 * 60 * 1000; // 5 minutes in milliseconds
-const STREAK_BONUS = 0.05; // 5% bonus per streak
-const MAX_STREAK = 5; // Maximum streak bonus
 const PROTECTION_DURATION = 2 * 60 * 60 * 1000; // 2 hours protection
 
 // ------------------- Global Cooldown System -------------------
 // New system to prevent steal abuse, especially for NPCs with uncommon items
-const GLOBAL_FAILURE_COOLDOWN = 2 * 60 * 60 * 1000; // 2 hours global cooldown on failure
-const GLOBAL_SUCCESS_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours global cooldown on success (resets at midnight EST)
+const GLOBAL_FAILURE_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours global cooldown on failure
+const GLOBAL_SUCCESS_COOLDOWN = 7 * 24 * 60 * 60 * 1000; // 1 week global cooldown on success
+
+// Individual NPC cooldown for each character (30 days)
+const NPC_COOLDOWN = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ------------------- Village Channels -------------------
 const villageChannels = {
@@ -119,7 +119,9 @@ const ERROR_MESSAGES = {
 // const userCooldowns = new Map(); // Track user cooldowns
 const stealStreaks = new Map(); // Track successful steal streaks
 
-
+// ------------------- New Cooldown Tracking -------------------
+// Note: Individual NPC cooldowns are now stored in the NPC model database
+// instead of in-memory Map for persistence across bot restarts
 
 // ------------------- NPC Item Cache -------------------
 // Cache NPC items to avoid repeated database queries
@@ -201,7 +203,7 @@ function canUseDailySteal(character, activity) {
 
   const lastStealDate = new Date(lastStealRoll);
   
-  // If steal was used today, deny the action
+  // If steal was used today (after rollover), deny the action
   if (lastStealDate >= rollover) {
     return false;
   }
@@ -219,7 +221,7 @@ async function updateDailySteal(character, activity) {
     character.dailyRoll.set(activity, now);
     await character.save();
   } catch (error) {
-    console.error(`[steal.js]: ❌ Failed to update daily steal for ${character.name}:`, error);
+            console.error(`[steal.js]: ❌ Failed to update daily steal for ${character.name}:`, error);
     
             // Call global error handler for tracking
         handleError(error, 'steal.js', {
@@ -433,18 +435,23 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
 
     // Add cooldown information for successful steals
     if (isSuccess && !thiefCharacter.jobVoucher) {
-        // Calculate next steal availability (8 AM EST / 12:00 UTC)
+        // Calculate next steal availability (8 AM EST rollover)
+        const nextRollover = new Date();
+        nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
+        if (nextRollover < new Date()) {
+            nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+        }
+        
         const now = new Date();
-        const nextRollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 12, 0, 0, 0));
         const timeUntilNextSteal = nextRollover.getTime() - now.getTime();
         const hoursUntilNext = Math.floor(timeUntilNextSteal / (60 * 60 * 1000));
         const minutesUntilNext = Math.floor((timeUntilNextSteal % (60 * 60 * 1000)) / (60 * 1000));
         
         let cooldownText;
         if (hoursUntilNext > 0) {
-            cooldownText = `> **${hoursUntilNext}h ${minutesUntilNext}m** until next steal`;
+            cooldownText = `> **${hoursUntilNext}h ${minutesUntilNext}m** until next steal (resets at 8 AM EST)`;
         } else {
-            cooldownText = `> **${minutesUntilNext}m** until next steal`;
+            cooldownText = `> **${minutesUntilNext}m** until next steal (resets at 8 AM EST)`;
         }
         
         embed.addFields({
@@ -454,11 +461,11 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
         });
     }
     
-    // Add protection information for failed steals
-    if (!isSuccess) {
-        // Calculate 2-hour cooldown from now
+    // Add protection information for failed steals (only for NPCs)
+    if (!isSuccess && isNPC) {
+        // Calculate 24-hour cooldown from now
         const now = new Date();
-        const cooldownEnd = new Date(now.getTime() + (2 * 60 * 60 * 1000)); // 2 hours from now
+        const cooldownEnd = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // 24 hours from now
         const timeUntilCooldownEnd = cooldownEnd.getTime() - now.getTime();
         const hoursUntilEnd = Math.floor(timeUntilCooldownEnd / (60 * 60 * 1000));
         const minutesUntilEnd = Math.floor((timeUntilCooldownEnd % (60 * 60 * 1000)) / (60 * 1000));
@@ -470,10 +477,17 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
             cooldownText = `> **${minutesUntilEnd}m** until protection expires`;
         }
         
-        // Add target protection information (failed attempts handled separately)
+        // Add target protection information (failed attempts - NPCs only)
         embed.addFields({
             name: '🛡️ Target Protection',
-            value: `> **${isNPC ? targetCharacter : targetCharacter.name}** is now protected from theft for **2 hours** due to this failed attempt!`,
+            value: `> **${targetCharacter}** is now protected from theft for **24 hours** due to this failed attempt!`,
+            inline: false
+        });
+        
+        // Add personal lockout information for failed attempts
+        embed.addFields({
+            name: '🔒 Personal Lockout',
+            value: `> **${targetCharacter}** is now protected for **1 month** from being stolen from **${thiefCharacter.name}**. Please try stealing from other NPCs!`,
             inline: false
         });
     }
@@ -490,15 +504,30 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
 }
 
 function createProtectionEmbed(targetName, timeLeftMinutes, isNPC = false, protectionType = 'local', targetIcon = null) {
-    // Convert minutes to hours and minutes for better display
+    // Convert minutes to days, hours, and minutes for better display
     let timeDisplay;
-    if (timeLeftMinutes >= 60) {
+    if (timeLeftMinutes >= 1440) { // 24 hours = 1440 minutes
+        const days = Math.floor(timeLeftMinutes / 1440);
+        const remainingMinutes = timeLeftMinutes % 1440;
+        const hours = Math.floor(remainingMinutes / 60);
+        const minutes = remainingMinutes % 60;
+        
+        if (hours > 0 && minutes > 0) {
+            timeDisplay = `**${days} day${days !== 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}**`;
+        } else if (hours > 0) {
+            timeDisplay = `**${days} day${days !== 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}**`;
+        } else if (minutes > 0) {
+            timeDisplay = `**${days} day${days !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}**`;
+        } else {
+            timeDisplay = `**${days} day${days !== 1 ? 's' : ''}**`;
+        }
+    } else if (timeLeftMinutes >= 60) {
         const hours = Math.floor(timeLeftMinutes / 60);
         const minutes = timeLeftMinutes % 60;
         if (minutes > 0) {
             timeDisplay = `**${hours} hour${hours !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}**`;
         } else {
-            timeDisplay = `**${timeLeftMinutes} minute${timeLeftMinutes !== 1 ? 's' : ''}**`;
+            timeDisplay = `**${hours} hour${hours !== 1 ? 's' : ''}**`;
         }
     } else {
         timeDisplay = `**${timeLeftMinutes} minute${timeLeftMinutes !== 1 ? 's' : ''}**`;
@@ -838,14 +867,143 @@ async function setGlobalFailureProtection(targetId) {
 
 // Note: Protection methods simplified to use unified isProtectionExpired and getProtectionTimeLeft functions
 
+// ============================================================================
+// ---- New Cooldown System Functions ----
+// ============================================================================
+
+// ------------------- Check Target Protection -------------------
+// Check if a target is protected from theft (applies to ALL thieves)
+async function checkTargetProtection(targetId, isNPCTarget) {
+    try {
+        if (isNPCTarget) {
+            // For NPCs, check if they have global protection
+            const npc = await NPC.findOne({ name: targetId });
+            if (npc && npc.stealProtection?.isProtected && !npc.isProtectionExpired()) {
+                return {
+                    protected: true,
+                    timeLeft: npc.getProtectionTimeLeft(),
+                    protectionType: 'NPC global'
+                };
+            }
+        } else {
+            // For player targets, check if they have global protection
+            const character = await Character.findById(targetId);
+            if (character && character.stealProtection?.isProtected && !character.isProtectionExpired()) {
+                return {
+                    protected: true,
+                    timeLeft: character.getProtectionTimeLeft(),
+                    protectionType: 'player global'
+                };
+            }
+        }
+        
+        return { protected: false };
+    } catch (error) {
+        console.error('[steal.js]: Error checking target protection:', error);
+        return { protected: false };
+    }
+}
+
+// ------------------- Check Individual NPC Cooldown -------------------
+// Check if a character can steal from a specific NPC (30-day cooldown for the thief)
+async function checkIndividualNPCCooldown(characterId, npcName) {
+    try {
+        const npc = await NPC.findOne({ name: npcName });
+        if (!npc) {
+            return { onCooldown: false };
+        }
+        
+        // Check if character has an active personal lockout
+        const personalLockout = npc.personalLockouts?.find(lockout => 
+            lockout.characterId.toString() === characterId.toString() && 
+            lockout.lockoutEndTime > new Date()
+        );
+        
+        if (personalLockout) {
+            return {
+                onCooldown: true,
+                timeLeft: personalLockout.lockoutEndTime.getTime() - Date.now(),
+                cooldownType: 'NPC individual'
+            };
+        }
+        
+        return { onCooldown: false };
+    } catch (error) {
+        console.error('[steal.js]: Error checking individual NPC cooldown:', error);
+        return { onCooldown: false };
+    }
+}
+
+// ------------------- Set Target Protection -------------------
+// Set global protection on target (applies to ALL thieves)
+async function setTargetProtection(targetId, isNPCTarget, wasSuccessful) {
+    try {
+        let protectionDuration;
+        
+        if (wasSuccessful) {
+            protectionDuration = GLOBAL_SUCCESS_COOLDOWN; // 1 week
+        } else {
+            protectionDuration = GLOBAL_FAILURE_COOLDOWN; // 24 hours
+        }
+        
+        if (isNPCTarget) {
+            // For NPCs, set global protection
+            await NPC.setProtection(targetId, protectionDuration);
+        } else {
+            // For player targets, set global protection
+            const character = await Character.findById(targetId);
+            if (character) {
+                character.setProtection(protectionDuration);
+                await character.save();
+            }
+        }
+        
+        console.log(`[steal.js]: Set target protection for ${targetId} (${isNPCTarget ? 'NPC' : 'player'}) for ${wasSuccessful ? '1 week' : '24 hours'}`);
+    } catch (error) {
+        console.error('[steal.js]: Error setting target protection:', error);
+    }
+}
+
+// ------------------- Set Individual NPC Cooldown -------------------
+// Set individual cooldown for thief stealing from specific NPC (30 days)
+async function setIndividualNPCCooldown(characterId, npcName) {
+    try {
+        await NPC.setPersonalLockout(npcName, characterId, NPC_COOLDOWN);
+        console.log(`[steal.js]: Set individual NPC cooldown for ${characterId} -> ${npcName} for 30 days`);
+    } catch (error) {
+        console.error('[steal.js]: Error setting individual NPC cooldown:', error);
+    }
+}
+
+// Note: Cleanup of expired personal lockouts is now handled automatically
+// by the NPC model's pre-save middleware
+
+// ------------------- Format Cooldown Time -------------------
+// Format remaining cooldown time for display
+function formatCooldownTime(timeLeft) {
+    const days = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
+    
+    if (days > 0) {
+        return `${days}d ${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    } else {
+            return `${minutes}m`;
+    }
+}
+
 // Reset all protections (called by scheduler at midnight EST)
 async function resetAllStealProtections() {
   try {
     console.log('[steal.js]: 🛡️ Starting steal protection reset...');
     
-    // Reset NPC protections
-    const npcResult = await NPC.resetAllProtections();
-    console.log(`[steal.js]: ✅ Reset ${npcResult.modifiedCount} NPC protections`);
+    // Reset NPC protections and personal lockouts
+    const npcProtectionResult = await NPC.resetAllProtections();
+    const npcLockoutResult = await NPC.resetAllPersonalLockouts();
+    console.log(`[steal.js]: ✅ Reset ${npcProtectionResult.modifiedCount} NPC protections`);
+    console.log(`[steal.js]: ✅ Reset ${npcLockoutResult.modifiedCount} NPC personal lockouts`);
     
     // Reset player character protections
     const characterResult = await Character.updateMany(
@@ -1416,14 +1574,16 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
     // Check for blight infection
     const blightResult = await checkBlightInfection(thiefCharacter, targetCharacter, isNPC, interaction);
     
-    // Set protection on target until midnight EST (prevents farming the same target)
-    try {
-        if (isNPC) {
-            await setProtection(targetCharacter, 'midnight'); // targetCharacter is NPC name string
-        } else {
-            await setProtection(targetCharacter._id, 'midnight');
-        }
-    } catch (error) {
+            // Set target protection (applies to ALL thieves) and individual NPC cooldown
+        try {
+            if (isNPC) {
+                // Set global protection on NPC (1 week for all thieves)
+                await setTargetProtection(targetCharacter, true, true);
+                // Set individual cooldown for this thief (30 days)
+                await setIndividualNPCCooldown(thiefCharacter._id, targetCharacter);
+            }
+            // Note: Player targets do not get global protection on successful steals
+        } catch (error) {
         console.error('[steal.js]: Error setting protection after successful steal:', error);
         
         // Call global error handler for tracking
@@ -1487,20 +1647,21 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             });
         }
         
-        // Add target protection information
-        if (isNPC) {
-            embed.addFields({
-                name: '🛡️ Target Protection',
-                value: `> **${targetCharacter}** is now protected from theft until **midnight tonight** due to this successful steal!`,
-                inline: false
-            });
-        } else {
-            embed.addFields({
-                name: '🛡️ Target Protection',
-                value: `> **${targetCharacter.name}** is now protected from theft until **midnight tonight** due to this successful steal!`,
-                inline: false
-            });
-        }
+            // Add target protection information (only for NPCs)
+    if (isNPC) {
+        embed.addFields({
+            name: '🛡️ Target Protection',
+            value: `> **${targetCharacter}** is now protected from theft for **1 week** due to this successful steal!`,
+            inline: false
+        });
+        
+        // Add personal lockout information
+        embed.addFields({
+            name: '🔒 Personal Lockout',
+            value: `> **${targetCharacter}** is now protected for **1 month** from being stolen from **${thiefCharacter.name}**. Please try stealing from other NPCs!`,
+            inline: false
+        });
+    }
         
         // Add fallback message if needed
         if (usedFallback) {
@@ -1553,11 +1714,33 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
     resetStreak(interaction.user.id);
     await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
     
-    // Set protection on the target to prevent immediate retry from anyone
-    if (isNPC) {
-        await setProtection(targetCharacter); // targetCharacter is NPC name string
-    } else {
-        await setProtection(targetCharacter._id);
+            // Set target protection (applies to ALL thieves) and individual NPC cooldown
+        try {
+            if (isNPC) {
+                // Set global protection on NPC (24 hours for all thieves)
+                await setTargetProtection(targetCharacter, true, false);
+                // Set individual cooldown for this thief (30 days)
+                await setIndividualNPCCooldown(thiefCharacter._id, targetCharacter);
+            }
+            // Note: Player targets do not get global protection on failed steals
+        } catch (error) {
+        console.error('[steal.js]: Error setting protection after failed steal:', error);
+        
+        // Call global error handler for tracking
+        handleError(error, 'steal.js', {
+            commandName: 'steal',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            subcommand: interaction.options?.getSubcommand?.() || 'commit',
+            operationType: 'set protection after failed steal',
+            options: {
+                targetType: isNPC ? 'NPC' : 'player',
+                targetName: isNPC ? targetCharacter : targetCharacter?.name,
+                characterName: thiefCharacter?.name
+            }
+        });
+        
+        // Continue with failure logic even if protection setting fails
     }
     
     try {
@@ -2353,6 +2536,27 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
                 return { valid: false, error: 'NPC is protected' };
             }
             
+            // Check individual NPC cooldown for this character (30 days)
+            const individualCooldown = await checkIndividualNPCCooldown(thiefCharacter._id, mappedNPCName);
+            if (individualCooldown.onCooldown) {
+                const timeLeft = formatCooldownTime(individualCooldown.timeLeft);
+                const cooldownEmbed = new EmbedBuilder()
+                    .setColor(0xFF6B35)
+                    .setTitle('⏰ NPC Cooldown Active')
+                    .setDescription(`❌ **You cannot steal from ${mappedNPCName} yet!**`)
+                    .addFields(
+                        { name: '⏰ Time Remaining', value: `> **${timeLeft}** until you can steal from this NPC again`, inline: false },
+                        { name: '💡 Tip', value: 'Try stealing from other NPCs instead! Each NPC has its own 30-day cooldown.', inline: false }
+                    )
+                    .setThumbnail(NPCs[mappedNPCName]?.icon || null)
+                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                    .setFooter({ text: 'Individual NPC cooldown active' })
+                    .setTimestamp();
+                
+                await interaction.editReply({ embeds: [cooldownEmbed] });
+                return { valid: false, error: 'Individual NPC cooldown active' };
+            }
+            
             return { valid: true, target: mappedNPCName, isNPC: true };
         } else {
             // Player target validation
@@ -2870,27 +3074,27 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
 // Centralized function to execute the actual steal attempt for both NPCs and players
 async function executeStealAttempt(thiefCharacter, targetName, targetType, raritySelection, targetCharacter, items, selectedTier, usedFallback, interaction, voucherCheck) {
     try {
-        // Update daily steal only when actually attempting the steal
-        if (!thiefCharacter.jobVoucher) {
-            try {
-                await updateDailySteal(thiefCharacter, 'steal');
-            } catch (error) {
-                console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
-                
-                // Call global error handler for tracking
-                handleError(error, 'steal.js', {
-                    commandName: 'steal',
-                    operationType: 'daily steal update',
-                    characterName: thiefCharacter?.name
-                });
-                
-                await interaction.editReply({
-                    content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
-                    ephemeral: true
-                });
-                return;
+                    // Update daily steal only when actually attempting the steal
+            if (!thiefCharacter.jobVoucher) {
+                try {
+                    await updateDailySteal(thiefCharacter, 'steal');
+                } catch (error) {
+                    console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                    
+                    // Call global error handler for tracking
+                    handleError(error, 'steal.js', {
+                        commandName: 'steal',
+                        operationType: 'daily steal update',
+                        characterName: thiefCharacter?.name
+                    });
+                    
+                    await interaction.editReply({
+                        content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
+                        ephemeral: true
+                    });
+                    return;
+                }
             }
-        }
 
         const selectedItem = getRandomItemByWeight(items);
         const roll = await generateStealRoll(thiefCharacter);
@@ -3177,14 +3381,14 @@ async function validateThiefCharacter(characterName, userId, interaction) {
 
         // Check daily steal limit AFTER job validation
         if (!thiefCharacter.jobVoucher) {
-            // Check if steal has been used today
+            // Check if steal has been used within the last day
             const canSteal = canUseDailySteal(thiefCharacter, 'steal');
             
             if (!canSteal) {
                 const nextRollover = new Date();
                 nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
                 if (nextRollover < new Date()) {
-                    nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+                  nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
                 }
                 const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
                 
@@ -3192,7 +3396,7 @@ async function validateThiefCharacter(characterName, userId, interaction) {
                 await interaction.editReply({
                     embeds: [{
                         color: 0x008B8B, // Dark cyan color
-                        description: `*${thiefCharacter.name} seems exhausted from their earlier stealing...*\n\n**Daily stealing limit reached.**\nThe next opportunity to steal will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to steal again today.*`,
+                        description: `*${thiefCharacter.name} seems exhausted from their earlier stealing...*\n\n**Daily stealing limit reached.**\nThe next opportunity to steal will be available at <t:${unixTimestamp}:F> (8 AM EST rollover).\n\n*Tip: A job voucher would allow you to steal again today.*`,
                         image: {
                             url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
                         },
@@ -3221,6 +3425,10 @@ async function validateThiefCharacter(characterName, userId, interaction) {
         return { valid: false, error: '❌ **An error occurred while validating the thief character.**' };
     }
 }
+
+
+
+
 
 
 
