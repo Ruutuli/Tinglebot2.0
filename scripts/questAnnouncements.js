@@ -56,7 +56,7 @@ async function fetchQuestData() {
     try {
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SHEET_ID,
-            range: 'loggedQuests!A2:R', // Adjust range as per sheet layout
+            range: 'loggedQuests!A2:S', // Updated range to include all columns
         });
         return response.data.values || [];
     } catch (error) {
@@ -115,7 +115,7 @@ async function postQuests() {
 
     // Filter quests not marked as "Posted"
     const unpostedQuests = questData.filter((quest, index) => {
-        const [title, , , , , , , , , , , , , , , questID, , posted] = quest;
+        const [title, , , , , , , , , , , , , , , questID, , posted, postedAt] = quest;
 
         // Log the raw value of "Posted" for debugging
         console.log(`[DEBUG]: Raw "Posted" value for quest "${title}" at row ${index + 2}: "${posted}"`);
@@ -143,19 +143,20 @@ async function postQuests() {
             title,
             description,
             questType,
-            location,
-            timeLimit,
-            minRequirements,
-            tokenReward,
-            itemReward,
-            itemRewardQty,
+            status,
+            targetChannel,
+            date,
             signupDeadline,
             participantCap,
             postRequirement,
-            specialNote,
-            status,
-            date,
+            rpThreadParentChannel,
+            tokenReward,
+            itemReward,
+            itemRewardQty,
             questID,
+            posted,
+            postedAt,
+            botNotes
         ] = quest;
     
         try {
@@ -164,23 +165,41 @@ async function postQuests() {
                 title: title || 'Untitled Quest',
                 description: description || 'No description provided.',
                 questType: questType || 'General',
-                location: location || 'Unknown',
-                timeLimit: timeLimit || 'No time limit',
-                minRequirements: minRequirements === 'N/A' || !minRequirements ? 0 : parseInt(minRequirements, 10),
+                location: 'Quest Location', // Default location
+                timeLimit: 'No time limit', // Default time limit
+                minRequirements: 0, // Default requirements
                 tokenReward: tokenReward === 'N/A' || !tokenReward ? 0 : parseInt(tokenReward, 10),
                 itemReward: itemReward && itemReward !== 'N/A' ? itemReward : null,
                 itemRewardQty: itemRewardQty === 'N/A' || !itemRewardQty ? 0 : parseInt(itemRewardQty, 10),
                 signupDeadline: signupDeadline && signupDeadline !== 'N/A' ? signupDeadline : null,
-                participantCap: participantCap === 'N/A' || !participantCap ? 0 : parseInt(participantCap, 10),
-                postRequirement: postRequirement === 'N/A' || !postRequirement ? 0 : parseInt(postRequirement, 10),
-                specialNote: specialNote && specialNote !== 'N/A' ? specialNote : null,
+                participantCap: participantCap === 'N/A' || !participantCap ? null : parseInt(participantCap, 10),
+                postRequirement: postRequirement === 'N/A' || !postRequirement ? null : parseInt(postRequirement, 10),
+                specialNote: null, // Will be set below for RP quests
                 participants: new Map(), // Initialize as an empty Map
                 status: status && status.toLowerCase() === 'active' ? 'active' : 'completed',
                 date: date || new Date().toISOString(),
                 questID: questID && questID !== 'N/A' ? questID : `Q${Math.floor(Math.random() * 100000)}`,
                 posted: true,
-                roleID: null, // Placeholder for role ID
-            };            
+                postedAt: new Date(),
+                targetChannel: targetChannel || null,
+                rpThreadParentChannel: rpThreadParentChannel || null,
+                roleID: null, // Will be set below
+            };
+
+            // ------------------- RP Quest Special Handling -------------------
+            if (sanitizedQuest.questType.toLowerCase() === 'rp') {
+                if (!sanitizedQuest.postRequirement) {
+                    sanitizedQuest.postRequirement = 15;
+                }
+                
+                if (!sanitizedQuest.signupDeadline) {
+                    const questDate = new Date(sanitizedQuest.date);
+                    const rpDeadline = new Date(questDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    sanitizedQuest.signupDeadline = rpDeadline.toISOString().split('T')[0];
+                }
+
+                sanitizedQuest.specialNote = 'RP Quest Rules: 15-20 posts minimum, 2 paragraph maximum per post, member-driven with @TaleWeaver support available.';
+            }            
     
             console.log('[DEBUG]: Sanitized quest data:', sanitizedQuest);
     
@@ -199,9 +218,42 @@ async function postQuests() {
                 console.log(`[INFO]: Role already exists for quest: "${sanitizedQuest.title}" with ID: ${role.id}.`);
             }
     
-            // Save the role ID in sanitized quest data
+                        // Save the role ID in sanitized quest data
             sanitizedQuest.roleID = role.id;
-    
+
+            // ------------------- Create RP Thread for RP Quests -------------------
+            let rpThread = null;
+            if (sanitizedQuest.questType.toLowerCase() === 'rp' && sanitizedQuest.rpThreadParentChannel) {
+                try {
+                    const parentChannel = guild.channels.cache.get(sanitizedQuest.rpThreadParentChannel);
+                    if (parentChannel) {
+                        rpThread = await parentChannel.threads.create({
+                            name: `📜 ${sanitizedQuest.title} - RP Thread`,
+                            autoArchiveDuration: 1440, // 24 hours
+                            reason: `Auto-created RP thread for quest: ${sanitizedQuest.title}`
+                        });
+                        
+                        // Send initial RP thread message
+                        const rpThreadEmbed = new EmbedBuilder()
+                            .setColor(0xAA926A)
+                            .setTitle(`📜 ${sanitizedQuest.title} - RP Thread`)
+                            .setDescription(`This is the RP thread for the quest: **${sanitizedQuest.title}**\n\n**Requirements**: ${sanitizedQuest.postRequirement || 15}-20 posts minimum, 2 paragraph maximum per post.\n\n**Note**: This quest is member-driven. Use @TaleWeaver if you need help moving things along!`)
+                            .addFields(
+                                { name: 'Quest Type', value: 'RP', inline: true },
+                                { name: 'Post Requirement', value: `${sanitizedQuest.postRequirement || 15}-20 posts`, inline: true },
+                                { name: 'Status', value: 'Active - Join with `/quest join`', inline: true }
+                            )
+                            .setTimestamp();
+
+                        await rpThread.send({ embeds: [rpThreadEmbed] });
+                        console.log(`[INFO]: Created RP thread for quest "${sanitizedQuest.title}" with ID: ${rpThread.id}.`);
+                    }
+                } catch (error) {
+                    console.error(`[ERROR]: Failed to create RP thread for quest "${sanitizedQuest.title}":`, error);
+                    sanitizedQuest.botNotes = `Failed to create RP thread: ${error.message}`;
+                }
+            }
+
             // ------------------- Create Quest Embed -------------------
             const questEmbed = formatQuestEmbed(sanitizedQuest);
     
@@ -235,7 +287,8 @@ async function postQuests() {
 async function markQuestAsPosted(auth, rowIndex, questID) {
     try {
         console.log(`[DEBUG]: Marking quest as posted in Google Sheets (Row: ${rowIndex + 2}, Quest ID: ${questID}).`);
-        await writeSheetData(auth, SHEET_ID, `loggedQuests!Q${rowIndex + 2}:R${rowIndex + 2}`, [[questID, 'Posted']]);
+        const now = new Date().toISOString();
+        await writeSheetData(auth, SHEET_ID, `loggedQuests!Q${rowIndex + 2}:S${rowIndex + 2}`, [[questID, 'Posted', now]]);
         console.log(`[INFO]: Quest successfully marked as posted in Google Sheets (Row: ${rowIndex + 2}).`);
     } catch (error) {
     handleError(error, 'questAnnouncements.js');

@@ -230,7 +230,48 @@ module.exports = {
     )
   )
   .addSubcommand((subcommand) =>
+   subcommand
+    .setName("submit")
+    .setDescription("Submit your quest completion (Art/Writing/RP)")
+    .addStringOption((option) =>
+     option
+      .setName("questid")
+      .setDescription("ID of the quest you're submitting for")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+     option
+      .setName("type")
+      .setDescription("Type of submission")
+      .setRequired(true)
+      .addChoices(
+       { name: "Art", value: "art" },
+       { name: "Writing", value: "writing" },
+       { name: "RP Posts", value: "rp_posts" }
+      )
+    )
+    .addStringOption((option) =>
+     option
+      .setName("url")
+      .setDescription("URL to your submission (required for Art/Writing)")
+      .setRequired(false)
+    )
+  )
+  .addSubcommand((subcommand) =>
    subcommand.setName("list").setDescription("List all active quests")
+  )
+  .addSubcommand((subcommand) =>
+   subcommand
+    .setName("complete")
+    .setDescription("Complete a quest and distribute rewards (Admin only)")
+    .addStringOption((option) =>
+     option
+      .setName("questid")
+      .setDescription("ID of the quest to complete")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
   ),
 
  async execute(interaction) {
@@ -255,6 +296,15 @@ module.exports = {
      break;
     case "voucher":
      await this.handleVoucherUse(interaction);
+     break;
+    case "submit":
+     await this.handleQuestSubmit(interaction);
+     break;
+    case "complete":
+     await this.handleQuestComplete(interaction);
+     break;
+    case "list":
+     await this.handleListQuests(interaction);
      break;
     case "list":
      await this.handleListQuests(interaction);
@@ -395,10 +445,10 @@ module.exports = {
    }
   }
 
-  quest.participants.set(userID, characterName);
-  await quest.save();
+     quest.addParticipant(userID, characterName);
+   await quest.save();
 
-  await this.updateQuestEmbed(interaction.guild, quest);
+   await this.updateQuestEmbed(interaction.guild, quest);
 
   let successMessage = `**${userName}** joined the quest **${quest.title}** with character **${characterName}**!`;
 
@@ -452,9 +502,9 @@ module.exports = {
    });
   }
 
-  const characterName = quest.participants.get(userID);
-  quest.participants.delete(userID);
-  await quest.save();
+     const characterName = quest.participants.get(userID);
+   quest.removeParticipant(userID);
+   await quest.save();
 
   if (quest.roleID) {
    const role = interaction.guild.roles.cache.find(
@@ -818,8 +868,8 @@ module.exports = {
   character.jobVoucher = false;
   await character.save();
 
-  quest.participants.set(userID, characterName);
-  await quest.save();
+     quest.addParticipant(userID, characterName);
+   await quest.save();
 
   if (quest.roleID) {
    const role = interaction.guild.roles.cache.find(
@@ -957,8 +1007,179 @@ module.exports = {
 
    embed.setFields(updatedFields);
    await questMessage.edit({ embeds: [embed] });
+     } catch (error) {
+    console.warn("[WARNING]: Failed to update quest embed:", error);
+   }
+ },
+
+ async handleQuestSubmit(interaction) {
+  const questID = interaction.options.getString("questid");
+  const submissionType = interaction.options.getString("type");
+  const submissionUrl = interaction.options.getString("url");
+  const userID = interaction.user.id;
+
+  try {
+   // Find the quest
+   const quest = await Quest.findOne({ questID });
+   if (!quest) {
+    return interaction.reply({
+     content: `Quest with ID \`${questID}\` does not exist.`,
+     ephemeral: true,
+    });
+   }
+
+   // Check if quest is active
+   if (quest.status !== "active") {
+    return interaction.reply({
+     content: `The quest \`${quest.title}\` is no longer active.`,
+     ephemeral: true,
+    });
+   }
+
+   // Check if user is participating
+   if (!quest.participants.has(userID)) {
+    return interaction.reply({
+     content: `You are not participating in the quest \`${quest.title}\`.`,
+     ephemeral: true,
+    });
+   }
+
+   const characterName = quest.participants.get(userID);
+
+   // Validate submission type matches quest type
+   if (submissionType === "rp_posts" && quest.questType !== "RP") {
+    return interaction.reply({
+     content: `RP post submissions are only valid for RP quests.`,
+     ephemeral: true,
+    });
+   }
+
+   if ((submissionType === "art" || submissionType === "writing") && 
+       quest.questType !== "Art" && quest.questType !== "Writing") {
+    return interaction.reply({
+     content: `${submissionType} submissions are only valid for ${submissionType} quests.`,
+     ephemeral: true,
+    });
+   }
+
+   // Validate URL for art/writing submissions
+   if ((submissionType === "art" || submissionType === "writing") && !submissionUrl) {
+    return interaction.reply({
+     content: `A URL is required for ${submissionType} submissions.`,
+     ephemeral: true,
+    });
+   }
+
+       // Get or create participant record
+    let participant = quest.getParticipant(userID);
+    
+    if (!participant) {
+     participant = quest.addParticipant(userID, characterName);
+    }
+
+   // Add submission
+   participant.addSubmission(submissionType, submissionUrl);
+
+   // Check if requirements are met and auto-complete if possible
+   if (participant.meetsRequirements(quest)) {
+    participant.progress = "completed";
+    participant.completedAt = new Date();
+    console.log(`[QUEST]: Auto-completed quest for ${characterName} in quest ${quest.title}`);
+   }
+
+   // Save quest with updated participant data
+   await quest.save();
+
+   // Check if quest should be auto-completed
+   await quest.checkAutoCompletion();
+
+   if (participant.progress === "completed") {
+    const embed = new EmbedBuilder()
+     .setColor(0x00ff00)
+     .setTitle("✅ Quest Requirements Met!")
+     .setDescription(`**${characterName}** has completed the requirements for **${quest.title}**!`)
+     .addFields(
+      { name: "Quest Type", value: quest.questType, inline: true },
+      { name: "Status", value: "Requirements Met - Awaiting Rewards", inline: true }
+     )
+     .setTimestamp();
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+   } else {
+    const embed = new EmbedBuilder()
+     .setColor(0xffff00)
+     .setTitle("📝 Submission Recorded")
+     .setDescription(`**${characterName}**'s submission for **${quest.title}** has been recorded.`)
+     .addFields(
+      { name: "Submission Type", value: submissionType, inline: true },
+      { name: "Status", value: "Requirements Not Yet Met", inline: true }
+     )
+     .setTimestamp();
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+   }
+
   } catch (error) {
-   console.warn("[WARNING]: Failed to update quest embed:", error);
+   handleError(error, "quest.js", {
+    commandName: "quest submit",
+    userTag: interaction.user.tag,
+    userId: interaction.user.id,
+    questID: questID,
+    submissionType: submissionType
+   });
+
+        return interaction.reply({
+      content: "An error occurred while processing your submission. Please try again later.",
+      ephemeral: true,
+     });
+   }
+ },
+
+ async handleQuestComplete(interaction) {
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+   return interaction.reply({
+    content: "You need administrator permissions to complete quests.",
+    ephemeral: true,
+   });
+  }
+
+  const questID = interaction.options.getString("questid");
+
+  try {
+   const questRewardModule = require("../../modules/questRewardModule");
+   const result = await questRewardModule.manuallyCompleteQuest(questID, interaction.user.id);
+
+   if (result.success) {
+    const embed = new EmbedBuilder()
+     .setColor(0x00ff00)
+     .setTitle("✅ Quest Completed!")
+     .setDescription(`Quest **${questID}** has been manually completed and rewards distributed.`)
+     .addFields(
+      { name: "Completed By", value: interaction.user.username, inline: true },
+      { name: "Status", value: "Completed - Rewards Distributed", inline: true }
+     )
+     .setTimestamp();
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+   } else {
+    return interaction.reply({
+     content: `❌ Failed to complete quest: ${result.error}`,
+     ephemeral: true,
+    });
+   }
+
+  } catch (error) {
+   handleError(error, "quest.js", {
+    commandName: "quest complete",
+    userTag: interaction.user.tag,
+    userId: interaction.user.id,
+    questID: questID
+   });
+
+   return interaction.reply({
+    content: "An error occurred while completing the quest. Please try again later.",
+    ephemeral: true,
+   });
   }
  },
 };

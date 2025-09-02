@@ -83,18 +83,11 @@ async function connectToTinglebot() {
    }
    
    tinglebotDbConnection = await mongoose.connect(uri, {
-    serverSelectionTimeoutMS: 60000,
-    socketTimeoutMS: 60000,
-    connectTimeoutMS: 60000,
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    retryWrites: true,
-    retryReads: true,
-    w: 'majority',
-    wtimeoutMS: 5000,
-    heartbeatFrequencyMS: 10000,
-    maxIdleTimeMS: 60000,
-    family: 4
+    serverSelectionTimeoutMS: 10000, // 10 seconds
+    socketTimeoutMS: 30000,          // 30 seconds
+    connectTimeoutMS: 10000,         // 10 seconds
+    maxPoolSize: 5,
+    minPoolSize: 1
    });
    
    console.log("[db.js]: ✅ Tinglebot database connected");
@@ -118,18 +111,11 @@ async function connectToInventories() {
    }
    
    inventoriesDbConnection = await mongoose.createConnection(uri, {
-    serverSelectionTimeoutMS: 60000,
-    socketTimeoutMS: 60000,
-    connectTimeoutMS: 60000,
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    retryWrites: true,
-    retryReads: true,
-    w: 'majority',
-    wtimeoutMS: 5000,
-    heartbeatFrequencyMS: 10000,
-    maxIdleTimeMS: 60000,
-    family: 4
+    serverSelectionTimeoutMS: 10000, // 10 seconds
+    socketTimeoutMS: 30000,          // 30 seconds
+    connectTimeoutMS: 10000,         // 10 seconds
+    maxPoolSize: 5,
+    minPoolSize: 1
    });
 
    // Set the database name
@@ -155,18 +141,11 @@ const connectToInventoriesNative = async () => {
   }
   
   const client = new MongoClient(uri, {
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    serverSelectionTimeoutMS: 60000, // Increased from 30000
-    connectTimeoutMS: 60000,         // Increased from 30000
-    socketTimeoutMS: 60000,          // Increased from 45000
-    retryWrites: true,
-    retryReads: true,
-    w: 'majority',
-    wtimeoutMS: 5000,               // Increased from 2500
-    heartbeatFrequencyMS: 10000,
-    maxIdleTimeMS: 60000,
-    family: 4
+    maxPoolSize: 5,
+    minPoolSize: 1,
+    serverSelectionTimeoutMS: 10000, // 10 seconds
+    connectTimeoutMS: 10000,         // 10 seconds
+    socketTimeoutMS: 30000           // 30 seconds
   });
   
   await client.connect();
@@ -197,18 +176,11 @@ async function connectToVending() {
    }
    
    vendingDbConnection = await mongoose.createConnection(uri, {
-    serverSelectionTimeoutMS: 60000,
-    socketTimeoutMS: 60000,
-    connectTimeoutMS: 60000,
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    retryWrites: true,
-    retryReads: true,
-    w: 'majority',
-    wtimeoutMS: 5000,
-    heartbeatFrequencyMS: 10000,
-    maxIdleTimeMS: 60000,
-    family: 4
+    serverSelectionTimeoutMS: 10000, // 10 seconds
+    socketTimeoutMS: 30000,          // 30 seconds
+    connectTimeoutMS: 10000,         // 10 seconds
+    maxPoolSize: 5,
+    minPoolSize: 1
    });
    
    console.log("[db.js]: ✅ Vending database connected");
@@ -220,6 +192,8 @@ async function connectToVending() {
   throw error;
  }
 }
+
+
 
 // ============================================================================
 // ------------------- Character Service Functions -------------------
@@ -2164,62 +2138,25 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
 const connectToInventoriesForItems = async () => {
     try {
         if (!inventoriesClient) {
-            const env = process.env.NODE_ENV || 'development';
-            const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
+            const uri = dbConfig.inventories || dbConfig.tinglebot;
             
             if (!uri) {
                 throw new Error('Missing MongoDB URI for items database');
             }
             
             inventoriesClient = new MongoClient(uri, {
-                maxPoolSize: 10,
-                minPoolSize: 5,
-                serverSelectionTimeoutMS: 60000, // Increased from 30000
-                connectTimeoutMS: 60000,         // Increased from 30000
-                socketTimeoutMS: 60000,          // Increased from 45000
-                retryWrites: true,
-                retryReads: true,
-                w: 'majority',
-                wtimeoutMS: 5000,               // Increased from 2500
-                heartbeatFrequencyMS: 10000,
-                maxIdleTimeMS: 60000,
-                family: 4
+                serverSelectionTimeoutMS: 10000,  // 10 seconds
+                connectTimeoutMS: 10000,          // 10 seconds
+                socketTimeoutMS: 30000,           // 30 seconds
+                maxPoolSize: 5,
+                minPoolSize: 1
             });
-            await inventoriesClient.connect();
-            // Use tinglebot database for items
-            inventoriesDb = inventoriesClient.db('tinglebot');
             
+            await inventoriesClient.connect();
+            inventoriesDb = inventoriesClient.db('tinglebot');
             console.log("[db.js]: ✅ Items database connected");
-        } else {
-            // Try to ping the server to check connection
-            try {
-                await inventoriesClient.db('tinglebot').command({ ping: 1 });
-            } catch (error) {
-                console.log("[db.js]: 🔄 Items database ping failed, reconnecting...");
-                // If ping fails, reconnect
-                await inventoriesClient.close();
-                const env = process.env.NODE_ENV || 'development';
-                const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
-                inventoriesClient = new MongoClient(uri, {
-                    maxPoolSize: 10,
-                    minPoolSize: 5,
-                    serverSelectionTimeoutMS: 60000,
-                    connectTimeoutMS: 60000,
-                    socketTimeoutMS: 60000,
-                    retryWrites: true,
-                    retryReads: true,
-                    w: 'majority',
-                    wtimeoutMS: 5000,
-                    heartbeatFrequencyMS: 10000,
-                    maxIdleTimeMS: 60000,
-                    family: 4
-                });
-                await inventoriesClient.connect();
-                inventoriesDb = inventoriesClient.db('tinglebot');
-                
-                console.log("[db.js]: ✅ Items database reconnected");
-            }
         }
+        
         return inventoriesDb;
     } catch (error) {
         handleError(error, "db.js");
