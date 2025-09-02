@@ -98,19 +98,75 @@ async function safeAutocompleteResponse(interaction, choices) {
       console.log('[autocompleteHandler.js]: ⚠️ Interaction expired or timed out');
       return;
     }
+  }
+}
 
-    // Log the error for debugging
-    handleError(error, 'autocompleteHandler.js', {
-      operation: 'safeAutocompleteResponse',
-      interactionId: interaction.id,
-      choices: choices?.length || 0,
-      errorCode: error.code
-    });
+// ------------------- Choice Name Validation Helper -------------------
+// Ensures autocomplete choice names meet Discord's requirements (1-100 characters)
+function validateChoiceName(choice, maxLength = 100) {
+  if (!choice.name || choice.name.length === 0) {
+    return { ...choice, name: "Unknown Character" };
+  }
+  
+  if (choice.name.length > maxLength) {
+    // Truncate to maxLength-3 characters and add "..." to indicate truncation
+    return { ...choice, name: choice.name.substring(0, maxLength - 3) + "..." };
+  }
+  
+  return choice;
+}
 
-    // Only try to send an empty response if we haven't responded yet and interaction is still valid
+// ------------------- Safe Autocomplete Response with Validation -------------------
+// Wraps interaction.respond with validation and error handling
+async function safeRespondWithValidation(interaction, choices) {
+  try {
+    // Validate all choices to ensure they meet Discord's requirements
+    const validatedChoices = choices.map(choice => validateChoiceName(choice));
+    
+    // Check if interaction is still valid
+    if (!interaction.isAutocomplete()) {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction is not an autocomplete interaction');
+      return;
+    }
+
+    // Check if already responded
+    if (interaction.responded) {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
+      return;
+    }
+
+    // Set a timeout for autocomplete responses (Discord's limit is 3 seconds)
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Response timeout')), 2500)
+    );
+
+    // Try to respond with the validated choices
+    await Promise.race([
+      interaction.respond(validatedChoices),
+      timeoutPromise
+    ]);
+  } catch (error) {
+    // Log the error with context
+    console.error('[autocompleteHandler.js]: ❌ Error in safeRespondWithValidation:', error);
+    
+    // Log the choices that were being processed for debugging
+    if (choices && choices.length > 0) {
+      console.error('[autocompleteHandler.js]: ❌ Problematic choices:', choices.map(c => ({
+        name: c.name,
+        nameLength: c.name?.length || 0,
+        value: c.value
+      })));
+    }
+    
+    // Handle specific error cases
+    if (error.code === 10062 || error.message === 'Response timeout') {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction expired or timed out');
+      return;
+    }
+    
+    // Try to send an empty response as fallback
     try {
       if (!interaction.responded && interaction.isAutocomplete()) {
-        console.log('[autocompleteHandler.js]: 📤 Sending empty response as fallback');
         await interaction.respond([]).catch(() => {});
       }
     } catch (e) {
@@ -662,7 +718,22 @@ async function respondWithFilteredChoices(interaction, focusedOption, choices) {
 
     const focusedValue = focusedOption?.value?.toLowerCase() || '';
 
-    const filteredChoices = choices
+    // Validate and sanitize choices to ensure they meet Discord's requirements
+    const validatedChoices = choices.map(choice => {
+      // Ensure name is between 1-100 characters as required by Discord
+      if (!choice.name || choice.name.length === 0) {
+        return { ...choice, name: "Unknown Character" };
+      }
+      
+      if (choice.name.length > 100) {
+        // Truncate to 97 characters and add "..." to indicate truncation
+        return { ...choice, name: choice.name.substring(0, 97) + "..." };
+      }
+      
+      return choice;
+    });
+
+    const filteredChoices = validatedChoices
       .filter(choice => choice.name.toLowerCase().includes(focusedValue))
       .slice(0, 25);
 
@@ -683,8 +754,17 @@ async function respondWithFilteredChoices(interaction, focusedOption, choices) {
       return;
     }
 
-    // Log other errors
+    // Log other errors with more context
     console.error('[autocompleteHandler.js]: ❌ Error in respondWithFilteredChoices:', error);
+    
+    // Log the choices that were being processed for debugging
+    if (choices && choices.length > 0) {
+      console.error('[autocompleteHandler.js]: ❌ Problematic choices:', choices.map(c => ({
+        name: c.name,
+        nameLength: c.name?.length || 0,
+        value: c.value
+      })));
+    }
     
     // Try to send an empty response as fallback
     try {
@@ -849,8 +929,30 @@ async function handleModBlightedCharacterAutocomplete(interaction, focusedOption
         status = ` | ▶️ ACTIVE`;
       }
       
+      // Build the full name and truncate if it exceeds Discord's 100 character limit
+      let fullName = `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)} | Blight Stage ${character.blightStage}${status}`;
+      
+      // If the name is too long, truncate it intelligently
+      if (fullName.length > 100) {
+        // Try to keep the most important parts: character name and blight stage
+        const baseName = `${character.name} | Blight Stage ${character.blightStage}`;
+        if (baseName.length > 100) {
+          // If even the base name is too long, truncate the character name
+          const maxCharNameLength = 100 - ` | Blight Stage ${character.blightStage}`.length;
+          fullName = `${character.name.substring(0, maxCharNameLength)}... | Blight Stage ${character.blightStage}`;
+        } else {
+          // Add status if it fits
+          const remainingSpace = 100 - baseName.length;
+          if (status.length <= remainingSpace) {
+            fullName = baseName + status;
+          } else {
+            fullName = baseName;
+          }
+        }
+      }
+      
       return {
-        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)} | Blight Stage ${character.blightStage}${status}`,
+        name: fullName,
         value: character.name,
       };
     });
@@ -901,7 +1003,7 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
         }))
         .slice(0, 25);
 
-      await interaction.respond(choices);
+      await safeRespondWithValidation(interaction, choices);
       return;
     }
 
@@ -957,7 +1059,7 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
         };
       });
 
-    await interaction.respond(choices.slice(0, 25));
+    await safeRespondWithValidation(interaction, choices.slice(0, 25));
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleBlightItemAutocomplete]: ❌ Error occurred:", error);
@@ -2581,7 +2683,8 @@ async function handleExploreRollCharacterAutocomplete(
    choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
   );
 
-  return await interaction.respond(
+  return await safeRespondWithValidation(
+   interaction,
    filtered.length > 0 ? filtered.slice(0, 25) : choices.slice(0, 25)
   );
  } catch (error) {
@@ -2719,7 +2822,7 @@ async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
    choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
   );
 
-  return await interaction.respond(filtered.slice(0, 25));
+  return await safeRespondWithValidation(interaction, filtered.slice(0, 25));
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("Error during explore character autocomplete:", error);
@@ -3183,7 +3286,7 @@ async function handleModPetLevelPetNameAutocomplete(interaction, focusedOption) 
       value: pet.name,
     }));
     
-    await respondWithFilteredChoices(interaction, focusedOption, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleModPetLevelPetNameAutocomplete]: Error:", error);
@@ -3330,7 +3433,7 @@ async function handleStableCharacterAutocomplete(interaction, focusedOption) {
       .map(formatCharacterChoice)
       .filter(choice => choice.name.toLowerCase().includes(searchQuery));
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     console.error('[autocompleteHandler]: Error in handleStableCharacterAutocomplete:', error);
     await safeRespondWithError(interaction);
@@ -3419,7 +3522,7 @@ async function handleStableMountNameAutocomplete(interaction, focusedOption) {
       .filter(choice => choice.name.toLowerCase().includes(query))
       .slice(0, 25);
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js", {
       operation: "handleStableMountNameAutocomplete",
@@ -3450,7 +3553,7 @@ async function handleStablePetNameAutocomplete(interaction, focusedOption) {
       .filter(choice => choice.name.toLowerCase().includes(query))
       .slice(0, 25);
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js", {
       operation: "handleStablePetNameAutocomplete",
@@ -3483,7 +3586,7 @@ async function handleStableNameAutocomplete(interaction, focusedOption) {
       .filter(choice => choice.name.toLowerCase().includes(query))
       .slice(0, 25);
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js", {
       operation: "handleStableNameAutocomplete",
@@ -3705,7 +3808,7 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
                 };
             }).slice(0, 25); // Limit to 25 choices
 
-            await safeAutocompleteResponse(interaction, choices);
+            await safeRespondWithValidation(interaction, choices);
         } else if (targetType === 'player') {
             const characters = await Character.find({ canBeStolenFrom: true });
             const filteredCharacters = characters.filter(char => 
@@ -3717,7 +3820,7 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
                   value: char.name
                 })).slice(0, 25); // Limit to 25 choices
                 
-            await safeAutocompleteResponse(interaction, choices);
+            await safeRespondWithValidation(interaction, choices);
         }
     } catch (error) {
         handleError(error, "autocompleteHandler.js", {
@@ -4351,7 +4454,7 @@ async function handleSpiritOrbCharacterAutocomplete(interaction, focusedOption) 
       value: character.name
     }));
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, 'autocompleteHandler.js');
     await safeRespondWithError(interaction, error);
@@ -4429,7 +4532,7 @@ async function handleMonsterAutocomplete(interaction, focusedOption) {
       value: monster.name
     }));
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleMonsterAutocomplete]: Error:", error);
@@ -4471,7 +4574,7 @@ async function handleSubmitCollabAutocomplete(interaction, focusedOption) {
       value: `<@${member.id}>`
     }));
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleSubmitCollabAutocomplete]: Error:", error);
@@ -4500,7 +4603,7 @@ async function handleTier5PlusMonsterAutocomplete(interaction, focusedOption) {
       value: monster.name
     }));
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleTier5PlusMonsterAutocomplete]: Error:", error);
@@ -4543,7 +4646,7 @@ async function handleBlightOverrideTargetAutocomplete(interaction, focusedOption
         .slice(0, 25); // Limit to 25 choices
     }
 
-    await safeAutocompleteResponse(interaction, choices);
+    await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleBlightOverrideTargetAutocomplete]: Error:", error);
