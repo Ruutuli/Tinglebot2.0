@@ -51,7 +51,19 @@ const NPCSchema = new mongoose.Schema({
   lastInteraction: {
     type: Date,
     default: Date.now
-  }
+  },
+
+  // Personal lockouts for characters
+  personalLockouts: [{
+    characterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true
+    },
+    lockoutEndTime: {
+      type: Date,
+      required: true
+    }
+  }]
 }, {
   timestamps: true
 });
@@ -59,6 +71,8 @@ const NPCSchema = new mongoose.Schema({
 // Index for efficient queries
 NPCSchema.index({ 'stealProtection.isProtected': 1 });
 NPCSchema.index({ 'stealProtection.protectionEndTime': 1 });
+NPCSchema.index({ 'personalLockouts.characterId': 1 });
+NPCSchema.index({ 'personalLockouts.lockoutEndTime': 1 });
 
 // Static method to get all protected NPCs
 NPCSchema.statics.getProtectedNPCs = function() {
@@ -75,6 +89,18 @@ NPCSchema.statics.resetAllProtections = function() {
       $set: {
         'stealProtection.isProtected': false,
         'stealProtection.protectionEndTime': null
+      }
+    }
+  );
+};
+
+// Static method to reset all personal lockouts
+NPCSchema.statics.resetAllPersonalLockouts = function() {
+  return this.updateMany(
+    { 'personalLockouts.0': { $exists: true } },
+    {
+      $set: {
+        personalLockouts: []
       }
     }
   );
@@ -118,6 +144,61 @@ NPCSchema.statics.getOrCreateNPC = function(npcName) {
   );
 };
 
+// Static method to set personal lockout for a character
+NPCSchema.statics.setPersonalLockout = function(npcName, characterId, duration) {
+  const lockoutEndTime = new Date(Date.now() + duration);
+  
+  return this.findOneAndUpdate(
+    { name: npcName },
+    {
+      $push: {
+        personalLockouts: {
+          characterId: characterId,
+          lockoutEndTime: lockoutEndTime
+        }
+      },
+      lastInteraction: new Date()
+    },
+    { upsert: true, new: true }
+  );
+};
+
+// Static method to clear personal lockout for a character
+NPCSchema.statics.clearPersonalLockout = function(npcName, characterId) {
+  return this.findOneAndUpdate(
+    { name: npcName },
+    {
+      $pull: {
+        personalLockouts: { characterId: characterId }
+      }
+    },
+    { new: true }
+  );
+};
+
+// Static method to check if a character is personally locked out
+NPCSchema.statics.isPersonallyLocked = function(npcName, characterId) {
+  return this.findOne({
+    name: npcName,
+    'personalLockouts.characterId': characterId,
+    'personalLockouts.lockoutEndTime': { $gt: new Date() }
+  });
+};
+
+// Static method to get personal lockout time left for a character
+NPCSchema.statics.getPersonalLockoutTimeLeft = function(npcName, characterId) {
+  return this.aggregate([
+    { $match: { name: npcName } },
+    { $unwind: '$personalLockouts' },
+    { $match: { 'personalLockouts.characterId': characterId } },
+    { $project: {
+      timeLeft: {
+        $max: [0, { $subtract: ['$personalLockouts.lockoutEndTime', new Date()] }]
+      }
+    }}
+  ]);
+};
+
 // Instance method to check if protection is expired
 NPCSchema.methods.isProtectionExpired = function() {
   if (!this.stealProtection.isProtected) {
@@ -147,6 +228,14 @@ NPCSchema.pre('save', function(next) {
   if (this.stealProtection.isProtected && this.isProtectionExpired()) {
     this.stealProtection.isProtected = false;
     this.stealProtection.protectionEndTime = null;
+  }
+  
+  // Clean up expired personal lockouts
+  if (this.personalLockouts && this.personalLockouts.length > 0) {
+    const now = new Date();
+    this.personalLockouts = this.personalLockouts.filter(lockout => 
+      lockout.lockoutEndTime > now
+    );
   }
   
   next();
