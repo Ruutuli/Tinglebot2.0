@@ -419,6 +419,51 @@ module.exports = {
       subcommand
         .setName("list")
         .setDescription("List all mod characters")
+    )
+
+    // ------------------- Edit Mod Character Subcommand -------------------
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("edit")
+        .setDescription("Edit an existing mod character")
+        .addStringOption((option) =>
+          option
+            .setName("name")
+            .setDescription("The name of the mod character")
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption((option) =>
+          option
+            .setName("category")
+            .setDescription("Category to edit")
+            .setRequired(true)
+            .addChoices(
+              { name: "Name", value: "name" },
+              { name: "Age", value: "age" },
+              { name: "Height", value: "height" },
+              { name: "Pronouns", value: "pronouns" },
+              { name: "Race", value: "race" },
+              { name: "Job", value: "job" },
+              { name: "Village", value: "homeVillage" },
+              { name: "Icon", value: "icon" },
+              { name: "App Link", value: "appLink" },
+              { name: "Mod Type", value: "modType" }
+            )
+        )
+        .addStringOption((option) =>
+          option
+            .setName("updatedinfo")
+            .setDescription("Updated information for the selected category")
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addAttachmentOption((option) =>
+          option
+            .setName("newicon")
+            .setDescription("New icon for the character (only if updating icon)")
+            .setRequired(false)
+        )
     ),
 
   // ============================================================================
@@ -437,6 +482,8 @@ module.exports = {
         await handleViewModCharacter(interaction);
       } else if (subcommand === "list") {
         await handleListModCharacters(interaction);
+      } else if (subcommand === "edit") {
+        await handleEditModCharacter(interaction);
       }
     } catch (error) {
       handleError(error, 'modCharacter.js', {
@@ -487,6 +534,14 @@ module.exports = {
         if (focusedOption.name === "name") {
           console.log('[modCharacter.js]: 👤 Handling name autocomplete');
           await handleModCharacterNameAutocomplete(interaction, focusedOption);
+        }
+      } else if (subcommand === "edit") {
+        if (focusedOption.name === "name") {
+          console.log('[modCharacter.js]: 👤 Handling edit name autocomplete');
+          await handleModCharacterNameAutocomplete(interaction, focusedOption);
+        } else if (focusedOption.name === "updatedinfo") {
+          console.log('[modCharacter.js]: 📝 Handling edit updatedinfo autocomplete');
+          await handleEditModCharacterAutocomplete(interaction, focusedOption);
         }
       }
     } catch (error) {
@@ -809,5 +864,320 @@ async function handleListModCharacters(interaction) {
       content: '❌ Failed to list mod characters. Please try again later.',
       flags: MessageFlags.Ephemeral
     });
+  }
+}
+
+async function handleEditModCharacter(interaction) {
+  try {
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+    const characterName = interaction.options.getString('name');
+    const category = interaction.options.getString('category');
+    const updatedInfo = interaction.options.getString('updatedinfo');
+    const userId = interaction.user.id;
+    const newIcon = interaction.options.getAttachment('newicon');
+
+    console.log(`[handleEditModCharacter] Starting edit for mod character: ${characterName}, category: ${category}`);
+
+    // Find the mod character
+    const modCharacter = await fetchModCharacterByNameAndUserId(characterName, userId);
+
+    if (!modCharacter) {
+      await interaction.editReply({
+        content: `❌ Mod character "${characterName}" not found or does not belong to you.`,
+        flags: [MessageFlags.Ephemeral]
+      });
+      return;
+    }
+
+    // Check if user has permission to edit this mod character
+    const member = interaction.member;
+    const hasModRole = member.roles.cache.some(role => 
+      role.name.toLowerCase().includes('mod') || 
+      role.name.toLowerCase().includes('admin') ||
+      role.name.toLowerCase().includes('oracle') ||
+      role.name.toLowerCase().includes('dragon') ||
+      role.name.toLowerCase().includes('sage')
+    );
+
+    if (!hasModRole && modCharacter.modOwner !== interaction.user.tag) {
+      await interaction.editReply({
+        content: '❌ You do not have permission to edit this mod character.',
+        flags: [MessageFlags.Ephemeral]
+      });
+      return;
+    }
+
+    let previousValue;
+    let finalUpdatedValue;
+
+    // Get previous value
+    switch (category) {
+      case 'name':
+        previousValue = modCharacter.name;
+        break;
+      case 'age':
+        previousValue = modCharacter.age;
+        break;
+      case 'height':
+        previousValue = modCharacter.height;
+        break;
+      case 'pronouns':
+        previousValue = modCharacter.pronouns;
+        break;
+      case 'race':
+        previousValue = modCharacter.race;
+        break;
+      case 'job':
+        previousValue = modCharacter.job;
+        break;
+      case 'homeVillage':
+        previousValue = modCharacter.homeVillage;
+        break;
+      case 'icon':
+        previousValue = modCharacter.icon;
+        break;
+      case 'appLink':
+        previousValue = modCharacter.appLink;
+        break;
+      case 'modType':
+        previousValue = modCharacter.modType;
+        break;
+      default:
+        previousValue = modCharacter[category];
+    }
+
+    // ------------------- Validation -------------------
+    if (category === "job") {
+      const validJobs = getAllJobs();
+      const modTitleJob = modCharacter.modTitle; // Oracle, Sage, or Dragon
+      
+      if (!validJobs.includes(updatedInfo) && updatedInfo !== modTitleJob) {
+        await interaction.editReply({
+          content: `❌ Invalid job: ${updatedInfo}. Please choose a valid job or use "${modTitleJob}" for your mod character.`,
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+    }
+
+    if (category === "race" && !isValidRace(updatedInfo) && updatedInfo.toLowerCase() !== 'dragon') {
+      await interaction.editReply({
+        content: `❌ Invalid race: ${updatedInfo}. Please choose a valid race.`,
+        flags: [MessageFlags.Ephemeral]
+      });
+      return;
+    }
+
+    if (["age"].includes(category)) {
+      const parsed = parseInt(updatedInfo, 10);
+      if (isNaN(parsed) || parsed < 1) {
+        await interaction.editReply({
+          content: `❌ Invalid age: ${updatedInfo}. Please provide a positive number.`,
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+    }
+
+    if (category === "height") {
+      const height = parseFloat(updatedInfo);
+      if (isNaN(height) || height < 0.1) {
+        await interaction.editReply({
+          content: `❌ Invalid height: ${updatedInfo}. Please provide a positive number in centimeters.`,
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+    }
+
+    if (category === "homeVillage" && !["Rudania", "Vhintl", "Inariko"].includes(updatedInfo)) {
+      await interaction.editReply({
+        content: `❌ Invalid village: ${updatedInfo}. Please choose from Rudania, Vhintl, or Inariko.`,
+        flags: [MessageFlags.Ephemeral]
+      });
+      return;
+    }
+
+    if (category === "modType") {
+      const validModTypes = {
+        'Oracle': ['Power', 'Courage', 'Wisdom'],
+        'Dragon': ['Power', 'Courage', 'Wisdom'],
+        'Sage': ['Light', 'Water', 'Forest', 'Shadow']
+      };
+      
+      const validTypes = validModTypes[modCharacter.modTitle];
+      if (!validTypes || !validTypes.includes(updatedInfo)) {
+        await interaction.editReply({
+          content: `❌ Invalid mod type: ${updatedInfo}. Valid types for ${modCharacter.modTitle} are: ${validTypes.join(', ')}.`,
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+    }
+
+    // Handle special cases
+    if (category === 'icon') {
+      if (!newIcon) {
+        await interaction.editReply({
+          content: "❌ Please attach a new icon image when updating the icon.",
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+
+      try {
+        // Download and upload the icon image
+        const response = await axios.get(newIcon.url, { responseType: 'arraybuffer' });
+        const iconData = Buffer.from(response.data, 'binary');
+        const blob = bucket.file(uuidv4() + path.extname(newIcon.name));
+        const blobStream = blob.createWriteStream({ resumable: false });
+        blobStream.end(iconData);
+        await new Promise((resolve, reject) => {
+          blobStream.on('finish', resolve);
+          blobStream.on('error', reject);
+        });
+
+        // Generate public URL for the uploaded icon
+        finalUpdatedValue = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+      } catch (err) {
+        handleError(err, 'modCharacter.js');
+        await interaction.editReply({
+          content: "❌ Failed to upload the new icon. Please try again later.",
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+    } else {
+      finalUpdatedValue = updatedInfo;
+    }
+
+    // Update the mod character directly (no approval needed)
+    const updateData = { [category]: finalUpdatedValue };
+    
+    // Handle special field mappings
+    if (category === 'homeVillage') {
+      updateData.currentVillage = finalUpdatedValue; // Also update current village
+    }
+
+    await updateModCharacterById(modCharacter._id, updateData);
+
+    // Create success embed
+    const embed = new EmbedBuilder()
+      .setColor(getVillageColorByName(modCharacter.homeVillage))
+      .setTitle('✅ Mod Character Updated!')
+      .setDescription(`**${modCharacter.name}**'s ${category} has been successfully updated.`)
+      .addFields(
+        { name: '👤 __Character__', value: `> ${modCharacter.name}`, inline: false },
+        { name: '📝 __Category__', value: `> ${category}`, inline: false },
+        { name: '🔄 __Previous Value__', value: `> ${previousValue}`, inline: false },
+        { name: '✅ __New Value__', value: `> ${finalUpdatedValue}`, inline: false }
+      )
+      .setThumbnail(category === 'icon' ? finalUpdatedValue : (modCharacter.icon || DEFAULT_IMAGE_URL))
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setFooter({ text: `Updated by ${interaction.user.tag}` })
+      .setTimestamp();
+
+    await interaction.editReply({
+      embeds: [embed],
+      flags: [MessageFlags.Ephemeral]
+    });
+
+  } catch (error) {
+    handleError(error, 'modCharacter.js', {
+      commandName: 'handleEditModCharacter',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: interaction.options.getString('name')
+    });
+
+    console.error(`[modCharacter.js]: Failed to edit mod character:`, error);
+
+    await interaction.editReply({
+      content: '❌ Failed to edit mod character. Please try again later.',
+      flags: [MessageFlags.Ephemeral]
+    });
+  }
+}
+
+async function handleEditModCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const selectedCategory = interaction.options.getString('category');
+    const characterName = interaction.options.getString('name');
+    
+    if (!selectedCategory || !characterName) {
+      await interaction.respond([]);
+      return;
+    }
+
+    let suggestions = [];
+
+    switch (selectedCategory) {
+      case 'race':
+        // Get valid races from race module
+        const { isValidRace } = require("../../modules/raceModule");
+        const validRaces = ['Hylian', 'Zora', 'Gerudo', 'Goron', 'Mixed', 'Sheikah', 'Rito', 'Korok/Kokiri', 'Keaton', 'Twili', 'Mogma', 'Dragon'];
+        suggestions = validRaces
+          .filter(race => race.toLowerCase().includes(focusedOption.value.toLowerCase()))
+          .slice(0, 25)
+          .map(race => ({ name: race, value: race }));
+        break;
+
+      case 'job':
+        const allJobs = getAllJobs();
+        // Add mod title as valid job option
+        const modCharacter = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+        if (modCharacter) {
+          allJobs.push(modCharacter.modTitle); // Oracle, Sage, or Dragon
+        }
+        suggestions = allJobs
+          .filter(job => job.toLowerCase().includes(focusedOption.value.toLowerCase()))
+          .slice(0, 25)
+          .map(job => ({ name: job, value: job }));
+        break;
+
+      case 'homeVillage':
+        const villages = ['Rudania', 'Vhintl', 'Inariko'];
+        suggestions = villages
+          .filter(village => village.toLowerCase().includes(focusedOption.value.toLowerCase()))
+          .slice(0, 25)
+          .map(village => ({ name: village, value: village }));
+        break;
+
+      case 'modType':
+        // Get valid mod types based on the mod character's title
+        const character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+        if (character) {
+          const validModTypes = {
+            'Oracle': ['Power', 'Courage', 'Wisdom'],
+            'Dragon': ['Power', 'Courage', 'Wisdom'],
+            'Sage': ['Light', 'Water', 'Forest', 'Shadow']
+          };
+          const validTypes = validModTypes[character.modTitle] || [];
+          suggestions = validTypes
+            .filter(type => type.toLowerCase().includes(focusedOption.value.toLowerCase()))
+            .slice(0, 25)
+            .map(type => ({ name: type, value: type }));
+        }
+        break;
+
+      case 'pronouns':
+        const commonPronouns = ['he/him', 'she/her', 'they/them', 'he/they', 'she/they', 'xe/xem', 'ze/zir', 'ey/em', 'fae/faer', 'ne/nem'];
+        suggestions = commonPronouns
+          .filter(pronoun => pronoun.toLowerCase().includes(focusedOption.value.toLowerCase()))
+          .slice(0, 25)
+          .map(pronoun => ({ name: pronoun, value: pronoun }));
+        break;
+
+      default:
+        // For other fields like name, age, height, appLink, just return empty
+        suggestions = [];
+        break;
+    }
+
+    await interaction.respond(suggestions);
+  } catch (error) {
+    console.error('[modCharacter.js]: Autocomplete error:', error);
+    await interaction.respond([]);
   }
 } 
