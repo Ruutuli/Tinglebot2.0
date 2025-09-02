@@ -581,7 +581,7 @@ async function validateCharacterOwnership(interaction, characterName) {
             { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
             { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
           )
-          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setImage('https://storage.googleapis.com/tinglebot/border.png')
           .setFooter({ text: 'Character Validation' })
           .setTimestamp();
 
@@ -598,7 +598,7 @@ async function validateCharacterOwnership(interaction, characterName) {
             { name: '🔒 Character Ownership', value: `The character "${cleanCharacterName}" belongs to another user.` },
             { name: '💡 Suggestion', value: 'Please use this command with one of your own characters.' }
           )
-          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setImage('https://storage.googleapis.com/tinglebot/border.png')
           .setFooter({ text: 'Character Validation' })
           .setTimestamp();
 
@@ -631,7 +631,7 @@ async function validateCharacterOwnership(interaction, characterName) {
         { name: '🆘 **Need Help?**', value: 'Contact a moderator with the technical details below.' },
         { name: '🔍 **Technical Details** (for moderators)', value: `Error: ${error.message || 'Unknown error'}\nUser: ${interaction.user.tag} (${interaction.user.id})\nCharacter: ${characterName}\nTimestamp: ${new Date().toISOString()}` }
       )
-      .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+      .setImage('https://storage.googleapis.com/tinglebot/border.png')
       .setFooter({ text: 'Character Validation' })
       .setTimestamp();
 
@@ -926,7 +926,7 @@ function createBlightSubmissionErrorEmbed(errorMessage) {
     .setTitle(title)
     .setDescription(description)
     .addFields(fields)
-    .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+    .setImage('https://storage.googleapis.com/tinglebot/border.png')
     .setFooter({ text: footerText, iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
     .setTimestamp();
 }
@@ -1010,20 +1010,101 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
   try {
     // ------------------- Validate Submission ID -------------------
     if (!submissionId || typeof submissionId !== 'string') {
-      await interaction.editReply({ content: '❌ Invalid submission ID provided.', flags: [4096] });
+      const invalidIdEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Invalid Submission ID')
+        .setDescription('The submission ID you provided is not valid.')
+        .addFields(
+          { 
+            name: '📝 What This Means', 
+            value: 'The submission ID must be a valid text string (not empty or null).' 
+          },
+          { 
+            name: '💡 Correct Format', 
+            value: '• Blight submission IDs start with **B** (e.g., B694183)\n• They are provided when a healer assigns you a task\n• Make sure you\'re copying the entire ID correctly' 
+          },
+          { 
+            name: '🔍 How to Get a Valid ID', 
+            value: '1. Use `/blight heal` to request healing for your character\n2. A healer will assign you a task and provide a submission ID\n3. Copy the exact ID provided (including the B prefix)\n4. Use that ID with `/blight submit`' 
+          }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border.png')
+        .setFooter({ text: 'Blight Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+        .setTimestamp();
+      
+      await interaction.editReply({ 
+        embeds: [invalidIdEmbed],
+        flags: [4096] 
+      });
       return;
     }
 
     // ------------------- Fetch & Validate Submission -------------------
     const submission = await retrieveBlightRequestFromStorage(submissionId);
     if (!submission) {
-      await interaction.editReply({ content: `❌ Submission with ID "${submissionId}" not found.` });
+      const errorEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Submission ID Not Found')
+        .setDescription(`The submission ID **"${submissionId}"** could not be found in our system.`)
+        .addFields(
+          { 
+            name: '📝 What This Means', 
+            value: 'This submission ID either doesn\'t exist, has expired, or was never created.' 
+          },
+          { 
+            name: '🔍 How to Get a Valid Submission ID', 
+            value: '1. Use `/blight heal` to request healing for your blighted character\n2. A healer will assign you a task and provide a submission ID\n3. Complete the assigned task (art, writing, or item offering)\n4. Use `/blight submit` with the correct submission ID' 
+          },
+          { 
+            name: '💡 Common Issues', 
+            value: '• **Typo in ID**: Double-check the submission ID for any typos\n• **Wrong Format**: Blight submission IDs start with **B** (e.g., B694183)\n• **Expired Request**: Submission IDs expire after a certain time\n• **Wrong Character**: Make sure you\'re using the ID for the correct character\n• **Already Used**: The ID may have already been submitted' 
+          },
+          { 
+            name: '🆘 Need Help?', 
+            value: 'If you believe this is an error, contact a moderator with your character name and the submission ID you received.' 
+          }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border.png')
+        .setFooter({ text: 'Blight Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+        .setTimestamp();
+      
+      await interaction.editReply({ 
+        embeds: [errorEmbed],
+        flags: [4096] 
+      });
       return;
     }
 
     if (submission.status !== 'pending') {
-      await interaction.editReply({
-        content: `❌ This submission has already been processed. Status: ${submission.status}`
+      const processedEmbed = new EmbedBuilder()
+        .setColor('#FFA500')
+        .setTitle('⚠️ Submission Already Processed')
+        .setDescription(`This submission has already been processed with status: **${submission.status}**`)
+        .addFields(
+          { 
+            name: '📝 What This Means', 
+            value: 'This submission ID has already been used and cannot be submitted again.' 
+          },
+          { 
+            name: '💡 Possible Reasons', 
+            value: '• You may have already submitted this task\n• Another user may have used this ID\n• The submission may have been processed by a moderator\n• The task may have expired and been auto-processed' 
+          },
+          { 
+            name: '🔍 How to Check', 
+            value: '1. Check your character\'s blight status with `/blight status`\n2. Review your blight history with `/blight history`\n3. If your character is still blighted, request a new healing task' 
+          },
+          { 
+            name: '🆘 Need Help?', 
+            value: 'If you believe this is an error, contact a moderator with your character name and submission ID.' 
+          }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border.png')
+        .setFooter({ text: 'Blight Healing Submission Status', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+        .setTimestamp();
+      
+      await interaction.editReply({ 
+        embeds: [processedEmbed],
+        flags: [4096] 
       });
       return;
     }
@@ -1065,7 +1146,36 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     // ------------------- Fetch Character & Healer -------------------
     const character = await Character.findOne({ name: submission.characterName });
     if (!character) {
-      await interaction.editReply({ content: `❌ Character "${submission.characterName}" not found.` });
+      const characterNotFoundEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Character Not Found')
+        .setDescription(`The character **"${submission.characterName}"** could not be found in our system.`)
+        .addFields(
+          { 
+            name: '📝 What This Means', 
+            value: 'The character referenced in this submission no longer exists or has been deleted.' 
+          },
+          { 
+            name: '💡 Possible Reasons', 
+            value: '• The character may have been deleted\n• The character name may have been changed\n• There may be a typo in the submission data\n• The character may have been transferred to another user' 
+          },
+          { 
+            name: '🔍 How to Check', 
+            value: '1. Verify the character name is correct\n2. Check if you still own this character\n3. Look for any recent character name changes\n4. Contact a moderator if you believe this is an error' 
+          },
+          { 
+            name: '🆘 Need Help?', 
+            value: 'If you believe this character should exist, contact a moderator with the character name and submission ID.' 
+          }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border.png')
+        .setFooter({ text: 'Character Validation Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+        .setTimestamp();
+      
+      await interaction.editReply({ 
+        embeds: [characterNotFoundEmbed],
+        flags: [4096] 
+      });
       return;
     }
 
@@ -1079,7 +1189,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
           { name: '🔒 Character Ownership', value: `The character "${submission.characterName}" belongs to another user.` },
           { name: '💡 Suggestion', value: 'Please use this command with one of your own characters.' }
         )
-        .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+        .setImage('https://storage.googleapis.com/tinglebot/border.png')
         .setFooter({ text: 'Character Validation' })
         .setTimestamp();
 
@@ -1097,7 +1207,36 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
 
     const healer = getModCharacterByName(submission.healerName);
     if (!healer) {
-      await interaction.editReply({ content: `❌ Healer "${submission.healerName}" not found.` });
+      const healerNotFoundEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Healer Not Found')
+        .setDescription(`The healer **"${submission.healerName}"** could not be found in our system.`)
+        .addFields(
+          { 
+            name: '📝 What This Means', 
+            value: 'The healer assigned to this submission is no longer available or has been removed.' 
+          },
+          { 
+            name: '💡 Possible Reasons', 
+            value: '• The healer may have been removed from the system\n• The healer name may have been changed\n• There may be a typo in the submission data\n• The healer may no longer be active' 
+          },
+          { 
+            name: '🔍 How to Fix', 
+            value: '1. Contact a moderator about this issue\n2. Request a new healing task with a different healer\n3. Provide the submission ID and healer name to support' 
+          },
+          { 
+            name: '🆘 Need Help?', 
+            value: 'This appears to be a system issue. Please contact a moderator with your submission ID and character name.' 
+          }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border.png')
+        .setFooter({ text: 'Healer Validation Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+        .setTimestamp();
+      
+      await interaction.editReply({ 
+        embeds: [healerNotFoundEmbed],
+        flags: [4096] 
+      });
       return;
     }
 
@@ -1264,7 +1403,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
             { name: '🆘 Need Help?', value: 'Use </blight heal:1306176789634355241> to request a new healing task.' }
           )
           .setThumbnail(healer.iconUrl)
-          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setImage('https://storage.googleapis.com/tinglebot/border.png')
           .setFooter({ text: 'Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
           .setTimestamp();
 
@@ -1357,7 +1496,36 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     // ========================================================================
     if (['art', 'writing'].includes(submission.taskType)) {
       if (!link) {
-        await interaction.editReply({ content: '❌ You must provide a link to your submission for healing.' });
+        const linkRequiredEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Submission Link Required')
+          .setDescription('You must provide a link to your completed art or writing submission.')
+          .addFields(
+            { 
+              name: '📝 What This Means', 
+              value: `For **${submission.taskType}** tasks, you need to provide a link to your completed work.` 
+            },
+            { 
+              name: '🔗 How to Get a Valid Link', 
+              value: '1. Post your art/writing in the submissions channel\n2. Include your blight healing request ID when submitting\n3. Wait for a moderator to approve with a checkmark emoji\n4. Right-click on your approved submission and select "Copy Message Link"\n5. Use that link with the `/blight submit` command' 
+            },
+            { 
+              name: '💡 Important Notes', 
+              value: '• The submission must be **approved** by a moderator (look for checkmark emoji)\n• The link must be from a **Discord message**, not a general channel link\n• Make sure the submission includes your blight healing request ID' 
+            },
+            { 
+              name: '🆘 Need Help?', 
+              value: 'If you haven\'t created your submission yet, use `/submit art` or `/submit writing` first.' 
+            }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border.png')
+          .setFooter({ text: 'Blight Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+          .setTimestamp();
+        
+        await interaction.editReply({ 
+          embeds: [linkRequiredEmbed],
+          flags: [4096] 
+        });
         return;
       }
 
