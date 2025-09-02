@@ -548,10 +548,39 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
   
       // Map job names to their role IDs
       const jobRoleIdMap = {
-        'Scout': process.env.JOB_SCOUT,
+        'Adventurer': process.env.JOB_ADVENTURER,
+        'Artist': process.env.JOB_ARTIST,
+        'Bandit': process.env.JOB_BANDIT,
+        'Beekeeper': process.env.JOB_BEEKEEPER,
+        'Blacksmith': process.env.JOB_BLACKSMITH,
+        'Cook': process.env.JOB_COOK,
+        'Courier': process.env.JOB_COURIER,
+        'Craftsman': process.env.JOB_CRAFTSMAN,
+        'Farmer': process.env.JOB_FARMER,
+        'Fisherman': process.env.JOB_FISHERMAN,
+        'Forager': process.env.JOB_FORAGER,
+        'Fortune Teller': process.env.JOB_FORTUNE_TELLER,
+        'Graveskeeper': process.env.JOB_GRAVESKEEPER,
+        'Guard': process.env.JOB_GUARD,
+        'Healer': process.env.JOB_HEALER,
+        'Herbalist': process.env.JOB_HERBALIST,
+        'Hunter': process.env.JOB_HUNTER,
+        'Mask Maker': process.env.JOB_MASK_MAKER,
         'Merchant': process.env.JOB_MERCHANT,
+        'Mercenary': process.env.JOB_MERCENARY,
+        'Miner': process.env.JOB_MINER,
+        'Priest': process.env.JOB_PRIEST,
+        'Rancher': process.env.JOB_RANCHER,
+        'Researcher': process.env.JOB_RESEARCHER,
+        'Scout': process.env.JOB_SCOUT,
+        'Scholar': process.env.JOB_SCHOLAR,
         'Shopkeeper': process.env.JOB_SHOPKEEPER,
-        // Add other job role IDs here
+        'Stablehand': process.env.JOB_STABLEHAND,
+        'Teacher': process.env.JOB_TEACHER,
+        'Villager': process.env.JOB_VILLAGER,
+        'Weaver': process.env.JOB_WEAVER,
+        'Witch': process.env.JOB_WITCH,
+        'Entertainer': process.env.JOB_ENTERTAINER
       };
 
       // Map job perks to their IDs

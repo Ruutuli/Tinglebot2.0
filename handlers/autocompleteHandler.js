@@ -182,10 +182,18 @@ async function safeRespondWithValidation(interaction, choices) {
 async function safeRespondWithError(interaction, error) {
   try {
     if (!interaction.responded && interaction.isAutocomplete()) {
-      await interaction.respond([]);
+      // Check if interaction is still valid before responding
+      if (interaction.isRepliable()) {
+        await interaction.respond([]);
+      }
     }
   } catch (respondError) {
-    // Ignore respond errors - interaction likely expired
+    // Log the specific error for debugging
+    if (respondError.code === 10062) {
+      console.log('[autocompleteHandler.js]: Interaction expired, ignoring response attempt');
+    } else {
+      console.error('[autocompleteHandler.js]: Error in safeRespondWithError:', respondError.message);
+    }
   }
 }
 
@@ -210,13 +218,17 @@ async function handleAutocomplete(interaction) {
         // Route to internal handler
         await handleAutocompleteInternal(interaction, commandName, focusedOption);
     } catch (error) {
-        // Simple error handling
+        // Enhanced error handling
         try {
-            if (!interaction.responded) {
+            if (!interaction.responded && interaction.isRepliable()) {
                 await interaction.respond([]);
             }
         } catch (respondError) {
-            // Ignore respond errors - interaction likely expired
+            if (respondError.code === 10062) {
+                console.log('[autocompleteHandler.js]: Main handler - interaction expired, ignoring response attempt');
+            } else {
+                console.error('[autocompleteHandler.js]: Main handler - respond error:', respondError.message);
+            }
         }
     }
 }
