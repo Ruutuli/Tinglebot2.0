@@ -1875,14 +1875,24 @@ async function rollForBlightProgression(interaction, characterName) {
     }
 
     const lastRollDate = character.lastRollDate || new Date(0);
-    // Calculate last blight call (previous day's 8 PM EST)
-    const lastBlightCall = get8PMESTInUTC(new Date(now.getTime() - 24 * 60 * 60 * 1000));
     
-    // Check if character has already rolled since the last blight call
+    // Determine which 8 PM EST boundary to check against
+    // If we're before 8 PM today, check against yesterday's 8 PM
+    // If we're after 8 PM today, check against today's 8 PM
+    let rollBoundary;
+    if (estNow.getHours() < 20) {
+      // Before 8 PM today - check against yesterday's 8 PM
+      rollBoundary = get8PMESTInUTC(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    } else {
+      // After 8 PM today - check against today's 8 PM
+      rollBoundary = today8PMUTC;
+    }
+    
+    // Check if character has already rolled since the roll boundary
     // A character can only roll once per "day" (8 PM to 8 PM window)
-    if (character.lastRollDate && character.lastRollDate > lastBlightCall) {
+    if (character.lastRollDate && character.lastRollDate > rollBoundary) {
       // Debug logging
-      console.log(`[blightHandler]: ${characterName} already rolled - Last roll: ${character.lastRollDate.toISOString()}, Last blight call: ${lastBlightCall.toISOString()}, Current time: ${now.toISOString()}`);
+      console.log(`[blightHandler]: ${characterName} already rolled - Last roll: ${character.lastRollDate.toISOString()}, Roll boundary: ${rollBoundary.toISOString()}, Current time: ${now.toISOString()}`);
       
       const timeUntilNextRoll = nextCallStart - estNow;
       const hoursUntilNextRoll = Math.floor(timeUntilNextRoll / (1000 * 60 * 60));
@@ -1915,7 +1925,7 @@ async function rollForBlightProgression(interaction, characterName) {
     character.lastRollDate = new Date(); // Use UTC time consistently
     
     // Debug logging
-    console.log(`[blightHandler]: ${characterName} rolling for blight - Current time: ${now.toISOString()}, Last blight call: ${lastBlightCall.toISOString()}, Next blight call: ${nextCallStart.toISOString()}`);
+    console.log(`[blightHandler]: ${characterName} rolling for blight - Current time: ${now.toISOString()}, Roll boundary: ${rollBoundary.toISOString()}, Next blight call: ${nextCallStart.toISOString()}`);
     
     const roll = Math.floor(Math.random() * 1000) + 1;
     let stage;
