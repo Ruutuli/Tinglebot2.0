@@ -113,9 +113,32 @@ function checkVillageMatch(character1, character2, skipVillageCheck = false) {
 // Checks if a character has enough stamina for healing
 function checkStamina(character, requiredStamina) {
   if (character.currentStamina < requiredStamina) {
+    const errorEmbed = createErrorEmbed(
+      'Insufficient Stamina',
+      `**${character.name}** only has **${character.currentStamina}** stamina and cannot heal your requested **${requiredStamina}** hearts.`,
+      [
+        {
+          name: '😴 __Current Stamina__',
+          value: `> ${character.currentStamina}/${character.maxStamina}`,
+          inline: true
+        },
+        {
+          name: '❤️ __Hearts Requested__',
+          value: `> ${requiredStamina}`,
+          inline: true
+        },
+        {
+          name: '💡 __What You Can Do__',
+          value: `> • Wait for **${character.name}** to rest and recover stamina\n> • Request fewer hearts to heal\n> • Find another healer with more stamina`,
+          inline: false
+        }
+      ],
+      'Come back later when the healer has rested!'
+    );
+    
     return {
       hasEnough: false,
-      message: `😴 **Oops!** **${character.name}** only has **${character.currentStamina}** stamina and cannot heal your requested **${requiredStamina}** hearts. Come back later when **${character.name}** has rested!`
+      message: errorEmbed
     };
   }
   return { hasEnough: true };
@@ -290,7 +313,13 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
     // Validate characters
     const validation = await validateCharacters(characterToHeal, healerCharacter, heartsToHeal, interaction);
     if (!validation.valid) {
-      await interaction.editReply(validation.message);
+      if (typeof validation.message === 'object' && validation.message.data) {
+        // It's an embed
+        await interaction.editReply({ embeds: [validation.message] });
+      } else {
+        // It's a string
+        await interaction.editReply(validation.message);
+      }
       return;
     }
 
@@ -645,7 +674,13 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     // Validate characters and jobs
     const validation = await validateCharacters(characterToHeal, healerCharacter, healingRequest.heartsToHeal, interaction);
     if (!validation.valid) {
-      await interaction.editReply(validation.message);
+      if (typeof validation.message === 'object' && validation.message.data) {
+        // It's an embed
+        await interaction.editReply({ embeds: [validation.message] });
+      } else {
+        // It's a string
+        await interaction.editReply(validation.message);
+      }
       return;
     }
 
