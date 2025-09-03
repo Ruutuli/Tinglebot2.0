@@ -635,12 +635,17 @@ module.exports = {
 
       // If Blood Moon is active and chance triggers a monster encounter (25% chance)
       if (bloodMoonActive && randomChance < 0.25) {
-        const allMonsters = await fetchAllMonsters();
-        const monstersByRegion = allMonsters.filter(
-          monster => monster[region.toLowerCase()] && monster.tier >= 1 && monster.tier <= 4
-        );
-        if (monstersByRegion.length > 0) {
-          const encounteredMonster = monstersByRegion[Math.floor(Math.random() * monstersByRegion.length)];
+        // Check if character has blight stage 3 or higher (monsters don't attack them)
+        if (character.blighted && character.blightStage >= 3) {
+          console.log(`[gather.js]: 🧿 Character ${character.name} has blight stage 3 - no monster encounters during Blood Moon`);
+          // Continue with gathering instead of monster encounter
+        } else {
+          const allMonsters = await fetchAllMonsters();
+          const monstersByRegion = allMonsters.filter(
+            monster => monster[region.toLowerCase()] && monster.tier >= 1 && monster.tier <= 4
+          );
+          if (monstersByRegion.length > 0) {
+            const encounteredMonster = monstersByRegion[Math.floor(Math.random() * monstersByRegion.length)];
           const diceRoll = Math.floor(Math.random() * 100) + 1;
           const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
           const outcome = await getEncounterOutcome(
@@ -809,6 +814,7 @@ module.exports = {
           });
           return;
         }
+        } // Close the else block for blight stage 3 check
       } else {
 
         

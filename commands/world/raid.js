@@ -155,6 +155,14 @@ module.exports = {
         });
       }
 
+      // Check if character has blight stage 3 or higher (monsters don't attack them)
+      if (character.blighted && character.blightStage >= 3) {
+        return interaction.editReply({
+          content: `❌ **${character.name} cannot participate in raids!**\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot participate in raids until you are healed.`,
+          ephemeral: true
+        });
+      }
+
       // Try to join the raid if not already participating
       let updatedRaidData = raidData;
       

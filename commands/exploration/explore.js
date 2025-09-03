@@ -842,6 +842,14 @@ module.exports = {
        );
       }
      } else if (encounterType === "monster") {
+      // Check if character has blight stage 3 or higher (monsters don't attack them)
+      if (character.blighted && character.blightStage >= 3) {
+        return interaction.editReply({
+          content: `❌ **${character.name} cannot encounter monsters during exploration!**\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot encounter monsters until you are healed.`,
+          ephemeral: true
+        });
+      }
+
       const monsters = await getMonstersByRegion(party.region.toLowerCase());
       if (!monsters || monsters.length === 0) {
        return interaction.editReply("No monsters available for this region.");

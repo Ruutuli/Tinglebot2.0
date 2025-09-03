@@ -680,6 +680,11 @@ async function handleTravelInteraction(
             result = '❌ Could not resolve monster for this encounter.';
             break;
           }
+          // Check if character has blight stage 3 or higher (monsters don't attack them)
+          if (character.blighted && character.blightStage >= 3) {
+            result = `❌ **${character.name} cannot fight monsters during travel!**\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot fight monsters until you are healed.`;
+            break;
+          }
           result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
           break;
         case 'flee':
@@ -690,7 +695,12 @@ async function handleTravelInteraction(
           break;
         default:
           if (monster) {
-            result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
+            // Check if character has blight stage 3 or higher (monsters don't attack them)
+            if (character.blighted && character.blightStage >= 3) {
+              result = `❌ **${character.name} cannot fight monsters during travel!**\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot fight monsters until you are healed.`;
+            } else {
+              result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
+            }
           } else {
             result = await handleDoNothing(interaction, character, encounterMessage, travelLog, preGeneratedFlavor);
           }
