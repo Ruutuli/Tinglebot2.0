@@ -1,15 +1,20 @@
-// ------------------- Import Necessary Libraries -------------------
+// ============================================================================
+// ------------------- testQuestPosting.js -------------------
+// Test script to manually load and post quests to test channel
+// ============================================================================
+
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../utils/globalErrorHandler');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
-const { authorizeSheets, writeSheetData }= require('../utils/googleSheetsUtils'); 
+const { authorizeSheets, writeSheetData } = require('../utils/googleSheetsUtils');
 const Quest = require('../models/QuestModel');
 
 // ------------------- Discord Bot Setup -------------------
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
-const QUEST_CHANNEL_ID = '1305486549252706335';
+const TEST_CHANNEL_ID = '1391812848099004578'; // Test channel ID
+const QUEST_CHANNEL_ID = '1305486549252706335'; // Original quest channel (for reference)
 
 // ------------------- Google Sheets API Setup -------------------
 const SHEET_ID = '1M106nBghmgng9xigxkVpUXuKIF60QXXKiAERlG1a0Gs';
@@ -60,7 +65,7 @@ async function fetchQuestData() {
         });
         return response.data.values || [];
     } catch (error) {
-        handleError(error, 'questAnnouncements.js');
+        handleError(error, 'testQuestPosting.js');
         console.error('[QUESTS]: Error fetching data from Google Sheets:', error);
         return [];
     }
@@ -106,18 +111,18 @@ function formatQuestEmbed(quest) {
     return embed;
 }
 
-// ------------------- Function to Post Quests to Discord -------------------
-async function postQuests() {
-    console.log('[DEBUG]: Starting postQuests function...');
-    const questChannel = await client.channels.fetch(QUEST_CHANNEL_ID);
+// ------------------- Function to Post Test Quests -------------------
+async function postTestQuests() {
+    console.log('[TEST]: Starting test quest posting...');
+    const testChannel = await client.channels.fetch(TEST_CHANNEL_ID);
 
-    if (!questChannel) {
-        console.error('[ERROR]: Quest channel not found!');
+    if (!testChannel) {
+        console.error('[ERROR]: Test channel not found!');
         return;
     }
 
-    console.log('[DEBUG]: Fetching quest data from Google Sheets...');
-    const auth = await authorizeSheets(); // Get authenticated client
+    console.log('[TEST]: Fetching quest data from Google Sheets...');
+    const auth = await authorizeSheets();
     const questData = await fetchQuestData();
 
     if (!questData.length) {
@@ -125,37 +130,16 @@ async function postQuests() {
         return;
     }
 
-    console.log(`[DEBUG]: Retrieved ${questData.length} quests from the sheet.`);
-    console.log('[DEBUG]: Checking for quests marked as "Posted"...');
+    console.log(`[TEST]: Retrieved ${questData.length} quests from the sheet.`);
+    console.log('[TEST]: Processing quests for testing...');
 
-    // Filter quests not marked as "Posted"
-    const unpostedQuests = questData.filter((quest, index) => {
+    const guild = testChannel.guild;
+
+    // Process all quests from the sheet
+    const testQuests = questData;
+
+    for (const [rowIndex, quest] of testQuests.entries()) {
         // Map your actual data structure: Title, Description, Quest Type, Status, Target Channel, Date, Signup Deadline, Participant Cap, Post Requirement, RP Thread Parent Channel, Token Reward, Item Reward, Item Reward Qty, Quest ID, Posted, Posted At, Bot Notes, Location, Time Limit, Min Requirements, Special Note
-        const [title, description, questType, status, targetChannel, date, signupDeadline, participantCap, postRequirement, rpThreadParentChannel, tokenReward, itemReward, itemRewardQty, questID, posted, postedAt, botNotes, location, timeLimit, minRequirements, specialNote] = quest;
-
-        // Log the raw value of "Posted" for debugging
-        console.log(`[DEBUG]: Raw "Posted" value for quest "${title}" at row ${index + 2}: "${posted}"`);
-
-        const sanitizedPosted = posted ? posted.trim().toLowerCase() : '';
-        if (sanitizedPosted === 'posted' && questID && questID !== 'N/A') {
-            console.log(`[INFO]: Skipping quest "${title}" - Already posted with ID ${questID}.`);
-            return false; // Exclude already posted quests
-        }
-
-        console.log(`[DEBUG]: Quest "${title}" at row ${index + 2} is NOT marked as "Posted".`);
-        return true; // Include quests that haven't been posted
-    });
-
-    if (!unpostedQuests.length) {
-        console.log('[INFO]: No new quests to post. All quests are already marked as "Posted".');
-        return;
-    }
-
-    console.log(`[DEBUG]: Found ${unpostedQuests.length} quests to post.`);
-    const guild = questChannel.guild;
-
-    for (const [rowIndex, quest] of unpostedQuests.entries()) {
-ired         // Map your actual data structure: Title, Description, Quest Type, Status, Target Channel, Date, Signup Deadline, Participant Cap, Post Requirement, RP Thread Parent Channel, Token Reward, Item Reward, Item Reward Qty, Quest ID, Posted, Posted At, Bot Notes, Location, Time Limit, Min Requirements, Special Note
         const [
             title,
             description,
@@ -181,6 +165,8 @@ ired         // Map your actual data structure: Title, Description, Quest Type, 
         ] = quest;
     
         try {
+            console.log(`[TEST]: Processing quest "${title}"...`);
+            
             // ------------------- Sanitize and Prepare Quest Data -------------------
             const sanitizedQuest = {
                 title: title || 'Untitled Quest',
@@ -195,16 +181,16 @@ ired         // Map your actual data structure: Title, Description, Quest Type, 
                 signupDeadline: signupDeadline && signupDeadline !== 'N/A' ? signupDeadline : null,
                 participantCap: participantCap === 'N/A' || !participantCap ? null : parseInt(participantCap, 10),
                 postRequirement: postRequirement === 'N/A' || !postRequirement ? null : parseInt(postRequirement, 10),
-                specialNote: specialNote || null, // Use from sheet or set below for RP quests
-                participants: new Map(), // Initialize as an empty Map
+                specialNote: specialNote || null,
+                participants: new Map(),
                 status: status && status.toLowerCase() === 'active' ? 'active' : 'completed',
                 date: date || new Date().toISOString(),
-                questID: questID && questID !== 'N/A' ? questID : `Q${Math.floor(Math.random() * 100000)}`,
-                posted: true,
+                questID: questID && questID !== 'N/A' ? questID : `TEST_Q${Math.floor(Math.random() * 100000)}`,
+                posted: false, // Don't mark as posted in test
                 postedAt: new Date(),
-                targetChannel: targetChannel || QUEST_CHANNEL_ID, // Use from sheet or default quest channel
-                rpThreadParentChannel: rpThreadParentChannel || null, // Use from sheet or set below for RP quests
-                roleID: null, // Will be set below
+                targetChannel: targetChannel || TEST_CHANNEL_ID,
+                rpThreadParentChannel: rpThreadParentChannel || null,
+                roleID: null,
             };
 
             // ------------------- RP Quest Special Handling -------------------
@@ -233,24 +219,24 @@ ired         // Map your actual data structure: Title, Description, Quest Type, 
                 sanitizedQuest.specialNote = 'RP Quest Rules: 15-20 posts minimum, 2 paragraph maximum per post, member-driven with @TaleWeaver support available.';
             }            
     
-            console.log('[DEBUG]: Sanitized quest data:', sanitizedQuest);
+            console.log('[TEST]: Sanitized quest data:', sanitizedQuest);
     
             // ------------------- Check or Create Quest Role -------------------
-            let role = guild.roles.cache.find(r => r.name === `Quest: ${sanitizedQuest.title}`);
+            let role = guild.roles.cache.find(r => r.name === `TEST Quest: ${sanitizedQuest.title}`);
             if (!role) {
-                console.log(`[DEBUG]: Creating role for quest: "${sanitizedQuest.title}".`);
+                console.log(`[TEST]: Creating test role for quest: "${sanitizedQuest.title}".`);
                 role = await guild.roles.create({
-                    name: `Quest: ${sanitizedQuest.title}`,
-                    color: 0xAA926A,
+                    name: `TEST Quest: ${sanitizedQuest.title}`,
+                    color: 0xFF6B6B, // Different color for test roles
                     mentionable: true,
-                    reason: `Automatically created for the quest: "${sanitizedQuest.title}".`
+                    reason: `Test role for quest: "${sanitizedQuest.title}".`
                 });
-                console.log(`[INFO]: Role created for quest: "${sanitizedQuest.title}" with ID: ${role.id}.`);
+                console.log(`[TEST]: Test role created for quest: "${sanitizedQuest.title}" with ID: ${role.id}.`);
             } else {
-                console.log(`[INFO]: Role already exists for quest: "${sanitizedQuest.title}" with ID: ${role.id}.`);
+                console.log(`[TEST]: Test role already exists for quest: "${sanitizedQuest.title}" with ID: ${role.id}.`);
             }
     
-                        // Save the role ID in sanitized quest data
+            // Save the role ID in sanitized quest data
             sanitizedQuest.roleID = role.id;
 
             // ------------------- Create RP Thread for RP Quests -------------------
@@ -260,99 +246,83 @@ ired         // Map your actual data structure: Title, Description, Quest Type, 
                     const parentChannel = guild.channels.cache.get(sanitizedQuest.rpThreadParentChannel);
                     if (parentChannel) {
                         rpThread = await parentChannel.threads.create({
-                            name: `📜 ${sanitizedQuest.title} - RP Thread`,
+                            name: `🧪 TEST - ${sanitizedQuest.title} - RP Thread`,
                             autoArchiveDuration: 1440, // 24 hours
-                            reason: `Auto-created RP thread for quest: ${sanitizedQuest.title}`
+                            reason: `Test RP thread for quest: ${sanitizedQuest.title}`
                         });
                         
                         // Send initial RP thread message
                         const rpThreadEmbed = new EmbedBuilder()
-                            .setColor(0xAA926A)
-                            .setTitle(`📜 ${sanitizedQuest.title} - RP Thread`)
-                            .setDescription(`This is the RP thread for the quest: **${sanitizedQuest.title}**\n\n**Requirements**: ${sanitizedQuest.postRequirement || 15}-20 posts minimum, 2 paragraph maximum per post.\n\n**Note**: This quest is member-driven. Use @TaleWeaver if you need help moving things along!`)
+                            .setColor(0xFF6B6B)
+                            .setTitle(`🧪 TEST - ${sanitizedQuest.title} - RP Thread`)
+                            .setDescription(`**TEST MODE** - This is a test RP thread for the quest: **${sanitizedQuest.title}**\n\n**Requirements**: ${sanitizedQuest.postRequirement || 15}-20 posts minimum, 2 paragraph maximum per post.\n\n**Note**: This quest is member-driven. Use @TaleWeaver if you need help moving things along!`)
                             .addFields(
-                                { name: 'Quest Type', value: 'RP', inline: true },
+                                { name: 'Quest Type', value: 'RP (TEST)', inline: true },
                                 { name: 'Post Requirement', value: `${sanitizedQuest.postRequirement || 15}-20 posts`, inline: true },
-                                { name: 'Status', value: 'Active - Join with `/quest join`', inline: true }
+                                { name: 'Status', value: 'TEST MODE - Join with `/quest join`', inline: true }
                             )
                             .setTimestamp();
 
                         await rpThread.send({ embeds: [rpThreadEmbed] });
-                        console.log(`[INFO]: Created RP thread for quest "${sanitizedQuest.title}" with ID: ${rpThread.id}.`);
+                        console.log(`[TEST]: Created test RP thread for quest "${sanitizedQuest.title}" with ID: ${rpThread.id}.`);
                     }
                 } catch (error) {
-                    console.error(`[ERROR]: Failed to create RP thread for quest "${sanitizedQuest.title}":`, error);
-                    sanitizedQuest.botNotes = `Failed to create RP thread: ${error.message}`;
+                    console.error(`[TEST]: Failed to create test RP thread for quest "${sanitizedQuest.title}":`, error);
+                    sanitizedQuest.botNotes = `Failed to create test RP thread: ${error.message}`;
                 }
             }
 
             // ------------------- Create Quest Embed -------------------
             const questEmbed = formatQuestEmbed(sanitizedQuest);
+            
+            // Add test mode indicator
+            questEmbed.setFooter({ text: '🧪 TEST MODE - This is a test quest posting' });
     
-            // ------------------- Post Quest Embed to Discord -------------------
-            console.log(`[DEBUG]: Posting embed for quest "${sanitizedQuest.title}" to Discord.`);
-            const message = await questChannel.send({ embeds: [questEmbed] });
+            // ------------------- Post Quest Embed to Test Channel -------------------
+            console.log(`[TEST]: Posting test embed for quest "${sanitizedQuest.title}" to test channel.`);
+            const message = await testChannel.send({ embeds: [questEmbed] });
     
             // Capture the message ID
             sanitizedQuest.messageID = message.id;
     
-            // ------------------- Save Quest to Database -------------------
-            console.log(`[DEBUG]: Saving quest "${sanitizedQuest.title}" to the database with message ID: ${message.id} and role ID: ${role.id}.`);
+            // ------------------- Save Quest to Database (with TEST prefix) -------------------
+            console.log(`[TEST]: Saving test quest "${sanitizedQuest.title}" to the database with message ID: ${message.id} and role ID: ${role.id}.`);
             const newQuest = new Quest(sanitizedQuest);
             await newQuest.save();
-            console.log(`[INFO]: Quest "${sanitizedQuest.title}" successfully saved to the database.`);
+            console.log(`[TEST]: Test quest "${sanitizedQuest.title}" successfully saved to the database.`);
     
-            // ------------------- Mark Quest as Posted -------------------
-            console.log(`[DEBUG]: Marking quest "${sanitizedQuest.title}" as posted in Google Sheets.`);
-            await markQuestAsPosted(auth, rowIndex, sanitizedQuest.questID);
+            // Add a small delay between quests
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
         } catch (error) {
-    handleError(error, 'questAnnouncements.js');
-
-            console.error(`[ERROR]: Failed to process quest "${title || 'Untitled Quest'}":`, error);
+            handleError(error, 'testQuestPosting.js');
+            console.error(`[TEST]: Failed to process test quest "${title || 'Untitled Quest'}":`, error);
         }
     }
        
-    console.log('[INFO]: Finished processing quests.');
+    console.log('[TEST]: Finished processing test quests.');
 }
-
-// ------------------- Function to Mark Quest as Posted -------------------
-async function markQuestAsPosted(auth, rowIndex, questID) {
-    try {
-        console.log(`[DEBUG]: Marking quest as posted in Google Sheets (Row: ${rowIndex + 2}, Quest ID: ${questID}).`);
-        const now = new Date().toISOString();
-        // Updated to mark the "Posted" column (column O, 15th column) and "Posted At" column (column P, 16th column)
-        await writeSheetData(auth, SHEET_ID, `loggedQuests!O${rowIndex + 2}:P${rowIndex + 2}`, [['Posted', now]]);
-        console.log(`[INFO]: Quest successfully marked as posted in Google Sheets (Row: ${rowIndex + 2}).`);
-    } catch (error) {
-    handleError(error, 'questAnnouncements.js');
-
-        console.error(`[ERROR]: Failed to mark quest as posted in Google Sheets (Row: ${rowIndex + 2}):`, error);
-    }
-}
-
-// ------------------- Discord Bot Test Command -------------------
-client.on('messageCreate', async (message) => {
-    if (message.content.trim() === '!testQuests') {
-        console.log('[TEST]: Triggering quest posting manually.');
-        try {
-            await postQuests();
-            await message.reply('✅ Quests have been posted for testing!');
-        } catch (error) {
-    handleError(error, 'questAnnouncements.js');
-
-            console.error('[ERROR]: Failed to execute postQuests:', error);
-            await message.reply('❌ An error occurred while posting quests.');
-        }
-    }
-});
 
 // ------------------- Discord Bot Event Listeners -------------------
-client.once('ready', () => {
-    console.log(`[BOT]: Logged in as ${client.user.tag}`);
+client.once('ready', async () => {
+    console.log(`[TEST BOT]: Logged in as ${client.user.tag}`);
+    console.log(`[TEST BOT]: Test channel ID: ${TEST_CHANNEL_ID}`);
+    console.log(`[TEST BOT]: Auto-posting quests from sheet...`);
+    
+    // Auto-post quests when bot starts
+    try {
+        await postTestQuests();
+        console.log(`[TEST BOT]: Quest posting completed. Exiting...`);
+        process.exit(0); // Exit after posting
+    } catch (error) {
+        handleError(error, 'testQuestPosting.js');
+        console.error('[TEST BOT]: Failed to post quests:', error);
+        process.exit(1);
+    }
 });
 
 client.on('error', (error) => {
-    console.error('[BOT]: Discord client error:', error);
+    console.error('[TEST BOT]: Discord client error:', error);
 });
 
 // ------------------- Login Bot -------------------
