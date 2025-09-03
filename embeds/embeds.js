@@ -2329,6 +2329,20 @@ const createDailyRollsResetEmbed = (characterName, rollTypesList) => {
   return embed;
 };
 
+// ------------------- Function: createEquippedItemErrorEmbed -------------------
+// Creates an embed for when a user tries to sell an equipped item
+const createEquippedItemErrorEmbed = (itemName) => {
+  const embed = new EmbedBuilder()
+    .setTitle('❌ Cannot Sell Equipped Item')
+    .setDescription(`You cannot sell \`${itemName}\` because it is currently equipped. Please unequip the item first if you want to sell it.`)
+    .setColor('#FF0000')
+    .setFooter({ text: 'Item Management' })
+    .setTimestamp();
+
+  setDefaultImage(embed);
+  return embed;
+};
+
 // ============================================================================
 // MODULE EXPORTS
 // ============================================================================
@@ -2398,6 +2412,7 @@ module.exports = {
  createBoostAppliedEmbed,
  createRaidVictoryEmbed,
  createDailyRollsResetEmbed,
+ createEquippedItemErrorEmbed,
 };
 
 

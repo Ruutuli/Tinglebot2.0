@@ -1492,8 +1492,9 @@ if (quantity <= 0) {
   const isEquipped = equippedItems.includes(itemName);
   
   if (isEquipped) {
+    const errorEmbed = createEquippedItemErrorEmbed(itemName);
     await interaction.editReply({
-      content: `❌ You cannot sell \`${itemName}\` because it is currently equipped. Please unequip the item first if you want to sell it.`,
+      embeds: [errorEmbed],
       ephemeral: true,
     });
     return;
@@ -1505,9 +1506,38 @@ if (quantity <= 0) {
      inventoryItem?.quantity || 0
     }`
    );
-   return interaction.editReply(
-    "❌ Not enough of the item in your inventory to sell."
-   );
+   const availableQuantity = inventoryItem?.quantity || 0;
+   return interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Insufficient Inventory',
+      description: `You don't have enough \`${itemName}\` in your inventory to sell.`,
+      fields: [
+        {
+          name: 'Requested',
+          value: `${quantity}`,
+          inline: true
+        },
+        {
+          name: 'Available',
+          value: `${availableQuantity}`,
+          inline: true
+        },
+        {
+          name: 'Shortage',
+          value: `${quantity - availableQuantity}`,
+          inline: true
+        }
+      ],
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
+      footer: {
+        text: 'Inventory Validation'
+      }
+    }],
+    ephemeral: true
+   });
   }
 
   console.log(`[shops]: Inventory validated: ${itemName} x${inventoryItem.quantity} available`);

@@ -44,7 +44,7 @@ const {
  getModCharacterByName,
  modCharacters
 } = require("../modules/modCharacters");
-const { normalPets, specialPets } = require("../modules/petModule");
+const { normalPets, specialPets, speciesRollPermissions } = require("../modules/petModule");
 const { getAllRaces } = require("../modules/raceModule");
 const { NPCs } = require("../modules/NPCsModule");
 
@@ -3657,8 +3657,14 @@ async function handlePetSpeciesAutocomplete(interaction, focusedOption) {
  const category = interaction.options.getString("category") || "normal";
 
  // choose only the normal or special species
- const speciesList =
-  category === "special" ? Object.keys(specialPets) : Object.keys(normalPets);
+ let speciesList;
+ if (category === "special") {
+  // Include special pets plus smallspecial and largespecial
+  speciesList = [...Object.keys(specialPets), 'smallspecial', 'largespecial'];
+ } else {
+  // Normal pets only
+  speciesList = Object.keys(normalPets);
+ }
 
  // build your choices array
  const choices = speciesList.map((species) => ({
