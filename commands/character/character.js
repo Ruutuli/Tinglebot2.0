@@ -915,7 +915,12 @@ async function handleCreateCharacter(interaction, subcommand) {
         'Race: Mogma': process.env.RACE_MOGMA,
         'Inariko Resident': process.env.INARIKO_RESIDENT,
         'Rudania Resident': process.env.RUDANIA_RESIDENT,
-        'Vhintl Resident': process.env.VHINTL_RESIDENT
+        'Vhintl Resident': process.env.VHINTL_RESIDENT,
+        ' Resident': process.env.RESIDENT_ROLE_ID, // Generic resident role
+        'Job: Rancher': process.env.JOB_RANCHER,
+        'Job: Shopkeeper': process.env.JOB_SHOPKEEPER,
+        'Job: Farmer': process.env.JOB_FARMER,
+        'Job: Weaver': process.env.JOB_WEAVER
       };
 
       // Map job perks to their IDs
