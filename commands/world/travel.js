@@ -985,13 +985,18 @@ async function processTravelDay(day, context) {
     let dailyLogEntry = `**Day ${day}:**\n`;
 
     if (!isSafe) {
-      // ------------------- Monster Encounter -------------------
-      const monsters = await getMonstersByPath(currentPath);
-      if (monsters.length) {
-        const tier = parseInt(getRandomTravelEncounter().split(' ')[1], 10);
-        const options = monsters.filter(m => m.tier <= tier);
-        const monster = options[Math.floor(Math.random() * options.length)];
-        dailyLogEntry += `⚔️ Encountered a ${monster.name}!\n`;
+      // Check if character has blight stage 3 or higher (monsters don't attack them)
+      if (character.blighted && character.blightStage >= 3) {
+        // Skip monster encounter for blight stage 3+ characters
+        dailyLogEntry += `🧿 No monsters encountered due to blight stage ${character.blightStage}.\n`;
+      } else {
+        // ------------------- Monster Encounter -------------------
+        const monsters = await getMonstersByPath(currentPath);
+        if (monsters.length) {
+          const tier = parseInt(getRandomTravelEncounter().split(' ')[1], 10);
+          const options = monsters.filter(m => m.tier <= tier);
+          const monster = options[Math.floor(Math.random() * options.length)];
+          dailyLogEntry += `⚔️ Encountered a ${monster.name}!\n`;
 
         // Before creating the encounter embed, check if Blood Moon is active
         const isBloodMoon = isBloodMoonActive();
@@ -1080,6 +1085,7 @@ async function processTravelDay(day, context) {
             await processTravelDay(day + 1, { ...context, channel });
           }
         });
+        } // Close the else block for blight stage 3 check
       }
     } else {
       // ------------------- Safe Day of Travel -------------------

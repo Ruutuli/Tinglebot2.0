@@ -1016,12 +1016,20 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     }
   }
   
-  // Check stamina
+    // Check stamina
   const currentStamina = parseInt(character.currentStamina) || 0;
   if (currentStamina < 1) {
     return await interaction.editReply({ content: `❌ ${character.name} needs at least 1 stamina to attempt a monster hunt.` });
   }
-  
+
+  // Check if character has blight stage 3 or higher (monsters don't attack them)
+  if (character.blighted && character.blightStage >= 3) {
+    return await interaction.editReply({
+      content: `❌ **${character.name} cannot participate in monster hunts!**\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot participate in monster hunts until you are healed.`,
+      ephemeral: true
+    });
+  }
+
   // Deduct stamina and start hunt
   const newStamina = Math.max(0, currentStamina - 1);
   character.currentStamina = newStamina;

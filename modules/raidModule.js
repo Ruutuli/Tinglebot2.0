@@ -344,6 +344,11 @@ async function joinRaid(character, raidId) {
       throw new Error('Character must be in the same village as the raid');
     }
 
+    // Check if character has blight stage 3 or higher (monsters don't attack them)
+    if (character.blighted && character.blightStage >= 3) {
+      throw new Error(`Character ${character.name} cannot participate in raids at Blight Stage ${character.blightStage} - monsters no longer attack them`);
+    }
+
     // Create participant data
     const participant = {
       userId: character.userId,
