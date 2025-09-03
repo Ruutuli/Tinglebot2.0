@@ -591,8 +591,10 @@ async function handleJailRelease(client) {
 
 async function handleDebuffExpiry(client) {
   const now = new Date();
+  // Get current time in EST
   const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const midnightEST = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 0, 0, 0, 0);
+  // Create midnight EST in UTC (5 AM UTC = midnight EST)
+  const midnightEST = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 5, 0, 0, 0));
   
   const charactersWithActiveDebuffs = await Character.find({
     "debuff.active": true,
@@ -622,8 +624,10 @@ async function handleDebuffExpiry(client) {
 
 async function handleBuffExpiry(client) {
   const now = new Date();
+  // Get current time in EST
   const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const midnightEST = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 0, 0, 0, 0);
+  // Create midnight EST in UTC (5 AM UTC = midnight EST)
+  const midnightEST = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 5, 0, 0, 0));
   
   const charactersWithActiveBuffs = await Character.find({
     "buff.active": true,
@@ -1302,12 +1306,12 @@ function initializeScheduler(client) {
     console.error('[scheduler.js]: Error during daily cleanup:', error);
   }
  });
- createCronJob("0 0 * * *", "debuff expiry check", () =>
-  handleDebuffExpiry(client)
- );
- createCronJob("0 0 * * *", "buff expiry check", () =>
-  handleBuffExpiry(client)
- );
+ createCronJob("0 5 * * *", "debuff expiry check", () =>
+ handleDebuffExpiry(client)
+);
+ createCronJob("0 5 * * *", "buff expiry check", () =>
+ handleBuffExpiry(client)
+);
  createCronJob("0 0 * * *", "birthday announcements", () =>
   executeBirthdayAnnouncements(client)
  );
