@@ -236,6 +236,13 @@ async function handleAutocomplete(interaction) {
 // Internal autocomplete handler function
 async function handleAutocompleteInternal(interaction, commandName, focusedOption) {
     try {
+        // Check if interaction is still valid (3 second timeout)
+        const interactionAge = Date.now() - interaction.createdTimestamp;
+        if (interactionAge > 2500) { // 2.5 second safety margin
+            console.log('[autocompleteHandler.js]: Interaction too old, skipping response');
+            return;
+        }
+
         switch (commandName) {
 
           // ------------------- Custom Weapon Command -------------------
@@ -2319,6 +2326,13 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
 // Provides autocomplete suggestions for items in a character's inventory.
 async function handleItemAutocomplete(interaction, focusedOption) {
   try {
+    // Check if interaction is still valid (3 second timeout)
+    const interactionAge = Date.now() - interaction.createdTimestamp;
+    if (interactionAge > 2500) { // 2.5 second safety margin
+      console.log('[handleItemAutocomplete]: Interaction too old, skipping response');
+      return;
+    }
+
     const userId = interaction.user.id;
     const focusedName = focusedOption.name;
     const characterName = interaction.options.getString("charactername");
@@ -2403,10 +2417,24 @@ async function handleItemAutocomplete(interaction, focusedOption) {
 
     await interaction.respond(choices.slice(0, 25));
   } catch (error) {
+    // Handle "Unknown interaction" errors gracefully
+    if (error.code === 10062) {
+      console.log('[handleItemAutocomplete]: Interaction expired, ignoring response attempt');
+      return;
+    }
+    
     handleError(error, "autocompleteHandler.js");
-
     console.error("[handleItemAutocomplete]: Error:", error);
-    if (!interaction.responded) await interaction.respond([]);
+    
+    if (!interaction.responded) {
+      try {
+        await interaction.respond([]);
+      } catch (respondError) {
+        if (respondError.code === 10062) {
+          console.log('[handleItemAutocomplete]: Interaction expired during error response');
+        }
+      }
+    }
   }
 }
 
