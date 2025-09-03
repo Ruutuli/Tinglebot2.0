@@ -325,13 +325,38 @@ function isBloodMoonDay() {
   
   // Check if current time is within the Blood Moon activation period
   const currentTime = new Date();
-  const currentEST = new Date(currentTime.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   
-  // Convert start and end dates to EST for comparison
-  const startEST = new Date(bloodMoonStartDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const endEST = new Date(bloodMoonEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  // Get current hour in EST
+  const currentESTHour = parseInt(currentTime.toLocaleString('en-US', { 
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    hour12: false
+  }));
   
-  const isActive = currentEST >= startEST && currentEST < endEST;
+  // Get current date in EST
+  const currentESTDate = new Date(currentTime.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const currentESTDateOnly = new Date(currentESTDate.getFullYear(), currentESTDate.getMonth(), currentESTDate.getDate());
+  
+  // Check if we're in the Blood Moon period and at the right time
+  let isActive = false;
+  
+  console.log(`[bloodmoon.js]: 🔍 Blood Moon check - Current EST: ${currentESTDateOnly.toDateString()} ${currentESTHour}:00, Start: ${bloodMoonStartDate.toDateString()}, End: ${bloodMoonEndDate.toDateString()}`);
+  
+  if (currentESTDateOnly.getTime() === bloodMoonStartDate.getTime()) {
+    // We're on the day before the Blood Moon date - check if it's 8 PM or later
+    isActive = currentESTHour >= 20;
+    console.log(`[bloodmoon.js]: 📅 Day before Blood Moon - Hour: ${currentESTHour}, Active: ${isActive}`);
+  } else if (currentESTDateOnly.getTime() === bloodMoonEndDate.getTime()) {
+    // We're on the day after the Blood Moon date - check if it's before 8 AM
+    isActive = currentESTHour < 8;
+    console.log(`[bloodmoon.js]: 📅 Day after Blood Moon - Hour: ${currentESTHour}, Active: ${isActive}`);
+  } else if (currentESTDateOnly.getTime() === new Date(bloodMoonStartDate.getTime() + 24 * 60 * 60 * 1000).getTime()) {
+    // We're on the actual Blood Moon date - always active
+    isActive = true;
+    console.log(`[bloodmoon.js]: 📅 Blood Moon day - Always active: ${isActive}`);
+  } else {
+    console.log(`[bloodmoon.js]: 📅 Not in Blood Moon period`);
+  }
   
   return isActive;
 }
