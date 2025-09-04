@@ -283,6 +283,50 @@ module.exports = {
 // ---- Helper Functions ----
 // ============================================================================
 
+// ---- Function: calculateDamageFromRoll ----
+// Calculates monster damage based on roll value and monster tier (without equipment bonuses)
+// This matches the logic from encounterModule.js
+function calculateDamageFromRoll(roll, monsterTier) {
+  if (monsterTier <= 4) {
+    // Low tier logic from getEncounterOutcome
+    if (roll <= 25) {
+      return monsterTier;
+    } else if (roll <= 50) {
+      return monsterTier === 1 ? 0 : monsterTier - 1;
+    } else if (roll <= 75) {
+      return monsterTier <= 2 ? 0 : monsterTier - 2;
+    } else {
+      return 0; // Win/loot
+    }
+  } else {
+    // High tier logic - all tiers 5-10 use the same damage ranges
+    // Based on the encounter module logic
+    if (roll <= 9) {
+      return 0; // Character takes damage, monster takes 0
+    } else if (roll <= 18) {
+      return 0; // Character takes damage, monster takes 0
+    } else if (roll <= 27) {
+      return 0; // Character takes damage, monster takes 0
+    } else if (roll <= 36) {
+      return 0; // Character takes damage, monster takes 0
+    } else if (roll <= 45) {
+      return 0; // Character takes damage, monster takes 0 (tiers 7-10)
+    } else if (roll <= 54) {
+      return 0; // Character takes damage, monster takes 0
+    } else if (roll <= 63) {
+      return 0; // Character takes damage, monster takes 0
+    } else if (roll <= 72) {
+      return 1; // Monster takes 1 damage
+    } else if (roll <= 81) {
+      return 1; // Monster takes 1 damage
+    } else if (roll <= 90) {
+      return 2; // Monster takes 2 damage
+    } else {
+      return 3; // Monster takes 3 damage
+    }
+  }
+}
+
 // ---- Function: getVillageRoleMention ----
 // Gets the proper role mention for a village (both resident and visiting)
 function getVillageRoleMention(village) {
@@ -404,7 +448,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: `__Roll Details__`,
-        value: `🎲 **Roll:** ${battleResult.originalRoll}\n📊 **Final Value:** ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **Weapon Bonus:** +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `\n🛡️ **Armor Bonus:** +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}\n💙 **Monster Damage Before Buffs:** ${Math.floor(battleResult.originalRoll / 10)} hearts\n💙 **Monster Damage After Buffs:** ${battleResult.hearts} hearts${battleResult.characterHeartsBefore > battleResult.playerHearts.current ? `\n❤️ **Character Damage Before:** ${battleResult.characterHeartsBefore} hearts\n❤️ **Character Damage After:** ${battleResult.playerHearts.current} hearts` : ''}`,
+        value: `🎲 **Roll:** ${battleResult.originalRoll}\n📊 **Final Value:** ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **Weapon Bonus:** +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `\n🛡️ **Armor Bonus:** +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}\n💙 **Monster:** ${raidData.monster.currentHearts + battleResult.hearts} → ${raidData.monster.currentHearts}${battleResult.characterHeartsBefore > battleResult.playerHearts.current ? `\n❤️ **Player:** ${battleResult.characterHeartsBefore} → ${battleResult.playerHearts.current}` : ''}`,
         inline: false
       },
       {
