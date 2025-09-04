@@ -448,7 +448,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: `__Roll Details__`,
-        value: `🎲 **Roll:** ${battleResult.originalRoll}\n📊 **Final Value:** ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **Weapon Bonus:** +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `\n🛡️ **Armor Bonus:** +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}\n💙 **Monster:** ${raidData.monster.currentHearts + battleResult.hearts} → ${raidData.monster.currentHearts}${battleResult.characterHeartsBefore > battleResult.playerHearts.current ? `\n❤️ **Player:** ${battleResult.characterHeartsBefore} → ${battleResult.playerHearts.current}` : ''}`,
+        value: `🎲 **Roll:** ${battleResult.originalRoll} → ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **ATK +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `${battleResult.attackSuccess && battleResult.attackStat > 0 ? ' | ' : ''}🛡️ **DEF +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}\n💙 **Monster:** ${raidData.monster.currentHearts + battleResult.hearts} → ${raidData.monster.currentHearts}${battleResult.characterHeartsBefore > battleResult.playerHearts.current ? `\n❤️ **Player:** ${battleResult.characterHeartsBefore} → ${battleResult.playerHearts.current}` : ''}`,
         inline: false
       },
       {
