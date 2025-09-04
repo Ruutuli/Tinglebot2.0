@@ -63,7 +63,7 @@ const VILLAGE_VISITING_ROLES = {
 
 // ---- Function: processRaidBattle ----
 // Processes a raid battle turn using the encounter module's tier-specific logic
-async function processRaidBattle(character, monster, diceRoll, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) {
+async function processRaidBattle(character, monster, diceRoll, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, characterHeartsBefore = null) {
   try {
     // Battle processing details logged only in debug mode
 
@@ -169,7 +169,8 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       defenseSuccess: defenseSuccess,
       damageValue: damageValue,
       attackStat: character.attack || 0,
-      defenseStat: character.defense || 0
+      defenseStat: character.defense || 0,
+      characterHeartsBefore: characterHeartsBefore || character.currentHearts
     };
 
   } catch (error) {
@@ -471,6 +472,9 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     diceRoll = Math.max(1, diceRoll - totalPenalty);
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateRaidFinalValue(character, diceRoll);
 
+    // Capture character hearts before battle
+    const characterHeartsBefore = character.currentHearts;
+    
     // Process the raid battle turn
     const battleResult = await processRaidBattle(
       character,
@@ -479,7 +483,8 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       damageValue,
       adjustedRandomValue,
       attackSuccess,
-      defenseSuccess
+      defenseSuccess,
+      characterHeartsBefore
     );
 
     if (!battleResult) {
