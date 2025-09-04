@@ -38,6 +38,7 @@ const ruuGameSchema = new Schema({
   // ------------------- Game settings -------------------
   targetScore: { type: Number, default: 20 }, // Score needed to win
   diceSides: { type: Number, default: 20 }, // Number of sides on dice
+  lastGlobalRollTime: { type: Date, default: null }, // When the last roll happened globally
   
   // ------------------- Prize information -------------------
   prizeType: { 

@@ -260,14 +260,14 @@ module.exports = {
       session.players.push(player);
     }
     
-    // Check cooldown
+    // Check global cooldown
     const now = new Date();
-    if (player.lastRollTime && (now - player.lastRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
-      const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - player.lastRollTime)) / 1000);
+    if (session.lastGlobalRollTime && (now - session.lastGlobalRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
+      const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - session.lastGlobalRollTime)) / 1000);
       
       try {
         const reply = await interaction.reply({
-          content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
+          content: `⏰ Please wait ${remainingSeconds} seconds before anyone can roll again.`,
           flags: 64
         });
       } catch (error) {
@@ -280,6 +280,7 @@ module.exports = {
     const roll = Math.floor(Math.random() * GAME_CONFIG.DICE_SIDES) + 1;
     player.lastRoll = roll;
     player.lastRollTime = now;
+    session.lastGlobalRollTime = now; // Set global cooldown for all players
     
     // Check for winner (exact 20, not cumulative)
     let gameEnded = false;
@@ -423,7 +424,8 @@ module.exports = {
                 winningScore: session.winningScore,
                 prizeClaimed: session.prizeClaimed,
                 prizeClaimedBy: session.prizeClaimedBy,
-                prizeClaimedAt: session.prizeClaimedAt
+                prizeClaimedAt: session.prizeClaimedAt,
+                lastGlobalRollTime: session.lastGlobalRollTime
               }
             },
             { new: true, runValidators: true }
