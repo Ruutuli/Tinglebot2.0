@@ -404,7 +404,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: `__Roll Details__`,
-        value: `🎲 **Roll:** ${battleResult.originalRoll}\n📊 **Final Value:** ${battleResult.adjustedRandomValue}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **Weapon Bonus:** +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `\n🛡️ **Armor Bonus:** +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}`,
+        value: `🎲 **Roll:** ${battleResult.originalRoll}\n📊 **Final Value:** ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **Weapon Bonus:** +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `\n🛡️ **Armor Bonus:** +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}\n💙 **Monster Damage Before Buffs:** ${Math.floor(battleResult.originalRoll / 10)} hearts\n💙 **Monster Damage After Buffs:** ${battleResult.hearts} hearts${battleResult.characterHeartsBefore > battleResult.playerHearts.current ? `\n❤️ **Character Damage Before:** ${battleResult.characterHeartsBefore} hearts\n❤️ **Character Damage After:** ${battleResult.playerHearts.current} hearts` : ''}`,
         inline: false
       },
       {
