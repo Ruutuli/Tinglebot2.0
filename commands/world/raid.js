@@ -403,6 +403,11 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
         inline: false
       },
       {
+        name: `__Roll Details__`,
+        value: `🎲 **Roll:** ${battleResult.originalRoll}\n📊 **Final Value:** ${battleResult.adjustedRandomValue}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **Weapon Bonus:** +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `\n🛡️ **Armor Bonus:** +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}`,
+        inline: false
+      },
+      {
         name: `__Turn Order__`,
         value: turnOrder || 'No participants',
         inline: false

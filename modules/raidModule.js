@@ -166,7 +166,10 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       originalRoll: diceRoll,
       adjustedRandomValue: adjustedRandomValue,
       attackSuccess: attackSuccess,
-      defenseSuccess: defenseSuccess
+      defenseSuccess: defenseSuccess,
+      damageValue: damageValue,
+      attackStat: character.attack || 0,
+      defenseStat: character.defense || 0
     };
 
   } catch (error) {
