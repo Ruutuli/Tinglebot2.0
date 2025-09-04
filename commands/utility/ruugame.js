@@ -262,12 +262,27 @@ module.exports = {
     
     // Check global cooldown
     const now = new Date();
-    if (session.lastGlobalRollTime && (now - session.lastGlobalRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
-      const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - session.lastGlobalRollTime)) / 1000);
+    if (session.lastGlobalRollTime && (now - session.lastGlobalRollTime) < (GAME_CONFIG.GLOBAL_COOLDOWN_SECONDS * 1000)) {
+      const remainingSeconds = Math.ceil((GAME_CONFIG.GLOBAL_COOLDOWN_SECONDS * 1000 - (now - session.lastGlobalRollTime)) / 1000);
       
       try {
         const reply = await interaction.reply({
           content: `⏰ Please wait ${remainingSeconds} seconds before anyone can roll again.`,
+          flags: 64
+        });
+      } catch (error) {
+        console.error(`[RuuGame Command] Failed to send cooldown message:`, error);
+      }
+      return;
+    }
+    
+    // Check individual player cooldown
+    if (player.lastRollTime && (now - player.lastRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
+      const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - player.lastRollTime)) / 1000);
+      
+      try {
+        const reply = await interaction.reply({
+          content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
           flags: 64
         });
       } catch (error) {
@@ -281,6 +296,13 @@ module.exports = {
     player.lastRoll = roll;
     player.lastRollTime = now;
     session.lastGlobalRollTime = now; // Set global cooldown for all players
+    
+    // Check for pity prize (roll of 1)
+    let pityPrizeCharacter = null;
+    if (roll === 1) {
+      console.log(`[RuuGame] Pity prize! User ${userId} rolled ${roll} - awarding Mock Fairy`);
+      pityPrizeCharacter = await awardRuuGamePityPrize(session, userId, interaction);
+    }
     
     // Check for winner (exact 20, not cumulative)
     let gameEnded = false;
@@ -447,7 +469,7 @@ module.exports = {
     console.log(`[RuuGame] After save - Session ${updatedSession.sessionId} status: ${updatedSession.status}, winner: ${updatedSession.winner}`);
     
     console.log(`[RuuGame] Creating final embed - Session status: ${updatedSession.status}, winner: ${updatedSession.winner}, gameEnded: ${gameEnded}`);
-    const embed = await createRuuGameEmbed(updatedSession, gameEnded ? '🎉 WINNER!' : 'Roll Result!', interaction.user, prizeCharacter, roll);
+    const embed = await createRuuGameEmbed(updatedSession, gameEnded ? '🎉 WINNER!' : 'Roll Result!', interaction.user, prizeCharacter, roll, pityPrizeCharacter);
     
     // Add roll announcement for non-winner rolls
     if (!gameEnded) {
@@ -470,4 +492,36 @@ module.exports = {
       // Prize notification removed - consolidated into main winner embed
     }
   }
+}
+
+// ------------------- Function: awardRuuGamePityPrize -------------------
+// Awards Mock Fairy pity prize to players who roll a 1
+async function awardRuuGamePityPrize(session, userId, interaction) {
+  try {
+    const characters = await Character.find({ userId: userId, inventorySynced: true });
+    if (characters.length > 0) {
+      const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
+
+      // Fetch the Mock Fairy item emoji from ItemModel
+      const itemDetails = await ItemModel.findOne({ itemName: 'Mock Fairy' }).select('emoji');
+      const itemEmoji = itemDetails?.emoji || '🧚‍♀️'; // Fallback emoji if not found
+
+      // Add Mock Fairy to random character's inventory using inventory utilities
+      const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+      await addItemInventoryDatabase(
+        randomCharacter._id,
+        'Mock Fairy',
+        1,
+        interaction,
+        'RuuGame Pity Prize'
+      );
+
+      console.log(`[RuuGame] Mock Fairy awarded to ${randomCharacter.name} for rolling 1`);
+      return randomCharacter; // Return the character for embed display
+    }
+  } catch (error) {
+    console.error('Error awarding pity prize:', error);
+    // Don't fail the game if pity prize awarding fails
+  }
+  return null;
 };

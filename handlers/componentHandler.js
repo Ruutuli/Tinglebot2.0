@@ -84,7 +84,8 @@ const GAME_CONFIG = {
   DICE_SIDES: 20,
   SESSION_DURATION_HOURS: 24,
   MAX_PLAYERS: 10,
-  ROLL_COOLDOWN_SECONDS: 15
+  ROLL_COOLDOWN_SECONDS: 15,
+  GLOBAL_COOLDOWN_SECONDS: 5
 };
 
 const PRIZES = {
@@ -913,13 +914,29 @@ async function handleRuuGameRoll(interaction) {
         
         // Check global cooldown BEFORE deferring
         const now = new Date();
-        if (session.lastGlobalRollTime && (now - session.lastGlobalRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
-          const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - session.lastGlobalRollTime)) / 1000);
+        if (session.lastGlobalRollTime && (now - session.lastGlobalRollTime) < (GAME_CONFIG.GLOBAL_COOLDOWN_SECONDS * 1000)) {
+          const remainingSeconds = Math.ceil((GAME_CONFIG.GLOBAL_COOLDOWN_SECONDS * 1000 - (now - session.lastGlobalRollTime)) / 1000);
           
           try {
             // Send ephemeral cooldown message using reply
             await interaction.reply({
               content: `⏰ Please wait ${remainingSeconds} seconds before anyone can roll again.`,
+              flags: 64
+            });
+          } catch (error) {
+            console.error(`[RuuGame Component] Failed to send cooldown message:`, error);
+          }
+          return;
+        }
+        
+        // Check individual player cooldown
+        if (player.lastRollTime && (now - player.lastRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
+          const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - player.lastRollTime)) / 1000);
+          
+          try {
+            // Send ephemeral cooldown message using reply
+            await interaction.reply({
+              content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
               flags: 64
             });
           } catch (error) {
@@ -963,6 +980,13 @@ async function handleRuuGameRoll(interaction) {
 
         let gameEnded = false;
         let prizeCharacter = null; // Track which character received the prize
+        let pityPrizeCharacter = null; // Track which character received the pity prize
+        
+        // Check for pity prize (roll of 1)
+        if (roll === 1) {
+          console.log(`[RuuGame Component] Pity prize! User ${userId} rolled ${roll} - awarding Mock Fairy`);
+          pityPrizeCharacter = await awardRuuGamePityPrize(session, userId, interaction);
+        }
         
         if (roll === GAME_CONFIG.TARGET_SCORE) {
           console.log(`[RuuGame Component] Winner detected! User ${userId} rolled ${roll}`);
@@ -1199,7 +1223,7 @@ async function handleRuuGameRoll(interaction) {
 
         // Only send response if this wasn't a winning roll (winner response already sent)
         if (!gameEnded) {
-          const embed = await createRuuGameEmbed(session, 'Roll Result!', interaction.user, prizeCharacter, roll);
+          const embed = await createRuuGameEmbed(session, 'Roll Result!', interaction.user, prizeCharacter, roll, pityPrizeCharacter);
           embed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll}!`);
           
           let buttons = createRuuGameButtons(sessionId);
@@ -1266,7 +1290,7 @@ async function handleRuuGameRoll(interaction) {
 
 // ------------------- Function: createRuuGameEmbed -------------------
 // Creates an embed showing game information
-async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCharacter = null, roll = null) {
+async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCharacter = null, roll = null, pityPrizeCharacter = null) {
   console.log(`[createRuuGameEmbed] Creating embed - Session status: ${session.status}, winner: ${session.winner}, prizeCharacter: ${prizeCharacter?.name || 'None'}`);
   
   // Fetch the actual item emoji from ItemModel
@@ -1294,8 +1318,15 @@ async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCha
   // Add roll result with emojis if we have a roll
   if (roll !== null) {
     const rollEmojis = getRollEmojis(roll);
+    let rollValue = `${rollEmojis}`;
+    
+    // Add pity prize information if someone rolled a 1
+    if (roll === 1 && pityPrizeCharacter) {
+      rollValue += `\n\n🎁 **Pity Prize!** Mock Fairy added to **${pityPrizeCharacter.name}**'s inventory!`;
+    }
+    
     embed.addFields(
-      { name: '🎲 Roll Result', value: `${rollEmojis}`, inline: false }
+      { name: '🎲 Roll Result', value: rollValue, inline: false }
     );
   }
   
@@ -1397,6 +1428,38 @@ async function awardRuuGamePrize(session, userId, interaction) {
     session.prizeClaimed = false;
     session.prizeClaimedBy = null;
     session.prizeClaimedAt = null;
+  }
+  return null;
+}
+
+// ------------------- Function: awardRuuGamePityPrize -------------------
+// Awards Mock Fairy pity prize to players who roll a 1
+async function awardRuuGamePityPrize(session, userId, interaction) {
+  try {
+    const characters = await Character.find({ userId: userId, inventorySynced: true });
+    if (characters.length > 0) {
+      const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
+
+      // Fetch the Mock Fairy item emoji from ItemModel
+      const itemDetails = await ItemModel.findOne({ itemName: 'Mock Fairy' }).select('emoji');
+      const itemEmoji = itemDetails?.emoji || '🧚‍♀️'; // Fallback emoji if not found
+
+      // Add Mock Fairy to random character's inventory using inventory utilities
+      const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
+      await addItemInventoryDatabase(
+        randomCharacter._id,
+        'Mock Fairy',
+        1,
+        interaction,
+        'RuuGame Pity Prize'
+      );
+
+      console.log(`[RuuGame Component] Mock Fairy awarded to ${randomCharacter.name} for rolling 1`);
+      return randomCharacter; // Return the character for embed display
+    }
+  } catch (error) {
+    console.error('Error awarding pity prize:', error);
+    // Don't fail the game if pity prize awarding fails
   }
   return null;
 }
