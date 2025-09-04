@@ -275,8 +275,15 @@ async function syncToInventoryDatabase(character, item, interaction) {
           uuidv4() // Generate new sync ID
         ];
 
-        // Append the new row to the sheet
-        await appendSheetData(auth, spreadsheetId, 'loggedInventory!A:M', [newRow]);
+        // Append the new row to the sheet using safeAppendDataToSheet for better error handling
+        await safeAppendDataToSheet(
+          character.inventory,
+          character,
+          'loggedInventory!A:M',
+          [newRow],
+          null,
+          { skipValidation: false, context: { commandName: 'sync', userTag: 'System', userId: character.userId } }
+        );
       }
     } catch (sheetError) {
       console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
@@ -416,11 +423,27 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
           'loggedInventory!A:M',
           [additionLogEntry],
           interaction?.client,
-          { skipValidation: false }
+          { skipValidation: false, context: { commandName: 'raid', userTag: interaction?.user?.tag, userId: interaction?.user?.id } }
         );
         
       } catch (sheetError) {
         console.error(`[inventoryUtils.js]: ⚠️ Failed to log item addition to Google Sheets: ${sheetError.message}`);
+        console.error(`[inventoryUtils.js]: 📊 Sheet error details:`, {
+          characterName: character.name,
+          itemName: itemName,
+          quantity: quantity,
+          obtain: obtain,
+          inventoryUrl: character.inventory,
+          errorMessage: sheetError.message,
+          errorStatus: sheetError.status,
+          errorCode: sheetError.code
+        });
+        
+        // If this is a retryable error, the operation should have been stored for retry
+        if (sheetError.message.includes('stored for retry') || sheetError.storedForRetry) {
+          console.log(`[inventoryUtils.js]: 📦 Item addition operation stored for retry - will be processed later`);
+        }
+        
         // Don't fail the addition if sheet logging fails
       }
     }

@@ -1542,7 +1542,8 @@ if (quantity <= 0) {
 
   console.log(`[shops]: Inventory validated: ${itemName} x${inventoryItem.quantity} available`);
 
-  const obtainMethod = inventoryItem.obtain.toLowerCase();
+  // Safely handle obtain field - ensure it's a string
+  const obtainMethod = (inventoryItem.obtain || '').toString().toLowerCase();
   const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
 
   let itemDetails;

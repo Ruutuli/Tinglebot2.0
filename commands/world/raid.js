@@ -448,7 +448,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: `__Roll Details__`,
-        value: `🎲 **Roll:** ${battleResult.originalRoll} → ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **ATK +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `${battleResult.attackSuccess && battleResult.attackStat > 0 ? ' | ' : ''}🛡️ **DEF +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}\n💙 **Monster:** ${raidData.monster.currentHearts + battleResult.hearts} → ${raidData.monster.currentHearts}${battleResult.characterHeartsBefore > battleResult.playerHearts.current ? `\n❤️ **Player:** ${battleResult.characterHeartsBefore} → ${battleResult.playerHearts.current}` : ''}`,
+        value: `🎲 **Roll:** ${battleResult.originalRoll} → ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **ATK +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `${battleResult.attackSuccess && battleResult.attackStat > 0 ? ' | ' : ''}🛡️ **DEF +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}`,
         inline: false
       },
       {
@@ -575,6 +575,14 @@ async function handleRaidVictory(interaction, raidData, monster) {
             
           } catch (error) {
             console.error(`[raid.js]: ❌ Error processing loot for ${character.name}:`, error);
+            console.error(`[raid.js]: 📊 Character details:`, {
+              name: character.name,
+              userId: character.userId,
+              hasInventory: !!character.inventory,
+              inventoryUrl: character.inventory,
+              isModCharacter: character.isModCharacter,
+              characterType: character.constructor?.name || 'Unknown'
+            });
             
             // Add to failed characters list
             failedCharacters.push({

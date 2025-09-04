@@ -185,7 +185,7 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
 
 // ---- Function: getTier5EncounterOutcome ----
 // Handles tier 5 monster encounters
-const getTier5EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
+const getTier5EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, isRaidContext = false) => {
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
@@ -266,10 +266,16 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
     if (character.currentHearts - characterDamage <= 0) {
         outcome += `\n${character.name} has been defeated by the ${monster.name}!`;
         character.currentHearts = 0;
-        await handleKO(character._id, createEncounterContext(character, 'tier5_encounter_ko'));
+        // Only handle KO in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await handleKO(character._id, createEncounterContext(character, 'tier5_encounter_ko'));
+        }
     } else {
         character.currentHearts -= characterDamage;
-        await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier5_encounter_damage'));
+        // Only use hearts in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier5_encounter_damage'));
+        }
     }
 
     if (monster.currentHearts - heartsLostForMonster <= 0) {
@@ -298,7 +304,7 @@ const getTier5EncounterOutcome = async (character, monster, damageValue, adjuste
 
 // ---- Function: getTier6EncounterOutcome ----
 // Handles tier 6 monster encounters
-const getTier6EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
+const getTier6EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, isRaidContext = false) => {
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
@@ -379,10 +385,16 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
     if (character.currentHearts - characterDamage <= 0) {
         outcome += `\n${character.name} has been defeated by the ${monster.name}!`;
         character.currentHearts = 0;
-        await handleKO(character._id, createEncounterContext(character, 'tier5_encounter_ko'));
+        // Only handle KO in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await handleKO(character._id, createEncounterContext(character, 'tier5_encounter_ko'));
+        }
     } else {
         character.currentHearts -= characterDamage;
-        await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier5_encounter_damage'));
+        // Only use hearts in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier5_encounter_damage'));
+        }
     }
 
     if (monster.currentHearts - heartsLostForMonster <= 0) {
@@ -411,7 +423,7 @@ const getTier6EncounterOutcome = async (character, monster, damageValue, adjuste
 
 // ---- Function: getTier7EncounterOutcome ----
 // Handles tier 7 monster encounters
-const getTier7EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
+const getTier7EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, isRaidContext = false) => {
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
@@ -495,10 +507,16 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
     if (character.currentHearts - characterDamage <= 0) {
         outcome += `\n${character.name} has been defeated by the ${monster.name}!`;
         character.currentHearts = 0;
-        await handleKO(character._id, createEncounterContext(character, 'tier7_encounter_ko'));
+        // Only handle KO in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await handleKO(character._id, createEncounterContext(character, 'tier7_encounter_ko'));
+        }
     } else {
         character.currentHearts -= characterDamage;
-        await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier7_encounter_damage'));
+        // Only use hearts in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier7_encounter_damage'));
+        }
     }
 
     if (monster.currentHearts - heartsLostForMonster <= 0) {
@@ -527,7 +545,7 @@ const getTier7EncounterOutcome = async (character, monster, damageValue, adjuste
 
 // ---- Function: getTier8EncounterOutcome ----
 // Handles tier 8 monster encounters
-const getTier8EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
+const getTier8EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, isRaidContext = false) => {
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
@@ -611,10 +629,16 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
     if (character.currentHearts - characterDamage <= 0) {
         outcome += `\n${character.name} has been defeated by the ${monster.name}!`;
         character.currentHearts = 0;
-        await handleKO(character._id, createEncounterContext(character, 'tier8_encounter_ko'));
+        // Only handle KO in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await handleKO(character._id, createEncounterContext(character, 'tier8_encounter_ko'));
+        }
     } else {
         character.currentHearts -= characterDamage;
-        await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier8_encounter_damage'));
+        // Only use hearts in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier8_encounter_damage'));
+        }
     }
 
     if (monster.currentHearts - heartsLostForMonster <= 0) {
@@ -643,7 +667,7 @@ const getTier8EncounterOutcome = async (character, monster, damageValue, adjuste
 
 // ---- Function: getTier9EncounterOutcome ----
 // Handles tier 9 monster encounters
-const getTier9EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
+const getTier9EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, isRaidContext = false) => {
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
@@ -727,10 +751,16 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
     if (character.currentHearts - characterDamage <= 0) {
         outcome += `\n${character.name} has been defeated by the ${monster.name}!`;
         character.currentHearts = 0;
-        await handleKO(character._id, createEncounterContext(character, 'tier9_encounter_ko'));
+        // Only handle KO in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await handleKO(character._id, createEncounterContext(character, 'tier9_encounter_ko'));
+        }
     } else {
         character.currentHearts -= characterDamage;
-        await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier9_encounter_damage'));
+        // Only use hearts in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier9_encounter_damage'));
+        }
     }
 
     if (monster.currentHearts - heartsLostForMonster <= 0) {
@@ -759,7 +789,7 @@ const getTier9EncounterOutcome = async (character, monster, damageValue, adjuste
 
 // ---- Function: getTier10EncounterOutcome ----
 // Handles tier 10 monster encounters
-const getTier10EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
+const getTier10EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, isRaidContext = false) => {
     let heartsLostForMonster = 0;
     let outcome;
     let characterDamage = 0;
@@ -843,10 +873,16 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
     if (character.currentHearts - characterDamage <= 0) {
         outcome += `\n${character.name} has been defeated by the ${monster.name}!`;
         character.currentHearts = 0;
-        await handleKO(character._id, createEncounterContext(character, 'tier10_encounter_ko'));
+        // Only handle KO in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await handleKO(character._id, createEncounterContext(character, 'tier10_encounter_ko'));
+        }
     } else {
         character.currentHearts -= characterDamage;
-        await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier10_encounter_damage'));
+        // Only use hearts in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await useHearts(character._id, characterDamage, createEncounterContext(character, 'tier10_encounter_damage'));
+        }
     }
 
     if (monster.currentHearts - heartsLostForMonster <= 0) {
@@ -991,7 +1027,10 @@ async function processBattle(character, monster, battleId, originalRoll, interac
                     outcome = await getTier10EncounterOutcome(character, monster, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess);
                     if (outcome.result.includes('KO')) {
                         console.log(`[encounterModule.js]: 💀 ${character.name} KO'd by ${monster.name}`);
-                        await handleKO(character._id, createEncounterContext(character, 'tier10_encounter_ko'));
+                        // Only handle KO in non-raid contexts to avoid conflicts
+        if (!isRaidContext) {
+            await handleKO(character._id, createEncounterContext(character, 'tier10_encounter_ko'));
+        }
                     }
                     break;
                 default:
