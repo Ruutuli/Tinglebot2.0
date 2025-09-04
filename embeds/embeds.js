@@ -1521,6 +1521,41 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
  return embed;
 };
 
+// ------------------- Function: createBlightRaidParticipationEmbed -------------------
+// Creates an embed for characters who cannot participate in raids due to blight
+const createBlightRaidParticipationEmbed = (character) => {
+ const settings = getCommonEmbedSettings(character);
+ const locationPrefix = getLocationPrefix(character);
+
+ const embed = new EmbedBuilder()
+  .setColor("#FF0000")
+  .setAuthor({
+   name: `${character.name} 🔗`,
+   iconURL: settings.author?.iconURL,
+   url: settings.author?.url,
+  })
+  .setTitle(`❌ ${locationPrefix}: ${character.name} Cannot Join Raid!`)
+  .setDescription(
+   `> **${character.name} cannot participate in raids!**\n\n` +
+   `<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot participate in raids until you are healed.`
+  )
+  .addFields({
+   name: "🔮 __Healing Options__",
+   value: `> • Seek help from **Oracles, Sages & Dragons**\n` +
+          `> • Only these special characters can heal blight corruption\n` +
+          `> **Current Blight Stage:** ${character.blightStage}`,
+   inline: false,
+  })
+  .setTimestamp()
+  .setFooter({
+   text: "Blight corruption prevents raid participation",
+   iconURL: settings.footer?.iconURL,
+  });
+
+ setDefaultImage(embed);
+ return embed;
+};
+
 // ------------------- Function: createBlightStage3NoEncounterEmbed -------------------
 // Creates a unique embed for when blight stage 3 characters encounter no monsters
 const createBlightStage3NoEncounterEmbed = (character, isBloodMoon = false) => {
@@ -2441,6 +2476,7 @@ module.exports = {
  createMonsterEncounterEmbed,
  createNoEncounterEmbed,
  createBlightStage3NoEncounterEmbed,
+ createBlightRaidParticipationEmbed,
  createKOEmbed,
  createRaidKOEmbed,
  createHealEmbed,

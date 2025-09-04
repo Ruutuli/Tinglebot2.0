@@ -483,39 +483,73 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       throw new Error('Failed to process raid battle turn');
     }
 
-    // Update participant's damage using the model method
+    // Update participant's damage using the model method with retry logic
     await raid.updateParticipantDamage(character._id, battleResult.hearts);
 
-    // Update monster hearts
-    raid.monster.currentHearts = battleResult.monsterHearts.current;
+    // Update monster hearts with retry logic for version conflicts
+    let raidUpdateRetries = 0;
+    const maxRaidRetries = 3;
+    
+    while (raidUpdateRetries < maxRaidRetries) {
+      try {
+        // Update monster hearts
+        raid.monster.currentHearts = battleResult.monsterHearts.current;
 
-    // Check if monster is defeated
-    if (raid.monster.currentHearts <= 0) {
-      await raid.completeRaid('defeated');
-    } else {
-      // Update character object with new hearts value from battle result
-      character.currentHearts = battleResult.playerHearts.current;
-      
-      // Ensure character's KO status is saved before advancing turn
-      if (battleResult.playerHearts.current <= 0) {
-        // Character was KO'd, make sure it's saved
-        character.ko = true;
-        character.currentHearts = 0;
-        await character.save();
-        console.log(`[raidModule.js]: 💀 Character ${character.name} KO'd and saved to database`);
-      } else {
-        // Save the updated hearts value for non-KO'd characters
-        await character.save();
-        console.log(`[raidModule.js]: 💔 Character ${character.name} hearts updated to ${character.currentHearts}/${character.maxHearts}`);
+        // Check if monster is defeated
+        if (raid.monster.currentHearts <= 0) {
+          await raid.completeRaid('defeated');
+        } else {
+          // Update character object with new hearts value from battle result
+          character.currentHearts = battleResult.playerHearts.current;
+          
+          // Ensure character's KO status is saved before advancing turn
+          if (battleResult.playerHearts.current <= 0) {
+            // Character was KO'd, make sure it's saved
+            character.ko = true;
+            character.currentHearts = 0;
+            await character.save();
+            console.log(`[raidModule.js]: 💀 Character ${character.name} KO'd and saved to database`);
+          } else {
+            // Save the updated hearts value for non-KO'd characters
+            await character.save();
+            console.log(`[raidModule.js]: 💔 Character ${character.name} hearts updated to ${character.currentHearts}/${character.maxHearts}`);
+          }
+          
+          // Advance to next turn if monster is not defeated
+          await raid.advanceTurn();
+          // Turn advancement logged only in debug mode
+        }
+
+        // Save updated raid data
+        await raid.save();
+        break; // Success, exit retry loop
+        
+      } catch (error) {
+        if (error.name === 'VersionError' && raidUpdateRetries < maxRaidRetries - 1) {
+          raidUpdateRetries++;
+          console.warn(`[raidModule.js]: ⚠️ Version conflict in processRaidTurn, retrying (${raidUpdateRetries}/${maxRaidRetries})`);
+          
+          // Reload the raid document to get the latest version
+          const freshRaid = await Raid.findById(raid._id);
+          if (!freshRaid) {
+            throw new Error('Raid document not found during retry');
+          }
+          
+          // Update the current raid object with fresh data
+          raid.set(freshRaid.toObject());
+          
+          // Continue with the retry
+          continue;
+        } else {
+          // Re-throw if it's not a version error or we've exhausted retries
+          throw error;
+        }
       }
-      
-      // Advance to next turn if monster is not defeated
-      await raid.advanceTurn();
-      // Turn advancement logged only in debug mode
     }
-
-    // Save updated raid data
-    await raid.save();
+    
+    if (raidUpdateRetries >= maxRaidRetries) {
+      throw new Error(`Failed to update raid after ${maxRaidRetries} retries`);
+    }
 
     // Turn completion logged only in debug mode
     

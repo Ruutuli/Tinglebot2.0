@@ -5,7 +5,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchAnyCharacterByNameAndUserId } = require('../../database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration } = require('../../modules/raidModule');
-const { createRaidKOEmbed } = require('../../embeds/embeds.js');
+const { createRaidKOEmbed, createBlightRaidParticipationEmbed } = require('../../embeds/embeds.js');
 const Raid = require('../../models/RaidModel');
 
 // ============================================================================
@@ -134,8 +134,33 @@ module.exports = {
         const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);
         const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
         
+        const raidNotFoundEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Raid Not Found!')
+          .setDescription(`The raid ID you entered could not be found.`)
+          .addFields(
+            {
+              name: '🔍 Raid ID Entered',
+              value: `\`${raidId}\``,
+              inline: false
+            },
+            {
+              name: '📋 Available Active Raids',
+              value: activeRaidIds || 'None',
+              inline: false
+            },
+            {
+              name: '⚠️ Possible Issues',
+              value: '• Check if you copied the raid ID correctly\n• The raid may have expired (20-minute time limit)\n• The raid may have been completed\n• Check the raid announcement for the correct ID',
+              inline: false
+            }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: 'Raid System' })
+          .setTimestamp();
+
         return interaction.editReply({
-          content: `❌ **Raid not found!**\n\n**Raid ID you entered:** \`${raidId}\`\n\n**Available active raids:** ${activeRaidIds || 'None'}\n\n**Possible issues:**\n• Check if you copied the raid ID correctly\n• The raid may have expired (20-minute time limit)\n• The raid may have been completed\n• Check the raid announcement for the correct ID`,
+          embeds: [raidNotFoundEmbed],
           ephemeral: true
         });
       }
@@ -158,7 +183,7 @@ module.exports = {
       // Check if character has blight stage 3 or higher (monsters don't attack them)
       if (character.blighted && character.blightStage >= 3) {
         return interaction.editReply({
-          content: `❌ **${character.name} cannot participate in raids!**\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot participate in raids until you are healed.`,
+          embeds: [createBlightRaidParticipationEmbed(character)],
           ephemeral: true
         });
       }
@@ -433,7 +458,9 @@ async function handleRaidVictory(interaction, raidData, monster) {
     // Process loot for each participant
     const lootResults = [];
     const failedCharacters = [];
+    const blightedCharacters = [];
     const Character = require('../../models/CharacterModel');
+    const User = require('../../models/UserModel');
     
     for (const participant of participants) {
       try {
@@ -534,6 +561,45 @@ async function handleRaidVictory(interaction, raidData, monster) {
           lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
         }
         
+        // ------------------- Gloom Hands Blight Effect -------------------
+        // Check if this was a Gloom Hands raid and apply 25% blight chance
+        if (monster.nameMapping === 'gloomHands' && Math.random() < 0.25) {
+          // Only apply blight if character isn't already blighted
+          if (!character.blighted) {
+            try {
+              // Apply blight to character
+              character.blighted = true;
+              character.blightedAt = new Date();
+              character.blightStage = 1;
+              character.blightPaused = false;
+              await character.save();
+              
+              // Assign blight role to character owner
+              const guild = interaction.guild;
+              if (guild) {
+                const member = await guild.members.fetch(character.userId);
+                await member.roles.add('798387447967907910');
+                console.log(`[raid.js]: ✅ Added blight role to user ${character.userId} for character ${character.name} (Gloom Hands effect)`);
+              }
+              
+              // Update user's blightedcharacter status
+              const user = await User.findOne({ discordId: character.userId });
+              if (user) {
+                user.blightedcharacter = true;
+                await user.save();
+              }
+              
+              blightedCharacters.push(character.name);
+              console.log(`[raid.js]: 🧿 Character ${character.name} was blighted by Gloom Hands effect`);
+              
+            } catch (blightError) {
+              console.error(`[raid.js]: ❌ Error applying blight to ${character.name}:`, blightError);
+            }
+          } else {
+            console.log(`[raid.js]: ⚠️ Character ${character.name} is already blighted, skipping Gloom Hands blight effect`);
+          }
+        }
+        
       } catch (error) {
         console.error(`[raid.js]: ❌ Error processing participant ${participant.name}:`, error);
         
@@ -578,7 +644,18 @@ async function handleRaidVictory(interaction, raidData, monster) {
           value: lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.',
           inline: false
         }
-      )
+      );
+    
+    // Add blight information if any characters were blighted by Gloom Hands
+    if (blightedCharacters.length > 0) {
+      victoryEmbed.addFields({
+        name: '<:blight_eye:805576955725611058> **Gloom Hands Blight Effect**',
+        value: `The following characters have been **blighted** by the Gloom Hands encounter:\n${blightedCharacters.map(name => `• **${name}**`).join('\n')}\n\nYou can be healed by **Oracles, Sages & Dragons**\n▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)`,
+        inline: false
+      });
+    }
+    
+    victoryEmbed
       .setThumbnail(monsterImage)
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: `Raid ID: ${raidData.raidId}` })
