@@ -190,8 +190,8 @@ raidSchema.methods.isExpired = function() {
 };
 
 // ---- Method: addParticipant ----
-// Add a participant to the raid
-raidSchema.methods.addParticipant = function(participant) {
+// Add a participant to the raid with retry logic for version conflicts
+raidSchema.methods.addParticipant = async function(participant, maxRetries = 3) {
   // Ensure participants array exists
   if (!this.participants) {
     this.participants = [];
@@ -203,14 +203,47 @@ raidSchema.methods.addParticipant = function(participant) {
     throw new Error('User already has a character in this raid');
   }
   
-  this.participants.push(participant);
-  this.analytics.participantCount = this.participants.length;
-  return this.save();
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      this.participants.push(participant);
+      this.analytics.participantCount = this.participants.length;
+      return await this.save();
+    } catch (error) {
+      if (error.name === 'VersionError' && retries < maxRetries - 1) {
+        retries++;
+        console.warn(`[RaidModel.js]: ⚠️ Version conflict in addParticipant, retrying (${retries}/${maxRetries})`);
+        
+        // Reload the document to get the latest version
+        const freshRaid = await this.constructor.findById(this._id);
+        if (!freshRaid) {
+          throw new Error('Raid document not found during retry');
+        }
+        
+        // Update the current document with fresh data
+        this.set(freshRaid.toObject());
+        
+        // Check again if user already has a character in the raid (after reload)
+        const freshExistingParticipant = this.participants.find(p => p.userId === participant.userId);
+        if (freshExistingParticipant) {
+          throw new Error('User already has a character in this raid');
+        }
+        
+        // Continue with the retry
+        continue;
+      } else {
+        // Re-throw if it's not a version error or we've exhausted retries
+        throw error;
+      }
+    }
+  }
+  
+  throw new Error(`Failed to add participant after ${maxRetries} retries`);
 };
 
 // ---- Method: updateParticipantDamage ----
-// Update a participant's damage
-raidSchema.methods.updateParticipantDamage = function(characterId, damage) {
+// Update a participant's damage with retry logic for version conflicts
+raidSchema.methods.updateParticipantDamage = async function(characterId, damage, maxRetries = 3) {
   // Ensure participants array exists
   if (!this.participants) {
     this.participants = [];
@@ -221,16 +254,51 @@ raidSchema.methods.updateParticipantDamage = function(characterId, damage) {
     throw new Error('Participant not found in raid');
   }
   
-  participant.damage += damage;
-  this.analytics.totalDamage += damage;
-  this.analytics.averageDamagePerParticipant = this.analytics.totalDamage / this.analytics.participantCount;
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      // Update the damage values
+      participant.damage += damage;
+      this.analytics.totalDamage += damage;
+      this.analytics.averageDamagePerParticipant = this.analytics.totalDamage / this.analytics.participantCount;
+      
+      // Save with optimistic concurrency control
+      return await this.save();
+    } catch (error) {
+      if (error.name === 'VersionError' && retries < maxRetries - 1) {
+        retries++;
+        console.warn(`[RaidModel.js]: ⚠️ Version conflict in updateParticipantDamage, retrying (${retries}/${maxRetries})`);
+        
+        // Reload the document to get the latest version
+        const freshRaid = await this.constructor.findById(this._id);
+        if (!freshRaid) {
+          throw new Error('Raid document not found during retry');
+        }
+        
+        // Update the current document with fresh data
+        this.set(freshRaid.toObject());
+        
+        // Find the participant again in the fresh data
+        const freshParticipant = this.participants.find(p => p.characterId.toString() === characterId.toString());
+        if (!freshParticipant) {
+          throw new Error('Participant not found in raid after reload');
+        }
+        
+        // Continue with the retry
+        continue;
+      } else {
+        // Re-throw if it's not a version error or we've exhausted retries
+        throw error;
+      }
+    }
+  }
   
-  return this.save();
+  throw new Error(`Failed to update participant damage after ${maxRetries} retries`);
 };
 
 // ---- Method: advanceTurn ----
-// Advance to the next turn, skipping KO'd participants
-raidSchema.methods.advanceTurn = async function() {
+// Advance to the next turn, skipping KO'd participants with retry logic for version conflicts
+raidSchema.methods.advanceTurn = async function(maxRetries = 3) {
   // Ensure participants array exists
   if (!this.participants) {
     this.participants = [];
@@ -240,45 +308,73 @@ raidSchema.methods.advanceTurn = async function() {
     return this.save();
   }
   
-  // Get current character states from database to check KO status
-  const Character = require('./CharacterModel');
-  
-  // Find the next non-KO'd participant
-  let nextTurn = this.currentTurn;
-  let attempts = 0;
-  const maxAttempts = this.participants.length; // Prevent infinite loop
-  
-  do {
-    nextTurn = (nextTurn + 1) % this.participants.length;
-    attempts++;
-    
-    // Check if the next participant is KO'd
-    const nextParticipant = this.participants[nextTurn];
-    if (nextParticipant) {
-      try {
-        const character = await Character.findById(nextParticipant.characterId);
-        if (character && !character.ko) {
-          // Found a non-KO'd participant
-          break;
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      // Get current character states from database to check KO status
+      const Character = require('./CharacterModel');
+      
+      // Find the next non-KO'd participant
+      let nextTurn = this.currentTurn;
+      let attempts = 0;
+      const maxAttempts = this.participants.length; // Prevent infinite loop
+      
+      do {
+        nextTurn = (nextTurn + 1) % this.participants.length;
+        attempts++;
+        
+        // Check if the next participant is KO'd
+        const nextParticipant = this.participants[nextTurn];
+        if (nextParticipant) {
+          try {
+            const character = await Character.findById(nextParticipant.characterId);
+            if (character && !character.ko) {
+              // Found a non-KO'd participant
+              break;
+            }
+          } catch (error) {
+            console.error(`[RaidModel.js]: ❌ Error checking KO status for ${nextParticipant.name}:`, error);
+            // If we can't check the character, assume they're not KO'd to avoid getting stuck
+            break;
+          }
         }
-      } catch (error) {
-        console.error(`[RaidModel.js]: ❌ Error checking KO status for ${nextParticipant.name}:`, error);
-        // If we can't check the character, assume they're not KO'd to avoid getting stuck
-        break;
+      } while (attempts < maxAttempts);
+      
+      // If all participants are KO'd, just advance normally
+      if (attempts >= maxAttempts) {
+        nextTurn = (this.currentTurn + 1) % this.participants.length;
+      }
+      
+      this.currentTurn = nextTurn;
+      const nextParticipant = this.participants[this.currentTurn];
+      // Turn advancement logged only in debug mode
+      
+      return await this.save();
+      
+    } catch (error) {
+      if (error.name === 'VersionError' && retries < maxRetries - 1) {
+        retries++;
+        console.warn(`[RaidModel.js]: ⚠️ Version conflict in advanceTurn, retrying (${retries}/${maxRetries})`);
+        
+        // Reload the document to get the latest version
+        const freshRaid = await this.constructor.findById(this._id);
+        if (!freshRaid) {
+          throw new Error('Raid document not found during retry');
+        }
+        
+        // Update the current document with fresh data
+        this.set(freshRaid.toObject());
+        
+        // Continue with the retry
+        continue;
+      } else {
+        // Re-throw if it's not a version error or we've exhausted retries
+        throw error;
       }
     }
-  } while (attempts < maxAttempts);
-  
-  // If all participants are KO'd, just advance normally
-  if (attempts >= maxAttempts) {
-    nextTurn = (this.currentTurn + 1) % this.participants.length;
   }
   
-  this.currentTurn = nextTurn;
-  const nextParticipant = this.participants[this.currentTurn];
-  // Turn advancement logged only in debug mode
-  
-  return this.save();
+  throw new Error(`Failed to advance turn after ${maxRetries} retries`);
 };
 
 // ---- Method: getEffectiveCurrentTurnParticipant ----
