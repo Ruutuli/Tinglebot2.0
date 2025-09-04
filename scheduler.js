@@ -1113,28 +1113,11 @@ async function handleBloodMoonStart(client) {
    process.env.VHINTL_TOWNHALL,
   ];
 
-  // Get current EST time and calculate tomorrow in EST
-  const now = new Date();
-  const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const tomorrow = new Date(estNow);
-  tomorrow.setDate(estNow.getDate() + 1);
-  const tomorrowDate = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
+  // Use the corrected isBloodMoonDay() function to check if blood moon is active
+  const isBloodMoonActive = isBloodMoonDay();
   
-  const { bloodmoonDates } = require('./modules/calendarModule');
-  let isTomorrowBloodMoon = false;
-  
-  for (const { realDate } of bloodmoonDates) {
-   const [month, day] = realDate.split('-').map(Number);
-   const bloodMoonDate = new Date(tomorrowDate.getFullYear(), month - 1, day);
-   if (tomorrowDate.getTime() === bloodMoonDate.getTime()) {
-    isTomorrowBloodMoon = true;
-    console.log(`[scheduler.js]: 🌕 Tomorrow (${realDate}) is a Blood Moon day - sending start announcement`);
-    break;
-   }
-  }
-
-  if (isTomorrowBloodMoon) {
-   console.log(`[scheduler.js]: 🌕 Blood Moon starts tomorrow - processing channels`);
+  if (isBloodMoonActive) {
+   console.log(`[scheduler.js]: 🌕 Blood Moon is active - processing channels`);
    await renameChannels(client);
 
    for (const channelId of channels) {
@@ -1155,7 +1138,7 @@ async function handleBloodMoonStart(client) {
     }
    }
   } else {
-   console.log(`[scheduler.js]: 📅 No Blood Moon starting tomorrow - no announcement needed`);
+   console.log(`[scheduler.js]: 📅 Blood Moon not active - no announcement needed`);
   }
 
   console.log(`[scheduler.js]: ✅ Blood Moon start check completed`);
@@ -1170,28 +1153,11 @@ async function handleBloodMoonEnd(client) {
    process.env.VHINTL_TOWNHALL,
   ];
 
-  // Get current EST time and calculate yesterday in EST
-  const now = new Date();
-  const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const yesterday = new Date(estNow);
-  yesterday.setDate(estNow.getDate() - 1);
-  const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+  // Use the corrected isBloodMoonDay() function to check if blood moon is still active
+  const isBloodMoonActive = isBloodMoonDay();
   
-  const { bloodmoonDates } = require('./modules/calendarModule');
-  let wasYesterdayBloodMoon = false;
-  
-  for (const { realDate } of bloodmoonDates) {
-   const [month, day] = realDate.split('-').map(Number);
-   const bloodMoonDate = new Date(yesterdayDate.getFullYear(), month - 1, day);
-   if (yesterdayDate.getTime() === bloodMoonDate.getTime()) {
-    wasYesterdayBloodMoon = true;
-    console.log(`[scheduler.js]: 🌙 Yesterday (${realDate}) was a Blood Moon day - sending end announcement`);
-    break;
-   }
-  }
-
-  if (wasYesterdayBloodMoon) {
-   console.log(`[scheduler.js]: 🌙 Blood Moon ended yesterday - processing channels`);
+  if (!isBloodMoonActive) {
+   console.log(`[scheduler.js]: 🌙 Blood Moon has ended - processing channels`);
    await revertChannelNames(client);
 
    for (const channelId of channels) {
@@ -1208,7 +1174,7 @@ async function handleBloodMoonEnd(client) {
     }
    }
   } else {
-   console.log(`[scheduler.js]: 📅 No Blood Moon ended yesterday - no announcement needed`);
+   console.log(`[scheduler.js]: 📅 Blood Moon still active - no end announcement needed`);
   }
 
   console.log(`[scheduler.js]: ✅ Blood Moon end check completed`);
@@ -1252,6 +1218,7 @@ function initializeScheduler(client) {
      }
     }
    } else {
+    console.log(`[scheduler.js]: 📅 Blood Moon not active - reverting channel names`);
     await revertChannelNames(client);
    }
 
