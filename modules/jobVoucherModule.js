@@ -76,9 +76,23 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             fields: [
                 { name: 'How to Use', value: 'Format your command like this:' },
                 { name: 'Example', value: '```/item charactername:YourCharacter itemname:Job Voucher jobname:Blacksmith```\nReplace `YourCharacter` with your character name and `Blacksmith` with the job you want to use.' },
-                { name: 'Available Jobs', value: '**General Jobs:**\nAdventurer, Artist, Bandit, Cook, Courier, Craftsman, Farmer, Forager, Guard, Graveskeeper, Healer, Herbalist, Hunter, Merchant, Mercenary, Priest, Scout, Shopkeeper, Stablehand, Villager, Witch, Entertainer\n\n**Inariko Jobs:**\nFisherman, Researcher, Scholar, Teacher\n\n**Rudania Jobs:**\nRancher, Blacksmith, Miner\n\n**Vhintl Jobs:**\nBeekeeper, Fortune Teller, Mask Maker, Weaver' }
+                { name: 'Available Jobs', value: '**General Jobs:**\nAdventurer, Artist, Bandit, Cook, Courier, Craftsman, Farmer, Forager, Guard, Graveskeeper, Healer, Herbalist, Hunter, Mercenary, Priest, Scout, Villager, Witch, Entertainer\n\n**Inariko Jobs:**\nFisherman, Researcher, Scholar, Teacher\n\n**Rudania Jobs:**\nRancher, Blacksmith, Miner\n\n**Vhintl Jobs:**\nBeekeeper, Fortune Teller, Mask Maker, Weaver\n\n**❌ Restricted Jobs (Cannot use Job Vouchers):**\nMerchant, Shopkeeper, Stablehand' }
             ],
             color: '#F1C40F'
+        },
+        // ============================================================================
+        // ------------------- Restricted Job Error (Job Voucher) -------------------
+        // Embed for when users try to use restricted jobs with job vouchers
+        // ============================================================================
+        RESTRICTED_JOB: {
+            title: '❌ Job Voucher Restriction',
+            description: `The **${capitalizeWords(data.jobName || '')}** job cannot be used with Job Vouchers.`,
+            fields: [
+                { name: 'Restricted Jobs', value: '• Shopkeeper\n• Stablehand\n• Merchant' },
+                { name: 'Why?', value: 'These jobs require permanent establishment and cannot be performed temporarily.' },
+                { name: 'Alternative', value: 'Choose a different job from the available list above.' }
+            ],
+            color: '#FF0000'
         }
     };
 

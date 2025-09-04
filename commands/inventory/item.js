@@ -235,6 +235,25 @@ module.exports = {
             });
           }
 
+          // Check if the job is restricted from job vouchers (even for mod characters)
+          const restrictedJobs = ['shopkeeper', 'stablehand', 'merchant'];
+          if (restrictedJobs.includes(jobName.toLowerCase())) {
+            return void await interaction.editReply({
+              embeds: [{
+                color: 0xFF0000,
+                title: '❌ Job Voucher Restriction',
+                description: `The **${capitalizeWords(jobName)}** job cannot be used with Job Vouchers.\n\n**Restricted Jobs:**\n• Shopkeeper\n• Stablehand\n• Merchant\n\n**Why?** These jobs require permanent establishment and cannot be performed temporarily.`,
+                image: {
+                  url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+                },
+                footer: {
+                  text: 'Job Voucher System'
+                }
+              }],
+              ephemeral: true
+            });
+          }
+
           // --- Location/Village validation for village-locked jobs ---
           if (jobPerkInfo.village) {
             const requiredVillage = jobPerkInfo.village.toLowerCase().trim();
@@ -431,6 +450,25 @@ module.exports = {
               },
               footer: {
                 text: 'Job Validation Error'
+              }
+            }],
+            ephemeral: true
+          });
+        }
+
+        // Check if the job is restricted from job vouchers
+        const restrictedJobs = ['shopkeeper', 'stablehand', 'merchant'];
+        if (restrictedJobs.includes(jobName.toLowerCase())) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0xFF0000,
+              title: '❌ Job Voucher Restriction',
+              description: `The **${capitalizeWords(jobName)}** job cannot be used with Job Vouchers.\n\n**Restricted Jobs:**\n• Shopkeeper\n• Stablehand\n• Merchant\n\n**Why?** These jobs require permanent establishment and cannot be performed temporarily.`,
+              image: {
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+              },
+              footer: {
+                text: 'Job Voucher System'
               }
             }],
             ephemeral: true
