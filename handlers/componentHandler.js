@@ -84,7 +84,7 @@ const GAME_CONFIG = {
   DICE_SIDES: 20,
   SESSION_DURATION_HOURS: 24,
   MAX_PLAYERS: 10,
-  ROLL_COOLDOWN_SECONDS: 10
+  ROLL_COOLDOWN_SECONDS: 15
 };
 
 const PRIZES = {
@@ -911,15 +911,15 @@ async function handleRuuGameRoll(interaction) {
           session.players.push(player);
         }
         
-        // Check cooldown BEFORE deferring
+        // Check global cooldown BEFORE deferring
         const now = new Date();
-        if (player.lastRollTime && (now - player.lastRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
-          const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - player.lastRollTime)) / 1000);
+        if (session.lastGlobalRollTime && (now - session.lastGlobalRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
+          const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - session.lastGlobalRollTime)) / 1000);
           
           try {
             // Send ephemeral cooldown message using reply
             await interaction.reply({
-              content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
+              content: `⏰ Please wait ${remainingSeconds} seconds before anyone can roll again.`,
               flags: 64
             });
           } catch (error) {
@@ -959,6 +959,7 @@ async function handleRuuGameRoll(interaction) {
         const roll = Math.floor(Math.random() * GAME_CONFIG.DICE_SIDES) + 1;
         player.lastRoll = roll;
         player.lastRollTime = now;
+        session.lastGlobalRollTime = now; // Set global cooldown for all players
 
         let gameEnded = false;
         let prizeCharacter = null; // Track which character received the prize
@@ -1128,7 +1129,8 @@ async function handleRuuGameRoll(interaction) {
             winningScore: session.winningScore,
             prizeClaimed: session.prizeClaimed,
             prizeClaimedBy: session.prizeClaimedBy,
-            prizeClaimedAt: session.prizeClaimedAt
+            prizeClaimedAt: session.prizeClaimedAt,
+            lastGlobalRollTime: session.lastGlobalRollTime
           };
           
           // Remove undefined values to prevent MongoDB errors
