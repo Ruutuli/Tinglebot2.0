@@ -76,6 +76,7 @@ const {
 const {
  createMonsterEncounterEmbed,
  createNoEncounterEmbed,
+ createBlightStage3NoEncounterEmbed,
  createKOEmbed,
 } = require("../../embeds/embeds.js");
 
@@ -877,7 +878,7 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
   // Check for blight stage 3 effect (no monsters)
   if (character.blightEffects?.noMonsters) {
     console.log(`[loot.js]: 🧿 Character ${character.name} has blight stage 3 - no monsters allowed`);
-    const embed = createNoEncounterEmbed(character, bloodMoonActive);
+    const embed = createBlightStage3NoEncounterEmbed(character, bloodMoonActive);
     await interaction.editReply({ embeds: [embed] });
     console.log(`[loot.js]: ✅ Blight stage 3 no encounter embed sent`);
     return null;

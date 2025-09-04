@@ -1521,6 +1521,49 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
  return embed;
 };
 
+// ------------------- Function: createBlightStage3NoEncounterEmbed -------------------
+// Creates a unique embed for when blight stage 3 characters encounter no monsters
+const createBlightStage3NoEncounterEmbed = (character, isBloodMoon = false) => {
+ const settings = getCommonEmbedSettings(character);
+ const locationPrefix = getLocationPrefix(character);
+ const villageImage = getVillageImage(character);
+
+ const embedColor = isBloodMoon
+  ? "#FF4500"
+  : character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase()
+  ? getVillageColorByName(character.currentVillage) || "#000000"
+  : settings.color || "#000000";
+
+ const embed = new EmbedBuilder()
+  .setColor(embedColor)
+  .setTitle(`${locationPrefix}: ${character.name} encountered no monsters.`)
+  .setAuthor({
+   name: `${character.name} 🔗`,
+   iconURL: settings.author?.iconURL,
+   url: settings.author?.url,
+  })
+  .addFields({
+   name: "🧿 __Blight Effect__",
+   value: `> Due to the advanced blight corruption within ${character.name}, the monsters seem to be avoiding them. The corruption has made them appear too dangerous or unpredictable for even the wildest creatures to approach.`,
+   inline: false,
+  })
+  .setFooter({
+   text: isBloodMoon
+    ? "🔴 The Blood Moon rises... but even the corrupted creatures keep their distance."
+    : character.jobVoucher && character.jobVoucherJob 
+    ? `🎫 No monsters encountered due to blight stage 3, job voucher for ${character.jobVoucherJob} remains active!`
+    : "The blight has made you too fearsome for monsters to approach.",
+  });
+
+ if (isValidImageUrl(villageImage)) {
+  embed.setImage(villageImage);
+ } else {
+  setDefaultImage(embed);
+ }
+
+ return embed;
+};
+
 // ------------------- Function: createKOEmbed -------------------
 // Creates an embed for when a character is knocked out
 const createKOEmbed = (character, customDescription = null) => {
@@ -2397,6 +2440,7 @@ module.exports = {
  createTradeEmbed,
  createMonsterEncounterEmbed,
  createNoEncounterEmbed,
+ createBlightStage3NoEncounterEmbed,
  createKOEmbed,
  createRaidKOEmbed,
  createHealEmbed,
