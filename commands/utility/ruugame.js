@@ -224,6 +224,22 @@ module.exports = {
       });
     }
     
+    // Check if game is already finished
+    if (session.status === 'finished') {
+      return await interaction.reply({
+        content: '❌ This game has already ended!',
+        flags: 64
+      });
+    }
+    
+    // Additional check: if there's already a winner, don't allow more rolls
+    if (session.winner && session.winner !== null) {
+      return await interaction.reply({
+        content: '❌ This game already has a winner!',
+        flags: 64
+      });
+    }
+    
     // Find player in the game or auto-join them
     let player = session.players.find(p => p.discordId === userId);
     if (!player) {
@@ -275,33 +291,76 @@ module.exports = {
       gameEnded = true;
 
       // STEP 1: Persist winner state to database BEFORE awarding prize
-      try {
-        const winnerPersist = await RuuGame.findOneAndUpdate(
-          {
-            _id: session._id,
-            status: { $ne: 'finished' },
-            winner: null
-          },
-          {
-            $set: {
-              status: 'finished',
-              winner: userId,
-              winningScore: roll,
-              players: session.players
+      let winnerPersisted = false;
+      let persistRetryCount = 0;
+      const maxPersistRetries = 3;
+      
+      while (!winnerPersisted && persistRetryCount < maxPersistRetries) {
+        try {
+          const winnerPersist = await RuuGame.findOneAndUpdate(
+            {
+              _id: session._id,
+              __v: session.__v,
+              status: { $ne: 'finished' },
+              winner: null
+            },
+            {
+              $set: {
+                status: 'finished',
+                winner: userId,
+                winningScore: roll,
+                players: session.players
+              },
+              $inc: { __v: 1 }
+            },
+            { new: true, runValidators: true }
+          );
+
+          if (winnerPersist) {
+            session = winnerPersist;
+            winnerPersisted = true;
+            console.log(`[RuuGame] Winner state persisted - Session status: ${session.status}, winner: ${session.winner}`);
+          } else {
+            // Check if another process already finished the game
+            const latestSession = await RuuGame.findById(session._id);
+            if (latestSession && latestSession.status === 'finished') {
+              session = latestSession;
+              winnerPersisted = true;
+              console.log(`[RuuGame] Session already finished by another process - Status: ${session.status}, winner: ${session.winner}`);
+            } else {
+              // Version conflict or other issue - retry
+              persistRetryCount++;
+              console.log(`[RuuGame] Winner persistence failed, retry ${persistRetryCount}/${maxPersistRetries}`);
+              if (persistRetryCount < maxPersistRetries) {
+                // Reload session to get latest version
+                session = await RuuGame.findById(session._id);
+                await new Promise(resolve => setTimeout(resolve, 100 * persistRetryCount));
+              }
             }
-          },
-          { new: true, runValidators: true }
-        );
-        if (winnerPersist) {
-          session = winnerPersist;
-          console.log(`[RuuGame] Winner state persisted - Session status: ${session.status}, winner: ${session.winner}`);
+          }
+        } catch (persistError) {
+          console.error(`[RuuGame] Failed to persist winner (attempt ${persistRetryCount + 1}):`, persistError);
+          persistRetryCount++;
+          if (persistRetryCount < maxPersistRetries) {
+            // Reload session to get latest version
+            session = await RuuGame.findById(session._id);
+            await new Promise(resolve => setTimeout(resolve, 100 * persistRetryCount));
+          }
         }
-        
-        // Double-check the session state before proceeding
-        console.log(`[RuuGame] Session state before prize awarding - Status: ${session.status}, winner: ${session.winner}`);
-      } catch (persistError) {
-        console.error('[RuuGame] Failed to persist winner immediately:', persistError);
       }
+      
+      // If we couldn't persist the winner after all retries, abort the game
+      if (!winnerPersisted) {
+        console.error('[RuuGame] Failed to persist winner after all retries - aborting game');
+        await interaction.reply({
+          content: '❌ Error: Could not properly end the game. Please contact an administrator.',
+          components: []
+        });
+        return;
+      }
+      
+      // Double-check the session state before proceeding
+      console.log(`[RuuGame] Session state before prize awarding - Status: ${session.status}, winner: ${session.winner}`);
 
       // STEP 2: Award prize AFTER winner state is persisted
       try {
