@@ -895,6 +895,18 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         isUserObject = character.discordId && !character.name;
         isCharacterObject = character.name;
         
+        // Debug logging for character object validation
+        console.log(`[googleSheetsUtils.js]: 🔍 Character validation debug:`, {
+            hasName: !!character.name,
+            hasDiscordId: !!character.discordId,
+            hasUserId: !!character.userId,
+            hasInventory: !!character.inventory,
+            isUserObject,
+            isCharacterObject,
+            characterName: character.name,
+            characterType: character.constructor?.name || 'Unknown'
+        });
+        
         if (!isUserObject && !isCharacterObject) {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid object type - neither User nor Character:`, character);
             return;

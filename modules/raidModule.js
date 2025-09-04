@@ -103,24 +103,27 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       };
     } else {
       // Use the encounter module's tier-specific logic for non-dragon characters
+      // Create a copy of the monster to avoid modifying the shared raid monster object
+      const monsterCopy = { ...monster };
+      
       switch (monster.tier) {
       case 5:
-        outcome = await getTier5EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        outcome = await getTier5EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
         break;
       case 6:
-        outcome = await getTier6EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        outcome = await getTier6EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
         break;
       case 7:
-        outcome = await getTier7EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        outcome = await getTier7EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
         break;
       case 8:
-        outcome = await getTier8EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        outcome = await getTier8EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
         break;
       case 9:
-        outcome = await getTier9EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        outcome = await getTier9EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
         break;
       case 10:
-        outcome = await getTier10EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        outcome = await getTier10EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
         break;
       default:
         throw new Error(`Unsupported monster tier for raid: ${monster.tier}`);
@@ -375,7 +378,14 @@ async function joinRaid(character, raidId) {
     };
 
     // Add participant to raid using the model method
-    await raid.addParticipant(participant);
+    try {
+      await raid.addParticipant(participant);
+    } catch (error) {
+      if (error.message === 'User already has a character in this raid') {
+        throw new Error('You already have a character participating in this raid');
+      }
+      throw error; // Re-throw other errors
+    }
 
     // ----- Dynamic HP scaling based on party size (starts at 5+ participants) -----
     try {
@@ -469,7 +479,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     const partyPenalty = Math.max(0, (partySize - 1) * 1);
     const tierPenalty = Math.max(0, ((raid.monster?.tier || 5) - 5) * 0.5);
     const totalPenalty = Math.min(15, partyPenalty + tierPenalty);
-    diceRoll = Math.max(1, diceRoll - totalPenalty);
+    diceRoll = Math.max(1, Math.floor(diceRoll - totalPenalty));
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateRaidFinalValue(character, diceRoll);
 
     // Capture character hearts before battle

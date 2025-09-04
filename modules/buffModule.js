@@ -230,13 +230,14 @@ const applyRaidBuffs = (randomValue, attackSuccess, defenseSuccess, attackStat, 
   // In raids, if equipment exists, it always provides its benefit
   if (attackSuccess && attackStat > 0) {
     // Slightly stronger than previous nerf to ease difficulty
-    adjustedRandomValue += attackStat * 1.8;
+    adjustedRandomValue += Math.floor(attackStat * 1.8);
   }
 
   if (defenseSuccess && defenseStat > 0) {
     // Slightly stronger than previous nerf to ease difficulty
-    adjustedRandomValue += defenseStat * 0.7;
-    console.log(`[buffModule.js]: 🛡️ Raid armor bonus applied: +${defenseStat * 0.7} (${defenseStat} defense)`);
+    const defenseBonus = Math.floor(defenseStat * 0.7);
+    adjustedRandomValue += defenseBonus;
+    console.log(`[buffModule.js]: 🛡️ Raid armor bonus applied: +${defenseBonus} (${defenseStat} defense)`);
   }
 
   // Ensure the final adjusted value is between 1 and 100
