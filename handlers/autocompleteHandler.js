@@ -424,6 +424,13 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             }
             break;
 
+          // ------------------- Minigame Command -------------------
+          case "minigame":
+            if (focusedOption.name === "character") {
+              await handleMinigameCharacterAutocomplete(interaction, focusedOption);
+            }
+            break;
+
           // ------------------- Special Weather Command -------------------
           case "specialweather":
             if (focusedOption.name === "charactername") {
@@ -3362,6 +3369,33 @@ async function handleMountAutocomplete(interaction, focusedOption) {
  }
 }
 
+// ------------------- Minigame Character Autocomplete -------------------
+// Provides autocomplete suggestions for characters in minigame commands.
+async function handleMinigameCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    
+    const choices = characters
+      .filter((character) => {
+        // Include all characters for minigame participation
+        return true;
+      })
+      .map((character) => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error(
+      "[handleMinigameCharacterAutocomplete]: Error handling minigame character autocomplete:",
+      error
+    );
+    await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Mount Name Autocomplete -------------------
 // Provides autocomplete suggestions for mounts owned by a specific character.
 async function handleMountNameAutocomplete(interaction, focusedOption) {
@@ -4818,6 +4852,10 @@ handleBlightOverrideTargetAutocomplete,
  // ------------------- Mount/Stable Functions -------------------
  handleMountAutocomplete,
  handleMountNameAutocomplete,
+ 
+ // ------------------- Minigame Functions -------------------
+ handleMinigameCharacterAutocomplete,
+ 
  handleStableCharacterAutocomplete,
  handleStableMountNameAutocomplete,
  handleStablePetNameAutocomplete,

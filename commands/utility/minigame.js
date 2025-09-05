@@ -65,16 +65,15 @@ module.exports = {
             .setRequired(true)
         )
         .addStringOption(option =>
+          option.setName('character')
+            .setDescription('Character name - required for signup, join, and roll actions')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
+        .addStringOption(option =>
           option.setName('target')
             .setDescription('Target alien (e.g., A1, B2) - only needed for roll action')
             .setRequired(false)
-        )
-        .addIntegerOption(option =>
-          option.setName('roll')
-            .setDescription('Your defense roll (1-6) - only needed for roll action')
-            .setRequired(false)
-            .setMinValue(1)
-            .setMaxValue(6)
         )
     ),
 
@@ -122,25 +121,26 @@ module.exports = {
     }
   },
 
+
   // ============================================================================
   // ------------------- They Came for the Cows Handler -------------------
   // ============================================================================
   async handleTheyCame(interaction) {
     const action = interaction.options.getString('action');
     const sessionId = interaction.options.getString('session_id');
+    const characterName = interaction.options.getString('character');
     const target = interaction.options.getString('target');
-    const roll = interaction.options.getInteger('roll');
     
     try {
       switch (action) {
         case 'signup':
-          await this.handleSignUp(interaction);
+          await this.handleSignUp(interaction, characterName);
           break;
         case 'join':
-          await this.handleJoin(interaction);
+          await this.handleJoin(interaction, characterName);
           break;
         case 'roll':
-          await this.handleRoll(interaction, target, roll);
+          await this.handleRoll(interaction, characterName, target);
           break;
         case 'status':
           await this.handleStatus(interaction);
@@ -162,10 +162,35 @@ module.exports = {
   // ============================================================================
   // ------------------- Sign Up Handler -------------------
   // ============================================================================
-  async handleSignUp(interaction) {
+  async handleSignUp(interaction, characterName) {
     const sessionId = interaction.options.getString('session_id');
     const userId = interaction.user.id;
-    const username = interaction.user.username;
+    
+    // Validate character name
+    if (!characterName) {
+      return await interaction.reply({
+        content: '❌ Please specify a character name for signup.',
+        flags: 64
+      });
+    }
+    
+    // Fetch character
+    const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('../../database/db');
+    let character = await fetchCharacterByNameAndUserId(characterName, userId);
+    
+    // If not found as regular character, try as mod character
+    if (!character) {
+      character = await fetchModCharacterByNameAndUserId(characterName, userId);
+    }
+    
+    if (!character) {
+      return await interaction.reply({
+        content: `❌ Character "${characterName}" not found or does not belong to you.`,
+        flags: 64
+      });
+    }
+    
+    const username = character.name;
     
     // Find the specific session
     const session = await Minigame.findOne({
@@ -187,16 +212,21 @@ module.exports = {
     
     if (result.success) {
       // Also add to players list if not already there
-      const alreadyJoined = session.players.find(p => p.discordId === userId);
+      const alreadyJoined = session.players.find(p => p.characterId === character._id.toString());
       if (!alreadyJoined) {
         session.players.push({
           discordId: userId,
-          username: username,
+          characterName: character.name,
+          characterId: character._id.toString(),
+          isModCharacter: character.isModCharacter || false,
           joinedAt: new Date()
         });
       }
       
       await session.save();
+      
+      // Update the game message
+      await this.updateGameMessage(interaction, session);
       
       await interaction.reply({
         content: result.message,
@@ -213,10 +243,35 @@ module.exports = {
   // ============================================================================
   // ------------------- Join Game Handler -------------------
   // ============================================================================
-  async handleJoin(interaction) {
+  async handleJoin(interaction, characterName) {
     const sessionId = interaction.options.getString('session_id');
     const userId = interaction.user.id;
-    const username = interaction.user.username;
+    
+    // Validate character name
+    if (!characterName) {
+      return await interaction.reply({
+        content: '❌ Please specify a character name to join.',
+        flags: 64
+      });
+    }
+    
+    // Fetch character
+    const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('../../database/db');
+    let character = await fetchCharacterByNameAndUserId(characterName, userId);
+    
+    // If not found as regular character, try as mod character
+    if (!character) {
+      character = await fetchModCharacterByNameAndUserId(characterName, userId);
+    }
+    
+    if (!character) {
+      return await interaction.reply({
+        content: `❌ Character "${characterName}" not found or does not belong to you.`,
+        flags: 64
+      });
+    }
+    
+    const username = character.name;
     
     // Find the specific session
     const session = await Minigame.findOne({
@@ -233,26 +288,31 @@ module.exports = {
       });
     }
     
-    // Check if player already joined
-    const alreadyJoined = session.players.find(p => p.discordId === userId);
+    // Check if character already joined
+    const alreadyJoined = session.players.find(p => p.characterId === character._id.toString());
     if (alreadyJoined) {
       return await interaction.reply({
-        content: '✅ You\'re already in the game!',
+        content: `✅ **${character.name}** is already in the game!`,
         flags: 64
       });
     }
     
-    // Add player to game
+    // Add character to game
     session.players.push({
       discordId: userId,
-      username: username,
+      characterName: character.name,
+      characterId: character._id.toString(),
+      isModCharacter: character.isModCharacter || false,
       joinedAt: new Date()
     });
     
     await session.save();
     
+    // Update the game message
+    await this.updateGameMessage(interaction, session);
+    
     await interaction.reply({
-      content: `🎮 **${username}** joined the alien defense!`,
+      content: `🎮 **${character.name}** joined the alien defense!`,
       flags: 64
     });
   },
@@ -260,17 +320,45 @@ module.exports = {
   // ============================================================================
   // ------------------- Roll Defense Handler -------------------
   // ============================================================================
-  async handleRoll(interaction, target, roll) {
+  async handleRoll(interaction, characterName, target) {
     const sessionId = interaction.options.getString('session_id');
     const userId = interaction.user.id;
-    const username = interaction.user.username;
     
-    if (!target || !roll) {
+    // Validate character name
+    if (!characterName) {
       return await interaction.reply({
-        content: '❌ Please specify both target alien (e.g., A1) and your roll (1-6).',
+        content: '❌ Please specify a character name to roll.',
         flags: 64
       });
     }
+    
+    // Fetch character
+    const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('../../database/db');
+    let character = await fetchCharacterByNameAndUserId(characterName, userId);
+    
+    // If not found as regular character, try as mod character
+    if (!character) {
+      character = await fetchModCharacterByNameAndUserId(characterName, userId);
+    }
+    
+    if (!character) {
+      return await interaction.reply({
+        content: `❌ Character "${characterName}" not found or does not belong to you.`,
+        flags: 64
+      });
+    }
+    
+    const username = character.name;
+    
+    if (!target) {
+      return await interaction.reply({
+        content: '❌ Please specify target alien (e.g., A1).',
+        flags: 64
+      });
+    }
+    
+    // Generate random roll (1-6)
+    const roll = Math.floor(Math.random() * 6) + 1;
     
     // Find the specific session
     const session = await Minigame.findOne({
@@ -287,11 +375,11 @@ module.exports = {
       });
     }
     
-    // Check if player is in the game
-    const player = session.players.find(p => p.discordId === userId);
+    // Check if character is in the game
+    const player = session.players.find(p => p.characterId === character._id.toString());
     if (!player) {
       return await interaction.reply({
-        content: '❌ You need to join the game first! Use `/minigame join session_id:' + sessionId + '`',
+        content: `❌ **${character.name}** needs to join the game first! Use \`/minigame theycame action:join session_id:${sessionId} character:${character.name}\``,
         flags: 64
       });
     }
@@ -310,10 +398,12 @@ module.exports = {
       
       await session.save();
       
-      const embed = await this.createMinigameEmbed(session, 'Defense Roll!');
+      // Update the game message
+      await this.updateGameMessage(interaction, session);
+      
       await interaction.reply({
         content: result.message,
-        embeds: [embed]
+        flags: 64
       });
     } else {
       await interaction.reply({
@@ -354,47 +444,71 @@ module.exports = {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     
+    // Create player list with character names
+    const playerList = session.players.length > 0 
+      ? session.players.map(p => `• **${p.characterName}**`).join('\n')
+      : '*No defenders joined yet*';
+    
+    // Create alien status with better formatting
+    const alienStatus = `**Outer Ring:** ${status.ringStatus.outerRing} aliens\n**Middle Ring:** ${status.ringStatus.middleRing} aliens\n**Inner Ring:** ${status.ringStatus.innerRing} aliens`;
+    
     const embed = new EmbedBuilder()
       .setTitle(`👽 ${gameConfig.name} - ${title}`)
-      .setDescription(gameConfig.description)
+      .setDescription('*Defend your village from alien invaders! Work together to protect the livestock.*')
       .setColor(this.getGameStatusColor(session.status))
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setTimestamp();
     
-    // Game progress
+    // Game progress and status
     embed.addFields(
-      { name: '📊 Game Progress', value: status.gameProgress, inline: true },
-      { name: '👥 Players', value: session.players.length.toString(), inline: true },
-      { name: '🐄 Animals Saved', value: status.villageAnimals.toString(), inline: true }
+      { 
+        name: '📊 Game Progress', 
+        value: `**Round:** ${status.gameProgress}\n**Status:** ${session.status === 'waiting' ? '⏳ Waiting for players' : session.status === 'active' ? '⚔️ In Progress' : '🏁 Finished'}`, 
+        inline: true 
+      },
+      { 
+        name: '👥 Defenders', 
+        value: `**Count:** ${session.players.length}\n**Characters:**\n${playerList}`, 
+        inline: true 
+      },
+      { 
+        name: '🐄 Village Status', 
+        value: `**Animals Saved:** ${status.villageAnimals}/25\n**Animals Lost:** ${status.animalsLost}\n**Defeated Aliens:** ${status.defeatedAliens}`, 
+        inline: true 
+      }
     );
     
     // Turn order info
     if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
       const turnOrderText = session.gameData.turnOrder.map((player, index) => 
-        `${index + 1}. ${player.username}${index === session.gameData.currentTurnIndex ? ' ⬅️' : ''}`
+        `${index + 1}. **${player.username}**${index === session.gameData.currentTurnIndex ? ' ⬅️ *Current Turn*' : ''}`
       ).join('\n');
       embed.addFields(
-        { name: '🔄 Turn Order', value: turnOrderText || 'No players signed up', inline: false }
+        { name: '🔄 Turn Order', value: turnOrderText, inline: false }
       );
     }
     
-    // Alien status
+    // Alien threat
     embed.addFields(
-      { name: '👾 Active Aliens', value: `Outer: ${status.ringStatus.outerRing} | Middle: ${status.ringStatus.middleRing} | Inner: ${status.ringStatus.innerRing}`, inline: false },
-      { name: '💀 Defeated Aliens', value: status.defeatedAliens.toString(), inline: true },
-      { name: '🚨 Animals Lost', value: status.animalsLost.toString(), inline: true }
+      { name: '👾 Alien Threat', value: alienStatus, inline: false }
     );
     
     // Game info
     embed.addFields(
-      { name: '🎯 Session ID', value: session.sessionId, inline: true },
-      { name: '⏰ Expires', value: `<t:${Math.floor(session.expiresAt.getTime() / 1000)}:R>`, inline: true }
+      { 
+        name: '🎯 Game Info', 
+        value: `**Session ID:** \`${session.sessionId}\`\n**Expires:** <t:${Math.floor(session.expiresAt.getTime() / 1000)}:R>`, 
+        inline: false 
+      }
     );
     
     if (session.status === 'finished') {
       embed.addFields(
-        { name: '🏁 Game Result', value: `Final Score: ${session.results.finalScore} animals saved!`, inline: false }
+        { name: '🏁 Game Result', value: `**Final Score:** ${session.results.finalScore} animals saved!`, inline: false }
       );
     }
+    
+    embed.setFooter({ text: '🎮 Use /minigame commands to participate! • Good luck defending your village!' });
     
     return embed;
   },
