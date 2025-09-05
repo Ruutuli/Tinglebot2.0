@@ -19,6 +19,24 @@ function initializeErrorHandler(trelloLoggerFunction, discordClient) {
   client = discordClient;
 }
 
+// ------------------- Error Response Types -------------------
+const ERROR_RESPONSE_TYPES = {
+  INTERACTION_REPLY: 'interaction_reply',
+  INTERACTION_FOLLOWUP: 'interaction_followup',
+  CONSOLE_ONLY: 'console_only',
+  RETURN_ERROR: 'return_error',
+  THROW_ERROR: 'throw_error'
+};
+
+// ------------------- Standard Error Context -------------------
+function createErrorContext(source, context = {}) {
+  return {
+    source: source || 'Unknown Source',
+    timestamp: new Date().toISOString(),
+    ...context
+  };
+}
+
 // ------------------- Handle Errors -------------------
 // Captures, formats, and sends errors to both Trello and Discord.
 async function handleError(error, source = "Unknown Source", context = {}) {
@@ -119,7 +137,91 @@ Error: ${message}
   }
 }
 
+// ------------------- Unified Error Handler for Interactions -------------------
+async function handleInteractionError(error, interaction, context = {}) {
+  const errorContext = createErrorContext(context.source || 'interaction', {
+    commandName: context.commandName || interaction?.commandName || 'unknown',
+    userTag: interaction?.user?.tag || 'unknown',
+    userId: interaction?.user?.id || 'unknown',
+    ...context
+  });
+
+  // Log error with global handler
+  await handleError(error, errorContext.source, errorContext);
+
+  // Determine response type
+  const responseType = context.responseType || ERROR_RESPONSE_TYPES.INTERACTION_REPLY;
+  const errorMessage = context.errorMessage || '❌ **An error occurred while processing your request. Please try again later.**';
+
+  try {
+    switch (responseType) {
+      case ERROR_RESPONSE_TYPES.INTERACTION_REPLY:
+        if (!interaction.replied && !interaction.deferred) {
+          return await interaction.reply({ content: errorMessage, ephemeral: true });
+        }
+        break;
+      
+      case ERROR_RESPONSE_TYPES.INTERACTION_FOLLOWUP:
+        if (interaction.replied || interaction.deferred) {
+          return await interaction.followUp({ content: errorMessage, ephemeral: true });
+        }
+        break;
+      
+      case ERROR_RESPONSE_TYPES.CONSOLE_ONLY:
+        // Only log, no user response
+        return;
+      
+      case ERROR_RESPONSE_TYPES.RETURN_ERROR:
+        return { success: false, error: error.message };
+      
+      case ERROR_RESPONSE_TYPES.THROW_ERROR:
+        throw error;
+    }
+  } catch (replyError) {
+    console.error(`[globalErrorHandler]: Failed to send error response:`, replyError);
+  }
+}
+
+// ------------------- Unified Error Handler for Async Functions -------------------
+async function handleAsyncError(error, source, context = {}) {
+  const errorContext = createErrorContext(source, context);
+  
+  // Log error with global handler
+  await handleError(error, errorContext.source, errorContext);
+
+  // Determine response type
+  const responseType = context.responseType || ERROR_RESPONSE_TYPES.CONSOLE_ONLY;
+
+  switch (responseType) {
+    case ERROR_RESPONSE_TYPES.RETURN_ERROR:
+      return { success: false, error: error.message };
+    
+    case ERROR_RESPONSE_TYPES.THROW_ERROR:
+      throw error;
+    
+    case ERROR_RESPONSE_TYPES.CONSOLE_ONLY:
+    default:
+      return { success: false, error: error.message };
+  }
+}
+
+// ------------------- Safe Async Wrapper -------------------
+function safeAsync(fn, context = {}) {
+  return async (...args) => {
+    try {
+      return await fn(...args);
+    } catch (error) {
+      return await handleAsyncError(error, context.source || fn.name, context);
+    }
+  };
+}
+
 module.exports = {
-  initializeErrorHandler,
-  handleError
+  handleError,
+  handleInteractionError,
+  handleAsyncError,
+  safeAsync,
+  createErrorContext,
+  ERROR_RESPONSE_TYPES,
+  initializeErrorHandler
 };

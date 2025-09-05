@@ -645,6 +645,28 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             }
             break;
 
+          // ------------------- Quest Command -------------------
+          case "quest":
+            if (interaction.options._subcommand) {
+              const questSubcommand = interaction.options.getSubcommand();
+              if (questSubcommand === "join") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "charactername") {
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "quest");
+                }
+              } else if (questSubcommand === "leave") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption);
+                }
+              } else if (questSubcommand === "postcount") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption);
+                }
+              }
+            }
+            break;
+
           // ------------------- Mod Character Command -------------------
           // Note: ModCharacter autocomplete is handled locally in the command file
           break;
@@ -3831,7 +3853,7 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
 // ------------------- Steal Rarity Autocomplete -------------------
 async function handleStealRarityAutocomplete(interaction, focusedOption) {
     try {
-        const choices = ['common', 'uncommon', 'rare'];
+        const choices = ['common', 'uncommon'];
         const filtered = choices.filter((choice) =>
             choice.toLowerCase().startsWith(focusedOption.value.toLowerCase())
         ).slice(0, 25); // Limit to 25 choices

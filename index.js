@@ -458,6 +458,24 @@ async function initializeClient() {
     });
 
     // --------------------------------------------------------------------------
+    // RP Quest Post Tracking
+    // --------------------------------------------------------------------------
+    client.on("messageCreate", async (message) => {
+      if (message.author.bot) return;
+      if (!message.guild) return;
+      
+      // Check if this is an RP thread
+      if (message.channel.isThread()) {
+        try {
+          const { handleRPPostTracking } = require('./modules/rpQuestTrackingModule');
+          await handleRPPostTracking(message);
+        } catch (error) {
+          console.error("[index.js]: Error tracking RP post:", error);
+        }
+      }
+    });
+
+    // --------------------------------------------------------------------------
     // Raid Thread Slow Mode Management
     // --------------------------------------------------------------------------
     // Enable slow mode on raid threads when they're created

@@ -293,6 +293,16 @@ async function checkAndPostWeatherOnRestart(client) {
  try {
   console.log(`[scheduler.js]: 🔄 Starting weather check on bot restart`);
   
+  // Check if it's 8 AM or later - only generate weather after 8 AM
+  const now = new Date();
+  const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const currentHour = estTime.getHours();
+  
+  if (currentHour < 8) {
+   console.log(`[scheduler.js]: ⏰ Current time is ${currentHour}:00 EST - weather generation only happens at 8 AM EST. Skipping weather generation.`);
+   return;
+  }
+  
   const villages = Object.keys(TOWNHALL_CHANNELS);
   let postedCount = 0;
   let checkedCount = 0;
@@ -845,14 +855,16 @@ async function setupBoostingScheduler(client) {
 // ============================================================================
 
 function setupWeatherScheduler(client) {
- // Primary weather update at 8:00am EST
+ // Primary weather update at 8:00am EST (1:00pm UTC during EST, 12:00pm UTC during EDT)
  createCronJob("0 8 * * *", "Daily Weather Update", () =>
-  postWeatherUpdate(client)
+  postWeatherUpdate(client),
+  "America/New_York"
  );
  
  // Backup weather check at 8:15am EST to ensure weather was posted
  createCronJob("15 8 * * *", "Backup Weather Check", () =>
-  checkAndPostWeatherIfNeeded(client)
+  checkAndPostWeatherIfNeeded(client),
+  "America/New_York"
  );
 }
 
@@ -932,6 +944,59 @@ async function handleQuestExpirationAtMidnight(client = null) {
       commandName: 'handleQuestExpirationAtMidnight'
     });
     console.error('[scheduler.js]: ❌ Error during quest expiration check:', error);
+  }
+}
+
+// ============================================================================
+// ------------------- Function: checkQuestCompletions -------------------
+// Checks all active quests for completion using unified system
+// ============================================================================
+async function checkQuestCompletions(client) {
+  try {
+    console.log('[scheduler.js]: 🔍 Checking quest completions...');
+    
+    const Quest = require('./models/QuestModel');
+    const questRewardModule = require('./modules/questRewardModule');
+    
+    const activeQuests = await Quest.find({ status: 'active' });
+    
+    if (activeQuests.length === 0) {
+      console.log('[scheduler.js]: ✅ No active quests to check');
+      return;
+    }
+    
+    console.log(`[scheduler.js]: 📋 Found ${activeQuests.length} active quests to check`);
+    
+    let completedCount = 0;
+    let processedCount = 0;
+    
+    for (const quest of activeQuests) {
+      try {
+        const completionResult = await quest.checkAutoCompletion();
+        
+        if (completionResult.completed) {
+          completedCount++;
+          console.log(`[scheduler.js]: ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
+          
+          // Distribute rewards if quest was completed
+          if (completionResult.reason === 'all_participants_completed' || completionResult.reason === 'time_expired') {
+            await questRewardModule.processQuestCompletion(quest.questID);
+          }
+        }
+        
+        processedCount++;
+      } catch (error) {
+        console.error(`[scheduler.js]: ❌ Error checking quest ${quest.questID}:`, error);
+      }
+    }
+    
+    console.log(`[scheduler.js]: ✅ Quest completion check finished - ${completedCount} completed, ${processedCount} processed`);
+    
+  } catch (error) {
+    handleError(error, 'scheduler.js', {
+      commandName: 'checkQuestCompletions'
+    });
+    console.error('[scheduler.js]: ❌ Error during quest completion check:', error);
   }
 }
 
@@ -1289,6 +1354,10 @@ function initializeScheduler(client) {
 
  createCronJob("0 0 * * *", "quest expiration check", () =>
   handleQuestExpirationAtMidnight(client)
+ );
+
+ createCronJob("0 */6 * * *", "quest completion check", () =>
+  checkQuestCompletions(client)
  );
 
  // Monthly quest posting - 1st of each month at 12:00 AM EST (5:00 AM UTC) - DISABLED

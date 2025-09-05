@@ -1,23 +1,40 @@
-// ------------------- Import Necessary Libraries -------------------
+// ============================================================================
+// ------------------- Imports & Dependencies -------------------
+// ============================================================================
+
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../utils/globalErrorHandler');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
-const { authorizeSheets, writeSheetData }= require('../utils/googleSheetsUtils'); 
+const { authorizeSheets, writeSheetData } = require('../utils/googleSheetsUtils'); 
 const Quest = require('../models/QuestModel');
+const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
-// ------------------- Discord Bot Setup -------------------
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
-const QUEST_CHANNEL_ID = '1305486549252706335';
+// ============================================================================
+// ------------------- Configuration & Constants -------------------
+// ============================================================================
 
-// ------------------- Google Sheets API Setup -------------------
+const QUEST_CHANNEL_ID = process.env.TEST_CHANNEL_ID || '1305486549252706335';
 const SHEET_ID = '1M106nBghmgng9xigxkVpUXuKIF60QXXKiAERlG1a0Gs';
+const MOD_CHANNEL_ID = '795747760691216384';
+const MOD_ROLE_ID = '606128760655183882';
 
-// Load service account credentials
+// ============================================================================
+// ------------------- Discord Bot Setup -------------------
+// ============================================================================
+
+const client = new Client({ 
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
+});
+
+// ============================================================================
+// ------------------- Google Sheets API Setup -------------------
+// ============================================================================
+
 let serviceAccount;
+
 if (process.env.RAILWAY_ENVIRONMENT) {
-    // Create service account object from environment variables
     serviceAccount = {
         type: "service_account",
         project_id: process.env.GOOGLE_PROJECT_ID,
@@ -32,10 +49,9 @@ if (process.env.RAILWAY_ENVIRONMENT) {
         universe_domain: "googleapis.com"
     };
 } else {
-    // Local environment - read from file
     const SERVICE_ACCOUNT_PATH = path.join(__dirname, '../config/service_account.json');
     if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-        console.error('[ERROR]: Service account file not found at', SERVICE_ACCOUNT_PATH);
+        console.error('[questAnnouncements.js] ❌ Service account file not found at', SERVICE_ACCOUNT_PATH);
         process.exit(1);
     }
     serviceAccount = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'));
@@ -51,309 +67,748 @@ const sheets = google.sheets({
     )
 });
 
-// ------------------- Function to Fetch Quest Data -------------------
+// ============================================================================
+// ------------------- Utility Functions -------------------
+// ============================================================================
+
+// ------------------- parseTokenReward -
+function parseTokenReward(tokenReward) {
+    if (!tokenReward || tokenReward === 'N/A') return 0;
+    if (typeof tokenReward === 'number') return Math.max(0, tokenReward);
+    
+    const parsed = parseFloat(tokenReward);
+    if (!isNaN(parsed)) return Math.max(0, parsed);
+    
+    if (tokenReward.toLowerCase().includes('no reward') || 
+        tokenReward.toLowerCase().includes('none')) {
+        return 0;
+    }
+    
+    return 0;
+}
+
+// ------------------- appendBotNote -
+function appendBotNote(note, msg) {
+    const now = new Date().toISOString();
+    return (note ? `${note}\n` : '') + `[${now}] ${msg}`;
+}
+
+// ============================================================================
+// ------------------- Module Exports -------------------
+// ============================================================================
+
+module.exports = {
+    postQuests,
+    appendBotNote
+};
+
+
+// ============================================================================
+// ------------------- Column Mapping Configuration -------------------
+// ============================================================================
+
+const COLUMN_MAPPING = {
+    TITLE: 0,                    // A - Title
+    DESCRIPTION: 1,              // B - Description
+    RULES: 2,                    // C - Rules
+    DATE: 3,                     // D - Date
+    QUEST_TYPE: 4,               // E - Quest Type
+    LOCATION: 5,                 // F - Location
+    TIME_LIMIT: 6,               // G - Time Limit
+    SIGNUP_DEADLINE: 7,          // H - Signup Deadline
+    PARTICIPANT_CAP: 8,          // I - Participant Cap
+    POST_REQUIREMENT: 9,         // J - Post Requirement
+    MIN_REQUIREMENTS: 10,        // K - Min Requirements
+    TOKEN_REWARD: 11,            // L - Token Reward
+    ITEM_REWARD_QTY: 12,         // M - Item Reward: Qty
+    RP_THREAD_PARENT_CHANNEL: 13, // N - RP Thread Parent Channel
+    COLLAB: 14,                  // O - Collab
+    QUEST_ID: 15,                // P - Quest ID
+    STATUS: 16,                  // Q - Status
+    POSTED: 17,                  // R - Posted
+    POSTED_AT: 18,               // S - Posted At
+    BOT_NOTES: 19                // T - Bot Notes
+};
+
+// ============================================================================
+// ------------------- Data Processing Functions -------------------
+// ============================================================================
+
+// ------------------- validateSheetData -
+function validateSheetData(questData) {
+    if (!Array.isArray(questData) || questData.length === 0) {
+        throw new Error('No quest data found');
+    }
+    
+    const expectedColumns = Object.keys(COLUMN_MAPPING).length;
+    const invalidRows = questData.filter((row, index) => {
+        if (!Array.isArray(row) || row.length < expectedColumns) {
+            console.warn(`[questAnnouncements.js] ⚠️ Row ${index + 2}: Expected ${expectedColumns} columns, got ${row.length}`);
+            return true;
+        }
+        return false;
+    });
+    
+    if (invalidRows.length > 0) {
+        console.warn(`[questAnnouncements.js] ⚠️ Found ${invalidRows.length} rows with invalid column count`);
+    }
+    
+    return questData;
+}
+
+// ------------------- parseQuestRow -
+function parseQuestRow(questRow) {
+    const defaults = new Array(20).fill(null);
+    const paddedRow = [...questRow, ...defaults].slice(0, 20);
+    
+    return {
+        title: paddedRow[COLUMN_MAPPING.TITLE] || 'Untitled Quest',
+        description: paddedRow[COLUMN_MAPPING.DESCRIPTION] || 'No description',
+        rules: paddedRow[COLUMN_MAPPING.RULES] || null,
+        date: paddedRow[COLUMN_MAPPING.DATE] || new Date().toISOString(),
+        questType: paddedRow[COLUMN_MAPPING.QUEST_TYPE] || 'General',
+        location: paddedRow[COLUMN_MAPPING.LOCATION] || 'Unknown',
+        timeLimit: paddedRow[COLUMN_MAPPING.TIME_LIMIT] || 'No time limit',
+        signupDeadline: paddedRow[COLUMN_MAPPING.SIGNUP_DEADLINE] || null,
+        participantCap: paddedRow[COLUMN_MAPPING.PARTICIPANT_CAP] || null,
+        postRequirement: paddedRow[COLUMN_MAPPING.POST_REQUIREMENT] || null,
+        minRequirements: paddedRow[COLUMN_MAPPING.MIN_REQUIREMENTS] || 0,
+        tokenReward: paddedRow[COLUMN_MAPPING.TOKEN_REWARD] || 'No reward',
+        itemReward: paddedRow[COLUMN_MAPPING.ITEM_REWARD_QTY] || null,
+        rpThreadParentChannel: paddedRow[COLUMN_MAPPING.RP_THREAD_PARENT_CHANNEL] || null,
+        collab: paddedRow[COLUMN_MAPPING.COLLAB] || null,
+        questID: paddedRow[COLUMN_MAPPING.QUEST_ID] || null,
+        status: paddedRow[COLUMN_MAPPING.STATUS] || 'pending',
+        posted: paddedRow[COLUMN_MAPPING.POSTED] || 'No',
+        postedAt: paddedRow[COLUMN_MAPPING.POSTED_AT] || null,
+        botNotes: paddedRow[COLUMN_MAPPING.BOT_NOTES] || null
+    };
+}
+
+// ------------------- fetchQuestData -
 async function fetchQuestData() {
     try {
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SHEET_ID,
-            range: 'loggedQuests!A2:U', // Updated range to include all columns (A-U = 21 columns)
+            range: 'loggedQuests!A2:T',
         });
-        return response.data.values || [];
+        const questData = response.data.values || [];
+        return validateSheetData(questData);
     } catch (error) {
         handleError(error, 'questAnnouncements.js');
-        console.error('[QUESTS]: Error fetching data from Google Sheets:', error);
+        console.error('[questAnnouncements.js] ❌ Error fetching data from Google Sheets:', error);
         return [];
     }
 }
 
-// ------------------- Function to Format Quest as Embed -------------------
+// ============================================================================
+// ------------------- Validation Functions -------------------
+// ============================================================================
+
+// ------------------- validateRPThreadRequirements -
+async function validateRPThreadRequirements(quest, guild) {
+    const errors = [];
+    const warnings = [];
+    
+    if (!quest.rpThreadParentChannel || quest.rpThreadParentChannel.trim() === '') {
+        errors.push('RP Thread Parent Channel is required for RP quests');
+        return { valid: false, errors, warnings };
+    }
+    
+    if (!/^\d+$/.test(quest.rpThreadParentChannel)) {
+        errors.push(`Invalid channel ID format: ${quest.rpThreadParentChannel}`);
+        return { valid: false, errors, warnings };
+    }
+    
+    const parentChannel = guild.channels.cache.get(quest.rpThreadParentChannel);
+    if (!parentChannel) {
+        errors.push(`Channel not found: ${quest.rpThreadParentChannel}`);
+        return { valid: false, errors, warnings };
+    }
+    
+    if (parentChannel.type !== 0 && parentChannel.type !== 2) {
+        errors.push(`Channel does not support threads (type: ${parentChannel.type})`);
+        return { valid: false, errors, warnings };
+    }
+    
+    const botMember = guild.members.me;
+    if (!parentChannel.permissionsFor(botMember).has(['MANAGE_THREADS', 'SEND_MESSAGES'])) {
+        errors.push('Bot lacks required permissions to create threads');
+        return { valid: false, errors, warnings };
+    }
+    
+    try {
+        await parentChannel.fetch();
+    } catch (error) {
+        errors.push(`Cannot access channel: ${error.message}`);
+        return { valid: false, errors, warnings };
+    }
+    
+    return { valid: true, errors, warnings, parentChannel };
+}
+
+// ============================================================================
+// ------------------- Notification Functions -------------------
+// ============================================================================
+
+// ------------------- sendModNotification -
+async function sendModNotification(guild, questTitle, questID, errorType, errorDetails) {
+    try {
+        const modChannel = guild.channels.cache.get(MOD_CHANNEL_ID);
+        
+        if (!modChannel) {
+            console.error(`[questAnnouncements.js] ❌ Mod channel ${MOD_CHANNEL_ID} not found`);
+            return;
+        }
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xff0000)
+            .setTitle('🚨 Quest Posting Error')
+            .addFields(
+                { name: 'Quest', value: `${questTitle} (${questID})`, inline: true },
+                { name: 'Error Type', value: errorType, inline: true },
+                { name: 'Error Details', value: errorDetails, inline: false },
+                { name: 'Action Required', value: 'Please check the Google Sheet and fix the RP Thread Parent Channel for this quest.', inline: false }
+            )
+            .setTimestamp();
+        
+        await modChannel.send({ 
+            content: `<@&${MOD_ROLE_ID}>`, 
+            embeds: [embed] 
+        });
+        
+        console.log(`[questAnnouncements.js] ✅ Sent mod notification for quest ${questID}`);
+    } catch (error) {
+        console.error(`[questAnnouncements.js] ❌ Failed to send mod notification:`, error);
+    }
+}
+
+// ============================================================================
+// ------------------- Embed Formatting Functions -------------------
+// ============================================================================
+
+// ------------------- formatQuestEmbed -
 function formatQuestEmbed(quest) {
+    const descriptionText = quest.description || 'No description provided.';
+    const descriptionLines = descriptionText.split('\n');
+    const quotedDescription = descriptionLines.map(line => `> *${line.trim()}*`).join('\n');
+    
     const embed = new EmbedBuilder()
         .setTitle(`📜 ${quest.title}`)
-        .setDescription(quest.description || 'No description provided.')
+        .setDescription(quotedDescription)
         .setColor(0xAA926A)
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
-    // Dynamically add fields based on value
-    if (quest.questType) embed.addFields({ name: '📖 Quest Type', value: quest.questType, inline: true });
-    if (quest.location) embed.addFields({ name: '📍 Location', value: quest.location, inline: true });
-    if (quest.timeLimit) embed.addFields({ name: '⏳ Time Limit', value: quest.timeLimit, inline: true });
-    if (quest.minRequirements) embed.addFields({ name: '🔑 Minimum Requirements', value: quest.minRequirements.toString(), inline: true });
-    if (quest.tokenReward) embed.addFields({ name: '💰 Token Reward', value: quest.tokenReward.toString(), inline: true });
-    if (quest.itemReward) embed.addFields({ name: '🎁 Item Reward', value: `${quest.itemReward} x ${quest.itemRewardQty || 'N/A'}`, inline: true });
-    if (quest.signupDeadline) embed.addFields({ name: '📅 Signup Deadline', value: quest.signupDeadline, inline: true });
-    if (quest.participantCap) embed.addFields({ name: '👥 Participant Cap', value: quest.participantCap.toString(), inline: true });
-    if (quest.postRequirement) embed.addFields({ name: '💬 Post Requirement', value: quest.postRequirement.toString(), inline: true });
-    if (quest.date) embed.addFields({ name: '📅 Date', value: quest.date, inline: true });
-    if (quest.questID) embed.addFields({ name: '🆔 Quest ID', value: quest.questID, inline: true });
+    // Quest Details
+    const essentialInfo = [];
+    if (quest.questType) essentialInfo.push(`**📖 Type:** ${quest.questType}`);
     
-    // Add special note for RP quests
-    if (quest.specialNote) embed.addFields({ name: '📝 Special Notes', value: quest.specialNote, inline: false });
+    if (quest.location) {
+        let locationText = `**📍 Location:** ${quest.location}`;
+        
+        if (quest.location.includes('Rudania') || quest.location.includes('Inariko') || quest.location.includes('Vhintl')) {
+            let villages = quest.location;
+            villages = villages.replace(/Rudania/g, '<:rudania:899492917452890142> Rudania');
+            villages = villages.replace(/Inariko/g, '<:inariko:899493009073274920> Inariko');
+            villages = villages.replace(/Vhintl/g, '<:vhintl:899492879205007450> Vhintl');
+            locationText = `**📍 Location:** ${villages}`;
+        }
+        
+        essentialInfo.push(locationText);
+    }
+    
+    if (quest.timeLimit) essentialInfo.push(`**⏰ Duration:** ${quest.timeLimit}`);
+    if (quest.date) essentialInfo.push(`**📅 Date:** ${quest.date}`);
+    if (quest.questID) essentialInfo.push(`**🆔 Quest ID:** \`${quest.questID}\``);
+    
+    if (essentialInfo.length > 0) {
+        embed.addFields({ 
+            name: '__📋 Quest Details__', 
+            value: essentialInfo.join('\n'), 
+            inline: false 
+        });
+    }
 
-    // Add quest rules reminder
-    let rulesText = '• Use `/quest join` to participate\n';
+    // Rewards
+    const rewards = [];
+    const normalizedTokenReward = quest.getNormalizedTokenReward ? quest.getNormalizedTokenReward() : parseTokenReward(quest.tokenReward);
+    if (normalizedTokenReward > 0) {
+        rewards.push(`💰 **${normalizedTokenReward}** tokens`);
+    }
+    if (quest.itemReward) {
+        rewards.push(`🎁 **${quest.itemReward}**${quest.itemRewardQty ? ` × **${quest.itemRewardQty}**` : ''}`);
+    }
+    if (quest.minRequirements && quest.minRequirements > 0) {
+        rewards.push(`🔑 **Min Requirements:** ${quest.minRequirements}`);
+    }
+    
+    if (rewards.length > 0) {
+        embed.addFields({ 
+            name: '__🏆 Rewards__', 
+            value: rewards.join('\n'), 
+            inline: false 
+        });
+    }
+
+    // Participation
+    const participation = [];
+    if (quest.signupDeadline && quest.signupDeadline !== 'No Deadline') {
+        let formattedDate = quest.signupDeadline;
+        try {
+            const date = new Date(quest.signupDeadline);
+            if (!isNaN(date.getTime())) {
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const year = String(date.getFullYear()).slice(-2);
+                formattedDate = `${month}-${day}-${year}`;
+            }
+        } catch (error) {
+            // Keep original format if parsing fails
+        }
+        participation.push(`📅 **Signup Deadline:** ${formattedDate}`);
+    }
     if (quest.participantCap) {
-        rulesText += `• **Member-capped quest** (max ${quest.participantCap} participants)\n`;
-        rulesText += '• Only ONE member-capped quest per person\n';
+        participation.push(`👥 **Participant Cap:** ${quest.participantCap} ⚠️`);
     }
-    if (quest.questType.toLowerCase() === 'rp') {
-        rulesText += '• RP quests: 1-week signup window\n';
-        rulesText += '• Use Quest Vouchers for guaranteed spots!\n';
+    if (quest.postRequirement) {
+        participation.push(`💬 **Post Requirement:** ${quest.postRequirement} posts`);
     }
     
-    embed.addFields({ name: '📋 Quest Rules', value: rulesText, inline: false });
+    if (participation.length > 0) {
+        embed.addFields({ 
+            name: '__🗓️ Participation__', 
+            value: participation.join('\n'), 
+            inline: false 
+        });
+    }
 
+    // RP Thread
+    if (quest.questType && quest.questType.toLowerCase() === 'rp' && quest.rpThreadParentChannel) {
+        const guildId = quest.guildId || 'UNKNOWN';
+        embed.addFields({ 
+            name: '__🎭 RP Thread__', 
+            value: `> 🧵 [Join the RP discussion here!](https://discord.com/channels/${guildId}/${quest.rpThreadParentChannel})`, 
+            inline: false 
+        });
+    } else if (quest.questType && quest.questType.toLowerCase() === 'rp') {
+        embed.addFields({ 
+            name: '__🎭 RP Thread__', 
+            value: `> ⚠️ RP thread will be created when quest is posted`, 
+            inline: false 
+        });
+    }
+
+    // Quest Rules
+    let rulesText = '• Use </quest join:1389946995468271729> to participate\n';
+    
+    if (quest.participantCap) {
+        rulesText += `• ⚠️  Member-capped quest (max ${quest.participantCap} participants)\n`;
+        rulesText += '• 🚫 Only ONE member-capped quest per person\n';
+    }
+    if (quest.questType && quest.questType.toLowerCase() === 'rp') {
+        rulesText += '• 🎭 RP quests: 1-week signup window\n';
+        rulesText += '• 🎫 Use Quest Vouchers for guaranteed spots!\n';
+        rulesText += '• 📝 RP posts must be 20+ characters with meaningful content\n';
+        rulesText += '• ❌ Posts that DON\'T count: reactions, emojis only, "))" posts, URLs only\n';
+        rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
+    }
+    
+    if (quest.rules && quest.rules.trim()) {
+        rulesText += '\n';
+        rulesText += '**__📋 Additional Rules:__**\n';
+        rulesText += quest.rules;
+    }
+    
+    embed.addFields({ 
+        name: '__📋 Quest Rules__', 
+        value: rulesText, 
+        inline: false 
+    });
+
+    if (quest.questID) {
+        embed.setFooter({ 
+            text: `🆔 Quest ID: ${quest.questID}`, 
+            iconURL: 'https://cdn.discordapp.com/emojis/1234567890123456789.png' 
+        });
+    }
+
+    embed.setTimestamp();
     return embed;
 }
 
-// ------------------- Function to Post Quests to Discord -------------------
-async function postQuests() {
-    console.log('[DEBUG]: Starting postQuests function...');
-    const questChannel = await client.channels.fetch(QUEST_CHANNEL_ID);
+// ============================================================================
+// ------------------- Quest Processing Helper Functions -------------------
+// ============================================================================
 
+// ------------------- parseItemReward -
+function parseItemReward(itemReward) {
+    if (!itemReward || itemReward === 'N/A' || itemReward === '') {
+        return { item: null, qty: 0 };
+    }
+    
+    if (itemReward.includes(':')) {
+        const [itemName, qty] = itemReward.split(':').map(s => s.trim());
+        return { item: itemName, qty: parseInt(qty, 10) || 1 };
+    }
+    
+    return { item: itemReward, qty: 1 };
+}
+
+// ------------------- parseCollabSettings -
+function parseCollabSettings(collab) {
+    if (!collab || collab === 'N/A' || collab === '') {
+        return { allowed: false, rule: null };
+    }
+    
+    if (collab.includes(',')) {
+        const parts = collab.split(',');
+        const allowedPart = parts.find(p => p.toLowerCase().includes('allowed'));
+        const rulePart = parts.find(p => p.toLowerCase().includes('rule'));
+        
+        return {
+            allowed: allowedPart ? allowedPart.toLowerCase().includes('true') : false,
+            rule: rulePart ? rulePart.split(':')[1]?.trim() : null
+        };
+    }
+    
+    return { allowed: collab.toLowerCase() === 'true', rule: null };
+}
+
+// ------------------- sanitizeQuestData -
+function sanitizeQuestData(parsedQuest) {
+    const itemReward = parseItemReward(parsedQuest.itemReward);
+    const collab = parseCollabSettings(parsedQuest.collab);
+    
+    return {
+        title: parsedQuest.title || 'Untitled Quest',
+        description: parsedQuest.description || 'No description provided.',
+        questType: parsedQuest.questType || 'General',
+        location: parsedQuest.location || 'Quest Location',
+        timeLimit: parsedQuest.timeLimit || 'No time limit',
+        minRequirements: parsedQuest.minRequirements || 0,
+        tokenReward: parsedQuest.tokenReward === 'N/A' || !parsedQuest.tokenReward ? 'No reward specified' : parsedQuest.tokenReward,
+        itemReward: itemReward.item,
+        itemRewardQty: itemReward.qty,
+        signupDeadline: parsedQuest.signupDeadline && parsedQuest.signupDeadline !== 'N/A' ? parsedQuest.signupDeadline : null,
+        participantCap: parsedQuest.participantCap === 'N/A' || !parsedQuest.participantCap ? null : parseInt(parsedQuest.participantCap, 10),
+        postRequirement: parsedQuest.postRequirement === 'N/A' || !parsedQuest.postRequirement ? null : parseInt(parsedQuest.postRequirement, 10),
+        specialNote: parsedQuest.rules && parsedQuest.rules !== 'N/A' && parsedQuest.rules !== '' ? parsedQuest.rules : null,
+        participants: new Map(),
+        status: 'active',
+        date: parsedQuest.date || new Date().toISOString(),
+        questID: null,
+        posted: false,
+        postedAt: null,
+        targetChannel: QUEST_CHANNEL_ID,
+        rpThreadParentChannel: parsedQuest.rpThreadParentChannel || null,
+        roleID: null,
+        collabAllowed: collab.allowed,
+        collabRule: collab.rule,
+        rules: parsedQuest.rules && parsedQuest.rules !== 'N/A' && parsedQuest.rules !== '' ? parsedQuest.rules : null,
+        botNotes: parsedQuest.botNotes || null,
+    };
+}
+
+// ------------------- handleRPQuestSetup -
+async function handleRPQuestSetup(sanitizedQuest, guild) {
+    if (!sanitizedQuest.postRequirement) {
+        sanitizedQuest.postRequirement = 15;
+    }
+    
+    if (!sanitizedQuest.signupDeadline) {
+        const questDate = new Date(sanitizedQuest.date);
+        const rpDeadline = new Date(questDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        sanitizedQuest.signupDeadline = rpDeadline.toISOString().split('T')[0];
+    }
+
+    const rpValidation = await validateRPThreadRequirements(sanitizedQuest, guild);
+    if (!rpValidation.valid) {
+        console.error(`[questAnnouncements.js] ❌ RP Quest "${sanitizedQuest.title}" validation failed:`, rpValidation.errors);
+        sanitizedQuest.botNotes = `ERROR: RP Thread validation failed - ${rpValidation.errors.join(', ')}`;
+        sanitizedQuest.posted = false;
+        
+        await sendModNotification(guild, sanitizedQuest.title, 'TBD', 'RP Thread Validation Failed', rpValidation.errors.join(', '));
+        return false;
+    }
+
+    sanitizedQuest.specialNote = 'RP Quest Rules: 15-20 posts minimum, 2 paragraph maximum per post, member-driven.';
+    return true;
+}
+
+// ------------------- createQuestRole -
+async function createQuestRole(guild, questTitle) {
+    let role = guild.roles.cache.find(r => r.name === `Quest: ${questTitle}`);
+    
+    if (!role) {
+        console.log(`[questAnnouncements.js] 🔧 Creating role for quest: "${questTitle}"`);
+        role = await guild.roles.create({
+            name: `Quest: ${questTitle}`,
+            color: 0xAA926A,
+            mentionable: true,
+            reason: `Automatically created for the quest: "${questTitle}"`
+        });
+        console.log(`[questAnnouncements.js] ✅ Role created for quest: "${questTitle}" with ID: ${role.id}`);
+    } else {
+        console.log(`[questAnnouncements.js] ℹ️ Role already exists for quest: "${questTitle}" with ID: ${role.id}`);
+    }
+    
+    return role;
+}
+
+// ------------------- createRPThread -
+async function createRPThread(guild, quest) {
+    if (quest.questType.toLowerCase() !== 'rp' || !quest.rpThreadParentChannel) {
+        return null;
+    }
+    
+    console.log(`[questAnnouncements.js] 🔧 Creating RP thread for: "${quest.title}"`);
+    
+    try {
+        const parentChannel = guild.channels.cache.get(quest.rpThreadParentChannel);
+        if (!parentChannel) {
+            console.log(`[questAnnouncements.js] ⚠️ Parent channel not found: ${quest.rpThreadParentChannel}`);
+            quest.botNotes = `Parent channel not found: ${quest.rpThreadParentChannel}`;
+            return null;
+        }
+        
+        if (parentChannel.type !== 0 && parentChannel.type !== 2) {
+            console.log(`[questAnnouncements.js] ⚠️ Channel does not support threads. Type: ${parentChannel.type}`);
+            quest.botNotes = `Parent channel does not support threads (type: ${parentChannel.type})`;
+            return null;
+        }
+        
+        if (!parentChannel.threads) {
+            console.log(`[questAnnouncements.js] ⚠️ Channel threads property is undefined`);
+            quest.botNotes = `Channel threads property is undefined`;
+            return null;
+        }
+        
+        const rpThread = await parentChannel.threads.create({
+            name: `📜 ${quest.title} - RP Thread`,
+            autoArchiveDuration: 1440,
+            reason: `Auto-created RP thread for quest: ${quest.title}`,
+            type: 11
+        });
+        
+        console.log(`[questAnnouncements.js] ✅ Created RP thread: ${rpThread.name} (${rpThread.id})`);
+        
+        const rpThreadEmbed = new EmbedBuilder()
+            .setColor(0xAA926A)
+            .setTitle(`📜 ${quest.title} - RP Thread`)
+            .setDescription(`This is the RP thread for the quest: **${quest.title}**\n\n**Requirements**: ${quest.postRequirement || 15}-20 posts minimum, 2 paragraph maximum per post.\n\n**Note**: This quest is member-driven.`)
+            .addFields(
+                { name: 'Quest Type', value: 'RP', inline: true },
+                { name: 'Post Requirement', value: `${quest.postRequirement || 15}-20 posts`, inline: true },
+                { name: 'Status', value: 'Active', inline: true },
+                { name: 'Quest ID', value: `\`${quest.questID}\``, inline: true },
+                { name: 'Join Quest', value: `</quest join:1389946995468271729> questid:${quest.questID} charactername:YourCharacter`, inline: false }
+            )
+            .setTimestamp();
+
+        await rpThread.send({ embeds: [rpThreadEmbed] });
+        console.log(`[questAnnouncements.js] ✅ Posted initial message in RP thread`);
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        quest.rpThreadParentChannel = rpThread.id;
+        quest.guildId = guild.id;
+        console.log(`[questAnnouncements.js] ✅ Stored RP thread ID ${rpThread.id} and guild ID ${guild.id} for quest "${quest.title}"`);
+        
+        return rpThread;
+    } catch (error) {
+        console.error(`[questAnnouncements.js] ❌ Failed to create RP thread for quest "${quest.title}":`, error);
+        quest.botNotes = `Failed to create RP thread: ${error.message}`;
+        return null;
+    }
+}
+
+// ------------------- saveQuestToDatabase -
+async function saveQuestToDatabase(quest) {
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+        try {
+            const savedQuest = await Promise.race([
+                new Quest(quest).save(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Database save timeout after 15 seconds')), 15000)
+                )
+            ]);
+            
+            console.log(`[questAnnouncements.js] ✅ Quest "${quest.title}" saved to database with ID: ${savedQuest._id}`);
+            return savedQuest;
+        } catch (error) {
+            retryCount++;
+            console.log(`[questAnnouncements.js] ⚠️ Database save attempt ${retryCount}/${maxRetries} failed for quest "${quest.title}": ${error.message}`);
+            
+            if (retryCount >= maxRetries) {
+                throw error;
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
+}
+
+// ============================================================================
+// ------------------- Main Quest Processing Function -------------------
+// ============================================================================
+
+// ------------------- postQuests -
+async function postQuests() {
+    console.log('[questAnnouncements.js] 🚀 Starting quest posting process...');
+    
+    const questChannel = await client.channels.fetch(QUEST_CHANNEL_ID);
     if (!questChannel) {
-        console.error('[ERROR]: Quest channel not found!');
+        console.error('[questAnnouncements.js] ❌ Quest channel not found!');
         return;
     }
 
-    console.log('[DEBUG]: Fetching quest data from Google Sheets...');
-    const auth = await authorizeSheets(); // Get authenticated client
+    const auth = await authorizeSheets();
     const questData = await fetchQuestData();
 
     if (!questData.length) {
-        console.error('[INFO]: No quest data found in Google Sheets.');
+        console.log('[questAnnouncements.js] ℹ️ No quest data found in Google Sheets');
         return;
     }
 
-    console.log(`[DEBUG]: Retrieved ${questData.length} quests from the sheet.`);
-    console.log('[DEBUG]: Checking for quests marked as "Posted"...');
+    console.log(`[questAnnouncements.js] 📊 Retrieved ${questData.length} quests from sheet`);
 
-    // Filter quests not marked as "Posted"
     const unpostedQuests = questData.filter((quest, index) => {
-        // Map your actual data structure: Title, Description, Quest Type, Status, Target Channel, Date, Signup Deadline, Participant Cap, Post Requirement, RP Thread Parent Channel, Token Reward, Item Reward, Item Reward Qty, Quest ID, Posted, Posted At, Bot Notes, Location, Time Limit, Min Requirements, Special Note
-        const [title, description, questType, status, targetChannel, date, signupDeadline, participantCap, postRequirement, rpThreadParentChannel, tokenReward, itemReward, itemRewardQty, questID, posted, postedAt, botNotes, location, timeLimit, minRequirements, specialNote] = quest;
-
-        // Log the raw value of "Posted" for debugging
-        console.log(`[DEBUG]: Raw "Posted" value for quest "${title}" at row ${index + 2}: "${posted}"`);
-
-        const sanitizedPosted = posted ? posted.trim().toLowerCase() : '';
-        if (sanitizedPosted === 'posted' && questID && questID !== 'N/A') {
-            console.log(`[INFO]: Skipping quest "${title}" - Already posted with ID ${questID}.`);
-            return false; // Exclude already posted quests
+        const parsedQuest = parseQuestRow(quest);
+        const sanitizedPosted = parsedQuest.posted ? parsedQuest.posted.trim().toLowerCase() : '';
+        
+        if (sanitizedPosted === 'posted' && parsedQuest.questID && parsedQuest.questID !== 'N/A') {
+            console.log(`[questAnnouncements.js] ⏭️ Skipping quest "${parsedQuest.title}" - Already posted with ID ${parsedQuest.questID}`);
+            return false;
         }
-
-        console.log(`[DEBUG]: Quest "${title}" at row ${index + 2} is NOT marked as "Posted".`);
-        return true; // Include quests that haven't been posted
+        
+        return true;
     });
 
     if (!unpostedQuests.length) {
-        console.log('[INFO]: No new quests to post. All quests are already marked as "Posted".');
+        console.log('[questAnnouncements.js] ℹ️ No new quests to post. All quests are already marked as "Posted"');
         return;
     }
 
-    console.log(`[DEBUG]: Found ${unpostedQuests.length} quests to post.`);
+    console.log(`[questAnnouncements.js] 📝 Found ${unpostedQuests.length} quests to post`);
     const guild = questChannel.guild;
+    const questsToProcess = process.env.TEST_CHANNEL_ID ? unpostedQuests.slice(0, 1) : unpostedQuests;
+    console.log(`[questAnnouncements.js] 🔄 Processing ${questsToProcess.length} quest(s) ${process.env.TEST_CHANNEL_ID ? '(TEST MODE)' : '(all quests)'}`);
 
-    for (const [rowIndex, quest] of unpostedQuests.entries()) {
-ired         // Map your actual data structure: Title, Description, Quest Type, Status, Target Channel, Date, Signup Deadline, Participant Cap, Post Requirement, RP Thread Parent Channel, Token Reward, Item Reward, Item Reward Qty, Quest ID, Posted, Posted At, Bot Notes, Location, Time Limit, Min Requirements, Special Note
-        const [
-            title,
-            description,
-            questType,
-            status,
-            targetChannel,
-            date,
-            signupDeadline,
-            participantCap,
-            postRequirement,
-            rpThreadParentChannel,
-            tokenReward,
-            itemReward,
-            itemRewardQty,
-            questID,
-            posted,
-            postedAt,
-            botNotes,
-            location,
-            timeLimit,
-            minRequirements,
-            specialNote
-        ] = quest;
+    for (const [rowIndex, quest] of questsToProcess.entries()) {
+        const parsedQuest = parseQuestRow(quest);
+        console.log(`[questAnnouncements.js] 🔍 Processing quest: "${parsedQuest.title}"`);
     
         try {
-            // ------------------- Sanitize and Prepare Quest Data -------------------
-            const sanitizedQuest = {
-                title: title || 'Untitled Quest',
-                description: description || 'No description provided.',
-                questType: questType || 'General',
-                location: location || 'Quest Location',
-                timeLimit: timeLimit || 'No time limit',
-                minRequirements: minRequirements || 0,
-                tokenReward: tokenReward === 'N/A' || !tokenReward ? 0 : parseInt(tokenReward, 10),
-                itemReward: itemReward && itemReward !== 'N/A' ? itemReward : null,
-                itemRewardQty: itemRewardQty === 'N/A' || !itemRewardQty ? 0 : parseInt(itemRewardQty, 10),
-                signupDeadline: signupDeadline && signupDeadline !== 'N/A' ? signupDeadline : null,
-                participantCap: participantCap === 'N/A' || !participantCap ? null : parseInt(participantCap, 10),
-                postRequirement: postRequirement === 'N/A' || !postRequirement ? null : parseInt(postRequirement, 10),
-                specialNote: specialNote || null, // Use from sheet or set below for RP quests
-                participants: new Map(), // Initialize as an empty Map
-                status: status && status.toLowerCase() === 'active' ? 'active' : 'completed',
-                date: date || new Date().toISOString(),
-                questID: questID && questID !== 'N/A' ? questID : `Q${Math.floor(Math.random() * 100000)}`,
-                posted: true,
-                postedAt: new Date(),
-                targetChannel: targetChannel || QUEST_CHANNEL_ID, // Use from sheet or default quest channel
-                rpThreadParentChannel: rpThreadParentChannel || null, // Use from sheet or set below for RP quests
-                roleID: null, // Will be set below
-            };
-
-            // ------------------- RP Quest Special Handling -------------------
+            const sanitizedQuest = sanitizeQuestData(parsedQuest);
+            
             if (sanitizedQuest.questType.toLowerCase() === 'rp') {
-                if (!sanitizedQuest.postRequirement) {
-                    sanitizedQuest.postRequirement = 15;
-                }
-                
-                if (!sanitizedQuest.signupDeadline) {
-                    const questDate = new Date(sanitizedQuest.date);
-                    const rpDeadline = new Date(questDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-                    sanitizedQuest.signupDeadline = rpDeadline.toISOString().split('T')[0];
-                }
-
-                // Use RP thread parent channel from sheet, or set based on location
-                if (!sanitizedQuest.rpThreadParentChannel && sanitizedQuest.location) {
-                    if (sanitizedQuest.location.includes('Rudania')) {
-                        sanitizedQuest.rpThreadParentChannel = '1234567890'; // Replace with actual Rudania RP channel ID
-                    } else if (sanitizedQuest.location.includes('Inariko')) {
-                        sanitizedQuest.rpThreadParentChannel = '1234567891'; // Replace with actual Inariko RP channel ID
-                    } else if (sanitizedQuest.location.includes('Vhintl')) {
-                        sanitizedQuest.rpThreadParentChannel = '1234567892'; // Replace with actual Vhintl RP channel ID
-                    }
-                }
-
-                sanitizedQuest.specialNote = 'RP Quest Rules: 15-20 posts minimum, 2 paragraph maximum per post, member-driven with @TaleWeaver support available.';
-            }            
-    
-            console.log('[DEBUG]: Sanitized quest data:', sanitizedQuest);
-    
-            // ------------------- Check or Create Quest Role -------------------
-            let role = guild.roles.cache.find(r => r.name === `Quest: ${sanitizedQuest.title}`);
-            if (!role) {
-                console.log(`[DEBUG]: Creating role for quest: "${sanitizedQuest.title}".`);
-                role = await guild.roles.create({
-                    name: `Quest: ${sanitizedQuest.title}`,
-                    color: 0xAA926A,
-                    mentionable: true,
-                    reason: `Automatically created for the quest: "${sanitizedQuest.title}".`
-                });
-                console.log(`[INFO]: Role created for quest: "${sanitizedQuest.title}" with ID: ${role.id}.`);
-            } else {
-                console.log(`[INFO]: Role already exists for quest: "${sanitizedQuest.title}" with ID: ${role.id}.`);
+                const rpValid = await handleRPQuestSetup(sanitizedQuest, guild);
+                if (!rpValid) continue;
             }
-    
-                        // Save the role ID in sanitized quest data
+            
+            sanitizedQuest.questID = generateUniqueId('Q');
+            const role = await createQuestRole(guild, sanitizedQuest.title);
             sanitizedQuest.roleID = role.id;
-
-            // ------------------- Create RP Thread for RP Quests -------------------
-            let rpThread = null;
-            if (sanitizedQuest.questType.toLowerCase() === 'rp' && sanitizedQuest.rpThreadParentChannel) {
-                try {
-                    const parentChannel = guild.channels.cache.get(sanitizedQuest.rpThreadParentChannel);
-                    if (parentChannel) {
-                        rpThread = await parentChannel.threads.create({
-                            name: `📜 ${sanitizedQuest.title} - RP Thread`,
-                            autoArchiveDuration: 1440, // 24 hours
-                            reason: `Auto-created RP thread for quest: ${sanitizedQuest.title}`
-                        });
-                        
-                        // Send initial RP thread message
-                        const rpThreadEmbed = new EmbedBuilder()
-                            .setColor(0xAA926A)
-                            .setTitle(`📜 ${sanitizedQuest.title} - RP Thread`)
-                            .setDescription(`This is the RP thread for the quest: **${sanitizedQuest.title}**\n\n**Requirements**: ${sanitizedQuest.postRequirement || 15}-20 posts minimum, 2 paragraph maximum per post.\n\n**Note**: This quest is member-driven. Use @TaleWeaver if you need help moving things along!`)
-                            .addFields(
-                                { name: 'Quest Type', value: 'RP', inline: true },
-                                { name: 'Post Requirement', value: `${sanitizedQuest.postRequirement || 15}-20 posts`, inline: true },
-                                { name: 'Status', value: 'Active - Join with `/quest join`', inline: true }
-                            )
-                            .setTimestamp();
-
-                        await rpThread.send({ embeds: [rpThreadEmbed] });
-                        console.log(`[INFO]: Created RP thread for quest "${sanitizedQuest.title}" with ID: ${rpThread.id}.`);
-                    }
-                } catch (error) {
-                    console.error(`[ERROR]: Failed to create RP thread for quest "${sanitizedQuest.title}":`, error);
-                    sanitizedQuest.botNotes = `Failed to create RP thread: ${error.message}`;
-                }
-            }
-
-            // ------------------- Create Quest Embed -------------------
+            
+            await createRPThread(guild, sanitizedQuest);
+            
             const questEmbed = formatQuestEmbed(sanitizedQuest);
-    
-            // ------------------- Post Quest Embed to Discord -------------------
-            console.log(`[DEBUG]: Posting embed for quest "${sanitizedQuest.title}" to Discord.`);
             const message = await questChannel.send({ embeds: [questEmbed] });
-    
-            // Capture the message ID
             sanitizedQuest.messageID = message.id;
-    
-            // ------------------- Save Quest to Database -------------------
-            console.log(`[DEBUG]: Saving quest "${sanitizedQuest.title}" to the database with message ID: ${message.id} and role ID: ${role.id}.`);
-            const newQuest = new Quest(sanitizedQuest);
-            await newQuest.save();
-            console.log(`[INFO]: Quest "${sanitizedQuest.title}" successfully saved to the database.`);
-    
-            // ------------------- Mark Quest as Posted -------------------
-            console.log(`[DEBUG]: Marking quest "${sanitizedQuest.title}" as posted in Google Sheets.`);
-            await markQuestAsPosted(auth, rowIndex, sanitizedQuest.questID);
+            
+            await saveQuestToDatabase(sanitizedQuest);
+            
+            sanitizedQuest.posted = true;
+            sanitizedQuest.postedAt = new Date();
+            
+            try {
+                await markQuestAsPosted(auth, rowIndex, sanitizedQuest.questID);
+                console.log(`[questAnnouncements.js] ✅ Quest "${sanitizedQuest.title}" marked as posted in Google Sheets`);
+            } catch (sheetError) {
+                console.error(`[questAnnouncements.js] ❌ Failed to mark quest as posted in Google Sheets:`, sheetError.message);
+                await sendModNotification(guild, sanitizedQuest.title, sanitizedQuest.questID, 'Sheet Update Failed', sheetError.message);
+            }
         } catch (error) {
-    handleError(error, 'questAnnouncements.js');
-
-            console.error(`[ERROR]: Failed to process quest "${title || 'Untitled Quest'}":`, error);
+            handleError(error, 'questAnnouncements.js');
+            console.error(`[questAnnouncements.js] ❌ Failed to process quest "${parsedQuest.title || 'Untitled Quest'}":`, error);
+            await sendModNotification(guild, parsedQuest.title || 'Untitled Quest', 'TBD', 'Quest Processing Failed', error.message);
         }
     }
        
-    console.log('[INFO]: Finished processing quests.');
-}
-
-// ------------------- Function to Mark Quest as Posted -------------------
-async function markQuestAsPosted(auth, rowIndex, questID) {
+    console.log('[questAnnouncements.js] ✅ Finished processing quests');
+    
+    // Check quest completions
     try {
-        console.log(`[DEBUG]: Marking quest as posted in Google Sheets (Row: ${rowIndex + 2}, Quest ID: ${questID}).`);
-        const now = new Date().toISOString();
-        // Updated to mark the "Posted" column (column O, 15th column) and "Posted At" column (column P, 16th column)
-        await writeSheetData(auth, SHEET_ID, `loggedQuests!O${rowIndex + 2}:P${rowIndex + 2}`, [['Posted', now]]);
-        console.log(`[INFO]: Quest successfully marked as posted in Google Sheets (Row: ${rowIndex + 2}).`);
+        const activeQuests = await Quest.find({ status: 'active' });
+        let completedCount = 0;
+        
+        for (const quest of activeQuests) {
+            const completionResult = await quest.checkAutoCompletion();
+            if (completionResult.completed) {
+                completedCount++;
+                console.log(`[questAnnouncements.js] ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
+            }
+        }
+        
+        if (completedCount > 0) {
+            console.log(`[questAnnouncements.js] ✅ Processed ${completedCount} quest completions`);
+        }
     } catch (error) {
-    handleError(error, 'questAnnouncements.js');
-
-        console.error(`[ERROR]: Failed to mark quest as posted in Google Sheets (Row: ${rowIndex + 2}):`, error);
+        console.error('[questAnnouncements.js] ❌ Error checking quest completion:', error);
     }
 }
 
-// ------------------- Discord Bot Test Command -------------------
+// ============================================================================
+// ------------------- Google Sheets Functions -------------------
+// ============================================================================
+
+// ------------------- markQuestAsPosted -
+async function markQuestAsPosted(auth, rowIndex, questID) {
+    try {
+        console.log(`[questAnnouncements.js] 📝 Marking quest as posted in Google Sheets (Row: ${rowIndex + 2}, Quest ID: ${questID})`);
+        const now = new Date().toISOString();
+        await writeSheetData(auth, SHEET_ID, `loggedQuests!P${rowIndex + 2}:S${rowIndex + 2}`, [[questID, 'active', 'Posted', now]]);
+        console.log(`[questAnnouncements.js] ✅ Quest marked as posted in Google Sheets (Row: ${rowIndex + 2})`);
+    } catch (error) {
+        handleError(error, 'questAnnouncements.js');
+        console.error(`[questAnnouncements.js] ❌ Failed to mark quest as posted in Google Sheets (Row: ${rowIndex + 2}):`, error);
+    }
+}
+
+// ============================================================================
+// ------------------- Discord Bot Event Handlers -------------------
+// ============================================================================
+
+// ------------------- Test Command Handler -
 client.on('messageCreate', async (message) => {
     if (message.content.trim() === '!testQuests') {
-        console.log('[TEST]: Triggering quest posting manually.');
+        console.log('[questAnnouncements.js] 🧪 Triggering quest posting manually');
         try {
             await postQuests();
             await message.reply('✅ Quests have been posted for testing!');
         } catch (error) {
-    handleError(error, 'questAnnouncements.js');
-
-            console.error('[ERROR]: Failed to execute postQuests:', error);
+            handleError(error, 'questAnnouncements.js');
+            console.error('[questAnnouncements.js] ❌ Failed to execute postQuests:', error);
             await message.reply('❌ An error occurred while posting quests.');
         }
     }
 });
 
-// ------------------- Discord Bot Event Listeners -------------------
+// ------------------- Bot Ready Handler -
 client.once('ready', () => {
-    console.log(`[BOT]: Logged in as ${client.user.tag}`);
+    console.log(`[questAnnouncements.js] 🤖 Logged in as ${client.user.tag}`);
 });
 
+// ------------------- Bot Error Handler -
 client.on('error', (error) => {
-    console.error('[BOT]: Discord client error:', error);
+    console.error('[questAnnouncements.js] ❌ Discord client error:', error);
 });
 
-// ------------------- Login Bot -------------------
+// ============================================================================
+// ------------------- Bot Initialization -------------------
+// ============================================================================
+
 client.login(process.env.DISCORD_BOT_TOKEN);

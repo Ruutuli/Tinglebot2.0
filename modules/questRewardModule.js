@@ -8,7 +8,45 @@ const Character = require('../models/CharacterModel');
 const User = require('../models/UserModel');
 const { handleError } = require('../utils/globalErrorHandler');
 
-// ------------------- Quest Completion Processing -------------------
+// ============================================================================
+// ------------------- Helper Functions -------------------
+// ============================================================================
+
+// ------------------- Requirements Check ------------------
+function meetsRequirements(participant, quest) {
+    if (quest.questType === 'RP') {
+        return participant.rpPostCount >= (quest.postRequirement || 15);
+    } else if (quest.questType === 'Art' || quest.questType === 'Writing') {
+        return participant.submissions.some(sub => 
+            sub.type === quest.questType.toLowerCase() && sub.approved
+        );
+    }
+    return false;
+}
+
+// ------------------- Token Calculation ------------------
+function computeTokens(quest) {
+    return quest.getNormalizedTokenReward();
+}
+
+// ------------------- Group Members Retrieval ------------------
+async function getGroupMembers(questId, groupId) {
+    try {
+        const quest = await Quest.findOne({ questID: questId });
+        if (!quest || !quest.participants) return [];
+        
+        return Array.from(quest.participants.values()).filter(p => p.group === groupId);
+    } catch (error) {
+        console.error(`[questRewardModule.js] :x: Error getting group members for quest ${questId}, group ${groupId}:`, error);
+        return [];
+    }
+}
+
+// ============================================================================
+// ------------------- Quest Processing Functions -------------------
+// ============================================================================
+
+// ------------------- Quest Completion Processing ------------------
 async function processQuestCompletion(questId) {
     try {
         const quest = await Quest.findOne({ questID: questId });
@@ -17,98 +55,105 @@ async function processQuestCompletion(questId) {
         }
 
         if (quest.status !== 'active') {
-            console.log(`[QUEST_REWARDS]: Quest ${questId} is not active, skipping completion processing.`);
+            console.log(`[questRewardModule.js] :information_source: Quest ${questId} is not active, skipping completion processing.`);
             return;
         }
 
-        console.log(`[QUEST_REWARDS]: Processing completion for quest: ${quest.title}`);
+        console.log(`[questRewardModule.js] :gear: Processing completion for quest: ${quest.title}`);
 
-        // Get all participants from quest
-        if (!quest.participantDetails || quest.participantDetails.length === 0) {
-            console.log(`[QUEST_REWARDS]: No participants found for quest ${questId}`);
+        if (!quest.participants || quest.participants.size === 0) {
+            console.log(`[questRewardModule.js] :warning: No participants found for quest ${questId}`);
             return;
         }
-        const participants = quest.participantDetails;
 
-        let completedCount = 0;
-        let rewardedCount = 0;
-        let errorCount = 0;
+        const participants = Array.from(quest.participants.values());
+        const results = await processAllParticipants(quest, participants);
 
-        for (const participant of participants) {
-            try {
-                const result = await processParticipantReward(quest, participant);
-                if (result === 'rewarded') {
-                    rewardedCount++;
-                } else if (result === 'completed') {
-                    completedCount++;
-                } else {
-                    errorCount++;
-                }
-            } catch (error) {
-                console.error(`[QUEST_REWARDS]: Error processing participant ${participant.characterName}:`, error);
-                errorCount++;
-            }
-        }
-
-        // Check if all participants have been processed
-        if (rewardedCount > 0 && rewardedCount === participants.length) {
+        if (results.rewardedCount > 0 && results.rewardedCount === participants.length) {
             await markQuestAsCompleted(quest);
-            console.log(`[QUEST_REWARDS]: Quest ${questId} marked as completed. All participants rewarded.`);
+            console.log(`[questRewardModule.js] :white_check_mark: Quest ${questId} marked as completed. All participants rewarded.`);
         }
 
-        // Save quest with updated participant data
         await quest.save();
-
-        console.log(`[QUEST_REWARDS]: Quest completion processing finished. Completed: ${completedCount}, Rewarded: ${rewardedCount}, Errors: ${errorCount}`);
+        console.log(`[questRewardModule.js] :white_check_mark: Quest completion processing finished. Completed: ${results.completedCount}, Rewarded: ${results.rewardedCount}, Errors: ${results.errorCount}`);
 
     } catch (error) {
         handleError(error, 'questRewardModule.js');
-        console.error(`[QUEST_REWARDS]: Error processing quest completion for ${questId}:`, error);
+        console.error(`[questRewardModule.js] :x: Error processing quest completion for ${questId}:`, error);
     }
 }
 
-// ------------------- Process Individual Participant Reward -------------------
+// ------------------- Process All Participants ------------------
+async function processAllParticipants(quest, participants) {
+    let completedCount = 0;
+    let rewardedCount = 0;
+    let errorCount = 0;
+
+    for (const participant of participants) {
+        try {
+            const result = await processParticipantReward(quest, participant);
+            if (result === 'rewarded') {
+                rewardedCount++;
+            } else if (result === 'completed') {
+                completedCount++;
+            } else {
+                errorCount++;
+            }
+        } catch (error) {
+            console.error(`[questRewardModule.js] :x: Error processing participant ${participant.characterName}:`, error);
+            errorCount++;
+        }
+    }
+
+    return { completedCount, rewardedCount, errorCount };
+}
+
+// ------------------- Process Individual Participant Reward ------------------
 async function processParticipantReward(quest, participant) {
     try {
-        // Skip if already rewarded
         if (participant.progress === 'rewarded') {
             return 'already_rewarded';
         }
 
-        // Check if participant meets requirements
-        if (!participant.meetsRequirements(quest)) {
-            console.log(`[QUEST_REWARDS]: Participant ${participant.characterName} does not meet requirements for quest ${quest.questID}`);
+        if (!meetsRequirements(participant, quest)) {
+            console.log(`[questRewardModule.js] :warning: Participant ${participant.characterName} does not meet requirements for quest ${quest.questID}`);
             return 'requirements_not_met';
         }
 
-        // Mark as completed if not already
         if (participant.progress !== 'completed') {
             participant.progress = 'completed';
             participant.completedAt = new Date();
         }
 
-        // Distribute rewards
         const rewardResult = await distributeRewards(quest, participant);
         if (rewardResult.success) {
-            participant.progress = 'rewarded';
-            participant.rewardedAt = new Date();
-            participant.tokensEarned = quest.tokenReward;
-            participant.itemsEarned = quest.itemReward ? [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }] : [];
-
-            console.log(`[QUEST_REWARDS]: Successfully rewarded participant ${participant.characterName} for quest ${quest.questID}`);
+            updateParticipantRewardData(participant, quest, rewardResult);
+            console.log(`[questRewardModule.js] :white_check_mark: Successfully rewarded participant ${participant.characterName} for quest ${quest.questID}`);
             return 'rewarded';
         } else {
-            console.error(`[QUEST_REWARDS]: Failed to distribute rewards for ${participant.characterName}:`, rewardResult.error);
+            console.error(`[questRewardModule.js] :x: Failed to distribute rewards for ${participant.characterName}:`, rewardResult.error);
             return 'reward_failed';
         }
 
     } catch (error) {
-        console.error(`[QUEST_REWARDS]: Error processing reward for participant ${participant.characterName}:`, error);
+        console.error(`[questRewardModule.js] :x: Error processing reward for participant ${participant.characterName}:`, error);
         return 'error';
     }
 }
 
-// ------------------- Distribute Quest Rewards -------------------
+// ------------------- Update Participant Reward Data ------------------
+function updateParticipantRewardData(participant, quest, rewardResult) {
+    participant.progress = 'rewarded';
+    participant.rewardedAt = new Date();
+    participant.tokensEarned = rewardResult.tokensAdded;
+    participant.itemsEarned = quest.itemReward ? [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }] : [];
+}
+
+// ============================================================================
+// ------------------- Reward Distribution Functions -------------------
+// ============================================================================
+
+// ------------------- Distribute Quest Rewards ------------------
 async function distributeRewards(quest, participant) {
     try {
         const results = {
@@ -118,63 +163,26 @@ async function distributeRewards(quest, participant) {
             itemsAdded: 0
         };
 
-        // Add tokens to user
-        if (quest.tokenReward > 0) {
-            try {
-                const user = await User.findOne({ discordId: participant.userId });
-                if (user) {
-                    user.tokens = (user.tokens || 0) + quest.tokenReward;
-                    await user.save();
-                    results.tokensAdded = quest.tokenReward;
-                    console.log(`[QUEST_REWARDS]: Added ${quest.tokenReward} tokens to user ${participant.userId}`);
-                } else {
-                    results.errors.push(`User not found: ${participant.userId}`);
-                }
-            } catch (error) {
-                results.errors.push(`Token distribution failed: ${error.message}`);
+        const tokensToAward = computeTokens(quest);
+        
+        if (tokensToAward > 0) {
+            const tokenResult = await distributeTokens(participant.userId, tokensToAward);
+            if (tokenResult.success) {
+                results.tokensAdded = tokenResult.tokensAdded;
+            } else {
+                results.errors.push(tokenResult.error);
             }
         }
 
-        // Add items to character inventory
         if (quest.itemReward && quest.itemRewardQty > 0) {
-            try {
-                const character = await Character.findOne({ 
-                    name: participant.characterName, 
-                    userId: participant.userId 
-                });
-                
-                if (character) {
-                    // Add item to character inventory
-                    // Note: This assumes you have an inventory system in place
-                    // You may need to adjust this based on your actual inventory implementation
-                    if (!character.inventory) {
-                        character.inventory = [];
-                    }
-                    
-                    const existingItem = character.inventory.find(item => item.name === quest.itemReward);
-                    if (existingItem) {
-                        existingItem.quantity = (existingItem.quantity || 0) + quest.itemRewardQty;
-                    } else {
-                        character.inventory.push({
-                            name: quest.itemReward,
-                            quantity: quest.itemRewardQty,
-                            obtainedAt: new Date(),
-                            source: `Quest: ${quest.title}`
-                        });
-                    }
-                    
-                    await character.save();
-                    results.itemsAdded = quest.itemRewardQty;
-                    console.log(`[QUEST_REWARDS]: Added ${quest.itemRewardQty}x ${quest.itemReward} to character ${participant.characterName}`);
-                } else {
-                    results.errors.push(`Character not found: ${participant.characterName}`);
-                }
-            } catch (error) {
-                results.errors.push(`Item distribution failed: ${error.message}`);
+            const itemResult = await distributeItems(quest, participant);
+            if (itemResult.success) {
+                results.itemsAdded = itemResult.itemsAdded;
+            } else {
+                results.errors.push(itemResult.error);
             }
         }
 
-        // Check if any critical errors occurred
         if (results.errors.length > 0) {
             results.success = false;
             results.error = results.errors.join('; ');
@@ -191,32 +199,84 @@ async function distributeRewards(quest, participant) {
     }
 }
 
-// ------------------- Mark Quest as Completed -------------------
+// ------------------- Distribute Tokens ------------------
+async function distributeTokens(userId, tokensToAward) {
+    try {
+        const user = await User.findOne({ discordId: userId });
+        if (!user) {
+            return { success: false, error: `User not found: ${userId}` };
+        }
+
+        user.tokens = (user.tokens || 0) + tokensToAward;
+        await user.save();
+        console.log(`[questRewardModule.js] :money_with_wings: Added ${tokensToAward} tokens to user ${userId}`);
+        
+        return { success: true, tokensAdded: tokensToAward };
+    } catch (error) {
+        return { success: false, error: `Token distribution failed: ${error.message}` };
+    }
+}
+
+// ------------------- Distribute Items ------------------
+async function distributeItems(quest, participant) {
+    try {
+        const character = await Character.findOne({ 
+            name: participant.characterName, 
+            userId: participant.userId 
+        });
+        
+        if (!character) {
+            return { success: false, error: `Character not found: ${participant.characterName}` };
+        }
+
+        if (!character.inventory) {
+            character.inventory = [];
+        }
+        
+        const existingItem = character.inventory.find(item => item.name === quest.itemReward);
+        if (existingItem) {
+            existingItem.quantity = (existingItem.quantity || 0) + quest.itemRewardQty;
+        } else {
+            character.inventory.push({
+                name: quest.itemReward,
+                quantity: quest.itemRewardQty,
+                obtainedAt: new Date(),
+                source: `Quest: ${quest.title}`
+            });
+        }
+        
+        await character.save();
+        console.log(`[questRewardModule.js] :package: Added ${quest.itemRewardQty}x ${quest.itemReward} to character ${participant.characterName}`);
+        
+        return { success: true, itemsAdded: quest.itemRewardQty };
+    } catch (error) {
+        return { success: false, error: `Item distribution failed: ${error.message}` };
+    }
+}
+
+// ============================================================================
+// ------------------- Quest Management Functions -------------------
+// ============================================================================
+
+// ------------------- Mark Quest as Completed ------------------
 async function markQuestAsCompleted(quest) {
     try {
         quest.status = 'completed';
         await quest.save();
         
-        console.log(`[QUEST_REWARDS]: Quest ${quest.questID} marked as completed`);
+        console.log(`[questRewardModule.js] :white_check_mark: Quest ${quest.questID} marked as completed`);
         
-        // Clean up quest role if it exists
         if (quest.roleID) {
-            try {
-                // Note: This would need to be called from a context where you have access to the guild
-                // You might want to pass the guild as a parameter or handle this differently
-                console.log(`[QUEST_REWARDS]: Quest role ${quest.roleID} should be deleted (requires guild context)`);
-            } catch (error) {
-                console.warn(`[QUEST_REWARDS]: Failed to clean up quest role:`, error);
-            }
+            console.log(`[questRewardModule.js] :information_source: Quest role ${quest.roleID} should be deleted (requires guild context)`);
         }
         
     } catch (error) {
-        console.error(`[QUEST_REWARDS]: Error marking quest as completed:`, error);
+        console.error(`[questRewardModule.js] :x: Error marking quest as completed:`, error);
         throw error;
     }
 }
 
-// ------------------- Manual Quest Completion -------------------
+// ------------------- Manual Quest Completion ------------------
 async function manuallyCompleteQuest(questId, adminUserId) {
     try {
         const quest = await Quest.findOne({ questID: questId });
@@ -228,9 +288,8 @@ async function manuallyCompleteQuest(questId, adminUserId) {
             throw new Error(`Quest ${questId} is already completed`);
         }
 
-        console.log(`[QUEST_REWARDS]: Admin ${adminUserId} manually completing quest ${questId}`);
+        console.log(`[questRewardModule.js] :gear: Admin ${adminUserId} manually completing quest ${questId}`);
         
-        // Process completion
         await processQuestCompletion(questId);
         
         return { success: true, message: `Quest ${questId} manually completed` };
@@ -241,7 +300,7 @@ async function manuallyCompleteQuest(questId, adminUserId) {
     }
 }
 
-// ------------------- Check Quest Status -------------------
+// ------------------- Check Quest Status ------------------
 async function getQuestStatus(questId) {
     try {
         const quest = await Quest.findOne({ questID: questId });
@@ -249,9 +308,9 @@ async function getQuestStatus(questId) {
             return { error: 'Quest not found' };
         }
 
-        const participants = quest.participantDetails || [];
+        const participants = Array.from(quest.participants.values());
         
-        const status = {
+        return {
             questId: questId,
             title: quest.title,
             status: quest.status,
@@ -268,8 +327,6 @@ async function getQuestStatus(questId) {
                 itemsEarned: p.itemsEarned
             }))
         };
-
-        return status;
         
     } catch (error) {
         handleError(error, 'questRewardModule.js');
@@ -277,12 +334,60 @@ async function getQuestStatus(questId) {
     }
 }
 
-// ------------------- Export Functions -------------------
+// ============================================================================
+// ------------------- Special Quest Processing Functions -------------------
+// ============================================================================
+
+// ------------------- Process RP Quest Completion ------------------
+async function processRPQuestCompletion(quest, participant) {
+    try {
+        console.log(`[questRewardModule.js] :gear: Processing RP quest completion for ${participant.characterName} in quest ${quest.questID}`);
+        
+        const meetsReq = meetsRequirements(participant, quest);
+        if (!meetsReq) {
+            console.log(`[questRewardModule.js] :warning: Participant ${participant.characterName} does not meet RP requirements (${participant.rpPostCount}/${quest.postRequirement || 15} posts)`);
+            return {
+                success: false,
+                error: `Participant needs ${(quest.postRequirement || 15) - participant.rpPostCount} more posts to complete the quest`
+            };
+        }
+        
+        participant.progress = 'completed';
+        participant.completedAt = new Date();
+        
+        const rewardResult = await distributeRewards(quest, participant);
+        
+        if (rewardResult.success) {
+            console.log(`[questRewardModule.js] :white_check_mark: RP quest completed and rewards distributed for ${participant.characterName}`);
+            return {
+                success: true,
+                tokensAdded: rewardResult.tokensAdded,
+                itemsAdded: rewardResult.itemsAdded
+            };
+        } else {
+            console.error(`[questRewardModule.js] :x: Failed to distribute rewards for RP quest:`, rewardResult.error);
+            return rewardResult;
+        }
+        
+    } catch (error) {
+        console.error(`[questRewardModule.js] :x: Error processing RP quest completion:`, error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// ============================================================================
+// ------------------- Module Exports -------------------
+// ============================================================================
+
 module.exports = {
     processQuestCompletion,
     processParticipantReward,
     distributeRewards,
     markQuestAsCompleted,
     manuallyCompleteQuest,
-    getQuestStatus
+    getQuestStatus,
+    processRPQuestCompletion
 };
