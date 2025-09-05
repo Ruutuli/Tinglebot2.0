@@ -46,28 +46,19 @@ module.exports = {
     .setDescription('🎮 Play minigames!')
     .addSubcommand(subcommand =>
       subcommand
-        .setName('signup')
-        .setDescription('✋ Sign up for turn order in an alien defense game')
+        .setName('theycame')
+        .setDescription('👽 They Came for the Cows - Alien Defense Minigame')
         .addStringOption(option =>
-          option.setName('session_id')
-            .setDescription('Game session ID')
+          option.setName('action')
+            .setDescription('What action to take')
             .setRequired(true)
+            .addChoices(
+              { name: 'Sign Up', value: 'signup' },
+              { name: 'Join Game', value: 'join' },
+              { name: 'Roll Defense', value: 'roll' },
+              { name: 'View Status', value: 'status' }
+            )
         )
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('join')
-        .setDescription('🎮 Join an alien defense game')
-        .addStringOption(option =>
-          option.setName('session_id')
-            .setDescription('Game session ID')
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('roll')
-        .setDescription('🎯 Roll defense against an alien')
         .addStringOption(option =>
           option.setName('session_id')
             .setDescription('Game session ID')
@@ -75,25 +66,15 @@ module.exports = {
         )
         .addStringOption(option =>
           option.setName('target')
-            .setDescription('Target alien (e.g., A1, B2)')
-            .setRequired(true)
+            .setDescription('Target alien (e.g., A1, B2) - only needed for roll action')
+            .setRequired(false)
         )
         .addIntegerOption(option =>
           option.setName('roll')
-            .setDescription('Your defense roll (1-6)')
-            .setRequired(true)
+            .setDescription('Your defense roll (1-6) - only needed for roll action')
+            .setRequired(false)
             .setMinValue(1)
             .setMaxValue(6)
-        )
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('status')
-        .setDescription('📊 View alien defense game status')
-        .addStringOption(option =>
-          option.setName('session_id')
-            .setDescription('Game session ID')
-            .setRequired(true)
         )
     ),
 
@@ -105,21 +86,10 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     
     try {
-      switch (subcommand) {
-        case 'signup':
-          await this.handleSignUp(interaction);
-          break;
-        case 'join':
-          await this.handleJoin(interaction);
-          break;
-        case 'roll':
-          await this.handleRoll(interaction);
-          break;
-        case 'status':
-          await this.handleStatus(interaction);
-          break;
-        default:
-          await interaction.reply({ content: '❌ Unknown minigame action.', flags: 64 });
+      if (subcommand === 'theycame') {
+        await this.handleTheyCame(interaction);
+      } else {
+        await interaction.reply({ content: '❌ Unknown minigame type.', flags: 64 });
       }
     } catch (error) {
       handleError(error, 'minigame.js', {
@@ -149,6 +119,43 @@ module.exports = {
           console.error('Failed to send error edit response:', editError);
         }
       }
+    }
+  },
+
+  // ============================================================================
+  // ------------------- They Came for the Cows Handler -------------------
+  // ============================================================================
+  async handleTheyCame(interaction) {
+    const action = interaction.options.getString('action');
+    const sessionId = interaction.options.getString('session_id');
+    const target = interaction.options.getString('target');
+    const roll = interaction.options.getInteger('roll');
+    
+    try {
+      switch (action) {
+        case 'signup':
+          await this.handleSignUp(interaction);
+          break;
+        case 'join':
+          await this.handleJoin(interaction);
+          break;
+        case 'roll':
+          await this.handleRoll(interaction, target, roll);
+          break;
+        case 'status':
+          await this.handleStatus(interaction);
+          break;
+        default:
+          await interaction.reply({ content: '❌ Unknown action.', flags: 64 });
+      }
+    } catch (error) {
+      handleError(error, 'minigame.js', {
+        commandName: 'theycame',
+        action: action,
+        userTag: interaction.user.tag,
+        userId: interaction.user.id
+      });
+      throw error;
     }
   },
 
@@ -253,12 +260,17 @@ module.exports = {
   // ============================================================================
   // ------------------- Roll Defense Handler -------------------
   // ============================================================================
-  async handleRoll(interaction) {
+  async handleRoll(interaction, target, roll) {
     const sessionId = interaction.options.getString('session_id');
-    const target = interaction.options.getString('target');
-    const roll = interaction.options.getInteger('roll');
     const userId = interaction.user.id;
     const username = interaction.user.username;
+    
+    if (!target || !roll) {
+      return await interaction.reply({
+        content: '❌ Please specify both target alien (e.g., A1) and your roll (1-6).',
+        flags: 64
+      });
+    }
     
     // Find the specific session
     const session = await Minigame.findOne({
