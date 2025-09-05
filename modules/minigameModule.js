@@ -124,11 +124,7 @@ function createAlienDefenseGame(channelId, guildId, createdBy) {
     createdBy,
     expiresAt,
     status: 'waiting',
-    players: [{
-      discordId: createdBy,
-      username: 'Game Creator',
-      joinedAt: new Date()
-    }],
+    players: [], // Start with empty players array - creator joins separately
     gameData
   };
 }
