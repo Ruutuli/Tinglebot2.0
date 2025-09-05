@@ -574,8 +574,10 @@ async function getWeatherWithoutGeneration(village) {
     endOfPeriod.setHours(7, 59, 59, 999);
     
     // Convert EST/EDT times to UTC for database query
-    const startOfPeriodUTC = new Date(startOfPeriod.getTime() - (startOfPeriod.getTimezoneOffset() * 60000));
-    const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
+    // The startOfPeriod and endOfPeriod are already in EST/EDT, so we need to convert them to UTC
+    // We can do this by creating a new Date object with the EST/EDT time and letting JavaScript handle the conversion
+    const startOfPeriodUTC = new Date(startOfPeriod.getTime() + (startOfPeriod.getTimezoneOffset() * 60000));
+    const endOfPeriodUTC = new Date(endOfPeriod.getTime() + (endOfPeriod.getTimezoneOffset() * 60000));
     
     // Get weather from the current period
     const weather = await Weather.findOne({
@@ -621,8 +623,10 @@ async function getCurrentWeather(village) {
     endOfPeriod.setHours(7, 59, 59, 999);
     
     // Convert EST/EDT times to UTC for database query
-    const startOfPeriodUTC = new Date(startOfPeriod.getTime() - (startOfPeriod.getTimezoneOffset() * 60000));
-    const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
+    // The startOfPeriod and endOfPeriod are already in EST/EDT, so we need to convert them to UTC
+    // We can do this by creating a new Date object with the EST/EDT time and letting JavaScript handle the conversion
+    const startOfPeriodUTC = new Date(startOfPeriod.getTime() + (startOfPeriod.getTimezoneOffset() * 60000));
+    const endOfPeriodUTC = new Date(endOfPeriod.getTime() + (endOfPeriod.getTimezoneOffset() * 60000));
     
     // Get weather from the current period
     console.log(`[weatherService.js]: 🔍 Searching for existing weather for ${normalizedVillage}`);

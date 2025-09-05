@@ -1106,6 +1106,47 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: rpposts -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('rpposts')
+    .setDescription('📝 Update RP post count for a quest participant')
+    .addStringOption(option =>
+      option
+        .setName('questid')
+        .setDescription('ID of the RP quest')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User to update post count for')
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('count')
+        .setDescription('New post count')
+        .setRequired(true)
+        .setMinValue(0)
+    )
+)
+
+// ------------------- Subcommand: rpstatus -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('rpstatus')
+    .setDescription('📊 Check RP quest status and post counts')
+    .addStringOption(option =>
+      option
+        .setName('questid')
+        .setDescription('ID of the RP quest')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+)
+
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -1216,6 +1257,10 @@ async function execute(interaction) {
         return await handleDebuff(interaction);
     } else if (subcommand === 'sheets') {
         return await handleSheets(interaction);
+    } else if (subcommand === 'rpposts') {
+        return await handleRPPosts(interaction);
+    } else if (subcommand === 'rpstatus') {
+        return await handleRPStatus(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -1478,7 +1523,71 @@ async function handleMount(interaction) {
     await interaction.editReply({ embeds: [embed] });
   }
   
-  // ------------------- Function: handleApprove -------------------
+  // ------------------- Function: handleQuestCompletionFromSubmission -------------------
+// Handles quest completion when an art/writing submission is approved
+async function handleQuestCompletionFromSubmission(submission, userId) {
+  try {
+    const Quest = require('../models/QuestModel');
+    const questRewardModule = require('../modules/questRewardModule');
+    
+    const questID = submission.questEvent;
+    console.log(`[mod.js]: 🎯 Processing quest completion for quest ${questID} and user ${userId}`);
+    
+    // Find the quest
+    const quest = await Quest.findOne({ questID });
+    if (!quest) {
+      console.log(`[mod.js]: ⚠️ Quest ${questID} not found for submission ${submission.submissionId}`);
+      return;
+    }
+    
+    // Check if quest is active
+    if (quest.status !== 'active') {
+      console.log(`[mod.js]: ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
+      return;
+    }
+    
+    // Find the participant
+    const participant = quest.getParticipant(userId);
+    if (!participant) {
+      console.log(`[mod.js]: ⚠️ User ${userId} is not a participant in quest ${questID}`);
+      return;
+    }
+    
+    // Check if participant has quest submission info
+    if (!participant.questSubmissionInfo) {
+      console.log(`[mod.js]: ⚠️ No quest submission info found for user ${userId} in quest ${questID}`);
+      return;
+    }
+    
+    // Mark quest as completed for this participant
+    participant.progress = 'completed';
+    participant.completedAt = new Date();
+    
+    // Clear the quest submission info since it's been processed
+    participant.questSubmissionInfo = null;
+    
+    // Save the quest with updated participant data
+    await quest.save();
+    
+    // Use unified completion system
+    const completionResult = await quest.checkAutoCompletion();
+    
+    if (completionResult.completed) {
+      console.log(`[mod.js]: ✅ Quest ${questID} completed: ${completionResult.reason}`);
+      
+      // Distribute rewards for all participants
+      await questRewardModule.processQuestCompletion(questID);
+    } else if (completionResult.reason.includes('participants completed')) {
+      console.log(`[mod.js]: 📊 ${completionResult.reason} in quest ${questID}`);
+    }
+    
+  } catch (error) {
+    console.error(`[mod.js]: ❌ Error in handleQuestCompletionFromSubmission:`, error);
+    throw error;
+  }
+}
+
+// ------------------- Function: handleApprove -------------------
 // Approves or denies a user submission and handles token updates, notifications, and reactions.
 async function handleApprove(interaction) {
     const submissionId = interaction.options.getString('submission_id');
@@ -1617,6 +1726,17 @@ async function handleApprove(interaction) {
             await interaction.client.users.send(userId, { embeds: [userEmbed] });
           } catch (dmError) {
             console.error(`[mod.js]: ❌ Error sending DM to user ${userId}:`, dmError);
+          }
+        }
+
+        // ------------------- Quest Completion Logic -------------------
+        // Check if this submission is linked to a quest and auto-complete it
+        if (submission.questEvent && submission.questEvent !== 'N/A') {
+          try {
+            await handleQuestCompletionFromSubmission(submission, userId);
+          } catch (questError) {
+            console.error(`[mod.js]: ❌ Error processing quest completion for submission ${submissionId}:`, questError);
+            // Continue with approval even if quest completion fails
           }
         }
 
@@ -3653,6 +3773,129 @@ async function handleSheets(interaction) {
     return interaction.editReply('⚠️ An error occurred while processing the sheets action.');
   }
 }
+// ============================================================================
+// ------------------- Function: handleRPPosts -------------------
+// Updates RP post count for a quest participant
+// ============================================================================
+
+async function handleRPPosts(interaction) {
+  try {
+    const questID = interaction.options.getString('questid');
+    const user = interaction.options.getUser('user');
+    const newCount = interaction.options.getInteger('count');
+
+    const { updateRPPostCount } = require('../../modules/rpQuestTrackingModule');
+    const result = await updateRPPostCount(questID, user.id, newCount);
+
+    if (result.success) {
+      const embed = new EmbedBuilder()
+        .setColor('#00FF00')
+        .setTitle('✅ RP Post Count Updated')
+        .setDescription(`Updated RP post count for **${user.username}** in quest **${questID}**`)
+        .addFields(
+          { name: 'Quest ID', value: questID, inline: true },
+          { name: 'User', value: user.username, inline: true },
+          { name: 'Old Count', value: result.oldCount.toString(), inline: true },
+          { name: 'New Count', value: result.newCount.toString(), inline: true },
+          { name: 'Meets Requirements', value: result.meetsRequirements ? '✅ Yes' : '❌ No', inline: true }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+        .setFooter({ text: `Updated by ${interaction.user.tag}` })
+        .setTimestamp();
+
+      return interaction.editReply({ embeds: [embed], ephemeral: true });
+    } else {
+      return interaction.editReply({
+        content: `❌ Failed to update RP post count: ${result.error}`,
+        ephemeral: true
+      });
+    }
+
+  } catch (error) {
+    handleError(error, 'mod.js', {
+      commandName: '/mod rpposts',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      questID: interaction.options.getString('questid')
+    });
+
+    return interaction.editReply({
+      content: '❌ An error occurred while updating RP post count.',
+      ephemeral: true
+    });
+  }
+}
+
+// ============================================================================
+// ------------------- Function: handleRPStatus -------------------
+// Checks RP quest status and post counts
+// ============================================================================
+
+async function handleRPStatus(interaction) {
+  try {
+    const questID = interaction.options.getString('questid');
+
+    const { getRPQuestStatus } = require('../../modules/rpQuestTrackingModule');
+    const result = await getRPQuestStatus(questID);
+
+    if (result.success === false) {
+      return interaction.editReply({
+        content: `❌ ${result.error}`,
+        ephemeral: true
+      });
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#0099FF')
+      .setTitle(`📊 RP Quest Status: ${result.title}`)
+      .setDescription(`Quest ID: ${result.questID} | Status: ${result.status}`)
+      .addFields(
+        { name: 'Post Requirement', value: `${result.postRequirement} posts`, inline: true },
+        { name: 'Participants', value: result.participants.length.toString(), inline: true }
+      );
+
+    // Add participant details
+    if (result.participants.length > 0) {
+      const participantInfo = result.participants.map(p => {
+        const status = p.meetsRequirements ? '✅' : '❌';
+        return `${status} **${p.characterName}**: ${p.rpPostCount}/${result.postRequirement} posts`;
+      }).join('\n');
+
+      embed.addFields({
+        name: 'Participant Progress',
+        value: participantInfo.length > 1024 ? participantInfo.substring(0, 1021) + '...' : participantInfo,
+        inline: false
+      });
+    } else {
+      embed.addFields({
+        name: 'Participant Progress',
+        value: 'No participants found',
+        inline: false
+      });
+    }
+
+    embed
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setFooter({ text: `Checked by ${interaction.user.tag}` })
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [embed], ephemeral: true });
+
+  } catch (error) {
+    handleError(error, 'mod.js', {
+      commandName: '/mod rpstatus',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      questID: interaction.options.getString('questid')
+    });
+
+    return interaction.editReply({
+      content: '❌ An error occurred while checking RP quest status.',
+      ephemeral: true
+    });
+  }
+}
+
 // ============================================================================
 // ------------------- Export Command -------------------
 // ============================================================================
