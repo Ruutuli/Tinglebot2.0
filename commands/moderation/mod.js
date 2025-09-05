@@ -1171,71 +1171,6 @@ const modCommand = new SlashCommandBuilder()
     .setDescription('👽 Create a new "They Came for the Cows" alien defense game')
 )
 
-// ------------------- Subcommand: theycame-signup -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('theycame-signup')
-    .setDescription('✋ Sign up for turn order in an alien defense game')
-    .addStringOption(option =>
-      option
-        .setName('session_id')
-        .setDescription('Game session ID')
-        .setRequired(true)
-    )
-)
-
-// ------------------- Subcommand: theycame-join -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('theycame-join')
-    .setDescription('🎮 Join an alien defense game')
-    .addStringOption(option =>
-      option
-        .setName('session_id')
-        .setDescription('Game session ID')
-        .setRequired(true)
-    )
-)
-
-// ------------------- Subcommand: theycame-roll -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('theycame-roll')
-    .setDescription('🎯 Roll defense against an alien')
-    .addStringOption(option =>
-      option
-        .setName('session_id')
-        .setDescription('Game session ID')
-        .setRequired(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName('target')
-        .setDescription('Target alien (e.g., A1, B2)')
-        .setRequired(true)
-    )
-    .addIntegerOption(option =>
-      option
-        .setName('roll')
-        .setDescription('Your defense roll (1-6)')
-        .setRequired(true)
-        .setMinValue(1)
-        .setMaxValue(6)
-    )
-)
-
-// ------------------- Subcommand: theycame-status -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('theycame-status')
-    .setDescription('📊 View alien defense game status')
-    .addStringOption(option =>
-      option
-        .setName('session_id')
-        .setDescription('Game session ID')
-        .setRequired(true)
-    )
-)
 
 // ------------------- Subcommand: theycame-advance -------------------
 .addSubcommand(sub =>
@@ -1377,14 +1312,6 @@ async function execute(interaction) {
         return await handleRPStatus(interaction);
     } else if (subcommand === 'theycame') {
         return await handleCreateTheyCame(interaction);
-    } else if (subcommand === 'theycame-signup') {
-        return await handleTheyCameSignup(interaction);
-    } else if (subcommand === 'theycame-join') {
-        return await handleTheyCameJoin(interaction);
-    } else if (subcommand === 'theycame-roll') {
-        return await handleTheyCameRoll(interaction);
-    } else if (subcommand === 'theycame-status') {
-        return await handleTheyCameStatus(interaction);
     } else if (subcommand === 'theycame-advance') {
         return await handleTheyCameAdvance(interaction);
     } else if (subcommand === 'theycame-end') {
@@ -4038,205 +3965,6 @@ async function handleCreateTheyCame(interaction) {
   }
 }
 
-// ============================================================================
-// ------------------- Player Action Handlers -------------------
-// ============================================================================
-
-async function handleTheyCameSignup(interaction) {
-  try {
-    const sessionId = interaction.options.getString('session_id');
-    const userId = interaction.user.id;
-    const username = interaction.user.username;
-    
-    // Find the specific session
-    const session = await Minigame.findOne({
-      sessionId: sessionId,
-      gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return interaction.editReply({
-        content: '❌ Game session not found, expired, or already finished.'
-      });
-    }
-    
-    // Add player to turn order
-    const result = addPlayerToTurnOrder(session.gameData, userId, username);
-    
-    if (result.success) {
-      // Also add to players list if not already there
-      const alreadyJoined = session.players.find(p => p.discordId === userId);
-      if (!alreadyJoined) {
-        session.players.push({
-          discordId: userId,
-          username: username,
-          joinedAt: new Date()
-        });
-      }
-      
-      await session.save();
-      
-      return interaction.editReply({
-        content: result.message
-      });
-    } else {
-      return interaction.editReply({
-        content: result.message
-      });
-    }
-  } catch (error) {
-    handleError(error, 'mod.js', {
-      commandName: '/mod theycame-signup',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id
-    });
-    throw error;
-  }
-}
-
-async function handleTheyCameJoin(interaction) {
-  try {
-    const sessionId = interaction.options.getString('session_id');
-    const userId = interaction.user.id;
-    const username = interaction.user.username;
-    
-    // Find the specific session
-    const session = await Minigame.findOne({
-      sessionId: sessionId,
-      gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return interaction.editReply({
-        content: '❌ Game session not found, expired, or already finished.'
-      });
-    }
-    
-    // Check if player already joined
-    const alreadyJoined = session.players.find(p => p.discordId === userId);
-    if (alreadyJoined) {
-      return interaction.editReply({
-        content: '✅ You\'re already in the game!'
-      });
-    }
-    
-    // Add player to game
-    session.players.push({
-      discordId: userId,
-      username: username,
-      joinedAt: new Date()
-    });
-    
-    await session.save();
-    
-    return interaction.editReply({
-      content: `🎮 **${username}** joined the alien defense!`
-    });
-  } catch (error) {
-    handleError(error, 'mod.js', {
-      commandName: '/mod theycame-join',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id
-    });
-    throw error;
-  }
-}
-
-async function handleTheyCameRoll(interaction) {
-  try {
-    const sessionId = interaction.options.getString('session_id');
-    const target = interaction.options.getString('target');
-    const roll = interaction.options.getInteger('roll');
-    const userId = interaction.user.id;
-    const username = interaction.user.username;
-    
-    // Find the specific session
-    const session = await Minigame.findOne({
-      sessionId: sessionId,
-      gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return interaction.editReply({
-        content: '❌ Game session not found, expired, or already finished.'
-      });
-    }
-    
-    // Check if player is in the game
-    const player = session.players.find(p => p.discordId === userId);
-    if (!player) {
-      return interaction.editReply({
-        content: '❌ You need to join the game first! Use `/mod theycame-join session_id:' + sessionId + '`'
-      });
-    }
-    
-    // Process the roll
-    const result = processAlienDefenseRoll(session.gameData, userId, username, target, roll);
-    
-    if (result.success) {
-      // Check if game should end
-      const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
-      if (gameEndCheck.gameEnded) {
-        session.status = 'finished';
-        session.results.finalScore = gameEndCheck.finalScore;
-        session.results.completedAt = new Date();
-      }
-      
-      await session.save();
-      
-      const embed = await createMinigameEmbed(session, 'Defense Roll!');
-      return interaction.editReply({
-        content: result.message,
-        embeds: [embed]
-      });
-    } else {
-      return interaction.editReply({
-        content: result.message
-      });
-    }
-  } catch (error) {
-    handleError(error, 'mod.js', {
-      commandName: '/mod theycame-roll',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id
-    });
-    throw error;
-  }
-}
-
-async function handleTheyCameStatus(interaction) {
-  try {
-    const sessionId = interaction.options.getString('session_id');
-    
-    // Find the specific session
-    const session = await Minigame.findOne({
-      sessionId: sessionId,
-      gameType: 'theycame'
-    });
-    
-    if (!session) {
-      return interaction.editReply({
-        content: '❌ Game session not found.'
-      });
-    }
-    
-    const embed = await createMinigameEmbed(session, 'Game Status');
-    return interaction.editReply({ embeds: [embed] });
-  } catch (error) {
-    handleError(error, 'mod.js', {
-      commandName: '/mod theycame-status',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id
-    });
-    throw error;
-  }
-}
 
 async function handleTheyCameAdvance(interaction) {
   try {
@@ -4379,12 +4107,12 @@ async function handleCreateMinigame(interaction) {
     .addFields(
       { 
         name: '🎮 Player Commands', 
-        value: `**Sign Up for Turn Order:** \`/mod theycame-signup session_id:${newSession.sessionId}\`\n**Join Game:** \`/mod theycame-join session_id:${newSession.sessionId}\`\n**View Status:** \`/mod theycame-status session_id:${newSession.sessionId}\``, 
+        value: `**Sign Up for Turn Order:** \`/minigame signup session_id:${newSession.sessionId}\`\n**Join Game:** \`/minigame join session_id:${newSession.sessionId}\`\n**View Status:** \`/minigame status session_id:${newSession.sessionId}\``, 
         inline: false 
       },
       { 
         name: '🎯 Combat Commands', 
-        value: `**Roll Defense:** \`/mod theycame-roll session_id:${newSession.sessionId} target:A1 roll:5\`\n*Target format: A1, A2, A3, B1, B2, B3, etc.*\n*Roll: 1-6 (Outer Ring needs 5+, Middle needs 4+, Inner needs 3+)*`, 
+        value: `**Roll Defense:** \`/minigame roll session_id:${newSession.sessionId} target:A1 roll:5\`\n*Target format: A1, A2, A3, B1, B2, B3, etc.*\n*Roll: 1-6 (Outer Ring needs 5+, Middle needs 4+, Inner needs 3+)*`, 
         inline: false 
       },
       { 

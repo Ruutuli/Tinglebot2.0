@@ -28,6 +28,8 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const { 
   GAME_CONFIGS,
   createAlienDefenseGame,
+  addPlayerToTurnOrder,
+  spawnAliens,
   processAlienDefenseRoll,
   advanceAlienDefenseRound,
   checkAlienDefenseGameEnd,
@@ -41,42 +43,59 @@ const {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('minigame')
-    .setDescription('🎮 Play various minigames!')
-      .addSubcommand(subcommand =>
-    subcommand
-      .setName('theycame')
-      .setDescription('Aliens are coming for the cows! Defend your village!')
-      .addStringOption(option =>
-        option.setName('action')
-          .setDescription('What action to take')
-          .setRequired(true)
-          .addChoices(
-            { name: 'Create Game', value: 'create' },
-            { name: 'Join Game', value: 'join' },
-            { name: 'Roll Defense', value: 'roll' },
-            { name: 'View Status', value: 'status' },
-            { name: 'Advance Round', value: 'advance' },
-            { name: 'End Game', value: 'end' }
-          )
-      )
-      .addStringOption(option =>
-        option.setName('session_id')
-          .setDescription('Game session ID (required for join, roll, status, advance, end)')
-          .setRequired(false)
-      )
-      .addStringOption(option =>
-        option.setName('target')
-          .setDescription('Target alien (e.g., A1, B2) or leave empty for status')
-          .setRequired(false)
-      )
-      .addIntegerOption(option =>
-        option.setName('roll')
-          .setDescription('Your defense roll (1-6)')
-          .setRequired(false)
-          .setMinValue(1)
-          .setMaxValue(6)
-      )
-  ),
+    .setDescription('🎮 Play minigames!')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('signup')
+        .setDescription('✋ Sign up for turn order in an alien defense game')
+        .addStringOption(option =>
+          option.setName('session_id')
+            .setDescription('Game session ID')
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('join')
+        .setDescription('🎮 Join an alien defense game')
+        .addStringOption(option =>
+          option.setName('session_id')
+            .setDescription('Game session ID')
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('roll')
+        .setDescription('🎯 Roll defense against an alien')
+        .addStringOption(option =>
+          option.setName('session_id')
+            .setDescription('Game session ID')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option.setName('target')
+            .setDescription('Target alien (e.g., A1, B2)')
+            .setRequired(true)
+        )
+        .addIntegerOption(option =>
+          option.setName('roll')
+            .setDescription('Your defense roll (1-6)')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(6)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('status')
+        .setDescription('📊 View alien defense game status')
+        .addStringOption(option =>
+          option.setName('session_id')
+            .setDescription('Game session ID')
+            .setRequired(true)
+        )
+    ),
 
   // ============================================================================
   // ------------------- Execute function -------------------
@@ -86,10 +105,21 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     
     try {
-      if (subcommand === 'theycame') {
-        await this.handleTheyCame(interaction);
-      } else {
-        await interaction.reply({ content: '❌ Unknown minigame type.', flags: 64 });
+      switch (subcommand) {
+        case 'signup':
+          await this.handleSignUp(interaction);
+          break;
+        case 'join':
+          await this.handleJoin(interaction);
+          break;
+        case 'roll':
+          await this.handleRoll(interaction);
+          break;
+        case 'status':
+          await this.handleStatus(interaction);
+          break;
+        default:
+          await interaction.reply({ content: '❌ Unknown minigame action.', flags: 64 });
       }
     } catch (error) {
       handleError(error, 'minigame.js', {
@@ -123,108 +153,63 @@ module.exports = {
   },
 
   // ============================================================================
-  // ------------------- Handle They Came for the Cows Game -------------------
+  // ------------------- Sign Up Handler -------------------
   // ============================================================================
-  async handleTheyCame(interaction) {
-    const action = interaction.options.getString('action');
+  async handleSignUp(interaction) {
     const sessionId = interaction.options.getString('session_id');
-    const target = interaction.options.getString('target');
-    const roll = interaction.options.getInteger('roll');
-    
-    try {
-      switch (action) {
-        case 'create':
-          await this.handleCreateTheyCame(interaction);
-          break;
-        case 'join':
-          await this.handleJoinTheyCame(interaction);
-          break;
-        case 'roll':
-          await this.handleRollTheyCame(interaction, target, roll);
-          break;
-        case 'status':
-          await this.handleStatusTheyCame(interaction);
-          break;
-        case 'advance':
-          await this.handleAdvanceRoundTheyCame(interaction);
-          break;
-        case 'end':
-          await this.handleEndTheyCame(interaction);
-          break;
-        default:
-          await interaction.reply({ content: '❌ Unknown action.', flags: 64 });
-      }
-    } catch (error) {
-      handleError(error, 'minigame.js', {
-        commandName: 'theycame',
-        action: action,
-        userTag: interaction.user.tag,
-        userId: interaction.user.id
-      });
-      throw error;
-    }
-  },
-
-  // ============================================================================
-  // ------------------- Create Game Handler -------------------
-  // ============================================================================
-  async handleCreateTheyCame(interaction) {
-    // Check if user is admin
-    if (!interaction.member.permissions.has('Administrator')) {
-      return await interaction.reply({
-        content: '❌ Only administrators can create minigame sessions.',
-        flags: 64
-      });
-    }
-    
-    const channelId = interaction.channelId;
-    const guildId = interaction.guildId;
     const userId = interaction.user.id;
+    const username = interaction.user.username;
     
-    // Check if there's already an active session in this channel
-    const existingSession = await Minigame.findOne({
-      channelId: channelId,
+    // Find the specific session
+    const session = await Minigame.findOne({
+      sessionId: sessionId,
       gameType: 'theycame',
       status: { $in: ['waiting', 'active'] },
       expiresAt: { $gt: new Date() }
     });
     
-    if (existingSession) {
+    if (!session) {
       return await interaction.reply({
-        content: `❌ There's already an active "They Came for the Cows" session in this channel (ID: ${existingSession.sessionId})`,
+        content: '❌ Game session not found, expired, or already finished.',
         flags: 64
       });
     }
     
-    // Create new game session
-    const gameSession = createAlienDefenseGame(channelId, guildId, userId);
+    // Add player to turn order
+    const result = addPlayerToTurnOrder(session.gameData, userId, username);
     
-    const newSession = new Minigame(gameSession);
-    await newSession.save();
-    
-    const embed = await this.createTheyCameEmbed(newSession, 'Game Created!');
-    const buttons = this.createTheyCameButtons(newSession.sessionId);
-    
-    await interaction.reply({
-      embeds: [embed],
-      components: [buttons]
-    });
+    if (result.success) {
+      // Also add to players list if not already there
+      const alreadyJoined = session.players.find(p => p.discordId === userId);
+      if (!alreadyJoined) {
+        session.players.push({
+          discordId: userId,
+          username: username,
+          joinedAt: new Date()
+        });
+      }
+      
+      await session.save();
+      
+      await interaction.reply({
+        content: result.message,
+        flags: 64
+      });
+    } else {
+      await interaction.reply({
+        content: result.message,
+        flags: 64
+      });
+    }
   },
 
   // ============================================================================
   // ------------------- Join Game Handler -------------------
   // ============================================================================
-  async handleJoinTheyCame(interaction) {
+  async handleJoin(interaction) {
     const sessionId = interaction.options.getString('session_id');
     const userId = interaction.user.id;
     const username = interaction.user.username;
-    
-    if (!sessionId) {
-      return await interaction.reply({
-        content: '❌ Please provide a session ID to join a specific game.',
-        flags: 64
-      });
-    }
     
     // Find the specific session
     const session = await Minigame.findOne({
@@ -268,23 +253,10 @@ module.exports = {
   // ============================================================================
   // ------------------- Roll Defense Handler -------------------
   // ============================================================================
-  async handleRollTheyCame(interaction, target, roll) {
+  async handleRoll(interaction) {
     const sessionId = interaction.options.getString('session_id');
-    
-    if (!sessionId) {
-      return await interaction.reply({
-        content: '❌ Please provide a session ID to participate in a specific game.',
-        flags: 64
-      });
-    }
-    
-    if (!target || !roll) {
-      return await interaction.reply({
-        content: '❌ Please specify both target alien (e.g., A1) and your roll (1-6).',
-        flags: 64
-      });
-    }
-    
+    const target = interaction.options.getString('target');
+    const roll = interaction.options.getInteger('roll');
     const userId = interaction.user.id;
     const username = interaction.user.username;
     
@@ -307,7 +279,7 @@ module.exports = {
     const player = session.players.find(p => p.discordId === userId);
     if (!player) {
       return await interaction.reply({
-        content: '❌ You need to join the game first! Use `/minigame theycame action:join session_id:' + sessionId + '`',
+        content: '❌ You need to join the game first! Use `/minigame join session_id:' + sessionId + '`',
         flags: 64
       });
     }
@@ -326,7 +298,7 @@ module.exports = {
       
       await session.save();
       
-      const embed = await this.createTheyCameEmbed(session, 'Defense Roll!');
+      const embed = await this.createMinigameEmbed(session, 'Defense Roll!');
       await interaction.reply({
         content: result.message,
         embeds: [embed]
@@ -342,15 +314,8 @@ module.exports = {
   // ============================================================================
   // ------------------- Status Handler -------------------
   // ============================================================================
-  async handleStatusTheyCame(interaction) {
+  async handleStatus(interaction) {
     const sessionId = interaction.options.getString('session_id');
-    
-    if (!sessionId) {
-      return await interaction.reply({
-        content: '❌ Please provide a session ID to view a specific game status.',
-        flags: 64
-      });
-    }
     
     // Find the specific session
     const session = await Minigame.findOne({
@@ -365,129 +330,15 @@ module.exports = {
       });
     }
     
-    const embed = await this.createTheyCameEmbed(session, 'Game Status');
+    const embed = await this.createMinigameEmbed(session, 'Game Status');
     await interaction.reply({ embeds: [embed] });
   },
 
   // ============================================================================
-  // ------------------- Advance Round Handler -------------------
-  // ============================================================================
-  async handleAdvanceRoundTheyCame(interaction) {
-    // Check if user is admin
-    if (!interaction.member.permissions.has('Administrator')) {
-      return await interaction.reply({
-        content: '❌ Only administrators can advance rounds.',
-        flags: 64
-      });
-    }
-    
-    const sessionId = interaction.options.getString('session_id');
-    
-    if (!sessionId) {
-      return await interaction.reply({
-        content: '❌ Please provide a session ID to advance a specific game.',
-        flags: 64
-      });
-    }
-    
-    // Find the specific session
-    const session = await Minigame.findOne({
-      sessionId: sessionId,
-      gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return await interaction.reply({
-        content: '❌ Game session not found, expired, or already finished.',
-        flags: 64
-      });
-    }
-    
-    // Advance the round
-    const result = advanceAlienDefenseRound(session.gameData);
-    
-    if (result.success) {
-      // Check if game should end
-      const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
-      if (gameEndCheck.gameEnded) {
-        session.status = 'finished';
-        session.results.finalScore = gameEndCheck.finalScore;
-        session.results.completedAt = new Date();
-      }
-      
-      await session.save();
-      
-      const embed = await this.createTheyCameEmbed(session, 'Round Advanced!');
-      await interaction.reply({
-        content: result.message,
-        embeds: [embed]
-      });
-    } else {
-      await interaction.reply({
-        content: result.message,
-        flags: 64
-      });
-    }
-  },
-
-  // ============================================================================
-  // ------------------- End Game Handler -------------------
-  // ============================================================================
-  async handleEndTheyCame(interaction) {
-    // Check if user is admin
-    if (!interaction.member.permissions.has('Administrator')) {
-      return await interaction.reply({
-        content: '❌ Only administrators can end games.',
-        flags: 64
-      });
-    }
-    
-    const sessionId = interaction.options.getString('session_id');
-    
-    if (!sessionId) {
-      return await interaction.reply({
-        content: '❌ Please provide a session ID to end a specific game.',
-        flags: 64
-      });
-    }
-    
-    // Find the specific session
-    const session = await Minigame.findOne({
-      sessionId: sessionId,
-      gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return await interaction.reply({
-        content: '❌ Game session not found, expired, or already finished.',
-        flags: 64
-      });
-    }
-    
-    // End the game
-    session.status = 'finished';
-    session.results.finalScore = session.gameData.villageAnimals;
-    session.results.completedAt = new Date();
-    
-    await session.save();
-    
-    const embed = await this.createTheyCameEmbed(session, 'Game Ended!');
-    await interaction.reply({
-      content: `🏁 **Game ended by ${interaction.user.username}!** Final score: ${session.gameData.villageAnimals} animals saved!`,
-      embeds: [embed]
-    });
-  },
-
-  // ============================================================================
-  // ------------------- Embed and Button Creation -------------------
+  // ------------------- Embed Creation -------------------
   // ============================================================================
   
-  // ------------------- Function: createTheyCameEmbed -------------------
-  async createTheyCameEmbed(session, title) {
+  async createMinigameEmbed(session, title) {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     
@@ -503,6 +354,16 @@ module.exports = {
       { name: '👥 Players', value: session.players.length.toString(), inline: true },
       { name: '🐄 Animals Saved', value: status.villageAnimals.toString(), inline: true }
     );
+    
+    // Turn order info
+    if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
+      const turnOrderText = session.gameData.turnOrder.map((player, index) => 
+        `${index + 1}. ${player.username}${index === session.gameData.currentTurnIndex ? ' ⬅️' : ''}`
+      ).join('\n');
+      embed.addFields(
+        { name: '🔄 Turn Order', value: turnOrderText || 'No players signed up', inline: false }
+      );
+    }
     
     // Alien status
     embed.addFields(
@@ -526,26 +387,6 @@ module.exports = {
     return embed;
   },
 
-  // ------------------- Function: createTheyCameButtons -------------------
-  createTheyCameButtons(sessionId) {
-    const row = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId(`minigame_join_${sessionId}`)
-          .setLabel('Join Game')
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji('🎮'),
-        new ButtonBuilder()
-          .setCustomId(`minigame_status_${sessionId}`)
-          .setLabel('View Status')
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('📊')
-      );
-    
-    return row;
-  },
-
-  // ------------------- Function: getGameStatusColor -------------------
   getGameStatusColor(status) {
     switch (status) {
       case 'waiting': return 0x00ff00; // Green
