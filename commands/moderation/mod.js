@@ -961,29 +961,33 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: resetpetrolls -------------------
+// ------------------- Subcommand: petrolls -------------------
 .addSubcommand(subcommand =>
   subcommand
-    .setName('resetpetrolls')
-    .setDescription('Reset all pet rolls for all characters')
-)
-
-.addSubcommand(subcommand =>
-  subcommand
-    .setName('forceresetpetrolls')
-    .setDescription('Force reset rolls for a specific pet')
+    .setName('petrolls')
+    .setDescription('🔄 Reset pet rolls for all characters or a specific pet')
+    .addStringOption(option =>
+      option
+        .setName('action')
+        .setDescription('Reset all pets or a specific pet')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Reset All Pet Rolls', value: 'all' },
+          { name: 'Reset Specific Pet', value: 'specific' }
+        )
+    )
     .addStringOption(option =>
       option
         .setName('character')
-        .setDescription('The character name')
-        .setRequired(true)
+        .setDescription('The character name (required for specific pet reset)')
+        .setRequired(false)
         .setAutocomplete(true)
     )
     .addStringOption(option =>
       option
         .setName('petname')
-        .setDescription('The pet name')
-        .setRequired(true)
+        .setDescription('The pet name (required for specific pet reset)')
+        .setRequired(false)
         .setAutocomplete(true)
     )
 )
@@ -1294,10 +1298,8 @@ async function execute(interaction) {
         return await handleWeather(interaction);
     } else if (subcommand === 'vendingreset') {
         return await handleVendingReset(interaction);
-    } else if (subcommand === 'resetpetrolls') {
-        return await handlePetRollsReset(interaction);
-    } else if (subcommand === 'forceresetpetrolls') {
-        return await handleForceResetPetRolls(interaction);
+    } else if (subcommand === 'petrolls') {
+        return await handlePetRolls(interaction);
     } else if (subcommand === 'resetrolls') {
         return await handleResetRolls(interaction);
     } else if (subcommand === 'shopadd') {
@@ -2553,132 +2555,129 @@ async function handleVendingReset(interaction) {
   }
 }
 
-// ------------------- Function: handlePetRollsReset -------------------
-// Manually resets all pet rolls for all characters
-async function handlePetRollsReset(interaction) {
+// ------------------- Function: handlePetRolls -------------------
+// Handles both resetting all pet rolls and resetting specific pet rolls
+async function handlePetRolls(interaction) {
   try {
-    // Call the reset function
-    await resetPetRollsForAllCharacters();
+    const action = interaction.options.getString('action');
     
-    return interaction.editReply({
-      content: "✅ Pet rolls have been manually reset for all active pets.",
-      ephemeral: true
-    });
-  } catch (error) {
-    handleError(error, "mod.js", {
-      commandName: '/mod resetpetrolls',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id,
-      options: {
-        subcommand: 'resetpetrolls'
-      }
-    });
-    
-    console.error(`[mod.js]: Error in /mod resetpetrolls:`, error);
-    
-    return interaction.editReply({
-      content: `❌ Failed to reset pet rolls: ${error.message || 'Unknown error'}`,
-      ephemeral: true
-    });
-  }
-}
-
-// ------------------- Function: handleForceResetPetRolls -------------------
-async function handleForceResetPetRolls(interaction) {
-  try {
-    const charName = interaction.options.getString('character');
-    const petName = interaction.options.getString('petname');
-    
-    const character = await fetchCharacterByName(charName);
-    if (!character) {
-      return interaction.editReply(
-        `❌ Character **${charName}** not found in database.`
-      );
-    }
-    
-    // Get the pet details for the embed
-    const pet = await Pet.findOne({
-      owner: character._id,
-      name: petName,
-    });
-    
-    if (!pet) {
-      return interaction.editReply(
-        `❌ Pet **${petName}** not found for **${character.name}**.`
-      );
-    }
-    
-    const result = await forceResetPetRolls(character._id, petName);
-    
-    // Log character and pet data for debugging
-    console.log(`[mod.js]: Character data (force reset):`, {
-      name: character.name,
-      icon: character.icon,
-      userId: character.userId
-    });
-    console.log(`[mod.js]: Pet data (force reset):`, {
-      name: pet.name,
-      species: pet.species,
-      petType: pet.petType,
-      imageUrl: pet.imageUrl
-    });
-
-    // Create a beautiful embed for the pet roll reset
-    try {
-      const resetEmbed = createPetEmbed('rollReset', {
-        character,
-        pet,
-        petName,
-        result,
-        moderatorTag: interaction.user.tag
-      });
-
-      // Log the embed data before sending
-      console.log(`[mod.js]: Reset embed data:`, {
-        author: resetEmbed.data.author,
-        title: resetEmbed.data.title,
-        thumbnail: resetEmbed.data.thumbnail,
-        image: resetEmbed.data.image,
-        fields: resetEmbed.data.fields,
-        footer: resetEmbed.data.footer,
-        color: resetEmbed.data.color
-      });
-
-      // Send the embed as a public message and mention the character owner
-      await interaction.editReply({ content: '✅ Processing pet roll reset...', ephemeral: true });
-      return await interaction.followUp({
-        content: `🔄 <@${character.userId}> | ${character.name}'s pet ${petName} rolls have been reset from ${result?.oldRolls || 0} to ${result?.newRolls || 0} rolls! Daily reset at 8:00 AM.`,
-        embeds: [resetEmbed]
-      });
-    } catch (error) {
-      console.error(`[mod.js]: Error creating or sending pet reset embed:`, error);
-      handleError(error, 'mod.js', {
-        commandName: '/mod forceresetpetrolls',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
-        characterName: character.name,
-        petName: petName,
-        result: result
-      });
+    if (action === 'all') {
+      // Reset all pet rolls for all characters
+      await resetPetRollsForAllCharacters();
       
       return interaction.editReply({
-        content: `❌ Failed to create pet reset embed: ${error.message || 'Unknown error'}`,
+        content: "✅ Pet rolls have been manually reset for all active pets.",
+        ephemeral: true
+      });
+    } else if (action === 'specific') {
+      // Reset specific pet rolls
+      const charName = interaction.options.getString('character');
+      const petName = interaction.options.getString('petname');
+      
+      if (!charName || !petName) {
+        return interaction.editReply({
+          content: "❌ Character and pet name are required for specific pet reset.",
+          ephemeral: true
+        });
+      }
+      
+      const character = await fetchCharacterByName(charName);
+      if (!character) {
+        return interaction.editReply(
+          `❌ Character **${charName}** not found in database.`
+        );
+      }
+      
+      // Get the pet details for the embed
+      const pet = await Pet.findOne({
+        owner: character._id,
+        name: petName,
+      });
+      
+      if (!pet) {
+        return interaction.editReply(
+          `❌ Pet **${petName}** not found for **${character.name}**.`
+        );
+      }
+      
+      const result = await forceResetPetRolls(character._id, petName);
+      
+      // Log character and pet data for debugging
+      console.log(`[mod.js]: Character data (force reset):`, {
+        name: character.name,
+        icon: character.icon,
+        userId: character.userId
+      });
+      console.log(`[mod.js]: Pet data (force reset):`, {
+        name: pet.name,
+        species: pet.species,
+        petType: pet.petType,
+        imageUrl: pet.imageUrl
+      });
+
+      // Create a beautiful embed for the pet roll reset
+      try {
+        const resetEmbed = createPetEmbed('rollReset', {
+          character,
+          pet,
+          petName,
+          result,
+          moderatorTag: interaction.user.tag
+        });
+
+        // Log the embed data before sending
+        console.log(`[mod.js]: Reset embed data:`, {
+          author: resetEmbed.data.author,
+          title: resetEmbed.data.title,
+          thumbnail: resetEmbed.data.thumbnail,
+          image: resetEmbed.data.image,
+          fields: resetEmbed.data.fields,
+          footer: resetEmbed.data.footer,
+          color: resetEmbed.data.color
+        });
+
+        // Send the embed as a public message and mention the character owner
+        await interaction.editReply({ content: '✅ Processing pet roll reset...', ephemeral: true });
+        return await interaction.followUp({
+          content: `🔄 <@${character.userId}> | ${character.name}'s pet ${petName} rolls have been reset from ${result?.oldRolls || 0} to ${result?.newRolls || 0} rolls! Daily reset at 8:00 AM.`,
+          embeds: [resetEmbed]
+        });
+      } catch (error) {
+        console.error(`[mod.js]: Error creating or sending pet reset embed:`, error);
+        handleError(error, 'mod.js', {
+          commandName: '/mod petrolls',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          characterName: character.name,
+          petName: petName,
+          result: result
+        });
+        
+        return interaction.editReply({
+          content: `❌ Failed to create pet reset embed: ${error.message || 'Unknown error'}`,
+          ephemeral: true
+        });
+      }
+    } else {
+      return interaction.editReply({
+        content: "❌ Invalid action. Please choose 'all' or 'specific'.",
         ephemeral: true
       });
     }
   } catch (error) {
     handleError(error, "mod.js", {
-      commandName: '/mod forceresetpetrolls',
+      commandName: '/mod petrolls',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
       options: {
-        subcommand: 'forceresetpetrolls',
+        subcommand: 'petrolls',
+        action: interaction.options.getString('action'),
         character: interaction.options.getString('character'),
         petname: interaction.options.getString('petname')
       }
     });
     
-    console.error(`[mod.js]: Error in /mod forceresetpetrolls:`, error);
+    console.error(`[mod.js]: Error in /mod petrolls:`, error);
     
     return interaction.editReply({
       content: `❌ Failed to reset pet rolls: ${error.message || 'Unknown error'}`,
