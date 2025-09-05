@@ -50,6 +50,7 @@ const {
 
 // ------------------- Database Models -------------------
 const Character = require('../../models/CharacterModel');
+const Minigame = require('../../models/MinigameModel');
 
 // ------------------- Custom Modules -------------------
 const { monsterMapping } = require('../../models/MonsterModel');
@@ -58,6 +59,7 @@ const { monsterMapping } = require('../../models/MonsterModel');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { addItemInventoryDatabase, escapeRegExp } = require('../../utils/inventoryUtils');
 const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('../../utils/interactionUtils');
+const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const {
   authorizeSheets,
   extractSpreadsheetId,
@@ -93,6 +95,17 @@ const {
   getVillageColorByName,
   getVillageEmojiByName
 } = require('../../modules/locationsModule');
+
+const {
+  GAME_CONFIGS,
+  createAlienDefenseGame,
+  addPlayerToTurnOrder,
+  spawnAliens,
+  processAlienDefenseRoll,
+  advanceAlienDefenseRound,
+  checkAlienDefenseGameEnd,
+  getAlienDefenseGameStatus
+} = require('../../modules/minigameModule');
 
 const {
   createRaidEmbed,
@@ -1147,6 +1160,48 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: theycame -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('theycame')
+    .setDescription('👽 They Came for the Cows - Alien Defense Minigame')
+    .addStringOption(option =>
+      option
+        .setName('action')
+        .setDescription('What action to take')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Create Game', value: 'create' },
+          { name: 'Sign Up', value: 'signup' },
+          { name: 'Join Game', value: 'join' },
+          { name: 'Roll Defense', value: 'roll' },
+          { name: 'View Status', value: 'status' },
+          { name: 'Advance Round', value: 'advance' },
+          { name: 'End Game', value: 'end' }
+        )
+    )
+    .addStringOption(option =>
+      option
+        .setName('session_id')
+        .setDescription('Game session ID (auto-generated for create, required for other actions)')
+        .setRequired(false)
+    )
+    .addStringOption(option =>
+      option
+        .setName('target')
+        .setDescription('Target alien (e.g., A1, B2) - only needed for roll action')
+        .setRequired(false)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('roll')
+        .setDescription('Your defense roll (1-6) - only needed for roll action')
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(6)
+    )
+)
+
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -1261,6 +1316,8 @@ async function execute(interaction) {
         return await handleRPPosts(interaction);
     } else if (subcommand === 'rpstatus') {
         return await handleRPStatus(interaction);
+    } else if (subcommand === 'theycame') {
+        return await handleTheyCame(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -3893,6 +3950,509 @@ async function handleRPStatus(interaction) {
       content: '❌ An error occurred while checking RP quest status.',
       ephemeral: true
     });
+  }
+}
+
+// ============================================================================
+// ------------------- They Came for the Cows Handler -------------------
+// ============================================================================
+
+async function handleTheyCame(interaction) {
+  const action = interaction.options.getString('action');
+  const sessionId = interaction.options.getString('session_id');
+  const target = interaction.options.getString('target');
+  const roll = interaction.options.getInteger('roll');
+  
+  try {
+    switch (action) {
+      case 'create':
+        return await handleCreateMinigame(interaction);
+      case 'signup':
+        return await handleSignUpMinigame(interaction);
+      case 'join':
+        return await handleJoinMinigame(interaction);
+      case 'roll':
+        return await handleRollMinigame(interaction, target, roll);
+      case 'status':
+        return await handleStatusMinigame(interaction);
+      case 'advance':
+        return await handleAdvanceRoundMinigame(interaction);
+      case 'end':
+        return await handleEndMinigame(interaction);
+      default:
+        return interaction.editReply({ content: '❌ Unknown action.' });
+    }
+  } catch (error) {
+    handleError(error, 'mod.js', {
+      commandName: '/mod theycame',
+      action: action,
+      userTag: interaction.user.tag,
+      userId: interaction.user.id
+    });
+    throw error;
+  }
+}
+
+// ============================================================================
+// ------------------- Create Game Handler -------------------
+// ============================================================================
+
+async function handleCreateMinigame(interaction) {
+  const channelId = interaction.channelId;
+  const guildId = interaction.guildId;
+  const userId = interaction.user.id;
+  
+  // Check if there's already an active session in this channel
+  const existingSession = await Minigame.findOne({
+    channelId: channelId,
+    gameType: 'theycame',
+    status: { $in: ['waiting', 'active'] },
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (existingSession) {
+    return interaction.editReply({
+      content: `❌ There's already an active "They Came for the Cows" session in this channel (ID: ${existingSession.sessionId})`
+    });
+  }
+  
+  // Create new game session with unique ID
+  const gameSession = createAlienDefenseGame(channelId, guildId, userId);
+  gameSession.sessionId = generateUniqueId('A'); // Generate unique ID for alien defense
+  
+  const newSession = new Minigame(gameSession);
+  await newSession.save();
+  
+  const embed = await createMinigameEmbed(newSession, 'Game Created!');
+  const buttons = createMinigameButtons(newSession.sessionId);
+  
+  // Create instructions embed
+  const instructionsEmbed = new EmbedBuilder()
+    .setTitle('📋 How to Play "They Came for the Cows"')
+    .setColor(0x00ff00)
+    .setDescription('**Game Session ID:** `' + newSession.sessionId + '`')
+    .addFields(
+      { 
+        name: '🎮 Player Commands', 
+        value: `**Sign Up for Turn Order:** \`/mod theycame action:signup session_id:${newSession.sessionId}\`\n**Join Game:** \`/mod theycame action:join session_id:${newSession.sessionId}\`\n**View Status:** \`/mod theycame action:status session_id:${newSession.sessionId}\``, 
+        inline: false 
+      },
+      { 
+        name: '🎯 Combat Commands', 
+        value: `**Roll Defense:** \`/mod theycame action:roll session_id:${newSession.sessionId} target:A1 roll:5\`\n*Target format: A1, A2, A3, B1, B2, B3, etc.*\n*Roll: 1-6 (Outer Ring needs 5+, Middle needs 4+, Inner needs 3+)*`, 
+        inline: false 
+      },
+      { 
+        name: '⚙️ Admin Commands', 
+        value: `**Advance Round:** \`/mod theycame action:advance session_id:${newSession.sessionId}\`\n**End Game:** \`/mod theycame action:end session_id:${newSession.sessionId}\``, 
+        inline: false 
+      },
+      { 
+        name: '🎲 Game Rules', 
+        value: `• Aliens spawn randomly each round (1dX where X = number of players, max 6)\n• Each segment can only hold 1 alien\n• Aliens move inward each round: A1→A2→A3→Steal Animal\n• Players take turns in sign-up order\n• Protect 25 animals from the aliens!`, 
+        inline: false 
+      }
+    )
+    .setFooter({ text: 'Use the buttons below for quick actions!' })
+    .setTimestamp();
+  
+  return interaction.editReply({
+    embeds: [instructionsEmbed, embed],
+    components: [buttons]
+  });
+}
+
+// ============================================================================
+// ------------------- Sign Up Handler -------------------
+// ============================================================================
+
+async function handleSignUpMinigame(interaction) {
+  const sessionId = interaction.options.getString('session_id');
+  const userId = interaction.user.id;
+  const username = interaction.user.username;
+  
+  if (!sessionId) {
+    return interaction.editReply({
+      content: '❌ Please provide a session ID to sign up for a specific game.'
+    });
+  }
+  
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: { $in: ['waiting', 'active'] },
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or already finished.'
+    });
+  }
+  
+  // Add player to turn order
+  const result = addPlayerToTurnOrder(session.gameData, userId, username);
+  
+  if (result.success) {
+    // Also add to players list if not already there
+    const alreadyJoined = session.players.find(p => p.discordId === userId);
+    if (!alreadyJoined) {
+      session.players.push({
+        discordId: userId,
+        username: username,
+        joinedAt: new Date()
+      });
+    }
+    
+    await session.save();
+    
+    return interaction.editReply({
+      content: result.message
+    });
+  } else {
+    return interaction.editReply({
+      content: result.message
+    });
+  }
+}
+
+// ============================================================================
+// ------------------- Join Game Handler -------------------
+// ============================================================================
+
+async function handleJoinMinigame(interaction) {
+  const sessionId = interaction.options.getString('session_id');
+  const userId = interaction.user.id;
+  const username = interaction.user.username;
+  
+  if (!sessionId) {
+    return interaction.editReply({
+      content: '❌ Please provide a session ID to join a specific game.'
+    });
+  }
+  
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: { $in: ['waiting', 'active'] },
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or already finished.'
+    });
+  }
+  
+  // Check if player already joined
+  const alreadyJoined = session.players.find(p => p.discordId === userId);
+  if (alreadyJoined) {
+    return interaction.editReply({
+      content: '✅ You\'re already in the game!'
+    });
+  }
+  
+  // Add player to game
+  session.players.push({
+    discordId: userId,
+    username: username,
+    joinedAt: new Date()
+  });
+  
+  await session.save();
+  
+  return interaction.editReply({
+    content: `🎮 **${username}** joined the alien defense!`
+  });
+}
+
+// ============================================================================
+// ------------------- Roll Defense Handler -------------------
+// ============================================================================
+
+async function handleRollMinigame(interaction, target, roll) {
+  const sessionId = interaction.options.getString('session_id');
+  
+  if (!sessionId) {
+    return interaction.editReply({
+      content: '❌ Please provide a session ID to participate in a specific game.'
+    });
+  }
+  
+  if (!target || !roll) {
+    return interaction.editReply({
+      content: '❌ Please specify both target alien (e.g., A1) and your roll (1-6).'
+    });
+  }
+  
+  const userId = interaction.user.id;
+  const username = interaction.user.username;
+  
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: { $in: ['waiting', 'active'] },
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or already finished.'
+    });
+  }
+  
+  // Check if player is in the game
+  const player = session.players.find(p => p.discordId === userId);
+  if (!player) {
+    return interaction.editReply({
+      content: '❌ You need to join the game first! Use `/mod theycame action:join session_id:' + sessionId + '`'
+    });
+  }
+  
+  // Process the roll
+  const result = processAlienDefenseRoll(session.gameData, userId, username, target, roll);
+  
+  if (result.success) {
+    // Check if game should end
+    const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
+    if (gameEndCheck.gameEnded) {
+      session.status = 'finished';
+      session.results.finalScore = gameEndCheck.finalScore;
+      session.results.completedAt = new Date();
+    }
+    
+    await session.save();
+    
+    const embed = await createMinigameEmbed(session, 'Defense Roll!');
+    return interaction.editReply({
+      content: result.message,
+      embeds: [embed]
+    });
+  } else {
+    return interaction.editReply({
+      content: result.message
+    });
+  }
+}
+
+// ============================================================================
+// ------------------- Status Handler -------------------
+// ============================================================================
+
+async function handleStatusMinigame(interaction) {
+  const sessionId = interaction.options.getString('session_id');
+  
+  if (!sessionId) {
+    return interaction.editReply({
+      content: '❌ Please provide a session ID to view a specific game status.'
+    });
+  }
+  
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame'
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found.'
+    });
+  }
+  
+  const embed = await createMinigameEmbed(session, 'Game Status');
+  return interaction.editReply({ embeds: [embed] });
+}
+
+// ============================================================================
+// ------------------- Advance Round Handler -------------------
+// ============================================================================
+
+async function handleAdvanceRoundMinigame(interaction) {
+  const sessionId = interaction.options.getString('session_id');
+  
+  if (!sessionId) {
+    return interaction.editReply({
+      content: '❌ Please provide a session ID to advance a specific game.'
+    });
+  }
+  
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: { $in: ['waiting', 'active'] },
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or already finished.'
+    });
+  }
+  
+  // If this is the first round, spawn initial aliens
+  if (session.gameData.currentRound === 0) {
+    const playerCount = session.gameData.turnOrder.length || session.players.length;
+    const spawnResult = spawnAliens(session.gameData, playerCount);
+    session.gameData.currentRound = 1;
+    session.status = 'active';
+  }
+  
+  // Advance the round
+  const result = advanceAlienDefenseRound(session.gameData);
+  
+  if (result.success) {
+    // Check if game should end
+    const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
+    if (gameEndCheck.gameEnded) {
+      session.status = 'finished';
+      session.results.finalScore = gameEndCheck.finalScore;
+      session.results.completedAt = new Date();
+    }
+    
+    await session.save();
+    
+    const embed = await createMinigameEmbed(session, 'Round Advanced!');
+    return interaction.editReply({
+      content: result.message,
+      embeds: [embed]
+    });
+  } else {
+    return interaction.editReply({
+      content: result.message
+    });
+  }
+}
+
+// ============================================================================
+// ------------------- End Game Handler -------------------
+// ============================================================================
+
+async function handleEndMinigame(interaction) {
+  const sessionId = interaction.options.getString('session_id');
+  
+  if (!sessionId) {
+    return interaction.editReply({
+      content: '❌ Please provide a session ID to end a specific game.'
+    });
+  }
+  
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: { $in: ['waiting', 'active'] },
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or already finished.'
+    });
+  }
+  
+  // End the game
+  session.status = 'finished';
+  session.results.finalScore = session.gameData.villageAnimals;
+  session.results.completedAt = new Date();
+  
+  await session.save();
+  
+  const embed = await createMinigameEmbed(session, 'Game Ended!');
+  return interaction.editReply({
+    content: `🏁 **Game ended by ${interaction.user.username}!** Final score: ${session.gameData.villageAnimals} animals saved!`,
+    embeds: [embed]
+  });
+}
+
+// ============================================================================
+// ------------------- Embed and Button Creation -------------------
+// ============================================================================
+
+async function createMinigameEmbed(session, title) {
+  const gameConfig = GAME_CONFIGS.theycame;
+  const status = getAlienDefenseGameStatus(session.gameData);
+  
+  const embed = new EmbedBuilder()
+    .setTitle(`👽 ${gameConfig.name} - ${title}`)
+    .setDescription(gameConfig.description)
+    .setColor(getGameStatusColor(session.status))
+    .setTimestamp();
+  
+  // Game progress
+  embed.addFields(
+    { name: '📊 Game Progress', value: status.gameProgress, inline: true },
+    { name: '👥 Players', value: session.players.length.toString(), inline: true },
+    { name: '🐄 Animals Saved', value: status.villageAnimals.toString(), inline: true }
+  );
+  
+  // Turn order info
+  if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
+    const turnOrderText = session.gameData.turnOrder.map((player, index) => 
+      `${index + 1}. ${player.username}${index === session.gameData.currentTurnIndex ? ' ⬅️' : ''}`
+    ).join('\n');
+    embed.addFields(
+      { name: '🔄 Turn Order', value: turnOrderText || 'No players signed up', inline: false }
+    );
+  }
+  
+  // Alien status
+  embed.addFields(
+    { name: '👾 Active Aliens', value: `Outer: ${status.ringStatus.outerRing} | Middle: ${status.ringStatus.middleRing} | Inner: ${status.ringStatus.innerRing}`, inline: false },
+    { name: '💀 Defeated Aliens', value: status.defeatedAliens.toString(), inline: true },
+    { name: '🚨 Animals Lost', value: status.animalsLost.toString(), inline: true }
+  );
+  
+  // Game info
+  embed.addFields(
+    { name: '🎯 Session ID', value: session.sessionId, inline: true },
+    { name: '⏰ Expires', value: `<t:${Math.floor(session.expiresAt.getTime() / 1000)}:R>`, inline: true }
+  );
+  
+  if (session.status === 'finished') {
+    embed.addFields(
+      { name: '🏁 Game Result', value: `Final Score: ${session.results.finalScore} animals saved!`, inline: false }
+    );
+  }
+  
+  return embed;
+}
+
+function createMinigameButtons(sessionId) {
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+  
+  const row = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`minigame_signup_${sessionId}`)
+        .setLabel('Sign Up')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✋'),
+      new ButtonBuilder()
+        .setCustomId(`minigame_join_${sessionId}`)
+        .setLabel('Join Game')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🎮'),
+      new ButtonBuilder()
+        .setCustomId(`minigame_status_${sessionId}`)
+        .setLabel('View Status')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('📊')
+    );
+  
+  return row;
+}
+
+function getGameStatusColor(status) {
+  switch (status) {
+    case 'waiting': return 0x00ff00; // Green
+    case 'active': return 0xffff00; // Yellow
+    case 'finished': return 0xff0000; // Red
+    default: return 0x808080; // Gray
   }
 }
 
