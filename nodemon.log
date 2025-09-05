@@ -57,7 +57,7 @@
     '    at _ArrayValidator.parse (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@sapphire\\shapeshift\\dist\\cjs\\index.cjs:972:29)\n' +
     '    at validateMaxOptionsLength (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@discordjs\\builders\\dist\\index.js:1614:27)\n' +
     '    at MixedClass.addSubcommand (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@discordjs\\builders\\dist\\index.js:2561:5)\n' +
-    '    at Object.<anonymous> (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\commands\\moderation\\mod.js:1188:2)\n' +
+    '    at Object.<anonymous> (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\commands\\moderation\\mod.js:1189:2)\n' +
     '    at Module._compile (node:internal/modules/cjs/loader:1358:14)\n' +
     '    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)\n' +
     '    at Module.load (node:internal/modules/cjs/loader:1208:32)'
@@ -101,4 +101,3 @@
 [deploy-commands.js]: Successfully loaded 33 commands
 🔄 Started refreshing 33 commands.
 [deploy-commands.js]: Deploying to guild: 603960955839447050
-✅ Successfully registered 33 commands to guild.
