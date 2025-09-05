@@ -1168,33 +1168,23 @@ const modCommand = new SlashCommandBuilder()
 .addSubcommand(sub =>
   sub
     .setName('theycame')
-    .setDescription('👽 Create a new "They Came for the Cows" alien defense game')
-)
-
-
-// ------------------- Subcommand: theycame-advance -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('theycame-advance')
-    .setDescription('🔄 Advance to the next round (Admin only)')
+    .setDescription('👽 Manage "They Came for the Cows" alien defense game')
     .addStringOption(option =>
       option
-        .setName('session_id')
-        .setDescription('Game session ID')
+        .setName('action')
+        .setDescription('Action to perform')
         .setRequired(true)
+        .addChoices(
+          { name: 'Create Game', value: 'create' },
+          { name: 'Advance Round', value: 'advance' },
+          { name: 'End Game', value: 'end' }
+        )
     )
-)
-
-// ------------------- Subcommand: theycame-end -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('theycame-end')
-    .setDescription('🏁 End the alien defense game (Admin only)')
     .addStringOption(option =>
       option
         .setName('session_id')
-        .setDescription('Game session ID')
-        .setRequired(true)
+        .setDescription('Game session ID (required for advance/end)')
+        .setRequired(false)
     )
 )
 
@@ -1311,11 +1301,7 @@ async function execute(interaction) {
     } else if (subcommand === 'rpstatus') {
         return await handleRPStatus(interaction);
     } else if (subcommand === 'theycame') {
-        return await handleCreateTheyCame(interaction);
-    } else if (subcommand === 'theycame-advance') {
-        return await handleTheyCameAdvance(interaction);
-    } else if (subcommand === 'theycame-end') {
-        return await handleTheyCameEnd(interaction);
+        return await handleTheyCame(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -3952,9 +3938,36 @@ async function handleRPStatus(interaction) {
 // ------------------- They Came for the Cows Handler -------------------
 // ============================================================================
 
-async function handleCreateTheyCame(interaction) {
+async function handleTheyCame(interaction) {
   try {
-    return await handleCreateMinigame(interaction);
+    const action = interaction.options.getString('action');
+    const sessionId = interaction.options.getString('session_id');
+    
+    switch (action) {
+      case 'create':
+        return await handleCreateMinigame(interaction);
+        
+      case 'advance':
+        if (!sessionId) {
+          return interaction.editReply({
+            content: '❌ Session ID is required for advance action.'
+          });
+        }
+        return await handleTheyCameAdvance(interaction, sessionId);
+        
+      case 'end':
+        if (!sessionId) {
+          return interaction.editReply({
+            content: '❌ Session ID is required for end action.'
+          });
+        }
+        return await handleTheyCameEnd(interaction, sessionId);
+        
+      default:
+        return interaction.editReply({
+          content: '❌ Invalid action. Use create, advance, or end.'
+        });
+    }
   } catch (error) {
     handleError(error, 'mod.js', {
       commandName: '/mod theycame',
@@ -3965,105 +3978,82 @@ async function handleCreateTheyCame(interaction) {
   }
 }
 
-
-async function handleTheyCameAdvance(interaction) {
-  try {
-    const sessionId = interaction.options.getString('session_id');
-    
-    // Find the specific session
-    const session = await Minigame.findOne({
-      sessionId: sessionId,
-      gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
+async function handleTheyCameAdvance(interaction, sessionId) {
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: { $in: ['waiting', 'active'] },
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or already finished.'
     });
-    
-    if (!session) {
-      return interaction.editReply({
-        content: '❌ Game session not found, expired, or already finished.'
-      });
-    }
-    
-    // If this is the first round, spawn initial aliens
-    if (session.gameData.currentRound === 0) {
-      const playerCount = session.gameData.turnOrder.length || session.players.length;
-      const spawnResult = spawnAliens(session.gameData, playerCount);
-      session.gameData.currentRound = 1;
-      session.status = 'active';
-    }
-    
-    // Advance the round
-    const result = advanceAlienDefenseRound(session.gameData);
-    
-    if (result.success) {
-      // Check if game should end
-      const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
-      if (gameEndCheck.gameEnded) {
-        session.status = 'finished';
-        session.results.finalScore = gameEndCheck.finalScore;
-        session.results.completedAt = new Date();
-      }
-      
-      await session.save();
-      
-      const embed = await createMinigameEmbed(session, 'Round Advanced!');
-      return interaction.editReply({
-        content: result.message,
-        embeds: [embed]
-      });
-    } else {
-      return interaction.editReply({
-        content: result.message
-      });
-    }
-  } catch (error) {
-    handleError(error, 'mod.js', {
-      commandName: '/mod theycame-advance',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id
-    });
-    throw error;
   }
-}
-
-async function handleTheyCameEnd(interaction) {
-  try {
-    const sessionId = interaction.options.getString('session_id');
-    
-    // Find the specific session
-    const session = await Minigame.findOne({
-      sessionId: sessionId,
-      gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return interaction.editReply({
-        content: '❌ Game session not found, expired, or already finished.'
-      });
+  
+  // If this is the first round, spawn initial aliens
+  if (session.gameData.currentRound === 0) {
+    const playerCount = session.gameData.turnOrder.length || session.players.length;
+    const spawnResult = spawnAliens(session.gameData, playerCount);
+    session.gameData.currentRound = 1;
+    session.status = 'active';
+  }
+  
+  // Advance the round
+  const result = advanceAlienDefenseRound(session.gameData);
+  
+  if (result.success) {
+    // Check if game should end
+    const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
+    if (gameEndCheck.gameEnded) {
+      session.status = 'finished';
+      session.results.finalScore = gameEndCheck.finalScore;
+      session.results.completedAt = new Date();
     }
-    
-    // End the game
-    session.status = 'finished';
-    session.results.finalScore = session.gameData.villageAnimals;
-    session.results.completedAt = new Date();
     
     await session.save();
     
-    const embed = await createMinigameEmbed(session, 'Game Ended!');
+    const embed = await createMinigameEmbed(session, 'Round Advanced!');
     return interaction.editReply({
-      content: `🏁 **Game ended by ${interaction.user.username}!** Final score: ${session.gameData.villageAnimals} animals saved!`,
+      content: result.message,
       embeds: [embed]
     });
-  } catch (error) {
-    handleError(error, 'mod.js', {
-      commandName: '/mod theycame-end',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id
+  } else {
+    return interaction.editReply({
+      content: result.message
     });
-    throw error;
   }
+}
+
+async function handleTheyCameEnd(interaction, sessionId) {
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: { $in: ['waiting', 'active'] },
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or already finished.'
+    });
+  }
+  
+  // End the game
+  session.status = 'finished';
+  session.results.finalScore = session.gameData.villageAnimals;
+  session.results.completedAt = new Date();
+  
+  await session.save();
+  
+  const embed = await createMinigameEmbed(session, 'Game Ended!');
+  return interaction.editReply({
+    content: `🏁 **Game ended by ${interaction.user.username}!** Final score: ${session.gameData.villageAnimals} animals saved!`,
+    embeds: [embed]
+  });
 }
 
 // ============================================================================
@@ -4107,12 +4097,12 @@ async function handleCreateMinigame(interaction) {
     .addFields(
       { 
         name: '🎮 Player Commands', 
-        value: `**Sign Up for Turn Order:** \`/minigame signup session_id:${newSession.sessionId}\`\n**Join Game:** \`/minigame join session_id:${newSession.sessionId}\`\n**View Status:** \`/minigame status session_id:${newSession.sessionId}\``, 
+        value: `**Sign Up for Turn Order:** \`/minigame theycame action:signup session_id:${newSession.sessionId}\`\n**Join Game:** \`/minigame theycame action:join session_id:${newSession.sessionId}\`\n**View Status:** \`/minigame theycame action:status session_id:${newSession.sessionId}\``, 
         inline: false 
       },
       { 
         name: '🎯 Combat Commands', 
-        value: `**Roll Defense:** \`/minigame roll session_id:${newSession.sessionId} target:A1 roll:5\`\n*Target format: A1, A2, A3, B1, B2, B3, etc.*\n*Roll: 1-6 (Outer Ring needs 5+, Middle needs 4+, Inner needs 3+)*`, 
+        value: `**Roll Defense:** \`/minigame theycame action:roll session_id:${newSession.sessionId} target:A1 roll:5\`\n*Target format: A1, A2, A3, B1, B2, B3, etc.*\n*Roll: 1-6 (Outer Ring needs 5+, Middle needs 4+, Inner needs 3+)*`, 
         inline: false 
       },
       { 
