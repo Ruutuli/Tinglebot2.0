@@ -4087,42 +4087,52 @@ async function handleCreateMinigame(interaction) {
   await newSession.save();
   
   const embed = await createMinigameEmbed(newSession, 'Game Created!');
-  const buttons = createMinigameButtons(newSession.sessionId);
   
   // Create instructions embed
   const instructionsEmbed = new EmbedBuilder()
-    .setTitle('📋 How to Play "They Came for the Cows"')
+    .setTitle('👽 They Came for the Cows - Game Instructions')
     .setColor(0x00ff00)
-    .setDescription('**Game Session ID:** `' + newSession.sessionId + '`')
+    .setDescription(`**🎯 Game Session ID:** \`${newSession.sessionId}\`\n\n*Defend your village from alien invaders! Work together to protect 25 animals from being stolen.*`)
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .addFields(
       { 
-        name: '🎮 Player Commands', 
-        value: `**Sign Up for Turn Order:** \`/minigame theycame action:signup session_id:${newSession.sessionId}\`\n**Join Game:** \`/minigame theycame action:join session_id:${newSession.sessionId}\`\n**View Status:** \`/minigame theycame action:status session_id:${newSession.sessionId}\``, 
+        name: '📝 Step 1: Join the Game', 
+        value: `**Sign Up for Turn Order:**\n\`/minigame theycame action:signup session_id:${newSession.sessionId} character:YourCharacter\`\n\n**Join the Defense:**\n\`/minigame theycame action:join session_id:${newSession.sessionId} character:YourCharacter\`\n\n*Choose your character to participate in the alien defense!*`, 
         inline: false 
       },
       { 
-        name: '🎯 Combat Commands', 
-        value: `**Roll Defense:** \`/minigame theycame action:roll session_id:${newSession.sessionId} target:A1 roll:5\`\n*Target format: A1, A2, A3, B1, B2, B3, etc.*\n*Roll: 1-6 (Outer Ring needs 5+, Middle needs 4+, Inner needs 3+)*`, 
+        name: '⚔️ Step 2: Defend Your Village', 
+        value: `**Roll Defense Against Aliens:**\n\`/minigame theycame action:roll session_id:${newSession.sessionId} character:YourCharacter target:A1\`\n\n**Target Aliens:**\n• **A1, A2, A3** - Outer Ring (needs 5+ to hit)\n• **B1, B2, B3** - Middle Ring (needs 4+ to hit)\n• **C1, C2, C3** - Inner Ring (needs 3+ to hit)\n\n*Rolls are automatically generated (1-6). Higher rings are easier to hit!*`, 
         inline: false 
       },
       { 
-        name: '⚙️ Admin Commands', 
+        name: '📊 Step 3: Monitor Progress', 
+        value: `**Check Game Status:**\n\`/minigame theycame action:status session_id:${newSession.sessionId}\`\n\n*Track aliens, animals saved, and current round progress.*`, 
+        inline: false 
+      },
+      { 
+        name: '🎲 How the Game Works', 
+        value: `**Alien Spawning:**\n• Each round: 1dX aliens spawn (X = number of players, max 6)\n• Each position can only hold 1 alien\n\n**Alien Movement:**\n• **A1 → A2 → A3 → Steal Animal**\n• **B1 → B2 → B3 → Steal Animal**\n• **C1 → C2 → C3 → Steal Animal**\n\n**Turn Order:**\n• Players act in sign-up order\n• Each player can target one alien per turn\n• Aliens move after all players have acted\n\n**Victory Condition:**\n• Protect all 25 animals from being stolen!`, 
+        inline: false 
+      },
+      { 
+        name: '⚙️ Admin Controls', 
         value: `**Advance Round:** \`/mod theycame-advance session_id:${newSession.sessionId}\`\n**End Game:** \`/mod theycame-end session_id:${newSession.sessionId}\``, 
-        inline: false 
-      },
-      { 
-        name: '🎲 Game Rules', 
-        value: `• Aliens spawn randomly each round (1dX where X = number of players, max 6)\n• Each segment can only hold 1 alien\n• Aliens move inward each round: A1→A2→A3→Steal Animal\n• Players take turns in sign-up order\n• Protect 25 animals from the aliens!`, 
         inline: false 
       }
     )
-    .setFooter({ text: 'Use the buttons below for quick actions!' })
+    .setFooter({ text: '🎮 Use /minigame commands to participate! • Good luck defending your village!' })
     .setTimestamp();
   
-  return interaction.editReply({
-    embeds: [instructionsEmbed, embed],
-    components: [buttons]
+  const reply = await interaction.editReply({
+    embeds: [instructionsEmbed, embed]
   });
+  
+  // Store the message ID for future updates
+  newSession.messageId = reply.id;
+  await newSession.save();
+  
+  return reply;
 }
 
 // ============================================================================
@@ -4235,7 +4245,7 @@ async function handleJoinMinigame(interaction) {
 // ------------------- Roll Defense Handler -------------------
 // ============================================================================
 
-async function handleRollMinigame(interaction, target, roll) {
+async function handleRollMinigame(interaction, target) {
   const sessionId = interaction.options.getString('session_id');
   
   if (!sessionId) {
@@ -4244,11 +4254,14 @@ async function handleRollMinigame(interaction, target, roll) {
     });
   }
   
-  if (!target || !roll) {
+  if (!target) {
     return interaction.editReply({
-      content: '❌ Please specify both target alien (e.g., A1) and your roll (1-6).'
+      content: '❌ Please specify target alien (e.g., A1).'
     });
   }
+  
+  // Generate random roll (1-6)
+  const roll = Math.floor(Math.random() * 6) + 1;
   
   const userId = interaction.user.id;
   const username = interaction.user.username;
@@ -4444,6 +4457,7 @@ async function createMinigameEmbed(session, title) {
     .setTitle(`👽 ${gameConfig.name} - ${title}`)
     .setDescription(gameConfig.description)
     .setColor(getGameStatusColor(session.status))
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setTimestamp();
   
   // Game progress

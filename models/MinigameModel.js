@@ -22,6 +22,7 @@ const minigameSchema = new Schema({
   createdBy: { type: String, required: true }, // Discord ID of session creator
   createdAt: { type: Date, default: Date.now }, // When the session was created
   expiresAt: { type: Date, required: true }, // When the session expires
+  messageId: { type: String, default: null }, // Discord message ID of the game status embed
   
   // ------------------- Game state -------------------
   status: { 
@@ -33,7 +34,9 @@ const minigameSchema = new Schema({
   // ------------------- Players -------------------
   players: [{
     discordId: { type: String, required: true },
-    username: { type: String, required: true },
+    characterName: { type: String, required: true },
+    characterId: { type: String, required: true },
+    isModCharacter: { type: Boolean, default: false },
     joinedAt: { type: Date, default: Date.now }
   }],
   
