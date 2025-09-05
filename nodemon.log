@@ -48,7 +48,20 @@
 [deploy-commands.js]: Processing file: commands\jobs\vending.js
 ✅ Loaded command: vending from commands\jobs\vending.js
 [deploy-commands.js]: Processing file: commands\moderation\mod.js
-✅ Loaded command: mod from commands\moderation\mod.js
+❌ Error requiring command file commands\moderation\mod.js: {
+  message: 'Invalid Array length',
+  stack: 'Error: Invalid Array length\n' +
+    '    at Object.run (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@sapphire\\shapeshift\\dist\\cjs\\index.cjs:1045:79)\n' +
+    '    at C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@sapphire\\shapeshift\\dist\\cjs\\index.cjs:972:67\n' +
+    '    at Array.reduce (<anonymous>)\n' +
+    '    at _ArrayValidator.parse (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@sapphire\\shapeshift\\dist\\cjs\\index.cjs:972:29)\n' +
+    '    at validateMaxOptionsLength (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@discordjs\\builders\\dist\\index.js:1614:27)\n' +
+    '    at validateRequiredParameters (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@discordjs\\builders\\dist\\index.js:1620:3)\n' +
+    '    at MixedClass.toJSON (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@discordjs\\builders\\dist\\index.js:1888:5)\n' +
+    '    at loadCommands (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\scripts\\deploy-commands.js:60:54)\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+    '    at async deployCommands (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\scripts\\deploy-commands.js:94:26)'
+}
 [deploy-commands.js]: Processing file: commands\specialweather.js
 ✅ Loaded command: specialweather from commands\specialweather.js
 [deploy-commands.js]: Processing file: commands\utility\cancelvoucher.js
@@ -85,7 +98,6 @@
 ⚠️ The command at embeds\embeds.js is missing a required "data" property.
 [deploy-commands.js]: Processing file: embeds\weatherEmbed.js
 ⚠️ The command at embeds\weatherEmbed.js is missing a required "data" property.
-[deploy-commands.js]: Successfully loaded 34 commands
-🔄 Started refreshing 34 commands.
+[deploy-commands.js]: Successfully loaded 33 commands
+🔄 Started refreshing 33 commands.
 [deploy-commands.js]: Deploying to guild: 603960955839447050
-✅ Successfully registered 34 commands to guild.
