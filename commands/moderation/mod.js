@@ -104,7 +104,13 @@ const {
   processAlienDefenseRoll,
   advanceAlienDefenseRound,
   checkAlienDefenseGameEnd,
-  getAlienDefenseGameStatus
+  getAlienDefenseGameStatus,
+  getCurrentVillageImage,
+  getAlienImage,
+  getAvailableVillages,
+  getAlienPosition,
+  getAlienPositions,
+  generateAlienOverlayImage
 } = require('../../modules/minigameModule');
 
 const {
@@ -1164,11 +1170,20 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: theycame -------------------
+// ------------------- Subcommand: minigame -------------------
 .addSubcommand(sub =>
   sub
-    .setName('theycame')
-    .setDescription('👽 Manage "They Came for the Cows" alien defense game')
+    .setName('minigame')
+    .setDescription('🎮 Manage minigames')
+    .addStringOption(option =>
+      option
+        .setName('minigame_name')
+        .setDescription('Name of the minigame to manage')
+        .setRequired(true)
+        .addChoices(
+          { name: 'They Came for the Cows', value: 'theycame' }
+        )
+    )
     .addStringOption(option =>
       option
         .setName('action')
@@ -1176,6 +1191,7 @@ const modCommand = new SlashCommandBuilder()
         .setRequired(true)
         .addChoices(
           { name: 'Create Game', value: 'create' },
+          { name: 'Start Game', value: 'start' },
           { name: 'Advance Round', value: 'advance' },
           { name: 'End Game', value: 'end' }
         )
@@ -1185,6 +1201,14 @@ const modCommand = new SlashCommandBuilder()
         .setName('session_id')
         .setDescription('Game session ID (required for advance/end)')
         .setRequired(false)
+        .setAutocomplete(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('quest_id')
+        .setDescription('Quest ID to tie to the minigame (optional for testing)')
+        .setRequired(false)
+        .setAutocomplete(true)
     )
 )
 
@@ -1300,8 +1324,8 @@ async function execute(interaction) {
         return await handleRPPosts(interaction);
     } else if (subcommand === 'rpstatus') {
         return await handleRPStatus(interaction);
-    } else if (subcommand === 'theycame') {
-        return await handleTheyCame(interaction);
+    } else if (subcommand === 'minigame') {
+        return await handleMinigame(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -3935,17 +3959,51 @@ async function handleRPStatus(interaction) {
 }
 
 // ============================================================================
+// ------------------- Minigame Handler -------------------
+// ============================================================================
+
+async function handleMinigame(interaction) {
+  try {
+    const minigameName = interaction.options.getString('minigame_name');
+    const action = interaction.options.getString('action');
+    const sessionId = interaction.options.getString('session_id');
+    const questId = interaction.options.getString('quest_id');
+    
+    switch (minigameName) {
+      case 'theycame':
+        return await handleTheyCame(interaction, action, sessionId, questId);
+      default:
+        return interaction.editReply({
+          content: '❌ Unknown minigame type.'
+        });
+    }
+  } catch (error) {
+    handleError(error, 'mod.js', {
+      commandName: '/mod minigame',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id
+    });
+    throw error;
+  }
+}
+
+// ============================================================================
 // ------------------- They Came for the Cows Handler -------------------
 // ============================================================================
 
-async function handleTheyCame(interaction) {
+async function handleTheyCame(interaction, action, sessionId, questId) {
   try {
-    const action = interaction.options.getString('action');
-    const sessionId = interaction.options.getString('session_id');
-    
     switch (action) {
       case 'create':
-        return await handleCreateMinigame(interaction);
+        return await handleCreateMinigame(interaction, questId);
+        
+      case 'start':
+        if (!sessionId) {
+          return interaction.editReply({
+            content: '❌ Session ID is required for start action.'
+          });
+        }
+        return await handleTheyCameStart(interaction, sessionId);
         
       case 'advance':
         if (!sessionId) {
@@ -3965,17 +4023,63 @@ async function handleTheyCame(interaction) {
         
       default:
         return interaction.editReply({
-          content: '❌ Invalid action. Use create, advance, or end.'
+          content: '❌ Invalid action. Use create, start, advance, or end.'
         });
     }
   } catch (error) {
     handleError(error, 'mod.js', {
-      commandName: '/mod theycame',
+      commandName: '/mod minigame theycame',
       userTag: interaction.user.tag,
       userId: interaction.user.id
     });
     throw error;
   }
+}
+
+async function handleTheyCameStart(interaction, sessionId) {
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: 'waiting',
+    expiresAt: { $gt: new Date() }
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or already started.'
+    });
+  }
+  
+  // Check if there are players
+  if (session.players.length === 0) {
+    return interaction.editReply({
+      content: '❌ Cannot start game with no players. Players must join first.'
+    });
+  }
+  
+  // Start the game by spawning initial aliens
+  const playerCount = session.gameData.turnOrder.length || session.players.length;
+  const spawnResult = spawnAliens(session.gameData, playerCount);
+  
+  // Update session status
+  session.gameData.currentRound = 1;
+  session.status = 'active';
+  
+  session.markModified('gameData');
+  await session.save();
+  
+  // Create start embed
+  const embedResult = await createMinigameEmbed(session, 'Game Started!');
+  const replyOptions = {
+    content: `🎮 **Game Started!** ${spawnResult.message}`,
+    embeds: [embedResult.embed]
+  };
+  if (embedResult.attachment) {
+    replyOptions.files = [embedResult.attachment];
+  }
+  
+  return interaction.editReply(replyOptions);
 }
 
 async function handleTheyCameAdvance(interaction, sessionId) {
@@ -4013,13 +4117,18 @@ async function handleTheyCameAdvance(interaction, sessionId) {
       session.results.completedAt = new Date();
     }
     
+    session.markModified('gameData');
     await session.save();
     
-    const embed = await createMinigameEmbed(session, 'Round Advanced!');
-    return interaction.editReply({
+    const embedResult = await createMinigameEmbed(session, 'Round Advanced!');
+    const replyOptions = {
       content: result.message,
-      embeds: [embed]
-    });
+      embeds: [embedResult.embed]
+    };
+    if (embedResult.attachment) {
+      replyOptions.files = [embedResult.attachment];
+    }
+    return interaction.editReply(replyOptions);
   } else {
     return interaction.editReply({
       content: result.message
@@ -4049,21 +4158,39 @@ async function handleTheyCameEnd(interaction, sessionId) {
   
   await session.save();
   
-  const embed = await createMinigameEmbed(session, 'Game Ended!');
-  return interaction.editReply({
+  const embedResult = await createMinigameEmbed(session, 'Game Ended!');
+  const replyOptions = {
     content: `🏁 **Game ended by ${interaction.user.username}!** Final score: ${session.gameData.villageAnimals} animals saved!`,
-    embeds: [embed]
-  });
+    embeds: [embedResult.embed]
+  };
+  if (embedResult.attachment) {
+    replyOptions.files = [embedResult.attachment];
+  }
+  return interaction.editReply(replyOptions);
 }
 
 // ============================================================================
 // ------------------- Create Game Handler -------------------
 // ============================================================================
 
-async function handleCreateMinigame(interaction) {
+async function handleCreateMinigame(interaction, questId) {
   const channelId = interaction.channelId;
   const guildId = interaction.guildId;
   const userId = interaction.user.id;
+  
+  // TODO: Make quest ID required after testing - currently optional for testing
+  let quest = null;
+  if (questId) {
+    // Validate quest exists if provided
+    const Quest = require('../../models/QuestModel');
+    quest = await Quest.findOne({ questID: questId });
+    
+    if (!quest) {
+      return interaction.editReply({
+        content: `❌ Quest with ID "${questId}" not found. Please check the quest ID and try again.`
+      });
+    }
+  }
   
   // Check if there's already an active session in this channel
   const existingSession = await Minigame.findOne({
@@ -4082,11 +4209,12 @@ async function handleCreateMinigame(interaction) {
   // Create new game session with unique ID
   const gameSession = createAlienDefenseGame(channelId, guildId, userId);
   gameSession.sessionId = generateUniqueId('A'); // Generate unique ID for alien defense
+  gameSession.questId = questId; // Store the quest ID
   
   const newSession = new Minigame(gameSession);
   await newSession.save();
   
-  const embed = await createMinigameEmbed(newSession, 'Game Created!');
+  const result = await createMinigameEmbed(newSession, 'Game Created!');
   
   // Create instructions embed
   const instructionsEmbed = new EmbedBuilder()
@@ -4096,37 +4224,32 @@ async function handleCreateMinigame(interaction) {
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .addFields(
       { 
-        name: '📝 Step 1: Join the Game', 
-        value: `**Sign Up for Turn Order:**\n\`/minigame theycame action:signup session_id:${newSession.sessionId} character:YourCharacter\`\n\n**Join the Defense:**\n\`/minigame theycame action:join session_id:${newSession.sessionId} character:YourCharacter\`\n\n*Choose your character to participate in the alien defense!*`, 
+        name: '🎮 How to Play', 
+        value: `**1. Join the Game:**\n</minigame theycame-join:1413815457118556201>\n\n**2. Roll Defense:**\n</minigame theycame-roll:1413815457118556201>\n\n**3. Target Aliens:**\n• **1A, 1B, 1C** - Outer Ring (needs 5+ to hit)\n• **2A, 2B, 2C** - Middle Ring (needs 4+ to hit)\n• **3A, 3B, 3C** - Inner Ring (needs 3+ to hit)`, 
         inline: false 
       },
       { 
-        name: '⚔️ Step 2: Defend Your Village', 
-        value: `**Roll Defense Against Aliens:**\n\`/minigame theycame action:roll session_id:${newSession.sessionId} character:YourCharacter target:A1\`\n\n**Target Aliens:**\n• **A1, A2, A3** - Outer Ring (needs 5+ to hit)\n• **B1, B2, B3** - Middle Ring (needs 4+ to hit)\n• **C1, C2, C3** - Inner Ring (needs 3+ to hit)\n\n*Rolls are automatically generated (1-6). Higher rings are easier to hit!*`, 
-        inline: false 
-      },
-      { 
-        name: '📊 Step 3: Monitor Progress', 
-        value: `**Check Game Status:**\n\`/minigame theycame action:status session_id:${newSession.sessionId}\`\n\n*Track aliens, animals saved, and current round progress.*`, 
-        inline: false 
-      },
-      { 
-        name: '🎲 How the Game Works', 
-        value: `**Alien Spawning:**\n• Each round: 1dX aliens spawn (X = number of players, max 6)\n• Each position can only hold 1 alien\n\n**Alien Movement:**\n• **A1 → A2 → A3 → Steal Animal**\n• **B1 → B2 → B3 → Steal Animal**\n• **C1 → C2 → C3 → Steal Animal**\n\n**Turn Order:**\n• Players act in sign-up order\n• Each player can target one alien per turn\n• Aliens move after all players have acted\n\n**Victory Condition:**\n• Protect all 25 animals from being stolen!`, 
+        name: '🎲 Game Rules', 
+        value: `**Alien Movement:** 1A → 2A → 3A → Steal Animal\n**Turn Order:** Players act in sign-up order\n**Victory:** Protect all 25 animals!\n**Max Players:** 6 per game`, 
         inline: false 
       },
       { 
         name: '⚙️ Admin Controls', 
-        value: `**Advance Round:** \`/mod theycame-advance session_id:${newSession.sessionId}\`\n**End Game:** \`/mod theycame-end session_id:${newSession.sessionId}\``, 
+        value: `</mod minigame:1413434285934903366>\n\n**Session ID:** \`${newSession.sessionId}\``, 
         inline: false 
       }
     )
-    .setFooter({ text: '🎮 Use /minigame commands to participate! • Good luck defending your village!' })
+    .setFooter({ text: '🎮 Click the commands above to participate! • Good luck defending your village!' })
     .setTimestamp();
   
-  const reply = await interaction.editReply({
-    embeds: [instructionsEmbed, embed]
-  });
+  const replyOptions = {
+    embeds: [instructionsEmbed, result.embed]
+  };
+  if (result.attachment) {
+    replyOptions.files = [result.attachment];
+  }
+  
+  const reply = await interaction.editReply(replyOptions);
   
   // Store the message ID for future updates
   newSession.messageId = reply.id;
@@ -4284,7 +4407,7 @@ async function handleRollMinigame(interaction, target) {
   const player = session.players.find(p => p.discordId === userId);
   if (!player) {
     return interaction.editReply({
-      content: '❌ You need to join the game first! Use `/mod theycame action:join session_id:' + sessionId + '`'
+      content: '❌ You need to join the game first! Use `/minigame theycame action:join session_id:' + sessionId + '`'
     });
   }
   
@@ -4302,11 +4425,15 @@ async function handleRollMinigame(interaction, target) {
     
     await session.save();
     
-    const embed = await createMinigameEmbed(session, 'Defense Roll!');
-    return interaction.editReply({
+    const embedResult = await createMinigameEmbed(session, 'Defense Roll!');
+    const replyOptions = {
       content: result.message,
-      embeds: [embed]
-    });
+      embeds: [embedResult.embed]
+    };
+    if (embedResult.attachment) {
+      replyOptions.files = [embedResult.attachment];
+    }
+    return interaction.editReply(replyOptions);
   } else {
     return interaction.editReply({
       content: result.message
@@ -4339,8 +4466,12 @@ async function handleStatusMinigame(interaction) {
     });
   }
   
-  const embed = await createMinigameEmbed(session, 'Game Status');
-  return interaction.editReply({ embeds: [embed] });
+  const embedResult = await createMinigameEmbed(session, 'Game Status');
+  const replyOptions = { embeds: [embedResult.embed] };
+  if (embedResult.attachment) {
+    replyOptions.files = [embedResult.attachment];
+  }
+  return interaction.editReply(replyOptions);
 }
 
 // ============================================================================
@@ -4392,11 +4523,15 @@ async function handleAdvanceRoundMinigame(interaction) {
     
     await session.save();
     
-    const embed = await createMinigameEmbed(session, 'Round Advanced!');
-    return interaction.editReply({
+    const embedResult = await createMinigameEmbed(session, 'Round Advanced!');
+    const replyOptions = {
       content: result.message,
-      embeds: [embed]
-    });
+      embeds: [embedResult.embed]
+    };
+    if (embedResult.attachment) {
+      replyOptions.files = [embedResult.attachment];
+    }
+    return interaction.editReply(replyOptions);
   } else {
     return interaction.editReply({
       content: result.message
@@ -4438,11 +4573,15 @@ async function handleEndMinigame(interaction) {
   
   await session.save();
   
-  const embed = await createMinigameEmbed(session, 'Game Ended!');
-  return interaction.editReply({
+  const embedResult = await createMinigameEmbed(session, 'Game Ended!');
+  const replyOptions = {
     content: `🏁 **Game ended by ${interaction.user.username}!** Final score: ${session.gameData.villageAnimals} animals saved!`,
-    embeds: [embed]
-  });
+    embeds: [embedResult.embed]
+  };
+  if (embedResult.attachment) {
+    replyOptions.files = [embedResult.attachment];
+  }
+  return interaction.editReply(replyOptions);
 }
 
 // ============================================================================
@@ -4453,41 +4592,89 @@ async function createMinigameEmbed(session, title) {
   const gameConfig = GAME_CONFIGS.theycame;
   const status = getAlienDefenseGameStatus(session.gameData);
   
+  // Generate overlay image with aliens
+  let overlayImage = null;
+  try {
+    overlayImage = await generateAlienOverlayImage(session.gameData, session.sessionId);
+  } catch (error) {
+    console.error('[mod.js]: Error generating overlay image:', error);
+    overlayImage = null;
+  }
+  
+  // Ensure we have valid data
+  const gameTitle = gameConfig?.name || 'They Came for the Cows';
+  const gameDescription = gameConfig?.description || 'Defend your village from alien invaders! Work together to protect the livestock.';
+  const gameStatus = session?.status || 'waiting';
+  
   const embed = new EmbedBuilder()
-    .setTitle(`👽 ${gameConfig.name} - ${title}`)
-    .setDescription(gameConfig.description)
-    .setColor(getGameStatusColor(session.status))
-    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+    .setTitle(`👽 ${gameTitle} - ${title}`)
+    .setDescription(gameDescription)
+    .setColor(getGameStatusColor(gameStatus))
     .setTimestamp();
   
-  // Game progress
+  // Add the overlay image if available, otherwise fallback to village image
+  if (overlayImage) {
+    embed.setImage(`attachment://minigame-${session.sessionId}-overlay.png`);
+  } else {
+    const villageImage = session.gameData?.images?.village || getCurrentVillageImage();
+    embed.setImage(villageImage);
+  }
+  
+  // Game status - better organized
+  const gameStatusText = session.status === 'waiting' ? '⏳ Waiting for players' : 
+                        session.status === 'active' ? '⚔️ In Progress' : '🏁 Finished';
+  
   embed.addFields(
-    { name: '📊 Game Progress', value: status.gameProgress, inline: true },
-    { name: '👥 Players', value: session.players.length.toString(), inline: true },
-    { name: '🐄 Animals Saved', value: status.villageAnimals.toString(), inline: true }
+    { 
+      name: '📊 Game Status', 
+      value: `**Progress:** ${status.gameProgress}\n**Status:** ${gameStatusText}\n**Players:** ${session.players.length}/6`, 
+      inline: false 
+    },
+    { 
+      name: '🐄 Village Status', 
+      value: `**${status.villageAnimals}/25** animals saved\n${status.animalsLost} lost • ${status.defeatedAliens} aliens defeated`, 
+      inline: false 
+    }
   );
   
-  // Turn order info
+  // Turn order info - only show if there are players
   if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
     const turnOrderText = session.gameData.turnOrder.map((player, index) => 
-      `${index + 1}. ${player.username}${index === session.gameData.currentTurnIndex ? ' ⬅️' : ''}`
+      `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${player.username}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`
     ).join('\n');
     embed.addFields(
-      { name: '🔄 Turn Order', value: turnOrderText || 'No players signed up', inline: false }
+      { name: '🔄 Turn Order', value: turnOrderText, inline: false }
     );
   }
   
-  // Alien status
+  // Alien threat with positions
+  const alienPositions = getAlienPositions(session.gameData);
+  let alienThreatText = `**Outer Ring:** ${status.ringStatus.outerRing} aliens\n**Middle Ring:** ${status.ringStatus.middleRing} aliens\n**Inner Ring:** ${status.ringStatus.innerRing} aliens`;
+  
+  if (alienPositions.length > 0) {
+    const positionText = alienPositions.map(alien => {
+      const ringNames = ['Outer', 'Middle', 'Inner'];
+      const ringName = ringNames[alien.ring - 1] || 'Unknown';
+      return `**${alien.id}** (${ringName} Ring)`;
+    }).join('\n');
+    alienThreatText += `\n\n**Active Aliens:**\n${positionText}`;
+  }
+  
   embed.addFields(
-    { name: '👾 Active Aliens', value: `Outer: ${status.ringStatus.outerRing} | Middle: ${status.ringStatus.middleRing} | Inner: ${status.ringStatus.innerRing}`, inline: false },
-    { name: '💀 Defeated Aliens', value: status.defeatedAliens.toString(), inline: true },
-    { name: '🚨 Animals Lost', value: status.animalsLost.toString(), inline: true }
+    { 
+      name: '👾 Alien Threat', 
+      value: alienThreatText, 
+      inline: false 
+    }
   );
   
-  // Game info
+  // Game info - more compact
   embed.addFields(
-    { name: '🎯 Session ID', value: session.sessionId, inline: true },
-    { name: '⏰ Expires', value: `<t:${Math.floor(session.expiresAt.getTime() / 1000)}:R>`, inline: true }
+    { 
+      name: '🎯 Session Info', 
+      value: `**ID:** \`${session.sessionId}\`\n**Expires:** <t:${Math.floor(session.expiresAt.getTime() / 1000)}:R>`, 
+      inline: false 
+    }
   );
   
   if (session.status === 'finished') {
@@ -4496,7 +4683,32 @@ async function createMinigameEmbed(session, title) {
     );
   }
   
-  return embed;
+  // Validate embed has required fields
+  try {
+    const embedData = embed.toJSON();
+    if (!embedData.title || !embedData.description) {
+      console.error('[mod.js]: Embed missing required fields:', embedData);
+      // Create a minimal valid embed as fallback
+      const fallbackEmbed = new EmbedBuilder()
+        .setTitle('👽 They Came for the Cows - Game Status')
+        .setDescription('Defend your village from alien invaders! Work together to protect the livestock.')
+        .setColor(0x00ff00)
+        .setTimestamp();
+      
+      return {
+        embed: fallbackEmbed,
+        attachment: overlayImage
+      };
+    }
+  } catch (error) {
+    console.error('[mod.js]: Error validating embed:', error);
+  }
+  
+  // Return both embed and attachment
+  return {
+    embed: embed,
+    attachment: overlayImage
+  };
 }
 
 function createMinigameButtons(sessionId) {
