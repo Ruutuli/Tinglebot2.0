@@ -326,6 +326,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "target") {
                   await handleBlightOverrideTargetAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "minigame") {
+                if (focusedOption.name === "session_id") {
+                  await handleMinigameSessionIdAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
@@ -428,6 +432,12 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
           case "minigame":
             if (focusedOption.name === "character") {
               await handleMinigameCharacterAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "session_id") {
+              await handleMinigameSessionIdAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "questid") {
+              await handleQuestIdAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "target") {
+              await handleMinigameTargetAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -3390,6 +3400,127 @@ async function handleMinigameCharacterAutocomplete(interaction, focusedOption) {
   } catch (error) {
     console.error(
       "[handleMinigameCharacterAutocomplete]: Error handling minigame character autocomplete:",
+      error
+    );
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Minigame Session ID Autocomplete -------------------
+// Provides autocomplete suggestions for active minigame session IDs
+async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
+  try {
+    const Minigame = require('../models/MinigameModel');
+    const searchQuery = focusedOption.value?.toLowerCase() || '';
+    
+    // Find active minigame sessions
+    const sessions = await Minigame.find({
+      gameType: 'theycame',
+      status: { $in: ['waiting', 'active'] },
+      expiresAt: { $gt: new Date() }
+    }).sort({ createdAt: -1 }).limit(25);
+    
+    const choices = sessions
+      .filter((session) => {
+        return session.sessionId.toLowerCase().includes(searchQuery);
+      })
+      .map((session) => {
+        const statusEmoji = session.status === 'waiting' ? '⏳' : '⚔️';
+        const playerCount = session.players ? session.players.length : 0;
+        const expiresAt = new Date(session.expiresAt).toLocaleDateString();
+        
+        return {
+          name: `${statusEmoji} ${session.sessionId} | ${playerCount} players | Expires: ${expiresAt}`,
+          value: session.sessionId,
+        };
+      });
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error(
+      "[handleMinigameSessionIdAutocomplete]: Error handling minigame session ID autocomplete:",
+      error
+    );
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Minigame Target Autocomplete -------------------
+// Provides autocomplete suggestions for active alien targets in a minigame session
+async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
+  try {
+    const Minigame = require('../models/MinigameModel');
+    let sessionId = interaction.options.getString('session_id');
+    const searchQuery = focusedOption.value?.toLowerCase() || '';
+    
+    if (!sessionId) {
+      await interaction.respond([]);
+      return;
+    }
+    
+    // Extract session ID from the full display text if needed
+    // Handle cases where sessionId might be "⚔ A947783 | 1 players | Expires: 9/6/2025"
+    const sessionIdMatch = sessionId.match(/A\d+/);
+    if (sessionIdMatch) {
+      sessionId = sessionIdMatch[0];
+    }
+    
+    // Find the specific session
+    const session = await Minigame.findOne({
+      sessionId: sessionId,
+      gameType: 'theycame',
+      status: { $in: ['waiting', 'active'] },
+      expiresAt: { $gt: new Date() }
+    });
+    
+    if (!session || !session.gameData || !session.gameData.aliens) {
+      console.log(`[handleMinigameTargetAutocomplete]: No session found for ${sessionId}`);
+      await interaction.respond([]);
+      return;
+    }
+    
+    // Get active aliens (not defeated)
+    const activeAliens = session.gameData.aliens.filter(alien => !alien.defeated);
+    
+    console.log(`[handleMinigameTargetAutocomplete]: Found ${activeAliens.length} active aliens for session ${sessionId}`);
+    
+    let choices = activeAliens
+      .filter((alien) => {
+        return alien.id.toLowerCase().includes(searchQuery);
+      })
+      .map((alien) => {
+        const ringNames = ['Outer', 'Middle', 'Inner'];
+        const ringName = ringNames[alien.ring - 1] || 'Unknown';
+        const difficulty = alien.ring === 1 ? 5 : alien.ring === 2 ? 4 : 3;
+        
+        return {
+          name: `👾 ${alien.id} | ${ringName} Ring | Difficulty: ${difficulty}+`,
+          value: alien.id,
+        };
+      })
+      .slice(0, 25); // Limit to 25 choices
+    
+    // If no active aliens, provide some example targets for reference
+    if (choices.length === 0) {
+      const exampleTargets = [
+        { name: '👾 1A | Outer Ring | Difficulty: 5+', value: '1A' },
+        { name: '👾 1B | Outer Ring | Difficulty: 5+', value: '1B' },
+        { name: '👾 2A | Middle Ring | Difficulty: 4+', value: '2A' },
+        { name: '👾 2B | Middle Ring | Difficulty: 4+', value: '2B' },
+        { name: '👾 3A | Inner Ring | Difficulty: 3+', value: '3A' },
+        { name: '👾 3B | Inner Ring | Difficulty: 3+', value: '3B' }
+      ];
+      
+      choices = exampleTargets.filter(target => 
+        target.value.toLowerCase().includes(searchQuery) || 
+        target.name.toLowerCase().includes(searchQuery)
+      ).slice(0, 10);
+    }
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error(
+      "[handleMinigameTargetAutocomplete]: Error handling minigame target autocomplete:",
       error
     );
     await safeRespondWithError(interaction);
