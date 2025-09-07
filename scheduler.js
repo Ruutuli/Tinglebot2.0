@@ -192,58 +192,12 @@ async function checkAndPostWeatherIfNeeded(client) {
     const existingWeather = await getWeatherWithoutGeneration(village);
     
     if (existingWeather) {
-     console.log(`[scheduler.js]: ✅ Weather already exists for ${village}, checking if it was posted`);
-      
-      // Check if weather was posted to the channel by looking for recent messages
-      const channelId = TOWNHALL_CHANNELS[village];
-      const channel = client.channels.cache.get(channelId);
-      
-      if (!channel) {
-       console.error(`[scheduler.js]: Channel not found: ${channelId}`);
-       continue;
-      }
-      
-      // Look for weather messages in recent messages
-      // Fetch more messages to ensure we don't miss weather posts
-      const messages = await channel.messages.fetch({ limit: 50 });
-      
-      // Check if any recent message contains weather-related content
-      const hasWeatherMessage = messages.some(msg => {
-       const content = msg.content.toLowerCase();
-       const embedTitle = msg.embeds[0]?.title?.toLowerCase() || '';
-       
-       // Check message content and embed titles
-       if (content.includes('weather') || content.includes('forecast') || 
-           embedTitle.includes('weather') || embedTitle.includes('forecast')) {
-         return true;
-       }
-       
-       // Check embed fields for weather data
-       if (msg.embeds && msg.embeds.length > 0) {
-         return msg.embeds.some(embed => {
-           if (embed.fields && embed.fields.length > 0) {
-             return embed.fields.some(field => {
-               const fieldName = field.name?.toLowerCase() || '';
-               return fieldName.includes('temperature') || 
-                      fieldName.includes('wind') || 
-                      fieldName.includes('precipitation');
-             });
-           }
-           return false;
-         });
-       }
-       
-       return false;
-      });
-      
-      if (hasWeatherMessage) {
-       console.log(`[scheduler.js]: ✅ Weather was already posted for ${village}`);
-       continue;
-      }
+     console.log(`[scheduler.js]: ✅ Weather already exists for ${village} - skipping weather generation`);
+     continue;
     }
     
-    // Weather doesn't exist or wasn't posted, generate and post it
-    console.log(`[scheduler.js]: 🌤️ Weather missing or not posted for ${village}, generating and posting now`);
+    // Weather doesn't exist in database, generate and post new weather
+    console.log(`[scheduler.js]: 🌤️ No weather found in database for ${village}, generating new weather`);
     
     const weather = await getCurrentWeather(village);
     
@@ -315,58 +269,12 @@ async function checkAndPostWeatherOnRestart(client) {
     const existingWeather = await getWeatherWithoutGeneration(village);
     
     if (existingWeather) {
-     console.log(`[scheduler.js]: ✅ Weather already exists for ${village}, checking if it was posted`);
-      
-      // Check if weather was posted to the channel by looking for recent messages
-      const channelId = TOWNHALL_CHANNELS[village];
-      const channel = client.channels.cache.get(channelId);
-      
-      if (!channel) {
-       console.error(`[scheduler.js]: Channel not found: ${channelId}`);
-       continue;
-      }
-      
-      // Look for weather messages in recent messages to see if weather was posted today
-      // Fetch more messages to ensure we don't miss weather posts
-      const messages = await channel.messages.fetch({ limit: 100 });
-      
-      // Check if any recent message contains weather-related content
-      const hasWeatherMessage = messages.some(msg => {
-       const content = msg.content.toLowerCase();
-       const embedTitle = msg.embeds[0]?.title?.toLowerCase() || '';
-       
-       // Check message content and embed titles
-       if (content.includes('weather') || content.includes('forecast') || 
-           embedTitle.includes('weather') || embedTitle.includes('forecast')) {
-         return true;
-       }
-       
-       // Check embed fields for weather data
-       if (msg.embeds && msg.embeds.length > 0) {
-         return msg.embeds.some(embed => {
-           if (embed.fields && embed.fields.length > 0) {
-             return embed.fields.some(field => {
-               const fieldName = field.name?.toLowerCase() || '';
-               return fieldName.includes('temperature') || 
-                      fieldName.includes('wind') || 
-                      fieldName.includes('precipitation');
-             });
-           }
-           return false;
-         });
-       }
-       
-       return false;
-      });
-      
-      if (hasWeatherMessage) {
-       console.log(`[scheduler.js]: ✅ Weather was already posted for ${village} today`);
-       continue;
-      }
+     console.log(`[scheduler.js]: ✅ Weather already exists for ${village} - skipping weather generation on restart`);
+     continue;
     }
     
-    // Weather doesn't exist or wasn't posted, generate and post it
-    console.log(`[scheduler.js]: 🌤️ Weather missing or not posted for ${village} today, generating and posting now`);
+    // Weather doesn't exist in database, generate and post new weather
+    console.log(`[scheduler.js]: 🌤️ No weather found in database for ${village}, generating new weather`);
     
     const weather = await getCurrentWeather(village);
     

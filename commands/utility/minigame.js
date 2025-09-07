@@ -43,6 +43,56 @@ const {
 } = require('../../modules/minigameModule');
 
 // ============================================================================
+// ------------------- Helper Functions -------------------
+// Utility functions for better error handling
+// ============================================================================
+
+// ------------------- Function: getSessionDiagnosticMessage -------------------
+// Provides detailed error messages for session issues
+async function getSessionDiagnosticMessage(sessionId) {
+  // First check if session exists at all
+  const sessionExists = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame'
+  });
+  
+  if (!sessionExists) {
+    return `❌ Game session **${sessionId}** not found. Please check the session ID and try again.`;
+  }
+  
+  
+  // Check if session is finished
+  if (sessionExists.status === 'finished') {
+    return `❌ Game session **${sessionId}** has already finished. Please start a new game.`;
+  }
+  
+  // Check if session is in the right status
+  if (!['waiting', 'active'].includes(sessionExists.status)) {
+    return `❌ Game session **${sessionId}** is in an invalid state (${sessionExists.status}). Please start a new game.`;
+  }
+  
+  // If we get here, session should be valid
+  return null;
+}
+
+// ------------------- Function: createSimpleErrorEmbed -------------------
+// Creates a simple error embed without game images for turn errors
+function createSimpleErrorEmbed(message, characterIcon = null) {
+  const embed = new EmbedBuilder()
+    .setTitle('👽 They Came for the Cows - Defense Roll')
+    .setDescription(message)
+    .setColor('#FF0000') // Red color for errors
+    .setTimestamp();
+  
+  // Add character thumbnail if provided
+  if (characterIcon) {
+    embed.setThumbnail(characterIcon);
+  }
+  
+  return embed;
+}
+
+// ============================================================================
 // ------------------- Export the slash command -------------------
 // Main command structure for minigames
 // ============================================================================
@@ -206,19 +256,20 @@ module.exports = {
     
     const username = character.name;
     
-    // Find the specific session
+    // Check session with detailed error messages
+    const sessionError = await getSessionDiagnosticMessage(sessionId);
+    if (sessionError) {
+      return await interaction.editReply({
+        content: sessionError
+      });
+    }
+    
+    // Find the specific session (we know it exists and is valid now)
     const session = await Minigame.findOne({
       sessionId: sessionId,
       gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
+      status: { $in: ['waiting', 'active'] }
     });
-    
-    if (!session) {
-      return await interaction.editReply({
-        content: '❌ Game session not found, expired, or already finished.'
-      });
-    }
     
     // Check if character already joined
     const alreadyJoined = session.players.find(p => p.characterId === character._id.toString());
@@ -247,7 +298,7 @@ module.exports = {
     await this.updateGameMessage(interaction, session);
     
     // Create join confirmation embed
-    const embedResult = await this.createJoinEmbed(session, character.name, result.message);
+    const embedResult = await this.createJoinEmbed(session, character, result.message);
     const replyOptions = {
       embeds: [embedResult.embed]
     };
@@ -271,19 +322,20 @@ module.exports = {
       await interaction.deferReply();
     }
     
-    // Find the session first
+    // Check session with detailed error messages
+    const sessionError = await getSessionDiagnosticMessage(sessionId);
+    if (sessionError) {
+      return await interaction.editReply({
+        content: sessionError
+      });
+    }
+    
+    // Find the session (we know it exists and is valid now)
     const session = await Minigame.findOne({
       sessionId: sessionId,
       gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
+      status: { $in: ['waiting', 'active'] }
     });
-    
-    if (!session) {
-      return await interaction.editReply({
-        content: '❌ Game session not found, expired, or already finished.'
-      });
-    }
     
     
     // Find the player's character from the session
@@ -352,22 +404,12 @@ module.exports = {
       session.markModified('gameData');
       await session.save();
       
-      // Update the game message
-      await this.updateGameMessage(interaction, session);
+      // Create embed for successful roll (before updating main game message)
+      const embedResult = await this.createMinigameEmbed(session, 'Defense Roll', character);
       
-      // Create embed for successful roll
-      const embedResult = await this.createMinigameEmbed(session, 'Defense Roll');
-      
-      // Add roll result and advancement messages to embed description
+      // Add roll result to embed description (no advancement messages here)
       let description = embedResult.embed.data.description;
       description += `\n\n**${result.message}**`;
-      if (advanceResult && advanceResult.success) {
-        description += `\n\n**${advanceResult.message}**`;
-        // Add spawn location notifications
-        if (advanceResult.spawnLocations && advanceResult.spawnLocations.length > 0) {
-          description += `\n\n${advanceResult.spawnLocations.join('\n')}`;
-        }
-      }
       embedResult.embed.setDescription(description);
       
       const replyOptions = {
@@ -378,10 +420,29 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
+      // Update the main game message after the Defense Roll embed is sent
+      await this.updateGameMessage(interaction, session);
+      
       // If round advanced automatically, post a separate red embed
       if (advanceResult && advanceResult.success) {
-        const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, 'Round Advanced!');
+        const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, character);
         roundAdvanceEmbed.embed.setColor('#FF0000'); // Red color
+        
+        // Add movement and spawning information to the round advance embed
+        let description = roundAdvanceEmbed.embed.data.description;
+        description += `\n\n**${advanceResult.message}**`;
+        
+        // Add movement messages if any aliens moved
+        if (advanceResult.movementMessages && advanceResult.movementMessages.length > 0) {
+          description += `\n\n${advanceResult.movementMessages.join('\n')}`;
+        }
+        
+        // Add spawning information if new aliens spawned
+        if (advanceResult.spawnLocations && advanceResult.spawnLocations.length > 0) {
+          description += `\n\n${advanceResult.spawnLocations.join('\n')}`;
+        }
+        
+        roundAdvanceEmbed.embed.setDescription(description);
         
         const roundAdvanceOptions = {
           embeds: [roundAdvanceEmbed.embed]
@@ -394,6 +455,14 @@ module.exports = {
         await interaction.followUp(roundAdvanceOptions);
       }
     } else {
+      // Check if this is a "not your turn" error - use simple embed
+      if (result.message.includes("It's not your turn")) {
+        const simpleEmbed = createSimpleErrorEmbed(result.message, character.icon);
+        return await interaction.editReply({
+          embeds: [simpleEmbed]
+        });
+      }
+      
       // Check if game should end
       const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
       if (gameEndCheck.gameEnded) {
@@ -409,18 +478,11 @@ module.exports = {
       await this.updateGameMessage(interaction, session);
       
       // Create embed for failed roll
-      const embedResult = await this.createMinigameEmbed(session, 'Defense Roll');
+      const embedResult = await this.createMinigameEmbed(session, 'Defense Roll', character);
       
-      // Add roll result and advancement messages to embed description
+      // Add roll result to embed description (no advancement messages here)
       let description = embedResult.embed.data.description;
       description += `\n\n**${result.message}**`;
-      if (advanceResult && advanceResult.success) {
-        description += `\n\n**${advanceResult.message}**`;
-        // Add spawn location notifications
-        if (advanceResult.spawnLocations && advanceResult.spawnLocations.length > 0) {
-          description += `\n\n${advanceResult.spawnLocations.join('\n')}`;
-        }
-      }
       embedResult.embed.setDescription(description);
       
       const replyOptions = {
@@ -431,10 +493,29 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
+      // Update the main game message after the Defense Roll embed is sent
+      await this.updateGameMessage(interaction, session);
+      
       // If round advanced automatically, post a separate red embed
       if (advanceResult && advanceResult.success) {
-        const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, 'Round Advanced!');
+        const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, character);
         roundAdvanceEmbed.embed.setColor('#FF0000'); // Red color
+        
+        // Add movement and spawning information to the round advance embed
+        let description = roundAdvanceEmbed.embed.data.description;
+        description += `\n\n**${advanceResult.message}**`;
+        
+        // Add movement messages if any aliens moved
+        if (advanceResult.movementMessages && advanceResult.movementMessages.length > 0) {
+          description += `\n\n${advanceResult.movementMessages.join('\n')}`;
+        }
+        
+        // Add spawning information if new aliens spawned
+        if (advanceResult.spawnLocations && advanceResult.spawnLocations.length > 0) {
+          description += `\n\n${advanceResult.spawnLocations.join('\n')}`;
+        }
+        
+        roundAdvanceEmbed.embed.setDescription(description);
         
         const roundAdvanceOptions = {
           embeds: [roundAdvanceEmbed.embed]
@@ -454,7 +535,7 @@ module.exports = {
   // ------------------- Helper Functions -------------------
   // ============================================================================
   
-  async createJoinEmbed(session, characterName, joinMessage) {
+  async createJoinEmbed(session, character, joinMessage) {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     const availableSlots = gameConfig.maxPlayers - session.players.length;
@@ -468,11 +549,17 @@ module.exports = {
     const overlayImage = await generateAlienOverlayImage(session.gameData, session.sessionId);
     
     const embed = new EmbedBuilder()
-      .setTitle(`🎮 ${characterName} joined the alien defense!`)
+      .setTitle(`🎮 ${character.name} joined the alien defense!`)
       .setDescription(`*Defend your village from alien invaders! Work together to protect the livestock.*`)
       .setColor(0x00ff00) // Green for join success
       .setTimestamp()
+      .setThumbnail(character.icon) // Add character icon as thumbnail
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+    
+    // Add character thumbnail if provided
+    if (character && character.icon) {
+      embed.setThumbnail(character.icon);
+    }
     
     // Add the overlay image if available, otherwise fallback to village image
     if (overlayImage) {
@@ -488,18 +575,13 @@ module.exports = {
     
     embed.addFields(
       { 
-        name: '👥 Defenders', 
-        value: `> ${session.players.length}/${gameConfig.maxPlayers} players\n> ${playerList}`, 
-        inline: false 
-      },
-      { 
         name: '🎯 Join the Defense', 
-        value: `> **${availableSlots} more slots available!**\n> \n> </minigame theycame-join:1413815457118556201>`, 
+        value: `**${availableSlots} more slots available!**\n\n</minigame theycame-join:1413815457118556201>`, 
         inline: false 
       }
     );
     
-    // Turn order info - only show if there are players
+    // Combined defenders and turn order info - only show if there are players
     if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
       const turnOrderText = session.gameData.turnOrder.map((player, index) => 
         `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${player.username}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`
@@ -507,11 +589,15 @@ module.exports = {
       // Add next turn message for active games
       let turnOrderValue = turnOrderText;
       if (session.status === 'active') {
-        turnOrderValue += `\n\n> **🎯 Use </minigame theycame-roll:1413815457118556201> to go!**`;
+        turnOrderValue += `\n\n**🎯 Use </minigame theycame-roll:1413815457118556201> to go!**`;
       }
       
       embed.addFields(
-        { name: '🔄 Turn Order', value: `> ${turnOrderValue.replace(/\n/g, '\n> ')}`, inline: false }
+        { 
+          name: '👥 Defenders & Turn Order', 
+          value: `**${session.players.length}/${gameConfig.maxPlayers} players**\n${turnOrderValue}`, 
+          inline: false 
+        }
       );
     }
     
@@ -553,7 +639,7 @@ module.exports = {
   // ------------------- Embed Creation -------------------
   // ============================================================================
   
-  async createDetailedMinigameEmbed(session, title) {
+  async createDetailedMinigameEmbed(session, title, character = null) {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     
@@ -571,6 +657,11 @@ module.exports = {
       .setColor(this.getGameStatusColor(session.status))
       .setTimestamp()
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+    
+    // Add character thumbnail if provided
+    if (character && character.icon) {
+      embed.setThumbnail(character.icon);
+    }
     
     // Add the overlay image if available, otherwise fallback to village image
     if (overlayImage) {
@@ -591,18 +682,13 @@ module.exports = {
         inline: false 
       },
       { 
-        name: '👥 Defenders', 
-        value: `${session.players.length} player${session.players.length !== 1 ? 's' : ''}\n\n${playerList}`, 
-        inline: false 
-      },
-      { 
         name: '🐄 Village Status', 
         value: `**${status.villageAnimals}/25** animals saved\n${status.animalsLost} lost • ${status.defeatedAliens} aliens defeated`, 
         inline: false 
       }
     );
     
-    // Turn order info - only show if there are players
+    // Combined defenders and turn order info - only show if there are players
     if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
       const turnOrderText = session.gameData.turnOrder.map((player, index) => 
         `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${player.username}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`
@@ -614,7 +700,11 @@ module.exports = {
       }
       
       embed.addFields(
-        { name: '🔄 Turn Order', value: turnOrderValue, inline: false }
+        { 
+          name: '👥 Defenders & Turn Order', 
+          value: `**${session.players.length} player${session.players.length !== 1 ? 's' : ''}**\n${turnOrderValue}`, 
+          inline: false 
+        }
       );
     }
     
@@ -663,7 +753,7 @@ module.exports = {
     };
   },
   
-  async createMinigameEmbed(session, title) {
+  async createMinigameEmbed(session, title, character = null) {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     
@@ -685,6 +775,11 @@ module.exports = {
       .setTimestamp()
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
     
+    // Add character thumbnail if provided
+    if (character && character.icon) {
+      embed.setThumbnail(character.icon);
+    }
+    
     // Add the overlay image if available, otherwise fallback to village image
     if (overlayImage) {
       embed.setImage(`attachment://minigame-${session.sessionId}-overlay.png`);
@@ -700,28 +795,36 @@ module.exports = {
     embed.addFields(
       { 
         name: '📊 Game Status', 
-        value: `__${status.gameProgress} • ${gameStatusText}__\n> **👥 Defenders:** ${session.players.length} player${session.players.length !== 1 ? 's' : ''}\n> ${playerList}`, 
+        value: `__${status.gameProgress} • ${gameStatusText}__`, 
         inline: false 
       }
     );
     
-    // Turn order info - only show if there are players
+    // Combined defenders and turn order info - only show if there are players
     if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
       const turnOrderText = session.gameData.turnOrder.map((player, index) => 
         `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${player.username}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`
       ).join('\n');
-      // Add next turn message for active games
-      let turnOrderValue = turnOrderText;
-      if (session.status === 'active') {
-        turnOrderValue += `\n\n> **🎯 Use </minigame theycame-roll:1413815457118556201> to go!**`;
-      }
       
       embed.addFields(
-        { name: '🔄 Turn Order', value: `> ${turnOrderValue.replace(/\n/g, '\n> ')}`, inline: false }
+        { 
+          name: '👥 Defenders & Turn Order', 
+          value: `**${session.players.length} player${session.players.length !== 1 ? 's' : ''}**\n${turnOrderText}`, 
+          inline: false 
+        }
       );
     }
     
-    
+    // Add ring difficulty info and command instruction for active games
+    if (session.status === 'active') {
+      embed.addFields(
+        { 
+          name: '🎯 Take Your Turn', 
+          value: `**Use </minigame theycame-roll:1413815457118556201> to attack aliens!**\n\n**Ring Difficulties:**\n• **Outer Ring (1A, 1B, etc.)** - Needs **5-6** to hit\n• **Middle Ring (2A, 2B, etc.)** - Needs **4-6** to hit\n• **Inner Ring (3A, 3B, etc.)** - Needs **3-6** to hit`, 
+          inline: false 
+        }
+      );
+    }
     
     if (session.status === 'finished') {
       embed.addFields(

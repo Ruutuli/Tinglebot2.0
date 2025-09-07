@@ -1895,9 +1895,7 @@ for (const { name } of cleanedItems) {
    fromCharacter
   );
 
-  console.log(
-   `[transfer.js:logs] Starting item availability check for character: ${fromCharacterName}`
-  );
+  // Starting item availability check
 
   // Aggregate quantities for duplicate items (case-insensitive)
   const aggregatedItems = [];
@@ -1915,9 +1913,7 @@ for (const { name } of cleanedItems) {
   }
 
   for (const { name, quantity } of aggregatedItems) {
-   console.log(
-    `[transfer.js:logs] Checking availability for item: ${name} (Required: ${quantity})`
-   );
+   // Checking item availability
 
    // Extract the base item name by removing any quantity in parentheses
    const baseItemName = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
@@ -1936,7 +1932,6 @@ for (const { name } of cleanedItems) {
    }
 
    if (!itemDetails) {
-     console.log(`[transfer.js:logs] Item not found in database: ${baseItemName}`);
      unavailableItems.push(`${baseItemName} - Not Found`);
      allItemsAvailable = false;
      continue;
@@ -1960,20 +1955,9 @@ for (const { name } of cleanedItems) {
     (sum, entry) => sum + entry.quantity,
     0
    );
-   console.log(
-    `[transfer.js:logs] Total quantity of '${canonicalName}' in inventory: ${totalQuantity} (Required: ${quantity})`
-   );
-
    if (totalQuantity < quantity) {
-     console.log(
-      `[transfer.js:logs] Insufficient quantity for item '${canonicalName}' (Available: ${totalQuantity}, Required: ${quantity}).`
-     );
      unavailableItems.push(`${canonicalName} - QTY:${totalQuantity}`);
      allItemsAvailable = false;
-   } else {
-     console.log(
-      `[transfer.js:logs] Sufficient quantity available for '${canonicalName}' (Total: ${totalQuantity}, Required: ${quantity}).`
-     );
    }
   }
 
@@ -2067,7 +2051,6 @@ for (const { name } of cleanedItems) {
     }
 
     if (!itemDetails) {
-      console.error(`[transfer.js:logs] Item not found in database: ${name}`);
       continue;
     }
 
