@@ -15,14 +15,13 @@ const GAME_CONFIGS = {
   theycame: {
     name: 'They Came for the Cows',
     description: 'Aliens are coming for the livestock! Defend your village!',
-    maxRounds: 6, // 6 rounds of spawns + cleanup
+    maxRounds: 8, // 6 rounds of spawns + 2 cleanup rounds
     segments: ['A', 'B', 'C', 'D', 'E', 'F'],
     rings: [
       { name: 'Outer Ring', difficulty: 5, description: 'Requires 5+ to defeat' },
       { name: 'Middle Ring', difficulty: 4, description: 'Requires 4+ to defeat' },
       { name: 'Inner Ring', difficulty: 3, description: 'Requires 3+ to defeat' }
     ],
-    sessionDurationHours: 2, // Game expires after 2 hours
     maxPlayers: 6,
     startingAnimals: 25, // Total animals to protect
     maxAliensPerSegment: 1, // Only one alien per segment
@@ -216,16 +215,42 @@ function addPlayerToTurnOrder(gameData, playerId, playerName) {
 }
 
 // ------------------- Function: spawnAliens -------------------
-// Spawns aliens based on player count (1dX where X = players, max 6)
-function spawnAliens(gameData, playerCount) {
-  const maxSpawn = Math.min(playerCount, 6);
-  const spawnCount = Math.floor(Math.random() * maxSpawn) + 1; // 1dX
+// Spawns aliens based on player count and round
+// First turn: players + 2 (up to 6 max)
+// Subsequent turns: 1dX (X = players)
+function spawnAliens(gameData, playerCount, currentRound) {
+  let spawnCount;
+  
+  console.log(`[MINIGAME] spawnAliens called - playerCount: ${playerCount}, currentRound: ${currentRound}`);
+  
+  if (currentRound === 0) {
+    // First turn: players + 2 (up to 6 max)
+    spawnCount = Math.min(playerCount + 2, 6);
+    console.log(`[MINIGAME] First turn logic - spawnCount: ${spawnCount} (${playerCount} + 2, max 6)`);
+  } else {
+    // Subsequent turns: different logic based on player count
+    if (playerCount >= 4) {
+      // For 4+ players: 1d3 + (players - 3)
+      // 4 players: 1d3 + 1 = 2-4 aliens
+      // 5 players: 1d3 + 2 = 3-5 aliens  
+      // 6 players: 1d3 + 3 = 4-6 aliens
+      spawnCount = Math.floor(Math.random() * 3) + 1 + (playerCount - 3); // 1d3 + (players - 3)
+      console.log(`[MINIGAME] High player count logic - spawnCount: ${spawnCount} (1d3 + ${playerCount - 3})`);
+    } else {
+      // For 1-3 players: 1d3 (consistent challenge for small groups)
+      spawnCount = Math.floor(Math.random() * 3) + 1; // 1d3
+      console.log(`[MINIGAME] Low player count logic - spawnCount: ${spawnCount} (1d3)`);
+    }
+  }
   
   // Get available segments (no alien currently there in outer ring)
   const occupiedSegments = gameData.aliens
     .filter(a => !a.defeated && a.ring === 1)
     .map(a => a.segment);
   const availableSegments = GAME_CONFIGS.theycame.segments.filter(s => !occupiedSegments.includes(s));
+  
+  console.log(`[MINIGAME] Available segments: ${availableSegments.join(', ')} (${availableSegments.length} total)`);
+  console.log(`[MINIGAME] Trying to spawn ${spawnCount} aliens`);
   
   // Spawn aliens in random available segments
   const newAliens = [];
@@ -248,6 +273,8 @@ function spawnAliens(gameData, playerCount) {
   
   gameData.aliens.push(...newAliens);
   
+  console.log(`[MINIGAME] Actually spawned ${newAliens.length} aliens: ${newAliens.map(a => a.id).join(', ')}`);
+  
   // Create spawn location messages
   const spawnMessages = newAliens.map(alien => {
     const ringNames = ['Outer', 'Middle', 'Inner'];
@@ -267,7 +294,6 @@ function spawnAliens(gameData, playerCount) {
 // Creates a new alien defense game session
 function createAlienDefenseGame(channelId, guildId, createdBy) {
   const sessionId = generateUniqueId('A'); // Alien Defense prefix
-  const expiresAt = new Date(Date.now() + (GAME_CONFIGS.theycame.sessionDurationHours * 60 * 60 * 1000));
   
   // Initialize empty game board - aliens spawn based on player count
   const gameData = {
@@ -297,7 +323,6 @@ function createAlienDefenseGame(channelId, guildId, createdBy) {
     channelId,
     guildId,
     createdBy,
-    expiresAt,
     status: 'waiting',
     players: [], // Start with empty players array - creator joins separately
     gameData
@@ -386,12 +411,17 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
 function advanceAlienDefenseRound(gameData) {
   console.log(`[MINIGAME] === ADVANCING ROUND ${gameData.currentRound} ===`);
   
-  // Move undefeated aliens inward
+  // First, advance to the next round
+  gameData.currentRound++;
+  console.log(`[MINIGAME] Round advanced to ${gameData.currentRound}`);
+  
+  // Move undefeated aliens inward at the START of the new round
   const undefeatedAliens = gameData.aliens.filter(a => !a.defeated);
   let animalsLost = 0;
   let barnAliens = []; // Track which aliens reached the barn
+  let movementMessages = []; // Track which aliens moved
   
-  console.log(`[MINIGAME] Before advance - Aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+  console.log(`[MINIGAME] Before movement - Aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
   
   undefeatedAliens.forEach(alien => {
     if (alien.ring < 3) {
@@ -402,9 +432,16 @@ function advanceAlienDefenseRound(gameData) {
       
       if (!targetSegmentOccupied) {
         const oldId = alien.id;
+        const oldRing = alien.ring;
         alien.ring++;
         alien.id = `${alien.ring}${alien.segment}`;
         console.log(`[MINIGAME] ${oldId} moved to ${alien.id} (Ring ${alien.ring})`);
+        
+        // Create movement message
+        const ringNames = ['Outer', 'Middle', 'Inner'];
+        const oldRingName = ringNames[oldRing - 1] || 'Unknown';
+        const newRingName = ringNames[alien.ring - 1] || 'Unknown';
+        movementMessages.push(`**${oldId}** moved from ${oldRingName} to ${newRingName} Ring!`);
       } else {
         console.log(`[MINIGAME] ${alien.id} blocked from moving to ring ${alien.ring + 1}`);
       }
@@ -422,21 +459,20 @@ function advanceAlienDefenseRound(gameData) {
 
   console.log(`[MINIGAME] After movement - Aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
   
-  // Spawn new aliens in outer ring if not at max rounds
+  // Spawn new aliens for the NEW round (only during rounds 1-6, skip rounds 7-8)
   let spawnResult = null;
-  if (gameData.currentRound < gameData.maxRounds) {
+  if (gameData.currentRound <= 6) {
     const playerCount = gameData.turnOrder.length || 1; // Use turn order count or default to 1
-    console.log(`[MINIGAME] Spawning aliens for round ${gameData.currentRound + 1} (${playerCount} players)`);
-    spawnResult = spawnAliens(gameData, playerCount);
+    console.log(`[MINIGAME] Spawning aliens for round ${gameData.currentRound} (${playerCount} players)`);
+    spawnResult = spawnAliens(gameData, playerCount, gameData.currentRound - 1); // Pass previous round number for logic
     console.log(`[MINIGAME] Spawned ${spawnResult.spawnCount} aliens: ${spawnResult.spawnLocations.join(', ')}`);
+  } else if (gameData.currentRound <= gameData.maxRounds) {
+    console.log(`[MINIGAME] Cleanup round ${gameData.currentRound} - no new aliens spawned`);
   } else {
     console.log(`[MINIGAME] Max rounds reached (${gameData.maxRounds}), no new aliens spawned`);
   }
   
   console.log(`[MINIGAME] After spawn - Aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
-
-  gameData.currentRound++;
-  console.log(`[MINIGAME] Round advanced to ${gameData.currentRound}`);
   
   // Record round history
   gameData.roundHistory.push({
@@ -446,7 +482,7 @@ function advanceAlienDefenseRound(gameData) {
     timestamp: new Date()
   });
 
-  let message = `🔄 **Turn complete!**`;
+  let message = `🔄 **Round complete!**`;
   if (animalsLost > 0) {
     if (barnAliens.length > 0) {
       message += ` **${barnAliens.join(', ')}** reached the barn and took ${animalsLost} animal${animalsLost > 1 ? 's' : ''}!`;
@@ -466,6 +502,7 @@ function advanceAlienDefenseRound(gameData) {
     message: message,
     gameData: gameData,
     spawnLocations: spawnResult ? spawnResult.spawnLocations : [],
+    movementMessages: movementMessages,
     barnAliens: barnAliens
   };
 }
@@ -484,17 +521,39 @@ function checkAlienDefenseGameEnd(gameData) {
     };
   }
   
-  // Game ends when no more aliens and all rounds are complete
-  if (gameData.currentRound > gameData.maxRounds && activeAliens.length === 0) {
+  // Game ends when all rounds are complete (round 8 finished)
+  if (gameData.currentRound > gameData.maxRounds) {
+    // Any remaining aliens steal animals at the end of round 8
+    let finalAnimalsLost = 0;
+    if (activeAliens.length > 0) {
+      finalAnimalsLost = activeAliens.length;
+      gameData.villageAnimals = Math.max(0, gameData.villageAnimals - finalAnimalsLost);
+      
+      // Mark remaining aliens as defeated by barn
+      activeAliens.forEach(alien => {
+        alien.defeated = true;
+        alien.defeatedBy = 'barn';
+        alien.defeatedAt = new Date();
+      });
+    }
+    
     const animalsSaved = gameData.villageAnimals;
     const totalAnimals = GAME_CONFIGS.theycame.startingAnimals;
     const percentage = Math.round((animalsSaved / totalAnimals) * 100);
     
-    return {
-      gameEnded: true,
-      finalScore: animalsSaved,
-      message: `🏁 **Game Over!** Village saved ${animalsSaved}/${totalAnimals} animals (${percentage}%)!`
-    };
+    if (finalAnimalsLost > 0) {
+      return {
+        gameEnded: true,
+        finalScore: animalsSaved,
+        message: `💀 **Game Over!** ${finalAnimalsLost} alien${finalAnimalsLost > 1 ? 's' : ''} reached the barn and stole ${finalAnimalsLost} animal${finalAnimalsLost > 1 ? 's' : ''}! Village saved ${animalsSaved}/${totalAnimals} animals (${percentage}%)!`
+      };
+    } else {
+      return {
+        gameEnded: true,
+        finalScore: animalsSaved,
+        message: `🏁 **Game Over!** Village saved ${animalsSaved}/${totalAnimals} animals (${percentage}%)!`
+      };
+    }
   }
   
   return {

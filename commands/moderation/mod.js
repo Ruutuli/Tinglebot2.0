@@ -1222,10 +1222,16 @@ async function execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
 
     // Only defer with ephemeral for non-mount and non-weather commands
-    if (subcommand !== 'mount' && subcommand !== 'weather') {
-      await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
-    } else {
-      await interaction.deferReply();
+    try {
+      if (subcommand !== 'mount' && subcommand !== 'weather') {
+        await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
+      } else {
+        await interaction.deferReply();
+      }
+    } catch (deferError) {
+      console.error('[mod.js]: Failed to defer reply:', deferError);
+      // If defer fails, the interaction is likely invalid, so we can't proceed
+      return;
     }
 
     if (subcommand === 'give') {
@@ -1327,13 +1333,15 @@ async function execute(interaction) {
     } else if (subcommand === 'minigame') {
         return await handleMinigame(interaction);
     } else {
-        return interaction.editReply('❌ Unknown subcommand.');
+        return await safeReply(interaction, '❌ Unknown subcommand.');
     }
 
   } catch (error) {
     handleError(error, 'mod.js');
     console.error('[mod.js]: Command execution error', error);
-    return interaction.editReply('⚠️ Something went wrong while processing the command.');
+    
+    // Use safeReply to handle invalid interactions gracefully
+    return await safeReply(interaction, '⚠️ Something went wrong while processing the command.');
   }
 }
 
@@ -2063,6 +2071,25 @@ async function reply(interaction, content) {
     return interaction.editReply({ content, ephemeral: true });
   } else {
     return interaction.editReply({ ...content, ephemeral: true });
+  }
+}
+
+// ------------------- Function: safeReply -------------------
+// Helper function to safely send replies, handling invalid interactions
+async function safeReply(interaction, content, ephemeral = true) {
+  try {
+    if (interaction.replied || interaction.deferred) {
+      return await interaction.editReply(content);
+    } else {
+      const replyContent = typeof content === 'string' ? { content } : content;
+      if (ephemeral && !replyContent.ephemeral) {
+        replyContent.ephemeral = true;
+      }
+      return await interaction.reply(replyContent);
+    }
+  } catch (error) {
+    console.error('[mod.js]: Failed to send safe reply:', error);
+    return null;
   }
 }
 
@@ -4041,8 +4068,7 @@ async function handleTheyCameStart(interaction, sessionId) {
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: 'waiting',
-    expiresAt: { $gt: new Date() }
+    status: 'waiting'
   });
   
   if (!session) {
@@ -4060,7 +4086,7 @@ async function handleTheyCameStart(interaction, sessionId) {
   
   // Start the game by spawning initial aliens
   const playerCount = session.gameData.turnOrder.length || session.players.length;
-  const spawnResult = spawnAliens(session.gameData, playerCount);
+  const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
   
   // Update session status
   session.gameData.currentRound = 1;
@@ -4087,8 +4113,7 @@ async function handleTheyCameAdvance(interaction, sessionId) {
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: { $in: ['waiting', 'active'] },
-    expiresAt: { $gt: new Date() }
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (!session) {
@@ -4100,7 +4125,7 @@ async function handleTheyCameAdvance(interaction, sessionId) {
   // If this is the first round, spawn initial aliens
   if (session.gameData.currentRound === 0) {
     const playerCount = session.gameData.turnOrder.length || session.players.length;
-    const spawnResult = spawnAliens(session.gameData, playerCount);
+    const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
     session.gameData.currentRound = 1;
     session.status = 'active';
   }
@@ -4141,8 +4166,7 @@ async function handleTheyCameEnd(interaction, sessionId) {
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: { $in: ['waiting', 'active'] },
-    expiresAt: { $gt: new Date() }
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (!session) {
@@ -4196,8 +4220,7 @@ async function handleCreateMinigame(interaction, questId) {
   const existingSession = await Minigame.findOne({
     channelId: channelId,
     gameType: 'theycame',
-    status: { $in: ['waiting', 'active'] },
-    expiresAt: { $gt: new Date() }
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (existingSession) {
@@ -4277,8 +4300,7 @@ async function handleSignUpMinigame(interaction) {
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: { $in: ['waiting', 'active'] },
-    expiresAt: { $gt: new Date() }
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (!session) {
@@ -4332,8 +4354,7 @@ async function handleJoinMinigame(interaction) {
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: { $in: ['waiting', 'active'] },
-    expiresAt: { $gt: new Date() }
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (!session) {
@@ -4393,8 +4414,7 @@ async function handleRollMinigame(interaction, target) {
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: { $in: ['waiting', 'active'] },
-    expiresAt: { $gt: new Date() }
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (!session) {
@@ -4491,8 +4511,7 @@ async function handleAdvanceRoundMinigame(interaction) {
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: { $in: ['waiting', 'active'] },
-    expiresAt: { $gt: new Date() }
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (!session) {
@@ -4504,7 +4523,7 @@ async function handleAdvanceRoundMinigame(interaction) {
   // If this is the first round, spawn initial aliens
   if (session.gameData.currentRound === 0) {
     const playerCount = session.gameData.turnOrder.length || session.players.length;
-    const spawnResult = spawnAliens(session.gameData, playerCount);
+    const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
     session.gameData.currentRound = 1;
     session.status = 'active';
   }
@@ -4556,8 +4575,7 @@ async function handleEndMinigame(interaction) {
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: { $in: ['waiting', 'active'] },
-    expiresAt: { $gt: new Date() }
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (!session) {
@@ -4672,10 +4690,21 @@ async function createMinigameEmbed(session, title) {
   embed.addFields(
     { 
       name: '🎯 Session Info', 
-      value: `**ID:** \`${session.sessionId}\`\n**Expires:** <t:${Math.floor(session.expiresAt.getTime() / 1000)}:R>`, 
+      value: `**ID:** \`${session.sessionId}\``, 
       inline: false 
     }
   );
+  
+  // Add command instructions for active games
+  if (session.status === 'active') {
+    embed.addFields(
+      { 
+        name: '🎲 Take Your Turn', 
+        value: `Use </minigame theycame-roll:1413815457118556201> to attack aliens!\n**Target format:** \`1A\`, \`2B\`, \`3C\` etc.`, 
+        inline: false 
+      }
+    );
+  }
   
   if (session.status === 'finished') {
     embed.addFields(

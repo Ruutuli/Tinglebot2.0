@@ -428,20 +428,10 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         
       } catch (sheetError) {
         console.error(`[inventoryUtils.js]: ⚠️ Failed to log item addition to Google Sheets: ${sheetError.message}`);
-        console.error(`[inventoryUtils.js]: 📊 Sheet error details:`, {
-          characterName: character.name,
-          itemName: itemName,
-          quantity: quantity,
-          obtain: obtain,
-          inventoryUrl: character.inventory,
-          errorMessage: sheetError.message,
-          errorStatus: sheetError.status,
-          errorCode: sheetError.code
-        });
         
         // If this is a retryable error, the operation should have been stored for retry
         if (sheetError.message.includes('stored for retry') || sheetError.storedForRetry) {
-          console.log(`[inventoryUtils.js]: 📦 Item addition operation stored for retry - will be processed later`);
+          console.log(`[inventoryUtils.js]: 📦 Operation stored for retry`);
         }
         
         // Don't fail the addition if sheet logging fails
