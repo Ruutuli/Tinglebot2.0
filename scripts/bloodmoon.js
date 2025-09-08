@@ -198,6 +198,12 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
       }
     }
     
+    // Additional safety check: Only send if we actually found a Blood Moon period that ended
+    if (!foundBloodMoonPeriod) {
+      console.log(`[bloodmoon.js]: ⏭️ No Blood Moon period found for yesterday - skipping end announcement`);
+      return;
+    }
+    
     // Use current date for the announcement (when the announcement is posted)
     const announcementDate = today;
     const realWorldDate = announcementDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });

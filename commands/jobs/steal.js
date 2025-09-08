@@ -2689,11 +2689,13 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
 async function processItemsForStealing(targetName, targetType, raritySelection, targetCharacter = null) {
     try {
         if (targetType === 'npc') {
+            let npcInventory = []; // Declare at function scope to avoid reference errors
+            
             // Handle Peddler special case
             if (targetName === 'Peddler') {
                 try {
                     const allItems = await ItemModel.find({}, 'itemName');
-                    let npcInventory = allItems.map(item => item.itemName);
+                    npcInventory = allItems.map(item => item.itemName);
                     
                     // Filter out custom weapons from Peddler inventory
                     const peddlerInventoryWithoutCustomWeapons = [];
