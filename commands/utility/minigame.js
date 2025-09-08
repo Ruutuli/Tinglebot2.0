@@ -425,7 +425,7 @@ module.exports = {
       
       // If round advanced automatically, post a separate red embed FIRST
       if (advanceResult && advanceResult.success) {
-        const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, character);
+        const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, null);
         roundAdvanceEmbed.embed.setColor('#FF0000'); // Red color
         
         // Add movement and spawning information to the round advance embed
@@ -498,7 +498,7 @@ module.exports = {
       
       // If round advanced automatically, post a separate red embed FIRST
       if (advanceResult && advanceResult.success) {
-        const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, character);
+        const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, null);
         roundAdvanceEmbed.embed.setColor('#FF0000'); // Red color
         
         // Add movement and spawning information to the round advance embed
