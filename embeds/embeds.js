@@ -1842,6 +1842,11 @@ const createHealEmbed = async (
      inline: true,
     },
     {
+     name: "__💖 Current Hearts__",
+     value: `> ${characterToHeal.currentHearts}/${characterToHeal.maxHearts}`,
+     inline: true,
+    },
+    {
      name: "__💰 Payment Offered__",
      value: `> ${paymentOffered || "None"}`,
      inline: false,
