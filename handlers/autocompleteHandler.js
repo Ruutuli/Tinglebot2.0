@@ -3416,8 +3416,7 @@ async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
     // Find active minigame sessions
     const sessions = await Minigame.find({
       gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
+      status: { $in: ['waiting', 'active'] }
     }).sort({ createdAt: -1 }).limit(25);
     
     const choices = sessions
@@ -3427,10 +3426,10 @@ async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
       .map((session) => {
         const statusEmoji = session.status === 'waiting' ? '⏳' : '⚔️';
         const playerCount = session.players ? session.players.length : 0;
-        const expiresAt = new Date(session.expiresAt).toLocaleDateString();
+        const createdAt = new Date(session.createdAt).toLocaleDateString();
         
         return {
-          name: `${statusEmoji} ${session.sessionId} | ${playerCount} players | Expires: ${expiresAt}`,
+          name: `${statusEmoji} ${session.sessionId} | ${playerCount} players | Created: ${createdAt}`,
           value: session.sessionId,
         };
       });
@@ -3469,8 +3468,7 @@ async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
     const session = await Minigame.findOne({
       sessionId: sessionId,
       gameType: 'theycame',
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
+      status: { $in: ['waiting', 'active'] }
     });
     
     if (!session || !session.gameData || !session.gameData.aliens) {

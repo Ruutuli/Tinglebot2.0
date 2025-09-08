@@ -384,27 +384,8 @@ module.exports = {
     
     console.log(`[MINIGAME] Roll result: ${result.success ? 'SUCCESS' : 'FAILED'} - ${result.message}`);
     
-    // Check if we should automatically advance the round
-    let advanceResult = null;
-    if (result.shouldAdvanceRound) {
-      console.log(`[MINIGAME] Advancing round - Current round: ${session.gameData.currentRound}`);
-      advanceResult = advanceAlienDefenseRound(session.gameData);
-      console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
-    }
-    
     if (result.success) {
-      // Check if game should end
-      const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
-      if (gameEndCheck.gameEnded) {
-        session.status = 'finished';
-        session.results.finalScore = gameEndCheck.finalScore;
-        session.results.completedAt = new Date();
-      }
-      
-      session.markModified('gameData');
-      await session.save();
-      
-      // Create embed for successful roll (before updating main game message)
+      // Create embed for successful roll BEFORE round advancement to show correct alien positions
       const embedResult = await this.createMinigameEmbed(session, 'Defense Roll', character);
       
       // Set color to cyan blue for successful hits
@@ -423,10 +404,29 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
+      // Check if we should automatically advance the round AFTER creating the roll result embed
+      let advanceResult = null;
+      if (result.shouldAdvanceRound) {
+        console.log(`[MINIGAME] Advancing round - Current round: ${session.gameData.currentRound}`);
+        advanceResult = advanceAlienDefenseRound(session.gameData);
+        console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
+      }
+      
+      // Check if game should end
+      const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
+      if (gameEndCheck.gameEnded) {
+        session.status = 'finished';
+        session.results.finalScore = gameEndCheck.finalScore;
+        session.results.completedAt = new Date();
+      }
+      
+      session.markModified('gameData');
+      await session.save();
+      
       // If round advanced automatically, post a separate red embed FIRST
       if (advanceResult && advanceResult.success) {
         const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, null);
-        roundAdvanceEmbed.embed.setColor('#FF0000'); // Red color
+        roundAdvanceEmbed.embed.setColor('#FFFFFF'); // White color
         
         // Add movement and spawning information to the round advance embed
         let description = roundAdvanceEmbed.embed.data.description;
@@ -466,22 +466,11 @@ module.exports = {
         });
       }
       
-      // Check if game should end
-      const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
-      if (gameEndCheck.gameEnded) {
-        session.status = 'finished';
-        session.results.finalScore = gameEndCheck.finalScore;
-        session.results.completedAt = new Date();
-      }
-      
-      session.markModified('gameData');
-      await session.save();
-      
-      // Create embed for failed roll
+      // Create embed for failed roll BEFORE round advancement to show correct alien positions
       const embedResult = await this.createMinigameEmbed(session, 'Defense Roll', character);
       
-      // Set color to highlighter orange for misses
-      embedResult.embed.setColor(0xFFA500); // Highlighter orange
+      // Set color to eye-burning saturated orange for misses
+      embedResult.embed.setColor(0xFF4500); // Eye-burning saturated orange
       
       // Add roll result to embed description (no advancement messages here)
       let description = embedResult.embed.data.description;
@@ -496,10 +485,29 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
+      // Check if we should automatically advance the round AFTER creating the roll result embed
+      let advanceResult = null;
+      if (result.shouldAdvanceRound) {
+        console.log(`[MINIGAME] Advancing round - Current round: ${session.gameData.currentRound}`);
+        advanceResult = advanceAlienDefenseRound(session.gameData);
+        console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
+      }
+      
+      // Check if game should end
+      const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
+      if (gameEndCheck.gameEnded) {
+        session.status = 'finished';
+        session.results.finalScore = gameEndCheck.finalScore;
+        session.results.completedAt = new Date();
+      }
+      
+      session.markModified('gameData');
+      await session.save();
+      
       // If round advanced automatically, post a separate red embed FIRST
       if (advanceResult && advanceResult.success) {
         const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, null);
-        roundAdvanceEmbed.embed.setColor('#FF0000'); // Red color
+        roundAdvanceEmbed.embed.setColor('#FFFFFF'); // White color
         
         // Add movement and spawning information to the round advance embed
         let description = roundAdvanceEmbed.embed.data.description;
