@@ -569,6 +569,9 @@ function getAlienDefenseGameStatus(gameData) {
     innerRing: activeAliens.filter(a => a.ring === 3).length
   };
 
+  // Check if game should have ended
+  const gameEnded = gameData.currentRound > gameData.maxRounds;
+  
   return {
     currentRound: gameData.currentRound,
     maxRounds: gameData.maxRounds,
@@ -577,7 +580,7 @@ function getAlienDefenseGameStatus(gameData) {
     animalsLost: animalsLost,
     villageAnimals: gameData.villageAnimals,
     ringStatus: ringStatus,
-    gameProgress: `${gameData.currentRound}/${gameData.maxRounds} rounds`
+    gameProgress: gameEnded ? 'Game End!' : `${gameData.currentRound}/${gameData.maxRounds} rounds`
   };
 }
 
