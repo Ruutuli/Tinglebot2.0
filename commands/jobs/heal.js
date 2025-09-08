@@ -354,12 +354,19 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
       });
     } else {
       // General healing request - ping the healing role
-      let pingContent = `🔔 <@&${healingRoleId || '1083191610478698547'}> Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
+      const finalRoleId = healingRoleId || '1083191610478698547';
+      let pingContent = `🔔 <@&${finalRoleId}> Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
       
+      // Send embed via interaction.followUp() and role ping via channel.send()
+      // This approach works because channel.send() properly handles role mentions
       sentMessage = await interaction.followUp({
-        content: pingContent,
         embeds: [embed],
       });
+      
+      const channel = interaction.channel;
+      if (channel) {
+        await channel.send({ content: pingContent });
+      }
     }
 
     const healingRequestData = createHealingRequestData(
