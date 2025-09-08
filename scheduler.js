@@ -24,6 +24,7 @@ const {
  revertChannelNames,
  cleanupOldTrackingData,
 } = require("./scripts/bloodmoon");
+const { bloodmoonDates } = require("./modules/calendarModule");
 const {
  cleanupExpiredEntries,
  cleanupExpiredHealingRequests,
@@ -1099,11 +1100,49 @@ async function handleBloodMoonEnd(client) {
    process.env.VHINTL_TOWNHALL,
   ];
 
-  // Use the corrected isBloodMoonDay() function to check if blood moon is still active
-  const isBloodMoonActive = isBloodMoonDay();
+  // Check if we're transitioning from a Blood Moon period (yesterday was Blood Moon, today is not)
+  const now = new Date();
+  const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const today = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
   
-  if (!isBloodMoonActive) {
-   console.log(`[scheduler.js]: 🌙 Blood Moon has ended - processing channels`);
+  // Check if yesterday was in a Blood Moon period
+  let wasBloodMoonYesterday = false;
+  if (bloodmoonDates && Array.isArray(bloodmoonDates)) {
+    for (const { realDate } of bloodmoonDates) {
+      const [month, day] = realDate.split('-').map(Number);
+      const currentYearBloodMoonDate = new Date(today.getFullYear(), month - 1, day);
+      const dayBefore = new Date(currentYearBloodMoonDate);
+      dayBefore.setDate(currentYearBloodMoonDate.getDate() - 1);
+      const dayAfter = new Date(currentYearBloodMoonDate);
+      dayAfter.setDate(currentYearBloodMoonDate.getDate() + 1);
+      
+      // Check if yesterday was within this Blood Moon period
+      if (yesterday >= dayBefore && yesterday <= dayAfter) {
+        // Check if yesterday was actually active (considering time)
+        const yesterdayHour = 23; // Assume 8 AM check means yesterday ended at 8 AM
+        let wasActiveYesterday = false;
+        
+        if (yesterday.getTime() === dayBefore.getTime()) {
+          wasActiveYesterday = yesterdayHour >= 20; // 8 PM or later
+        } else if (yesterday.getTime() === currentYearBloodMoonDate.getTime()) {
+          wasActiveYesterday = true; // Full day active
+        } else if (yesterday.getTime() === dayAfter.getTime()) {
+          wasActiveYesterday = yesterdayHour < 8; // Before 8 AM
+        }
+        
+        if (wasActiveYesterday) {
+          wasBloodMoonYesterday = true;
+          break;
+        }
+      }
+    }
+  }
+  
+  // Only send end announcements if we're transitioning from Blood Moon to non-Blood Moon
+  if (wasBloodMoonYesterday && !isBloodMoonDay()) {
+   console.log(`[scheduler.js]: 🌙 Blood Moon has ended - transitioning from Blood Moon period`);
    await revertChannelNames(client);
 
    for (const channelId of channels) {
@@ -1120,7 +1159,7 @@ async function handleBloodMoonEnd(client) {
     }
    }
   } else {
-   console.log(`[scheduler.js]: 📅 Blood Moon still active - no end announcement needed`);
+   console.log(`[scheduler.js]: 📅 No Blood Moon transition detected - no end announcement needed`);
   }
 
   console.log(`[scheduler.js]: ✅ Blood Moon end check completed`);
