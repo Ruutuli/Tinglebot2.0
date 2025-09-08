@@ -21,7 +21,6 @@ const minigameSchema = new Schema({
   guildId: { type: String, required: true }, // Discord guild/server ID
   createdBy: { type: String, required: true }, // Discord ID of session creator
   createdAt: { type: Date, default: Date.now }, // When the session was created
-  expiresAt: { type: Date, required: true }, // When the session expires
   messageId: { type: String, default: null }, // Discord message ID of the game status embed
   
   // ------------------- Game state -------------------
@@ -63,25 +62,19 @@ const minigameSchema = new Schema({
 // ============================================================================
 minigameSchema.index({ channelId: 1, status: 1 });
 minigameSchema.index({ gameType: 1, status: 1 });
-minigameSchema.index({ expiresAt: 1 });
 minigameSchema.index({ createdBy: 1 });
 
 // ============================================================================
 // ------------------- Static methods for cleanup -------------------
 // ============================================================================
 minigameSchema.statics.cleanupOldSessions = async function() {
-  const now = new Date();
-  
-  // Find sessions that are either finished or expired
+  // Find sessions that are finished
   const sessionsToDelete = await this.find({
-    $or: [
-      { status: 'finished' },
-      { expiresAt: { $lt: now } }
-    ]
+    status: 'finished'
   });
   
   if (sessionsToDelete.length === 0) {
-    return { deletedCount: 0, finishedCount: 0, expiredCount: 0 };
+    return { deletedCount: 0, finishedCount: 0 };
   }
   
   // Delete the sessions
@@ -89,13 +82,11 @@ minigameSchema.statics.cleanupOldSessions = async function() {
     _id: { $in: sessionsToDelete.map(s => s._id) }
   });
   
-  const finishedCount = sessionsToDelete.filter(s => s.status === 'finished').length;
-  const expiredCount = sessionsToDelete.filter(s => s.status !== 'finished').length;
+  const finishedCount = sessionsToDelete.length;
   
   return {
     deletedCount: deleteResult.deletedCount,
-    finishedCount,
-    expiredCount
+    finishedCount
   };
 };
 
