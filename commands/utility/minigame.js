@@ -407,6 +407,9 @@ module.exports = {
       // Create embed for successful roll (before updating main game message)
       const embedResult = await this.createMinigameEmbed(session, 'Defense Roll', character);
       
+      // Set color to cyan blue for successful hits
+      embedResult.embed.setColor(0x00FFFF); // Cyan blue
+      
       // Add roll result to embed description (no advancement messages here)
       let description = embedResult.embed.data.description;
       description += `\n\n**${result.message}**`;
@@ -420,10 +423,7 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
-      // Update the main game message after the Defense Roll embed is sent
-      await this.updateGameMessage(interaction, session);
-      
-      // If round advanced automatically, post a separate red embed
+      // If round advanced automatically, post a separate red embed FIRST
       if (advanceResult && advanceResult.success) {
         const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, character);
         roundAdvanceEmbed.embed.setColor('#FF0000'); // Red color
@@ -454,6 +454,9 @@ module.exports = {
         // Post the round advance embed as a follow-up message
         await interaction.followUp(roundAdvanceOptions);
       }
+      
+      // Update the main game message AFTER the round advancement embed is posted
+      await this.updateGameMessage(interaction, session);
     } else {
       // Check if this is a "not your turn" error - use simple embed
       if (result.message.includes("It's not your turn")) {
@@ -474,11 +477,11 @@ module.exports = {
       session.markModified('gameData');
       await session.save();
       
-      // Update the game message
-      await this.updateGameMessage(interaction, session);
-      
       // Create embed for failed roll
       const embedResult = await this.createMinigameEmbed(session, 'Defense Roll', character);
+      
+      // Set color to highlighter orange for misses
+      embedResult.embed.setColor(0xFFA500); // Highlighter orange
       
       // Add roll result to embed description (no advancement messages here)
       let description = embedResult.embed.data.description;
@@ -493,10 +496,7 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
-      // Update the main game message after the Defense Roll embed is sent
-      await this.updateGameMessage(interaction, session);
-      
-      // If round advanced automatically, post a separate red embed
+      // If round advanced automatically, post a separate red embed FIRST
       if (advanceResult && advanceResult.success) {
         const roundAdvanceEmbed = await this.createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, character);
         roundAdvanceEmbed.embed.setColor('#FF0000'); // Red color
@@ -527,6 +527,9 @@ module.exports = {
         // Post the round advance embed as a follow-up message
         await interaction.followUp(roundAdvanceOptions);
       }
+      
+      // Update the main game message AFTER the round advancement embed is posted
+      await this.updateGameMessage(interaction, session);
     }
   },
 
@@ -820,7 +823,7 @@ module.exports = {
       embed.addFields(
         { 
           name: '🎯 Take Your Turn', 
-          value: `**Use </minigame theycame-roll:1413815457118556201> to attack aliens!**\n\n**Ring Difficulties:**\n• **Outer Ring (1A, 1B, etc.)** - Needs **5-6** to hit\n• **Middle Ring (2A, 2B, etc.)** - Needs **4-6** to hit\n• **Inner Ring (3A, 3B, etc.)** - Needs **3-6** to hit`, 
+          value: `**Use </minigame theycame-roll:1413815457118556201> to attack aliens!**\n\n**Ring Difficulties:**\n• **Outer (1A, 1B)** - **5-6** to hit\n• **Middle (2A, 2B)** - **4-6** to hit\n• **Inner (3A, 3B)** - **3-6** to hit`, 
           inline: false 
         }
       );

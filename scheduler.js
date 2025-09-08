@@ -140,8 +140,6 @@ const TOWNHALL_CHANNELS = {
 
 async function postWeatherUpdate(client) {
  try {
-  console.log(`[scheduler.js]: 🌤️ Starting weather update process`);
-
   const villages = Object.keys(TOWNHALL_CHANNELS);
   let postedCount = 0;
 
@@ -170,7 +168,7 @@ async function postWeatherUpdate(client) {
    }
   }
 
-  console.log(`[scheduler.js]: ✅ Weather update completed - posted to ${postedCount}/${villages.length} villages`);
+  console.log(`[scheduler.js]: ✅ Weather posted to ${postedCount}/${villages.length} villages`);
  } catch (error) {
   console.error("[scheduler.js]: Weather update process failed:", error.message);
  }
@@ -178,27 +176,19 @@ async function postWeatherUpdate(client) {
 
 async function checkAndPostWeatherIfNeeded(client) {
  try {
-  console.log(`[scheduler.js]: 🔍 Starting backup weather check at 8:15am EST`);
-  
   const villages = Object.keys(TOWNHALL_CHANNELS);
   let postedCount = 0;
-  let checkedCount = 0;
 
   for (const village of villages) {
    try {
-    checkedCount++;
-    
     // Check if weather exists for today without generating new weather
     const existingWeather = await getWeatherWithoutGeneration(village);
     
     if (existingWeather) {
-     console.log(`[scheduler.js]: ✅ Weather already exists for ${village} - skipping weather generation`);
      continue;
     }
     
     // Weather doesn't exist in database, generate and post new weather
-    console.log(`[scheduler.js]: 🌤️ No weather found in database for ${village}, generating new weather`);
-    
     const weather = await getCurrentWeather(village);
     
     if (!weather) {
@@ -218,8 +208,6 @@ async function checkAndPostWeatherIfNeeded(client) {
     await channel.send({ embeds: [embed], files });
     postedCount++;
     
-    console.log(`[scheduler.js]: ✅ Backup weather posted for ${village}`);
-    
    } catch (error) {
     console.error(`[scheduler.js]: Error in backup weather check for ${village}:`, error.message);
     handleError(error, "scheduler.js", {
@@ -230,9 +218,7 @@ async function checkAndPostWeatherIfNeeded(client) {
   }
 
   if (postedCount > 0) {
-   console.log(`[scheduler.js]: ✅ Backup weather check completed - posted to ${postedCount}/${checkedCount} villages`);
-  } else {
-   console.log(`[scheduler.js]: ✅ Backup weather check completed - all villages already had weather posted`);
+   console.log(`[scheduler.js]: ✅ Backup weather posted to ${postedCount} villages`);
   }
   
  } catch (error) {
@@ -245,37 +231,28 @@ async function checkAndPostWeatherIfNeeded(client) {
 
 async function checkAndPostWeatherOnRestart(client) {
  try {
-  console.log(`[scheduler.js]: 🔄 Starting weather check on bot restart`);
-  
   // Check if it's 8 AM or later - only generate weather after 8 AM
   const now = new Date();
   const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const currentHour = estTime.getHours();
   
   if (currentHour < 8) {
-   console.log(`[scheduler.js]: ⏰ Current time is ${currentHour}:00 EST - weather generation only happens at 8 AM EST. Skipping weather generation.`);
    return;
   }
   
   const villages = Object.keys(TOWNHALL_CHANNELS);
   let postedCount = 0;
-  let checkedCount = 0;
 
   for (const village of villages) {
    try {
-    checkedCount++;
-    
     // Check if weather exists for today without generating new weather
     const existingWeather = await getWeatherWithoutGeneration(village);
     
     if (existingWeather) {
-     console.log(`[scheduler.js]: ✅ Weather already exists for ${village} - skipping weather generation on restart`);
      continue;
     }
     
     // Weather doesn't exist in database, generate and post new weather
-    console.log(`[scheduler.js]: 🌤️ No weather found in database for ${village}, generating new weather`);
-    
     const weather = await getCurrentWeather(village);
     
     if (!weather) {
@@ -295,8 +272,6 @@ async function checkAndPostWeatherOnRestart(client) {
     await channel.send({ embeds: [embed], files });
     postedCount++;
     
-    console.log(`[scheduler.js]: ✅ Weather posted for ${village} on restart`);
-    
    } catch (error) {
     console.error(`[scheduler.js]: Error in restart weather check for ${village}:`, error.message);
     handleError(error, "scheduler.js", {
@@ -307,9 +282,7 @@ async function checkAndPostWeatherOnRestart(client) {
   }
 
   if (postedCount > 0) {
-   console.log(`[scheduler.js]: ✅ Restart weather check completed - posted to ${postedCount}/${checkedCount} villages`);
-  } else {
-   console.log(`[scheduler.js]: ✅ Restart weather check completed - all villages already had weather posted today`);
+   console.log(`[scheduler.js]: ✅ Weather posted to ${postedCount} villages on restart`);
   }
   
  } catch (error) {
@@ -1168,32 +1141,28 @@ function initializeScheduler(client) {
  // Startup checks
  (async () => {
   try {
-   console.log(`[scheduler.js]: 🚀 Running startup checks...`);
+  const isBloodMoonActive = isBloodMoonDay();
+  if (isBloodMoonActive) {
+   await renameChannels(client);
    
-   const isBloodMoonActive = isBloodMoonDay();
-   if (isBloodMoonActive) {
-    console.log(`[scheduler.js]: 🌕 Blood Moon active - processing channels`);
-    await renameChannels(client);
-    
-    const channels = [
-     process.env.RUDANIA_TOWNHALL,
-     process.env.INARIKO_TOWNHALL,
-     process.env.VHINTL_TOWNHALL,
-    ];
-    
-    for (const channelId of channels) {
-     if (channelId) {
-      await sendBloodMoonAnnouncement(
-       client,
-       channelId,
-       "The Blood Moon is upon us! Beware!"
-      );
-     }
+   const channels = [
+    process.env.RUDANIA_TOWNHALL,
+    process.env.INARIKO_TOWNHALL,
+    process.env.VHINTL_TOWNHALL,
+   ];
+   
+   for (const channelId of channels) {
+    if (channelId) {
+     await sendBloodMoonAnnouncement(
+      client,
+      channelId,
+      "The Blood Moon is upon us! Beware!"
+     );
     }
-   } else {
-    console.log(`[scheduler.js]: 📅 Blood Moon not active - reverting channel names`);
-    await revertChannelNames(client);
    }
+  } else {
+   await revertChannelNames(client);
+  }
 
    await handleDebuffExpiry(client);
    await handleBuffExpiry(client);
@@ -1201,7 +1170,7 @@ function initializeScheduler(client) {
    await checkAndPostMissedQuests(client);
    await handleQuestExpirationAtMidnight(client);
 
-   console.log(`[scheduler.js]: ✅ Startup checks completed`);
+   console.log(`[scheduler.js]: ✅ Startup completed`);
   } catch (error) {
    handleError(error, "scheduler.js");
    console.error(`[scheduler.js]: ❌ Startup checks failed: ${error.message}`);
@@ -1306,7 +1275,6 @@ function initializeScheduler(client) {
  // Check and post weather on restart if needed
  (async () => {
    try {
-     console.log(`[scheduler.js]: 🔄 Running restart weather check...`);
      await checkAndPostWeatherOnRestart(client);
    } catch (error) {
      console.error(`[scheduler.js]: ❌ Restart weather check failed:`, error.message);
