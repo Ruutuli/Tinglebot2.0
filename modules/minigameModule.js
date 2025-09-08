@@ -221,12 +221,9 @@ function addPlayerToTurnOrder(gameData, playerId, playerName) {
 function spawnAliens(gameData, playerCount, currentRound) {
   let spawnCount;
   
-  console.log(`[MINIGAME] spawnAliens called - playerCount: ${playerCount}, currentRound: ${currentRound}`);
-  
   if (currentRound === 0) {
     // First turn: players + 2 (up to 6 max)
     spawnCount = Math.min(playerCount + 2, 6);
-    console.log(`[MINIGAME] First turn logic - spawnCount: ${spawnCount} (${playerCount} + 2, max 6)`);
   } else {
     // Subsequent turns: different logic based on player count
     if (playerCount >= 4) {
@@ -235,11 +232,9 @@ function spawnAliens(gameData, playerCount, currentRound) {
       // 5 players: 1d3 + 2 = 3-5 aliens  
       // 6 players: 1d3 + 3 = 4-6 aliens
       spawnCount = Math.floor(Math.random() * 3) + 1 + (playerCount - 3); // 1d3 + (players - 3)
-      console.log(`[MINIGAME] High player count logic - spawnCount: ${spawnCount} (1d3 + ${playerCount - 3})`);
     } else {
       // For 1-3 players: 1d3 (consistent challenge for small groups)
       spawnCount = Math.floor(Math.random() * 3) + 1; // 1d3
-      console.log(`[MINIGAME] Low player count logic - spawnCount: ${spawnCount} (1d3)`);
     }
   }
   
@@ -248,9 +243,6 @@ function spawnAliens(gameData, playerCount, currentRound) {
     .filter(a => !a.defeated && a.ring === 1)
     .map(a => a.segment);
   const availableSegments = GAME_CONFIGS.theycame.segments.filter(s => !occupiedSegments.includes(s));
-  
-  console.log(`[MINIGAME] Available segments: ${availableSegments.join(', ')} (${availableSegments.length} total)`);
-  console.log(`[MINIGAME] Trying to spawn ${spawnCount} aliens`);
   
   // Spawn aliens in random available segments
   const newAliens = [];

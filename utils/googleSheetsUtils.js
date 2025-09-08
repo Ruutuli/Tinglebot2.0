@@ -895,8 +895,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         isUserObject = character.discordId && !character.name;
         isCharacterObject = character.name;
         
-        // Character validation (debug logging removed for cleaner output)
-        
         if (!isUserObject && !isCharacterObject) {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid object type - neither User nor Character:`, character);
             return;
@@ -1053,8 +1051,7 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                         originalError: apiError.message
                     };
                     
-                    const operationId = await storePendingSheetOperation(operationData);
-                    console.log(`[googleSheetsUtils.js]: 📦 409 Conflict operation stored for retry: ${operationId}`);
+                const operationId = await storePendingSheetOperation(operationData);
                     
                     return { success: false, storedForRetry: true, operationId };
                 } catch (storageError) {
@@ -1067,18 +1064,10 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         
         // Log successful sheet update
         const entityName = isCharacterObject ? character.name : `User ${character.discordId}`;
-        console.log(`[googleSheetsUtils.js]: ✅ Sheet updated for ${entityName}`);
+        console.log(`[googleSheetsUtils.js]: ✅ Inventory update logged to sheet for ${entityName}`);
 
     } catch (error) {
         console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
-        console.error(`[googleSheetsUtils.js]: 📊 Error details:`, {
-            status: error.status,
-            code: error.code,
-            spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
-            range: range,
-            valuesLength: values?.length,
-            characterName: isCharacterObject ? character?.name : null
-        });
         
         // Check if this is a service unavailable error or conflict error
         if (error.message.includes('service is currently unavailable') || 
@@ -1106,7 +1095,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                 };
                 
                 const operationId = await storePendingSheetOperation(operationData);
-                console.log(`[googleSheetsUtils.js]: 📦 Operation stored for retry: ${operationId}`);
                 
                 // Don't throw the error - the operation will be retried later
                 return { success: false, storedForRetry: true, operationId };
@@ -1201,7 +1189,6 @@ async function storePendingSheetOperation(operationData) {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
     });
 
-    console.log(`[googleSheetsUtils.js]: 📦 Stored pending sheet operation: ${operationId}`);
     return operationId;
   } catch (error) {
     console.error(`[googleSheetsUtils.js]: ❌ Error storing pending operation: ${error.message}`);
@@ -1216,11 +1203,8 @@ async function retryPendingSheetOperations() {
     const pendingOperations = await TempData.findAllByType('pendingSheetOperation');
     
     if (pendingOperations.length === 0) {
-      console.log(`[googleSheetsUtils.js]: ✅ No pending sheet operations to retry`);
       return { success: true, retried: 0, failed: 0 };
     }
-
-    console.log(`[googleSheetsUtils.js]: 🔄 Attempting to retry ${pendingOperations.length} pending sheet operations`);
     
     let successCount = 0;
     let failureCount = 0;
@@ -1230,7 +1214,6 @@ async function retryPendingSheetOperations() {
       try {
         // Check if operation has exceeded max retries
         if (operation.data.retryCount >= maxRetries) {
-          console.log(`[googleSheetsUtils.js]: ❌ Operation ${operation.key} exceeded max retries, removing`);
           await TempData.findByIdAndDelete(operation._id);
           failureCount++;
           continue;
@@ -1239,7 +1222,6 @@ async function retryPendingSheetOperations() {
         // Add a small delay between retries to avoid conflicts
         if (operation.data.retryCount > 0) {
           const delay = Math.min(1000 * operation.data.retryCount, 5000); // 1s, 2s, 3s, 4s, 5s max
-          console.log(`[googleSheetsUtils.js]: ⏳ Waiting ${delay}ms before retry ${operation.data.retryCount + 1}`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
 
@@ -1267,8 +1249,6 @@ async function retryPendingSheetOperations() {
         await TempData.findByIdAndDelete(operation._id);
         successCount++;
         
-        console.log(`[googleSheetsUtils.js]: ✅ Successfully retried operation: ${operation.key}`);
-        
       } catch (error) {
         // Increment retry count
         await TempData.findByIdAndUpdate(operation._id, {
@@ -1277,11 +1257,9 @@ async function retryPendingSheetOperations() {
         });
         
         failureCount++;
-        console.log(`[googleSheetsUtils.js]: ⚠️ Failed to retry operation ${operation.key}: ${error.message}`);
       }
     }
 
-    console.log(`[googleSheetsUtils.js]: 📊 Retry summary: ${successCount} successful, ${failureCount} failed`);
     return { success: true, retried: successCount, failed: failureCount };
     
   } catch (error) {

@@ -580,9 +580,6 @@ async function getWeatherWithoutGeneration(village) {
     const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
     
     // Get weather from the current period
-    console.log(`[weatherService.js]: 🔍 getWeatherWithoutGeneration - Searching for existing weather for ${normalizedVillage}`);
-    console.log(`[weatherService.js]: 📅 Search period: ${startOfPeriodUTC.toISOString()} to ${endOfPeriodUTC.toISOString()}`);
-    
     const weather = await Weather.findOne({
       village: normalizedVillage,
       date: {
@@ -590,18 +587,6 @@ async function getWeatherWithoutGeneration(village) {
         $lte: endOfPeriodUTC
       }
     });
-    
-    if (weather) {
-      console.log(`[weatherService.js]: ✅ Found existing weather in database:`, {
-        id: weather._id,
-        date: weather.date,
-        temperature: weather.temperature?.label,
-        precipitation: weather.precipitation?.label,
-        special: weather.special?.label || 'None'
-      });
-    } else {
-      console.log(`[weatherService.js]: ❌ No existing weather found in database for ${normalizedVillage}`);
-    }
     
     return weather;
   } catch (error) {
@@ -640,9 +625,6 @@ async function getCurrentWeather(village) {
     const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
     
     // Get weather from the current period
-    console.log(`[weatherService.js]: 🔍 Searching for existing weather for ${normalizedVillage}`);
-    console.log(`[weatherService.js]: 📅 Search period: ${startOfPeriodUTC.toISOString()} to ${endOfPeriodUTC.toISOString()}`);
-    
     let weather = await Weather.findOne({
       village: normalizedVillage,
       date: {
@@ -651,24 +633,10 @@ async function getCurrentWeather(village) {
       }
     });
     
-    if (weather) {
-      console.log(`[weatherService.js]: ✅ Found existing weather for ${normalizedVillage}:`, {
-        id: weather._id,
-        date: weather.date,
-        temperature: weather.temperature?.label,
-        precipitation: weather.precipitation?.label,
-        special: weather.special?.label || 'None'
-      });
-    } else {
-      console.log(`[weatherService.js]: ❌ No existing weather found for ${normalizedVillage}`);
-    }
-    
     // Only generate new weather if none exists for the current period
     if (!weather) {
-      console.log(`[weatherService.js]: 🌤️ No existing weather found for ${normalizedVillage}, generating new weather`);
       const season = getCurrentSeason();
       const capitalizedSeason = capitalizeFirstLetter(season);
-      console.log(`[weatherService.js]: 📅 Current season: ${season}, capitalized: ${capitalizedSeason}`);
       
       // Try to generate valid weather with retry limit
       let newWeather = null;
@@ -677,23 +645,14 @@ async function getCurrentWeather(village) {
       
       while (attempts < maxAttempts) {
         attempts++;
-        console.log(`[weatherService.js]: 🔄 Attempt ${attempts} to generate weather for ${normalizedVillage}`);
         newWeather = await simulateWeightedWeather(normalizedVillage, capitalizedSeason, { useDatabaseHistory: true });
         
         if (!newWeather) {
-          console.error(`[weatherService.js]: Failed to generate weather for ${village} on attempt ${attempts}`);
           if (attempts === maxAttempts) {
             throw new Error(`Failed to generate weather for ${village} after ${maxAttempts} attempts`);
           }
           continue;
         }
-        
-        console.log(`[weatherService.js]: ✅ Weather generated successfully on attempt ${attempts}:`, {
-          temperature: newWeather.temperature?.label,
-          wind: newWeather.wind?.label,
-          precipitation: newWeather.precipitation?.label,
-          special: newWeather.special?.label || 'None'
-        });
         
         // Add date and season to weather data
         newWeather.date = new Date();
@@ -704,7 +663,6 @@ async function getCurrentWeather(village) {
           break;
         } else {
           if (attempts === maxAttempts) {
-            console.warn(`[weatherService.js]: Failed to generate valid weather after ${maxAttempts} attempts, removing special weather`);
             newWeather.special = null;
           }
         }
@@ -715,7 +673,6 @@ async function getCurrentWeather(village) {
         try {
           const weatherDoc = new Weather(newWeather);
           weather = await weatherDoc.save();
-          console.log(`[weatherService.js]: ✅ Weather saved to database for ${normalizedVillage}`);
         } catch (saveError) {
           console.error(`[weatherService.js]: ❌ Failed to save weather to database:`, saveError);
           // Return the generated weather even if save fails
