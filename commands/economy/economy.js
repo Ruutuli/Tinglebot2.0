@@ -1842,21 +1842,62 @@ const equippedItems = [
 
 for (const { name } of cleanedItems) {
   if (equippedItems.includes(name)) {
-    await interaction.editReply({
-      embeds: [{
-        color: 0xFF0000, // Red color
-        title: '❌ Item Equipped',
-        description: `You cannot transfer \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`,
-        image: {
-          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-        },
-        footer: {
-          text: 'Equipment Check'
-        }
-      }],
-      ephemeral: true,
-    });
-    return;
+    // ------------------- Check if character has enough items to unequip first -------------------
+    const fromInventoryCollection = await getCharacterInventoryCollectionWithModSupport(fromCharacter);
+    
+    // Find the canonical item name from the database
+    const baseItemName = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
+    let itemDetails;
+    if (baseItemName.includes('+')) {
+      itemDetails = await ItemModel.findOne({
+        itemName: baseItemName
+      }).exec();
+    } else {
+      itemDetails = await ItemModel.findOne({
+        itemName: { $regex: new RegExp(`^${escapeRegExp(baseItemName)}$`, "i") }
+      }).exec();
+    }
+    
+    let totalQuantity = 0;
+    if (itemDetails) {
+      const canonicalName = itemDetails.itemName;
+      let fromInventoryEntries;
+      if (canonicalName.includes('+')) {
+        fromInventoryEntries = await fromInventoryCollection
+          .find({ itemName: canonicalName })
+          .toArray();
+      } else {
+        fromInventoryEntries = await fromInventoryCollection
+          .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalName)}$`, "i") } })
+          .toArray();
+      }
+      totalQuantity = fromInventoryEntries.reduce(
+        (sum, entry) => sum + entry.quantity,
+        0
+      );
+    }
+    
+    console.log(`[TRANSFER LOG] Character ${fromCharacter.name} tried to transfer equipped item "${name}". Total quantity in inventory: ${totalQuantity}`);
+    
+    // Only block transfer if they have exactly 1 (unequipping would leave them with 0)
+    if (totalQuantity <= 1) {
+      await interaction.editReply({
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Equipped',
+          description: `You cannot transfer \`${name}\` because it is currently equipped and you only have 1. Please unequip it first using the </gear:1372262090450141196> command.`,
+          image: {
+            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+          },
+          footer: {
+            text: 'Equipment Check'
+          }
+        }],
+        ephemeral: true,
+      });
+      return;
+    }
+    // If they have 2 or more, allow the transfer to continue (they can unequip and still have items left)
   }
 }
 

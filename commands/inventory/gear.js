@@ -35,7 +35,7 @@ const { checkInventorySync } = require('../../utils/characterUtils.js');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('gear')
-    .setDescription('Displays, equips, or unequips gear of a character.')
+    .setDescription('Displays current gear, equips, or unequips gear of a character.')
     .addStringOption(option =>
       option.setName('charactername')
         .setDescription('The name of the character')
@@ -54,12 +54,12 @@ module.exports = {
         ))
     .addStringOption(option =>
       option.setName('itemname')
-        .setDescription('The name of the item to equip')
+        .setDescription('The name of the item to equip (leave empty to view current gear)')
         .setRequired(false)
         .setAutocomplete(true))
         .addStringOption(option =>
           option.setName('status')
-            .setDescription('Choose to equip or unequip the item')
+            .setDescription('Choose to equip or unequip the item (leave empty to view current gear)')
             .setRequired(false)
             .addChoices(
               { name: 'Equip', value: 'equip' },
@@ -204,6 +204,51 @@ module.exports = {
         if (weaponDetail) {
           character.gearWeapon.type = weaponDetail.type;
         }
+      }
+
+      // ------------------- Handle Lookup Only (No Item Name Provided) -------------------
+      // If no item name is provided, just show current gear
+      if (!itemName) {
+        // Retrieve current gear details from the item database
+        const currentItemDetails = await ItemModel.find({
+          itemName: {
+            $in: [
+              character.gearWeapon?.name,
+              character.gearShield?.name,
+              character.gearArmor?.head?.name,
+              character.gearArmor?.chest?.name,
+              character.gearArmor?.legs?.name
+            ].filter(Boolean)
+          }
+        });
+
+        // Map current gear to display in the embed
+        const currentGearMap = {
+          head: character.gearArmor?.head
+            ? `> ${character.gearArmor.head.name} [+${currentItemDetails.find(i => i.itemName === character.gearArmor.head.name)?.modifierHearts || 0}]`
+            : '> N/A',
+          chest: character.gearArmor?.chest
+            ? `> ${character.gearArmor.chest.name} [+${currentItemDetails.find(i => i.itemName === character.gearArmor.chest.name)?.modifierHearts || 0}]`
+            : '> N/A',
+          legs: character.gearArmor?.legs
+            ? `> ${character.gearArmor.legs.name} [+${currentItemDetails.find(i => i.itemName === character.gearArmor.legs.name)?.modifierHearts || 0}]`
+            : '> N/A',
+          weapon: character.gearWeapon
+            ? `> ${character.gearWeapon.name} [+${currentItemDetails.find(i => i.itemName === character.gearWeapon.name)?.modifierHearts || 0}]`
+            : '> N/A',
+          shield: character.gearShield
+            ? `> ${character.gearShield.name} [+${currentItemDetails.find(i => i.itemName === character.gearShield.name)?.modifierHearts || 0}]`
+            : '> N/A',
+        };
+
+        // Create and send the gear lookup embed
+        const gearEmbed = createCharacterGearEmbed(character, currentGearMap, type);
+        await interaction.editReply({ 
+          content: `📋 **Current gear for ${characterName}:**`, 
+          embeds: [gearEmbed], 
+          flags: [MessageFlags.Ephemeral] 
+        });
+        return;
       }
 
       // ------------------- Validate Item in Inventory -------------------
