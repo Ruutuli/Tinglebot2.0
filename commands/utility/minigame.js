@@ -418,6 +418,9 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
+      // Send turn notification if it's someone else's turn now
+      await this.sendTurnNotification(interaction, session);
+      
       // Check if we should automatically advance the round AFTER creating the roll result embed
       let advanceResult = null;
       if (result.shouldAdvanceRound) {
@@ -528,6 +531,9 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
+      // Send turn notification if it's someone else's turn now
+      await this.sendTurnNotification(interaction, session);
+      
       // Check if we should automatically advance the round AFTER creating the roll result embed
       let advanceResult = null;
       if (result.shouldAdvanceRound) {
@@ -617,6 +623,28 @@ module.exports = {
   // ============================================================================
   // ------------------- Helper Functions -------------------
   // ============================================================================
+  
+  async sendTurnNotification(interaction, session) {
+    // Only send notification if there are players and it's not the same player's turn
+    if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
+      const currentPlayer = session.gameData.turnOrder[session.gameData.currentTurnIndex];
+      const currentUserId = interaction.user.id;
+      
+      // Only send notification if it's someone else's turn
+      if (currentPlayer.discordId !== currentUserId) {
+        try {
+          await interaction.followUp({
+            content: `🎯 **${currentPlayer.username}**, it's your turn! Use \`/minigame theycame-roll\` to attack aliens!`,
+            allowedMentions: {
+              users: [currentPlayer.discordId]
+            }
+          });
+        } catch (error) {
+          console.error('[MINIGAME] Error sending turn notification:', error);
+        }
+      }
+    }
+  },
   
   async createJoinEmbed(session, character, joinMessage) {
     const gameConfig = GAME_CONFIGS.theycame;
