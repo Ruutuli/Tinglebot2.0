@@ -580,7 +580,7 @@ function getAlienDefenseGameStatus(gameData) {
     animalsLost: animalsLost,
     villageAnimals: gameData.villageAnimals,
     ringStatus: ringStatus,
-    gameProgress: gameEnded ? 'Game End!' : `${gameData.currentRound}/${gameData.maxRounds} rounds`
+    gameProgress: gameEnded ? 'Game End!' : `Round ${gameData.currentRound}`
   };
 }
 
