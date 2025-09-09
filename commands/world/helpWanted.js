@@ -199,29 +199,38 @@ function validateCharacterLocation(character, quest) {
  * @returns {Promise<{requirementsMet: boolean, message: string}>}
  */
 async function validateQuestRequirements(character, quest) {
+  console.log(`[helpWanted.js]: 🔍 validateQuestRequirements called for quest type: ${quest.type}`);
+  
   switch (quest.type) {
     case 'item':
+      console.log(`[helpWanted.js]: 📦 Validating item quest requirements`);
       return await validateItemQuestRequirements(character, quest);
     case 'monster':
+      console.log(`[helpWanted.js]: ⚔️ Monster quest - redirecting to monsterhunt command`);
       return {
         requirementsMet: false,
         message: `🗡️ **Monster Quest:** This quest requires defeating monsters. Please use the \`/helpwanted monsterhunt\` command instead.`
       };
     case 'escort':
+      console.log(`[helpWanted.js]: 🛡️ Validating escort quest requirements`);
       return validateEscortQuestRequirements(character, quest);
     case 'crafting':
+      console.log(`[helpWanted.js]: 🔨 Validating crafting quest requirements`);
       return await validateCraftingQuestRequirements(character, quest);
     case 'art':
+      console.log(`[helpWanted.js]: 🎨 Art quest - redirecting to submit art command`);
       return {
         requirementsMet: false,
         message: `🎨 **Art Quest:** This quest requires creating artwork. Please use the \`/submit art\` command with this quest ID to submit your artwork. Once approved by a moderator, the quest will be automatically completed.`
       };
     case 'writing':
+      console.log(`[helpWanted.js]: 📝 Writing quest - redirecting to submit writing command`);
       return {
         requirementsMet: false,
         message: `📝 **Writing Quest:** This quest requires writing content. Please use the \`/submit writing\` command with this quest ID to submit your writing. Once approved by a moderator, the quest will be automatically completed.`
       };
     default:
+      console.log(`[helpWanted.js]: ❌ Unknown quest type: ${quest.type}`);
       return { requirementsMet: false, message: '❌ Unknown quest type.' };
   }
 }
@@ -307,6 +316,11 @@ async function validateCraftingQuestRequirements(character, quest) {
   const { connectToInventories } = require('../../database/db');
   
   try {
+    console.log(`[helpWanted.js]: 🔍 CRAFTING QUEST VALIDATION DEBUG`);
+    console.log(`[helpWanted.js]: Character: ${character.name} (ID: ${character._id})`);
+    console.log(`[helpWanted.js]: Quest requirements:`, quest.requirements);
+    console.log(`[helpWanted.js]: Is mod character: ${character.isModCharacter}`);
+    
     const inventoriesConnection = await connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     
@@ -317,22 +331,65 @@ async function validateCraftingQuestRequirements(character, quest) {
     } else {
       collectionName = character.name.toLowerCase();
     }
+    console.log(`[helpWanted.js]: Using collection: ${collectionName}`);
+    
     const inventoryCollection = db.collection(collectionName);
     
-    const dbItems = await inventoryCollection.find({
+    // Build the query step by step for debugging
+    const itemNameRegex = new RegExp(`^${escapeRegExp(quest.requirements.item)}$`, 'i');
+    const obtainRegex = /crafting/i;
+    
+    console.log(`[helpWanted.js]: Item name regex: ${itemNameRegex}`);
+    console.log(`[helpWanted.js]: Obtain regex: ${obtainRegex}`);
+    
+    const query = {
       characterId: character._id,
-      itemName: { $regex: new RegExp(`^${escapeRegExp(quest.requirements.item)}$`, 'i') },
-      obtain: { $regex: /crafting/i }
-    }).toArray();
+      itemName: itemNameRegex,
+      obtain: obtainRegex
+    };
+    console.log(`[helpWanted.js]: Database query:`, JSON.stringify(query, null, 2));
+    
+    const dbItems = await inventoryCollection.find(query).toArray();
+    console.log(`[helpWanted.js]: Found ${dbItems.length} items matching crafting criteria`);
+    
+    // Log each item found
+    dbItems.forEach((item, index) => {
+      console.log(`[helpWanted.js]: Item ${index + 1}:`, {
+        itemName: item.itemName,
+        quantity: item.quantity,
+        obtain: item.obtain,
+        characterId: item.characterId
+      });
+    });
     
     const totalCraftedQuantity = dbItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    console.log(`[helpWanted.js]: Total crafted quantity: ${totalCraftedQuantity}`);
+    console.log(`[helpWanted.js]: Required amount: ${quest.requirements.amount}`);
+    
+    // Also check for items without the crafting filter to see what's in inventory
+    const allMatchingItems = await inventoryCollection.find({
+      characterId: character._id,
+      itemName: itemNameRegex
+    }).toArray();
+    
+    console.log(`[helpWanted.js]: Found ${allMatchingItems.length} total items with matching name`);
+    allMatchingItems.forEach((item, index) => {
+      console.log(`[helpWanted.js]: All items ${index + 1}:`, {
+        itemName: item.itemName,
+        quantity: item.quantity,
+        obtain: item.obtain,
+        characterId: item.characterId
+      });
+    });
     
     if (totalCraftedQuantity >= quest.requirements.amount) {
+      console.log(`[helpWanted.js]: ✅ Crafting requirements MET`);
       return {
         requirementsMet: true,
         message: `🔨 **Crafting Quest:** ✅ ${character.name} has crafted ${totalCraftedQuantity}x ${quest.requirements.item} (required: ${quest.requirements.amount}x)`
       };
     } else {
+      console.log(`[helpWanted.js]: ❌ Crafting requirements NOT MET`);
       return {
         requirementsMet: false,
         message: `🔨 **Crafting Quest:** ❌ ${character.name} has crafted ${totalCraftedQuantity}x ${quest.requirements.item} but needs ${quest.requirements.amount}x. Use \`/crafting\` to craft more.`
@@ -1443,11 +1500,21 @@ module.exports = {
         }
 
         // Validate quest requirements
+        console.log(`[helpWanted.js]: 🔍 VALIDATING QUEST REQUIREMENTS`);
+        console.log(`[helpWanted.js]: Quest type: ${quest.type}`);
+        console.log(`[helpWanted.js]: Quest requirements:`, quest.requirements);
+        console.log(`[helpWanted.js]: Character: ${character.name} (ID: ${character._id})`);
+        
         const requirementsCheck = await validateQuestRequirements(character, quest);
+        console.log(`[helpWanted.js]: Requirements check result:`, requirementsCheck);
+        
         if (!requirementsCheck.requirementsMet) {
+          console.log(`[helpWanted.js]: ❌ Quest requirements NOT MET - showing requirements embed`);
           const requirementsEmbed = createQuestRequirementsEmbed(requirementsCheck);
           return await interaction.editReply({ embeds: [requirementsEmbed] });
         }
+        
+        console.log(`[helpWanted.js]: ✅ Quest requirements MET - proceeding with quest completion`);
 
         // ------------------- Blight Rain Infection Check -------------------
         const weather = await getWeatherWithoutGeneration(character.currentVillage);

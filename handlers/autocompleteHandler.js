@@ -2959,7 +2959,7 @@ async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
       
       // Format quest choices for autocomplete
       const choices = quests.map(quest => ({
-          name: `${quest.questId} - ${quest.type} quest for ${quest.village} (${quest.date})`,
+          name: quest.questId, // Just the quest ID
           value: quest.questId // Just the quest ID, not the full description
       }));
       
