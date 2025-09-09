@@ -1193,13 +1193,21 @@ const modCommand = new SlashCommandBuilder()
           { name: 'Create Game', value: 'create' },
           { name: 'Start Game', value: 'start' },
           { name: 'Advance Round', value: 'advance' },
+          { name: 'Skip Turn', value: 'skip' },
           { name: 'End Game', value: 'end' }
         )
     )
     .addStringOption(option =>
       option
         .setName('session_id')
-        .setDescription('Game session ID (required for advance/end)')
+        .setDescription('Game session ID (required for advance/skip/end)')
+        .setRequired(false)
+        .setAutocomplete(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('character')
+        .setDescription('Character name to skip (required for skip action)')
         .setRequired(false)
         .setAutocomplete(true)
     )
@@ -4046,6 +4054,23 @@ async function handleTheyCame(interaction, action, sessionId, questId) {
         const cleanAdvanceSessionId = advanceSessionIdMatch ? advanceSessionIdMatch[0] : sessionId;
         return await handleTheyCameAdvance(interaction, cleanAdvanceSessionId);
         
+      case 'skip':
+        if (!sessionId) {
+          return interaction.editReply({
+            content: '❌ Session ID is required for skip action.'
+          });
+        }
+        const characterName = interaction.options.getString('character');
+        if (!characterName) {
+          return interaction.editReply({
+            content: '❌ Character name is required for skip action.'
+          });
+        }
+        // Extract session ID from autocomplete format if needed
+        const skipSessionIdMatch = sessionId.match(/A\d+/);
+        const cleanSkipSessionId = skipSessionIdMatch ? skipSessionIdMatch[0] : sessionId;
+        return await handleTheyCameSkip(interaction, cleanSkipSessionId, characterName);
+        
       case 'end':
         if (!sessionId) {
           return interaction.editReply({
@@ -4251,6 +4276,63 @@ async function handleTheyCameEnd(interaction, sessionId) {
   if (embedResult.attachment) {
     replyOptions.files = [embedResult.attachment];
   }
+  return interaction.editReply(replyOptions);
+}
+
+// ============================================================================
+// ------------------- Skip Turn Handler -------------------
+// ============================================================================
+
+async function handleTheyCameSkip(interaction, sessionId, characterName) {
+  // Find the specific session
+  const session = await Minigame.findOne({
+    sessionId: sessionId,
+    gameType: 'theycame',
+    status: 'active'
+  });
+  
+  if (!session) {
+    return interaction.editReply({
+      content: '❌ Game session not found, expired, or not active.'
+    });
+  }
+  
+  // Find the character in the turn order
+  const turnOrderIndex = session.gameData.turnOrder.findIndex(player => 
+    player.username === characterName || player.characterName === characterName
+  );
+  
+  if (turnOrderIndex === -1) {
+    return interaction.editReply({
+      content: `❌ Character "${characterName}" not found in the current game.`
+    });
+  }
+  
+  // Check if it's actually their turn
+  if (session.gameData.currentTurnIndex !== turnOrderIndex) {
+    return interaction.editReply({
+      content: `❌ It's not ${characterName}'s turn. Current turn: ${session.gameData.turnOrder[session.gameData.currentTurnIndex].username}`
+    });
+  }
+  
+  // Advance to next player's turn
+  session.gameData.currentTurnIndex = (session.gameData.currentTurnIndex + 1) % session.gameData.turnOrder.length;
+  
+  session.markModified('gameData');
+  await session.save();
+  
+  // Get next player for notification
+  const nextPlayer = session.gameData.turnOrder[session.gameData.currentTurnIndex];
+  
+  const embedResult = await createMinigameEmbed(session, 'Turn Skipped!');
+  const replyOptions = {
+    content: `⏭️ **${characterName}'s turn skipped by ${interaction.user.username}!** Next turn: **${nextPlayer.username}**`,
+    embeds: [embedResult.embed]
+  };
+  if (embedResult.attachment) {
+    replyOptions.files = [embedResult.attachment];
+  }
+  
   return interaction.editReply(replyOptions);
 }
 
@@ -4705,8 +4787,8 @@ async function createMinigameEmbed(session, title) {
   
   embed.addFields(
     { 
-      name: '📊 Game Status', 
-      value: `**Progress:** ${status.gameProgress}\n**Status:** ${gameStatusText}\n**Players:** ${session.players.length}/6`, 
+      name: '📊 Game Status',
+      value: `**Session:** ${session.sessionId}\n**Progress:** ${status.gameProgress}\n**Status:** ${gameStatusText}\n**Players:** ${session.players.length}/6`, 
       inline: false 
     },
     { 
@@ -4728,7 +4810,7 @@ async function createMinigameEmbed(session, title) {
   
   // Alien threat with positions
   const alienPositions = getAlienPositions(session.gameData);
-  let alienThreatText = `**Outer Ring:** ${status.ringStatus.outerRing} aliens\n**Middle Ring:** ${status.ringStatus.middleRing} aliens\n**Inner Ring:** ${status.ringStatus.innerRing} aliens`;
+  let alienThreatText = '';
   
   if (alienPositions.length > 0) {
     // Group aliens by ring
@@ -4740,18 +4822,18 @@ async function createMinigameEmbed(session, title) {
     
     const positionText = [];
     if (aliensByRing.outer.length > 0) {
-      positionText.push(`**Outer:** ${aliensByRing.outer.join(', ')}`);
+      positionText.push(`**Outer Ring:** (${aliensByRing.outer.length}) ${aliensByRing.outer.join(', ')}`);
     }
     if (aliensByRing.middle.length > 0) {
-      positionText.push(`**Middle:** ${aliensByRing.middle.join(', ')}`);
+      positionText.push(`**Middle Ring:** (${aliensByRing.middle.length}) ${aliensByRing.middle.join(', ')}`);
     }
     if (aliensByRing.inner.length > 0) {
-      positionText.push(`**Inner:** ${aliensByRing.inner.join(', ')}`);
+      positionText.push(`**Inner Ring:** (${aliensByRing.inner.length}) ${aliensByRing.inner.join(', ')}`);
     }
     
-    if (positionText.length > 0) {
-      alienThreatText += `\n\n**Active Aliens:**\n${positionText.join('\n')}`;
-    }
+    alienThreatText = positionText.join('\n');
+  } else {
+    alienThreatText = '*No active aliens on the field*';
   }
   
   embed.addFields(
@@ -4859,7 +4941,7 @@ async function createDetailedMinigameEmbed(session, title, character = null) {
   embed.addFields(
     { 
       name: '__📊 Game Status__', 
-      value: `**${status.gameProgress}** • ${gameStatusText}`, 
+      value: `**Session:** ${session.sessionId}\n**${status.gameProgress}** • ${gameStatusText}`, 
       inline: false 
     },
     { 
@@ -4891,7 +4973,7 @@ async function createDetailedMinigameEmbed(session, title, character = null) {
   
   // Alien threat with positions
   const alienPositions = getAlienPositions(session.gameData);
-  let alienThreatText = `**Outer Ring:** ${status.ringStatus.outerRing} aliens\n**Middle Ring:** ${status.ringStatus.middleRing} aliens\n**Inner Ring:** ${status.ringStatus.innerRing} aliens`;
+  let alienThreatText = '';
   
   if (alienPositions.length > 0) {
     // Group aliens by ring
@@ -4903,20 +4985,18 @@ async function createDetailedMinigameEmbed(session, title, character = null) {
     
     const positionText = [];
     if (aliensByRing.outer.length > 0) {
-      positionText.push(`**Outer Ring:** ${aliensByRing.outer.join(', ')}`);
+      positionText.push(`**Outer Ring:** (${aliensByRing.outer.length}) ${aliensByRing.outer.join(', ')}`);
     }
     if (aliensByRing.middle.length > 0) {
-      positionText.push(`**Middle Ring:** ${aliensByRing.middle.join(', ')}`);
+      positionText.push(`**Middle Ring:** (${aliensByRing.middle.length}) ${aliensByRing.middle.join(', ')}`);
     }
     if (aliensByRing.inner.length > 0) {
-      positionText.push(`**Inner Ring:** ${aliensByRing.inner.join(', ')}`);
+      positionText.push(`**Inner Ring:** (${aliensByRing.inner.length}) ${aliensByRing.inner.join(', ')}`);
     }
     
-    if (positionText.length > 0) {
-      alienThreatText += `\n\n**Active Aliens:**\n${positionText.join('\n')}`;
-    }
+    alienThreatText = positionText.join('\n');
   } else {
-    alienThreatText += `\n\n*No active aliens on the field*`;
+    alienThreatText = '*No active aliens on the field*';
   }
   
   embed.addFields(

@@ -1506,7 +1506,12 @@ async function handleMinigameJoin(interaction) {
     
     await session.save();
     
-    // Check if we have 6 players and should auto-start
+    await interaction.reply({
+      content: `🎮 **${username}** joined the game!`,
+      flags: 64
+    });
+    
+    // Check if we have 6 players and should auto-start (separate message)
     if (session.players.length === 6 && session.status === 'waiting') {
       console.log(`[MINIGAME] Auto-starting game with 6 players for session ${session.sessionId}`);
       
@@ -1522,13 +1527,13 @@ async function handleMinigameJoin(interaction) {
       session.markModified('gameData');
       await session.save();
       
-      await interaction.reply({
-        content: `🎮 **${username}** joined the game!\n\n**🎮 Game Auto-Started with 6 players!** ${spawnResult.message}`,
-        flags: 64
-      });
-    } else {
-      await interaction.reply({
-        content: `🎮 **${username}** joined the game!`,
+      // Get first player in turn order for mention
+      const firstPlayer = session.gameData.turnOrder[0];
+      const firstPlayerMention = firstPlayer ? `<@${firstPlayer.discordId}>` : '';
+      
+      // Post auto-start as follow-up message
+      await interaction.followUp({
+        content: `🎮 **Game Auto-Started!** ${spawnResult.message}\n\n🎯 ${firstPlayerMention}, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
         flags: 64
       });
     }
