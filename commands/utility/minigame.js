@@ -634,7 +634,7 @@ module.exports = {
       if (currentPlayer.discordId !== currentUserId) {
         try {
           await interaction.followUp({
-            content: `🎯 **${currentPlayer.username}**, it's your turn! Use \`/minigame theycame-roll\` to attack aliens!`,
+            content: `🎯 <@${currentPlayer.discordId}>, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
             allowedMentions: {
               users: [currentPlayer.discordId]
             }
