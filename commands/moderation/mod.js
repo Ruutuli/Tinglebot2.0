@@ -4130,9 +4130,22 @@ async function handleTheyCameStart(interaction, sessionId) {
       session.markModified('gameData');
       await session.save();
       
-      const embedResult = await createMinigameEmbed(session, 'Round Advanced!');
+      // Use the same embed format as the regular round advance
+      const embedResult = await createDetailedMinigameEmbed(session, `Round ${session.gameData.currentRound} Advanced!`, null);
+      embedResult.embed.setColor('#FFFFFF'); // White color like the regular advance
+      
+      // Add spawning information to the embed description
+      let description = embedResult.embed.data.description;
+      description += `\n\n**🔄 Round complete!** ${spawnResult.message}`;
+      
+      // Add spawning information if new aliens spawned
+      if (spawnResult.spawnLocations && spawnResult.spawnLocations.length > 0) {
+        description += `\n\n__👾 New Aliens Spawned:__\n${spawnResult.spawnLocations.join('\n')}`;
+      }
+      
+      embedResult.embed.setDescription(description);
+      
       const replyOptions = {
-        content: `🎮 **Round Advanced!** ${spawnResult.message}`,
         embeds: [embedResult.embed]
       };
       if (embedResult.attachment) {
@@ -4296,7 +4309,7 @@ async function handleCreateMinigame(interaction, questId) {
     .addFields(
       { 
         name: '🎮 How to Play', 
-        value: `**1. Join the Game:**\n</minigame theycame-join:1413815457118556201>\n\n**2. Roll Defense:**\n</minigame theycame-roll:1413815457118556201>\n\n**3. Target Aliens:**\n• **1A, 1B, 1C** - Outer Ring (needs 5+ to hit)\n• **2A, 2B, 2C** - Middle Ring (needs 4+ to hit)\n• **3A, 3B, 3C** - Inner Ring (needs 3+ to hit)`, 
+        value: `**1. Join the Game:**\n</minigame theycame-join:1413815457118556201>\n\n**2. Roll Defense:**\n</minigame theycame-roll:1413815457118556201>\n\n**3. Target Aliens:**\n• **Outer Ring** (needs 5+ to hit)\n• **Middle Ring** (needs 4+ to hit)\n• **Inner Ring** (needs 3+ to hit)`, 
         inline: false 
       },
       { 
@@ -4795,6 +4808,141 @@ async function createMinigameEmbed(session, title) {
   } catch (error) {
     console.error('[mod.js]: Error validating embed:', error);
   }
+  
+  // Return both embed and attachment
+  return {
+    embed: embed,
+    attachment: overlayImage
+  };
+}
+
+// ============================================================================
+// ------------------- Detailed Minigame Embed Creation -------------------
+// ============================================================================
+
+async function createDetailedMinigameEmbed(session, title, character = null) {
+  const gameConfig = GAME_CONFIGS.theycame;
+  const status = getAlienDefenseGameStatus(session.gameData);
+  
+  // Create player list with character names
+  const playerList = session.players.length > 0 
+    ? session.players.map(p => `• **${p.characterName}**`).join('\n')
+    : '*No defenders joined yet*';
+  
+  // Generate overlay image with aliens
+  const overlayImage = await generateAlienOverlayImage(session.gameData, session.sessionId);
+  
+  const embed = new EmbedBuilder()
+    .setTitle(`👽 ${gameConfig.name} - ${title}`)
+    .setDescription('*Defend your village from alien invaders! Work together to protect the livestock.*')
+    .setColor(getGameStatusColor(session.status))
+    .setTimestamp()
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+  
+  // Add character thumbnail if provided
+  if (character && character.icon) {
+    embed.setThumbnail(character.icon);
+  }
+  
+  // Add the overlay image if available, otherwise fallback to village image
+  if (overlayImage) {
+    embed.setImage(`attachment://minigame-${session.sessionId}-overlay.png`);
+  } else {
+    const villageImage = session.gameData?.images?.village || getCurrentVillageImage();
+    embed.setImage(villageImage);
+  }
+  
+  // Game progress and status
+  const gameStatusText = session.status === 'waiting' ? '⏳ Waiting for players' : 
+                        session.status === 'active' ? '⚔️ In Progress' : '🏁 Finished';
+  
+  embed.addFields(
+    { 
+      name: '__📊 Game Status__', 
+      value: `**${status.gameProgress}** • ${gameStatusText}`, 
+      inline: false 
+    },
+    { 
+      name: '__🐄 Village Status__', 
+      value: `**${status.villageAnimals}/25** animals saved\n${status.animalsLost} lost • ${status.defeatedAliens} aliens defeated`, 
+      inline: true 
+    }
+  );
+  
+  // Combined defenders and turn order info - only show if there are players
+  if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
+    const turnOrderText = session.gameData.turnOrder.map((player, index) => 
+      `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${player.username}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`
+    ).join('\n');
+    // Add next turn message for active games
+    let turnOrderValue = turnOrderText;
+    if (session.status === 'active') {
+      turnOrderValue += `\n\n**🎯 Next Turn!** Use </minigame theycame-roll:1413815457118556201> to go!`;
+    }
+    
+    embed.addFields(
+      { 
+        name: '__👥 Defenders & Turn Order__', 
+        value: `**${session.players.length} player${session.players.length !== 1 ? 's' : ''}**\n${turnOrderValue}`, 
+        inline: false 
+      }
+    );
+  }
+  
+  // Alien threat with positions
+  const alienPositions = getAlienPositions(session.gameData);
+  let alienThreatText = `**Outer Ring:** ${status.ringStatus.outerRing} aliens\n**Middle Ring:** ${status.ringStatus.middleRing} aliens\n**Inner Ring:** ${status.ringStatus.innerRing} aliens`;
+  
+  if (alienPositions.length > 0) {
+    // Group aliens by ring
+    const aliensByRing = {
+      outer: alienPositions.filter(alien => alien.ring === 1).map(alien => alien.id),
+      middle: alienPositions.filter(alien => alien.ring === 2).map(alien => alien.id),
+      inner: alienPositions.filter(alien => alien.ring === 3).map(alien => alien.id)
+    };
+    
+    const positionText = [];
+    if (aliensByRing.outer.length > 0) {
+      positionText.push(`**Outer Ring:** ${aliensByRing.outer.join(', ')}`);
+    }
+    if (aliensByRing.middle.length > 0) {
+      positionText.push(`**Middle Ring:** ${aliensByRing.middle.join(', ')}`);
+    }
+    if (aliensByRing.inner.length > 0) {
+      positionText.push(`**Inner Ring:** ${aliensByRing.inner.join(', ')}`);
+    }
+    
+    if (positionText.length > 0) {
+      alienThreatText += `\n\n**Active Aliens:**\n${positionText.join('\n')}`;
+    }
+  } else {
+    alienThreatText += `\n\n*No active aliens on the field*`;
+  }
+  
+  embed.addFields(
+    { 
+      name: '__👾 Alien Threat__', 
+      value: alienThreatText, 
+      inline: false 
+    }
+  );
+  
+  // Game info
+  embed.addFields(
+    { 
+      name: '__🎯 Session Info__', 
+      value: `**ID:** \`${session.sessionId}\`\n**Status:** ${gameStatusText}`, 
+      inline: true 
+    }
+  );
+  
+  if (session.status === 'finished') {
+    embed.addFields(
+      { name: '🏁 Game Result', value: `**Final Score:** ${session.results.finalScore} animals saved!`, inline: false }
+    );
+  }
+  
+  embed.setFooter({ text: '🎮 Use /minigame commands to participate! • Good luck defending your village! 🛡️' });
   
   // Return both embed and attachment
   return {

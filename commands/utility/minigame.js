@@ -301,19 +301,53 @@ module.exports = {
     session.markModified('gameData');
     await session.save();
     
-    // Update the game message
-    await this.updateGameMessage(interaction, session);
-    
-    // Create join confirmation embed
-    const embedResult = await this.createJoinEmbed(session, character, result.message);
-    const replyOptions = {
-      embeds: [embedResult.embed]
-    };
-    if (embedResult.attachment) {
-      replyOptions.files = [embedResult.attachment];
+    // Check if we have 6 players and should auto-start
+    if (session.players.length === 6 && session.status === 'waiting') {
+      console.log(`[MINIGAME] Auto-starting game with 6 players for session ${session.sessionId}`);
+      
+      // Auto-start the game
+      const { spawnAliens } = require('../../modules/minigameModule');
+      const playerCount = session.gameData.turnOrder.length || session.players.length;
+      const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
+      
+      // Update session status
+      session.gameData.currentRound = 1;
+      session.status = 'active';
+      
+      session.markModified('gameData');
+      await session.save();
+      
+      // Update the game message
+      await this.updateGameMessage(interaction, session);
+      
+      // Create auto-start embed
+      const embedResult = await this.createJoinEmbed(session, character, result.message);
+      embedResult.embed.setTitle('🎮 Game Auto-Started!');
+      embedResult.embed.setDescription(embedResult.embed.data.description + `\n\n**🎮 Game Auto-Started with 6 players!** ${spawnResult.message}`);
+      
+      const replyOptions = {
+        embeds: [embedResult.embed]
+      };
+      if (embedResult.attachment) {
+        replyOptions.files = [embedResult.attachment];
+      }
+      
+      await interaction.editReply(replyOptions);
+    } else {
+      // Update the game message
+      await this.updateGameMessage(interaction, session);
+      
+      // Create join confirmation embed
+      const embedResult = await this.createJoinEmbed(session, character, result.message);
+      const replyOptions = {
+        embeds: [embedResult.embed]
+      };
+      if (embedResult.attachment) {
+        replyOptions.files = [embedResult.attachment];
+      }
+      
+      await interaction.editReply(replyOptions);
     }
-    
-    await interaction.editReply(replyOptions);
   },
 
   // ============================================================================
@@ -418,15 +452,24 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
-      // Send turn notification if it's someone else's turn now
-      await this.sendTurnNotification(interaction, session);
-      
       // Check if we should automatically advance the round AFTER creating the roll result embed
       let advanceResult = null;
+      let shouldDelayTurnNotification = false;
       if (result.shouldAdvanceRound) {
         console.log(`[MINIGAME] Advancing round - Current round: ${session.gameData.currentRound}`);
         advanceResult = advanceAlienDefenseRound(session.gameData);
         console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
+        
+        // Check if turn order has reset to the first player (turn index 0)
+        if (session.gameData.currentTurnIndex === 0) {
+          shouldDelayTurnNotification = true;
+          console.log(`[MINIGAME] Turn order reset to first player - will delay turn notification until after round embed`);
+        }
+      }
+      
+      // Send turn notification if it's someone else's turn now, unless we need to delay it for new round
+      if (!shouldDelayTurnNotification) {
+        await this.sendTurnNotification(interaction, session);
       }
       
       // Check if game should end
@@ -495,6 +538,12 @@ module.exports = {
             
             // Post the round advance embed as a follow-up message
             await interaction.followUp(roundAdvanceOptions);
+            
+            // Send delayed turn notification if we delayed it for new round
+            if (shouldDelayTurnNotification) {
+              console.log(`[MINIGAME] Sending delayed turn notification after round embed for session ${session.sessionId}`);
+              await this.sendTurnNotification(interaction, session);
+            }
           } catch (error) {
             console.error('[MINIGAME] Error posting delayed round advance embed:', error);
           }
@@ -531,15 +580,24 @@ module.exports = {
       }
       await interaction.editReply(replyOptions);
       
-      // Send turn notification if it's someone else's turn now
-      await this.sendTurnNotification(interaction, session);
-      
       // Check if we should automatically advance the round AFTER creating the roll result embed
       let advanceResult = null;
+      let shouldDelayTurnNotification = false;
       if (result.shouldAdvanceRound) {
         console.log(`[MINIGAME] Advancing round - Current round: ${session.gameData.currentRound}`);
         advanceResult = advanceAlienDefenseRound(session.gameData);
         console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
+        
+        // Check if turn order has reset to the first player (turn index 0)
+        if (session.gameData.currentTurnIndex === 0) {
+          shouldDelayTurnNotification = true;
+          console.log(`[MINIGAME] Turn order reset to first player - will delay turn notification until after round embed`);
+        }
+      }
+      
+      // Send turn notification if it's someone else's turn now, unless we need to delay it for new round
+      if (!shouldDelayTurnNotification) {
+        await this.sendTurnNotification(interaction, session);
       }
       
       // Check if game should end
@@ -608,6 +666,12 @@ module.exports = {
             
             // Post the round advance embed as a follow-up message
             await interaction.followUp(roundAdvanceOptions);
+            
+            // Send delayed turn notification if we delayed it for new round
+            if (shouldDelayTurnNotification) {
+              console.log(`[MINIGAME] Sending delayed turn notification after round embed for session ${session.sessionId}`);
+              await this.sendTurnNotification(interaction, session);
+            }
           } catch (error) {
             console.error('[MINIGAME] Error posting delayed round advance embed:', error);
           }
@@ -630,19 +694,29 @@ module.exports = {
       const currentPlayer = session.gameData.turnOrder[session.gameData.currentTurnIndex];
       const currentUserId = interaction.user.id;
       
+      console.log(`[MINIGAME] Turn notification check - Session: ${session.sessionId}, Current Player: ${currentPlayer.username} (${currentPlayer.discordId}), Interaction User: ${interaction.user.username} (${currentUserId}), Turn Index: ${session.gameData.currentTurnIndex}`);
+      
       // Only send notification if it's someone else's turn
       if (currentPlayer.discordId !== currentUserId) {
         try {
+          console.log(`[MINIGAME] Sending turn notification to ${currentPlayer.username} (${currentPlayer.discordId}) for session ${session.sessionId}`);
+          
           await interaction.followUp({
             content: `🎯 <@${currentPlayer.discordId}>, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
             allowedMentions: {
               users: [currentPlayer.discordId]
             }
           });
+          
+          console.log(`[MINIGAME] Successfully sent turn notification to ${currentPlayer.username} for session ${session.sessionId}`);
         } catch (error) {
-          console.error('[MINIGAME] Error sending turn notification:', error);
+          console.error(`[MINIGAME] Error sending turn notification to ${currentPlayer.username} for session ${session.sessionId}:`, error);
         }
+      } else {
+        console.log(`[MINIGAME] Skipping turn notification - same player (${currentPlayer.username}) is taking the turn`);
       }
+    } else {
+      console.log(`[MINIGAME] No turn order available for session ${session.sessionId} - skipping turn notification`);
     }
   },
   
@@ -953,7 +1027,7 @@ module.exports = {
         },
         { 
           name: '__⚔️ Ring Difficulties__', 
-          value: `• **Outer Ring** (1A, 1B, 1C, 1D, 1E, 1F) - **5-6** to hit\n• **Middle Ring** (2A, 2B, 2C, 2D, 2E, 2F) - **4-6** to hit\n• **Inner Ring** (3A, 3B, 3C, 3D, 3E, 3F) - **3-6** to hit`, 
+          value: `• **Outer Ring** - **5-6** to hit\n• **Middle Ring** - **4-6** to hit\n• **Inner Ring** - **3-6** to hit`, 
           inline: false 
         }
       );
