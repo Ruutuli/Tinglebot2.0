@@ -1814,7 +1814,15 @@ async function handleApprove(interaction) {
         // Check if this submission is linked to a quest and auto-complete it
         if (submission.questEvent && submission.questEvent !== 'N/A') {
           try {
-            await handleQuestCompletionFromSubmission(submission, userId);
+            // Import the Help Wanted Quest completion function
+            const { checkAndCompleteQuestFromSubmission } = require('../modules/helpWantedModule');
+            
+            // Update submission data with message URL for quest completion
+            submission.messageUrl = messageUrl;
+            submission.approvedSubmissionData = true; // Flag to skip approval check
+            
+            // Use the Help Wanted Quest completion logic
+            await checkAndCompleteQuestFromSubmission(submission, interaction.client);
           } catch (questError) {
             console.error(`[mod.js]: ❌ Error processing quest completion for submission ${submissionId}:`, questError);
             // Continue with approval even if quest completion fails
