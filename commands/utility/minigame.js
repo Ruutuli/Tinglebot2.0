@@ -301,7 +301,21 @@ module.exports = {
     session.markModified('gameData');
     await session.save();
     
-    // Check if we have 6 players and should auto-start
+    // Update the game message
+    await this.updateGameMessage(interaction, session);
+    
+    // Create join confirmation embed
+    const embedResult = await this.createJoinEmbed(session, character, result.message);
+    const replyOptions = {
+      embeds: [embedResult.embed]
+    };
+    if (embedResult.attachment) {
+      replyOptions.files = [embedResult.attachment];
+    }
+    
+    await interaction.editReply(replyOptions);
+    
+    // Check if we have 6 players and should auto-start (separate message)
     if (session.players.length === 6 && session.status === 'waiting') {
       console.log(`[MINIGAME] Auto-starting game with 6 players for session ${session.sessionId}`);
       
@@ -314,39 +328,26 @@ module.exports = {
       session.gameData.currentRound = 1;
       session.status = 'active';
       
-      session.markModified('gameData');
-      await session.save();
       
       // Update the game message
       await this.updateGameMessage(interaction, session);
       
-      // Create auto-start embed
-      const embedResult = await this.createJoinEmbed(session, character, result.message);
-      embedResult.embed.setTitle('🎮 Game Auto-Started!');
-      embedResult.embed.setDescription(embedResult.embed.data.description + `\n\n**🎮 Game Auto-Started with 6 players!** ${spawnResult.message}`);
+      // Get first player in turn order for mention
+      const firstPlayer = session.gameData.turnOrder[0];
+      const firstPlayerMention = firstPlayer ? `<@${firstPlayer.discordId}>` : '';
       
-      const replyOptions = {
-        embeds: [embedResult.embed]
+      // Create auto-start embed (like start game embed)
+      const startEmbedResult = await this.createMinigameEmbed(session, 'Game Started!');
+      const startReplyOptions = {
+        content: `🎮 **Game Auto-Started!** ${spawnResult.message}\n\n🎯 ${firstPlayerMention}, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
+        embeds: [startEmbedResult.embed]
       };
-      if (embedResult.attachment) {
-        replyOptions.files = [embedResult.attachment];
+      if (startEmbedResult.attachment) {
+        startReplyOptions.files = [startEmbedResult.attachment];
       }
       
-      await interaction.editReply(replyOptions);
-    } else {
-      // Update the game message
-      await this.updateGameMessage(interaction, session);
-      
-      // Create join confirmation embed
-      const embedResult = await this.createJoinEmbed(session, character, result.message);
-      const replyOptions = {
-        embeds: [embedResult.embed]
-      };
-      if (embedResult.attachment) {
-        replyOptions.files = [embedResult.attachment];
-      }
-      
-      await interaction.editReply(replyOptions);
+      // Post auto-start as follow-up message
+      await interaction.followUp(startReplyOptions);
     }
   },
 
@@ -432,8 +433,12 @@ module.exports = {
     
     console.log(`[MINIGAME] Roll result: ${result.success ? 'SUCCESS' : 'FAILED'} - ${result.message}`);
     
+    // Save the session data after roll processing (which may have advanced the turn)
+    session.markModified('gameData');
+    await session.save();
+    
     if (result.success) {
-      // Create embed for successful roll BEFORE round advancement to show correct alien positions
+      // Create embed for successful roll AFTER saving session to show correct turn order
       const embedResult = await this.createMinigameEmbed(session, 'Defense Roll', character);
       
       // Set color to cyan blue for successful hits
@@ -460,10 +465,13 @@ module.exports = {
         advanceResult = advanceAlienDefenseRound(session.gameData);
         console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
         
-        // Check if turn order has reset to the first player (turn index 0)
-        if (session.gameData.currentTurnIndex === 0) {
-          shouldDelayTurnNotification = true;
-          console.log(`[MINIGAME] Turn order reset to first player - will delay turn notification until after round embed`);
+        // Only proceed with round advancement logic if it was successful
+        if (advanceResult.success) {
+          // Check if turn order has reset to the first player (turn index 0)
+          if (session.gameData.currentTurnIndex === 0) {
+            shouldDelayTurnNotification = true;
+            console.log(`[MINIGAME] Turn order reset to first player - will delay turn notification until after round embed`);
+          }
         }
       }
       
@@ -492,8 +500,6 @@ module.exports = {
         await interaction.followUp(endGameOptions);
       }
       
-      session.markModified('gameData');
-      await session.save();
       
       // If round advanced automatically, post border image first, then delay, then new round embed
       if (advanceResult && advanceResult.success) {
@@ -519,12 +525,12 @@ module.exports = {
             
             // Add movement messages if any aliens moved
             if (advanceResult.movementMessages && advanceResult.movementMessages.length > 0) {
-              description += `\n\n__🔄 Alien Movement:__\n${advanceResult.movementMessages.join('\n')}`;
+              description += `\n\n__🔄 Alien Movement:__\n${advanceResult.movementMessages.join(', ')}`;
             }
             
             // Add spawning information if new aliens spawned
             if (advanceResult.spawnLocations && advanceResult.spawnLocations.length > 0) {
-              description += `\n\n__👾 New Aliens Spawned:__\n${advanceResult.spawnLocations.join('\n')}`;
+              description += `\n\n__👾 New Aliens Spawned:__\n${advanceResult.spawnLocations.join(', ')}`;
             }
             
             roundAdvanceEmbed.embed.setDescription(description);
@@ -561,7 +567,9 @@ module.exports = {
         });
       }
       
-      // Create embed for failed roll BEFORE round advancement to show correct alien positions
+      // Save the session data after roll processing (which may have advanced the turn)
+      
+      // Create embed for failed roll AFTER saving session to show correct turn order
       const embedResult = await this.createMinigameEmbed(session, 'Defense Roll', character);
       
       // Set color to eye-burning saturated orange for misses
@@ -588,10 +596,13 @@ module.exports = {
         advanceResult = advanceAlienDefenseRound(session.gameData);
         console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
         
-        // Check if turn order has reset to the first player (turn index 0)
-        if (session.gameData.currentTurnIndex === 0) {
-          shouldDelayTurnNotification = true;
-          console.log(`[MINIGAME] Turn order reset to first player - will delay turn notification until after round embed`);
+        // Only proceed with round advancement logic if it was successful
+        if (advanceResult.success) {
+          // Check if turn order has reset to the first player (turn index 0)
+          if (session.gameData.currentTurnIndex === 0) {
+            shouldDelayTurnNotification = true;
+            console.log(`[MINIGAME] Turn order reset to first player - will delay turn notification until after round embed`);
+          }
         }
       }
       
@@ -620,8 +631,6 @@ module.exports = {
         await interaction.followUp(endGameOptions);
       }
       
-      session.markModified('gameData');
-      await session.save();
       
       // If round advanced automatically, post border image first, then delay, then new round embed
       if (advanceResult && advanceResult.success) {
@@ -647,12 +656,12 @@ module.exports = {
             
             // Add movement messages if any aliens moved
             if (advanceResult.movementMessages && advanceResult.movementMessages.length > 0) {
-              description += `\n\n__🔄 Alien Movement:__\n${advanceResult.movementMessages.join('\n')}`;
+              description += `\n\n__🔄 Alien Movement:__\n${advanceResult.movementMessages.join(', ')}`;
             }
             
             // Add spawning information if new aliens spawned
             if (advanceResult.spawnLocations && advanceResult.spawnLocations.length > 0) {
-              description += `\n\n__👾 New Aliens Spawned:__\n${advanceResult.spawnLocations.join('\n')}`;
+              description += `\n\n__👾 New Aliens Spawned:__\n${advanceResult.spawnLocations.join(', ')}`;
             }
             
             roundAdvanceEmbed.embed.setDescription(description);
@@ -863,7 +872,7 @@ module.exports = {
     embed.addFields(
       { 
         name: '__📊 Game Status__', 
-        value: `**${status.gameProgress}** • ${gameStatusText}`, 
+        value: `**Session:** ${session.sessionId}\n**${status.gameProgress}** • ${gameStatusText}`, 
         inline: false 
       },
       { 
@@ -895,7 +904,7 @@ module.exports = {
     
     // Alien threat with positions
     const alienPositions = getAlienPositions(session.gameData);
-    let alienThreatText = `**Outer Ring:** ${status.ringStatus.outerRing} aliens\n**Middle Ring:** ${status.ringStatus.middleRing} aliens\n**Inner Ring:** ${status.ringStatus.innerRing} aliens`;
+    let alienThreatText = '';
     
     if (alienPositions.length > 0) {
       // Group aliens by ring
@@ -907,20 +916,18 @@ module.exports = {
       
       const positionText = [];
       if (aliensByRing.outer.length > 0) {
-        positionText.push(`**Outer Ring:** ${aliensByRing.outer.join(', ')}`);
+        positionText.push(`**Outer Ring:** (${aliensByRing.outer.length}) ${aliensByRing.outer.join(', ')}`);
       }
       if (aliensByRing.middle.length > 0) {
-        positionText.push(`**Middle Ring:** ${aliensByRing.middle.join(', ')}`);
+        positionText.push(`**Middle Ring:** (${aliensByRing.middle.length}) ${aliensByRing.middle.join(', ')}`);
       }
       if (aliensByRing.inner.length > 0) {
-        positionText.push(`**Inner Ring:** ${aliensByRing.inner.join(', ')}`);
+        positionText.push(`**Inner Ring:** (${aliensByRing.inner.length}) ${aliensByRing.inner.join(', ')}`);
       }
       
-      if (positionText.length > 0) {
-        alienThreatText += `\n\n**Active Aliens:**\n${positionText.join('\n')}`;
-      }
+      alienThreatText = positionText.join('\n');
     } else {
-      alienThreatText += `\n\n*No active aliens on the field*`;
+      alienThreatText = '*No active aliens on the field*';
     }
     
     embed.addFields(
@@ -997,7 +1004,7 @@ module.exports = {
     embed.addFields(
       { 
         name: '📊 Game Status', 
-        value: `__${status.gameProgress} • ${gameStatusText}__`, 
+        value: `**Session:** ${session.sessionId}\n__${status.gameProgress} • ${gameStatusText}__`, 
         inline: false 
       }
     );

@@ -271,7 +271,7 @@ function spawnAliens(gameData, playerCount, currentRound) {
   const spawnMessages = newAliens.map(alien => {
     const ringNames = ['Outer', 'Middle', 'Inner'];
     const ringName = ringNames[alien.ring - 1] || 'Unknown';
-    return `**${alien.id}** spawned in ${ringName} Ring!`;
+    return `${alien.id} (${ringName})`;
   });
 
   return {
@@ -339,10 +339,23 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     }
   }
   
-  const alien = gameData.aliens.find(a => a.id === targetAlienId && !a.defeated);
+  // Extract alien ID from target string (handle cases where user might input formatted string)
+  let cleanAlienId = targetAlienId;
+  if (targetAlienId.includes('👾')) {
+    // Extract ID from formatted string like "👾 1A | Outer Ring | Difficulty: 5+" or "👾 2E | Middle Ring | Difficulty: 4+"
+    const match = targetAlienId.match(/👾\s*([A-Z0-9]+)/);
+    if (match) {
+      cleanAlienId = match[1];
+      console.log(`[MINIGAME] Extracted alien ID: ${cleanAlienId} from formatted string: ${targetAlienId}`);
+    } else {
+      console.log(`[MINIGAME] Failed to extract alien ID from: ${targetAlienId}`);
+    }
+  }
+  
+  const alien = gameData.aliens.find(a => a.id === cleanAlienId && !a.defeated);
   
   if (!alien) {
-    console.log(`[MINIGAME] Alien not found: ${targetAlienId}`);
+    console.log(`[MINIGAME] Alien not found: ${cleanAlienId} (original: ${targetAlienId})`);
     return {
       success: false,
       message: '❌ Target alien not found or already defeated!',
@@ -352,7 +365,7 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
 
   const ring = GAME_CONFIGS.theycame.rings[alien.ring - 1];
   const requiredRoll = ring.difficulty;
-  console.log(`[MINIGAME] Alien ${targetAlienId} in ${ring.name} - Required: ${requiredRoll}+`);
+  console.log(`[MINIGAME] Alien ${cleanAlienId} in ${ring.name} - Required: ${requiredRoll}+`);
   
   if (roll >= requiredRoll) {
     // Alien defeated!
@@ -403,6 +416,19 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
 function advanceAlienDefenseRound(gameData) {
   console.log(`[MINIGAME] === ADVANCING ROUND ${gameData.currentRound} ===`);
   
+  // Check if we've reached the maximum rounds (8) - don't advance further
+  if (gameData.currentRound >= 8) {
+    console.log(`[MINIGAME] Max rounds reached (8), no round advancement`);
+    return {
+      success: false,
+      message: 'Game has reached maximum rounds (8)',
+      gameData: gameData,
+      spawnLocations: [],
+      movementMessages: [],
+      barnAliens: []
+    };
+  }
+  
   // First, advance to the next round
   gameData.currentRound++;
   console.log(`[MINIGAME] Round advanced to ${gameData.currentRound}`);
@@ -412,6 +438,11 @@ function advanceAlienDefenseRound(gameData) {
   let animalsLost = 0;
   let barnAliens = []; // Track which aliens reached the barn
   let movementMessages = []; // Track which aliens moved
+  let movementGroups = {
+    'Outer→Middle': [],
+    'Middle→Inner': [],
+    'Inner→Barn': []
+  };
   
   console.log(`[MINIGAME] Before movement - Aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
   
@@ -429,11 +460,13 @@ function advanceAlienDefenseRound(gameData) {
         alien.id = `${alien.ring}${alien.segment}`;
         console.log(`[MINIGAME] ${oldId} moved to ${alien.id} (Ring ${alien.ring})`);
         
-        // Create movement message
+        // Track movement for grouped message
         const ringNames = ['Outer', 'Middle', 'Inner'];
         const oldRingName = ringNames[oldRing - 1] || 'Unknown';
         const newRingName = ringNames[alien.ring - 1] || 'Unknown';
-        movementMessages.push(`**${oldId}** moved from ${oldRingName} to ${newRingName} Ring!`);
+        const movementKey = `${oldRingName}→${newRingName}`;
+        movementGroups[movementKey] = movementGroups[movementKey] || [];
+        movementGroups[movementKey].push(oldId);
       } else {
         console.log(`[MINIGAME] ${alien.id} blocked from moving to ring ${alien.ring + 1}`);
       }
@@ -443,6 +476,7 @@ function advanceAlienDefenseRound(gameData) {
       gameData.villageAnimals = Math.max(0, gameData.villageAnimals - 1);
       animalsLost++;
       barnAliens.push(alien.id); // Track which alien reached the barn
+      movementGroups['Inner→Barn'].push(alien.id);
       alien.defeated = true; // Remove from board
       alien.defeatedBy = 'barn';
       alien.defeatedAt = new Date();
@@ -486,6 +520,14 @@ function advanceAlienDefenseRound(gameData) {
     message += ` ${spawnResult.message}`;
   }
 
+  // Create compact movement messages from grouped data
+  const compactMovementMessages = [];
+  Object.entries(movementGroups).forEach(([direction, aliens]) => {
+    if (aliens.length > 0) {
+      compactMovementMessages.push(`${direction}: ${aliens.join(', ')}`);
+    }
+  });
+
   console.log(`[MINIGAME] Round ${gameData.currentRound - 1} complete - Animals: ${gameData.villageAnimals}/25, Lost: ${animalsLost}, Barn Aliens: [${barnAliens.join(', ')}]`);
   console.log(`[MINIGAME] === END ROUND ${gameData.currentRound - 1} ===\n`);
 
@@ -494,7 +536,7 @@ function advanceAlienDefenseRound(gameData) {
     message: message,
     gameData: gameData,
     spawnLocations: spawnResult ? spawnResult.spawnLocations : [],
-    movementMessages: movementMessages,
+    movementMessages: compactMovementMessages,
     barnAliens: barnAliens
   };
 }

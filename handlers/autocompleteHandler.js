@@ -329,6 +329,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               } else if (modSubcommand === "minigame") {
                 if (focusedOption.name === "session_id") {
                   await handleMinigameSessionIdAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "character") {
+                  await handleModMinigameCharacterAutocomplete(interaction, focusedOption);
                 }
               }
             }
@@ -3406,6 +3408,50 @@ async function handleMinigameCharacterAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Mod Minigame Character Autocomplete -------------------
+// Provides autocomplete suggestions for characters in the current minigame session.
+async function handleModMinigameCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    // Get the session ID from the interaction options
+    const sessionIdOption = interaction.options.getString('session_id');
+    if (!sessionIdOption) {
+      await respondWithFilteredChoices(interaction, focusedOption, []);
+      return;
+    }
+
+    // Extract session ID from autocomplete format if needed
+    const sessionIdMatch = sessionIdOption.match(/A\d+/);
+    const cleanSessionId = sessionIdMatch ? sessionIdMatch[0] : sessionIdOption;
+
+    // Find the minigame session
+    const Minigame = require('../models/MinigameModel');
+    const session = await Minigame.findOne({
+      sessionId: cleanSessionId,
+      gameType: 'theycame',
+      status: { $in: ['waiting', 'active'] }
+    });
+
+    if (!session) {
+      await respondWithFilteredChoices(interaction, focusedOption, []);
+      return;
+    }
+
+    // Get characters from the session
+    const choices = session.players.map(player => ({
+      name: `${player.characterName} | ${player.username}`,
+      value: player.characterName,
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error(
+      "[handleModMinigameCharacterAutocomplete]: Error handling mod minigame character autocomplete:",
+      error
+    );
+    await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Minigame Session ID Autocomplete -------------------
 // Provides autocomplete suggestions for active minigame session IDs
 async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
@@ -4984,6 +5030,7 @@ handleBlightOverrideTargetAutocomplete,
  
  // ------------------- Minigame Functions -------------------
  handleMinigameCharacterAutocomplete,
+ handleModMinigameCharacterAutocomplete,
  
  handleStableCharacterAutocomplete,
  handleStableMountNameAutocomplete,
