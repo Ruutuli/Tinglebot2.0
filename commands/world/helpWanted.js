@@ -19,7 +19,9 @@ const QUEST_TYPE_EMOJIS = {
   'item': '📦',
   'monster': '⚔️',
   'escort': '🛡️',
-  'crafting': '🔨'
+  'crafting': '🔨',
+  'art': '🎨',
+  'writing': '📝'
 };
 
 
@@ -209,6 +211,16 @@ async function validateQuestRequirements(character, quest) {
       return validateEscortQuestRequirements(character, quest);
     case 'crafting':
       return await validateCraftingQuestRequirements(character, quest);
+    case 'art':
+      return {
+        requirementsMet: false,
+        message: `🎨 **Art Quest:** This quest requires creating artwork. Please use the \`/submit art\` command with this quest ID to submit your artwork. Once approved by a moderator, the quest will be automatically completed.`
+      };
+    case 'writing':
+      return {
+        requirementsMet: false,
+        message: `📝 **Writing Quest:** This quest requires writing content. Please use the \`/submit writing\` command with this quest ID to submit your writing. Once approved by a moderator, the quest will be automatically completed.`
+      };
     default:
       return { requirementsMet: false, message: '❌ Unknown quest type.' };
   }
@@ -522,6 +534,12 @@ function createQuestCompletionEmbed(character, quest, userId) {
     case 'crafting':
       questDetails = `**Crafted:** ${quest.requirements.amount}x ${quest.requirements.item}`;
       break;
+    case 'art':
+      questDetails = `**Created:** ${quest.requirements.prompt}\n**Requirement:** ${quest.requirements.requirement}`;
+      break;
+    case 'writing':
+      questDetails = `**Written:** ${quest.requirements.prompt}\n**Requirement:** ${quest.requirements.requirement}`;
+      break;
     default:
       questDetails = 'Quest completed successfully!';
   }
@@ -616,6 +634,18 @@ function createQuestRequirementsEmbed(requirementsCheck) {
     description = 'You need to travel to the required location to complete this quest.';
     fields = [
       { name: '💡 How to Complete', value: 'Travel to the specified location using `/travel`', inline: false }
+    ];
+  } else if (message.includes('🎨 **Art Quest:**')) {
+    title = '🎨 Art Quest Requirements Not Met';
+    description = 'This quest requires creating artwork.';
+    fields = [
+      { name: '💡 How to Complete', value: 'Use `/submit art` with this quest ID to submit your artwork', inline: false }
+    ];
+  } else if (message.includes('📝 **Writing Quest:**')) {
+    title = '📝 Writing Quest Requirements Not Met';
+    description = 'This quest requires writing content.';
+    fields = [
+      { name: '💡 How to Complete', value: 'Use `/submit writing` with this quest ID to submit your writing', inline: false }
     ];
   } else {
     title = '❌ Quest Requirements Not Met';

@@ -551,7 +551,9 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
       item: `**${npcName} needs supplies:** Gather **${requirements.amount || 'unknown'}x ${requirements.item || 'unknown item'}** for the village`,
       monster: `**${npcName} seeks a hunter:** Defeat **${requirements.amount || 'unknown'}x ${requirements.monster || 'unknown monster'} (tier: ${requirements.tier || 'unknown'})** threatening the area`,
       escort: `**${npcName} needs protection:** Safely escort them to **${requirements.location || 'unknown location'}**`,
-      crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount || 'unknown'}x ${requirements.item || 'unknown item'}**`
+      crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount || 'unknown'}x ${requirements.item || 'unknown item'}**`,
+      art: `**${npcName} requests artwork:** Create a picture showing **${requirements.prompt || 'something for the village'}** (${requirements.requirement || 'any style'})`,
+      writing: `**${npcName} needs documentation:** Write a detailed account about **${requirements.prompt || 'village life'}** (${requirements.requirement || '500+ words'})`
     };
     return fallbackTexts[questType] || `**${npcName} needs help:** Complete this quest for the village`;
   }
@@ -572,7 +574,9 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
     .replace('{item}', requirements.item || 'unknown item')
     .replace('{monster}', requirements.monster || 'unknown monster')
     .replace('{tier}', requirements.tier || 'unknown tier')
-    .replace('{location}', requirements.location || 'unknown location');
+    .replace('{location}', requirements.location || 'unknown location')
+    .replace('{prompt}', requirements.prompt || 'unknown prompt')
+    .replace('{requirement}', requirements.requirement || 'unknown requirement');
 }
 
 // ============================================================================
@@ -600,6 +604,16 @@ const NPC_QUEST_FLAVOR = {
       "Hank needs **{amount}x {item}** for his latest medicinal experiments. He's looking for a skilled craftsman to create them.",
       "The herbalist's workshop is missing some essential tools. He requests **{amount}x {item}** to continue his healing work.",
       "Hank's been developing a new allergy remedy but needs **{amount}x {item}** to complete the formula."
+    ],
+    art: [
+      "Hank wants to create a visual guide for identifying medicinal herbs. He needs a picture showing **{prompt}** ({requirement}) to help villagers learn about healing plants.",
+      "The herbalist is compiling a book of remedies and needs artwork depicting **{prompt}** ({requirement}) to illustrate the healing process.",
+      "Hank's been teaching villagers about herb identification and needs a visual aid showing **{prompt}** ({requirement}) for his lessons."
+    ],
+    writing: [
+      "Hank is documenting his herbal knowledge and needs a detailed account of **{prompt}** ({requirement}) to preserve this wisdom for future generations.",
+      "The herbalist wants to create a guide for treating common ailments and needs documentation about **{prompt}** ({requirement}) to help other healers.",
+      "Hank's been researching new medicinal applications and needs a written record of **{prompt}** ({requirement}) for his studies."
     ]
   },
   'Sue': {
@@ -622,6 +636,16 @@ const NPC_QUEST_FLAVOR = {
       "Sue's fishing gear is wearing out. She needs **{amount}x {item}** to maintain her livelihood on the river.",
       "Sue wants to expand her business but needs **{amount}x {item}** to build new fish processing equipment.",
       "Sue's been experimenting with new fishing techniques but requires **{amount}x {item}** to perfect her methods."
+    ],
+    art: [
+      "Sue wants to create a fishing guide for newcomers and needs artwork showing **{prompt}** ({requirement}) to help them learn the trade.",
+      "The Zora fisherman is documenting river life and needs a picture depicting **{prompt}** ({requirement}) for her collection.",
+      "Sue's been teaching fishing techniques and needs a visual reference showing **{prompt}** ({requirement}) for her students."
+    ],
+    writing: [
+      "Sue is writing a guide to river fishing and needs a detailed account of **{prompt}** ({requirement}) to help other fishermen.",
+      "The Zora fisherman wants to document the river's ecosystem and needs a written record of **{prompt}** ({requirement}) for her research.",
+      "Sue's been studying fish behavior and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Lukan': {
@@ -644,6 +668,16 @@ const NPC_QUEST_FLAVOR = {
       "Lukan's orchard tools are worn out from years of use. She needs **{amount}x {item}** to maintain her grove properly.",
       "The Gerudo orchard keeper wants to build a new greenhouse but requires **{amount}x {item}** for the construction.",
       "Lukan's been developing new fruit varieties but needs **{amount}x {item}** to complete her research."
+    ],
+    art: [
+      "Lukan wants to create a guide for fruit cultivation and needs artwork showing **{prompt}** ({requirement}) to help other farmers.",
+      "The Gerudo orchard keeper is documenting her orchard's beauty and needs a picture depicting **{prompt}** ({requirement}) for her records.",
+      "Lukan's been teaching farming techniques and needs a visual reference showing **{prompt}** ({requirement}) for her students."
+    ],
+    writing: [
+      "Lukan is writing a comprehensive guide to orchard management and needs a detailed account of **{prompt}** ({requirement}) to help other farmers.",
+      "The Gerudo orchard keeper wants to document her farming methods and needs a written record of **{prompt}** ({requirement}) for her research.",
+      "Lukan's been studying fruit cultivation and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Myti': {
@@ -666,6 +700,16 @@ const NPC_QUEST_FLAVOR = {
       "Myti's mining tools are breaking down from constant use. He needs **{amount}x {item}** to continue his underground work.",
       "The Mogma scout wants to build a new underground outpost but requires **{amount}x {item}** for the construction.",
       "Myti's been developing new cave exploration equipment but needs **{amount}x {item}** to complete his inventions."
+    ],
+    art: [
+      "Myti wants to create a map of underground passages and needs artwork showing **{prompt}** ({requirement}) to help other explorers.",
+      "The Mogma scout is documenting cave formations and needs a picture depicting **{prompt}** ({requirement}) for his research.",
+      "Myti's been teaching cave exploration and needs a visual reference showing **{prompt}** ({requirement}) for his students."
+    ],
+    writing: [
+      "Myti is writing a guide to underground exploration and needs a detailed account of **{prompt}** ({requirement}) to help other scouts.",
+      "The Mogma scout wants to document his cave discoveries and needs a written record of **{prompt}** ({requirement}) for his research.",
+      "Myti's been studying underground ecosystems and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Cree': {
@@ -688,6 +732,16 @@ const NPC_QUEST_FLAVOR = {
       "Cree's hunting weapons need upgrading to handle stronger monsters. He requires **{amount}x {item}** to forge better gear.",
       "Cree wants to build a new hunting lodge but needs **{amount}x {item}** for the construction.",
       "Cree's been developing new monster tracking techniques but requires **{amount}x {item}** to perfect his methods."
+    ],
+    art: [
+      "Cree wants to create a monster identification guide and needs artwork showing **{prompt}** ({requirement}) to help other hunters.",
+      "The Rito Monster Hunter is documenting dangerous creatures and needs a picture depicting **{prompt}** ({requirement}) for his research.",
+      "Cree's been teaching hunting techniques and needs a visual reference showing **{prompt}** ({requirement}) for his students."
+    ],
+    writing: [
+      "Cree is writing a guide to monster hunting and needs a detailed account of **{prompt}** ({requirement}) to help other hunters.",
+      "The Rito Monster Hunter wants to document his hunting methods and needs a written record of **{prompt}** ({requirement}) for his research.",
+      "Cree's been studying monster behavior and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Cece': {
@@ -710,6 +764,16 @@ const NPC_QUEST_FLAVOR = {
       "Cece's foraging tools are worn out from constant use. She needs **{amount}x {item}** to maintain her collection equipment.",
       "Cece wants to build a new drying shed but requires **{amount}x {item}** for the construction.",
       "Cece's been developing new mushroom preservation methods but needs **{amount}x {item}** to complete her research."
+    ],
+    art: [
+      "Cece wants to create a mushroom identification guide and needs artwork showing **{prompt}** ({requirement}) to help other foragers.",
+      "The Mixed Mushroom Forager is documenting forest life and needs a picture depicting **{prompt}** ({requirement}) for her collection.",
+      "Cece's been teaching foraging techniques and needs a visual reference showing **{prompt}** ({requirement}) for her students."
+    ],
+    writing: [
+      "Cece is writing a guide to mushroom foraging and needs a detailed account of **{prompt}** ({requirement}) to help other foragers.",
+      "The Mixed Mushroom Forager wants to document her foraging methods and needs a written record of **{prompt}** ({requirement}) for her research.",
+      "Cece's been studying forest ecosystems and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Walton': {
@@ -732,6 +796,16 @@ const NPC_QUEST_FLAVOR = {
       "Walton's forest care tools are breaking down. He needs **{amount}x {item}** to maintain the ancient trees properly.",
       "Walton wants to build a new forest sanctuary but requires **{amount}x {item}** for the construction.",
       "Walton's been developing new tree healing techniques but needs **{amount}x {item}** to complete his methods."
+    ],
+    art: [
+      "Walton wants to create a forest care guide and needs artwork showing **{prompt}** ({requirement}) to help other Koroks.",
+      "The Korok is documenting forest life and needs a picture depicting **{prompt}** ({requirement}) for his collection.",
+      "Walton's been teaching tree care and needs a visual reference showing **{prompt}** ({requirement}) for his students."
+    ],
+    writing: [
+      "Walton is writing a guide to forest care and needs a detailed account of **{prompt}** ({requirement}) to help other Koroks.",
+      "The Korok wants to document his tree care methods and needs a written record of **{prompt}** ({requirement}) for his research.",
+      "Walton's been studying forest ecosystems and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Jengo': {
@@ -754,6 +828,16 @@ const NPC_QUEST_FLAVOR = {
       "Jengo's mining tools need upgrading to reach deeper deposits. He requires **{amount}x {item}** to forge better equipment.",
       "Jengo wants to build a new mining outpost but needs **{amount}x {item}** for the construction.",
       "Jengo's been developing new mining techniques but requires **{amount}x {item}** to perfect his methods."
+    ],
+    art: [
+      "Jengo wants to create a mining safety guide and needs artwork showing **{prompt}** ({requirement}) to help other miners.",
+      "The Goron Miner is documenting underground formations and needs a picture depicting **{prompt}** ({requirement}) for his research.",
+      "Jengo's been teaching mining techniques and needs a visual reference showing **{prompt}** ({requirement}) for his students."
+    ],
+    writing: [
+      "Jengo is writing a guide to safe mining practices and needs a detailed account of **{prompt}** ({requirement}) to help other miners.",
+      "The Goron Miner wants to document his mining methods and needs a written record of **{prompt}** ({requirement}) for his research.",
+      "Jengo's been studying underground geology and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Jasz': {
@@ -776,6 +860,16 @@ const NPC_QUEST_FLAVOR = {
       "Jasz's hunting weapons need upgrading for stronger night creatures. He requires **{amount}x {item}** to forge better gear.",
       "Jasz wants to build a new night hunting lodge but needs **{amount}x {item}** for the construction.",
       "Jasz's been developing new nocturnal tracking techniques but requires **{amount}x {item}** to perfect his methods."
+    ],
+    art: [
+      "Jasz wants to create a nocturnal creature guide and needs artwork showing **{prompt}** ({requirement}) to help other night hunters.",
+      "The Nocturnal Twili Hunter is documenting night creatures and needs a picture depicting **{prompt}** ({requirement}) for his research.",
+      "Jasz's been teaching night hunting techniques and needs a visual reference showing **{prompt}** ({requirement}) for his students."
+    ],
+    writing: [
+      "Jasz is writing a guide to nocturnal hunting and needs a detailed account of **{prompt}** ({requirement}) to help other night hunters.",
+      "The Nocturnal Twili Hunter wants to document his hunting methods and needs a written record of **{prompt}** ({requirement}) for his research.",
+      "Jasz's been studying nocturnal wildlife and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Lecia': {
@@ -798,6 +892,16 @@ const NPC_QUEST_FLAVOR = {
       "Lecia's research tools are wearing out from constant use. She needs **{amount}x {item}** to maintain her scholarly equipment.",
       "Lecia wants to build a new research library but requires **{amount}x {item}** for the construction.",
       "Lecia's been developing new archaeological techniques but needs **{amount}x {item}** to complete her research."
+    ],
+    art: [
+      "Lecia wants to create an archaeological guide and needs artwork showing **{prompt}** ({requirement}) to help other scholars.",
+      "The Sheikah Scholar is documenting ancient artifacts and needs a picture depicting **{prompt}** ({requirement}) for her research.",
+      "Lecia's been teaching ancient history and needs a visual reference showing **{prompt}** ({requirement}) for her students."
+    ],
+    writing: [
+      "Lecia is writing a guide to archaeological research and needs a detailed account of **{prompt}** ({requirement}) to help other scholars.",
+      "The Sheikah Scholar wants to document her research methods and needs a written record of **{prompt}** ({requirement}) for her studies.",
+      "Lecia's been studying ancient civilizations and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Tye': {
@@ -820,6 +924,16 @@ const NPC_QUEST_FLAVOR = {
       "Tye's botanical tools are wearing out from constant use. She needs **{amount}x {item}** to maintain her research equipment.",
       "Tye wants to build a new greenhouse but requires **{amount}x {item}** for the construction.",
       "Tye's been developing new plant cultivation techniques but needs **{amount}x {item}** to complete her research."
+    ],
+    art: [
+      "Tye wants to create a botanical guide and needs artwork showing **{prompt}** ({requirement}) to help other botanists.",
+      "The Kokiri Botanist is documenting plant life and needs a picture depicting **{prompt}** ({requirement}) for her research.",
+      "Tye's been teaching plant cultivation and needs a visual reference showing **{prompt}** ({requirement}) for her students."
+    ],
+    writing: [
+      "Tye is writing a guide to botanical research and needs a detailed account of **{prompt}** ({requirement}) to help other botanists.",
+      "The Kokiri Botanist wants to document her research methods and needs a written record of **{prompt}** ({requirement}) for her studies.",
+      "Tye's been studying plant ecosystems and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Lil Tim': {
@@ -842,6 +956,16 @@ const NPC_QUEST_FLAVOR = {
       "Lil Tim's coop maintenance tools are breaking down. He needs **{amount}x {item}** to keep his birds' home in good condition.",
       "Lil Tim wants to build a new nesting area but requires **{amount}x {item}** for the construction.",
       "Lil Tim's been developing new bird care techniques but needs **{amount}x {item}** to complete his methods."
+    ],
+    art: [
+      "Lil Tim wants to create a bird care guide and needs artwork showing **{prompt}** ({requirement}) to help other bird keepers.",
+      "The Cucco is documenting bird life and needs a picture depicting **{prompt}** ({requirement}) for his collection.",
+      "Lil Tim's been teaching bird care and needs a visual reference showing **{prompt}** ({requirement}) for his students."
+    ],
+    writing: [
+      "Lil Tim is writing a guide to bird care and needs a detailed account of **{prompt}** ({requirement}) to help other bird keepers.",
+      "The Cucco wants to document his bird care methods and needs a written record of **{prompt}** ({requirement}) for his research.",
+      "Lil Tim's been studying bird behavior and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Zone': {
@@ -864,6 +988,16 @@ const NPC_QUEST_FLAVOR = {
       "Zone's smithing tools are wearing out from constant use. He needs **{amount}x {item}** to maintain his workshop properly.",
       "Zone wants to expand his shop but requires **{amount}x {item}** for the construction.",
       "Zone's been developing new weapon designs but needs **{amount}x {item}** to complete his prototypes."
+    ],
+    art: [
+      "Zone wants to create a weapon catalog and needs artwork showing **{prompt}** ({requirement}) to help customers choose weapons.",
+      "The Keaton Weapons Dealer is documenting weapon designs and needs a picture depicting **{prompt}** ({requirement}) for his catalog.",
+      "Zone's been teaching weapon crafting and needs a visual reference showing **{prompt}** ({requirement}) for his students."
+    ],
+    writing: [
+      "Zone is writing a guide to weapon crafting and needs a detailed account of **{prompt}** ({requirement}) to help other smiths.",
+      "The Keaton Weapons Dealer wants to document his crafting methods and needs a written record of **{prompt}** ({requirement}) for his research.",
+      "Zone's been studying weapon design and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Peddler': {
@@ -886,6 +1020,16 @@ const NPC_QUEST_FLAVOR = {
       "Peddler's auction equipment is wearing out from constant use. He needs **{amount}x {item}** to maintain his professional setup.",
       "Peddler wants to build a new auction house but requires **{amount}x {item}** for the construction.",
       "Peddler's been developing new auction techniques but needs **{amount}x {item}** to complete his innovations."
+    ],
+    art: [
+      "Peddler wants to create an auction catalog and needs artwork showing **{prompt}** ({requirement}) to attract bidders.",
+      "The Hylian Auctioneer is documenting valuable items and needs a picture depicting **{prompt}** ({requirement}) for his catalog.",
+      "Peddler's been teaching auction techniques and needs a visual reference showing **{prompt}** ({requirement}) for his students."
+    ],
+    writing: [
+      "Peddler is writing a guide to auctioneering and needs a detailed account of **{prompt}** ({requirement}) to help other auctioneers.",
+      "The Hylian Auctioneer wants to document his auction methods and needs a written record of **{prompt}** ({requirement}) for his research.",
+      "Peddler's been studying market trends and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
     ]
   }
 };

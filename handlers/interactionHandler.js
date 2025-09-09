@@ -101,6 +101,46 @@ const initializeReactionHandler = (client) => {
         }
       }
 
+      // Help Wanted quest completion logic - check for checkmark reactions from Tinglebot
+      if (reaction.emoji.name === '✅' || reaction.emoji.name === '☑️' || reaction.emoji.name === '✔️') {
+        // Check if this is a submission message in the submissions channel
+        if (reaction.message.channel.id === '940446392789389362') { // Submissions channel ID
+          // Check if Tinglebot reacted (approval)
+          const botUser = client.user;
+          if (reaction.users.cache.has(botUser.id)) {
+            console.log('[interactionHandler.js]: ✅ Checkmark reaction detected on submission - checking for quest completion');
+            
+            // Get the message URL
+            const messageUrl = `https://discord.com/channels/${reaction.message.guildId}/${reaction.message.channelId}/${reaction.message.id}`;
+            
+            // Try to find submission data by message URL
+            const { retrieveSubmissionFromStorage } = require('../utils/storage');
+            const { checkAndCompleteQuestFromSubmission } = require('../modules/helpWantedModule');
+            
+            // We need to find the submission data - let's check if we can get it from the embed
+            const embed = reaction.message.embeds[0];
+            if (embed && embed.fields) {
+              const submissionIdField = embed.fields.find(field => field.name === 'Submission ID' || field.name === '🆔 Submission ID');
+              if (submissionIdField) {
+                const submissionId = submissionIdField.value.replace(/`/g, '').trim();
+                console.log(`[interactionHandler.js]: Found submission ID: ${submissionId}`);
+                
+                try {
+                  const submissionData = await retrieveSubmissionFromStorage(submissionId);
+                  if (submissionData) {
+                    // Update the message URL in submission data
+                    submissionData.messageUrl = messageUrl;
+                    await checkAndCompleteQuestFromSubmission(submissionData, client);
+                  }
+                } catch (error) {
+                  console.error(`[interactionHandler.js]: Error retrieving submission data for ${submissionId}:`, error);
+                }
+              }
+            }
+          }
+        }
+      }
+
     } catch (error) {
       handleError(error, 'interactionHandler.js');
       console.error('[interactionHandler.js]: ❌ Error in reaction handler', error);
