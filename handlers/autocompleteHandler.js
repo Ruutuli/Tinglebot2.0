@@ -2957,10 +2957,10 @@ async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
         date: today
       }).lean();
       
-      // Format quest choices for autocomplete
+      // Format quest choices for autocomplete with Quest | Village | Type format
       const choices = quests.map(quest => ({
-          name: quest.questId, // Just the quest ID
-          value: quest.questId // Just the quest ID, not the full description
+          name: `${quest.questId} | ${quest.village} | ${quest.type}`, // Quest | Village | Type format
+          value: quest.questId // Still use just the quest ID as the value
       }));
       
       console.log(`[autocompleteHandler.js]: Generated choices:`, choices.map(c => ({ name: c.name, value: c.value })));

@@ -1699,7 +1699,8 @@ async function checkAndCompleteQuestFromSubmission(submissionData, client) {
     }
 
     // Check if the submission has been approved (has checkmark reaction)
-    if (submissionData.messageUrl) {
+    // Skip this check if called from mod approval system (indicated by approvedSubmissionData flag)
+    if (submissionData.messageUrl && !submissionData.approvedSubmissionData) {
       const isApproved = await checkSubmissionApproval(submissionData.messageUrl, client);
       if (!isApproved) {
         console.log(`[helpWantedModule]: Submission for quest ${questId} is not approved yet`);
@@ -1812,9 +1813,9 @@ async function sendQuestCompletionMessage(quest, submissionData, client) {
   try {
     // Get the town hall channel for the quest's village
     const townHallChannels = {
-      'Rudania': '651614266046152705', // Replace with actual channel IDs
-      'Inariko': '651614266046152705', // Replace with actual channel IDs  
-      'Vhintl': '651614266046152705'   // Replace with actual channel IDs
+      'Rudania': '629028823001858060', // RUDANIA_TOWNHALL
+      'Inariko': '629028490179510308', // INARIKO_TOWNHALL
+      'Vhintl': '629030018965700668'   // VHINTL_TOWNHALL
     };
 
     const channelId = townHallChannels[quest.village];
@@ -1871,17 +1872,8 @@ async function sendQuestCompletionMessage(quest, submissionData, client) {
       });
     }
 
-    // Add village image
-    const VILLAGE_IMAGES = {
-      Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
-      Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
-      Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
-    };
-    
-    const villageImage = VILLAGE_IMAGES[quest.village];
-    if (villageImage) {
-      completionEmbed.setImage(villageImage);
-    }
+    // Add border image
+    completionEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
     await channel.send({ embeds: [completionEmbed] });
     console.log(`[helpWantedModule]: ✅ Quest completion message sent to ${quest.village} town hall`);
