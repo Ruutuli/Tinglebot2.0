@@ -966,16 +966,30 @@ async function generateDailyQuests() {
     const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     
     // Check if it's after 12pm EST - if so, don't generate art/writing quests
-    const currentHour = now.getHours();
-    const estHour = new Date(now.toLocaleString('en-US', {timeZone: 'America/New_York'})).getHours();
+    const estHour = parseInt(now.toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}));
     const isAfterNoon = estHour >= 12;
+    
+    console.log(`[helpWantedModule.js]: 🕐 Time check - Current EST hour: ${estHour}, isAfterNoon: ${isAfterNoon}`);
     
     if (isAfterNoon) {
       console.log(`[helpWantedModule.js]: ⏰ After 12pm EST (${estHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
+    } else {
+      console.log(`[helpWantedModule.js]: ✅ Before 12pm EST (${estHour}:00) - All quest types including art and writing are available`);
     }
 
     // Clean up existing documents with null questId
     await HelpWantedQuest.deleteMany({ questId: null });
+    
+    // Clean up any art or writing quests that were generated after 12pm EST
+    if (isAfterNoon) {
+      const deletedArtWriting = await HelpWantedQuest.deleteMany({ 
+        date: date, 
+        type: { $in: ['art', 'writing'] } 
+      });
+      if (deletedArtWriting.deletedCount > 0) {
+        console.log(`[helpWantedModule.js]: 🧹 Cleaned up ${deletedArtWriting.deletedCount} art/writing quest(s) that were generated after 12pm EST`);
+      }
+    }
 
     const pools = await getAllQuestPools();
 
@@ -1007,7 +1021,7 @@ async function generateDailyQuests() {
       // Assign a posting time with variable buffer from the selected times
       quest.scheduledPostTime = selectedTimes[i];
       const hour = cronToHour(quest.scheduledPostTime);
-      console.log(`[HelpWanted] Generated quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
+      console.log(`[HelpWanted] Generated ${quest.type} quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
       quests.push(quest);
     }
 
