@@ -18,7 +18,7 @@ const { generateUniqueId } = require('../utils/uniqueIdUtils');
 // ------------------- Constants -------------------
 // ============================================================================
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
-const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting'];
+const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting', 'art', 'writing'];
 
 // Generate full 24-hour schedule with hourly intervals (24 time slots per day)
 const FIXED_CRON_TIMES = [
@@ -52,7 +52,9 @@ const QUEST_TYPE_EMOJIS = {
   'item': '📦',
   'monster': '⚔️',
   'escort': '🛡️',
-  'crafting': '🔨'
+  'crafting': '🔨',
+  'art': '🎨',
+  'writing': '📝'
 };
 
 const VILLAGE_COLORS = {
@@ -71,7 +73,9 @@ const VILLAGE_IMAGES = {
 const QUEST_PARAMS = {
   item: { minAmount: 1, maxAmount: 5 },
   monster: { minAmount: 3, maxAmount: 7 },
-  crafting: { minAmount: 1, maxAmount: 3 }
+  crafting: { minAmount: 1, maxAmount: 3 },
+  art: { minAmount: 1, maxAmount: 1 },
+  writing: { minAmount: 1, maxAmount: 1 }
 };
 
 // ============================================================================
@@ -635,6 +639,84 @@ function getEscortQuestPool() {
   return getAllVillages();
 }
 
+// ------------------- Function: getArtQuestPool -------------------
+// Gets art prompts for art quests - practical NPC requests for 24-hour completion
+function getArtQuestPool() {
+  return [
+    // Real estate and housing requests
+    { prompt: 'Draw a house for sale in {village} - need to see what\'s available', requirement: 'Sketch', context: 'housing', needsVillage: true },
+    { prompt: 'Draw a room layout in {village} - looking for a new place to live', requirement: 'Line art', context: 'housing', needsVillage: true },
+    { prompt: 'Draw the {village} marketplace - need to know where to shop', requirement: 'Sketch', context: 'location', needsVillage: true },
+    { prompt: 'Draw a map of {village} - getting lost too often', requirement: 'Line art', context: 'location', needsVillage: true },
+    
+    // Mount and transportation requests
+    { prompt: 'Draw a horse for sale - looking for a new mount', requirement: 'Sketch', context: 'mount' },
+    { prompt: 'Draw a stable in {village} - need to find where to board my horse', requirement: 'Line art', context: 'mount', needsVillage: true },
+    { prompt: 'Draw a good riding path near {village} - planning a journey', requirement: 'Sketch', context: 'travel', needsVillage: true },
+    
+    // Wildlife and hunting requests
+    { prompt: 'Draw a fish native to {village} waters - want to know what to catch', requirement: 'Line art', context: 'wildlife', needsVillage: true },
+    { prompt: 'Draw the easiest monster to hunt near {village} - new to hunting', requirement: 'Sketch', context: 'hunting', needsVillage: true },
+    { prompt: 'Draw a good hunting spot near {village} - need to find game', requirement: 'Line art', context: 'hunting', needsVillage: true },
+    { prompt: 'Draw a dangerous creature near {village} - want to avoid it', requirement: 'Sketch', context: 'wildlife', needsVillage: true },
+    
+    // Job and profession requests
+    { prompt: 'Draw a good mining spot near {village} - looking for work', requirement: 'Line art', context: 'job', needsVillage: true },
+    { prompt: 'Draw a fishing spot in {village} - need to find where to fish', requirement: 'Sketch', context: 'job', needsVillage: true },
+    { prompt: 'Draw a good foraging area near {village} - collecting herbs', requirement: 'Line art', context: 'job', needsVillage: true },
+    { prompt: 'Draw a crafting workshop in {village} - need tools', requirement: 'Sketch', context: 'job', needsVillage: true },
+    
+    // Safety and navigation requests
+    { prompt: 'Draw a safe camping spot near {village} - planning to travel', requirement: 'Line art', context: 'safety', needsVillage: true },
+    { prompt: 'Draw landmarks around {village} - need to find my way back', requirement: 'Sketch', context: 'navigation', needsVillage: true },
+    { prompt: 'Draw a dangerous area near {village} - want to avoid it', requirement: 'Line art', context: 'safety', needsVillage: true },
+    
+    // Simple character and item requests
+    { prompt: 'Draw your character - need to remember what you look like', requirement: 'Sketch', context: 'character' },
+    { prompt: 'Draw a weapon you recommend - looking to buy one', requirement: 'Line art', context: 'equipment' },
+    { prompt: 'Draw a useful tool - need something for my work', requirement: 'Sketch', context: 'equipment' }
+  ];
+}
+
+// ------------------- Function: getWritingQuestPool -------------------
+// Gets writing prompts for writing quests with 500-word minimum
+function getWritingQuestPool() {
+  return [
+    // Wildlife and nature reports
+    { prompt: 'Write a detailed wildlife report about the animals and creatures native to {village} - need to know what lives here (500+ words)', context: 'wildlife', needsVillage: true },
+    { prompt: 'Write a comprehensive guide to the fish species found in {village} waters - planning to start fishing (500+ words)', context: 'fishing', needsVillage: true },
+    { prompt: 'Write about the dangerous creatures near {village} and how to avoid them - safety is important (500+ words)', context: 'safety', needsVillage: true },
+    { prompt: 'Write a detailed report on the plant life and herbs around {village} - need to know what\'s useful (500+ words)', context: 'foraging', needsVillage: true },
+    
+    // Job and profession guides
+    { prompt: 'Write a detailed guide on how hunters find their hunting grounds near {village} - want to learn hunting (500+ words)', context: 'hunting', needsVillage: true },
+    { prompt: 'Write a comprehensive mining guide for the area around {village} - looking for work as a miner (500+ words)', context: 'mining', needsVillage: true },
+    { prompt: 'Write about the best fishing techniques for {village} waters - need to improve my catch (500+ words)', context: 'fishing', needsVillage: true },
+    { prompt: 'Write a detailed guide to foraging safely around {village} - collecting herbs for medicine (500+ words)', context: 'foraging', needsVillage: true },
+    { prompt: 'Write about crafting techniques and where to find materials near {village} - want to start crafting (500+ words)', context: 'crafting', needsVillage: true },
+    
+    // Travel and navigation guides
+    { prompt: 'Write a detailed travel guide from {village} to other villages - planning a journey (500+ words)', context: 'travel', needsVillage: true },
+    { prompt: 'Write about safe camping spots and travel routes near {village} - need to know where to rest (500+ words)', context: 'travel', needsVillage: true },
+    { prompt: 'Write a comprehensive guide to the landmarks and navigation around {village} - keep getting lost (500+ words)', context: 'navigation', needsVillage: true },
+    
+    // Village information and services
+    { prompt: 'Write a detailed guide to the shops and services in {village} - new here and need to know where to go (500+ words)', context: 'village', needsVillage: true },
+    { prompt: 'Write about the housing options and neighborhoods in {village} - looking for a place to live (500+ words)', context: 'housing', needsVillage: true },
+    { prompt: 'Write a comprehensive guide to the local customs and traditions in {village} - want to fit in (500+ words)', context: 'culture', needsVillage: true },
+    
+    // Equipment and gear guides
+    { prompt: 'Write a detailed guide to choosing the right weapon for hunting near {village} - need to buy equipment (500+ words)', context: 'equipment', needsVillage: true },
+    { prompt: 'Write about the best tools and gear for mining in the {village} area - starting a new job (500+ words)', context: 'equipment', needsVillage: true },
+    { prompt: 'Write a comprehensive guide to mount care and stable services in {village} - just got a horse (500+ words)', context: 'mounts', needsVillage: true },
+    
+    // Adventure and experience reports
+    { prompt: 'Write a detailed account of your most successful hunting trip near {village} - want to learn from your experience (500+ words)', context: 'adventure', needsVillage: true },
+    { prompt: 'Write about a dangerous encounter you survived near {village} - need to know what to watch out for (500+ words)', context: 'adventure', needsVillage: true },
+    { prompt: 'Write a comprehensive guide to exploring safely around {village} - planning my first adventure (500+ words)', context: 'exploration', needsVillage: true }
+  ];
+}
+
 // ------------------- Function: getVillageShopQuestPool -------------------
 // Fetches all items from village shops for Peddler's special quests
 async function getVillageShopQuestPool() {
@@ -666,8 +748,10 @@ async function getAllQuestPools() {
     ]);
     
     const escortPool = getEscortQuestPool();
+    const artPool = getArtQuestPool();
+    const writingPool = getWritingQuestPool();
     
-    return { itemPool, monsterPool, craftingPool, escortPool, villageShopPool };
+    return { itemPool, monsterPool, craftingPool, escortPool, villageShopPool, artPool, writingPool };
   } catch (error) {
     console.error('[HelpWanted] Error fetching quest pools:', error);
     throw error;
@@ -740,6 +824,48 @@ function generateQuestRequirements(type, pools, village) {
       return { item: item.itemName, amount };
     }
     
+    case 'art': {
+      const artPrompt = getRandomElement(pools.artPool);
+      if (!artPrompt) {
+        throw new Error(`No art prompts available for ${village} art quest`);
+      }
+      
+      let finalPrompt = artPrompt.prompt;
+      
+      // Replace {village} placeholder with actual village name
+      if (artPrompt.needsVillage) {
+        finalPrompt = finalPrompt.replace('{village}', village);
+      }
+      
+      return {
+        prompt: finalPrompt,
+        requirement: artPrompt.requirement,
+        context: artPrompt.context,
+        amount: 1
+      };
+    }
+    
+    case 'writing': {
+      const writingPrompt = getRandomElement(pools.writingPool);
+      if (!writingPrompt) {
+        throw new Error(`No writing prompts available for ${village} writing quest`);
+      }
+      
+      let finalPrompt = writingPrompt.prompt;
+      
+      // Replace {village} placeholder with actual village name
+      if (writingPrompt.needsVillage) {
+        finalPrompt = finalPrompt.replace('{village}', village);
+      }
+      
+      return { 
+        prompt: finalPrompt, 
+        requirement: '500+ words',
+        context: writingPrompt.context,
+        amount: 1 
+      };
+    }
+    
     default:
       throw new Error(`Unknown quest type: ${type}`);
   }
@@ -747,9 +873,9 @@ function generateQuestRequirements(type, pools, village) {
 
 // ------------------- Function: generateQuestForVillage -------------------
 // Generates a random quest object for a given village and date
-async function generateQuestForVillage(village, date, pools, availableNPCs = null) {
+async function generateQuestForVillage(village, date, pools, availableNPCs = null, isAfterNoon = false) {
   // Validate pools
-  const requiredPools = ['itemPool', 'monsterPool', 'craftingPool', 'escortPool', 'villageShopPool'];
+  const requiredPools = ['itemPool', 'monsterPool', 'craftingPool', 'escortPool', 'villageShopPool', 'artPool', 'writingPool'];
   for (const poolName of requiredPools) {
     if (!pools[poolName] || pools[poolName].length === 0) {
       throw new Error(`No ${poolName} available for ${village} quest generation`);
@@ -785,7 +911,7 @@ async function generateQuestForVillage(village, date, pools, availableNPCs = nul
   }
   
   // ------------------- Special Peddler Quest Logic -------------------
-  // Peddler ONLY asks for item quests from village shops with full stock amounts
+  // Peddler ONLY asks for item quests from village shops with 1 item amount
   if (npcName === 'Peddler') {
     const shopItem = getRandomElement(pools.villageShopPool);
     if (!shopItem?.itemName || !shopItem?.stock) {
@@ -800,7 +926,7 @@ async function generateQuestForVillage(village, date, pools, availableNPCs = nul
       npcName: 'Peddler',
       requirements: {
         item: shopItem.itemName,
-        amount: shopItem.stock // Full stock amount for auction
+        amount: 1 // Only ask for 1 item from shop
       },
       completed: false,
       completedBy: null
@@ -808,7 +934,14 @@ async function generateQuestForVillage(village, date, pools, availableNPCs = nul
   }
   
   // ------------------- Normal Quest Generation -------------------
-  const type = getRandomElement(QUEST_TYPES);
+  // Exclude art and writing quests if it's after 12pm EST
+  let availableTypes = [...QUEST_TYPES];
+  if (isAfterNoon) {
+    availableTypes = availableTypes.filter(type => type !== 'art' && type !== 'writing');
+    console.log(`[helpWantedModule.js]: ⏰ After 12pm EST - Excluding art and writing quests. Available types: ${availableTypes.join(', ')}`);
+  }
+  
+  const type = getRandomElement(availableTypes);
   const requirements = generateQuestRequirements(type, pools, village);
   
   return {
@@ -831,6 +964,15 @@ async function generateDailyQuests() {
     const now = new Date();
     // Fix: Use toLocaleDateString to get the correct EST date
     const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    
+    // Check if it's after 12pm EST - if so, don't generate art/writing quests
+    const currentHour = now.getHours();
+    const estHour = new Date(now.toLocaleString('en-US', {timeZone: 'America/New_York'})).getHours();
+    const isAfterNoon = estHour >= 12;
+    
+    if (isAfterNoon) {
+      console.log(`[helpWantedModule.js]: ⏰ After 12pm EST (${estHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
+    }
 
     // Clean up existing documents with null questId
     await HelpWantedQuest.deleteMany({ questId: null });
@@ -854,7 +996,7 @@ async function generateDailyQuests() {
     // Generate quests sequentially to ensure unique NPCs
     for (let i = 0; i < shuffledVillages.length; i++) {
       const village = shuffledVillages[i];
-      const quest = await generateQuestForVillage(village, date, pools, availableNPCs);
+      const quest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon);
       
       // Remove the used NPC from the available pool
       const npcIndex = availableNPCs.indexOf(quest.npcName);
@@ -1090,7 +1232,9 @@ function getQuestTurnInInstructions(type) {
     item: '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1402779337270497370> when ready.',
     monster: '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1402779337270497370> to complete this quest. **Costs 1 stamina per attempt.**',
     escort: '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using </travel:1379850586987430009>, then use </helpwanted complete:1402779337270497370>.',
-    crafting: '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1402779337270497370>.'
+    crafting: '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1402779337270497370>.',
+    art: '• **Art Quest:** Create the requested artwork and submit it using </submit art:1402779337270497370> with this quest ID. **Must be submitted before midnight (EST) today.** Once approved by a moderator, the quest will be automatically completed.',
+    writing: '• **Writing Quest:** Write the requested content and submit it using </submit writing:1402779337270497370> with this quest ID. **Must be submitted before midnight (EST) today.** Once approved by a moderator, the quest will be automatically completed.'
   };
   
   return instructions[type] || '• Use </helpwanted complete:1402779337270497370> to turn in your quest.';
@@ -1214,6 +1358,7 @@ async function formatQuestsAsEmbedsByVillage() {
         const rules = '• Only natives of the village can complete this quest.\n' +
                      '• First come, first served—one completion per quest!\n' +
                      '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
+                     '• **All quests expire at midnight (EST) today!**\n' +
                      '• Complete quests to help your village prosper!';
         
         embed.addFields(
@@ -1305,6 +1450,7 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
         const rules = '• Only natives of the village can complete this quest.\n' +
                      '• First come, first served—one completion per quest!\n' +
                      '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
+                     '• **All quests expire at midnight (EST) today!**\n' +
                      '• Complete quests to help your village prosper!';
         
         embed.addFields(
@@ -1497,6 +1643,241 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
 }
 
 // ============================================================================
+// ------------------- Auto-Quest Completion -------------------
+// ============================================================================
+
+// ------------------- Function: checkAndCompleteQuestFromSubmission -------------------
+// Checks if a submission is for a Help Wanted quest and completes it if approved
+async function checkAndCompleteQuestFromSubmission(submissionData, client) {
+  try {
+    // Check if this submission has a quest ID
+    if (!submissionData.questEvent || submissionData.questEvent === 'N/A') {
+      return; // Not a quest submission
+    }
+
+    const questId = submissionData.questEvent;
+    console.log(`[helpWantedModule]: Checking quest completion for submission with quest ID: ${questId}`);
+
+    // Find the quest
+    const quest = await HelpWantedQuest.findOne({ questId });
+    if (!quest) {
+      console.log(`[helpWantedModule]: Quest ${questId} not found`);
+      return;
+    }
+
+    // Check if quest is already completed
+    if (quest.completed) {
+      console.log(`[helpWantedModule]: Quest ${questId} is already completed`);
+      return;
+    }
+
+    // Check if quest is expired
+    if (isQuestExpired(quest)) {
+      console.log(`[helpWantedModule]: Quest ${questId} is expired`);
+      return;
+    }
+
+    // Check if submission type matches quest type
+    const submissionType = submissionData.category; // 'art' or 'writing'
+    if (submissionType !== quest.type) {
+      console.log(`[helpWantedModule]: Submission type ${submissionType} doesn't match quest type ${quest.type}`);
+      return;
+    }
+
+    // Check if the submission has been approved (has checkmark reaction)
+    if (submissionData.messageUrl) {
+      const isApproved = await checkSubmissionApproval(submissionData.messageUrl, client);
+      if (!isApproved) {
+        console.log(`[helpWantedModule]: Submission for quest ${questId} is not approved yet`);
+        return;
+      }
+    }
+
+    // Complete the quest
+    await completeQuestFromSubmission(quest, submissionData, client);
+    
+  } catch (error) {
+    console.error(`[helpWantedModule]: Error checking quest completion from submission:`, error);
+  }
+}
+
+// ------------------- Function: checkSubmissionApproval -------------------
+// Checks if a submission message has been approved with a checkmark reaction
+async function checkSubmissionApproval(messageUrl, client) {
+  try {
+    // Parse the message URL to get channel and message IDs
+    const urlMatch = messageUrl.match(/\/channels\/(\d+)\/(\d+)\/(\d+)/);
+    if (!urlMatch) {
+      return false;
+    }
+
+    const [, guildId, channelId, messageId] = urlMatch;
+    
+    // Fetch the message
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) {
+      return false;
+    }
+
+    const message = await channel.messages.fetch(messageId);
+    if (!message) {
+      return false;
+    }
+
+    // Check for checkmark emoji reactions from Tinglebot
+    const checkmarkReactions = message.reactions.cache.filter(reaction => {
+      const isCheckmark = reaction.emoji.name === '✅' || 
+                         reaction.emoji.name === '☑️' || 
+                         reaction.emoji.name === '✔️' ||
+                         reaction.emoji.id === '854499720797618207'; // Custom checkmark emoji ID if exists
+      
+      return isCheckmark && reaction.users.cache.has(client.user.id);
+    });
+
+    return checkmarkReactions.size > 0;
+  } catch (error) {
+    console.error(`[helpWantedModule]: Error checking submission approval:`, error);
+    return false;
+  }
+}
+
+// ------------------- Function: completeQuestFromSubmission -------------------
+// Completes a quest when a submission is approved
+async function completeQuestFromSubmission(quest, submissionData, client) {
+  try {
+    // Mark quest as completed
+    quest.completed = true;
+    quest.completedBy = {
+      userId: submissionData.userId,
+      characterId: null, // We don't have character info in submission data
+      timestamp: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'})
+    };
+    await quest.save();
+
+    // Update user tracking
+    const User = require('../models/UserModel');
+    const user = await User.findOne({ discordId: submissionData.userId });
+    if (user) {
+      await updateUserTracking(user, quest, submissionData.userId);
+    }
+
+    // Update quest embed
+    await updateQuestEmbed(client, quest, quest.completedBy);
+
+    // Send completion message to the original town hall channel
+    await sendQuestCompletionMessage(quest, submissionData, client);
+
+    console.log(`[helpWantedModule]: ✅ Quest ${quest.questId} completed via submission approval`);
+    
+  } catch (error) {
+    console.error(`[helpWantedModule]: Error completing quest from submission:`, error);
+  }
+}
+
+// ------------------- Function: updateUserTracking -------------------
+// Updates user tracking for quest completion (copied from helpWanted.js)
+async function updateUserTracking(user, quest, userId) {
+  const now = new Date();
+  const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+  
+  user.helpWanted.lastCompletion = today;
+  user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
+  user.helpWanted.completions.push({
+    date: today,
+    village: quest.village,
+    questType: quest.type,
+    questId: quest.questId,
+    timestamp: new Date()
+  });
+  await user.save();
+}
+
+// ------------------- Function: sendQuestCompletionMessage -------------------
+// Sends a quest completion message to the original town hall channel
+async function sendQuestCompletionMessage(quest, submissionData, client) {
+  try {
+    // Get the town hall channel for the quest's village
+    const townHallChannels = {
+      'Rudania': '651614266046152705', // Replace with actual channel IDs
+      'Inariko': '651614266046152705', // Replace with actual channel IDs  
+      'Vhintl': '651614266046152705'   // Replace with actual channel IDs
+    };
+
+    const channelId = townHallChannels[quest.village];
+    if (!channelId) {
+      console.log(`[helpWantedModule]: No town hall channel found for village ${quest.village}`);
+      return;
+    }
+
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) {
+      console.log(`[helpWantedModule]: Could not fetch town hall channel ${channelId}`);
+      return;
+    }
+
+    // Create completion embed
+    const { EmbedBuilder } = require('discord.js');
+    const completionEmbed = new EmbedBuilder()
+      .setColor(0x00FF00)
+      .setTitle('✅ Quest Completed!')
+      .setDescription(`**${submissionData.username}** has successfully completed the Help Wanted quest for **${quest.village}**!`)
+      .addFields(
+        { name: '🎯 Quest Type', value: quest.type.charAt(0).toUpperCase() + quest.type.slice(1), inline: true },
+        { name: '🏘️ Village', value: quest.village, inline: true },
+        { name: '👤 Requested By', value: quest.npcName || 'Unknown NPC', inline: true },
+        { name: '👤 Completed By', value: `<@${submissionData.userId}>`, inline: true },
+        { name: '🆔 Quest ID', value: quest.questId, inline: true }
+      )
+      .setFooter({ text: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}) })
+      .setTimestamp();
+
+    // Add quest-specific details
+    let questDetails = '';
+    switch (quest.type) {
+      case 'art':
+        questDetails = `**Created:** ${quest.requirements.prompt}\n**Requirement:** ${quest.requirements.requirement}`;
+        break;
+      case 'writing':
+        questDetails = `**Written:** ${quest.requirements.prompt}\n**Requirement:** ${quest.requirements.requirement}`;
+        break;
+      default:
+        questDetails = 'Quest completed successfully!';
+    }
+
+    if (questDetails) {
+      completionEmbed.addFields({ name: '📋 Quest Details', value: questDetails, inline: false });
+    }
+
+    // Add submission link
+    if (submissionData.messageUrl) {
+      completionEmbed.addFields({ 
+        name: '🔗 View Submission', 
+        value: `[Click Here](${submissionData.messageUrl})`, 
+        inline: false 
+      });
+    }
+
+    // Add village image
+    const VILLAGE_IMAGES = {
+      Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
+      Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
+      Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
+    };
+    
+    const villageImage = VILLAGE_IMAGES[quest.village];
+    if (villageImage) {
+      completionEmbed.setImage(villageImage);
+    }
+
+    await channel.send({ embeds: [completionEmbed] });
+    console.log(`[helpWantedModule]: ✅ Quest completion message sent to ${quest.village} town hall`);
+    
+  } catch (error) {
+    console.error(`[helpWantedModule]: Error sending quest completion message:`, error);
+  }
+}
+
+// ============================================================================
 // ------------------- Module Exports -------------------
 // ============================================================================
 module.exports = {
@@ -1508,6 +1889,8 @@ module.exports = {
   getCraftingQuestPool,
   getEscortQuestPool,
   getVillageShopQuestPool,
+  getArtQuestPool,
+  getWritingQuestPool,
   getAllQuestPools,
   VILLAGES,
   QUEST_TYPES,
@@ -1520,5 +1903,6 @@ module.exports = {
   getQuestsForScheduledTime,
   getCurrentQuestSchedule,
   updateQuestEmbed,
-  isQuestExpired
+  isQuestExpired,
+  checkAndCompleteQuestFromSubmission
 }; 

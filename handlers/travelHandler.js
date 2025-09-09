@@ -233,6 +233,7 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
     if (character.currentStamina >= 1 || hasPerk(character, 'DELIVERING')) {
       if (!hasPerk(character, 'DELIVERING')) {
         await useStamina(character._id, 1);
+        // Update character object to reflect the stamina change
         character.currentStamina -= 1;
       }
       await recoverHearts(character._id, 1);
@@ -312,6 +313,7 @@ async function handleGather(interaction, character, currentPath, encounterMessag
 
       if (!hasPerk(character, 'DELIVERING')) {
         await useStamina(character._id, 1);
+        // Update character object to reflect the stamina change
         character.currentStamina = Math.max(0, character.currentStamina - 1);
         outcomeMessage += ' (-1 🟩 stamina)';
       }        
@@ -521,6 +523,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         // success
         if (!hasPerk(character, 'DELIVERING')) {
           await useStamina(character._id, 1);
+          // Update character object to reflect the stamina change
           character.currentStamina = Math.max(0, character.currentStamina - 1);
         }
         
@@ -534,6 +537,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
         if (!hasPerk(character, 'DELIVERING')) {
           await useStamina(character._id, 1);
+          // Update character object to reflect the stamina change
           character.currentStamina = Math.max(0, character.currentStamina - 1);
         }
 
@@ -561,6 +565,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         // no attack
         if (!hasPerk(character, 'DELIVERING')) {
           await useStamina(character._id, 1);
+          // Update character object to reflect the stamina change
           character.currentStamina = Math.max(0, character.currentStamina - 1);
         }
         

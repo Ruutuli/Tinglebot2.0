@@ -32,7 +32,7 @@ const HelpWantedQuestSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['item', 'monster', 'escort', 'crafting']
+    enum: ['item', 'monster', 'escort', 'crafting', 'art', 'writing']
   },
   npcName: {
     type: String,
