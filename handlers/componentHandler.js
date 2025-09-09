@@ -1506,10 +1506,32 @@ async function handleMinigameJoin(interaction) {
     
     await session.save();
     
-    await interaction.reply({
-      content: `🎮 **${username}** joined the game!`,
-      flags: 64
-    });
+    // Check if we have 6 players and should auto-start
+    if (session.players.length === 6 && session.status === 'waiting') {
+      console.log(`[MINIGAME] Auto-starting game with 6 players for session ${session.sessionId}`);
+      
+      // Auto-start the game
+      const { spawnAliens } = require('../modules/minigameModule');
+      const playerCount = session.gameData.turnOrder.length || session.players.length;
+      const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
+      
+      // Update session status
+      session.gameData.currentRound = 1;
+      session.status = 'active';
+      
+      session.markModified('gameData');
+      await session.save();
+      
+      await interaction.reply({
+        content: `🎮 **${username}** joined the game!\n\n**🎮 Game Auto-Started with 6 players!** ${spawnResult.message}`,
+        flags: 64
+      });
+    } else {
+      await interaction.reply({
+        content: `🎮 **${username}** joined the game!`,
+        flags: 64
+      });
+    }
     
   } catch (error) {
     handleError(error, 'componentHandler.js', {

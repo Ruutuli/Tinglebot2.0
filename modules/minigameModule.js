@@ -513,6 +513,19 @@ function checkAlienDefenseGameEnd(gameData) {
     };
   }
   
+  // Game ends early if all aliens are defeated in rounds 7 or 8
+  if ((gameData.currentRound === 7 || gameData.currentRound === 8) && activeAliens.length === 0) {
+    const animalsSaved = gameData.villageAnimals;
+    const totalAnimals = GAME_CONFIGS.theycame.startingAnimals;
+    const percentage = Math.round((animalsSaved / totalAnimals) * 100);
+    
+    return {
+      gameEnded: true,
+      finalScore: animalsSaved,
+      message: `🏆 **Victory!** All aliens defeated in round ${gameData.currentRound}! Village saved ${animalsSaved}/${totalAnimals} animals (${percentage}%)!`
+    };
+  }
+  
   // Game ends when all rounds are complete (round 8 finished)
   if (gameData.currentRound > gameData.maxRounds) {
     // Any remaining aliens steal animals at the end of round 8
