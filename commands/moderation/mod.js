@@ -4030,7 +4030,10 @@ async function handleTheyCame(interaction, action, sessionId, questId) {
             content: '❌ Session ID is required for start action.'
           });
         }
-        return await handleTheyCameStart(interaction, sessionId);
+        // Extract session ID from autocomplete format if needed
+        const sessionIdMatch = sessionId.match(/A\d+/);
+        const cleanSessionId = sessionIdMatch ? sessionIdMatch[0] : sessionId;
+        return await handleTheyCameStart(interaction, cleanSessionId);
         
       case 'advance':
         if (!sessionId) {
@@ -4038,7 +4041,10 @@ async function handleTheyCame(interaction, action, sessionId, questId) {
             content: '❌ Session ID is required for advance action.'
           });
         }
-        return await handleTheyCameAdvance(interaction, sessionId);
+        // Extract session ID from autocomplete format if needed
+        const advanceSessionIdMatch = sessionId.match(/A\d+/);
+        const cleanAdvanceSessionId = advanceSessionIdMatch ? advanceSessionIdMatch[0] : sessionId;
+        return await handleTheyCameAdvance(interaction, cleanAdvanceSessionId);
         
       case 'end':
         if (!sessionId) {
@@ -4046,7 +4052,10 @@ async function handleTheyCame(interaction, action, sessionId, questId) {
             content: '❌ Session ID is required for end action.'
           });
         }
-        return await handleTheyCameEnd(interaction, sessionId);
+        // Extract session ID from autocomplete format if needed
+        const endSessionIdMatch = sessionId.match(/A\d+/);
+        const cleanEndSessionId = endSessionIdMatch ? endSessionIdMatch[0] : sessionId;
+        return await handleTheyCameEnd(interaction, cleanEndSessionId);
         
       default:
         return interaction.editReply({
@@ -4064,16 +4073,16 @@ async function handleTheyCame(interaction, action, sessionId, questId) {
 }
 
 async function handleTheyCameStart(interaction, sessionId) {
-  // Find the specific session
+  // Find the specific session - allow both waiting and active sessions
   const session = await Minigame.findOne({
     sessionId: sessionId,
     gameType: 'theycame',
-    status: 'waiting'
+    status: { $in: ['waiting', 'active'] }
   });
   
   if (!session) {
     return interaction.editReply({
-      content: '❌ Game session not found, expired, or already started.'
+      content: '❌ Game session not found, expired, or already finished.'
     });
   }
   
@@ -4084,28 +4093,67 @@ async function handleTheyCameStart(interaction, sessionId) {
     });
   }
   
-  // Start the game by spawning initial aliens
-  const playerCount = session.gameData.turnOrder.length || session.players.length;
-  const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
-  
-  // Update session status
-  session.gameData.currentRound = 1;
-  session.status = 'active';
-  
-  session.markModified('gameData');
-  await session.save();
-  
-  // Create start embed
-  const embedResult = await createMinigameEmbed(session, 'Game Started!');
-  const replyOptions = {
-    content: `🎮 **Game Started!** ${spawnResult.message}`,
-    embeds: [embedResult.embed]
-  };
-  if (embedResult.attachment) {
-    replyOptions.files = [embedResult.attachment];
+  // Handle different session states
+  if (session.status === 'waiting') {
+    // Starting a new game - spawn initial aliens
+    const playerCount = session.gameData.turnOrder.length || session.players.length;
+    const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
+    
+    // Update session status
+    session.gameData.currentRound = 1;
+    session.status = 'active';
+    
+    session.markModified('gameData');
+    await session.save();
+    
+    // Create start embed
+    const embedResult = await createMinigameEmbed(session, 'Game Started!');
+    const replyOptions = {
+      content: `🎮 **Game Started!** ${spawnResult.message}`,
+      embeds: [embedResult.embed]
+    };
+    if (embedResult.attachment) {
+      replyOptions.files = [embedResult.attachment];
+    }
+    
+    return interaction.editReply(replyOptions);
+  } else if (session.status === 'active') {
+    // Game is already active - this might be a round advancement issue
+    // Check if we need to spawn more aliens for the current round
+    const activeAliens = session.gameData.aliens.filter(a => !a.defeated);
+    
+    if (activeAliens.length === 0 && session.gameData.currentRound <= session.gameData.maxRounds) {
+      // No active aliens but game should continue - spawn for current round
+      const playerCount = session.gameData.turnOrder.length || session.players.length;
+      const spawnResult = spawnAliens(session.gameData, playerCount, session.gameData.currentRound);
+      
+      session.markModified('gameData');
+      await session.save();
+      
+      const embedResult = await createMinigameEmbed(session, 'Round Advanced!');
+      const replyOptions = {
+        content: `🎮 **Round Advanced!** ${spawnResult.message}`,
+        embeds: [embedResult.embed]
+      };
+      if (embedResult.attachment) {
+        replyOptions.files = [embedResult.attachment];
+      }
+      
+      return interaction.editReply(replyOptions);
+    } else {
+      // Game is active and has aliens - just show current status
+      const embedResult = await createMinigameEmbed(session, 'Game Status');
+      const replyOptions = {
+        content: `🎮 **Game is already active!** Current round: ${session.gameData.currentRound}`,
+        embeds: [embedResult.embed]
+      };
+      if (embedResult.attachment) {
+        replyOptions.files = [embedResult.attachment];
+      }
+      
+      return interaction.editReply(replyOptions);
+    }
   }
-  
-  return interaction.editReply(replyOptions);
 }
 
 async function handleTheyCameAdvance(interaction, sessionId) {

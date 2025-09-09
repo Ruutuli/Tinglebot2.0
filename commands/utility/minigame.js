@@ -824,12 +824,27 @@ module.exports = {
     let alienThreatText = `**Outer Ring:** ${status.ringStatus.outerRing} aliens\n**Middle Ring:** ${status.ringStatus.middleRing} aliens\n**Inner Ring:** ${status.ringStatus.innerRing} aliens`;
     
     if (alienPositions.length > 0) {
-      const positionText = alienPositions.map(alien => {
-        const ringNames = ['Outer', 'Middle', 'Inner'];
-        const ringName = ringNames[alien.ring - 1] || 'Unknown';
-        return `• **${alien.id}** (${ringName} Ring)`;
-      }).join('\n');
-      alienThreatText += `\n\n**Active Aliens:**\n${positionText}`;
+      // Group aliens by ring
+      const aliensByRing = {
+        outer: alienPositions.filter(alien => alien.ring === 1).map(alien => alien.id),
+        middle: alienPositions.filter(alien => alien.ring === 2).map(alien => alien.id),
+        inner: alienPositions.filter(alien => alien.ring === 3).map(alien => alien.id)
+      };
+      
+      const positionText = [];
+      if (aliensByRing.outer.length > 0) {
+        positionText.push(`**Outer Ring:** ${aliensByRing.outer.join(', ')}`);
+      }
+      if (aliensByRing.middle.length > 0) {
+        positionText.push(`**Middle Ring:** ${aliensByRing.middle.join(', ')}`);
+      }
+      if (aliensByRing.inner.length > 0) {
+        positionText.push(`**Inner Ring:** ${aliensByRing.inner.join(', ')}`);
+      }
+      
+      if (positionText.length > 0) {
+        alienThreatText += `\n\n**Active Aliens:**\n${positionText.join('\n')}`;
+      }
     } else {
       alienThreatText += `\n\n*No active aliens on the field*`;
     }
