@@ -611,9 +611,9 @@ const NPC_QUEST_FLAVOR = {
       "Hank's been teaching villagers about herb identification and needs a visual aid showing **{prompt}** ({requirement}) for his lessons."
     ],
     writing: [
-      "Hank is documenting his herbal knowledge and needs a detailed account of **{prompt}** ({requirement}) to preserve this wisdom for future generations.",
-      "The herbalist wants to create a guide for treating common ailments and needs documentation about **{prompt}** ({requirement}) to help other healers.",
-      "Hank's been researching new medicinal applications and needs a written record of **{prompt}** ({requirement}) for his studies."
+      "Hank is documenting his herbal knowledge and needs **{prompt}** ({requirement}) to preserve this wisdom for future generations.",
+      "The herbalist wants to create a guide for treating common ailments and needs **{prompt}** ({requirement}) to help other healers.",
+      "Hank's been researching new medicinal applications and needs **{prompt}** ({requirement}) for his studies."
     ]
   },
   'Sue': {
@@ -643,9 +643,9 @@ const NPC_QUEST_FLAVOR = {
       "Sue's been teaching fishing techniques and needs a visual reference showing **{prompt}** ({requirement}) for her students."
     ],
     writing: [
-      "Sue is writing a guide to river fishing and needs a detailed account of **{prompt}** ({requirement}) to help other fishermen.",
-      "The Zora fisherman wants to document the river's ecosystem and needs a written record of **{prompt}** ({requirement}) for her research.",
-      "Sue's been studying fish behavior and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
+      "Sue is writing a guide to river fishing and needs **{prompt}** ({requirement}) to help other fishermen.",
+      "The Zora fisherman wants to document the river's ecosystem and needs **{prompt}** ({requirement}) for her research.",
+      "Sue's been studying fish behavior and needs **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Lukan': {
@@ -675,9 +675,9 @@ const NPC_QUEST_FLAVOR = {
       "Lukan's been teaching farming techniques and needs a visual reference showing **{prompt}** ({requirement}) for her students."
     ],
     writing: [
-      "Lukan is writing a comprehensive guide to orchard management and needs a detailed account of **{prompt}** ({requirement}) to help other farmers.",
-      "The Gerudo orchard keeper wants to document her farming methods and needs a written record of **{prompt}** ({requirement}) for her research.",
-      "Lukan's been studying fruit cultivation and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
+      "Lukan is writing a comprehensive guide to orchard management and needs **{prompt}** ({requirement}) to help other farmers.",
+      "The Gerudo orchard keeper wants to document her farming methods and needs **{prompt}** ({requirement}) for her research.",
+      "Lukan's been studying fruit cultivation and needs **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Myti': {
@@ -707,9 +707,9 @@ const NPC_QUEST_FLAVOR = {
       "Myti's been teaching cave exploration and needs a visual reference showing **{prompt}** ({requirement}) for his students."
     ],
     writing: [
-      "Myti is writing a guide to underground exploration and needs a detailed account of **{prompt}** ({requirement}) to help other scouts.",
-      "The Mogma scout wants to document his cave discoveries and needs a written record of **{prompt}** ({requirement}) for his research.",
-      "Myti's been studying underground ecosystems and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
+      "Myti is writing a guide to underground exploration and needs **{prompt}** ({requirement}) to help other scouts.",
+      "The Mogma scout wants to document his cave discoveries and needs **{prompt}** ({requirement}) for his research.",
+      "Myti's been studying underground ecosystems and needs **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Cree': {
@@ -739,9 +739,9 @@ const NPC_QUEST_FLAVOR = {
       "Cree's been teaching hunting techniques and needs a visual reference showing **{prompt}** ({requirement}) for his students."
     ],
     writing: [
-      "Cree is writing a guide to monster hunting and needs a detailed account of **{prompt}** ({requirement}) to help other hunters.",
-      "The Rito Monster Hunter wants to document his hunting methods and needs a written record of **{prompt}** ({requirement}) for his research.",
-      "Cree's been studying monster behavior and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
+      "Cree is writing a guide to monster hunting and needs **{prompt}** ({requirement}) to help other hunters.",
+      "The Rito Monster Hunter wants to document his hunting methods and needs **{prompt}** ({requirement}) for his research.",
+      "Cree's been studying monster behavior and needs **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Cece': {
@@ -771,9 +771,9 @@ const NPC_QUEST_FLAVOR = {
       "Cece's been teaching foraging techniques and needs a visual reference showing **{prompt}** ({requirement}) for her students."
     ],
     writing: [
-      "Cece is writing a guide to mushroom foraging and needs a detailed account of **{prompt}** ({requirement}) to help other foragers.",
-      "The Mixed Mushroom Forager wants to document her foraging methods and needs a written record of **{prompt}** ({requirement}) for her research.",
-      "Cece's been studying forest ecosystems and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
+      "Cece is writing a guide to mushroom foraging and needs **{prompt}** ({requirement}) to help other foragers.",
+      "The Mixed Mushroom Forager wants to document her foraging methods and needs **{prompt}** ({requirement}) for her research.",
+      "Cece's been studying forest ecosystems and needs **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Walton': {
@@ -803,9 +803,9 @@ const NPC_QUEST_FLAVOR = {
       "Walton's been teaching tree care and needs a visual reference showing **{prompt}** ({requirement}) for his students."
     ],
     writing: [
-      "Walton is writing a guide to forest care and needs a detailed account of **{prompt}** ({requirement}) to help other Koroks.",
-      "The Korok wants to document his tree care methods and needs a written record of **{prompt}** ({requirement}) for his research.",
-      "Walton's been studying forest ecosystems and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
+      "Walton is writing a guide to forest care and needs **{prompt}** ({requirement}) to help other Koroks.",
+      "The Korok wants to document his tree care methods and needs **{prompt}** ({requirement}) for his research.",
+      "Walton's been studying forest ecosystems and needs **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Jengo': {
@@ -835,9 +835,9 @@ const NPC_QUEST_FLAVOR = {
       "Jengo's been teaching mining techniques and needs a visual reference showing **{prompt}** ({requirement}) for his students."
     ],
     writing: [
-      "Jengo is writing a guide to safe mining practices and needs a detailed account of **{prompt}** ({requirement}) to help other miners.",
-      "The Goron Miner wants to document his mining methods and needs a written record of **{prompt}** ({requirement}) for his research.",
-      "Jengo's been studying underground geology and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
+      "Jengo is writing a guide to safe mining practices and needs **{prompt}** ({requirement}) to help other miners.",
+      "The Goron Miner wants to document his mining methods and needs **{prompt}** ({requirement}) for his research.",
+      "Jengo's been studying underground geology and needs **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Jasz': {
@@ -867,9 +867,9 @@ const NPC_QUEST_FLAVOR = {
       "Jasz's been teaching night hunting techniques and needs a visual reference showing **{prompt}** ({requirement}) for his students."
     ],
     writing: [
-      "Jasz is writing a guide to nocturnal hunting and needs a detailed account of **{prompt}** ({requirement}) to help other night hunters.",
-      "The Nocturnal Twili Hunter wants to document his hunting methods and needs a written record of **{prompt}** ({requirement}) for his research.",
-      "Jasz's been studying nocturnal wildlife and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
+      "Jasz is writing a guide to nocturnal hunting and needs **{prompt}** ({requirement}) to help other night hunters.",
+      "The Nocturnal Twili Hunter wants to document his hunting methods and needs **{prompt}** ({requirement}) for his research.",
+      "Jasz's been studying nocturnal wildlife and needs **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Lecia': {
@@ -899,9 +899,9 @@ const NPC_QUEST_FLAVOR = {
       "Lecia's been teaching ancient history and needs a visual reference showing **{prompt}** ({requirement}) for her students."
     ],
     writing: [
-      "Lecia is writing a guide to archaeological research and needs a detailed account of **{prompt}** ({requirement}) to help other scholars.",
-      "The Sheikah Scholar wants to document her research methods and needs a written record of **{prompt}** ({requirement}) for her studies.",
-      "Lecia's been studying ancient civilizations and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
+      "Lecia is writing a guide to archaeological research and needs **{prompt}** ({requirement}) to help other scholars.",
+      "The Sheikah Scholar wants to document her research methods and needs **{prompt}** ({requirement}) for her studies.",
+      "Lecia's been studying ancient civilizations and needs **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Tye': {
@@ -931,9 +931,9 @@ const NPC_QUEST_FLAVOR = {
       "Tye's been teaching plant cultivation and needs a visual reference showing **{prompt}** ({requirement}) for her students."
     ],
     writing: [
-      "Tye is writing a guide to botanical research and needs a detailed account of **{prompt}** ({requirement}) to help other botanists.",
-      "The Kokiri Botanist wants to document her research methods and needs a written record of **{prompt}** ({requirement}) for her studies.",
-      "Tye's been studying plant ecosystems and needs documentation about **{prompt}** ({requirement}) to share her knowledge."
+      "Tye is writing a guide to botanical research and needs **{prompt}** ({requirement}) to help other botanists.",
+      "The Kokiri Botanist wants to document her research methods and needs **{prompt}** ({requirement}) for her studies.",
+      "Tye's been studying plant ecosystems and needs **{prompt}** ({requirement}) to share her knowledge."
     ]
   },
   'Lil Tim': {
@@ -963,9 +963,9 @@ const NPC_QUEST_FLAVOR = {
       "Lil Tim's been teaching bird care and needs a visual reference showing **{prompt}** ({requirement}) for his students."
     ],
     writing: [
-      "Lil Tim is writing a guide to bird care and needs a detailed account of **{prompt}** ({requirement}) to help other bird keepers.",
-      "The Cucco wants to document his bird care methods and needs a written record of **{prompt}** ({requirement}) for his research.",
-      "Lil Tim's been studying bird behavior and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
+      "Lil Tim is writing a guide to bird care and needs **{prompt}** ({requirement}) to help other bird keepers.",
+      "The Cucco wants to document his bird care methods and needs **{prompt}** ({requirement}) for his research.",
+      "Lil Tim's been studying bird behavior and needs **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Zone': {
@@ -995,9 +995,9 @@ const NPC_QUEST_FLAVOR = {
       "Zone's been teaching weapon crafting and needs a visual reference showing **{prompt}** ({requirement}) for his students."
     ],
     writing: [
-      "Zone is writing a guide to weapon crafting and needs a detailed account of **{prompt}** ({requirement}) to help other smiths.",
-      "The Keaton Weapons Dealer wants to document his crafting methods and needs a written record of **{prompt}** ({requirement}) for his research.",
-      "Zone's been studying weapon design and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
+      "Zone is writing a guide to weapon crafting and needs **{prompt}** ({requirement}) to help other smiths.",
+      "The Keaton Weapons Dealer wants to document his crafting methods and needs **{prompt}** ({requirement}) for his research.",
+      "Zone's been studying weapon design and needs **{prompt}** ({requirement}) to share his knowledge."
     ]
   },
   'Peddler': {
@@ -1027,9 +1027,9 @@ const NPC_QUEST_FLAVOR = {
       "Peddler's been teaching auction techniques and needs a visual reference showing **{prompt}** ({requirement}) for his students."
     ],
     writing: [
-      "Peddler is writing a guide to auctioneering and needs a detailed account of **{prompt}** ({requirement}) to help other auctioneers.",
-      "The Hylian Auctioneer wants to document his auction methods and needs a written record of **{prompt}** ({requirement}) for his research.",
-      "Peddler's been studying market trends and needs documentation about **{prompt}** ({requirement}) to share his knowledge."
+      "Peddler is writing a guide to auctioneering and needs **{prompt}** ({requirement}) to help other auctioneers.",
+      "The Hylian Auctioneer wants to document his auction methods and needs **{prompt}** ({requirement}) for his research.",
+      "Peddler's been studying market trends and needs **{prompt}** ({requirement}) to share his knowledge."
     ]
   }
 };
