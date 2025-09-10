@@ -644,37 +644,37 @@ function getEscortQuestPool() {
 function getArtQuestPool() {
   return [
     // Real estate and housing requests
-    { prompt: 'Draw a house for sale in {village} - need to see what\'s available', requirement: 'Sketch', context: 'housing', needsVillage: true },
-    { prompt: 'Draw a room layout in {village} - looking for a new place to live', requirement: 'Line art', context: 'housing', needsVillage: true },
-    { prompt: 'Draw the {village} marketplace - need to know where to shop', requirement: 'Sketch', context: 'location', needsVillage: true },
-    { prompt: 'Draw a map of {village} - getting lost too often', requirement: 'Line art', context: 'location', needsVillage: true },
+    { prompt: 'a house for sale in {village} to see what\'s available', requirement: 'Sketch', context: 'housing', needsVillage: true },
+    { prompt: 'a room layout in {village} for someone looking for a new place to live', requirement: 'Line art', context: 'housing', needsVillage: true },
+    { prompt: 'the {village} marketplace to help people know where to shop', requirement: 'Sketch', context: 'location', needsVillage: true },
+    { prompt: 'a map of {village} to help people navigate the area', requirement: 'Line art', context: 'location', needsVillage: true },
     
     // Mount and transportation requests
-    { prompt: 'Draw a horse for sale - looking for a new mount', requirement: 'Sketch', context: 'mount' },
-    { prompt: 'Draw a stable in {village} - need to find where to board my horse', requirement: 'Line art', context: 'mount', needsVillage: true },
-    { prompt: 'Draw a good riding path near {village} - planning a journey', requirement: 'Sketch', context: 'travel', needsVillage: true },
+    { prompt: 'a horse for sale to help someone find a new mount', requirement: 'Sketch', context: 'mount' },
+    { prompt: 'a stable in {village} to help people find where to board their horses', requirement: 'Line art', context: 'mount', needsVillage: true },
+    { prompt: 'a good riding path near {village} for travelers planning a journey', requirement: 'Sketch', context: 'travel', needsVillage: true },
     
     // Wildlife and hunting requests
-    { prompt: 'Draw a fish native to {village} waters - want to know what to catch', requirement: 'Line art', context: 'wildlife', needsVillage: true },
-    { prompt: 'Draw the easiest monster to hunt near {village} - new to hunting', requirement: 'Sketch', context: 'hunting', needsVillage: true },
-    { prompt: 'Draw a good hunting spot near {village} - need to find game', requirement: 'Line art', context: 'hunting', needsVillage: true },
-    { prompt: 'Draw a dangerous creature near {village} - want to avoid it', requirement: 'Sketch', context: 'wildlife', needsVillage: true },
+    { prompt: 'a fish native to {village} waters to help people know what to catch', requirement: 'Line art', context: 'wildlife', needsVillage: true },
+    { prompt: 'the easiest monster to hunt near {village} for new hunters', requirement: 'Sketch', context: 'hunting', needsVillage: true },
+    { prompt: 'a good hunting spot near {village} to help people find game', requirement: 'Line art', context: 'hunting', needsVillage: true },
+    { prompt: 'a dangerous creature near {village} to help people avoid it', requirement: 'Sketch', context: 'wildlife', needsVillage: true },
     
     // Job and profession requests
-    { prompt: 'Draw a good mining spot near {village} - looking for work', requirement: 'Line art', context: 'job', needsVillage: true },
-    { prompt: 'Draw a fishing spot in {village} - need to find where to fish', requirement: 'Sketch', context: 'job', needsVillage: true },
-    { prompt: 'Draw a good foraging area near {village} - collecting herbs', requirement: 'Line art', context: 'job', needsVillage: true },
-    { prompt: 'Draw a crafting workshop in {village} - need tools', requirement: 'Sketch', context: 'job', needsVillage: true },
+    { prompt: 'a good mining spot near {village} to help people find work', requirement: 'Line art', context: 'job', needsVillage: true },
+    { prompt: 'a fishing spot in {village} to help people find where to fish', requirement: 'Sketch', context: 'job', needsVillage: true },
+    { prompt: 'a good foraging area near {village} to help people collect herbs', requirement: 'Line art', context: 'job', needsVillage: true },
+    { prompt: 'a crafting workshop in {village} to help people find tools', requirement: 'Sketch', context: 'job', needsVillage: true },
     
     // Safety and navigation requests
-    { prompt: 'Draw a safe camping spot near {village} - planning to travel', requirement: 'Line art', context: 'safety', needsVillage: true },
-    { prompt: 'Draw landmarks around {village} - need to find my way back', requirement: 'Sketch', context: 'navigation', needsVillage: true },
-    { prompt: 'Draw a dangerous area near {village} - want to avoid it', requirement: 'Line art', context: 'safety', needsVillage: true },
+    { prompt: 'a safe camping spot near {village} to help travelers rest', requirement: 'Line art', context: 'safety', needsVillage: true },
+    { prompt: 'landmarks around {village} to help people navigate the area', requirement: 'Sketch', context: 'navigation', needsVillage: true },
+    { prompt: 'a dangerous area near {village} to help people avoid it', requirement: 'Line art', context: 'safety', needsVillage: true },
     
     // Simple character and item requests
-    { prompt: 'Draw your character - need to remember what you look like', requirement: 'Sketch', context: 'character' },
-    { prompt: 'Draw a weapon you recommend - looking to buy one', requirement: 'Line art', context: 'equipment' },
-    { prompt: 'Draw a useful tool - need something for my work', requirement: 'Sketch', context: 'equipment' }
+    { prompt: 'your character to help people remember what you look like', requirement: 'Sketch', context: 'character' },
+    { prompt: 'a weapon you recommend to help people choose what to buy', requirement: 'Line art', context: 'equipment' },
+    { prompt: 'a useful tool to help people with their work', requirement: 'Sketch', context: 'equipment' }
   ];
 }
 
@@ -683,37 +683,37 @@ function getArtQuestPool() {
 function getWritingQuestPool() {
   return [
     // Wildlife and nature reports
-    { prompt: 'Write a detailed wildlife report about the animals and creatures native to {village} - need to know what lives here (500+ words)', context: 'wildlife', needsVillage: true },
-    { prompt: 'Write a comprehensive guide to the fish species found in {village} waters - planning to start fishing (500+ words)', context: 'fishing', needsVillage: true },
-    { prompt: 'Write about the dangerous creatures near {village} and how to avoid them - safety is important (500+ words)', context: 'safety', needsVillage: true },
-    { prompt: 'Write a detailed report on the plant life and herbs around {village} - need to know what\'s useful (500+ words)', context: 'foraging', needsVillage: true },
+    { prompt: 'a detailed wildlife report about the animals and creatures native to {village}', context: 'wildlife', needsVillage: true },
+    { prompt: 'a comprehensive guide to the fish species found in {village} waters', context: 'fishing', needsVillage: true },
+    { prompt: 'a detailed report on the dangerous creatures near {village} and how to avoid them', context: 'safety', needsVillage: true },
+    { prompt: 'a comprehensive guide to the plant life and herbs around {village}', context: 'foraging', needsVillage: true },
     
     // Job and profession guides
-    { prompt: 'Write a detailed guide on how hunters find their hunting grounds near {village} - want to learn hunting (500+ words)', context: 'hunting', needsVillage: true },
-    { prompt: 'Write a comprehensive mining guide for the area around {village} - looking for work as a miner (500+ words)', context: 'mining', needsVillage: true },
-    { prompt: 'Write about the best fishing techniques for {village} waters - need to improve my catch (500+ words)', context: 'fishing', needsVillage: true },
-    { prompt: 'Write a detailed guide to foraging safely around {village} - collecting herbs for medicine (500+ words)', context: 'foraging', needsVillage: true },
-    { prompt: 'Write about crafting techniques and where to find materials near {village} - want to start crafting (500+ words)', context: 'crafting', needsVillage: true },
+    { prompt: 'a detailed guide on how hunters find their hunting grounds near {village}', context: 'hunting', needsVillage: true },
+    { prompt: 'a comprehensive mining guide for the area around {village}', context: 'mining', needsVillage: true },
+    { prompt: 'a detailed guide to the best fishing techniques for {village} waters', context: 'fishing', needsVillage: true },
+    { prompt: 'a comprehensive guide to foraging safely around {village}', context: 'foraging', needsVillage: true },
+    { prompt: 'a detailed guide to crafting techniques and where to find materials near {village}', context: 'crafting', needsVillage: true },
     
     // Travel and navigation guides
-    { prompt: 'Write a detailed travel guide from {village} to other villages - planning a journey (500+ words)', context: 'travel', needsVillage: true },
-    { prompt: 'Write about safe camping spots and travel routes near {village} - need to know where to rest (500+ words)', context: 'travel', needsVillage: true },
-    { prompt: 'Write a comprehensive guide to the landmarks and navigation around {village} - keep getting lost (500+ words)', context: 'navigation', needsVillage: true },
+    { prompt: 'a detailed travel guide from {village} to other villages', context: 'travel', needsVillage: true },
+    { prompt: 'a comprehensive guide to safe camping spots and travel routes near {village}', context: 'travel', needsVillage: true },
+    { prompt: 'a detailed guide to the landmarks and navigation around {village}', context: 'navigation', needsVillage: true },
     
     // Village information and services
-    { prompt: 'Write a detailed guide to the shops and services in {village} - new here and need to know where to go (500+ words)', context: 'village', needsVillage: true },
-    { prompt: 'Write about the housing options and neighborhoods in {village} - looking for a place to live (500+ words)', context: 'housing', needsVillage: true },
-    { prompt: 'Write a comprehensive guide to the local customs and traditions in {village} - want to fit in (500+ words)', context: 'culture', needsVillage: true },
+    { prompt: 'a detailed guide to the shops and services in {village}', context: 'village', needsVillage: true },
+    { prompt: 'a comprehensive guide to the housing options and neighborhoods in {village}', context: 'housing', needsVillage: true },
+    { prompt: 'a detailed guide to the local customs and traditions in {village}', context: 'culture', needsVillage: true },
     
     // Equipment and gear guides
-    { prompt: 'Write a detailed guide to choosing the right weapon for hunting near {village} - need to buy equipment (500+ words)', context: 'equipment', needsVillage: true },
-    { prompt: 'Write about the best tools and gear for mining in the {village} area - starting a new job (500+ words)', context: 'equipment', needsVillage: true },
-    { prompt: 'Write a comprehensive guide to mount care and stable services in {village} - just got a horse (500+ words)', context: 'mounts', needsVillage: true },
+    { prompt: 'a detailed guide to choosing the right weapon for hunting near {village}', context: 'equipment', needsVillage: true },
+    { prompt: 'a comprehensive guide to the best tools and gear for mining in the {village} area', context: 'equipment', needsVillage: true },
+    { prompt: 'a detailed guide to mount care and stable services in {village}', context: 'mounts', needsVillage: true },
     
     // Adventure and experience reports
-    { prompt: 'Write a detailed account of your most successful hunting trip near {village} - want to learn from your experience (500+ words)', context: 'adventure', needsVillage: true },
-    { prompt: 'Write about a dangerous encounter you survived near {village} - need to know what to watch out for (500+ words)', context: 'adventure', needsVillage: true },
-    { prompt: 'Write a comprehensive guide to exploring safely around {village} - planning my first adventure (500+ words)', context: 'exploration', needsVillage: true }
+    { prompt: 'a detailed account of your most successful hunting trip near {village}', context: 'adventure', needsVillage: true },
+    { prompt: 'a comprehensive report on a dangerous encounter you survived near {village}', context: 'adventure', needsVillage: true },
+    { prompt: 'a detailed guide to exploring safely around {village}', context: 'exploration', needsVillage: true }
   ];
 }
 
