@@ -141,10 +141,13 @@ function validateSheetData(questData) {
         throw new Error('No quest data found');
     }
     
-    const expectedColumns = Object.keys(COLUMN_MAPPING).length;
+    // Check actual column count from the data
+    const actualColumns = questData[0] ? questData[0].length : 0;
+    console.log(`[questAnnouncements.js] 📊 Actual columns in sheet: ${actualColumns}`);
+    
     const invalidRows = questData.filter((row, index) => {
-        if (!Array.isArray(row) || row.length < expectedColumns) {
-            console.warn(`[questAnnouncements.js] ⚠️ Row ${index + 2}: Expected ${expectedColumns} columns, got ${row.length}`);
+        if (!Array.isArray(row) || row.length < actualColumns) {
+            console.warn(`[questAnnouncements.js] ⚠️ Row ${index + 2}: Expected ${actualColumns} columns, got ${row.length}`);
             return true;
         }
         return false;
@@ -159,8 +162,10 @@ function validateSheetData(questData) {
 
 // ------------------- parseQuestRow -
 function parseQuestRow(questRow) {
-    const defaults = new Array(21).fill(null);
-    const paddedRow = [...questRow, ...defaults].slice(0, 21);
+    // Use the actual column count from the sheet data
+    const maxColumns = 21; // Maximum expected columns
+    const defaults = new Array(maxColumns).fill(null);
+    const paddedRow = [...questRow, ...defaults].slice(0, maxColumns);
     
     // Parse quest type - handle combined types
     let questType = paddedRow[COLUMN_MAPPING.QUEST_TYPE] || 'General';
@@ -328,66 +333,64 @@ function formatQuestEmbed(quest) {
         .setColor(0xAA926A)
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
-    // Quest Details
+    // Essential Info - Clean and concise
     const essentialInfo = [];
-    if (quest.questType) essentialInfo.push(`**📖 Type:** ${quest.questType}`);
+    if (quest.questType) essentialInfo.push(`**Type:** ${quest.questType}`);
+    if (quest.questID) essentialInfo.push(`**ID:** \`${quest.questID}\``);
     
     if (quest.location) {
-        let locationText = `**📍 Location:** ${quest.location}`;
-        
+        let locationText = quest.location;
         if (quest.location.includes('Rudania') || quest.location.includes('Inariko') || quest.location.includes('Vhintl')) {
-            let villages = quest.location;
-            villages = villages.replace(/Rudania/g, '<:rudania:899492917452890142> Rudania');
-            villages = villages.replace(/Inariko/g, '<:inariko:899493009073274920> Inariko');
-            villages = villages.replace(/Vhintl/g, '<:vhintl:899492879205007450> Vhintl');
-            locationText = `**📍 Location:** ${villages}`;
+            locationText = quest.location
+                .replace(/Rudania/g, '<:rudania:899492917452890142> Rudania')
+                .replace(/Inariko/g, '<:inariko:899493009073274920> Inariko')
+                .replace(/Vhintl/g, '<:vhintl:899492879205007450> Vhintl');
         }
-        
-        essentialInfo.push(locationText);
+        essentialInfo.push(`**Location:** ${locationText}`);
     }
     
-    if (quest.timeLimit) essentialInfo.push(`**⏰ Duration:** ${quest.timeLimit}`);
-    if (quest.date) essentialInfo.push(`**📅 Date:** ${quest.date}`);
-    if (quest.questID) essentialInfo.push(`**🆔 Quest ID:** \`${quest.questID}\``);
+    if (quest.timeLimit) essentialInfo.push(`**Duration:** ${quest.timeLimit}`);
+    if (quest.date) essentialInfo.push(`**Date:** ${quest.date}`);
     
     if (essentialInfo.length > 0) {
         embed.addFields({ 
-            name: '__📋 Quest Details__', 
-            value: essentialInfo.join('\n'), 
+            name: '📋 Details', 
+            value: essentialInfo.join(' • '), 
             inline: false 
         });
     }
 
-    // Rewards
+    // Rewards - Simplified
     const rewards = [];
     const normalizedTokenReward = quest.getNormalizedTokenReward ? quest.getNormalizedTokenReward() : parseTokenReward(quest.tokenReward);
     if (normalizedTokenReward > 0) {
-        rewards.push(`💰 **${normalizedTokenReward}** tokens`);
+        rewards.push(`💰 **${normalizedTokenReward} tokens**`);
     }
     
-    // Handle multiple items
     if (quest.itemRewards && quest.itemRewards.length > 0) {
         for (const item of quest.itemRewards) {
-            rewards.push(`🎁 **${item.name}**${item.quantity > 1 ? ` × **${item.quantity}**` : ''}`);
+            rewards.push(`🎁 **${item.name}**${item.quantity > 1 ? ` ×${item.quantity}` : ''}`);
         }
     } else if (quest.itemReward) {
-        rewards.push(`🎁 **${quest.itemReward}**${quest.itemRewardQty ? ` × **${quest.itemRewardQty}**` : ''}`);
-    }
-    
-    if (quest.minRequirements && quest.minRequirements > 0) {
-        rewards.push(`🔑 **Min Requirements:** ${quest.minRequirements}`);
+        rewards.push(`🎁 **${quest.itemReward}**${quest.itemRewardQty ? ` ×${quest.itemRewardQty}` : ''}`);
     }
     
     if (rewards.length > 0) {
         embed.addFields({ 
-            name: '__🏆 Rewards__', 
-            value: rewards.join('\n'), 
+            name: '🏆 Rewards', 
+            value: rewards.join(' • '), 
             inline: false 
         });
     }
 
-    // Participation
+    // Participation - Key info only
     const participation = [];
+    if (quest.participantCap) {
+        participation.push(`👥 **${quest.participantCap} slots**`);
+    }
+    if (quest.postRequirement) {
+        participation.push(`💬 **${quest.postRequirement} posts**`);
+    }
     if (quest.signupDeadline && quest.signupDeadline !== 'No Deadline') {
         let formattedDate = quest.signupDeadline;
         try {
@@ -401,102 +404,75 @@ function formatQuestEmbed(quest) {
         } catch (error) {
             // Keep original format if parsing fails
         }
-        participation.push(`📅 **Signup Deadline:** ${formattedDate}`);
-    }
-    if (quest.participantCap) {
-        participation.push(`👥 **Participant Cap:** ${quest.participantCap} ⚠️`);
-    }
-    if (quest.postRequirement) {
-        participation.push(`💬 **Post Requirement:** ${quest.postRequirement} posts`);
-    }
-    if (quest.questType && quest.questType.toLowerCase() === 'interactive' && quest.tableRollName) {
-        const rollInfo = `🎲 **Table Roll:** ${quest.tableRollName}`;
-        const rollRequirement = quest.requiredRolls > 1 ? ` (${quest.requiredRolls} successful rolls required)` : '';
-        const criteria = quest.rollSuccessCriteria ? ` - Success: ${quest.rollSuccessCriteria}` : '';
-        participation.push(rollInfo + rollRequirement + criteria);
+        participation.push(`📅 **Signup by ${formattedDate}**`);
     }
     
     if (participation.length > 0) {
         embed.addFields({ 
-            name: '__🗓️ Participation__', 
-            value: participation.join('\n'), 
+            name: '🗓️ Participation', 
+            value: participation.join(' • '), 
             inline: false 
         });
     }
 
-    // RP Thread
-    if (quest.questType && quest.questType.toLowerCase() === 'rp' && quest.rpThreadParentChannel) {
-        const guildId = quest.guildId || 'UNKNOWN';
-        embed.addFields({ 
-            name: '__🎭 RP Thread__', 
-            value: `> 🧵 [Join the RP discussion here!](https://discord.com/channels/${guildId}/${quest.rpThreadParentChannel})`, 
-            inline: false 
-        });
-    } else if (quest.questType && quest.questType.toLowerCase() === 'rp') {
-        embed.addFields({ 
-            name: '__🎭 RP Thread__', 
-            value: `> ⚠️ RP thread will be created when quest is posted`, 
-            inline: false 
-        });
+    // Quest-specific rules - Much cleaner
+    let rulesText = '';
+    
+    if (quest.questType && quest.questType.toLowerCase() === 'rp') {
+        rulesText = '• **RP Quest**: 1-week signup window\n';
+        rulesText += '• **Village Rule**: Stay in quest village for entire duration\n';
+        rulesText += '• **Posts**: 20+ characters, meaningful content only\n';
+        if (quest.participantCap) {
+            rulesText += `• **Member-capped**: Max ${quest.participantCap} participants\n`;
+        }
+        if (quest.tableroll) {
+            rulesText += `• **Optional Table Roll**: ${quest.tableroll} table available\n`;
+        }
+    } else if (quest.questType && quest.questType.toLowerCase() === 'interactive' && quest.tableRollName) {
+        rulesText = '• **Interactive Quest**: Use table roll mechanics\n';
+        rulesText += `• **Table**: ${quest.tableRollName}\n`;
+        if (quest.requiredRolls > 1) {
+            rulesText += `• **Requirement**: ${quest.requiredRolls} successful rolls\n`;
+        }
+        if (quest.participantCap) {
+            rulesText += `• **Member-capped**: Max ${quest.participantCap} participants\n`;
+        }
+    } else if (quest.questType && quest.questType === 'Art / Writing') {
+        rulesText = '• **Art & Writing**: Submit either art OR writing\n';
+        rulesText += '• **Writing**: Minimum 500 words\n';
+        rulesText += '• **Art**: Any style accepted\n';
     }
-
-    // Quest Rules
-    let rulesText = '• Use </quest join:1389946995468271729> to participate\n';
     
     if (quest.participantCap) {
-        rulesText += `• ⚠️  Member-capped quest (max ${quest.participantCap} participants)\n`;
-        rulesText += '• 🚫 Only ONE member-capped quest per person\n';
-    }
-    if (quest.questType && quest.questType.toLowerCase() === 'rp') {
-        rulesText += '• 🎭 RP quests: 1-week signup window\n';
-        rulesText += '• 🎫 Use Quest Vouchers for guaranteed spots!\n';
-        rulesText += '• 📝 RP posts must be 20+ characters with meaningful content\n';
-        rulesText += '• ❌ Posts that DON\'T count: reactions, emojis only, "))" posts, URLs only\n';
-        if (quest.tableroll) {
-            rulesText += `• 🎲 **Optional Table Roll**: Use </tableroll roll:1389946995468271729> to roll on **${quest.tableroll}** table\n`;
-        }
-        rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
-        rulesText += '• 🏘️ **IMPORTANT**: You must stay in the quest village for the entire duration!\n';
-        rulesText += '• ⚠️ Leaving the village will disqualify you from the quest\n';
-    }
-    
-    if (quest.questType && quest.questType.toLowerCase() === 'interactive' && quest.tableRollName) {
-        rulesText += '• 🎲 Interactive quests: Use table roll mechanics\n';
-        rulesText += '• 🎫 Use Quest Vouchers for guaranteed spots!\n';
-        rulesText += `• 🎯 Roll on **${quest.tableRollName}** table to complete quest\n`;
-        if (quest.requiredRolls > 1) {
-            rulesText += `• ✅ Need ${quest.requiredRolls} successful rolls to complete\n`;
-        }
-        if (quest.rollSuccessCriteria) {
-            rulesText += `• 🎯 Success criteria: ${quest.rollSuccessCriteria}\n`;
-        }
-        rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
-    }
-    
-    if (quest.questType && quest.questType === 'Art / Writing') {
-        rulesText += '• 🎨 Art & Writing quests: Submit either art OR writing\n';
-        rulesText += '• 🎫 Use Quest Vouchers for guaranteed spots!\n';
-        rulesText += '• 📝 Writing: Minimum 500 words\n';
-        rulesText += '• 🎨 Art: Any art style accepted\n';
-        rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
+        rulesText += '• **Rule**: Only ONE member-capped quest per person\n';
     }
     
     if (quest.rules && quest.rules.trim()) {
-        rulesText += '\n';
-        rulesText += '**__📋 Additional Rules:__**\n';
-        rulesText += quest.rules;
+        rulesText += `\n**Additional Rules:**\n${quest.rules}`;
     }
     
-    embed.addFields({ 
-        name: '__📋 Quest Rules__', 
-        value: rulesText, 
-        inline: false 
-    });
+    if (rulesText) {
+        embed.addFields({ 
+            name: '📋 Rules', 
+            value: rulesText, 
+            inline: false 
+        });
+    }
 
+    // RP Thread link - Only if available
+    if (quest.questType && quest.questType.toLowerCase() === 'rp' && quest.rpThreadParentChannel) {
+        const guildId = quest.guildId || 'UNKNOWN';
+        embed.addFields({ 
+            name: '🎭 RP Thread', 
+            value: `[Join the RP discussion here!](https://discord.com/channels/${guildId}/${quest.rpThreadParentChannel})`, 
+            inline: false 
+        });
+    }
+
+    // Footer - Clean
     if (quest.questID) {
         embed.setFooter({ 
-            text: `🆔 Quest ID: ${quest.questID}`, 
-            iconURL: 'https://cdn.discordapp.com/emojis/1234567890123456789.png' 
+            text: `Quest ID: ${quest.questID} • Use /quest join to participate` 
         });
     }
 
@@ -757,13 +733,18 @@ async function createRPThread(guild, quest) {
         const rpThreadEmbed = new EmbedBuilder()
             .setColor(0xAA926A)
             .setTitle(`📜 ${quest.title} - RP Thread`)
-            .setDescription(`This is the RP thread for the quest: **${quest.title}**\n\n**Requirements**: ${quest.postRequirement || 15}-20 posts minimum, 2 paragraph maximum per post.\n\n**Note**: This quest is member-driven.`)
+            .setDescription(`**Requirements**: ${quest.postRequirement || 15}-20 posts • 2 paragraph max per post\n**Quest ID**: \`${quest.questID}\` • **Status**: Active`)
             .addFields(
-                { name: 'Quest Type', value: 'RP', inline: true },
-                { name: 'Post Requirement', value: `${quest.postRequirement || 15}-20 posts`, inline: true },
-                { name: 'Status', value: 'Active', inline: true },
-                { name: 'Quest ID', value: `\`${quest.questID}\``, inline: true },
-                { name: 'Join Quest', value: `</quest join:1389946995468271729> questid:${quest.questID} charactername:YourCharacter`, inline: false }
+                { 
+                    name: '🎭 How to Join', 
+                    value: `</quest join:1389946995468271729> questid:${quest.questID} charactername:YourCharacter`, 
+                    inline: false 
+                },
+                { 
+                    name: '📋 RP Rules', 
+                    value: '• Posts must be 20+ characters with meaningful content\n• No reactions, emojis only, or "))" posts\n• Stay in the quest village for the entire duration\n• Use `/quest postcount` to check your progress', 
+                    inline: false 
+                }
             )
             .setTimestamp();
 
@@ -856,7 +837,7 @@ async function postQuests() {
 
     console.log(`[questAnnouncements.js] 📝 Found ${unpostedQuests.length} quests to post`);
     const guild = questChannel.guild;
-    const questsToProcess = process.env.TEST_CHANNEL_ID ? unpostedQuests.slice(0, 1) : unpostedQuests;
+    const questsToProcess = unpostedQuests; // Process all quests regardless of test mode
     console.log(`[questAnnouncements.js] 🔄 Processing ${questsToProcess.length} quest(s) ${process.env.TEST_CHANNEL_ID ? '(TEST MODE)' : '(all quests)'}`);
 
     for (const [rowIndex, quest] of questsToProcess.entries()) {
@@ -923,10 +904,15 @@ async function postQuests() {
         let completedCount = 0;
         
         for (const quest of activeQuests) {
-            const completionResult = await quest.checkAutoCompletion();
-            if (completionResult.completed) {
-                completedCount++;
-                console.log(`[questAnnouncements.js] ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
+            try {
+                const completionResult = await quest.checkAutoCompletion();
+                if (completionResult.completed) {
+                    completedCount++;
+                    console.log(`[questAnnouncements.js] ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
+                }
+            } catch (questError) {
+                console.warn(`[questAnnouncements.js] ⚠️ Error processing quest "${quest.title}":`, questError.message);
+                // Continue with other quests
             }
         }
         

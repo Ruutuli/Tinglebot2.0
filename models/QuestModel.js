@@ -163,6 +163,25 @@ const questSchema = new Schema({
 
 questSchema.pre('save', function(next) {
     this.updatedAt = new Date();
+    
+    // Fix participants field if it contains primitive values
+    if (this.participants && typeof this.participants === 'object') {
+        const fixedParticipants = new Map();
+        
+        for (const [key, value] of this.participants.entries()) {
+            if (typeof value === 'string') {
+                // Skip primitive string values - they're invalid
+                console.warn(`[QuestModel] Skipping invalid participant data: ${key} = ${value}`);
+                continue;
+            } else if (typeof value === 'object' && value !== null) {
+                // Valid participant object
+                fixedParticipants.set(key, value);
+            }
+        }
+        
+        this.participants = fixedParticipants;
+    }
+    
     next();
 });
 
