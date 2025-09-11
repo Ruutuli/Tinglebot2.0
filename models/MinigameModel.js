@@ -29,6 +29,11 @@ const minigameSchema = new Schema({
     enum: ['waiting', 'active', 'finished'], 
     default: 'waiting' 
   }, // Current game status
+  village: { 
+    type: String, 
+    enum: ['rudania', 'inariko', 'vhintl'], 
+    default: 'rudania' 
+  }, // Village where the minigame takes place
   
   // ------------------- Players -------------------
   players: [{

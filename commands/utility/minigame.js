@@ -20,6 +20,7 @@ const Character = require('../../models/CharacterModel');
 const User = require('../../models/UserModel');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const { handleError } = require('../../utils/globalErrorHandler');
+const { getVillageEmojiByName } = require('../../modules/locationsModule');
 
 // ============================================================================
 // ------------------- Import minigame module -------------------
@@ -277,6 +278,43 @@ module.exports = {
       gameType: 'theycame',
       status: { $in: ['waiting', 'active'] }
     });
+    
+    // Check if character is in the correct village for this minigame
+    if (session.village && character.currentVillage !== session.village) {
+      const villageDisplayName = session.village.charAt(0).toUpperCase() + session.village.slice(1);
+      const currentVillageDisplayName = character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1);
+      const villageEmoji = getVillageEmojiByName(session.village) || '';
+      const currentVillageEmoji = getVillageEmojiByName(character.currentVillage) || '';
+      
+      const errorEmbed = new EmbedBuilder()
+        .setTitle('❌ Wrong Village Location')
+        .setDescription(`**${resolvedCharacterName}** is currently in ${currentVillageEmoji} **${currentVillageDisplayName}** but this minigame is taking place in ${villageEmoji} **${villageDisplayName}**!`)
+        .setColor(0xFF0000) // Red for error
+        .setThumbnail(character.icon)
+        .addFields(
+          {
+            name: '🚶‍♀️ How to Travel',
+            value: `Use </travel:1405184599805394944> to travel **${resolvedCharacterName}** to ${villageEmoji} **${villageDisplayName}** before joining the minigame.`,
+            inline: false
+          },
+          {
+            name: '📍 Current Location',
+            value: `${currentVillageEmoji} **${currentVillageDisplayName}**`,
+            inline: true
+          },
+          {
+            name: '🎯 Required Location',
+            value: `${villageEmoji} **${villageDisplayName}**`,
+            inline: true
+          }
+        )
+        .setFooter({ text: 'Travel to the correct village and try joining again!' })
+        .setTimestamp();
+      
+      return await interaction.editReply({
+        embeds: [errorEmbed]
+      });
+    }
     
     // Check if character already joined
     const alreadyJoined = session.players.find(p => p.characterId === character._id.toString());
@@ -742,8 +780,10 @@ module.exports = {
     // Generate overlay image with aliens
     const overlayImage = await generateAlienOverlayImage(session.gameData, session.sessionId);
     
+    const villageDisplayName = session.village ? session.village.charAt(0).toUpperCase() + session.village.slice(1) : 'Village';
+    const villageEmoji = session.village ? getVillageEmojiByName(session.village) || '' : '';
     const embed = new EmbedBuilder()
-      .setTitle(`🎮 ${character.name} joined the alien defense!`)
+      .setTitle(`🎮 ${character.name} joined the ${villageDisplayName} alien defense!`)
       .setDescription(`*Defend your village from alien invaders! Work together to protect the livestock.*`)
       .setColor(0x00ff00) // Green for join success
       .setTimestamp()
@@ -845,8 +885,10 @@ module.exports = {
     // Generate overlay image with aliens
     const overlayImage = await generateAlienOverlayImage(session.gameData, session.sessionId);
     
+    const villageDisplayName = session.village ? session.village.charAt(0).toUpperCase() + session.village.slice(1) : 'Village';
+    const villageEmoji = session.village ? getVillageEmojiByName(session.village) || '' : '';
     const embed = new EmbedBuilder()
-      .setTitle(`👽 ${gameConfig.name} - ${title}`)
+      .setTitle(`👽 ${gameConfig.name} - ${villageDisplayName} Village - ${title}`)
       .setDescription('*Defend your village from alien invaders! Work together to protect the livestock.*')
       .setColor(this.getGameStatusColor(session.status))
       .setTimestamp()
@@ -977,8 +1019,10 @@ module.exports = {
     // Generate overlay image with aliens
     const overlayImage = await generateAlienOverlayImage(session.gameData, session.sessionId);
     
+    const villageDisplayName = session.village ? session.village.charAt(0).toUpperCase() + session.village.slice(1) : 'Village';
+    const villageEmoji = session.village ? getVillageEmojiByName(session.village) || '' : '';
     const embed = new EmbedBuilder()
-      .setTitle(`👽 ${gameConfig.name} - ${title}`)
+      .setTitle(`👽 ${gameConfig.name} - ${villageDisplayName} Village - ${title}`)
       .setDescription('*Defend your village from alien invaders! Work together to protect the livestock.*')
       .setColor(this.getGameStatusColor(session.status))
       .setTimestamp()
@@ -1075,8 +1119,9 @@ module.exports = {
     // Generate overlay image with aliens (final state)
     const overlayImage = await generateAlienOverlayImage(session.gameData, session.sessionId);
     
+    const villageDisplayName = session.village ? session.village.charAt(0).toUpperCase() + session.village.slice(1) : 'Village';
     const embed = new EmbedBuilder()
-      .setTitle(`👽 ${gameConfig.name} - GAME OVER!`)
+      .setTitle(`👽 ${gameConfig.name} - ${villageDisplayName} Village - GAME OVER!`)
       .setDescription('*The alien invasion has ended! The village defense is complete.*')
       .setColor(0x00FF00) // Bright alien green color
       .setTimestamp()
