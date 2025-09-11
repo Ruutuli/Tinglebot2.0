@@ -455,12 +455,13 @@ function formatQuestEmbed(quest) {
     
     // Combine additional rules with main rules
     if (quest.rules && quest.rules.trim()) {
-        if (rulesText) {
-            rulesText += '\n';
-        }
         // Format additional rules with bullet points
         const additionalRules = quest.rules.split('\n').filter(rule => rule.trim()).map(rule => `• ${rule.trim()}`).join('\n');
-        rulesText += additionalRules;
+        if (rulesText) {
+            rulesText += '\n' + additionalRules;
+        } else {
+            rulesText = additionalRules;
+        }
     }
     
     if (rulesText) {
