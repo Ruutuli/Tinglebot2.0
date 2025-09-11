@@ -145,7 +145,8 @@ async function distributeMinigameRewards(session, animalsLost, interaction) {
     success: true,
     errors: [],
     rewardsGiven: [],
-    totalPlayers: session.players.length
+    totalPlayers: session.players.length,
+    tokensAwarded: 0
   };
   
   if (rewards.length === 0) {
@@ -191,9 +192,31 @@ async function distributeMinigameRewards(session, animalsLost, interaction) {
         }
       }
       
+      // Calculate and distribute token rewards based on submissions
+      const tokenReward = calculateMinigameTokenReward(animalsLost);
+      if (tokenReward > 0) {
+        try {
+          const User = require('../../models/UserModel');
+          const user = await User.findOne({ discordId: player.discordId });
+          if (user) {
+            user.tokens = (user.tokens || 0) + tokenReward;
+            await user.save();
+            results.tokensAwarded += tokenReward;
+            console.log(`[MINIGAME] Added ${tokenReward} tokens to ${character.name}`);
+          } else {
+            console.error(`[MINIGAME] User not found for token distribution: ${player.discordId}`);
+            results.errors.push(`User not found for token distribution: ${player.characterName}`);
+          }
+        } catch (tokenError) {
+          console.error(`[MINIGAME] Failed to add tokens to ${character.name}:`, tokenError);
+          results.errors.push(`Failed to add tokens to ${character.name}: ${tokenError.message}`);
+        }
+      }
+      
       results.rewardsGiven.push({
         characterName: character.name,
-        rewards: rewards.map(r => ({ name: r.name, quantity: r.quantity }))
+        rewards: rewards.map(r => ({ name: r.name, quantity: r.quantity })),
+        tokensAwarded: tokenReward
       });
       
     } catch (error) {
@@ -207,6 +230,42 @@ async function distributeMinigameRewards(session, animalsLost, interaction) {
   }
   
   return results;
+}
+
+// ------------------- Function: calculateMinigameTokenReward -------------------
+// Calculates token rewards based on animals lost (per_unit: 222, max: 3 submissions)
+function calculateMinigameTokenReward(animalsLost) {
+  const perUnit = 222;
+  const maxSubmissions = 3;
+  
+  // Calculate submissions based on performance
+  // Better performance = more submissions allowed
+  let submissions = 0;
+  
+  if (animalsLost === 0) {
+    // Perfect defense - all 3 submissions
+    submissions = 3;
+  } else if (animalsLost >= 1 && animalsLost <= 5) {
+    // Good defense - 2 submissions
+    submissions = 2;
+  } else if (animalsLost >= 6 && animalsLost <= 10) {
+    // Poor defense - 1 submission
+    submissions = 1;
+  } else if (animalsLost >= 11 && animalsLost <= 15) {
+    // Very poor defense - 1 submission
+    submissions = 1;
+  } else if (animalsLost >= 16 && animalsLost <= 24) {
+    // Terrible defense - 1 submission
+    submissions = 1;
+  } else if (animalsLost === 25) {
+    // Total failure - 0 submissions
+    submissions = 0;
+  }
+  
+  // Cap at maximum submissions
+  submissions = Math.min(submissions, maxSubmissions);
+  
+  return submissions * perUnit;
 }
 
 // ============================================================================
@@ -356,9 +415,9 @@ module.exports = {
       
       // Verify the character matches the quest participant
       const participant = quest.participants.get(userId);
-      if (participant.resolvedCharacterName !== resolvedCharacterName) {
+      if (participant.characterName !== resolvedCharacterName) {
         return await interaction.editReply({
-          content: `❌ You are participating in this quest with character "${participant.resolvedCharacterName}", not "${resolvedCharacterName}".`
+          content: `❌ You are participating in this quest with character "${participant.characterName}", not "${resolvedCharacterName}".`
         });
       }
     }
@@ -619,6 +678,10 @@ module.exports = {
         advanceResult = advanceAlienDefenseRound(session.gameData);
         console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
         
+        // Save the session after round advancement
+        session.markModified('gameData');
+        await session.save();
+        
         // Only proceed with round advancement logic if it was successful
         if (advanceResult.success) {
           // Check if turn order has reset to the first player (turn index 0)
@@ -629,14 +692,14 @@ module.exports = {
         }
       }
       
-      // Send turn notification if it's someone else's turn now, unless we need to delay it for new round
-      if (!shouldDelayTurnNotification) {
-        await this.sendTurnNotification(interaction, session);
-      }
-      
-      // Check if game should end
+      // Check if game should end BEFORE sending turn notifications
       const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
       if (gameEndCheck.gameEnded) {
+        // Send immediate game over message
+        await interaction.followUp({
+          content: '🏁 **Game Over! Processing...**'
+        });
+        
         session.status = 'finished';
         session.results.finalScore = gameEndCheck.finalScore;
         session.results.completedAt = new Date();
@@ -660,6 +723,11 @@ module.exports = {
         
         // Post the end-game embed as a follow-up message
         await interaction.followUp(endGameOptions);
+      } else {
+        // Send turn notification if it's someone else's turn now, unless we need to delay it for new round
+        if (!shouldDelayTurnNotification) {
+          await this.sendTurnNotification(interaction, session);
+        }
       }
       
       
@@ -673,7 +741,7 @@ module.exports = {
         await interaction.followUp({ embeds: [borderEmbed] });
         
         // Wait 5-8 seconds before posting the new round embed
-        const delay = Math.floor(Math.random() * 4) + 5; // Random delay between 5-8 seconds
+        const delay = 4; // Fixed delay of 4 seconds
         console.log(`[MINIGAME] Waiting ${delay} seconds before posting new round embed...`);
         
         setTimeout(async () => {
@@ -758,6 +826,10 @@ module.exports = {
         advanceResult = advanceAlienDefenseRound(session.gameData);
         console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
         
+        // Save the session after round advancement
+        session.markModified('gameData');
+        await session.save();
+        
         // Only proceed with round advancement logic if it was successful
         if (advanceResult.success) {
           // Check if turn order has reset to the first player (turn index 0)
@@ -768,14 +840,14 @@ module.exports = {
         }
       }
       
-      // Send turn notification if it's someone else's turn now, unless we need to delay it for new round
-      if (!shouldDelayTurnNotification) {
-        await this.sendTurnNotification(interaction, session);
-      }
-      
-      // Check if game should end
+      // Check if game should end BEFORE sending turn notifications
       const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
       if (gameEndCheck.gameEnded) {
+        // Send immediate game over message
+        await interaction.followUp({
+          content: '🏁 **Game Over! Processing...**'
+        });
+        
         session.status = 'finished';
         session.results.finalScore = gameEndCheck.finalScore;
         session.results.completedAt = new Date();
@@ -799,6 +871,11 @@ module.exports = {
         
         // Post the end-game embed as a follow-up message
         await interaction.followUp(endGameOptions);
+      } else {
+        // Send turn notification if it's someone else's turn now, unless we need to delay it for new round
+        if (!shouldDelayTurnNotification) {
+          await this.sendTurnNotification(interaction, session);
+        }
       }
       
       
@@ -812,7 +889,7 @@ module.exports = {
         await interaction.followUp({ embeds: [borderEmbed] });
         
         // Wait 5-8 seconds before posting the new round embed
-        const delay = Math.floor(Math.random() * 4) + 5; // Random delay between 5-8 seconds
+        const delay = 4; // Fixed delay of 4 seconds
         console.log(`[MINIGAME] Waiting ${delay} seconds before posting new round embed...`);
         
         setTimeout(async () => {
