@@ -31,6 +31,7 @@ const {
   handleError,
   initializeErrorHandler,
 } = require("./utils/globalErrorHandler");
+const { initializeErrorTracking } = require("./utils/errorTracking");
 const {
   createTrelloCard,
   logWishlistToTrello,
@@ -210,6 +211,7 @@ async function initializeClient() {
 
     client.once("ready", async () => {
       initializeErrorHandler(logErrorToTrello, client);
+      initializeErrorTracking(client);
     });
 
     client.once("ready", async () => {
