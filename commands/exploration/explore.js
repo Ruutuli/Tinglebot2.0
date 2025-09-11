@@ -559,7 +559,7 @@ module.exports = {
       ephemeral: true,
      });
     } catch (error) {
-     handleInteractionError(error, "explore.js");
+     handleInteractionError(error, interaction, { source: "explore.js" });
      await interaction.reply({
       content: `${characterName} has joined the expedition, but I could not update the original message.`,
       ephemeral: true,
@@ -694,7 +694,7 @@ module.exports = {
       ephemeral: false,
      });
     } catch (error) {
-     handleInteractionError(error, "explore.js");
+     handleInteractionError(error, interaction, { source: "explore.js" });
      await interaction.reply({
       content: `Expedition started, but I could not update the original message. Use \`/explore roll id:${expeditionId} charactername:<character_name>\` to begin!`,
       ephemeral: false,
@@ -836,7 +836,7 @@ module.exports = {
         "Exploration"
        );
       } catch (error) {
-       handleInteractionError(error, "explore.js");
+       handleInteractionError(error, interaction, { source: "explore.js" });
        console.error(
         `[ERROR] Could not add item to inventory: ${error.message}`
        );
@@ -1009,7 +1009,7 @@ module.exports = {
 
         await interaction.editReply({ embeds: [embed] });
        } catch (error) {
-        handleInteractionError(error, "explore.js");
+        handleInteractionError(error, interaction, { source: "explore.js" });
         console.error(`[ERROR] Raid processing failed:`, error);
         await interaction.editReply("**An error occurred during the raid.**");
        }
@@ -1148,7 +1148,7 @@ module.exports = {
       }
      }
     } catch (error) {
-     handleInteractionError(error, "explore.js");
+     handleInteractionError(error, interaction, { source: "explore.js" });
      console.error(`[Roll Command Error]`, error);
      await interaction.editReply(
       "An error occurred while processing the roll command."
