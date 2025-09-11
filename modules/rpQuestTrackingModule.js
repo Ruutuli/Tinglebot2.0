@@ -101,6 +101,21 @@ async function processValidRPPost(quest, participant, channelId) {
         participant.rpThreadId = channelId;
     }
 
+    // Check if participant now meets requirements
+    const meetsRequirements = quest.meetsRequirements(participant, quest);
+    const wasNotCompleted = participant.progress !== 'completed';
+    
+    if (meetsRequirements && wasNotCompleted) {
+        // Mark participant as completed
+        participant.progress = 'completed';
+        participant.completedAt = new Date();
+        
+        // Send notification in the RP thread
+        await sendRequirementMetNotification(quest, participant, channelId);
+        
+        console.log(`[rpQuestTracking] ✅ ${participant.characterName} has met the RP requirements (${participant.rpPostCount}/${quest.postRequirement || 15} posts)!`);
+    }
+
     // Save the quest
     await quest.save();
 
@@ -120,6 +135,44 @@ async function processValidRPPost(quest, participant, channelId) {
     }
 
     console.log(`[rpQuestTracking] 📊 Updated RP post count for ${participant.characterName}: ${participant.rpPostCount}/${quest.postRequirement || 15}`);
+}
+
+// ------------------- Send Requirement Met Notification -------------------
+async function sendRequirementMetNotification(quest, participant, channelId) {
+    try {
+        // Get the Discord client from the main index.js
+        const { client } = require('../index.js');
+        if (!client) {
+            console.log(`[rpQuestTracking] ❌ Discord client not available for notification`);
+            return;
+        }
+
+        const channel = await client.channels.fetch(channelId);
+        if (!channel) {
+            console.log(`[rpQuestTracking] ❌ Could not find channel ${channelId} for notification`);
+            return;
+        }
+
+        const { EmbedBuilder } = require('discord.js');
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF00) // Green for success
+            .setTitle('🎉 Quest Requirements Met!')
+            .setDescription(`**${participant.characterName}** has successfully met the quest requirements!`)
+            .addFields(
+                { name: 'Posts Completed', value: `${participant.rpPostCount}/${quest.postRequirement || 15}`, inline: true },
+                { name: 'Status', value: '✅ Completed', inline: true },
+                { name: 'Quest ID', value: `\`${quest.questID}\``, inline: true }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setTimestamp();
+
+        await channel.send({ embeds: [embed] });
+        console.log(`[rpQuestTracking] ✅ Sent requirement met notification for ${participant.characterName} in quest ${quest.questID}`);
+
+    } catch (error) {
+        console.error(`[rpQuestTracking] ❌ Error sending requirement met notification:`, error);
+    }
 }
 
 // ------------------- Find Quest by Thread ID -------------------
