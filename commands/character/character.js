@@ -643,7 +643,13 @@ module.exports = {
     }
    }
   } catch (error) {
-   handleError(error, "character.js");
+   handleError(error, "character.js", {
+     commandName: interaction.commandName,
+     userTag: interaction.user?.tag,
+     userId: interaction.user?.id,
+     options: interaction.options?.data,
+     subcommand: interaction.options?.getSubcommand()
+   });
    const errorMessage = "❌ An error occurred while processing your request.";
    
    try {
@@ -745,7 +751,12 @@ module.exports = {
     }
    }
   } catch (error) {
-   handleError(error, "character.js");
+   handleError(error, "character.js", {
+     commandName: interaction.commandName,
+     userTag: interaction.user?.tag,
+     userId: interaction.user?.id,
+     options: interaction.options?.data
+   });
    await interaction.respond([]);
    
   }

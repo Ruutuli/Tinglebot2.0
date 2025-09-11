@@ -123,7 +123,13 @@ module.exports = {
           });
       }
     } catch (error) {
-      handleError(error, 'inventory.js');
+      handleError(error, 'inventory.js', {
+        commandName: interaction.commandName,
+        userTag: interaction.user?.tag,
+        userId: interaction.user?.id,
+        options: interaction.options?.data,
+        subcommand: interaction.options?.getSubcommand()
+      });
       console.error('[inventory.js]: Error executing command', error);
       await interaction.reply({ 
         embeds: [new EmbedBuilder()

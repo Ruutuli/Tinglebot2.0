@@ -23,6 +23,12 @@ function initializeErrorTracking(discordClient) {
 
 // ------------------- Track Database Error -------------------
 async function trackDatabaseError(error, source = "Unknown") {
+  // Don't track errors if we're already shutting down
+  if (isShuttingDown) {
+    console.log(`[errorTracking.js]: ⚠️ Skipping error tracking - shutdown in progress`);
+    return;
+  }
+  
   const now = Date.now();
   
   // Reset counter if enough time has passed since last error
@@ -36,9 +42,11 @@ async function trackDatabaseError(error, source = "Unknown") {
   lastErrorTime = now;
   
   console.log(`[errorTracking.js]: 📊 Database error #${consecutiveDatabaseErrors} detected in ${source}`);
+  console.log(`[errorTracking.js]: 📊 Threshold: ${MAX_CONSECUTIVE_ERRORS}, Current: ${consecutiveDatabaseErrors}, ShuttingDown: ${isShuttingDown}`);
   
   // Check if we've hit the threshold
   if (consecutiveDatabaseErrors >= MAX_CONSECUTIVE_ERRORS) {
+    console.log(`[errorTracking.js]: 🚨 THRESHOLD REACHED! Calling handleCriticalErrorThreshold...`);
     await handleCriticalErrorThreshold(error, source);
   }
 }
@@ -68,8 +76,47 @@ async function handleCriticalErrorThreshold(error, source) {
   // Wait a moment for the notification to be sent
   await new Promise(resolve => setTimeout(resolve, 2000));
   
-  // Shutdown the bot
-  process.exit(1);
+  // Force shutdown the bot with exit code 1
+  console.error(`[errorTracking.js]: 🚨 FORCING BOT SHUTDOWN NOW...`);
+  
+  // Try multiple shutdown methods to ensure the process actually exits
+  try {
+    // Method 1: Immediate exit
+    console.error(`[errorTracking.js]: 🚨 Attempting immediate exit...`);
+    process.exit(1);
+  } catch (exitError) {
+    console.error(`[errorTracking.js]: ❌ process.exit(1) failed:`, exitError);
+  }
+  
+  // Method 2: Force exit after short delay (in case immediate exit doesn't work)
+  setTimeout(() => {
+    console.error(`[errorTracking.js]: 🚨 FORCE EXITING - Process should have terminated!`);
+    try {
+      process.exit(1);
+    } catch (e) {
+      console.error(`[errorTracking.js]: ❌ Second exit attempt failed:`, e);
+    }
+  }, 100);
+  
+  // Method 3: Emergency exit with SIGKILL
+  setTimeout(() => {
+    console.error(`[errorTracking.js]: 🚨 EMERGENCY EXIT - Killing process with SIGKILL!`);
+    try {
+      process.kill(process.pid, 'SIGKILL');
+    } catch (killError) {
+      console.error(`[errorTracking.js]: ❌ SIGKILL failed:`, killError);
+    }
+  }, 1000);
+  
+  // Method 4: Last resort - try to exit again
+  setTimeout(() => {
+    console.error(`[errorTracking.js]: 🚨 LAST RESORT - Final exit attempt!`);
+    try {
+      process.exit(1);
+    } catch (e) {
+      console.error(`[errorTracking.js]: ❌ All exit methods failed!`);
+    }
+  }, 2000);
 }
 
 // ------------------- Send Critical Error Notification -------------------

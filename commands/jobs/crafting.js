@@ -169,7 +169,12 @@ module.exports = {
       }
 
       // ------------------- Fetch and Validate Item -------------------
-      const item = await fetchItemByName(itemName);
+      const item = await fetchItemByName(itemName, {
+        commandName: interaction.commandName,
+        userTag: interaction.user?.tag,
+        userId: interaction.user?.id,
+        operation: 'crafting_validate_item'
+      });
       if (!item) {
         return interaction.editReply({ content: `❌ **No item found named "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
       }
