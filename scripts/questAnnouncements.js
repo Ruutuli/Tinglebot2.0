@@ -119,15 +119,16 @@ const COLUMN_MAPPING = {
     PARTICIPANT_CAP: 8,          // I - Participant Cap
     POST_REQUIREMENT: 9,         // J - Post Requirement
     MIN_REQUIREMENTS: 10,        // K - Min Requirements
-    TOKEN_REWARD: 11,            // L - Token Reward
-    ITEM_REWARD_QTY: 12,         // M - Item Reward: Qty
-    RP_THREAD_PARENT_CHANNEL: 13, // N - RP Thread Parent Channel
-    COLLAB: 14,                  // O - Collab
-    QUEST_ID: 15,                // P - Quest ID
-    STATUS: 16,                  // Q - Status
-    POSTED: 17,                  // R - Posted
-    POSTED_AT: 18,               // S - Posted At
-    BOT_NOTES: 19                // T - Bot Notes
+    TABLEROLL: 11,               // L - Table Roll
+    TOKEN_REWARD: 12,            // M - Token Reward
+    ITEM_REWARD_QTY: 13,         // N - Item Reward: Qty
+    RP_THREAD_PARENT_CHANNEL: 14, // O - RP Thread Parent Channel
+    COLLAB: 15,                  // P - Collab
+    QUEST_ID: 16,                // Q - Quest ID
+    STATUS: 17,                  // R - Status
+    POSTED: 18,                  // S - Posted
+    POSTED_AT: 19,               // T - Posted At
+    BOT_NOTES: 20                // U - Bot Notes
 };
 
 // ============================================================================
@@ -158,25 +159,53 @@ function validateSheetData(questData) {
 
 // ------------------- parseQuestRow -
 function parseQuestRow(questRow) {
-    const defaults = new Array(20).fill(null);
-    const paddedRow = [...questRow, ...defaults].slice(0, 20);
+    const defaults = new Array(21).fill(null);
+    const paddedRow = [...questRow, ...defaults].slice(0, 21);
+    
+    // Parse quest type - handle combined types
+    let questType = paddedRow[COLUMN_MAPPING.QUEST_TYPE] || 'General';
+    // Keep combined types as-is for now, we'll handle them in the quest model
+    
+    // Parse token reward - handle complex formats
+    let tokenReward = paddedRow[COLUMN_MAPPING.TOKEN_REWARD] || 'No reward';
+    if (tokenReward.includes('flat:')) {
+        tokenReward = tokenReward.split('flat:')[1];
+    } else if (tokenReward.includes('per_unit:')) {
+        // Extract the per_unit value
+        const perUnitMatch = tokenReward.match(/per_unit:(\d+)/);
+        tokenReward = perUnitMatch ? perUnitMatch[1] : '0';
+    } else if (tokenReward === 'TBD') {
+        tokenReward = 'No reward';
+    }
+    
+    // Parse item reward - handle multiple items
+    let itemReward = paddedRow[COLUMN_MAPPING.ITEM_REWARD_QTY] || null;
+    // Keep multiple items as-is for now, we'll handle them in the quest model
+    
+    // Parse collab - handle complex formats
+    let collab = paddedRow[COLUMN_MAPPING.COLLAB] || null;
+    if (collab && collab.includes('/')) {
+        // Extract just the TRUE/FALSE part
+        collab = collab.split('/')[0];
+    }
     
     return {
         title: paddedRow[COLUMN_MAPPING.TITLE] || 'Untitled Quest',
         description: paddedRow[COLUMN_MAPPING.DESCRIPTION] || 'No description',
         rules: paddedRow[COLUMN_MAPPING.RULES] || null,
         date: paddedRow[COLUMN_MAPPING.DATE] || new Date().toISOString(),
-        questType: paddedRow[COLUMN_MAPPING.QUEST_TYPE] || 'General',
+        questType: questType,
         location: paddedRow[COLUMN_MAPPING.LOCATION] || 'Unknown',
         timeLimit: paddedRow[COLUMN_MAPPING.TIME_LIMIT] || 'No time limit',
         signupDeadline: paddedRow[COLUMN_MAPPING.SIGNUP_DEADLINE] || null,
         participantCap: paddedRow[COLUMN_MAPPING.PARTICIPANT_CAP] || null,
         postRequirement: paddedRow[COLUMN_MAPPING.POST_REQUIREMENT] || null,
         minRequirements: paddedRow[COLUMN_MAPPING.MIN_REQUIREMENTS] || 0,
-        tokenReward: paddedRow[COLUMN_MAPPING.TOKEN_REWARD] || 'No reward',
-        itemReward: paddedRow[COLUMN_MAPPING.ITEM_REWARD_QTY] || null,
+        tableroll: paddedRow[COLUMN_MAPPING.TABLEROLL] || null,
+        tokenReward: tokenReward,
+        itemReward: itemReward,
         rpThreadParentChannel: paddedRow[COLUMN_MAPPING.RP_THREAD_PARENT_CHANNEL] || null,
-        collab: paddedRow[COLUMN_MAPPING.COLLAB] || null,
+        collab: collab,
         questID: paddedRow[COLUMN_MAPPING.QUEST_ID] || null,
         status: paddedRow[COLUMN_MAPPING.STATUS] || 'pending',
         posted: paddedRow[COLUMN_MAPPING.POSTED] || 'No',
@@ -190,7 +219,7 @@ async function fetchQuestData() {
     try {
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SHEET_ID,
-            range: 'loggedQuests!A2:T',
+            range: 'loggedQuests!A2:U',
         });
         const questData = response.data.values || [];
         return validateSheetData(questData);
@@ -335,9 +364,16 @@ function formatQuestEmbed(quest) {
     if (normalizedTokenReward > 0) {
         rewards.push(`💰 **${normalizedTokenReward}** tokens`);
     }
-    if (quest.itemReward) {
+    
+    // Handle multiple items
+    if (quest.itemRewards && quest.itemRewards.length > 0) {
+        for (const item of quest.itemRewards) {
+            rewards.push(`🎁 **${item.name}**${item.quantity > 1 ? ` × **${item.quantity}**` : ''}`);
+        }
+    } else if (quest.itemReward) {
         rewards.push(`🎁 **${quest.itemReward}**${quest.itemRewardQty ? ` × **${quest.itemRewardQty}**` : ''}`);
     }
+    
     if (quest.minRequirements && quest.minRequirements > 0) {
         rewards.push(`🔑 **Min Requirements:** ${quest.minRequirements}`);
     }
@@ -416,6 +452,9 @@ function formatQuestEmbed(quest) {
         rulesText += '• 🎫 Use Quest Vouchers for guaranteed spots!\n';
         rulesText += '• 📝 RP posts must be 20+ characters with meaningful content\n';
         rulesText += '• ❌ Posts that DON\'T count: reactions, emojis only, "))" posts, URLs only\n';
+        if (quest.tableroll) {
+            rulesText += `• 🎲 **Optional Table Roll**: Use </tableroll roll:1389946995468271729> to roll on **${quest.tableroll}** table\n`;
+        }
         rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
         rulesText += '• 🏘️ **IMPORTANT**: You must stay in the quest village for the entire duration!\n';
         rulesText += '• ⚠️ Leaving the village will disqualify you from the quest\n';
@@ -431,6 +470,14 @@ function formatQuestEmbed(quest) {
         if (quest.rollSuccessCriteria) {
             rulesText += `• 🎯 Success criteria: ${quest.rollSuccessCriteria}\n`;
         }
+        rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
+    }
+    
+    if (quest.questType && quest.questType === 'Art / Writing') {
+        rulesText += '• 🎨 Art & Writing quests: Submit either art OR writing\n';
+        rulesText += '• 🎫 Use Quest Vouchers for guaranteed spots!\n';
+        rulesText += '• 📝 Writing: Minimum 500 words\n';
+        rulesText += '• 🎨 Art: Any art style accepted\n';
         rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
     }
     
@@ -467,6 +514,16 @@ function parseItemReward(itemReward) {
         return { item: null, qty: 0 };
     }
     
+    // Handle multiple items separated by semicolons
+    if (itemReward.includes(';')) {
+        const firstItem = itemReward.split(';')[0].trim();
+        if (firstItem.includes(':')) {
+            const [itemName, qty] = firstItem.split(':').map(s => s.trim());
+            return { item: itemName, qty: parseInt(qty, 10) || 1 };
+        }
+        return { item: firstItem, qty: 1 };
+    }
+    
     if (itemReward.includes(':')) {
         const [itemName, qty] = itemReward.split(':').map(s => s.trim());
         return { item: itemName, qty: parseInt(qty, 10) || 1 };
@@ -479,6 +536,15 @@ function parseItemReward(itemReward) {
 function parseCollabSettings(collab) {
     if (!collab || collab === 'N/A' || collab === '') {
         return { allowed: false, rule: null };
+    }
+    
+    // Handle complex formats like "TRUE/FULL_EACH" or "TRUE/SPLIT_EQUAL"
+    if (collab.includes('/')) {
+        const allowedPart = collab.split('/')[0];
+        return {
+            allowed: allowedPart.toLowerCase() === 'true',
+            rule: null
+        };
     }
     
     if (collab.includes(',')) {
@@ -500,6 +566,27 @@ function sanitizeQuestData(parsedQuest) {
     const itemReward = parseItemReward(parsedQuest.itemReward);
     const collab = parseCollabSettings(parsedQuest.collab);
     
+    // Parse multiple items if present
+    let itemRewards = [];
+    if (parsedQuest.itemReward && parsedQuest.itemReward.includes(';')) {
+        const itemStrings = parsedQuest.itemReward.split(';');
+        for (const itemString of itemStrings) {
+            const trimmed = itemString.trim();
+            if (trimmed.includes(':')) {
+                const [name, qty] = trimmed.split(':').map(s => s.trim());
+                itemRewards.push({
+                    name: name,
+                    quantity: parseInt(qty, 10) || 1
+                });
+            } else {
+                itemRewards.push({
+                    name: trimmed,
+                    quantity: 1
+                });
+            }
+        }
+    }
+    
     return {
         title: parsedQuest.title || 'Untitled Quest',
         description: parsedQuest.description || 'No description provided.',
@@ -507,9 +594,11 @@ function sanitizeQuestData(parsedQuest) {
         location: parsedQuest.location || 'Quest Location',
         timeLimit: parsedQuest.timeLimit || 'No time limit',
         minRequirements: parsedQuest.minRequirements || 0,
+        tableroll: parsedQuest.tableroll && parsedQuest.tableroll !== 'N/A' && parsedQuest.tableroll !== '' ? parsedQuest.tableroll : null,
         tokenReward: parsedQuest.tokenReward === 'N/A' || !parsedQuest.tokenReward ? 'No reward specified' : parsedQuest.tokenReward,
         itemReward: itemReward.item,
         itemRewardQty: itemReward.qty,
+        itemRewards: itemRewards,
         signupDeadline: parsedQuest.signupDeadline && parsedQuest.signupDeadline !== 'N/A' ? parsedQuest.signupDeadline : null,
         participantCap: parsedQuest.participantCap === 'N/A' || !parsedQuest.participantCap ? null : parseInt(parsedQuest.participantCap, 10),
         postRequirement: parsedQuest.postRequirement === 'N/A' || !parsedQuest.postRequirement ? null : parseInt(parsedQuest.postRequirement, 10),

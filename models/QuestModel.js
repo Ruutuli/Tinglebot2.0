@@ -9,12 +9,14 @@ const { Schema } = mongoose;
 const basicQuestFields = {
     title: { type: String, required: true },
     description: { type: String, required: true },
-    questType: { type: String, required: true, enum: ['Art', 'Writing', 'Interactive', 'RP'] },
+    questType: { type: String, required: true, enum: ['Art', 'Writing', 'Interactive', 'RP', 'Art / Writing'] },
     location: { type: String, required: true },
     timeLimit: { type: String, required: true },
     minRequirements: { type: Schema.Types.Mixed, default: 0 }, // Can be number or table roll config
+    tableroll: { type: String, default: null }, // Table roll name for RP quests
     itemReward: { type: String, default: null },
     itemRewardQty: { type: Number, default: null },
+    itemRewards: [{ name: String, quantity: Number }], // Multiple items support
     signupDeadline: { type: String, default: null },
     participantCap: { type: Number, default: null },
     postRequirement: { type: Number, default: null },
@@ -203,6 +205,12 @@ function meetsRequirements(participant, quest) {
         const submissionType = questType.toLowerCase();
         return submissions.some(sub => 
             sub.type === submissionType && sub.approved
+        );
+    }
+    
+    if (questType === 'Art / Writing') {
+        return submissions.some(sub => 
+            (sub.type === 'art' || sub.type === 'writing') && sub.approved
         );
     }
     
@@ -485,6 +493,34 @@ questSchema.methods.completeFromWritingSubmission = async function(userId, submi
         console.error(`[QuestModel] ❌ Error completing writing quest from submission:`, error);
         return { success: false, error: error.message };
     }
+};
+
+// ------------------- Parse Multiple Items ------------------
+questSchema.methods.parseMultipleItems = function(itemRewardString) {
+    if (!itemRewardString || itemRewardString === 'N/A' || itemRewardString === '') {
+        return [];
+    }
+    
+    const items = [];
+    const itemStrings = itemRewardString.split(';');
+    
+    for (const itemString of itemStrings) {
+        const trimmed = itemString.trim();
+        if (trimmed.includes(':')) {
+            const [name, qty] = trimmed.split(':').map(s => s.trim());
+            items.push({
+                name: name,
+                quantity: parseInt(qty, 10) || 1
+            });
+        } else {
+            items.push({
+                name: trimmed,
+                quantity: 1
+            });
+        }
+    }
+    
+    return items;
 };
 
 // ------------------- Quest Submission Linking ------------------
