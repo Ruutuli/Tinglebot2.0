@@ -13,12 +13,16 @@ const moment = require('moment');
 const { EmbedBuilder } = require('discord.js');
 const { NPCs, getNPCQuestFlavor } = require('./NPCsModule');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
+const { getWeatherWithoutGeneration } = require('../services/weatherService');
 
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting', 'art', 'writing'];
+
+// Weather conditions that block travel
+const TRAVEL_BLOCKING_WEATHER = ['Flood', 'Avalanche', 'Rock Slide'];
 
 // Generate full 24-hour schedule with hourly intervals (24 time slots per day)
 const FIXED_CRON_TIMES = [
@@ -128,6 +132,64 @@ function getRandomNPCNameFromPool(availableNPCs) {
     throw new Error('No NPCs available in pool');
   }
   return getRandomElement(availableNPCs);
+}
+
+// ------------------- Function: isTravelBlockedByWeather -------------------
+// Checks if travel is blocked by current weather conditions
+async function isTravelBlockedByWeather(village) {
+  try {
+    const weather = await getWeatherWithoutGeneration(village);
+    if (!weather || !weather.special) {
+      return false; // No special weather, travel is not blocked
+    }
+    
+    const specialWeather = weather.special.label;
+    const isBlocked = TRAVEL_BLOCKING_WEATHER.includes(specialWeather);
+    
+    if (isBlocked) {
+      console.log(`[helpWantedModule.js]: 🚫 Travel blocked in ${village} due to ${specialWeather} weather`);
+    }
+    
+    return isBlocked;
+  } catch (error) {
+    console.error(`[helpWantedModule.js]: ❌ Error checking weather for ${village}:`, error);
+    return false; // Default to allowing travel if weather check fails
+  }
+}
+
+// ------------------- Function: regenerateEscortQuest -------------------
+// Regenerates an escort quest as a different quest type when travel is blocked
+async function regenerateEscortQuest(quest) {
+  try {
+    console.log(`[helpWantedModule.js]: 🔄 Regenerating escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
+    
+    // Get available quest pools
+    const pools = await getAllQuestPools();
+    
+    // Get available NPCs (excluding the current one to avoid duplicates)
+    const allNPCs = Object.keys(NPCs);
+    const availableNPCs = allNPCs.filter(npc => npc !== quest.npcName);
+    
+    // Generate new quest excluding escort type
+    const availableTypes = QUEST_TYPES.filter(type => type !== 'escort');
+    const newType = getRandomElement(availableTypes);
+    const newRequirements = generateQuestRequirements(newType, pools, quest.village);
+    const newNpcName = getRandomElement(availableNPCs);
+    
+    // Update the quest
+    quest.type = newType;
+    quest.requirements = newRequirements;
+    quest.npcName = newNpcName;
+    
+    await quest.save();
+    
+    console.log(`[helpWantedModule.js]: ✅ Regenerated quest ${quest.questId} as ${newType} quest with NPC ${newNpcName} for ${quest.village}`);
+    
+    return quest;
+  } catch (error) {
+    console.error(`[helpWantedModule.js]: ❌ Error regenerating escort quest ${quest.questId}:`, error);
+    throw error;
+  }
 }
 
 // ------------------- Function: shuffleArray -------------------
@@ -941,8 +1003,13 @@ async function generateQuestForVillage(village, date, pools, availableNPCs = nul
     console.log(`[helpWantedModule.js]: ⏰ After 12pm EST - Excluding art and writing quests. Available types: ${availableTypes.join(', ')}`);
   }
   
+  // Note: Weather checking is now done at posting time, not generation time
+  // This allows quests to be generated at midnight before weather is determined at 8am
+  
   const type = getRandomElement(availableTypes);
   const requirements = generateQuestRequirements(type, pools, village);
+  
+  // Note: Weather-based quest regeneration happens at posting time
   
   return {
     questId,
@@ -990,6 +1057,8 @@ async function generateDailyQuests() {
         console.log(`[helpWantedModule.js]: 🧹 Cleaned up ${deletedArtWriting.deletedCount} art/writing quest(s) that were generated after 12pm EST`);
       }
     }
+
+    // Note: Escort quest cleanup due to weather is now handled at posting time
 
     const pools = await getAllQuestPools();
 
@@ -1910,5 +1979,7 @@ module.exports = {
   getCurrentQuestSchedule,
   updateQuestEmbed,
   isQuestExpired,
-  checkAndCompleteQuestFromSubmission
+  checkAndCompleteQuestFromSubmission,
+  isTravelBlockedByWeather,
+  regenerateEscortQuest
 }; 
