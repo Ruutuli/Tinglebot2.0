@@ -804,7 +804,7 @@ for (const { name } of cleanedItems) {
   
   
  } catch (error) {
-  handleInteractionError(error, "gift.js");
+  handleInteractionError(error, interaction, { source: "gift.js" });
   console.error("❌ Error during gift execution:", error);
   await interaction.editReply({
     embeds: [{
@@ -1390,7 +1390,7 @@ async function handleShopBuy(interaction) {
 
     await interaction.editReply({ embeds: [purchaseEmbed] });
   } catch (error) {
-    handleInteractionError(error, "economy.js", {
+    handleInteractionError(error, interaction, {
       commandName: interaction.commandName,
       userTag: interaction.user?.tag,
       userId: interaction.user?.id,
@@ -1737,7 +1737,7 @@ if (quantity <= 0) {
 
   interaction.editReply({ embeds: [saleEmbed] });
  } catch (error) {
-  handleInteractionError(error, "economy.js", {
+  handleInteractionError(error, interaction, {
     commandName: interaction.commandName,
     userTag: interaction.user?.tag,
     userId: interaction.user?.id,
@@ -2194,7 +2194,7 @@ for (const { name } of cleanedItems) {
     embeds: [transferEmbed],
   });
  } catch (error) {
-  handleInteractionError(error, "transfer.js");
+  handleInteractionError(error, interaction, { source: "transfer.js" });
   console.error("❌ Error during transfer execution:", error);
   await interaction.editReply({
     embeds: [{
@@ -3045,7 +3045,7 @@ async function handleTrade(interaction) {
       }
     }
   } catch (error) {
-    handleInteractionError(error, "economy.js", {
+    handleInteractionError(error, interaction, {
       commandName: interaction.commandName,
       userTag: interaction.user?.tag,
       userId: interaction.user?.id,

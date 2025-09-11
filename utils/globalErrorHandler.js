@@ -146,8 +146,8 @@ Error: ${message}
         .setColor(0xFF0000)
         .setTitle(`❌ Error Detected in ${source}`)
         .addFields(
-          { name: "🧠 Command Used", value: context.commandName || "Unknown", inline: false },
-          { name: "🙋 User", value: context.userTag ? `${context.userTag} (${context.userId})` : "Unknown", inline: false },
+          { name: "🧠 Command Used", value: context.commandName && context.commandName !== 'unknown' ? context.commandName : "unknown", inline: false },
+          { name: "🙋 User", value: context.userTag && context.userTag !== 'unknown' ? `${context.userTag} (${context.userId})` : "unknown (unknown)", inline: false },
           { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
           { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` || "No error message available" },
           ...(extraInfo ? [{ name: "🌐 Context", value: extraInfo }] : []),
@@ -158,10 +158,10 @@ Error: ${message}
       try {
         // Create user mention content
         let mentionContent = "";
-        if (context.userId) {
-          mentionContent = `**HEY! <@${context.userId}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`;
+        if (context.userId && context.userId !== 'unknown') {
+          mentionContent = `HEY! <@${context.userId}>! 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\nError: ${error.message || 'Unknown error occurred'}`;
         } else {
-          mentionContent = `**HEY! @everyone!** 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!\n\n**Error:** ${error.message || 'Unknown error occurred'}`;
+          mentionContent = `HEY! @everyone! 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!`;
         }
         
         await errorChannel.send({ 
