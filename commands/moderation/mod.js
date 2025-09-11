@@ -1156,20 +1156,6 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: rpstatus -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('rpstatus')
-    .setDescription('📊 Check RP quest status and post counts')
-    .addStringOption(option =>
-      option
-        .setName('questid')
-        .setDescription('ID of the RP quest')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-)
-
 // ------------------- Subcommand: minigame -------------------
 .addSubcommand(sub =>
   sub
@@ -1347,8 +1333,6 @@ async function execute(interaction) {
         return await handleSheets(interaction);
     } else if (subcommand === 'rpposts') {
         return await handleRPPosts(interaction);
-    } else if (subcommand === 'rpstatus') {
-        return await handleRPStatus(interaction);
     } else if (subcommand === 'minigame') {
         return await handleMinigame(interaction);
     } else {
@@ -3968,75 +3952,6 @@ async function handleRPPosts(interaction) {
   }
 }
 
-// ============================================================================
-// ------------------- Function: handleRPStatus -------------------
-// Checks RP quest status and post counts
-// ============================================================================
-
-async function handleRPStatus(interaction) {
-  try {
-    const questID = interaction.options.getString('questid');
-
-    const { getRPQuestStatus } = require('../../modules/rpQuestTrackingModule');
-    const result = await getRPQuestStatus(questID);
-
-    if (result.success === false) {
-      return interaction.editReply({
-        content: `❌ ${result.error}`,
-        ephemeral: true
-      });
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor('#0099FF')
-      .setTitle(`📊 RP Quest Status: ${result.title}`)
-      .setDescription(`Quest ID: ${result.questID} | Status: ${result.status}`)
-      .addFields(
-        { name: 'Post Requirement', value: `${result.postRequirement} posts`, inline: true },
-        { name: 'Participants', value: result.participants.length.toString(), inline: true }
-      );
-
-    // Add participant details
-    if (result.participants.length > 0) {
-      const participantInfo = result.participants.map(p => {
-        const status = p.meetsRequirements ? '✅' : '❌';
-        return `${status} **${p.characterName}**: ${p.rpPostCount}/${result.postRequirement} posts`;
-      }).join('\n');
-
-      embed.addFields({
-        name: 'Participant Progress',
-        value: participantInfo.length > 1024 ? participantInfo.substring(0, 1021) + '...' : participantInfo,
-        inline: false
-      });
-    } else {
-      embed.addFields({
-        name: 'Participant Progress',
-        value: 'No participants found',
-        inline: false
-      });
-    }
-
-    embed
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setFooter({ text: `Checked by ${interaction.user.tag}` })
-      .setTimestamp();
-
-    return interaction.editReply({ embeds: [embed], ephemeral: true });
-
-  } catch (error) {
-    handleError(error, 'mod.js', {
-      commandName: '/mod rpstatus',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id,
-      questID: interaction.options.getString('questid')
-    });
-
-    return interaction.editReply({
-      content: '❌ An error occurred while checking RP quest status.',
-      ephemeral: true
-    });
-  }
-}
 
 // ============================================================================
 // ------------------- Minigame Handler -------------------

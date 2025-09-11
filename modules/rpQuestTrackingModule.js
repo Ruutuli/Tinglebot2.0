@@ -167,7 +167,10 @@ async function sendRequirementMetNotification(quest, participant, channelId) {
             .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
             .setTimestamp();
 
-        await channel.send({ embeds: [embed] });
+        await channel.send({ 
+            content: `<@${participant.userId}>`,
+            embeds: [embed] 
+        });
         console.log(`[rpQuestTracking] ✅ Sent requirement met notification for ${participant.characterName} in quest ${quest.questID}`);
 
     } catch (error) {
