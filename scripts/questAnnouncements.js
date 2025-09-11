@@ -926,17 +926,26 @@ async function postQuests() {
        
     console.log('[questAnnouncements.js] ✅ Finished processing quests');
     
-    // Check quest completions
+    // Check quest completions - only for quests that have been posted for a while
     try {
-        const activeQuests = await Quest.find({ status: 'active' });
+        const activeQuests = await Quest.find({ 
+            status: 'active',
+            postedAt: { $exists: true, $ne: null }
+        });
         let completedCount = 0;
         
         for (const quest of activeQuests) {
             try {
-                const completionResult = await quest.checkAutoCompletion();
-                if (completionResult.completed) {
-                    completedCount++;
-                    console.log(`[questAnnouncements.js] ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
+                // Only check completion for quests posted more than 1 hour ago
+                const postedAt = new Date(quest.postedAt);
+                const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+                
+                if (postedAt < oneHourAgo) {
+                    const completionResult = await quest.checkAutoCompletion();
+                    if (completionResult.completed) {
+                        completedCount++;
+                        console.log(`[questAnnouncements.js] ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
+                    }
                 }
             } catch (questError) {
                 console.warn(`[questAnnouncements.js] ⚠️ Error processing quest "${quest.title}":`, questError.message);
@@ -961,7 +970,7 @@ async function markQuestAsPosted(auth, rowIndex, questID) {
     try {
         console.log(`[questAnnouncements.js] 📝 Marking quest as posted in Google Sheets (Row: ${rowIndex + 2}, Quest ID: ${questID})`);
         const now = new Date().toISOString();
-        await writeSheetData(auth, SHEET_ID, `loggedQuests!P${rowIndex + 2}:S${rowIndex + 2}`, [[questID, 'active', 'Posted', now]]);
+        await writeSheetData(auth, SHEET_ID, `loggedQuests!Q${rowIndex + 2}:T${rowIndex + 2}`, [[questID, 'active', 'Posted', now]]);
         console.log(`[questAnnouncements.js] ✅ Quest marked as posted in Google Sheets (Row: ${rowIndex + 2})`);
     } catch (error) {
         handleError(error, 'questAnnouncements.js');
