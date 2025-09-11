@@ -379,6 +379,294 @@ async function processRPQuestCompletion(quest, participant) {
 }
 
 // ============================================================================
+// ------------------- Monthly Reward Distribution Functions -------------------
+// ============================================================================
+
+// ------------------- Process Monthly Quest Rewards ------------------
+async function processMonthlyQuestRewards() {
+    try {
+        console.log('[questRewardModule.js] 🏆 Starting monthly quest reward distribution...');
+        
+        // Find all completed quests that haven't been rewarded yet
+        const completedQuests = await Quest.find({
+            status: 'completed',
+            'participants.progress': { $in: ['completed'] }
+        });
+        
+        if (completedQuests.length === 0) {
+            console.log('[questRewardModule.js] ℹ️ No completed quests found for reward distribution');
+            return { processed: 0, rewarded: 0, errors: 0 };
+        }
+        
+        console.log(`[questRewardModule.js] 📋 Found ${completedQuests.length} completed quests to process`);
+        
+        let totalProcessed = 0;
+        let totalRewarded = 0;
+        let totalErrors = 0;
+        
+        for (const quest of completedQuests) {
+            try {
+                const result = await processQuestMonthlyRewards(quest);
+                totalProcessed += result.processed;
+                totalRewarded += result.rewarded;
+                totalErrors += result.errors;
+            } catch (error) {
+                console.error(`[questRewardModule.js] ❌ Error processing quest ${quest.questID}:`, error);
+                totalErrors++;
+            }
+        }
+        
+        console.log(`[questRewardModule.js] ✅ Monthly reward distribution completed - Processed: ${totalProcessed}, Rewarded: ${totalRewarded}, Errors: ${totalErrors}`);
+        
+        return {
+            processed: totalProcessed,
+            rewarded: totalRewarded,
+            errors: totalErrors
+        };
+        
+    } catch (error) {
+        handleError(error, 'questRewardModule.js');
+        console.error('[questRewardModule.js] ❌ Error in monthly reward distribution:', error);
+        throw error;
+    }
+}
+
+// ------------------- Process Individual Quest Monthly Rewards ------------------
+async function processQuestMonthlyRewards(quest) {
+    try {
+        const participants = Array.from(quest.participants.values());
+        let processed = 0;
+        let rewarded = 0;
+        let errors = 0;
+        
+        for (const participant of participants) {
+            try {
+                // Only reward participants who completed the quest and haven't been rewarded yet
+                if (participant.progress === 'completed' && participant.tokensEarned === 0) {
+                    const rewardResult = await distributeParticipantMonthlyRewards(quest, participant);
+                    
+                    if (rewardResult.success) {
+                        participant.progress = 'rewarded';
+                        participant.rewardedAt = new Date();
+                        participant.tokensEarned = rewardResult.tokensAdded;
+                        participant.itemsEarned = rewardResult.itemsAdded || [];
+                        rewarded++;
+                        console.log(`[questRewardModule.js] ✅ Rewarded ${participant.characterName} for quest ${quest.questID}`);
+                    } else {
+                        console.error(`[questRewardModule.js] ❌ Failed to reward ${participant.characterName}: ${rewardResult.error}`);
+                        errors++;
+                    }
+                }
+                
+                processed++;
+            } catch (error) {
+                console.error(`[questRewardModule.js] ❌ Error processing participant ${participant.characterName}:`, error);
+                errors++;
+            }
+        }
+        
+        // Save the quest with updated participant data
+        await quest.save();
+        
+        return { processed, rewarded, errors };
+        
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Error processing quest monthly rewards for ${quest.questID}:`, error);
+        throw error;
+    }
+}
+
+// ------------------- Distribute Participant Monthly Rewards ------------------
+async function distributeParticipantMonthlyRewards(quest, participant) {
+    try {
+        const results = {
+            success: true,
+            errors: [],
+            tokensAdded: 0,
+            itemsAdded: []
+        };
+
+        // Calculate token reward
+        const tokensToAward = quest.getNormalizedTokenReward();
+        
+        if (tokensToAward > 0) {
+            const tokenResult = await distributeTokens(participant.userId, tokensToAward);
+            if (tokenResult.success) {
+                results.tokensAdded = tokenResult.tokensAdded;
+            } else {
+                results.errors.push(tokenResult.error);
+            }
+        }
+
+        // Distribute item rewards
+        if (quest.itemReward && quest.itemRewardQty > 0) {
+            const itemResult = await distributeItems(quest, participant);
+            if (itemResult.success) {
+                results.itemsAdded = itemResult.itemsAdded;
+            } else {
+                results.errors.push(itemResult.error);
+            }
+        }
+
+        if (results.errors.length > 0) {
+            results.success = false;
+            results.error = results.errors.join('; ');
+        }
+
+        return results;
+
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message,
+            errors: [error.message]
+        };
+    }
+}
+
+// ------------------- Get Quest Reward Summary ------------------
+async function getQuestRewardSummary() {
+    try {
+        const completedQuests = await Quest.find({
+            status: 'completed'
+        });
+        
+        let totalParticipants = 0;
+        let completedParticipants = 0;
+        let rewardedParticipants = 0;
+        let disqualifiedParticipants = 0;
+        
+        for (const quest of completedQuests) {
+            const participants = Array.from(quest.participants.values());
+            totalParticipants += participants.length;
+            
+            for (const participant of participants) {
+                if (participant.progress === 'completed') completedParticipants++;
+                if (participant.progress === 'rewarded') rewardedParticipants++;
+                if (participant.progress === 'disqualified') disqualifiedParticipants++;
+            }
+        }
+        
+        return {
+            totalQuests: completedQuests.length,
+            totalParticipants,
+            completedParticipants,
+            rewardedParticipants,
+            disqualifiedParticipants,
+            pendingRewards: completedParticipants - rewardedParticipants
+        };
+        
+    } catch (error) {
+        console.error('[questRewardModule.js] ❌ Error getting reward summary:', error);
+        return null;
+    }
+}
+
+// ============================================================================
+// ------------------- Art Quest Completion from Submission -------------------
+// ============================================================================
+
+// ------------------- Process Art Quest Completion from Submission ------------------
+async function processArtQuestCompletionFromSubmission(submissionData, userId) {
+    try {
+        console.log(`[questRewardModule.js] 🎨 Processing art quest completion for user ${userId}`);
+        
+        const questID = submissionData.questEvent;
+        if (!questID || questID === 'N/A') {
+            console.log(`[questRewardModule.js] ℹ️ No quest ID in submission data`);
+            return { success: false, reason: 'No quest ID' };
+        }
+        
+        // Find the quest
+        const quest = await Quest.findOne({ questID });
+        if (!quest) {
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} not found`);
+            return { success: false, reason: 'Quest not found' };
+        }
+        
+        // Check if quest is active
+        if (quest.status !== 'active') {
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
+            return { success: false, reason: 'Quest not active' };
+        }
+        
+        // Complete the quest for this participant
+        const completionResult = await quest.completeFromArtSubmission(userId, submissionData);
+        
+        if (!completionResult.success) {
+            console.log(`[questRewardModule.js] ❌ Failed to complete art quest: ${completionResult.reason || completionResult.error}`);
+            return completionResult;
+        }
+        
+        // Check if the entire quest should be completed
+        const autoCompletionResult = await quest.checkAutoCompletion();
+        
+        if (autoCompletionResult.completed) {
+            console.log(`[questRewardModule.js] ✅ Quest ${questID} completed: ${autoCompletionResult.reason}`);
+            
+            // Process quest completion and distribute rewards
+            await processQuestCompletion(questID);
+        }
+        
+        return { success: true, questCompleted: autoCompletionResult.completed };
+        
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Error processing art quest completion:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+// ------------------- Process Writing Quest Completion from Submission ------------------
+async function processWritingQuestCompletionFromSubmission(submissionData, userId) {
+    try {
+        console.log(`[questRewardModule.js] 📝 Processing writing quest completion for user ${userId}`);
+        
+        const questID = submissionData.questEvent;
+        if (!questID || questID === 'N/A') {
+            console.log(`[questRewardModule.js] ℹ️ No quest ID in submission data`);
+            return { success: false, reason: 'No quest ID' };
+        }
+        
+        // Find the quest
+        const quest = await Quest.findOne({ questID });
+        if (!quest) {
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} not found`);
+            return { success: false, reason: 'Quest not found' };
+        }
+        
+        // Check if quest is active
+        if (quest.status !== 'active') {
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
+            return { success: false, reason: 'Quest not active' };
+        }
+        
+        // Complete the quest for this participant
+        const completionResult = await quest.completeFromWritingSubmission(userId, submissionData);
+        
+        if (!completionResult.success) {
+            console.log(`[questRewardModule.js] ❌ Failed to complete writing quest: ${completionResult.reason || completionResult.error}`);
+            return completionResult;
+        }
+        
+        // Check if the entire quest should be completed
+        const autoCompletionResult = await quest.checkAutoCompletion();
+        
+        if (autoCompletionResult.completed) {
+            console.log(`[questRewardModule.js] ✅ Quest ${questID} completed: ${autoCompletionResult.reason}`);
+            
+            // Process quest completion and distribute rewards
+            await processQuestCompletion(questID);
+        }
+        
+        return { success: true, questCompleted: autoCompletionResult.completed };
+        
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Error processing writing quest completion:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+// ============================================================================
 // ------------------- Module Exports -------------------
 // ============================================================================
 
@@ -389,5 +677,11 @@ module.exports = {
     markQuestAsCompleted,
     manuallyCompleteQuest,
     getQuestStatus,
-    processRPQuestCompletion
+    processRPQuestCompletion,
+    processMonthlyQuestRewards,
+    processQuestMonthlyRewards,
+    distributeParticipantMonthlyRewards,
+    getQuestRewardSummary,
+    processArtQuestCompletionFromSubmission,
+    processWritingQuestCompletionFromSubmission
 };

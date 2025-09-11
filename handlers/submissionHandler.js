@@ -145,6 +145,27 @@ async function handleSubmissionCompletion(interaction) {
     submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
     await saveSubmissionToStorage(submissionId, submissionData);
 
+    // Link submission to quest if quest ID is provided
+    if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+      try {
+        const Quest = require('../models/QuestModel');
+        const quest = await Quest.findOne({ questID: submissionData.questEvent });
+        
+        if (quest && (quest.questType === 'Art' || quest.questType === 'Writing') && quest.status === 'active') {
+          const linkResult = await quest.linkSubmission(interaction.user.id, submissionData);
+          
+          if (linkResult.success) {
+            console.log(`[submissionHandler.js] ✅ Submission linked to quest ${submissionData.questEvent}`);
+          } else {
+            console.log(`[submissionHandler.js] ℹ️ Could not link submission to quest: ${linkResult.reason || linkResult.error}`);
+          }
+        }
+      } catch (questError) {
+        console.error(`[submissionHandler.js] ❌ Error linking submission to quest:`, questError);
+        // Don't fail the submission if quest linking fails
+      }
+    }
+
     // Send notification to approval channel
     try {
       const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');

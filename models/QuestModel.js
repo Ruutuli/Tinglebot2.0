@@ -12,7 +12,7 @@ const basicQuestFields = {
     questType: { type: String, required: true, enum: ['Art', 'Writing', 'Interactive', 'RP'] },
     location: { type: String, required: true },
     timeLimit: { type: String, required: true },
-    minRequirements: { type: Number, default: 0 },
+    minRequirements: { type: Schema.Types.Mixed, default: 0 }, // Can be number or table roll config
     itemReward: { type: String, default: null },
     itemRewardQty: { type: Number, default: null },
     signupDeadline: { type: String, default: null },
@@ -78,7 +78,7 @@ const participantSchema = {
     leftAt: { type: Date, default: null },
     progress: {
         type: String,
-        enum: ['active', 'completed', 'failed', 'rewarded'],
+        enum: ['active', 'completed', 'failed', 'rewarded', 'disqualified'],
         default: 'active'
     },
     submissions: [submissionSchema],
@@ -96,6 +96,19 @@ const participantSchema = {
     signedUp: { type: Boolean, default: true },
     attended: { type: Boolean, default: false },
     questSubmissionInfo: { type: Schema.Types.Mixed, default: null },
+    // RP Quest specific fields
+    requiredVillage: { type: String, default: null }, // Village participant must stay in for RP quests
+    lastVillageCheck: { type: Date, default: Date.now }, // Last time village location was verified
+    disqualifiedAt: { type: Date, default: null }, // When participant was disqualified
+    disqualificationReason: { type: String, default: null }, // Reason for disqualification
+    // Interactive Quest specific fields
+    tableRollResults: [{ 
+        rollNumber: Number, 
+        result: Schema.Types.Mixed, 
+        rolledAt: { type: Date, default: Date.now },
+        success: { type: Boolean, default: false }
+    }], // Track table roll results for interactive quests
+    successfulRolls: { type: Number, default: 0 }, // Count of successful rolls
     updatedAt: { type: Date, default: Date.now }
 };
 
@@ -112,7 +125,12 @@ const additionalFields = {
     collabRule: { type: String, default: null },
     rules: { type: String, default: null },
     createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
+    updatedAt: { type: Date, default: Date.now },
+    // Interactive Quest Table Roll Fields
+    tableRollName: { type: String, default: null }, // Name of the table roll to use
+    tableRollConfig: { type: Schema.Types.Mixed, default: null }, // Configuration for table roll requirements
+    requiredRolls: { type: Number, default: 1 }, // Number of successful rolls required
+    rollSuccessCriteria: { type: String, default: null } // What constitutes a successful roll
 };
 
 // ============================================================================
@@ -174,8 +192,8 @@ const PROGRESS_STATUS = {
 
 // ------------------- Requirements Check ------------------
 function meetsRequirements(participant, quest) {
-    const { questType, postRequirement } = quest;
-    const { rpPostCount, submissions } = participant;
+    const { questType, postRequirement, requiredRolls } = quest;
+    const { rpPostCount, submissions, successfulRolls } = participant;
     
     if (questType === QUEST_TYPES.RP) {
         return rpPostCount >= (postRequirement || 15);
@@ -186,6 +204,10 @@ function meetsRequirements(participant, quest) {
         return submissions.some(sub => 
             sub.type === submissionType && sub.approved
         );
+    }
+    
+    if (questType === QUEST_TYPES.INTERACTIVE) {
+        return successfulRolls >= (requiredRolls || 1);
     }
     
     return false;
@@ -296,6 +318,325 @@ questSchema.methods.incrementRPPosts = function(participant) {
     return incrementRPPosts(participant);
 };
 
+// ------------------- RP Quest Village Tracking ------------------
+questSchema.methods.setRequiredVillage = function(village) {
+    this.requiredVillage = village;
+    return this;
+};
+
+questSchema.methods.checkParticipantVillage = async function(userId) {
+    const participant = this.getParticipant(userId);
+    if (!participant) return { valid: false, reason: 'Participant not found' };
+    
+    if (this.questType !== 'RP' || !this.requiredVillage) {
+        return { valid: true, reason: 'Not an RP quest or no village requirement' };
+    }
+    
+    const Character = require('./CharacterModel');
+    const character = await Character.findOne({
+        name: participant.characterName,
+        userId: participant.userId
+    });
+    
+    if (!character) {
+        return { valid: false, reason: 'Character not found' };
+    }
+    
+    const currentVillage = character.currentVillage.toLowerCase();
+    const requiredVillage = this.requiredVillage.toLowerCase();
+    
+    if (currentVillage !== requiredVillage) {
+        return { valid: false, reason: `Character is in ${currentVillage}, must be in ${requiredVillage}` };
+    }
+    
+    // Update last village check time
+    participant.lastVillageCheck = new Date();
+    participant.updatedAt = new Date();
+    
+    return { valid: true, reason: 'Village location valid' };
+};
+
+questSchema.methods.disqualifyParticipant = function(userId, reason) {
+    const participant = this.getParticipant(userId);
+    if (!participant) return false;
+    
+    participant.progress = 'disqualified';
+    participant.disqualifiedAt = new Date();
+    participant.disqualificationReason = reason;
+    participant.updatedAt = new Date();
+    
+    return true;
+};
+
+questSchema.methods.checkAllParticipantsVillages = async function() {
+    if (this.questType !== 'RP' || !this.requiredVillage) {
+        return { checked: 0, disqualified: 0 };
+    }
+    
+    const participants = Array.from(this.participants.values());
+    let checked = 0;
+    let disqualified = 0;
+    
+    for (const participant of participants) {
+        if (participant.progress === 'active') {
+            const villageCheck = await this.checkParticipantVillage(participant.userId);
+            checked++;
+            
+            if (!villageCheck.valid) {
+                this.disqualifyParticipant(participant.userId, villageCheck.reason);
+                disqualified++;
+                console.log(`[QuestModel] Disqualified ${participant.characterName}: ${villageCheck.reason}`);
+            }
+        }
+    }
+    
+    return { checked, disqualified };
+};
+
+// ------------------- Art Quest Completion from Submission ------------------
+questSchema.methods.completeFromArtSubmission = async function(userId, submissionData) {
+    try {
+        const participant = this.getParticipant(userId);
+        if (!participant) {
+            throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
+        }
+        
+        if (this.questType !== 'Art') {
+            throw new Error(`Quest ${this.questID} is not an Art quest`);
+        }
+        
+        if (participant.progress !== 'active') {
+            console.log(`[QuestModel] Participant ${participant.characterName} is not active (status: ${participant.progress})`);
+            return { success: false, reason: 'Participant not active' };
+        }
+        
+        // Add the approved submission to participant's submissions
+        const submission = {
+            type: 'art',
+            url: submissionData.messageUrl || submissionData.fileUrl,
+            submittedAt: new Date(),
+            approved: true,
+            approvedBy: submissionData.approvedBy || 'System',
+            approvedAt: new Date()
+        };
+        
+        participant.submissions.push(submission);
+        participant.progress = 'completed';
+        participant.completedAt = new Date();
+        participant.updatedAt = new Date();
+        
+        // Clear quest submission info if it exists
+        participant.questSubmissionInfo = null;
+        
+        await this.save();
+        
+        console.log(`[QuestModel] ✅ Art quest completed for ${participant.characterName} in quest ${this.questID}`);
+        
+        return { success: true, participant };
+        
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error completing art quest from submission:`, error);
+        return { success: false, error: error.message };
+    }
+};
+
+// ------------------- Writing Quest Completion from Submission ------------------
+questSchema.methods.completeFromWritingSubmission = async function(userId, submissionData) {
+    try {
+        const participant = this.getParticipant(userId);
+        if (!participant) {
+            throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
+        }
+        
+        if (this.questType !== 'Writing') {
+            throw new Error(`Quest ${this.questID} is not a Writing quest`);
+        }
+        
+        if (participant.progress !== 'active') {
+            console.log(`[QuestModel] Participant ${participant.characterName} is not active (status: ${participant.progress})`);
+            return { success: false, reason: 'Participant not active' };
+        }
+        
+        // Add the approved submission to participant's submissions
+        const submission = {
+            type: 'writing',
+            url: submissionData.messageUrl || submissionData.link,
+            submittedAt: new Date(),
+            approved: true,
+            approvedBy: submissionData.approvedBy || 'System',
+            approvedAt: new Date()
+        };
+        
+        participant.submissions.push(submission);
+        participant.progress = 'completed';
+        participant.completedAt = new Date();
+        participant.updatedAt = new Date();
+        
+        // Clear quest submission info if it exists
+        participant.questSubmissionInfo = null;
+        
+        await this.save();
+        
+        console.log(`[QuestModel] ✅ Writing quest completed for ${participant.characterName} in quest ${this.questID}`);
+        
+        return { success: true, participant };
+        
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error completing writing quest from submission:`, error);
+        return { success: false, error: error.message };
+    }
+};
+
+// ------------------- Quest Submission Linking ------------------
+questSchema.methods.linkSubmission = async function(userId, submissionData) {
+    try {
+        const participant = this.getParticipant(userId);
+        if (!participant) {
+            throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
+        }
+        
+        if (this.questType !== 'Art' && this.questType !== 'Writing') {
+            throw new Error(`Quest ${this.questID} is not an Art or Writing quest`);
+        }
+        
+        if (participant.progress !== 'active') {
+            console.log(`[QuestModel] Participant ${participant.characterName} is not active (status: ${participant.progress})`);
+            return { success: false, reason: 'Participant not active' };
+        }
+        
+        // Store quest submission info for later processing
+        participant.questSubmissionInfo = {
+            submissionId: submissionData.submissionId,
+            questEvent: submissionData.questEvent,
+            messageUrl: submissionData.messageUrl,
+            fileUrl: submissionData.fileUrl,
+            link: submissionData.link,
+            title: submissionData.title,
+            category: submissionData.category,
+            linkedAt: new Date()
+        };
+        
+        participant.updatedAt = new Date();
+        await this.save();
+        
+        console.log(`[QuestModel] ✅ Submission linked for ${participant.characterName} in quest ${this.questID}`);
+        
+        return { success: true, participant };
+        
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error linking submission to quest:`, error);
+        return { success: false, error: error.message };
+    }
+};
+
+// ------------------- Interactive Quest Table Roll Methods ------------------
+questSchema.methods.setTableRollConfig = function(tableRollName, config = {}) {
+    if (this.questType !== 'Interactive') {
+        throw new Error(`Quest ${this.questID} is not an Interactive quest`);
+    }
+    
+    this.tableRollName = tableRollName;
+    this.tableRollConfig = config;
+    this.requiredRolls = config.requiredRolls || 1;
+    this.rollSuccessCriteria = config.successCriteria || null;
+    
+    return this;
+};
+
+questSchema.methods.processTableRoll = async function(userId, rollResult) {
+    try {
+        const participant = this.getParticipant(userId);
+        if (!participant) {
+            throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
+        }
+        
+        if (this.questType !== 'Interactive') {
+            throw new Error(`Quest ${this.questID} is not an Interactive quest`);
+        }
+        
+        if (participant.progress !== 'active') {
+            console.log(`[QuestModel] Participant ${participant.characterName} is not active (status: ${participant.progress})`);
+            return { success: false, reason: 'Participant not active' };
+        }
+        
+        if (!this.tableRollName) {
+            throw new Error(`Quest ${this.questID} has no table roll configured`);
+        }
+        
+        // Determine if this roll is successful based on criteria
+        const isSuccess = this.evaluateRollSuccess(rollResult);
+        
+        // Add roll result to participant's history
+        const rollEntry = {
+            rollNumber: participant.tableRollResults.length + 1,
+            result: rollResult,
+            rolledAt: new Date(),
+            success: isSuccess
+        };
+        
+        participant.tableRollResults.push(rollEntry);
+        
+        if (isSuccess) {
+            participant.successfulRolls += 1;
+        }
+        
+        participant.updatedAt = new Date();
+        await this.save();
+        
+        console.log(`[QuestModel] ✅ Table roll processed for ${participant.characterName} in quest ${this.questID} - Success: ${isSuccess}`);
+        
+        return { 
+            success: true, 
+            rollEntry, 
+            isSuccess,
+            totalSuccessfulRolls: participant.successfulRolls,
+            requiredRolls: this.requiredRolls,
+            questCompleted: participant.successfulRolls >= this.requiredRolls
+        };
+        
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error processing table roll:`, error);
+        return { success: false, error: error.message };
+    }
+};
+
+questSchema.methods.evaluateRollSuccess = function(rollResult) {
+    if (!this.rollSuccessCriteria) {
+        // Default: any roll is successful
+        return true;
+    }
+    
+    // Parse success criteria (e.g., "item:sword", "rarity:rare", "weight:>5")
+    const criteria = this.rollSuccessCriteria.toLowerCase();
+    
+    if (criteria.startsWith('item:')) {
+        const requiredItem = criteria.split(':')[1];
+        return rollResult.item && rollResult.item.toLowerCase().includes(requiredItem);
+    }
+    
+    if (criteria.startsWith('rarity:')) {
+        const requiredRarity = criteria.split(':')[1];
+        return rollResult.rarity && rollResult.rarity.toLowerCase() === requiredRarity;
+    }
+    
+    if (criteria.startsWith('weight:')) {
+        const weightCondition = criteria.split(':')[1];
+        if (weightCondition.startsWith('>')) {
+            const minWeight = parseFloat(weightCondition.substring(1));
+            return rollResult.weight && rollResult.weight > minWeight;
+        }
+        if (weightCondition.startsWith('<')) {
+            const maxWeight = parseFloat(weightCondition.substring(1));
+            return rollResult.weight && rollResult.weight < maxWeight;
+        }
+        const exactWeight = parseFloat(weightCondition);
+        return rollResult.weight && rollResult.weight === exactWeight;
+    }
+    
+    // Default: any roll is successful
+    return true;
+};
+
 // ============================================================================
 // ------------------- Quest Completion System -------------------
 // ============================================================================
@@ -339,6 +680,14 @@ questSchema.methods.checkAutoCompletion = async function() {
             participant.completedAt = new Date();
             participantsCompleted++;
             console.log(`[QuestModel.js] ✅ Auto-completed quest for ${participant.characterName} in quest ${this.title}`);
+        }
+    }
+    
+    // For RP quests, check village locations and disqualify if needed
+    if (this.questType === QUEST_TYPES.RP) {
+        const villageCheckResult = await this.checkAllParticipantsVillages();
+        if (villageCheckResult.disqualified > 0) {
+            console.log(`[QuestModel.js] ⚠️ Disqualified ${villageCheckResult.disqualified} participants for leaving quest village`);
         }
     }
     

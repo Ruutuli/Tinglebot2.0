@@ -50,6 +50,7 @@ const RuuGame = require("./models/RuuGameModel");
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests } = require('./modules/helpWantedModule');
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
 const { removeExpiredBuffs } = require('./modules/elixirModule');
+const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 // const { postMonthlyQuests } = require('./scripts/monthlyQuestScheduler'); // Monthly quests not yet implemented
 
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
@@ -1227,6 +1228,16 @@ function initializeScheduler(client) {
  createCronJob("0 0 1 * *", "monthly vending stock generation", () =>
   generateVendingStockList(client)
  );
+ createCronJob("0 1 1 * *", "monthly quest reward distribution", async () => {
+  try {
+   console.log('[scheduler.js]: 🏆 Starting monthly quest reward distribution...');
+   const result = await processMonthlyQuestRewards();
+   console.log(`[scheduler.js]: ✅ Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
+  } catch (error) {
+   handleError(error, 'scheduler.js');
+   console.error('[scheduler.js]: ❌ Monthly quest reward distribution failed:', error.message);
+  }
+ });
  createCronJob("0 0 * * 0", "weekly pet rolls reset", () =>
   resetPetRollsForAllCharacters(client)
  );
