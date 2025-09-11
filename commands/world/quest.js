@@ -729,8 +729,9 @@ module.exports = {
 
  async validateQuestParticipation(interaction, quest, userID, characterName) {
   if (quest.participants.has(userID)) {
+   const existingParticipant = quest.participants.get(userID);
    await interaction.reply({
-    content: `[quest.js]❌ You are already participating in the quest \`${quest.title}\` with character **${quest.participants.get(userID)}**.`,
+    content: `[quest.js]❌ You are already participating in the quest \`${quest.title}\` with character **${existingParticipant.characterName}**.`,
     ephemeral: true,
    });
    return false;
