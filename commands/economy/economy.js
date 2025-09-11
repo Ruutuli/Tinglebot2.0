@@ -357,6 +357,16 @@ module.exports = {
      await interaction.reply("Unknown subcommand");
    }
   } catch (error) {
+   // Use global error handler with proper context
+   const { handleError } = require('../../utils/globalErrorHandler');
+   await handleError(error, "economy.js", {
+     commandName: interaction.commandName,
+     userTag: interaction.user?.tag,
+     userId: interaction.user?.id,
+     options: interaction.options?.data,
+     subcommand: interaction.options?.getSubcommand()
+   });
+   
    console.error("[economy.js]: ❌ Error in economy command:", error);
    
    // Track database errors for shutdown threshold
@@ -893,9 +903,17 @@ async function handleShopView(interaction) {
   const pages = Math.ceil(items.length / ITEMS_PER_PAGE);
   let currentPage = 0;
 
-  const generateEmbed = async (page) => {
+  const generateEmbed = async (page, interaction) => {
    const start = page * ITEMS_PER_PAGE;
    const end = start + ITEMS_PER_PAGE;
+   
+   // Create context for database operations
+   const context = {
+     commandName: interaction.commandName,
+     userTag: interaction.user?.tag,
+     userId: interaction.user?.id,
+     operation: 'shop_view_generate_embed'
+   };
    
    // Check if we have a database connection issue
    try {
@@ -903,7 +921,7 @@ async function handleShopView(interaction) {
      items.slice(start, end).map(async (item) => {
       let itemDetails;
       try {
-       itemDetails = await fetchItemByName(item.itemName);
+       itemDetails = await fetchItemByName(item.itemName, context);
       } catch (error) {
        console.error(`[shops]: Error fetching item details for ${item.itemName}:`, error);
        // Use fallback values if item details can't be fetched
@@ -941,7 +959,7 @@ async function handleShopView(interaction) {
   let embeds;
   try {
     embeds = await Promise.all(
-      Array.from({ length: pages }, (_, i) => generateEmbed(i))
+      Array.from({ length: pages }, (_, i) => generateEmbed(i, interaction))
     );
   } catch (error) {
     console.error("[shops]: Error generating embeds:", error);
@@ -1397,7 +1415,12 @@ async function handleShopBuy(interaction) {
 
     await interaction.editReply({ embeds: [purchaseEmbed] });
   } catch (error) {
-    handleError(error, "shops.js");
+    handleError(error, "economy.js", {
+      commandName: interaction.commandName,
+      userTag: interaction.user?.tag,
+      userId: interaction.user?.id,
+      operation: 'shop_buy'
+    });
     console.error("[shops]: Error buying item:", error);
     await interaction.editReply({
       embeds: [{
@@ -1739,10 +1762,11 @@ if (quantity <= 0) {
 
   interaction.editReply({ embeds: [saleEmbed] });
  } catch (error) {
-  handleError(error, "shops.js", {
-    commandName: "economy shop-sell",
-    userTag: interaction.user.tag,
-    userId: interaction.user.id,
+  handleError(error, "economy.js", {
+    commandName: interaction.commandName,
+    userTag: interaction.user?.tag,
+    userId: interaction.user?.id,
+    operation: 'shop_sell',
     options: {
       characterName: interaction.options.getString("charactername"),
       itemName: interaction.options.getString("itemname"),
@@ -3037,17 +3061,21 @@ async function handleTrade(interaction) {
         if (error.embed) {
           await interaction.editReply({ embeds: [error.embed] });
         } else {
-          const errorEmbed = new EmbedBuilder()
-            .setTitle("❌ Trade Error")
-            .setDescription(error.message || "An error occurred while initiating the trade.")
-            .setColor("#FF0000");
-          await interaction.editReply({ embeds: [errorEmbed] });
+          await interaction.editReply({
+            content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`,
+            ephemeral: true
+          });
         }
         return;
       }
     }
   } catch (error) {
-    handleError(error, "trade.js");
+    handleError(error, "economy.js", {
+      commandName: interaction.commandName,
+      userTag: interaction.user?.tag,
+      userId: interaction.user?.id,
+      operation: 'trade'
+    });
     // Only log a simple message for insufficient items
     if (error.embed) {
       console.log(`[trade.js]: Trade validation failed for ${characterName}`);
@@ -3055,11 +3083,10 @@ async function handleTrade(interaction) {
       console.error(`[trade.js]: ❌ Error executing trade command:`, error);
     }
     
-    // Create a generic error embed
-    const errorEmbed = new EmbedBuilder()
-      .setTitle("❌ Trade Error")
-      .setDescription(error.message || "An error occurred while trying to execute the trade.")
-      .setColor("#FF0000");
-    await interaction.editReply({ embeds: [errorEmbed] });
+    // Create a generic error message with user mention
+    await interaction.editReply({
+      content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`,
+      ephemeral: true
+    });
   }
 }

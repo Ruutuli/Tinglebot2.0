@@ -119,7 +119,12 @@ module.exports = {
       // Clean the itemName to remove quantity suffix if present (e.g., "Job Voucher - Qty: 2" -> "Job Voucher")
       const cleanItemName = itemName.replace(/\s*-\s*Qty:\s*\d+\s*$/i, '').trim();
       
-      const item = await fetchItemByName(cleanItemName);
+      const item = await fetchItemByName(cleanItemName, {
+        commandName: interaction.commandName,
+        userTag: interaction.user?.tag,
+        userId: interaction.user?.id,
+        operation: 'inventory_item_lookup'
+      });
       if (!item) {
         return void await interaction.editReply({
           embeds: [{

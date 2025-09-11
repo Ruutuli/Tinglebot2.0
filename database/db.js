@@ -7,7 +7,7 @@ const { google } = require("googleapis");
 
 // ------------------- Project Utilities -------------------
 const { handleError } = require("../utils/globalErrorHandler");
-const { trackDatabaseError, isDatabaseError, resetErrorCounter } = require("../utils/errorTracking");
+const { resetErrorCounter } = require("../utils/errorTracking");
 const {
  authorizeSheets,
  appendSheetData,
@@ -97,17 +97,11 @@ async function connectToTinglebot() {
    resetErrorCounter();
   }
   return tinglebotDbConnection;
- } catch (error) {
-  handleError(error, "db.js");
-  console.error("[db.js]: ❌ Failed to connect to tinglebot database:", error.message);
-  
-  // Track database errors for shutdown threshold
-  if (isDatabaseError(error)) {
-   await trackDatabaseError(error, "connectToTinglebot");
+  } catch (error) {
+    handleError(error, "db.js");
+    console.error("[db.js]: ❌ Failed to connect to tinglebot database:", error.message);
+    throw error;
   }
-  
-  throw error;
- }
 }
 
 // ------------------- connectToInventories -------------------
@@ -922,9 +916,9 @@ const fetchAllItems = async () => {
 };
 
 // ------------------- fetchItemByName -------------------
-async function fetchItemByName(itemName) {
+async function fetchItemByName(itemName, context = {}) {
     try {
-        const db = await connectToInventoriesForItems();
+        const db = await connectToInventoriesForItems(context);
         
         // Check if database connection is null
         if (!db) {
@@ -945,10 +939,6 @@ async function fetchItemByName(itemName) {
         handleError(error, "itemService.js");
         console.error("[itemService.js]: ❌ Error fetching item by name:", error);
         
-        // Track database errors for shutdown threshold
-        if (isDatabaseError(error)) {
-            await trackDatabaseError(error, "fetchItemByName");
-        }
         
         throw error;
     }
@@ -970,10 +960,6 @@ const fetchItemById = async (itemId) => {
         handleError(error, "itemService.js");
         console.error("[itemService.js]: ❌ Error fetching item by ID:", error);
         
-        // Track database errors for shutdown threshold
-        if (isDatabaseError(error)) {
-            await trackDatabaseError(error, "fetchItemById");
-        }
         
         throw error;
     }
@@ -2180,7 +2166,7 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
  }
 };
 
-const connectToInventoriesForItems = async () => {
+const connectToInventoriesForItems = async (context = {}) => {
     try {
         if (!inventoriesClient) {
             const uri = dbConfig.inventories || dbConfig.tinglebot;
@@ -2212,13 +2198,8 @@ const connectToInventoriesForItems = async () => {
         
         return inventoriesDb;
     } catch (error) {
-        handleError(error, "db.js");
+        handleError(error, "db.js", context);
         console.error("[db.js]: ❌ Error connecting to Items database:", error.message);
-        
-        // Track database errors for shutdown threshold
-        if (isDatabaseError(error)) {
-            await trackDatabaseError(error, "connectToInventoriesForItems");
-        }
         
         // Reset the connection variables on error
         inventoriesClient = null;

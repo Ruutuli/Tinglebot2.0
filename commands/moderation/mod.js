@@ -1340,7 +1340,13 @@ async function execute(interaction) {
     }
 
   } catch (error) {
-    handleError(error, 'mod.js');
+    handleError(error, 'mod.js', {
+      commandName: interaction.commandName,
+      userTag: interaction.user?.tag,
+      userId: interaction.user?.id,
+      options: interaction.options?.data,
+      subcommand: interaction.options?.getSubcommand()
+    });
     console.error('[mod.js]: Command execution error', error);
     
     // Use safeReply to handle invalid interactions gracefully
@@ -1371,7 +1377,12 @@ async function handleGive(interaction) {
       return interaction.editReply(`❌ Character **${charName}** not found.`);
     }
   
-    const item = await fetchItemByName(itemName);
+    const item = await fetchItemByName(itemName, {
+      commandName: interaction.commandName,
+      userTag: interaction.user?.tag,
+      userId: interaction.user?.id,
+      operation: 'mod_give_item'
+    });
     if (!item) {
       return interaction.editReply(`❌ Item **${itemName}** does not exist.`);
     }

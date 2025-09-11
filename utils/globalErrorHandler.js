@@ -4,6 +4,7 @@
 // ============================================================================
 const { EmbedBuilder } = require('discord.js');
 const dbConfig = require('../config/database');
+const { trackDatabaseError, isDatabaseError } = require('./errorTracking');
 
 // ------------------- Standard Libraries -------------------
 const ERROR_LOG_CHANNEL_ID = process.env.CONSOLE_LOG_CHANNEL;
@@ -90,6 +91,11 @@ Error: ${message}
 
   console.error(logBlock);
 
+  // Track database errors for shutdown threshold
+  if (isDatabaseError(error)) {
+    await trackDatabaseError(error, source);
+  }
+
   let trelloLink = null;
 
   // ------------------- Trello Logging -------------------
@@ -129,7 +135,18 @@ Error: ${message}
         .setTimestamp();
 
       try {
-        await errorChannel.send({ embeds: [errorEmbed] });
+        // Create user mention content
+        let mentionContent = "";
+        if (context.userId) {
+          mentionContent = `**HEY! <@${context.userId}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`;
+        } else {
+          mentionContent = `**HEY! @everyone!** 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!\n\n**Error:** ${error.message || 'Unknown error occurred'}`;
+        }
+        
+        await errorChannel.send({ 
+          content: mentionContent,
+          embeds: [errorEmbed] 
+        });
       } catch (sendError) {
         console.error(`[globalErrorHandler.js]: ❌ Failed to send error to Discord channel: ${sendError.message}`);
       }

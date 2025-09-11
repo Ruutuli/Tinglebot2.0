@@ -1383,7 +1383,12 @@ try {
         const formattedDateTime = formatDateTime(new Date());
 
         // 🛠️ Fetch actual item details from DB for accurate category/type/subtype
-        const item = await fetchItemByName(weaponSubmission.weaponName);
+        const item = await fetchItemByName(weaponSubmission.weaponName, {
+          commandName: interaction.commandName,
+          userTag: interaction.user?.tag,
+          userId: interaction.user?.id,
+          operation: 'custom_weapon_submission'
+        });
 
         const values = [
             [
