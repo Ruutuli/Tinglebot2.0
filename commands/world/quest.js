@@ -183,11 +183,37 @@ module.exports = {
   const questTypeCheck = await this.validateQuestTypeRules(interaction, quest);
   if (!questTypeCheck) return;
 
+  // For RP quests, validate character is in the correct village
+  if (quest.questType.toLowerCase() === 'rp') {
+    const villageCheck = await this.validateRPQuestVillage(interaction, quest, character);
+    if (!villageCheck) return;
+  }
+
   // Add role if quest has one
   await this.assignQuestRole(interaction, quest, userID);
 
   // Add participant to quest
-  quest.addParticipant(userID, characterName);
+  const participant = quest.addParticipant(userID, characterName);
+  
+  // For RP quests, set the required village
+  if (quest.questType.toLowerCase() === 'rp') {
+    const questLocation = quest.location.toLowerCase();
+    let requiredVillage = null;
+    
+    if (questLocation.includes('rudania')) {
+      requiredVillage = 'rudania';
+    } else if (questLocation.includes('inariko')) {
+      requiredVillage = 'inariko';
+    } else if (questLocation.includes('vhintl')) {
+      requiredVillage = 'vhintl';
+    }
+    
+    if (requiredVillage) {
+      participant.requiredVillage = requiredVillage;
+      quest.setRequiredVillage(requiredVillage);
+    }
+  }
+  
   await quest.save();
 
   // Update quest embed
@@ -501,12 +527,12 @@ module.exports = {
     });
    }
 
-   if (quest.questType !== "RP") {
+  if (quest.questType !== "RP" && quest.questType !== "Interactive") {
     return interaction.reply({
-     content: "[quest.js]❌ This command only works with RP quests. The specified quest is not an RP quest.",
+     content: "[quest.js]❌ This command only works with RP and Interactive quests. The specified quest is not an RP or Interactive quest.",
      ephemeral: true,
     });
-   }
+  }
 
      // Get participant details
   const participants = Array.from(quest.participants.values());
@@ -518,20 +544,73 @@ module.exports = {
    });
   }
 
-  // Get post requirement
-  const postRequirement = quest.postRequirement || 15;
+  // Get requirements based on quest type
+  let requirementText = "";
+  let requirementValue = 0;
+  
+  if (quest.questType === "RP") {
+    requirementValue = quest.postRequirement || 15;
+    requirementText = "posts";
+  } else if (quest.questType === "Interactive") {
+    requirementValue = quest.requiredRolls || 1;
+    requirementText = "successful rolls";
+  }
 
-  // Create participant list with post counts and usernames
+  // Create participant list with progress and usernames
   const participantList = await Promise.all(
    participants.map(async (participant) => {
     try {
      const user = await interaction.client.users.fetch(participant.userId);
-     const status = participant.rpPostCount >= postRequirement ? "✅" : "❌";
-     return `${status} **${participant.characterName}** (${user.username}): ${participant.rpPostCount}/${postRequirement} posts`;
+     let status = "❌";
+     let statusText = "";
+     let progressText = "";
+     
+     if (participant.progress === 'disqualified') {
+      status = "🚫";
+      statusText = ` (DISQUALIFIED: ${participant.disqualificationReason || 'Left quest village'})`;
+     } else if (quest.questType === "RP") {
+      if (participant.rpPostCount >= requirementValue) {
+        status = "✅";
+      }
+      progressText = `${participant.rpPostCount}/${requirementValue} ${requirementText}`;
+     } else if (quest.questType === "Interactive") {
+      if (participant.successfulRolls >= requirementValue) {
+        status = "✅";
+      }
+      progressText = `${participant.successfulRolls}/${requirementValue} ${requirementText}`;
+      if (participant.tableRollResults && participant.tableRollResults.length > 0) {
+        const totalRolls = participant.tableRollResults.length;
+        progressText += ` (${totalRolls} total rolls)`;
+      }
+     }
+     
+     return `${status} **${participant.characterName}** (${user.username}): ${progressText}${statusText}`;
     } catch (error) {
      // Fallback to user ID if username can't be fetched
-     const status = participant.rpPostCount >= postRequirement ? "✅" : "❌";
-     return `${status} **${participant.characterName}** (${participant.userId}): ${participant.rpPostCount}/${postRequirement} posts`;
+     let status = "❌";
+     let statusText = "";
+     let progressText = "";
+     
+     if (participant.progress === 'disqualified') {
+      status = "🚫";
+      statusText = ` (DISQUALIFIED: ${participant.disqualificationReason || 'Left quest village'})`;
+     } else if (quest.questType === "RP") {
+      if (participant.rpPostCount >= requirementValue) {
+        status = "✅";
+      }
+      progressText = `${participant.rpPostCount}/${requirementValue} ${requirementText}`;
+     } else if (quest.questType === "Interactive") {
+      if (participant.successfulRolls >= requirementValue) {
+        status = "✅";
+      }
+      progressText = `${participant.successfulRolls}/${requirementValue} ${requirementText}`;
+      if (participant.tableRollResults && participant.tableRollResults.length > 0) {
+        const totalRolls = participant.tableRollResults.length;
+        progressText += ` (${totalRolls} total rolls)`;
+      }
+     }
+     
+     return `${status} **${participant.characterName}** (${participant.userId}): ${progressText}${statusText}`;
     }
    })
   );
@@ -540,10 +619,10 @@ module.exports = {
 
    const embed = new EmbedBuilder()
     .setColor(EMBED_COLORS.INFO)
-    .setTitle(`📊 RP Quest Post Counts: ${quest.title}`)
+    .setTitle(`📊 ${quest.questType} Quest Progress: ${quest.title}`)
     .setDescription(`Quest ID: ${quest.questID || questID}`)
     .addFields(
-     { name: 'Post Requirement', value: `${postRequirement} posts`, inline: true },
+     { name: quest.questType === 'RP' ? 'Post Requirement' : 'Roll Requirement', value: `${requirementValue} ${requirementText}`, inline: true },
      { name: 'Participants', value: participants.length.toString(), inline: true }
     )
     .addFields({
@@ -552,13 +631,17 @@ module.exports = {
      inline: false
     })
     .addFields({
-     name: '__❌ Posts That DON\'T Count__',
-     value: `• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters`,
+     name: quest.questType === 'RP' ? '__❌ Posts That DON\'T Count__' : '__🎲 Table Roll Instructions__',
+     value: quest.questType === 'RP' 
+       ? `• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters`
+       : `• Use </tableroll roll:1389946995468271729> to roll on the ${quest.tableRollName} table\n• Each successful roll counts toward your quest progress\n• Check your progress with this command\n• Quest completes when you reach ${requirementValue} successful rolls`,
      inline: false
     })
     .addFields({
-     name: '__💬 Meta Comments__',
-     value: `If you want to talk outside of the RP for meta reasons, please use the gossip and mossy stone or format your comments in this thread "like this text lorem ipsum yada yada ))" - messages with this format don't count as RP posts.`,
+     name: quest.questType === 'RP' ? '__💬 Meta Comments__' : '__📊 Quest Progress__',
+     value: quest.questType === 'RP' 
+       ? `If you want to talk outside of the RP for meta reasons, please use the gossip and mossy stone or format your comments in this thread "like this text lorem ipsum yada yada ))" - messages with this format don't count as RP posts.`
+       : `Use this command to check your table roll progress. Each successful roll on the ${quest.tableRollName} table counts toward completing the quest.`,
      inline: false
     })
     .setImage(BORDER_IMAGE)
@@ -666,6 +749,40 @@ module.exports = {
    return false;
   }
 
+  return true;
+ },
+
+ async validateRPQuestVillage(interaction, quest, character) {
+  // Extract village from quest location
+  const questLocation = quest.location.toLowerCase();
+  let requiredVillage = null;
+  
+  if (questLocation.includes('rudania')) {
+    requiredVillage = 'rudania';
+  } else if (questLocation.includes('inariko')) {
+    requiredVillage = 'inariko';
+  } else if (questLocation.includes('vhintl')) {
+    requiredVillage = 'vhintl';
+  }
+  
+  if (!requiredVillage) {
+    await interaction.reply({
+      content: `[quest.js]❌ Could not determine required village from quest location: ${quest.location}`,
+      ephemeral: true,
+    });
+    return false;
+  }
+  
+  const characterVillage = character.currentVillage.toLowerCase();
+  
+  if (characterVillage !== requiredVillage) {
+    await interaction.reply({
+      content: `[quest.js]❌ **RP Quest Village Requirement**: Your character **${character.name}** must be in **${requiredVillage.charAt(0).toUpperCase() + requiredVillage.slice(1)}** to join this RP quest. Currently in: **${characterVillage.charAt(0).toUpperCase() + characterVillage.slice(1)}**.\n\n**Rule**: RP quest participants must stay in the quest village for the entire duration. Use \`/travel\` to move to the correct village first.`,
+      ephemeral: true,
+    });
+    return false;
+  }
+  
   return true;
  },
 

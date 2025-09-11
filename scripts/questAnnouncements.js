@@ -373,6 +373,12 @@ function formatQuestEmbed(quest) {
     if (quest.postRequirement) {
         participation.push(`💬 **Post Requirement:** ${quest.postRequirement} posts`);
     }
+    if (quest.questType && quest.questType.toLowerCase() === 'interactive' && quest.tableRollName) {
+        const rollInfo = `🎲 **Table Roll:** ${quest.tableRollName}`;
+        const rollRequirement = quest.requiredRolls > 1 ? ` (${quest.requiredRolls} successful rolls required)` : '';
+        const criteria = quest.rollSuccessCriteria ? ` - Success: ${quest.rollSuccessCriteria}` : '';
+        participation.push(rollInfo + rollRequirement + criteria);
+    }
     
     if (participation.length > 0) {
         embed.addFields({ 
@@ -410,6 +416,21 @@ function formatQuestEmbed(quest) {
         rulesText += '• 🎫 Use Quest Vouchers for guaranteed spots!\n';
         rulesText += '• 📝 RP posts must be 20+ characters with meaningful content\n';
         rulesText += '• ❌ Posts that DON\'T count: reactions, emojis only, "))" posts, URLs only\n';
+        rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
+        rulesText += '• 🏘️ **IMPORTANT**: You must stay in the quest village for the entire duration!\n';
+        rulesText += '• ⚠️ Leaving the village will disqualify you from the quest\n';
+    }
+    
+    if (quest.questType && quest.questType.toLowerCase() === 'interactive' && quest.tableRollName) {
+        rulesText += '• 🎲 Interactive quests: Use table roll mechanics\n';
+        rulesText += '• 🎫 Use Quest Vouchers for guaranteed spots!\n';
+        rulesText += `• 🎯 Roll on **${quest.tableRollName}** table to complete quest\n`;
+        if (quest.requiredRolls > 1) {
+            rulesText += `• ✅ Need ${quest.requiredRolls} successful rolls to complete\n`;
+        }
+        if (quest.rollSuccessCriteria) {
+            rulesText += `• 🎯 Success criteria: ${quest.rollSuccessCriteria}\n`;
+        }
         rulesText += '• 📊 Use </quest postcount:1389946995468271729> to check your progress\n';
     }
     
@@ -532,6 +553,58 @@ async function handleRPQuestSetup(sanitizedQuest, guild) {
     }
 
     sanitizedQuest.specialNote = 'RP Quest Rules: 15-20 posts minimum, 2 paragraph maximum per post, member-driven.';
+    return true;
+}
+
+// ------------------- handleInteractiveQuestSetup -
+async function handleInteractiveQuestSetup(sanitizedQuest, guild) {
+    if (sanitizedQuest.questType.toLowerCase() !== 'interactive') {
+        return true;
+    }
+    
+    // Parse minRequirements for table roll configuration
+    const minRequirements = sanitizedQuest.minRequirements;
+    
+    if (typeof minRequirements === 'string' && minRequirements.includes(':')) {
+        // Parse table roll configuration from minRequirements field
+        // Format: "tableName:requiredRolls:successCriteria"
+        // Example: "treasure_chest:3:item:sword" or "loot_table:1:rarity:rare"
+        const parts = minRequirements.split(':');
+        
+        if (parts.length >= 2) {
+            const tableName = parts[0];
+            const requiredRolls = parseInt(parts[1]) || 1;
+            const successCriteria = parts[2] || null;
+            
+            // Set table roll configuration
+            sanitizedQuest.tableRollName = tableName;
+            sanitizedQuest.requiredRolls = requiredRolls;
+            sanitizedQuest.rollSuccessCriteria = successCriteria;
+            sanitizedQuest.tableRollConfig = {
+                tableName,
+                requiredRolls,
+                successCriteria
+            };
+            
+            console.log(`[questAnnouncements.js] ✅ Interactive quest "${sanitizedQuest.title}" configured with table roll: ${tableName} (${requiredRolls} rolls, criteria: ${successCriteria || 'any'})`);
+        } else {
+            console.warn(`[questAnnouncements.js] ⚠️ Invalid table roll configuration format for quest "${sanitizedQuest.title}": ${minRequirements}`);
+            sanitizedQuest.botNotes = `WARNING: Invalid table roll configuration format: ${minRequirements}`;
+        }
+    } else if (typeof minRequirements === 'number' && minRequirements > 0) {
+        // Simple numeric requirement - default table roll setup
+        sanitizedQuest.requiredRolls = minRequirements;
+        sanitizedQuest.tableRollConfig = {
+            requiredRolls: minRequirements,
+            successCriteria: null
+        };
+        
+        console.log(`[questAnnouncements.js] ✅ Interactive quest "${sanitizedQuest.title}" configured with ${minRequirements} required rolls`);
+    } else {
+        console.warn(`[questAnnouncements.js] ⚠️ No valid table roll configuration found for interactive quest "${sanitizedQuest.title}"`);
+        sanitizedQuest.botNotes = `WARNING: No table roll configuration found for interactive quest`;
+    }
+    
     return true;
 }
 
@@ -707,11 +780,26 @@ async function postQuests() {
             if (sanitizedQuest.questType.toLowerCase() === 'rp') {
                 const rpValid = await handleRPQuestSetup(sanitizedQuest, guild);
                 if (!rpValid) continue;
+            } else if (sanitizedQuest.questType.toLowerCase() === 'interactive') {
+                const interactiveValid = await handleInteractiveQuestSetup(sanitizedQuest, guild);
+                if (!interactiveValid) continue;
             }
             
             sanitizedQuest.questID = generateUniqueId('Q');
             const role = await createQuestRole(guild, sanitizedQuest.title);
             sanitizedQuest.roleID = role.id;
+            
+            // For RP quests, set the required village based on location
+            if (sanitizedQuest.questType.toLowerCase() === 'rp') {
+                const questLocation = sanitizedQuest.location.toLowerCase();
+                if (questLocation.includes('rudania')) {
+                    sanitizedQuest.requiredVillage = 'rudania';
+                } else if (questLocation.includes('inariko')) {
+                    sanitizedQuest.requiredVillage = 'inariko';
+                } else if (questLocation.includes('vhintl')) {
+                    sanitizedQuest.requiredVillage = 'vhintl';
+                }
+            }
             
             await createRPThread(guild, sanitizedQuest);
             

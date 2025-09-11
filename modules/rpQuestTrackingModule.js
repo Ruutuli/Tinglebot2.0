@@ -64,6 +64,15 @@ async function handleRPPostTracking(message) {
             return;
         }
 
+        // Check village location for RP quest participants
+        const villageCheck = await quest.checkParticipantVillage(participant.userId);
+        if (!villageCheck.valid) {
+            console.log(`[rpQuestTracking] ❌ Participant ${participant.characterName} disqualified: ${villageCheck.reason}`);
+            quest.disqualifyParticipant(participant.userId, villageCheck.reason);
+            await quest.save();
+            return;
+        }
+
         // Process valid RP post
         await processValidRPPost(quest, participant, message.channel.id);
 
