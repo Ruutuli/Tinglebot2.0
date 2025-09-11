@@ -339,7 +339,7 @@ function formatQuestEmbed(quest) {
         .setColor(0xAA926A)
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
-    // Essential Info - Clean and concise
+    // Essential Info - Better spacing
     const essentialInfo = [];
     if (quest.questType) essentialInfo.push(`**Type:** ${quest.questType}`);
     if (quest.questID) essentialInfo.push(`**ID:** \`${quest.questID}\``);
@@ -361,7 +361,7 @@ function formatQuestEmbed(quest) {
     if (essentialInfo.length > 0) {
         embed.addFields({ 
             name: '📋 Details', 
-            value: essentialInfo.join(' • '), 
+            value: essentialInfo.join('\n'), 
             inline: false 
         });
     }
@@ -453,8 +453,12 @@ function formatQuestEmbed(quest) {
         rulesText += '• **Rule**: Only ONE member-capped quest per person\n';
     }
     
+    // Combine additional rules with main rules
     if (quest.rules && quest.rules.trim()) {
-        rulesText += `\n**Additional Rules:**\n${quest.rules}`;
+        if (rulesText) {
+            rulesText += '\n';
+        }
+        rulesText += quest.rules;
     }
     
     if (rulesText) {
