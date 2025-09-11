@@ -1186,6 +1186,17 @@ const modCommand = new SlashCommandBuilder()
     )
     .addStringOption(option =>
       option
+        .setName('village')
+        .setDescription('Village where the minigame takes place')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Rudania', value: 'rudania' },
+          { name: 'Inariko', value: 'inariko' },
+          { name: 'Vhintl', value: 'vhintl' }
+        )
+    )
+    .addStringOption(option =>
+      option
         .setName('action')
         .setDescription('Action to perform')
         .setRequired(true)
@@ -1206,7 +1217,7 @@ const modCommand = new SlashCommandBuilder()
     )
     .addStringOption(option =>
       option
-        .setName('character')
+        .setName('skip_character')
         .setDescription('Character name to skip (required for skip action)')
         .setRequired(false)
         .setAutocomplete(true)
@@ -4036,9 +4047,11 @@ async function handleMinigame(interaction) {
 
 async function handleTheyCame(interaction, action, sessionId, questId) {
   try {
+    const village = interaction.options.getString('village');
+    
     switch (action) {
       case 'create':
-        return await handleCreateMinigame(interaction, questId);
+        return await handleCreateMinigame(interaction, questId, village);
         
       case 'start':
         if (!sessionId) {
@@ -4068,7 +4081,7 @@ async function handleTheyCame(interaction, action, sessionId, questId) {
             content: '❌ Session ID is required for skip action.'
           });
         }
-        const characterName = interaction.options.getString('character');
+        const characterName = interaction.options.getString('skip_character');
         if (!characterName) {
           return interaction.editReply({
             content: '❌ Character name is required for skip action.'
@@ -4348,7 +4361,7 @@ async function handleTheyCameSkip(interaction, sessionId, characterName) {
 // ------------------- Create Game Handler -------------------
 // ============================================================================
 
-async function handleCreateMinigame(interaction, questId) {
+async function handleCreateMinigame(interaction, questId, village) {
   const channelId = interaction.channelId;
   const guildId = interaction.guildId;
   const userId = interaction.user.id;
@@ -4367,6 +4380,17 @@ async function handleCreateMinigame(interaction, questId) {
     }
   }
   
+  // Village is now required from the command option
+  const selectedVillage = village;
+  
+  // Validate village is one of the supported options
+  const validVillages = ['rudania', 'inariko', 'vhintl'];
+  if (!validVillages.includes(selectedVillage)) {
+    return interaction.editReply({
+      content: `❌ Invalid village "${selectedVillage}". Must be one of: ${validVillages.join(', ')}`
+    });
+  }
+  
   // Check if there's already an active session in this channel
   const existingSession = await Minigame.findOne({
     channelId: channelId,
@@ -4381,9 +4405,10 @@ async function handleCreateMinigame(interaction, questId) {
   }
   
   // Create new game session with unique ID
-  const gameSession = createAlienDefenseGame(channelId, guildId, userId);
+  const gameSession = createAlienDefenseGame(channelId, guildId, userId, selectedVillage);
   gameSession.sessionId = generateUniqueId('A'); // Generate unique ID for alien defense
   gameSession.questId = questId; // Store the quest ID
+  gameSession.village = selectedVillage; // Store the selected village
   
   const newSession = new Minigame(gameSession);
   await newSession.save();
@@ -4391,29 +4416,31 @@ async function handleCreateMinigame(interaction, questId) {
   const result = await createMinigameEmbed(newSession, 'Game Created!');
   
   // Create instructions embed
+  const villageDisplayName = selectedVillage.charAt(0).toUpperCase() + selectedVillage.slice(1);
+  const villageEmoji = getVillageEmojiByName(selectedVillage) || '';
   const instructionsEmbed = new EmbedBuilder()
-    .setTitle('👽 They Came for the Cows - Game Instructions')
+    .setTitle(`👽 They Came for the Cows - ${villageDisplayName} Village Defense`)
     .setColor(0x00ff00)
-    .setDescription(`**🎯 Game Session ID:** \`${newSession.sessionId}\`\n\n*Defend your village from alien invaders! Work together to protect 25 animals from being stolen.*`)
+    .setDescription(`**Session:** \`${newSession.sessionId}\` • **Village:** ${villageEmoji} ${villageDisplayName}\n\n*Defend your village from alien invaders! Work together to protect 25 animals from being stolen.*`)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .addFields(
       { 
         name: '🎮 How to Play', 
-        value: `**1. Join the Game:**\n</minigame theycame-join:1413815457118556201>\n\n**2. Roll Defense:**\n</minigame theycame-roll:1413815457118556201>\n\n**3. Target Aliens:**\n• **Outer Ring** (needs 5+ to hit)\n• **Middle Ring** (needs 4+ to hit)\n• **Inner Ring** (needs 3+ to hit)`, 
+        value: `**Join:** </minigame theycame-join:1413815457118556201>\n**Attack:** </minigame theycame-roll:1413815457118556201>\n\n**Target Aliens:**\n• Outer Ring (5+ to hit) • Middle Ring (4+ to hit) • Inner Ring (3+ to hit)`, 
         inline: false 
       },
       { 
-        name: '🎲 Game Rules', 
-        value: `**Alien Movement:** 1A → 2A → 3A → Steal Animal\n**Turn Order:** Players act in sign-up order\n**Victory:** Protect all 25 animals!\n**Max Players:** 6 per game`, 
-        inline: false 
+        name: '🎲 Rules', 
+        value: `**Movement:** 1A → 2A → 3A → Steal Animal\n**Turns:** Players act in sign-up order\n**Victory:** Protect all 25 animals!\n**Max Players:** 6`, 
+        inline: true 
       },
       { 
-        name: '⚙️ Admin Controls', 
-        value: `</mod minigame:1413434285934903366>\n\n**Session ID:** \`${newSession.sessionId}\``, 
-        inline: false 
+        name: '⚙️ Admin', 
+        value: `</mod minigame:1413434285934903366>\n**Session:** \`${newSession.sessionId}\``, 
+        inline: true 
       }
     )
-    .setFooter({ text: '🎮 Click the commands above to participate! • Good luck defending your village!' })
+    .setFooter({ text: '🎮 Click commands to participate! • Good luck defending your village!' })
     .setTimestamp();
   
   const replyOptions = {
@@ -4793,10 +4820,13 @@ async function createMinigameEmbed(session, title) {
   const gameStatusText = session.status === 'waiting' ? '⏳ Waiting for players' : 
                         session.status === 'active' ? '⚔️ In Progress' : '🏁 Finished';
   
+  const villageDisplayName = session.village ? session.village.charAt(0).toUpperCase() + session.village.slice(1) : 'Unknown';
+  const villageEmoji = session.village ? getVillageEmojiByName(session.village) || '' : '';
+  
   embed.addFields(
     { 
       name: '📊 Game Status',
-      value: `**Session:** ${session.sessionId}\n**Progress:** ${status.gameProgress}\n**Status:** ${gameStatusText}\n**Players:** ${session.players.length}/6`, 
+      value: `**Session:** ${session.sessionId}\n**Village:** ${villageEmoji} ${villageDisplayName}\n**Progress:** ${status.gameProgress}\n**Status:** ${gameStatusText}\n**Players:** ${session.players.length}/6`, 
       inline: false 
     },
     { 
@@ -4946,10 +4976,13 @@ async function createDetailedMinigameEmbed(session, title, character = null) {
   const gameStatusText = session.status === 'waiting' ? '⏳ Waiting for players' : 
                         session.status === 'active' ? '⚔️ In Progress' : '🏁 Finished';
   
+  const villageDisplayName = session.village ? session.village.charAt(0).toUpperCase() + session.village.slice(1) : 'Unknown';
+  const villageEmoji = session.village ? getVillageEmojiByName(session.village) || '' : '';
+  
   embed.addFields(
     { 
       name: '__📊 Game Status__', 
-      value: `**Session:** ${session.sessionId}\n**${status.gameProgress}** • ${gameStatusText}`, 
+      value: `**Session:** ${session.sessionId}\n**Village:** ${villageEmoji} ${villageDisplayName}\n**${status.gameProgress}** • ${gameStatusText}`, 
       inline: false 
     },
     { 

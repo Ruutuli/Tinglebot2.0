@@ -284,7 +284,7 @@ function spawnAliens(gameData, playerCount, currentRound) {
 
 // ------------------- Function: createAlienDefenseGame -------------------
 // Creates a new alien defense game session
-function createAlienDefenseGame(channelId, guildId, createdBy) {
+function createAlienDefenseGame(channelId, guildId, createdBy, village = 'rudania') {
   const sessionId = generateUniqueId('A'); // Alien Defense prefix
   
   // Initialize empty game board - aliens spawn based on player count
@@ -302,10 +302,10 @@ function createAlienDefenseGame(channelId, guildId, createdBy) {
     turnOrder: [], // Players sign up in order
     currentTurnIndex: 0, // Current player's turn
     turnPhase: 'waiting', // waiting, rolling, advancing
-    village: GAME_CONFIGS.theycame.images.defaultVillage, // Default village
+    village: village, // Selected village
     images: {
       alien: getAlienImage(),
-      village: getCurrentVillageImage()
+      village: getCurrentVillageImage(village)
     }
   };
 
