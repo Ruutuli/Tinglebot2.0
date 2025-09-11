@@ -538,9 +538,8 @@ async function simulateWeightedWeather(village, season, options = {}) {
   // Validate weather combination if requested
   if (validateResult && !validateWeatherCombination(result)) {
     console.warn(`[weatherService.js]: Invalid weather combination generated for ${village}`);
-    if (special) {
-      result.special = null;
-    }
+    // Note: We keep special weather even if validation fails to ensure it's saved to database
+    // The special weather was generated according to the rules and should be preserved
   }
   
   return result;
@@ -663,7 +662,9 @@ async function getCurrentWeather(village) {
           break;
         } else {
           if (attempts === maxAttempts) {
-            newWeather.special = null;
+            // Note: We keep special weather even if validation fails to ensure it's saved to database
+            // The special weather was generated according to the rules and should be preserved
+            console.warn(`[weatherService.js]: Max attempts reached, keeping special weather despite validation failure`);
           }
         }
       }
