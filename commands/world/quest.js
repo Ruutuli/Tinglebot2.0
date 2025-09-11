@@ -643,9 +643,19 @@ module.exports = {
        ? `If you want to talk outside of the RP for meta reasons, please use the gossip and mossy stone or format your comments in this thread "like this text lorem ipsum yada yada ))" - messages with this format don't count as RP posts.`
        : `Use this command to check your table roll progress. Each successful roll on the ${quest.tableRollName} table counts toward completing the quest.`,
      inline: false
-    })
-    .setImage(BORDER_IMAGE)
-    .setTimestamp();
+    });
+    
+    // Add table roll information for RP quests if applicable
+    if (quest.questType === 'RP' && quest.tableroll) {
+      embed.addFields({
+        name: '__🎲 Optional Table Roll__',
+        value: `This RP quest has an optional table roll available!\n• Use </tableroll roll:1389946995468271729> to roll on **${quest.tableroll}** table\n• Table rolls are optional and don't affect quest completion\n• They may provide additional rewards or flavor text`,
+        inline: false
+      });
+    }
+    
+    embed.setImage(BORDER_IMAGE)
+         .setTimestamp();
 
    return interaction.reply({ embeds: [embed] });
 
