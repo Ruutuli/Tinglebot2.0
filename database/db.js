@@ -7,6 +7,7 @@ const { google } = require("googleapis");
 
 // ------------------- Project Utilities -------------------
 const { handleError } = require("../utils/globalErrorHandler");
+const { trackDatabaseError, isDatabaseError, resetErrorCounter } = require("../utils/errorTracking");
 const {
  authorizeSheets,
  appendSheetData,
@@ -91,11 +92,20 @@ async function connectToTinglebot() {
    });
    
    console.log("[db.js]: ✅ Tinglebot database connected");
+   
+   // Reset error counter on successful connection
+   resetErrorCounter();
   }
   return tinglebotDbConnection;
  } catch (error) {
   handleError(error, "db.js");
   console.error("[db.js]: ❌ Failed to connect to tinglebot database:", error.message);
+  
+  // Track database errors for shutdown threshold
+  if (isDatabaseError(error)) {
+   await trackDatabaseError(error, "connectToTinglebot");
+  }
+  
   throw error;
  }
 }
@@ -896,6 +906,12 @@ async function forceResetPetRolls(characterId, petName) {
 const fetchAllItems = async () => {
     try {
         const db = await connectToInventoriesForItems();
+        
+        // Check if database connection is null
+        if (!db) {
+            throw new Error('Database connection failed - unable to connect to items database');
+        }
+        
         const items = await db.collection("items").find().toArray();
         return items;
     } catch (error) {
@@ -909,6 +925,12 @@ const fetchAllItems = async () => {
 async function fetchItemByName(itemName) {
     try {
         const db = await connectToInventoriesForItems();
+        
+        // Check if database connection is null
+        if (!db) {
+            throw new Error('Database connection failed - unable to connect to items database');
+        }
+        
         const normalizedItemName = itemName.trim();
         // Note: We don't escape the + character as it's commonly used in item names
         const escapedName = normalizedItemName.replace(/[-\/\\^$*?.()|[\]{}]/g, "\\$&");
@@ -922,6 +944,12 @@ async function fetchItemByName(itemName) {
     } catch (error) {
         handleError(error, "itemService.js");
         console.error("[itemService.js]: ❌ Error fetching item by name:", error);
+        
+        // Track database errors for shutdown threshold
+        if (isDatabaseError(error)) {
+            await trackDatabaseError(error, "fetchItemByName");
+        }
+        
         throw error;
     }
 };
@@ -930,11 +958,23 @@ async function fetchItemByName(itemName) {
 const fetchItemById = async (itemId) => {
     try {
         const db = await connectToInventoriesForItems();
+        
+        // Check if database connection is null
+        if (!db) {
+            throw new Error('Database connection failed - unable to connect to items database');
+        }
+        
         const item = await db.collection("items").findOne({ _id: ObjectId(itemId) });
         return item;
     } catch (error) {
         handleError(error, "itemService.js");
         console.error("[itemService.js]: ❌ Error fetching item by ID:", error);
+        
+        // Track database errors for shutdown threshold
+        if (isDatabaseError(error)) {
+            await trackDatabaseError(error, "fetchItemById");
+        }
+        
         throw error;
     }
 };
@@ -943,6 +983,11 @@ const fetchItemById = async (itemId) => {
 const fetchItemsByMonster = async (monsterName) => {
     try {
         const db = await connectToInventoriesForItems();
+        
+        // Check if database connection is null
+        if (!db) {
+            throw new Error('Database connection failed - unable to connect to items database');
+        }
         
         // Import monsterMapping to get the correct field names
         const { monsterMapping } = require('../models/MonsterModel');
@@ -2155,12 +2200,29 @@ const connectToInventoriesForItems = async () => {
             await inventoriesClient.connect();
             inventoriesDb = inventoriesClient.db('tinglebot');
             console.log("[db.js]: ✅ Items database connected");
+            
+            // Reset error counter on successful connection
+            resetErrorCounter();
+        }
+        
+        // Double-check that we have a valid database connection
+        if (!inventoriesDb) {
+            throw new Error('Database connection failed - inventoriesDb is null');
         }
         
         return inventoriesDb;
     } catch (error) {
         handleError(error, "db.js");
         console.error("[db.js]: ❌ Error connecting to Items database:", error.message);
+        
+        // Track database errors for shutdown threshold
+        if (isDatabaseError(error)) {
+            await trackDatabaseError(error, "connectToInventoriesForItems");
+        }
+        
+        // Reset the connection variables on error
+        inventoriesClient = null;
+        inventoriesDb = null;
         throw error;
     }
 };

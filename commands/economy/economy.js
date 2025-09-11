@@ -7,6 +7,7 @@ const {
  MessageFlags,
 } = require("discord.js");
 const { handleError } = require("../../utils/globalErrorHandler.js");
+const { trackDatabaseError, isDatabaseError } = require("../../utils/errorTracking.js");
 const { handleTokenError } = require('../../utils/tokenUtils.js');
 const { enforceJail } = require('../../utils/jailCheck');
 const { v4: uuidv4 } = require("uuid");
@@ -331,28 +332,50 @@ module.exports = {
   ),
 
  async execute(interaction) {
-  const subcommand = interaction.options.getSubcommand();
-  switch (subcommand) {
-   case "gift":
-    await handleGift(interaction);
-    break;
-   case "shop-view":
-    await handleShopView(interaction);
-    break;
-   case "shop-buy":
-    await handleShopBuy(interaction);
-    break;
-   case "shop-sell":
-    await handleShopSell(interaction);
-    break;
-   case "trade":
-    await handleTrade(interaction);
-    break;
-   case "transfer":
-    await handleTransfer(interaction);
-    break;
-   default:
-    await interaction.reply("Unknown subcommand");
+  try {
+   const subcommand = interaction.options.getSubcommand();
+   switch (subcommand) {
+    case "gift":
+     await handleGift(interaction);
+     break;
+    case "shop-view":
+     await handleShopView(interaction);
+     break;
+    case "shop-buy":
+     await handleShopBuy(interaction);
+     break;
+    case "shop-sell":
+     await handleShopSell(interaction);
+     break;
+    case "trade":
+     await handleTrade(interaction);
+     break;
+    case "transfer":
+     await handleTransfer(interaction);
+     break;
+    default:
+     await interaction.reply("Unknown subcommand");
+   }
+  } catch (error) {
+   console.error("[economy.js]: ❌ Error in economy command:", error);
+   
+   // Track database errors for shutdown threshold
+   if (isDatabaseError(error)) {
+    await trackDatabaseError(error, "economy_command");
+   }
+   
+   // Check if it's a database connection error
+   if (error.message && error.message.includes('Database connection failed')) {
+    await interaction.reply({
+     content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** Database connection failed - the bot cannot access the items database right now.`,
+     ephemeral: true
+    });
+   } else {
+    await interaction.reply({
+     content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`,
+     ephemeral: true
+    });
+   }
   }
  },
 };
@@ -873,12 +896,15 @@ async function handleShopView(interaction) {
   const generateEmbed = async (page) => {
    const start = page * ITEMS_PER_PAGE;
    const end = start + ITEMS_PER_PAGE;
-   const itemsList = await Promise.all(
-    items.slice(start, end).map(async (item) => {
-     let itemDetails;
-     try {
+   
+   // Check if we have a database connection issue
+   try {
+    const itemsList = await Promise.all(
+     items.slice(start, end).map(async (item) => {
+      let itemDetails;
+      try {
        itemDetails = await fetchItemByName(item.itemName);
-     } catch (error) {
+      } catch (error) {
        console.error(`[shops]: Error fetching item details for ${item.itemName}:`, error);
        // Use fallback values if item details can't be fetched
        itemDetails = {
@@ -886,22 +912,29 @@ async function handleShopView(interaction) {
          sellPrice: "N/A",
          emoji: "🛒"
        };
-     }
-     const buyPrice = itemDetails?.buyPrice || "N/A";
-     const sellPrice = itemDetails?.sellPrice || "N/A";
-     const emoji = itemDetails?.emoji || "🛒";
-     return `__ ${emoji} **${item.itemName}**__ - Stock: ${item.stock}\n> 🪙 Buy Price: ${buyPrice} \n> 🪙 Sell Price: ${sellPrice}`;
-    })
-   );
-
-   return new EmbedBuilder()
-    .setTitle("🛒 Shop Inventory")
-    .setDescription(itemsList.join("\n\n"))
-    .setColor("#A48D68")
-    .setImage(
-     "https://storage.googleapis.com/tinglebot/Graphics/border.png"
-    )
-    .setFooter({ text: `Page ${page + 1} of ${pages}` });
+      }
+      const buyPrice = itemDetails?.buyPrice || "N/A";
+      const sellPrice = itemDetails?.sellPrice || "N/A";
+      const emoji = itemDetails?.emoji || "🛒";
+      return `__ ${emoji} **${item.itemName}**__ - Stock: ${item.stock}\n> 🪙 Buy Price: ${buyPrice} \n> 🪙 Sell Price: ${sellPrice}`;
+     })
+    );
+    
+    return new EmbedBuilder()
+     .setTitle("🛒 Shop Inventory")
+     .setDescription(itemsList.join("\n\n"))
+     .setColor("#A48D68")
+     .setImage(
+      "https://storage.googleapis.com/tinglebot/Graphics/border.png"
+     )
+     .setFooter({ text: `Page ${page + 1} of ${pages}` });
+   } catch (error) {
+    // If there's a database connection error, return an error embed
+    if (error.message && error.message.includes('Database connection failed')) {
+     throw new Error('Database connection failed - unable to access items database');
+    }
+    throw error;
+   }
   };
 
   // Pre-generate all embeds to avoid async operations during button clicks
@@ -912,7 +945,19 @@ async function handleShopView(interaction) {
     );
   } catch (error) {
     console.error("[shops]: Error generating embeds:", error);
-    return interaction.editReply("❌ An error occurred while loading the shop inventory. Please try again later.");
+    
+    // Check if it's a database connection error
+    if (error.message && error.message.includes('Database connection failed')) {
+      return interaction.editReply({ 
+        content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** Database connection failed - the bot cannot access the items database right now.`,
+        flags: [MessageFlags.Ephemeral]
+      });
+    }
+    
+    return interaction.editReply({ 
+      content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`,
+      flags: [MessageFlags.Ephemeral]
+    });
   }
 
   const generateButtons = (page) => {
