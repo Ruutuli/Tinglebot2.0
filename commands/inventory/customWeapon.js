@@ -6,7 +6,7 @@
 // ------------------- /customweapon Command -------------------
 // ------------------- Standard Libraries -------------------
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 const mongoose = require('mongoose'); // Add mongoose import
 

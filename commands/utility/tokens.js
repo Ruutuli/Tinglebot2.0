@@ -1,4 +1,4 @@
-const { handleError } = require('../../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { handleTokenError } = require('../../utils/tokenUtils.js');
 
 // ------------------- Import necessary modules and services -------------------

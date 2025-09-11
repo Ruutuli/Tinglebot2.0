@@ -6,7 +6,7 @@ const { MongoClient, ObjectId } = require("mongodb");
 const { google } = require("googleapis");
 
 // ------------------- Project Utilities -------------------
-const { handleError } = require("../utils/globalErrorHandler");
+const { handleInteractionError } = require("../utils/globalErrorHandler");
 const { resetErrorCounter } = require("../utils/errorTracking");
 const {
  authorizeSheets,

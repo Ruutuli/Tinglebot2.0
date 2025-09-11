@@ -7,7 +7,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 
 
-const { handleError } = require('../../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { escapeRegExp } = require('../../utils/inventoryUtils.js');
 // ------------------- Database Services -------------------
 // Import character-related database services for fetching and updating character data.
@@ -429,10 +429,13 @@ module.exports = {
       const gearEmbed = createCharacterGearEmbed(updatedCharacter, updatedGearMap, type);
       await interaction.editReply({ content: `✅ **${itemName} has been equipped to the ${type} slot for ${characterName}.** ${unequippedMessage}`, embeds: [gearEmbed], flags: [MessageFlags.Ephemeral] });
     } catch (error) {
-    handleError(error, 'gear.js');
-
-      console.error(`[gear.js]: Error executing gear command: ${error.message}`);
-      await interaction.editReply({ content: `❌ **An error occurred while executing the gear command. Please try again later.**`, flags: [MessageFlags.Ephemeral] });
+      await handleInteractionError(error, interaction, {
+        source: 'gear.js',
+        characterName: interaction.options?.getString('charactername'),
+        itemName: interaction.options?.getString('itemname'),
+        type: interaction.options?.getString('type'),
+        status: interaction.options?.getString('status')
+      });
     }
   }
 };

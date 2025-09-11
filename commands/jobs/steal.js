@@ -7,7 +7,7 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Local Module Imports -------------------
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { 
     fetchCharacterByName, 
     getCharacterInventoryCollection, 
@@ -224,7 +224,7 @@ async function updateDailySteal(character, activity) {
             console.error(`[steal.js]: ❌ Failed to update daily steal for ${character.name}:`, error);
     
             // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'updateDailySteal',
             characterName: character?.name
@@ -338,7 +338,7 @@ async function validateCharacter(characterName, userId, requireInventorySync = f
         console.error(`[steal.js]: ❌ Error validating character "${characterName}":`, error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'validateCharacter',
             characterName: characterName,
@@ -683,7 +683,7 @@ async function isProtected(targetId) {
         console.error('[steal.js]: Error checking protection:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'isProtected check',
             targetId: targetId
@@ -737,7 +737,7 @@ async function setProtection(targetId, duration = '2hours') {
         console.error('[steal.js]: Error setting protection:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'setProtection',
             targetId: targetId,
@@ -769,7 +769,7 @@ async function clearProtection(targetId) {
         console.error('[steal.js]: Error clearing protection:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'clearProtection',
             targetId: targetId
@@ -822,7 +822,7 @@ async function setGlobalSuccessProtection(targetId) {
     console.error('[steal.js]: Error setting global success protection:', error);
     
             // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'setGlobalSuccessProtection',
             targetId: targetId
@@ -857,7 +857,7 @@ async function setGlobalFailureProtection(targetId) {
     console.error('[steal.js]: Error setting global failure protection:', error);
     
             // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'setGlobalFailureProtection',
             targetId: targetId
@@ -1022,7 +1022,7 @@ async function resetAllStealProtections() {
     console.error('[steal.js]: ❌ Error resetting steal protections:', error);
     
             // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'resetAllStealProtections'
         });
@@ -1107,7 +1107,7 @@ async function updateStealStats(characterId, success, itemRarity, victimCharacte
         console.error('[steal.js]: Error updating steal stats:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'updateStealStats',
             characterId: characterId,
@@ -1146,7 +1146,7 @@ async function getStealStats(characterId) {
         console.error('[steal.js]: Error getting steal stats:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'getStealStats',
             characterId: characterId
@@ -1186,7 +1186,7 @@ async function getItemEmoji(itemName) {
         console.error('[steal.js]: Error getting item emoji:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'getItemEmoji',
             itemName: itemName
@@ -1255,7 +1255,7 @@ async function isCustomWeapon(itemName) {
         console.error('[steal.js]: ❌ Error checking if item is custom weapon:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'isCustomWeapon check',
             itemName: itemName
@@ -1380,7 +1380,7 @@ async function handleStealError(error, interaction, operationType) {
     console.error(`[steal.js]: ❌ Critical error during ${operationType} flow:`, error);
     
     // Call global error handler with enhanced context
-    handleError(error, 'steal.js', {
+    handleInteractionError(error, 'steal.js', {
         commandName: 'steal',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -1554,7 +1554,7 @@ async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, inte
         console.error(`[steal.js]: ❌ Failed to infect ${thiefCharacter.name} with blight:`, error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'blight infection',
             thiefCharacterName: thiefCharacter?.name,
@@ -1587,7 +1587,7 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         console.error('[steal.js]: Error setting protection after successful steal:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             userTag: interaction.user.tag,
             userId: interaction.user.id,
@@ -1691,7 +1691,7 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         }
     } catch (error) {
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             userTag: interaction.user.tag,
             userId: interaction.user.id,
@@ -1727,7 +1727,7 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
         console.error('[steal.js]: Error setting protection after failed steal:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             userTag: interaction.user.tag,
             userId: interaction.user.id,
@@ -1770,7 +1770,7 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             userTag: interaction.user.tag,
             userId: interaction.user.id,
@@ -1907,7 +1907,7 @@ async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries
         console.log(`[steal.js]: 📊 Debug info - Item names: ${JSON.stringify(itemNames)}, isNPC: ${isNPC}`);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'processItemsWithRarity',
             itemNames: itemNames,
@@ -2377,12 +2377,10 @@ module.exports = {
             console.log(`[steal.js]: ❌ Steal command failed after ${totalTime}ms`);
             
             // Enhanced error context for better debugging
-            handleError(error, 'steal.js', {
-                commandName: 'steal',
-                userTag: interaction.user.tag,
-                userId: interaction.user.id,
-                characterName: characterName,
+            await handleInteractionError(error, interaction, {
+                source: 'steal.js',
                 subcommand: interaction.options.getSubcommand(),
+                characterName: characterName,
                 options: {
                     targetType,
                     targetName,
@@ -2390,42 +2388,6 @@ module.exports = {
                     characterName
                 }
             });
-            console.error('[steal.js]: Error executing command:', error);
-            
-            // Provide more specific error messages based on the error type
-            let errorMessage = '❌ **An error occurred while processing the steal command.**';
-            
-            if (error.name === 'MongoError' || error.name === 'MongoServerError') {
-                if (error.code === 11000) {
-                    errorMessage = '❌ **Database duplicate key error.**\n🔄 Please try again in a moment.';
-                } else if (error.code === 121) {
-                    errorMessage = '❌ **Database validation error.**\n🔄 Please try again in a moment.';
-                } else {
-                    errorMessage = `❌ **Database error (Code: ${error.code}).**\n🔄 Please try again in a moment.`;
-                }
-            } else if (error.name === 'TypeError') {
-                if (error.message.includes('Cannot read properties of undefined') || error.message.includes('Cannot read properties of null')) {
-                                errorMessage = '❌ **Data structure error.**\n🔄 The target may have invalid data. Please try again or contact a mod and submit an error report.';
-        } else {
-            errorMessage = '❌ **Data type error.**\n🔄 Please try again or contact a mod and submit an error report.';
-        }
-    } else if (error.name === 'ReferenceError') {
-        errorMessage = '❌ **System configuration error.**\n🔄 Please contact a mod immediately and submit an error report.';
-            } else if (error.message && error.message.includes('timeout')) {
-                errorMessage = '❌ **Database operation timed out.**\n🔄 Please try again in a moment.';
-            } else if (error.message && error.message.includes('network')) {
-                errorMessage = '❌ **Network error.**\n🔄 Please check your connection and try again.';
-            }
-            
-            // Add debugging information for mods
-            const debugInfo = `\n\n**Debug Info:**\n• Character: ${characterName}\n• Target: ${targetName}\n• Type: ${targetType}\n• Rarity: ${raritySelection}\n• Error: ${error.name}: ${error.message}`;
-            
-            // Check if interaction has already been replied to
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: errorMessage + debugInfo, ephemeral: true });
-            } else {
-                await interaction.editReply({ content: errorMessage + debugInfo });
-            }
         }
     },
     
@@ -2513,7 +2475,7 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
                     console.error('[steal.js]: ❌ Error validating Zone NPC:', zoneError);
                     
                     // Call global error handler for tracking
-                    handleError(zoneError, 'steal.js', {
+                    handleInteractionError(zoneError, 'steal.js', {
                         commandName: 'steal',
                         operationType: 'Zone NPC validation',
                         targetName: 'Zone'
@@ -2672,7 +2634,7 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
         console.error('[steal.js]: Error in validateStealTarget:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'validateStealTarget',
             targetName: targetName,
@@ -2709,7 +2671,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                             console.error(`[steal.js]: ❌ Error checking if Peddler item is custom weapon: ${itemName}`, customWeaponError);
                             
                             // Call global error handler for tracking
-                            handleError(customWeaponError, 'steal.js', {
+                            handleInteractionError(customWeaponError, 'steal.js', {
                                 commandName: 'steal',
                                 operationType: 'Peddler custom weapon check',
                                 itemName: itemName,
@@ -2733,7 +2695,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                     console.error(`[steal.js]: ❌ Error processing Peddler inventory:`, peddlerError);
                     
                     // Call global error handler for tracking
-                    handleError(peddlerError, 'steal.js', {
+                    handleInteractionError(peddlerError, 'steal.js', {
                         commandName: 'steal',
                         operationType: 'Peddler inventory processing',
                         targetName: 'Peddler'
@@ -2761,7 +2723,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                         console.error(`[steal.js]: ❌ Error fetching items for NPC ${targetName}:`, npcError);
                         
                         // Call global error handler for tracking
-                        handleError(npcError, 'steal.js', {
+                        handleInteractionError(npcError, 'steal.js', {
                             commandName: 'steal',
                             operationType: 'NPC items fetch',
                             targetName: targetName
@@ -2857,7 +2819,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                 console.error(`[steal.js]: ❌ Error processing items with rarity for NPC ${targetName}:`, rarityError);
                 
                 // Call global error handler for tracking
-                handleError(rarityError, 'steal.js', {
+                handleInteractionError(rarityError, 'steal.js', {
                     commandName: 'steal',
                     operationType: 'NPC rarity processing',
                     targetName: targetName,
@@ -2918,7 +2880,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                 console.error(`[steal.js]: ❌ Error fetching player inventory for ${targetCharacter.name}:`, inventoryError);
                 
                 // Call global error handler for tracking
-                handleError(inventoryError, 'steal.js', {
+                handleInteractionError(inventoryError, 'steal.js', {
                     commandName: 'steal',
                     operationType: 'player inventory fetch',
                     targetCharacterName: targetCharacter.name,
@@ -2960,7 +2922,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                     console.error(`[steal.js]: ❌ Error checking if item is custom weapon: ${itemName}`, customWeaponError);
                     
                     // Call global error handler for tracking
-                    handleError(customWeaponError, 'steal.js', {
+                    handleInteractionError(customWeaponError, 'steal.js', {
                         commandName: 'steal',
                         operationType: 'custom weapon check',
                         itemName: itemName,
@@ -2991,7 +2953,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                 console.error(`[steal.js]: ❌ Error processing items with rarity for player ${targetCharacter.name}:`, rarityError);
                 
                 // Call global error handler for tracking
-                handleError(rarityError, 'steal.js', {
+                handleInteractionError(rarityError, 'steal.js', {
                     commandName: 'steal',
                     operationType: 'player rarity processing',
                     targetCharacterName: targetCharacter.name,
@@ -3054,7 +3016,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
         }
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'processItemsForStealing',
             targetName: targetName,
@@ -3084,7 +3046,7 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
                     console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
                     
                     // Call global error handler for tracking
-                    handleError(error, 'steal.js', {
+                    handleInteractionError(error, 'steal.js', {
                         commandName: 'steal',
                         operationType: 'daily steal update',
                         characterName: thiefCharacter?.name
@@ -3192,7 +3154,7 @@ async function validateChannelAccess(thiefCharacter, interaction) {
         console.error('[steal.js]: Error in validateChannelAccess:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'validateChannelAccess',
             characterName: thiefCharacter?.name,
@@ -3246,7 +3208,7 @@ async function validateAndActivateJobVoucher(thiefCharacter, job, interaction) {
         console.error('[steal.js]: Error in validateAndActivateJobVoucher:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'validateAndActivateJobVoucher',
             characterName: thiefCharacter?.name,
@@ -3311,7 +3273,7 @@ async function validateCharacterStatus(thiefCharacter, interaction) {
         console.error('[steal.js]: Error in validateCharacterStatus:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'validateCharacterStatus',
             characterName: thiefCharacter?.name
@@ -3417,7 +3379,7 @@ async function validateThiefCharacter(characterName, userId, interaction) {
         console.error('[steal.js]: Error in validateThiefCharacter:', error);
         
         // Call global error handler for tracking
-        handleError(error, 'steal.js', {
+        handleInteractionError(error, 'steal.js', {
             commandName: 'steal',
             operationType: 'validateThiefCharacter',
             characterName: characterName,

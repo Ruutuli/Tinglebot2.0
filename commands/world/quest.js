@@ -2,7 +2,7 @@ const {
  SlashCommandBuilder,
  PermissionFlagsBits,
 } = require("@discordjs/builders");
-const { handleError } = require("../../utils/globalErrorHandler");
+const { handleInteractionError } = require("../../utils/globalErrorHandler");
 const {
  EmbedBuilder,
  ActionRowBuilder,
@@ -114,19 +114,10 @@ module.exports = {
      });
    }
   } catch (error) {
-   handleError(error, "quest.js", {
-    commandName: "quest",
-    userTag: interaction.user.tag,
-    userId: interaction.user.id,
-    options: interaction.options.data,
+   await handleInteractionError(error, interaction, {
+     source: 'quest.js',
+     subcommand: interaction.options?.getSubcommand()
    });
-
-   if (!interaction.replied && !interaction.deferred) {
-    await interaction.reply({
-     content: "[quest.js]❌ An error occurred while processing your request. Please try again later.",
-     ephemeral: true,
-    });
-   }
   }
  },
 
@@ -657,7 +648,7 @@ module.exports = {
    return interaction.reply({ embeds: [embed] });
 
   } catch (error) {
-   handleError(error, "quest.js", {
+   handleInteractionError(error, "quest.js", {
     commandName: "quest postcount",
     userTag: interaction.user.tag,
     userId: interaction.user.id,

@@ -19,7 +19,7 @@ const Minigame = require('../../models/MinigameModel');
 const Character = require('../../models/CharacterModel');
 const User = require('../../models/UserModel');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 
@@ -333,33 +333,10 @@ module.exports = {
         await interaction.reply({ content: '❌ Unknown minigame command.', ephemeral: true });
       }
     } catch (error) {
-      handleError(error, 'minigame.js', {
-        commandName: 'minigame',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
+      await handleInteractionError(error, interaction, {
+        source: 'minigame.js',
         subcommand: subcommand
       });
-      
-      console.error('[minigame.js]: Command execution error', error);
-      
-      if (!interaction.replied && !interaction.deferred) {
-        try {
-          await interaction.reply({ 
-            content: '❌ An error occurred while processing your request.', 
-            ephemeral: true 
-          });
-        } catch (replyError) {
-          console.error('Failed to send error response:', replyError);
-        }
-      } else if (interaction.deferred) {
-        try {
-          await interaction.editReply({ 
-            content: '❌ An error occurred while processing your request.' 
-          });
-        } catch (editError) {
-          console.error('Failed to send error edit response:', editError);
-        }
-      }
     }
   },
 

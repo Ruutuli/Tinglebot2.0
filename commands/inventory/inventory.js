@@ -26,7 +26,7 @@ const {
 } = require('../../database/db.js');
 
 // ------------------- Project Utilities -------------------
-const { handleError } = require('../../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/googleSheetsUtils.js');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../utils/googleSheetsUtils.js');
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
@@ -123,27 +123,9 @@ module.exports = {
           });
       }
     } catch (error) {
-      handleError(error, 'inventory.js', {
-        commandName: interaction.commandName,
-        userTag: interaction.user?.tag,
-        userId: interaction.user?.id,
-        options: interaction.options?.data,
+      await handleInteractionError(error, interaction, {
+        source: 'inventory.js',
         subcommand: interaction.options?.getSubcommand()
-      });
-      console.error('[inventory.js]: Error executing command', error);
-      await interaction.reply({ 
-        embeds: [new EmbedBuilder()
-          .setColor('#FF0000')
-          .setTitle('❌ Command Error')
-          .setDescription('An unexpected error occurred while processing your command.')
-          .addFields(
-            { name: '🔍 What Happened', value: 'The command encountered an error while trying to process your request.' },
-            { name: '💡 How to Fix', value: '• Try using the command again\n• Check if your inventory is properly set up\n• If the error persists, contact staff for assistance' }
-          )
-          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
-          .setFooter({ text: 'Error ID: ' + Date.now() })
-          .setTimestamp()],
-        flags: [MessageFlags.Ephemeral]
       });
     }
   },
@@ -323,7 +305,7 @@ module.exports = {
             ]
           });
         } catch (error) {
-          handleError(error, 'inventory.js');
+          handleInteractionError(error, 'inventory.js');
           console.error('[inventory.js]: ❌ Error updating interaction', error);
           
           if (error.code === 10062) { // Unknown interaction error
@@ -342,13 +324,13 @@ module.exports = {
         try {
           await interaction.editReply({ components: [] }).catch(() => {});
         } catch (err) {
-          handleError(err, 'inventory.js');
+          handleInteractionError(err, 'inventory.js');
           console.error('[inventory.js]: ❌ Error clearing components on collector end', err);
         }
       });
 
     } catch (error) {
-      handleError(error, 'inventory.js');
+      handleInteractionError(error, 'inventory.js');
       console.error('[inventory.js]: Error in handleView', error);
       try {
         if (!interaction.replied && !interaction.deferred) {
@@ -428,7 +410,7 @@ module.exports = {
       });
 
     } catch (error) {
-      handleError(error, 'inventory.js');
+      handleInteractionError(error, 'inventory.js');
       console.error('[inventory.js]: Error in handleSync', error);
       await interaction.reply({ content: '❌ An error occurred while syncing inventory.', flags: [MessageFlags.Ephemeral] });
     }
@@ -506,7 +488,7 @@ module.exports = {
       });
 
     } catch (error) {
-      handleError(error, 'inventory.js');
+      handleInteractionError(error, 'inventory.js');
       console.error('[inventory.js]: Error in handleTest', error);
 
       let errorMessage;

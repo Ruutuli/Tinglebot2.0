@@ -18,7 +18,7 @@ const { google } = require("googleapis");
 const mongoose = require("mongoose");
 const { MongoClient } = require("mongodb");
 
-const { handleError } = require("../../utils/globalErrorHandler");
+const { handleInteractionError } = require("../../utils/globalErrorHandler");
 const {
  getOrCreateToken,
  updateTokenBalance,
@@ -643,30 +643,10 @@ module.exports = {
     }
    }
   } catch (error) {
-   handleError(error, "character.js", {
-     commandName: interaction.commandName,
-     userTag: interaction.user?.tag,
-     userId: interaction.user?.id,
-     options: interaction.options?.data,
+   await handleInteractionError(error, interaction, {
+     source: 'character.js',
      subcommand: interaction.options?.getSubcommand()
    });
-   const errorMessage = "❌ An error occurred while processing your request.";
-   
-   try {
-     if (!interaction.replied && !interaction.deferred) {
-       await interaction.reply({
-         content: errorMessage,
-         ephemeral: true
-       });
-     } else if (interaction.replied || interaction.deferred) {
-       await interaction.followUp({
-         content: errorMessage,
-         ephemeral: true
-       });
-     }
-   } catch (replyError) {
-     console.error('Failed to send error message:', replyError);
-   }
   }
  },
 
@@ -751,7 +731,7 @@ module.exports = {
     }
    }
   } catch (error) {
-   handleError(error, "character.js", {
+   handleInteractionError(error, "character.js", {
      commandName: interaction.commandName,
      userTag: interaction.user?.tag,
      userId: interaction.user?.id,
@@ -1020,7 +1000,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     // Note: createCharacterInteraction already handles sending the reply,
     // so we don't need to send another one here
   } catch (error) {
-    handleError(error, "character.js");
+    handleInteractionError(error, "character.js");
     console.error(
       "[CreateCharacter]: Error during character creation:",
       error.message
@@ -1179,7 +1159,7 @@ async function handleEditCharacter(interaction) {
         // Generate public URL for the uploaded icon
         finalUpdatedValue = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
       } catch (err) {
-        handleError(err, "character.js");
+        handleInteractionError(err, "character.js");
         return await safeReply(interaction, "❌ Failed to upload the new icon. Please try again later.");
       }
     } else {
@@ -1216,7 +1196,7 @@ async function handleEditCharacter(interaction) {
       
       await savePendingEditToStorage(editId, pendingEdit);
     } catch (err) {
-      handleError(err, "character.js");
+      handleInteractionError(err, "character.js");
       console.error(`[character.js]: Error sending update notification: ${err.message}`);
       return await safeReply(interaction, "❌ Failed to send edit request to mods. Please try again later.");
     }
@@ -1238,7 +1218,7 @@ async function handleEditCharacter(interaction) {
     await safeReply(interaction, successEmbed, true);
 
   } catch (error) {
-    handleError(error, "character.js");
+    handleInteractionError(error, "character.js");
     console.error('[handleEditCharacter] Error occurred:', error);
     await safeReply(interaction, "❌ An error occurred while processing your request.");
   }
@@ -1435,7 +1415,7 @@ async function handleViewCharacter(interaction) {
 
   await interaction.reply({ embeds, flags: 64 });
  } catch (error) {
-  handleError(error, "character.js");
+  handleInteractionError(error, "character.js");
   console.error("Error executing viewcharacter command:", error);
   await interaction.reply({
    content: "❌ An error occurred while fetching the character.",
@@ -1503,7 +1483,7 @@ async function handleViewCharacterList(interaction) {
 
   await interaction.reply({ embeds: [embed], components: rows, flags: 64 });
  } catch (error) {
-  handleError(error, "character.js");
+  handleInteractionError(error, "character.js");
   await interaction.reply({
    content: `❌ Error retrieving character list.`,
    flags: 64
@@ -1559,7 +1539,7 @@ async function handleDeleteCharacter(interaction) {
       options: interaction.options.data
     });
    } catch (error) {
-    handleError(error, "character.js", {
+    handleInteractionError(error, "character.js", {
       commandName: "delete",
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -1658,7 +1638,7 @@ async function handleDeleteCharacter(interaction) {
    flags: [MessageFlags.Ephemeral]
   });
  } catch (error) {
-  handleError(error, "character.js", {
+  handleInteractionError(error, "character.js", {
     commandName: "delete",
     userTag: interaction.user.tag,
     userId: interaction.user.id,
@@ -2005,7 +1985,7 @@ async function handleChangeJob(interaction) {
   console.log(`[handleChangeJob] ✅ Job change completed: ${characterName} (${previousJob} -> ${newJob})`);
  } catch (error) {
   console.error('[handleChangeJob] Error occurred:', error);
-  handleError(error, "character.js");
+  handleInteractionError(error, "character.js");
   await interaction.followUp({
    content: "❌ An error occurred while processing your request. Please try again later.",
    ephemeral: true
@@ -2114,7 +2094,7 @@ async function handleSetBirthday(interaction) {
    flags: [MessageFlags.Ephemeral]
   });
  } catch (error) {
-  handleError(error, "character.js");
+  handleInteractionError(error, "character.js");
   await interaction.reply({
    content: `❌ **An error occurred while setting the birthday**: ${error.message}`,
    flags: [MessageFlags.Ephemeral]

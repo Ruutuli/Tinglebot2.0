@@ -1,6 +1,6 @@
 // ------------------- Standard Libraries -------------------
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 
 // ------------------- Database Services -------------------
 const { fetchCharacterByNameAndUserId } = require('../../database/db');

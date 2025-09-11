@@ -1,6 +1,26 @@
 // ============================================================================
 // ------------------- Error Handling -------------------
 // Global error capturing and logging to Discord and Trello.
+//
+// USAGE EXAMPLES:
+// 
+// 1. Basic error handling (console only):
+//    await handleError(error, 'myFile.js');
+//
+// 2. Interaction error with reply:
+//    await handleError(error, 'myFile.js', {
+//      interaction: interaction,
+//      responseType: ERROR_RESPONSE_TYPES.REPLY,
+//      errorMessage: 'Custom error message'
+//    });
+//
+// 3. Using convenience wrappers:
+//    await handleInteractionError(error, interaction, { source: 'myFile.js' });
+//    await handleAsyncError(error, 'myFile.js', { responseType: ERROR_RESPONSE_TYPES.RETURN });
+//
+// 4. Safe async wrapper:
+//    const safeFunction = safeAsync(myAsyncFunction, { source: 'myFile.js' });
+//    const result = await safeFunction(args);
 // ============================================================================
 const { EmbedBuilder } = require('discord.js');
 const dbConfig = require('../config/database');
@@ -22,11 +42,12 @@ function initializeErrorHandler(trelloLoggerFunction, discordClient) {
 
 // ------------------- Error Response Types -------------------
 const ERROR_RESPONSE_TYPES = {
-  INTERACTION_REPLY: 'interaction_reply',
-  INTERACTION_FOLLOWUP: 'interaction_followup',
-  CONSOLE_ONLY: 'console_only',
-  RETURN_ERROR: 'return_error',
-  THROW_ERROR: 'throw_error'
+  REPLY: 'reply',           // For interaction.reply()
+  FOLLOWUP: 'followup',     // For interaction.followUp()
+  EDIT: 'edit',             // For interaction.editReply()
+  CONSOLE: 'console',       // Console only, no user response
+  RETURN: 'return',         // Return error object
+  THROW: 'throw'            // Re-throw error
 };
 
 // ------------------- Standard Error Context -------------------
@@ -38,8 +59,8 @@ function createErrorContext(source, context = {}) {
   };
 }
 
-// ------------------- Handle Errors -------------------
-// Captures, formats, and sends errors to both Trello and Discord.
+// ------------------- Unified Error Handler -------------------
+// Single function to handle all error types with consistent logging and response handling.
 async function handleError(error, source = "Unknown Source", context = {}) {
   const message = error?.stack || error?.message || String(error) || 'Unknown error occurred';
   const timestamp = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
@@ -152,46 +173,40 @@ Error: ${message}
       }
     }
   }
-}
 
-// ------------------- Unified Error Handler for Interactions -------------------
-async function handleInteractionError(error, interaction, context = {}) {
-  const errorContext = createErrorContext(context.source || 'interaction', {
-    commandName: context.commandName || interaction?.commandName || 'unknown',
-    userTag: interaction?.user?.tag || 'unknown',
-    userId: interaction?.user?.id || 'unknown',
-    ...context
-  });
-
-  // Log error with global handler
-  await handleError(error, errorContext.source, errorContext);
-
-  // Determine response type
-  const responseType = context.responseType || ERROR_RESPONSE_TYPES.INTERACTION_REPLY;
+  // ------------------- Handle Response Based on Type -------------------
+  const responseType = context.responseType || ERROR_RESPONSE_TYPES.CONSOLE;
   const errorMessage = context.errorMessage || '❌ **An error occurred while processing your request. Please try again later.**';
+  const interaction = context.interaction;
 
   try {
     switch (responseType) {
-      case ERROR_RESPONSE_TYPES.INTERACTION_REPLY:
-        if (!interaction.replied && !interaction.deferred) {
+      case ERROR_RESPONSE_TYPES.REPLY:
+        if (interaction && !interaction.replied && !interaction.deferred) {
           return await interaction.reply({ content: errorMessage, ephemeral: true });
         }
         break;
       
-      case ERROR_RESPONSE_TYPES.INTERACTION_FOLLOWUP:
-        if (interaction.replied || interaction.deferred) {
+      case ERROR_RESPONSE_TYPES.FOLLOWUP:
+        if (interaction && (interaction.replied || interaction.deferred)) {
           return await interaction.followUp({ content: errorMessage, ephemeral: true });
         }
         break;
       
-      case ERROR_RESPONSE_TYPES.CONSOLE_ONLY:
+      case ERROR_RESPONSE_TYPES.EDIT:
+        if (interaction && (interaction.replied || interaction.deferred)) {
+          return await interaction.editReply({ content: errorMessage, ephemeral: true });
+        }
+        break;
+      
+      case ERROR_RESPONSE_TYPES.CONSOLE:
         // Only log, no user response
         return;
       
-      case ERROR_RESPONSE_TYPES.RETURN_ERROR:
+      case ERROR_RESPONSE_TYPES.RETURN:
         return { success: false, error: error.message };
       
-      case ERROR_RESPONSE_TYPES.THROW_ERROR:
+      case ERROR_RESPONSE_TYPES.THROW:
         throw error;
     }
   } catch (replyError) {
@@ -199,30 +214,36 @@ async function handleInteractionError(error, interaction, context = {}) {
   }
 }
 
-// ------------------- Unified Error Handler for Async Functions -------------------
-async function handleAsyncError(error, source, context = {}) {
-  const errorContext = createErrorContext(source, context);
+// ------------------- Convenience Wrappers -------------------
+// These functions provide backward compatibility and convenience for common use cases.
+
+// For interaction-based errors (replaces handleInteractionError)
+async function handleInteractionError(error, interaction, context = {}) {
+  const errorContext = {
+    ...context,
+    interaction: interaction,
+    commandName: context.commandName || interaction?.commandName || 'unknown',
+    userTag: interaction?.user?.tag || 'unknown',
+    userId: interaction?.user?.id || 'unknown',
+    options: interaction?.options?.data || context.options,
+    subcommand: interaction?.options?.getSubcommand() || context.subcommand,
+    responseType: context.responseType || ERROR_RESPONSE_TYPES.REPLY
+  };
   
-  // Log error with global handler
-  await handleError(error, errorContext.source, errorContext);
-
-  // Determine response type
-  const responseType = context.responseType || ERROR_RESPONSE_TYPES.CONSOLE_ONLY;
-
-  switch (responseType) {
-    case ERROR_RESPONSE_TYPES.RETURN_ERROR:
-      return { success: false, error: error.message };
-    
-    case ERROR_RESPONSE_TYPES.THROW_ERROR:
-      throw error;
-    
-    case ERROR_RESPONSE_TYPES.CONSOLE_ONLY:
-    default:
-      return { success: false, error: error.message };
-  }
+  return await handleError(error, context.source || 'interaction', errorContext);
 }
 
-// ------------------- Safe Async Wrapper -------------------
+// For async function errors (replaces handleAsyncError)
+async function handleAsyncError(error, source, context = {}) {
+  const errorContext = {
+    ...context,
+    responseType: context.responseType || ERROR_RESPONSE_TYPES.CONSOLE
+  };
+  
+  return await handleError(error, source, errorContext);
+}
+
+// Safe async wrapper for functions
 function safeAsync(fn, context = {}) {
   return async (...args) => {
     try {
@@ -234,10 +255,15 @@ function safeAsync(fn, context = {}) {
 }
 
 module.exports = {
+  // Main unified error handler
   handleError,
+  
+  // Convenience wrappers for backward compatibility
   handleInteractionError,
   handleAsyncError,
   safeAsync,
+  
+  // Utilities
   createErrorContext,
   ERROR_RESPONSE_TYPES,
   initializeErrorHandler

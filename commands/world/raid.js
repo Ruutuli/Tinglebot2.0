@@ -2,7 +2,7 @@
 // ---- Standard Libraries ----
 // ============================================================================
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { fetchAnyCharacterByNameAndUserId } = require('../../database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration } = require('../../modules/raidModule');
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed } = require('../../embeds/embeds.js');
@@ -260,20 +260,10 @@ module.exports = {
       });
 
     } catch (error) {
-      handleError(error, 'raid.js', {
-        commandName: 'raid',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
+      await handleInteractionError(error, interaction, {
+        source: 'raid.js',
         raidId: interaction.options.getString('raidid'),
         characterName: interaction.options.getString('charactername')
-      });
-      
-      console.error(`[raid.js]: ❌ Error processing raid command:`, error);
-      
-      const errorMessage = error.message || 'An unexpected error occurred';
-      return interaction.editReply({
-        content: `❌ Error: ${errorMessage}`,
-        ephemeral: true
       });
     }
   },
@@ -773,7 +763,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
     }
     
   } catch (error) {
-    handleError(error, 'raid.js', {
+    handleInteractionError(error, 'raid.js', {
       functionName: 'handleRaidVictory',
       raidId: raidData.raidId,
       monsterName: monster.name

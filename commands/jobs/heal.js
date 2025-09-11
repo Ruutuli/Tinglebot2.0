@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules -------------------
 // Group imports into standard libraries, third-party, and local modules
 const { SlashCommandBuilder } = require('discord.js');
-const { handleError } = require('../../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('../../database/db.js');
 const { capitalizeFirstLetter } = require('../../modules/formattingModule.js');
 const { useStamina, recoverHearts } = require('../../modules/characterStatsModule.js');
@@ -207,10 +207,10 @@ async function handleInventorySync(characters, interaction) {
   return true;
 }
 
-// ---- Function: handleErrorResponse ----
+// ---- Function: handleInteractionErrorResponse ----
 // Standardizes error handling and response
-async function handleErrorResponse(error, interaction, context) {
-  handleError(error, 'heal.js');
+async function handleInteractionErrorResponse(error, interaction, context) {
+  handleInteractionError(error, 'heal.js');
   console.error(`[heal.js]: ❌ Error during ${context}: ${error.message}`);
   await interaction.editReply(`❌ **Error:** An issue occurred while ${context}.`);
 }
@@ -405,7 +405,7 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
       await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
     }
   } catch (error) {
-    await handleErrorResponse(error, interaction, 'creating the healing request');
+    await handleInteractionErrorResponse(error, interaction, 'creating the healing request');
   }
 }
 
@@ -781,7 +781,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
 
     await interaction.followUp({ content: message, embeds: [embed] });
   } catch (error) {
-    await handleErrorResponse(error, interaction, 'fulfilling the healing request');
+    await handleInteractionErrorResponse(error, interaction, 'fulfilling the healing request');
   }
 }
 
@@ -847,21 +847,28 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const subcommand = interaction.options.getSubcommand();
-    await interaction.deferReply();
+    try {
+      const subcommand = interaction.options.getSubcommand();
+      await interaction.deferReply();
 
-    if (subcommand === 'request') {
-      const characterName = interaction.options.getString('charactername');
-      const heartsToHeal = interaction.options.getInteger('hearts');
-      const paymentOffered = interaction.options.getString('payment') || 'No payment specified';
-      const healerName = interaction.options.getString('healer');
+      if (subcommand === 'request') {
+        const characterName = interaction.options.getString('charactername');
+        const heartsToHeal = interaction.options.getInteger('hearts');
+        const paymentOffered = interaction.options.getString('payment') || 'No payment specified';
+        const healerName = interaction.options.getString('healer');
 
-      await handleHealingRequest(interaction, characterName, heartsToHeal, paymentOffered, healerName);
-    } else if (subcommand === 'fulfill') {
-      const requestId = interaction.options.getString('requestid');
-      const healerName = interaction.options.getString('healername');
+        await handleHealingRequest(interaction, characterName, heartsToHeal, paymentOffered, healerName);
+      } else if (subcommand === 'fulfill') {
+        const requestId = interaction.options.getString('requestid');
+        const healerName = interaction.options.getString('healername');
 
-      await handleHealingFulfillment(interaction, requestId, healerName);
+        await handleHealingFulfillment(interaction, requestId, healerName);
+      }
+    } catch (error) {
+      await handleInteractionError(error, interaction, {
+        source: 'heal.js',
+        subcommand: interaction.options?.getSubcommand()
+      });
     }
   }
 };

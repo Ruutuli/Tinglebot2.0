@@ -9,7 +9,7 @@
 // const { fetchCharacterByNameAndUserId } = require('../../database/db');
 
 // // ---- Custom Modules ----
-// const { handleError } = require('../../utils/globalErrorHandler');
+// const { handleInteractionError } = require('../../utils/globalErrorHandler');
 // const { capitalizeVillageName } = require('../../utils/stringUtils');
 // const { checkInventorySync } = require('../../utils/characterUtils');
 // const { getEncounterById } = require('../../modules/mountModule');

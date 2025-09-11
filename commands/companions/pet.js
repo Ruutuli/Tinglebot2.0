@@ -48,7 +48,7 @@ const {
 } = require("../../utils/googleSheetsUtils");
 const { uploadPetImage } = require("../../utils/uploadUtils");
 const { checkInventorySync } = require("../../utils/characterUtils");
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { enforceJail } = require('../../utils/jailCheck');
 const { characterExistsNotOwned } = require('../../utils/validation');
 
