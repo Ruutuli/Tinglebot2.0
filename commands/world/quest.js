@@ -800,21 +800,12 @@ module.exports = {
  // ------------------- Embed Creation Helper Methods -------------------
  // ============================================================================
  createSuccessEmbed(quest, characterName, userName, character) {
-  const participantCount = quest.participants ? quest.participants.size : 0;
-  const slotsLeft = quest.participantCap ? quest.participantCap - participantCount : 'Unlimited';
-  const slotsText = quest.participantCap ? `${participantCount}/${quest.participantCap} (${slotsLeft} slots left)` : `${participantCount} participants`;
-
   const embed = new EmbedBuilder()
    .setColor(EMBED_COLORS.SUCCESS)
    .setTitle(`🎯 Quest Joined Successfully!`)
    .setDescription(`**${characterName}** (${userName}) joined the quest **${quest.title}**!`)
    .addFields(
-    { name: 'Quest ID', value: `\`${quest.questID}\``, inline: false },
-    { name: 'Quest Type', value: quest.questType, inline: false },
-    { name: 'Location', value: quest.location, inline: false },
-    { name: 'Participants', value: slotsText, inline: false },
-    { name: 'Time Limit', value: quest.timeLimit, inline: false },
-    { name: 'Token Reward', value: `${quest.getNormalizedTokenReward ? quest.getNormalizedTokenReward() : (quest.tokenReward || 0)} tokens`, inline: false }
+    { name: 'Quest ID', value: `\`${quest.questID}\``, inline: false }
    )
    .setImage(BORDER_IMAGE)
    .setTimestamp();
@@ -825,7 +816,7 @@ module.exports = {
 
   embed.addFields({
    name: '💡 Want to join this quest?',
-   value: `</quest join:1389946995468271729> questid:${quest.questID} charactername:YourCharacter`,
+   value: `</quest join:1389946995468271729>`,
    inline: false
   });
 
