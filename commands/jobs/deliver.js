@@ -579,7 +579,7 @@ const command = {
      }
     }
    } catch (error) {
-    handleError(error, "deliver.js");
+    handleInteractionError(error, "deliver.js");
     return interaction.reply({
      content: `❌ An unexpected error occurred while creating the delivery task. Please try again later.`,
      ephemeral: true,
@@ -869,7 +869,7 @@ const command = {
      ephemeral: true,
     });
    } catch (error) {
-    handleError(error, "deliver.js");
+    handleInteractionError(error, "deliver.js");
     return interaction.reply({
      content: `❌ An error occurred while cancelling the delivery request.`,
      ephemeral: true,

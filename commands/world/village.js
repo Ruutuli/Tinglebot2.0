@@ -93,7 +93,7 @@
 //         }
 //         return { success: false, message: '❌ **Invalid contribution type.**' };
 //     } catch (error) {
-//         handleError(error, 'village.js');
+//         handleInteractionError(error, 'village.js');
 //         console.error('[processContribution] Error:', error);
 //         return { success: false, message: '❌ **An error occurred while processing your contribution.**' };
 //     }
@@ -256,7 +256,7 @@
 //         }
 //         return { success: false, message: '❌ **Invalid contribution type.**' };
 //     } catch (error) {
-//         handleError(error, 'village.js');
+//         handleInteractionError(error, 'village.js');
 //         console.error('[processRepair] Error:', error);
 //         return { success: false, message: '❌ **An error occurred while processing your repair contribution.**' };
 //     }
@@ -524,7 +524,7 @@
 //             }
 //         }
 //     } catch (error) {
-//         handleError(error, 'village.js');
+//         handleInteractionError(error, 'village.js');
 //         console.error('[village.js]: ❌ Error checking expired village cooldowns:', error.message);
 //     }
 // }
@@ -822,7 +822,7 @@
 //             }
 
 //         } catch (error) {
-//             handleError(error, 'village.js');
+//             handleInteractionError(error, 'village.js');
 //             console.error(`[village.js] An error occurred while processing "${subcommand}" for village "${villageName}":`, error);
 //             return interaction.reply({ content: '❌ **An error occurred while processing your request.**', ephemeral: true });
 //         }

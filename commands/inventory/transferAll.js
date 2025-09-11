@@ -203,7 +203,7 @@ module.exports = {
               ephemeral: true
             });
           } catch (error) {
-            handleError(error, 'transferAll.js', {
+            handleInteractionError(error, 'transferAll.js', {
               commandName: 'transfer-all',
               userTag: interaction.user.tag,
               userId: interaction.user.id,
@@ -228,7 +228,7 @@ module.exports = {
         }
       });
     } catch (error) {
-      handleError(error, 'transferAll.js', {
+      handleInteractionError(error, 'transferAll.js', {
         commandName: 'transfer-all',
         userTag: interaction.user.tag,
         userId: interaction.user.id,

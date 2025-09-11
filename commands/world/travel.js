@@ -89,7 +89,7 @@ const {
 } = process.env;
 
 if (!PATH_OF_SCARLET_LEAVES || !LEAF_DEW_WAY) {
-  handleError(new Error('Missing required path channel IDs in environment variables.'), 'travel.js');
+  handleInteractionError(new Error('Missing required path channel IDs in environment variables.'), 'travel.js');
   throw new Error('Missing required path channel IDs in environment variables.');
 }
 
@@ -621,7 +621,7 @@ module.exports = {
       });
       
     } catch (error) {
-      handleError(error, 'travel.js (execute)', {
+      handleInteractionError(error, 'travel.js (execute)', {
         commandName: 'travel',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -933,7 +933,7 @@ async function processTravelDay(day, context) {
         });
         await character.save();
       } catch (error) {
-        handleError(error, 'travel.js');
+        handleInteractionError(error, 'travel.js');
         await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
       }
       for (const msg of travelingMessages) {
@@ -1183,7 +1183,7 @@ async function processTravelDay(day, context) {
       });
     }
   } catch (error) {
-    handleError(error, 'travel.js (processTravelDay)', {
+    handleInteractionError(error, 'travel.js (processTravelDay)', {
       commandName: 'travel',
       userTag: context.interaction?.user?.tag,
       userId: context.interaction?.user?.id,
@@ -1235,7 +1235,7 @@ async function checkSevereWeather(village) {
 
     return { blocked: false };
   } catch (error) {
-    handleError(error, 'travel.js (checkSevereWeather)', {
+    handleInteractionError(error, 'travel.js (checkSevereWeather)', {
       commandName: 'travel',
       options: {
         village,

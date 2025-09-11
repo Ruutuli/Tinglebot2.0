@@ -166,7 +166,7 @@ module.exports = {
           });
       }
     } catch (error) {
-      handleError(error, 'tableroll.js', {
+      handleInteractionError(error, 'tableroll.js', {
         commandName: 'tableroll',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -278,7 +278,7 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
-      handleError(error, 'tableroll.js', {
+      handleInteractionError(error, 'tableroll.js', {
         commandName: 'tableroll create',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -423,7 +423,7 @@ module.exports = {
            inventoryAdded = true;
            // Note: Google Sheets sync is handled by addItemInventoryDatabase
          } catch (error) {
-           handleError(error, 'tableroll.js', {
+           handleInteractionError(error, 'tableroll.js', {
              commandName: '/tableroll roll',
              userTag: interaction.user.tag,
              userId: interaction.user.id,
@@ -508,7 +508,7 @@ module.exports = {
       await interaction.reply({ embeds: [embed] });
 
     } catch (error) {
-      handleError(error, 'tableroll.js', {
+      handleInteractionError(error, 'tableroll.js', {
         commandName: 'tableroll list',
         userTag: interaction.user.tag,
         userId: interaction.user.id
@@ -580,7 +580,7 @@ module.exports = {
       await interaction.reply({ embeds: [embed] });
 
     } catch (error) {
-      handleError(error, 'tableroll.js', {
+      handleInteractionError(error, 'tableroll.js', {
         commandName: 'tableroll view',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -688,7 +688,7 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
-      handleError(error, 'tableroll.js', {
+      handleInteractionError(error, 'tableroll.js', {
         commandName: 'tableroll edit',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -735,7 +735,7 @@ module.exports = {
       await interaction.reply({ embeds: [embed] });
 
     } catch (error) {
-      handleError(error, 'tableroll.js', {
+      handleInteractionError(error, 'tableroll.js', {
         commandName: 'tableroll delete',
         userTag: interaction.user.tag,
         userId: interaction.user.id,

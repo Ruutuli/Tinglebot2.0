@@ -54,7 +54,7 @@
 //     await sharp(buffer).toFile(outputPath);
 //     return outputPath;
 //   } catch (error) {
-//     handleError(error, 'viewMap.js');
+//     handleInteractionError(error, 'viewMap.js');
 
 //     console.error(`[viewMap.js:error] downloadSquareImage failed: ${error}`);
 //     throw error;
@@ -92,7 +92,7 @@
 //     await sharp(buffer).extract(cropRegion).toFile(outputPath);
 //     return outputPath;
 //   } catch (error) {
-//     handleError(error, 'viewMap.js');
+//     handleInteractionError(error, 'viewMap.js');
 
 //     console.error(`[viewMap.js:error] cropQuadrant failed: ${error}`);
 //     throw error;
@@ -184,7 +184,7 @@
 //       const attachment = new AttachmentBuilder(outputImagePath, { name: quadrantId ? 'quadrant.png' : 'full_square.png' });
 //       await interaction.reply({ embeds: [embed], files: [attachment] });
 //     } catch (error) {
-//     handleError(error, 'viewMap.js');
+//     handleInteractionError(error, 'viewMap.js');
 
 //       console.error(`[viewMap.js:error] Error processing viewmap command: ${error}`);
 //       await interaction.reply('❌ **There was an error retrieving the map data. Please try again later.**');

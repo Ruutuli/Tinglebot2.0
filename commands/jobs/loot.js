@@ -100,7 +100,7 @@ const { getCurrentWeather } = require('../../services/weatherService');
 
 // Unified error handling
 async function handleLootError(interaction, error, context = '') {
-  handleError(error, "loot.js", {
+  handleInteractionError(error, "loot.js", {
     operation: 'handleLootError',
     commandName: interaction.commandName || 'loot',
     userTag: interaction.user.tag,
@@ -552,7 +552,7 @@ module.exports = {
      try {
        await updateDailyRoll(character, 'loot');
      } catch (error) {
-       handleError(error, "loot.js", {
+       handleInteractionError(error, "loot.js", {
          operation: 'updateDailyRoll',
          commandName: interaction.commandName || 'loot',
          userTag: interaction.user.tag,
@@ -679,7 +679,7 @@ module.exports = {
       return; // Stop if reroll is needed and executed
      }
     } catch (error) {
-     handleError(error, "loot.js", {
+     handleInteractionError(error, "loot.js", {
        operation: 'bloodMoonEncounter',
        commandName: interaction.commandName || 'loot',
        userTag: interaction.user.tag,
@@ -724,7 +724,7 @@ module.exports = {
   } catch (error) {
     // Only log errors that aren't inventory sync related
     if (!error.message.includes('inventory is not synced')) {
-      handleError(error, "loot.js", {
+      handleInteractionError(error, "loot.js", {
         operation: 'execute',
         commandName: interaction.commandName || 'loot',
         userTag: interaction.user.tag,

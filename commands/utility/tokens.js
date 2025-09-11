@@ -242,7 +242,7 @@ module.exports = {
           !error.message.includes('permission') && 
           !error.message.includes('404') && 
           !error.message.includes('headers')) {
-        handleError(error, 'tokens.js');
+        handleInteractionError(error, 'tokens.js');
       }
       const { fullMessage } = handleTokenError(error, interaction);
       await interaction.editReply({

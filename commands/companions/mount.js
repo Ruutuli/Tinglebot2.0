@@ -77,7 +77,7 @@
 //             }
 //         } catch (error) {
 //             console.error('[mount.js]: ❌ Error in execute:', error);
-//             handleError(error, 'mount.js');
+//             handleInteractionError(error, 'mount.js');
 //             await interaction.reply({
 //                 content: '❌ **An error occurred while processing your request. Please try again later.**',
 //                 ephemeral: true,
@@ -153,7 +153,7 @@
 
 //     } catch (error) {
 //         console.error('[mount.js]: ❌ Error in handleEncounter:', error);
-//         handleError(error, 'mount.js');
+//         handleInteractionError(error, 'mount.js');
 //         await interaction.reply({
 //             content: '❌ **An error occurred while processing your request. Please try again later.**',
 //             ephemeral: true,

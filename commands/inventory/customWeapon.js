@@ -178,7 +178,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
                         const materialObjectId = new mongoose.Types.ObjectId(material._id);
                         materialItem = await ItemModel.findById(materialObjectId);
                     } catch (error) {
-                        handleError(error, 'customWeapon.js', {
+                        handleInteractionError(error, 'customWeapon.js', {
                             commandName: 'customWeapon',
                             userTag: interaction?.user?.tag,
                             userId: interaction?.user?.id,
@@ -232,7 +232,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
                     uuidv4()
                 ];
             } catch (error) {
-                handleError(error, 'customWeapon.js', {
+                handleInteractionError(error, 'customWeapon.js', {
                     commandName: 'customWeapon',
                     userTag: interaction?.user?.tag,
                     userId: interaction?.user?.id,
@@ -279,7 +279,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
             }
         });
     } catch (error) {
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             userTag: interaction?.user?.tag,
             userId: interaction?.user?.id,
@@ -319,7 +319,7 @@ async function getAllWeaponSubmissions() {
         const submissions = await getAllWeaponSubmissions();
         return submissions;
     } catch (error) {
-        handleError(error, 'customWeapon.js');
+        handleInteractionError(error, 'customWeapon.js');
         console.error(`[customweapon helper]: Error reading weapon submissions:`, error);
         return [];
     }
@@ -485,7 +485,7 @@ async function parseAndValidateMaterials(materialsString, interaction) {
         return materials;
 
     } catch (error) {
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             userTag: interaction?.user?.tag,
             userId: interaction?.user?.id,
@@ -572,7 +572,7 @@ async function updateNotificationMessage(weaponSubmission, interaction) {
         console.log(`[updateNotificationMessage]: ✅ Successfully updated notification message for weapon ${weaponSubmission.weaponName}`);
 
     } catch (error) {
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             userTag: interaction?.user?.tag,
             userId: interaction?.user?.id,
@@ -629,7 +629,7 @@ async function sendApprovalDM(user, weaponSubmission, craftingMaterials, stamina
         console.log(`[sendApprovalDM]: ✅ Sent DM to user ${user.id} for weapon ${weaponSubmission.weaponName}`);
 
     } catch (error) {
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             userTag: interaction?.user?.tag,
             userId: interaction?.user?.id,
@@ -745,7 +745,7 @@ async function validateBlueprintVoucher(inventoryItems, characterName, operation
 
     } catch (error) {
         // Enhanced error handling with more context
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             characterName: characterName,
             options: {
@@ -857,7 +857,7 @@ async function validateStarFragment(inventoryItems, characterName) {
 
     } catch (error) {
         // Enhanced error handling with more context
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             characterName: characterName,
             options: {
@@ -918,7 +918,7 @@ async function validateCraftingLock(weaponSubmission, weaponId, characterName) {
         return true;
 
     } catch (error) {
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             characterName: characterName,
             options: {
@@ -956,7 +956,7 @@ async function markWeaponAsCrafted(weaponSubmission, weaponId, characterName) {
         return true;
 
     } catch (error) {
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             characterName: characterName,
             options: {
@@ -979,7 +979,7 @@ async function cleanupCraftedSubmission(weaponId, weaponName) {
         return true;
 
     } catch (error) {
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             options: {
                 weaponId: weaponId,
@@ -1027,7 +1027,7 @@ async function validateCreateCommandRequirements(characterName, weaponId, userId
         return character;
 
     } catch (error) {
-        handleError(error, 'customWeapon.js', {
+        handleInteractionError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             userTag: interaction?.user?.tag,
             userId: userId,
@@ -1149,7 +1149,7 @@ async function processCraftingTransaction(character, weaponSubmission, inventory
             console.log(`[processCraftingTransaction]: ✅ Rollback completed successfully`);
         } catch (rollbackError) {
             console.error(`[processCraftingTransaction]: ❌ Rollback failed: ${rollbackError.message}`);
-            handleError(rollbackError, 'customWeapon.js', {
+            handleInteractionError(rollbackError, 'customWeapon.js', {
                 commandName: 'customWeapon',
                 userTag: interaction?.user?.tag,
                 userId: interaction?.user?.id,
@@ -1338,7 +1338,7 @@ try {
         const inventoryCollection = await getCharacterInventoryCollection(character.name);
         inventoryItems = await inventoryCollection.find({ characterId: character._id }).toArray();
     } catch (error) {
-    handleError(error, 'customWeapon.js');
+    handleInteractionError(error, 'customWeapon.js');
 
         console.error(`[customweapon create]: Failed to fetch inventory for ${character.name}:`, error);
         await interaction.editReply({
@@ -1443,7 +1443,7 @@ try {
         );
 
     } catch (error) {
-        handleError(error, 'customWeapon.js');
+        handleInteractionError(error, 'customWeapon.js');
         console.error(`[customweapon create]: Failed to log Google Sheets crafting entry:`, error);
     }
 
@@ -1495,7 +1495,7 @@ const embed = {
 await interaction.editReply({ content: null, embeds: [embed] });
 
 } catch (error) {
-    handleError(error, 'customWeapon.js');
+    handleInteractionError(error, 'customWeapon.js');
 
     console.error(`[customweapon create]: Error sending success embed:`, error);
 }
@@ -1556,7 +1556,7 @@ try {
             throw new Error('Inventory is empty or not synced.');
         }
     } catch (error) {
-    handleError(error, 'customWeapon.js');
+    handleInteractionError(error, 'customWeapon.js');
 
         console.error(`[customweapon submit]: Failed to fetch inventory for ${characterName}:`, error);
         await interaction.editReply({
@@ -1584,7 +1584,7 @@ try {
             const imageName = `${weaponName.replace(/\s+/g, '_')}_${weaponId}`; // Generate a unique name
             uploadedImageUrl = await uploadSubmissionImage(imageAttachment.url, imageName); // Upload to Google Cloud
         } catch (error) {
-    handleError(error, 'customWeapon.js');
+    handleInteractionError(error, 'customWeapon.js');
 
             console.error(`[customweapon submit]: Failed to upload image for ${weaponName}:`, error);
             return interaction.reply({
@@ -1791,14 +1791,14 @@ try {
     if (error.code === 50001) {
         console.warn(`[customweapon submit]: Bot lacks access to notification channel. Submission will still be processed.`);
     } else {
-        handleError(error, 'customWeapon.js');
+        handleInteractionError(error, 'customWeapon.js');
         console.error(`[customweapon submit]: Error sending notification to channel:`, error);
     }
 }
 
 
 } catch (error) {
-    handleError(error, 'customWeapon.js');
+    handleInteractionError(error, 'customWeapon.js');
 
     console.error(`[customweapon submit]: Error during submission process:`, error);
 
@@ -1981,7 +1981,7 @@ try {
         try {
             user = await interaction.client.users.fetch(userId);
         } catch (error) {
-            handleError(error, 'customWeapon.js');
+            handleInteractionError(error, 'customWeapon.js');
             console.error(`[customweapon approve]: Failed to fetch user with ID ${userId}:`, error);
             // Continue with approval even if user can't be found - just skip DM
         }
@@ -1994,7 +1994,7 @@ try {
             craftingMaterials = await parseAndValidateMaterials(materialsToCraft, interaction);
 
         } catch (error) {
-            handleError(error, 'customWeapon.js');
+            handleInteractionError(error, 'customWeapon.js');
             console.error(`[customweapon approve]: ❌ Error parsing materials: ${error.message}`);
             await interaction.editReply({
                 content: `❌ Failed to parse materials: ${error.message}`,
@@ -2052,7 +2052,7 @@ try {
             approvalSuccessful = true;
 
         } catch (error) {
-            handleError(error, 'customWeapon.js');
+            handleInteractionError(error, 'customWeapon.js');
             console.error(`[customweapon approve]: Failed to save weapon to database:`, error);
             
             // If we saved the item but failed to update submission, clean up
@@ -2115,7 +2115,7 @@ try {
         }
 
     } catch (error) {
-        handleError(error, 'customWeapon.js');
+        handleInteractionError(error, 'customWeapon.js');
         console.error(`[customweapon approve]: Error approving weapon:`, error);
         await interaction.editReply({
             content: `❌ An error occurred while approving the weapon. Please try again later.`,
@@ -2125,7 +2125,7 @@ try {
 }
 
 } catch (error) {
-    handleError(error, 'customWeapon.js');
+    handleInteractionError(error, 'customWeapon.js');
     console.error(`[customweapon execute]: Error executing command:`, error);
     await interaction.editReply({
         content: `❌ An error occurred while processing your request. Please try again later.`,

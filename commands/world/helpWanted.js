@@ -1413,7 +1413,7 @@ module.exports = {
       try {
         await handleMonsterHunt(interaction, questId, characterName);
       } catch (error) {
-        handleError(error, 'helpWanted.js', {
+        handleInteractionError(error, 'helpWanted.js', {
           commandName: 'helpwanted monsterhunt',
           userTag: interaction.user.tag,
           userId: interaction.user.id,
@@ -1648,7 +1648,7 @@ module.exports = {
         await interaction.editReply({ embeds: [successEmbed] });
 
       } catch (error) {
-        handleError(error, 'helpWanted.js', {
+        handleInteractionError(error, 'helpWanted.js', {
           commandName: 'helpwanted complete',
           userTag: interaction.user.tag,
           userId: interaction.user.id,
@@ -1770,7 +1770,7 @@ module.exports = {
         }
 
       } catch (error) {
-        handleError(error, 'helpWanted.js', {
+        handleInteractionError(error, 'helpWanted.js', {
           commandName: 'helpwanted exchange',
           userTag: interaction.user.tag,
           userId: interaction.user.id,
@@ -1895,7 +1895,7 @@ module.exports = {
         return await interaction.editReply({ embeds: [embed] });
 
       } catch (error) {
-        handleError(error, 'helpWanted.js', {
+        handleInteractionError(error, 'helpWanted.js', {
           commandName: 'helpwanted history',
           userTag: interaction.user.tag,
           userId: interaction.user.id
