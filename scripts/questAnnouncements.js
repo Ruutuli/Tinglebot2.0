@@ -479,10 +479,19 @@ function formatQuestEmbed(quest) {
         });
     }
 
+    // Call to Action - Join Quest
+    if (quest.questID) {
+        embed.addFields({
+            name: '🎯 Join This Quest',
+            value: `</quest join:1389946995468271729> questid:${quest.questID} charactername:YourCharacter`,
+            inline: false
+        });
+    }
+
     // Footer - Clean
     if (quest.questID) {
         embed.setFooter({ 
-            text: `Quest ID: ${quest.questID} • Use /quest join to participate` 
+            text: `Quest ID: ${quest.questID}` 
         });
     }
 
