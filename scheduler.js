@@ -47,7 +47,7 @@ const DEFAULT_IMAGE_URL =
 const Pet = require("./models/PetModel");
 const Raid = require("./models/RaidModel");
 const RuuGame = require("./models/RuuGameModel");
-const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests } = require('./modules/helpWantedModule');
+const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest } = require('./modules/helpWantedModule');
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
 const { removeExpiredBuffs } = require('./modules/elixirModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
@@ -920,6 +920,21 @@ async function checkAndPostMissedQuests(client) {
       const currentTimeInMinutes = currentHour * 60 + currentMinute;
       
       if (currentTimeInMinutes >= scheduledTimeInMinutes) {
+        // Check if this is an escort quest and if travel is blocked by weather
+        if (quest.type === 'escort') {
+          const travelBlocked = await isTravelBlockedByWeather(quest.village);
+          if (travelBlocked) {
+            console.log(`[scheduler.js]: 🌤️ Regenerating missed escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
+            try {
+              await regenerateEscortQuest(quest);
+              console.log(`[scheduler.js]: ✅ Successfully regenerated missed quest ${quest.questId} as ${quest.type} quest`);
+            } catch (error) {
+              console.error(`[scheduler.js]: ❌ Failed to regenerate missed escort quest ${quest.questId}:`, error);
+              continue; // Skip this quest if regeneration fails
+            }
+          }
+        }
+        
         const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
         const embed = embedsByVillage[quest.village];
         if (embed) {
@@ -983,6 +998,21 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     let posted = 0;
     
     for (const quest of shuffledQuests) {
+      // Check if this is an escort quest and if travel is blocked by weather
+      if (quest.type === 'escort') {
+        const travelBlocked = await isTravelBlockedByWeather(quest.village);
+        if (travelBlocked) {
+          console.log(`[scheduler.js]: 🌤️ Regenerating escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
+          try {
+            await regenerateEscortQuest(quest);
+            console.log(`[scheduler.js]: ✅ Successfully regenerated quest ${quest.questId} as ${quest.type} quest`);
+          } catch (error) {
+            console.error(`[scheduler.js]: ❌ Failed to regenerate escort quest ${quest.questId}:`, error);
+            continue; // Skip this quest if regeneration fails
+          }
+        }
+      }
+      
       const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
       const embed = embedsByVillage[quest.village];
       if (embed) {
