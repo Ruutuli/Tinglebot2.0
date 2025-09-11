@@ -761,7 +761,7 @@ async function createRPThread(guild, quest) {
         const rpThreadEmbed = new EmbedBuilder()
             .setColor(0xAA926A)
             .setTitle(`📜 ${quest.title} - RP Thread`)
-            .setDescription(`**Requirements**: ${quest.postRequirement || 15}-20 posts • 2 paragraph max per post\n**Quest ID**: \`${quest.questID}\` • **Status**: Active`)
+            .setDescription(`**Requirements**: ${quest.postRequirement || 15} posts • 2 paragraph max per post\n**Quest ID**: \`${quest.questID}\` • **Status**: Active`)
             .addFields(
                 { 
                     name: '🎭 How to Join', 
@@ -770,7 +770,7 @@ async function createRPThread(guild, quest) {
                 },
                 { 
                     name: '📋 RP Rules', 
-                    value: '• Posts must be 20+ characters with meaningful content\n• No reactions, emojis only, or "))" posts\n• Stay in the quest village for the entire duration\n• Use `/quest postcount` to check your progress', 
+                    value: '• Posts must be 20+ characters with meaningful content\n• No reactions, emojis only, or "))" posts\n• Stay in the quest village for the entire duration\n• Use </quest postcount:1389946995468271729> to check your progress', 
                     inline: false 
                 }
             )
