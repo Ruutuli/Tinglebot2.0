@@ -15,7 +15,7 @@ const {
  fetchCharacterByNameAndUserId,
  fetchItemsByMonster,
 } = require("../../database/db.js");
-const { handleError } = require("../../utils/globalErrorHandler.js");
+const { handleInteractionError } = require("../../utils/globalErrorHandler.js");
 
 // Utilities
 const {

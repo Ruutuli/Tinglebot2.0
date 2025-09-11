@@ -1,4 +1,4 @@
-const { handleError } = require("../../utils/globalErrorHandler.js");
+const { handleInteractionError } = require("../../utils/globalErrorHandler.js");
 const { SlashCommandBuilder } = require("@discordjs/builders");
 const { EmbedBuilder } = require("discord.js");
 const { fetchAllItems, fetchItemsByMonster } = require("../../database/db.js");
@@ -559,7 +559,7 @@ module.exports = {
       ephemeral: true,
      });
     } catch (error) {
-     handleError(error, "explore.js");
+     handleInteractionError(error, "explore.js");
      await interaction.reply({
       content: `${characterName} has joined the expedition, but I could not update the original message.`,
       ephemeral: true,
@@ -694,7 +694,7 @@ module.exports = {
       ephemeral: false,
      });
     } catch (error) {
-     handleError(error, "explore.js");
+     handleInteractionError(error, "explore.js");
      await interaction.reply({
       content: `Expedition started, but I could not update the original message. Use \`/explore roll id:${expeditionId} charactername:<character_name>\` to begin!`,
       ephemeral: false,
@@ -836,7 +836,7 @@ module.exports = {
         "Exploration"
        );
       } catch (error) {
-       handleError(error, "explore.js");
+       handleInteractionError(error, "explore.js");
        console.error(
         `[ERROR] Could not add item to inventory: ${error.message}`
        );
@@ -1009,7 +1009,7 @@ module.exports = {
 
         await interaction.editReply({ embeds: [embed] });
        } catch (error) {
-        handleError(error, "explore.js");
+        handleInteractionError(error, "explore.js");
         console.error(`[ERROR] Raid processing failed:`, error);
         await interaction.editReply("**An error occurred during the raid.**");
        }
@@ -1148,7 +1148,7 @@ module.exports = {
       }
      }
     } catch (error) {
-     handleError(error, "explore.js");
+     handleInteractionError(error, "explore.js");
      console.error(`[Roll Command Error]`, error);
      await interaction.editReply(
       "An error occurred while processing the roll command."
@@ -1883,17 +1883,10 @@ module.exports = {
     await interaction.editReply({ embeds: [embed] });
    }
   } catch (error) {
-   handleError(error, "explore.js", {
-     commandName: interaction.commandName,
-     userTag: interaction.user?.tag,
-     userId: interaction.user?.id,
-     options: interaction.options?.data,
+   await handleInteractionError(error, interaction, {
+     source: 'explore.js',
      subcommand: interaction.options?.getSubcommand()
    });
-   console.error(`[Command Execution Error]`, error);
-   await interaction.editReply(
-    `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`
-   );
   }
  },
 };

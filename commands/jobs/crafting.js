@@ -30,7 +30,7 @@ const { addItemInventoryDatabase, processMaterials } = require('../../utils/inve
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils');
 const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { enforceJail } = require('../../utils/jailCheck');
 
 
@@ -312,7 +312,7 @@ module.exports = {
         console.log(`[crafting.js]: ✅ Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
       } catch (error) {
         console.error(`[crafting.js]: ❌ Failed to deduct stamina for ${freshCharacter.name}: ${error.message}`);
-        handleError(error, 'crafting.js');
+        handleInteractionError(error, 'crafting.js');
         // Refund materials if stamina deduction fails
         for (const mat of materialsUsed) {
           await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
@@ -337,7 +337,7 @@ module.exports = {
         for (const mat of materialsUsed) {
           await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
         }
-        handleError(embedError, 'crafting.js');
+        handleInteractionError(embedError, 'crafting.js');
         return interaction.editReply({ content: '❌ **An error occurred while generating the crafting result. Your materials and stamina have been refunded. Please contact a moderator.**', flags: [MessageFlags.Ephemeral] });
       }
 
@@ -381,7 +381,13 @@ module.exports = {
       // ------------------- Failsafe: Critical Error Handling -------------------
       // If an error occurs after materials/stamina are deducted, attempt to refund
       // ============================================================================
-      handleError(error, 'crafting.js');
+      await handleInteractionError(error, interaction, {
+        source: 'crafting.js',
+        characterName: characterName,
+        itemName: itemName,
+        quantity: quantity
+      });
+      
       try {
         if (typeof materialsUsed !== 'undefined' && Array.isArray(materialsUsed)) {
           for (const mat of materialsUsed) {
@@ -392,9 +398,8 @@ module.exports = {
           await checkAndUseStamina(freshCharacter, -staminaCost); // Refund stamina
         }
       } catch (refundError) {
-        handleError(refundError, 'crafting.js (refund)');
+        console.error('[crafting.js]: Refund error:', refundError);
       }
-      await interaction.editReply({ content: '❌ **A critical error occurred during crafting. Your materials and stamina have been refunded if possible. Please contact a moderator.**', flags: [MessageFlags.Ephemeral] });
     }
   }
 };

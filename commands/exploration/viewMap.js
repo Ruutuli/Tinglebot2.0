@@ -7,7 +7,7 @@
 // // ------------------- Standard Libraries -------------------
 // // Third-party libraries for HTTP requests and image processing.
 // const axios = require('axios');
-// const { handleError } = require('../../utils/globalErrorHandler');
+// const { handleInteractionError } = require('../../utils/globalErrorHandler');
 // const sharp = require('sharp');
 
 

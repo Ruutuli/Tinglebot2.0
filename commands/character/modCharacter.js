@@ -18,7 +18,7 @@ const { google } = require("googleapis");
 const mongoose = require("mongoose");
 const { MongoClient } = require("mongodb");
 
-const { handleError } = require("../../utils/globalErrorHandler");
+const { handleInteractionError } = require("../../utils/globalErrorHandler");
 const {
   getOrCreateToken,
   updateTokenBalance,

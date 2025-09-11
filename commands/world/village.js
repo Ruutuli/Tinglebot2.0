@@ -16,7 +16,7 @@
 // // ============================================================================
 // // ---- Utility Functions ----
 // // ============================================================================
-// const { handleError } = require('../../utils/globalErrorHandler');
+// const { handleInteractionError } = require('../../utils/globalErrorHandler');
 // const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
 // const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 

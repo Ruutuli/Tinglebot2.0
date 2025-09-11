@@ -15,7 +15,7 @@ const ItemModel = require('../models/ItemModel');
 
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../modules/rngModule.js');
-const { handleError } = require('../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../utils/globalErrorHandler.js');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
 const { getWeatherWithoutGeneration } = require('../services/weatherService');
 const WeatherService = require('../services/weatherService');

@@ -8,7 +8,7 @@
 // // Core Discord.js objects for building commands and message embeds.
 // const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 
-// const { handleError } = require('../../utils/globalErrorHandler');
+// const { handleInteractionError } = require('../../utils/globalErrorHandler');
 // const { enforceJail } = require('../../utils/jailCheck');
 // // ------------------- Database Services -------------------
 // // Services for retrieving character data.

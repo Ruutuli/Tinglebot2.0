@@ -4,7 +4,7 @@
 // ============================================================================
 
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { escapeRegExp } = require('../../utils/inventoryUtils');
 const User = require('../../models/UserModel');
 const Character = require('../../models/CharacterModel');

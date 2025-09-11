@@ -17,7 +17,7 @@ const { fetchCharacterByNameAndUserId, getCharacterBlightHistory } = require('..
 const { getModCharacterByName } = require('../../modules/modCharacters');
 const { retrieveBlightRequestFromStorage } = require('../../utils/storage');
 const Character = require('../../models/CharacterModel');
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 
 // ------------------- Helper function to safely respond to interactions -------------------
 async function safeInteractionResponse(interaction, content, options = {}) {

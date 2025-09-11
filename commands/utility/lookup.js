@@ -1,6 +1,6 @@
 // ------------------- Import necessary modules and functions -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { handleError } = require('../../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { connectToTinglebot, getIngredientItems, getCharacterInventoryCollection, fetchCharacterByNameAndUserId } = require('../../database/db.js');
 const { escapeRegExp } = require('../../utils/inventoryUtils.js');
 const ItemModel = require('../../models/ItemModel.js');
@@ -72,43 +72,10 @@ module.exports = {
         await handleCraftingLookup(interaction, characterName);
       }
     } catch (error) {
-      handleError(error, 'lookup.js', {
-        commandName: 'lookup',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
+      await handleInteractionError(error, interaction, {
+        source: 'lookup.js',
         subcommand: interaction.options.getSubcommand()
       });
-
-      console.error("❌ Error in lookup command:", error);
-      
-      // Check if interaction is still valid before attempting to respond
-      if (interaction && !interaction.replied && !interaction.deferred) {
-        try {
-          await interaction.reply({ 
-            content: '❌ There was an error while executing this command!', 
-            ephemeral: true 
-          });
-        } catch (replyError) {
-          console.error('[lookup.js]: Failed to send error reply:', replyError);
-        }
-      } else if (interaction && (interaction.replied || interaction.deferred)) {
-        try {
-          await interaction.editReply({ 
-            content: '❌ There was an error while executing this command!', 
-            ephemeral: true 
-          });
-        } catch (editError) {
-          console.error('[lookup.js]: Failed to edit error reply:', editError);
-          try {
-            await interaction.followUp({ 
-              content: '❌ There was an error while executing this command!', 
-              ephemeral: true 
-            });
-          } catch (followUpError) {
-            console.error('[lookup.js]: Failed to send follow-up error message:', followUpError);
-          }
-        }
-      }
     }
   },
 
@@ -269,7 +236,7 @@ async function handleItemLookup(interaction, itemName) {
         ephemeral: true
       });
     } catch (error) {
-      handleError(error, 'lookup.js');
+      handleInteractionError(error, 'lookup.js');
       return;
     }
 
@@ -297,7 +264,7 @@ async function handleItemLookup(interaction, itemName) {
       try {
         await interaction.editReply({ components: [] });
       } catch (error) {
-        handleError(error, 'lookup.js');
+        handleInteractionError(error, 'lookup.js');
       }
     });
   } else {
@@ -384,7 +351,7 @@ async function handleIngredientLookup(interaction, ingredientName) {
      components: [generatePaginationRow()],
    });
  } catch (error) {
-   handleError(error, 'lookup.js');
+   handleInteractionError(error, 'lookup.js');
    return;
  }
 
@@ -412,7 +379,7 @@ async function handleIngredientLookup(interaction, ingredientName) {
    try {
      await interaction.editReply({ components: [] });
    } catch (error) {
-    handleError(error, 'lookup.js');
+    handleInteractionError(error, 'lookup.js');
 
      // Error handling if needed
    }
@@ -788,7 +755,7 @@ async function handleCraftingLookup(interaction, characterName) {
         components: [generatePaginationRow()],
       });
     } catch (error) {
-      handleError(error, 'lookup.js', {
+      handleInteractionError(error, 'lookup.js', {
         commandName: 'craftingLookup',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -912,7 +879,7 @@ async function handleCraftingLookup(interaction, characterName) {
               collector.stop();
             }
           } else {
-            handleError(error, 'lookup.js', {
+            handleInteractionError(error, 'lookup.js', {
               commandName: 'craftingLookup',
               userTag: interaction.user.tag,
               userId: interaction.user.id,
@@ -951,7 +918,7 @@ async function handleCraftingLookup(interaction, characterName) {
     
 
     
-    handleError(error, 'lookup.js', {
+    handleInteractionError(error, 'lookup.js', {
       commandName: 'craftingLookup',
       userTag: interaction.user.tag,
       userId: interaction.user.id,

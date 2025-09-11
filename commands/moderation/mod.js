@@ -56,7 +56,7 @@ const Minigame = require('../../models/MinigameModel');
 const { monsterMapping } = require('../../models/MonsterModel');
 
 // ------------------- Utility Functions -------------------
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { addItemInventoryDatabase, escapeRegExp } = require('../../utils/inventoryUtils');
 const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('../../utils/interactionUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
@@ -273,7 +273,7 @@ async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason
     console.log(`[mod.js]: ✅ Updated embed footer to: ${footerText}`);
   } catch (error) {
     console.error(`[mod.js]: ❌ Error updating embed footer:`, error);
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
   }
 }
 
@@ -331,7 +331,7 @@ async function updateApprovalNotificationMessage(interaction, submissionId, stat
     console.log(`[mod.js]: ✅ Updated approval notification message for submission ${submissionId}`);
   } catch (error) {
     console.error(`[mod.js]: ❌ Error updating approval notification message:`, error);
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
   }
 }
 
@@ -1340,17 +1340,10 @@ async function execute(interaction) {
     }
 
   } catch (error) {
-    handleError(error, 'mod.js', {
-      commandName: interaction.commandName,
-      userTag: interaction.user?.tag,
-      userId: interaction.user?.id,
-      options: interaction.options?.data,
+    await handleInteractionError(error, interaction, {
+      source: 'mod.js',
       subcommand: interaction.options?.getSubcommand()
     });
-    console.error('[mod.js]: Command execution error', error);
-    
-    // Use safeReply to handle invalid interactions gracefully
-    return await safeReply(interaction, '⚠️ Something went wrong while processing the command.');
   }
 }
 
@@ -1507,7 +1500,7 @@ async function handlePetLevel(interaction) {
       });
     } catch (error) {
       console.error(`[mod.js]: Error creating or sending pet level embed:`, error);
-      handleError(error, 'mod.js', {
+      handleInteractionError(error, 'mod.js', {
         commandName: '/mod petlevel',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -1601,7 +1594,7 @@ async function handleMount(interaction) {
     try {
       storeEncounter(encounterId, encounterData);
     } catch (error) {
-      handleError(error, 'mod.js');
+      handleInteractionError(error, 'mod.js');
       console.error('[mod.js]: Error storing encounter:', error);
       return interaction.editReply('❌ Failed to store encounter. Please try again later.');
     }
@@ -1755,7 +1748,7 @@ async function handleApprove(interaction) {
           await approvedSubmission.save();
           console.log(`[mod.js]: ✅ Saved approved submission ${submissionId} to database`);
         } catch (dbError) {
-          handleError(dbError, 'mod.js');
+          handleInteractionError(dbError, 'mod.js');
           console.error(`[mod.js]: ❌ Failed to save approved submission to database:`, dbError);
           // Continue with token updates even if database save fails
         }
@@ -1901,7 +1894,7 @@ async function handleApprove(interaction) {
   
       return interaction.editReply({ content: '❌ Invalid action specified. Use `approve` or `deny`.', ephemeral: true });
     } catch (error) {
-      handleError(error, 'mod.js');
+      handleInteractionError(error, 'mod.js');
       console.error('[mod.js]: Error during approve/deny logic', error);
       return interaction.editReply({ content: '⚠️ An error occurred while processing the submission.', ephemeral: true });
     }
@@ -1951,7 +1944,7 @@ async function handleApproveEdit(interaction) {
         
         console.log(`[mod.js]: ✅ Updated character ${character.name}'s ${pendingEdit.category} to`, updateValue);
       } catch (err) {
-        handleError(err, 'mod.js');
+        handleInteractionError(err, 'mod.js');
         return reply(interaction, '❌ Failed to update the character. Please try again.');
       }
     }
@@ -1978,7 +1971,7 @@ async function handleApproveEdit(interaction) {
         await originalMsg.edit(updatedContent);
       }
     } catch (err) {
-      handleError(err, 'mod.js');
+      handleInteractionError(err, 'mod.js');
       return reply(interaction, '❌ Could not update the original mod message. Edit request remains pending.');
     }
 
@@ -1990,7 +1983,7 @@ async function handleApproveEdit(interaction) {
       const dmMessage = formatUserDM(character.name, pendingEdit.category, pendingEdit.previousValue, pendingEdit.updatedValue);
       await attemptDMWithRetry(user, dmMessage, 3);
     } catch (err) {
-      handleError(err, 'mod.js');
+      handleInteractionError(err, 'mod.js');
       console.warn(`[mod.js]: Could not DM user ${pendingEdit.userId}`);
     }
 
@@ -2006,7 +1999,7 @@ async function handleApproveEdit(interaction) {
 
     return reply(interaction, { embeds: [replyEmbed] });
   } catch (error) {
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
     return reply(interaction, '❌ An error occurred while processing the edit request.');
   }
 }
@@ -2331,7 +2324,7 @@ async function handleBlightPause(interaction) {
 
     return interaction.editReply({ embeds: [pauseEmbed] });
   } catch (error) {
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
     console.error('[mod.js]: Error in handleBlightPause', error);
     return interaction.editReply('❌ An error occurred while processing your request.');
   }
@@ -2388,7 +2381,7 @@ async function handleBlightUnpause(interaction) {
 
     return interaction.editReply({ embeds: [unpauseEmbed] });
   } catch (error) {
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
     console.error('[mod.js]: Error in handleBlightUnpause', error);
     return interaction.editReply('❌ An error occurred while processing your request.');
   }
@@ -2474,7 +2467,7 @@ async function handleBlightStatus(interaction) {
 
     return interaction.editReply({ embeds: [statusEmbed] });
   } catch (error) {
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
     console.error('[mod.js]: Error in handleBlightStatus', error);
     return interaction.editReply('❌ An error occurred while processing your request.');
   }
@@ -2630,7 +2623,7 @@ async function handleVendingReset(interaction) {
     await character.save();
     return interaction.editReply(`✅ All vending fields for **${charName}** have been reset.`);
   } catch (error) {
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
     console.error('[mod.js]: Error resetting vending fields:', error);
     return interaction.editReply('❌ Failed to reset vending fields.');
   }
@@ -2725,7 +2718,7 @@ async function handlePetRolls(interaction) {
         });
       } catch (error) {
         console.error(`[mod.js]: Error creating or sending pet reset embed:`, error);
-        handleError(error, 'mod.js', {
+        handleInteractionError(error, 'mod.js', {
           commandName: '/mod petrolls',
           userTag: interaction.user.tag,
           userId: interaction.user.id,
@@ -2746,7 +2739,7 @@ async function handlePetRolls(interaction) {
       });
     }
   } catch (error) {
-    handleError(error, "mod.js", {
+    handleInteractionError(error, "mod.js", {
       commandName: '/mod petrolls',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -2806,7 +2799,7 @@ async function handleResetRolls(interaction) {
     });
 
   } catch (error) {
-    handleError(error, 'mod.js', {
+    handleInteractionError(error, 'mod.js', {
       commandName: '/mod resetrolls',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -2962,7 +2955,7 @@ async function handleShopAdd(interaction) {
       });
     }
   } catch (error) {
-    handleError(error, 'mod.js', {
+    handleInteractionError(error, 'mod.js', {
       commandName: '/mod shopadd',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -3249,7 +3242,7 @@ async function handleBlightOverride(interaction) {
     });
 
   } catch (error) {
-    handleError(error, 'mod.js', {
+    handleInteractionError(error, 'mod.js', {
       commandName: '/mod blightoverride',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -3373,7 +3366,7 @@ async function handleTriggerRaid(interaction) {
     });
 
   } catch (error) {
-    handleError(error, 'mod.js', {
+    handleInteractionError(error, 'mod.js', {
       commandName: '/mod trigger-raid',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -3508,7 +3501,7 @@ async function handleDebuff(interaction) {
 
     return interaction.editReply('❌ Invalid action specified. Use `apply` or `remove`.');
   } catch (error) {
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
     console.error('[mod.js]: Error during debuff handling:', error);
     return interaction.editReply('⚠️ An error occurred while processing the debuff action.');
   }
@@ -3830,7 +3823,7 @@ async function handleBlight(interaction) {
     }
 
   } catch (error) {
-    handleError(error, 'mod.js');
+    handleInteractionError(error, 'mod.js');
     console.error('[mod.js]: Error during blight handling:', error);
     return interaction.editReply('⚠️ An error occurred while processing the blight action.');
   }
@@ -3949,7 +3942,7 @@ async function handleRPPosts(interaction) {
     }
 
   } catch (error) {
-    handleError(error, 'mod.js', {
+    handleInteractionError(error, 'mod.js', {
       commandName: '/mod rpposts',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -3984,7 +3977,7 @@ async function handleMinigame(interaction) {
         });
     }
   } catch (error) {
-    handleError(error, 'mod.js', {
+    handleInteractionError(error, 'mod.js', {
       commandName: '/mod minigame',
       userTag: interaction.user.tag,
       userId: interaction.user.id
@@ -4061,7 +4054,7 @@ async function handleTheyCame(interaction, action, sessionId, questId) {
         });
     }
   } catch (error) {
-    handleError(error, 'mod.js', {
+    handleInteractionError(error, 'mod.js', {
       commandName: '/mod minigame theycame',
       userTag: interaction.user.tag,
       userId: interaction.user.id

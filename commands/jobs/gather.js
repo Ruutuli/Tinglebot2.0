@@ -34,7 +34,7 @@ const { applyGatheringBoost } = require('../../modules/boostIntegration');
 // ============================================================================
 // ------------------- Utilities -------------------
 // ============================================================================
-const { handleError } = require('../../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');

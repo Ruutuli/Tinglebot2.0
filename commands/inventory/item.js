@@ -31,7 +31,7 @@ const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = r
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { removeItemInventoryDatabase, syncToInventoryDatabase, addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
@@ -962,7 +962,7 @@ module.exports = {
             // Note: maxStamina update would need a separate function, but for now this shows the effect
           }
         } catch (error) {
-          handleError(error, 'item.js', {
+          handleInteractionError(error, 'item.js', {
             commandName: 'item',
             userTag: interaction.user.tag,
             userId: interaction.user.id,
@@ -1284,7 +1284,11 @@ module.exports = {
 
       return void await interaction.editReply({ embeds: [successEmbed] });
     } catch (error) {
-      handleError(error, interaction);
+      await handleInteractionError(error, interaction, {
+        source: 'item.js',
+        characterName: interaction.options?.getString('charactername'),
+        itemName: interaction.options?.getString('itemname')
+      });
     }
   }
 };

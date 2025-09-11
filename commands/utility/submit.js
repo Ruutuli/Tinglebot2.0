@@ -5,7 +5,7 @@
 // Standard Library Imports
 const path = require('path');
 
-const { handleError } = require('../../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 // Discord.js Imports
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 

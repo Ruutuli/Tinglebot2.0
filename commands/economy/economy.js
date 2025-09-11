@@ -6,7 +6,7 @@ const {
  EmbedBuilder,
  MessageFlags,
 } = require("discord.js");
-const { handleError } = require("../../utils/globalErrorHandler.js");
+const { handleInteractionError } = require("../../utils/globalErrorHandler.js");
 const { trackDatabaseError, isDatabaseError } = require("../../utils/errorTracking.js");
 const { handleTokenError } = require('../../utils/tokenUtils.js');
 const { enforceJail } = require('../../utils/jailCheck');
@@ -357,35 +357,10 @@ module.exports = {
      await interaction.reply("Unknown subcommand");
    }
   } catch (error) {
-   // Use global error handler with proper context
-   const { handleError } = require('../../utils/globalErrorHandler');
-   await handleError(error, "economy.js", {
-     commandName: interaction.commandName,
-     userTag: interaction.user?.tag,
-     userId: interaction.user?.id,
-     options: interaction.options?.data,
+   await handleInteractionError(error, interaction, {
+     source: 'economy.js',
      subcommand: interaction.options?.getSubcommand()
    });
-   
-   console.error("[economy.js]: ❌ Error in economy command:", error);
-   
-   // Track database errors for shutdown threshold
-   if (isDatabaseError(error)) {
-    await trackDatabaseError(error, "economy_command");
-   }
-   
-   // Check if it's a database connection error
-   if (error.message && error.message.includes('Database connection failed')) {
-    await interaction.reply({
-     content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** Database connection failed - the bot cannot access the items database right now.`,
-     ephemeral: true
-    });
-   } else {
-    await interaction.reply({
-     content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`,
-     ephemeral: true
-    });
-   }
   }
  },
 };
@@ -829,7 +804,7 @@ for (const { name } of cleanedItems) {
   
   
  } catch (error) {
-  handleError(error, "gift.js");
+  handleInteractionError(error, "gift.js");
   console.error("❌ Error during gift execution:", error);
   await interaction.editReply({
     embeds: [{
@@ -1415,7 +1390,7 @@ async function handleShopBuy(interaction) {
 
     await interaction.editReply({ embeds: [purchaseEmbed] });
   } catch (error) {
-    handleError(error, "economy.js", {
+    handleInteractionError(error, "economy.js", {
       commandName: interaction.commandName,
       userTag: interaction.user?.tag,
       userId: interaction.user?.id,
@@ -1762,7 +1737,7 @@ if (quantity <= 0) {
 
   interaction.editReply({ embeds: [saleEmbed] });
  } catch (error) {
-  handleError(error, "economy.js", {
+  handleInteractionError(error, "economy.js", {
     commandName: interaction.commandName,
     userTag: interaction.user?.tag,
     userId: interaction.user?.id,
@@ -2219,7 +2194,7 @@ for (const { name } of cleanedItems) {
     embeds: [transferEmbed],
   });
  } catch (error) {
-  handleError(error, "transfer.js");
+  handleInteractionError(error, "transfer.js");
   console.error("❌ Error during transfer execution:", error);
   await interaction.editReply({
     embeds: [{
@@ -3070,7 +3045,7 @@ async function handleTrade(interaction) {
       }
     }
   } catch (error) {
-    handleError(error, "economy.js", {
+    handleInteractionError(error, "economy.js", {
       commandName: interaction.commandName,
       userTag: interaction.user?.tag,
       userId: interaction.user?.id,

@@ -3,7 +3,7 @@
 // // ============================================================================
 // // ------------------- File system and path modules -------------------
 // const fs = require('fs');
-// const { handleError } = require('../../utils/globalErrorHandler.js');
+// const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 // const path = require('path');
 
 // // ============================================================================
