@@ -194,6 +194,12 @@ function parseQuestRow(questRow) {
         collab = collab.split('/')[0];
     }
     
+    // Parse participant cap - handle "Unlimited" values
+    let participantCap = paddedRow[COLUMN_MAPPING.PARTICIPANT_CAP] || null;
+    if (participantCap === 'Unlimited' || participantCap === 'unlimited' || participantCap === 'N/A') {
+        participantCap = null;
+    }
+
     return {
         title: paddedRow[COLUMN_MAPPING.TITLE] || 'Untitled Quest',
         description: paddedRow[COLUMN_MAPPING.DESCRIPTION] || 'No description',
@@ -203,7 +209,7 @@ function parseQuestRow(questRow) {
         location: paddedRow[COLUMN_MAPPING.LOCATION] || 'Unknown',
         timeLimit: paddedRow[COLUMN_MAPPING.TIME_LIMIT] || 'No time limit',
         signupDeadline: paddedRow[COLUMN_MAPPING.SIGNUP_DEADLINE] || null,
-        participantCap: paddedRow[COLUMN_MAPPING.PARTICIPANT_CAP] || null,
+        participantCap: participantCap,
         postRequirement: paddedRow[COLUMN_MAPPING.POST_REQUIREMENT] || null,
         minRequirements: paddedRow[COLUMN_MAPPING.MIN_REQUIREMENTS] || 0,
         tableroll: paddedRow[COLUMN_MAPPING.TABLEROLL] || null,
@@ -576,8 +582,14 @@ function sanitizeQuestData(parsedQuest) {
         itemRewardQty: itemReward.qty,
         itemRewards: itemRewards,
         signupDeadline: parsedQuest.signupDeadline && parsedQuest.signupDeadline !== 'N/A' ? parsedQuest.signupDeadline : null,
-        participantCap: parsedQuest.participantCap === 'N/A' || !parsedQuest.participantCap ? null : parseInt(parsedQuest.participantCap, 10),
-        postRequirement: parsedQuest.postRequirement === 'N/A' || !parsedQuest.postRequirement ? null : parseInt(parsedQuest.postRequirement, 10),
+        participantCap: parsedQuest.participantCap === 'N/A' || !parsedQuest.participantCap || parsedQuest.participantCap === 'Unlimited' || parsedQuest.participantCap === 'unlimited' ? null : (() => {
+            const parsed = parseInt(parsedQuest.participantCap, 10);
+            return isNaN(parsed) ? null : parsed;
+        })(),
+        postRequirement: parsedQuest.postRequirement === 'N/A' || !parsedQuest.postRequirement ? null : (() => {
+            const parsed = parseInt(parsedQuest.postRequirement, 10);
+            return isNaN(parsed) ? null : parsed;
+        })(),
         specialNote: parsedQuest.rules && parsedQuest.rules !== 'N/A' && parsedQuest.rules !== '' ? parsedQuest.rules : null,
         participants: new Map(),
         status: 'active',
