@@ -184,11 +184,17 @@ async function syncToInventoryDatabase(character, item, interaction) {
     });
 
     if (existingItem) {
-      // Update existing item by incrementing quantity
-      await inventoryCollection.updateOne(
-        { characterId: character._id, itemName: dbDoc.itemName },
-        { $inc: { quantity: dbDoc.quantity } }
-      );
+      // If we're adding crafted items and the existing item wasn't crafted, create a new entry
+      if (dbDoc.obtain === 'Crafting' && !existingItem.obtain?.toLowerCase().includes('crafting')) {
+        // Create a new entry for the crafted items
+        await inventoryCollection.insertOne(dbDoc);
+      } else {
+        // Update existing item by incrementing quantity (for same obtain method)
+        await inventoryCollection.updateOne(
+          { characterId: character._id, itemName: dbDoc.itemName },
+          { $inc: { quantity: dbDoc.quantity } }
+        );
+      }
     } else {
       // Insert new item
       await inventoryCollection.insertOne(dbDoc);
@@ -367,10 +373,32 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     }
 
     if (inventoryItem) {
-      await inventoryCollection.updateOne(
-        { characterId, itemName: inventoryItem.itemName },
-        { $inc: { quantity: quantity } }
-      );
+      // If we're adding crafted items and the existing item wasn't crafted, create a new entry
+      if (obtain === 'Crafting' && !inventoryItem.obtain?.toLowerCase().includes('crafting')) {
+        // Create a new entry for the crafted items
+        const newCraftedItem = {
+          characterId,
+          itemName: item.itemName,
+          itemId: item._id,
+          quantity,
+          category: Array.isArray(item.category) ? item.category.join(", ") : "Misc",
+          type: Array.isArray(item.type) ? item.type.join(", ") : "Unknown",
+          subtype: Array.isArray(item.subtype) ? item.subtype.join(", ") : "",
+          location: character.currentVillage || "Unknown",
+          date: new Date(),
+          obtain: 'Crafting',
+        };
+        if (craftedAt) {
+          newCraftedItem.craftedAt = craftedAt;
+        }
+        await inventoryCollection.insertOne(newCraftedItem);
+      } else {
+        // Update existing item by incrementing quantity (for same obtain method)
+        await inventoryCollection.updateOne(
+          { characterId, itemName: inventoryItem.itemName },
+          { $inc: { quantity: quantity } }
+        );
+      }
     } else {
       const newItem = {
         characterId,
