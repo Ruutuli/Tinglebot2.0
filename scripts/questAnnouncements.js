@@ -360,7 +360,7 @@ function formatQuestEmbed(quest) {
     
     if (essentialInfo.length > 0) {
         embed.addFields({ 
-            name: '📋 Details', 
+            name: '__📋 Details__', 
             value: essentialInfo.join('\n'), 
             inline: false 
         });
@@ -383,7 +383,7 @@ function formatQuestEmbed(quest) {
     
     if (rewards.length > 0) {
         embed.addFields({ 
-            name: '🏆 Rewards', 
+            name: '__🏆 Rewards__', 
             value: rewards.join(' • '), 
             inline: false 
         });
@@ -415,7 +415,7 @@ function formatQuestEmbed(quest) {
     
     if (participation.length > 0) {
         embed.addFields({ 
-            name: '🗓️ Participation', 
+            name: '__🗓️ Participation__', 
             value: participation.join(' • '), 
             inline: false 
         });
@@ -458,12 +458,14 @@ function formatQuestEmbed(quest) {
         if (rulesText) {
             rulesText += '\n';
         }
-        rulesText += quest.rules;
+        // Format additional rules with bullet points
+        const additionalRules = quest.rules.split('\n').filter(rule => rule.trim()).map(rule => `• ${rule.trim()}`).join('\n');
+        rulesText += additionalRules;
     }
     
     if (rulesText) {
         embed.addFields({ 
-            name: '📋 Rules', 
+            name: '__📋 Rules__', 
             value: rulesText, 
             inline: false 
         });
@@ -473,7 +475,7 @@ function formatQuestEmbed(quest) {
     if (quest.questType && quest.questType.toLowerCase() === 'rp' && quest.rpThreadParentChannel) {
         const guildId = quest.guildId || 'UNKNOWN';
         embed.addFields({ 
-            name: '🎭 RP Thread', 
+            name: '__🎭 RP Thread__', 
             value: `[Join the RP discussion here!](https://discord.com/channels/${guildId}/${quest.rpThreadParentChannel})`, 
             inline: false 
         });
@@ -482,8 +484,8 @@ function formatQuestEmbed(quest) {
     // Call to Action - Join Quest
     if (quest.questID) {
         embed.addFields({
-            name: '🎯 Join This Quest',
-            value: `</quest join:1389946995468271729> questid:${quest.questID} charactername:YourCharacter`,
+            name: '__🎯 Join This Quest__',
+            value: `</quest join:1389946995468271729> questid:${quest.questID}`,
             inline: false
         });
     }
