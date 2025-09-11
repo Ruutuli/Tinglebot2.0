@@ -179,7 +179,7 @@ try {
     meter = `${'🟩'.repeat(Math.max(0, maxStamina - 1))}✅`;
   }
 } catch (err) {
-    handleError(err, 'spiritOrb.js');
+    handleInteractionError(err, 'spiritOrb.js');
 
   console.error(`[spiritOrb.js]: Failed to build meter display: ${err.message}`);
   meter = '*Unable to display meter.*';
@@ -266,7 +266,7 @@ if (!inventoryLink || !isValidGoogleSheetsUrl(inventoryLink)) {
         }
     });
   } catch (err) {
-    handleError(err, 'spiritOrb.js');
+    handleInteractionError(err, 'spiritOrb.js');
 
     console.error(`[spiritOrb.js]: Failed to log Spirit Orb exchange to sheet: ${err.message}`);
   }
@@ -278,7 +278,7 @@ if (!inventoryLink || !isValidGoogleSheetsUrl(inventoryLink)) {
     }
 
   } catch (error) {
-    handleError(error, 'spiritOrb.js');
+    handleInteractionError(error, 'spiritOrb.js');
 
     console.error(`[spiritOrb.js]: Error handling /spiritorbs command: ${error.stack}`);
     return await interaction.reply({

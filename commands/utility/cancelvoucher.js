@@ -78,7 +78,7 @@ module.exports = {
             });
 
         } catch (error) {
-            handleError(error, 'cancelvoucher.js');
+            handleInteractionError(error, 'cancelvoucher.js');
             console.error(`[cancelvoucher.js]: ❌ Error cancelling job voucher:`, error);
             return interaction.editReply({
                 content: '❌ An error occurred while trying to cancel the job voucher.',

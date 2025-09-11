@@ -710,7 +710,7 @@ module.exports = {
             }
           } catch (bonusError) {
             // Non-fatal: log but do not interrupt the encounter flow
-            handleError(bonusError, 'gather.js', {
+            handleInteractionError(bonusError, 'gather.js', {
               commandName: '/gather',
               operation: 'applyEntertainerBonusDuringEncounter',
               userId: interaction.user.id,
@@ -1001,7 +1001,7 @@ module.exports = {
       
       // Only log errors that aren't inventory sync related
       if (!error.message.includes('inventory is not synced')) {
-        handleError(error, 'gather.js', {
+        handleInteractionError(error, 'gather.js', {
           commandName: '/gather',
           userTag: interaction.user.tag,
           userId: interaction.user.id,

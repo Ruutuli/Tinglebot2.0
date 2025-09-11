@@ -1357,7 +1357,7 @@ module.exports = {
       }
     }
   } catch (error) {
-    handleError(error, 'pet.js');
+    handleInteractionError(error, 'pet.js');
     console.error(`[pet.js]: ❌ Error during pet command execution:`, error);
 
     try {

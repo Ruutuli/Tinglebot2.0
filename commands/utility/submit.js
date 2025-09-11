@@ -237,7 +237,7 @@ module.exports = {
         resetSubmissionState();
 
       } catch (error) {
-        handleError(error, 'submit.js');
+        handleInteractionError(error, 'submit.js');
         console.error('Error handling art submission:', error);
         await interaction.editReply({ content: '❌ **Error processing your submission. Please try again later.**' });
       }
@@ -394,7 +394,7 @@ module.exports = {
           ephemeral: true, // Ensure this is ephemeral
         });
       } catch (error) {
-        handleError(error, 'submit.js');
+        handleInteractionError(error, 'submit.js');
         console.error('Error handling writing submission:', error);
         await interaction.editReply({
           content: '❌ **Error processing your submission. Please try again later.**',
@@ -412,7 +412,7 @@ module.exports = {
       const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
       await handleAutocomplete(interaction);
     } catch (error) {
-      handleError(error, 'submit.js');
+      handleInteractionError(error, 'submit.js');
       console.error('Error handling autocomplete:', error);
       await interaction.respond([]);
     }
@@ -432,7 +432,7 @@ module.exports = {
         await handleModalSubmission(interaction);
       }
     } catch (error) {
-      handleError(error, 'submit.js');
+      handleInteractionError(error, 'submit.js');
       console.error('Error handling interaction:', error);
       if (!interaction.replied && !interaction.deferred) {
         await interaction.followUp({

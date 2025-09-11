@@ -165,7 +165,7 @@
 //       }
 
 //     } catch (error) {
-//     handleError(error, 'combat.js');
+//     handleInteractionError(error, 'combat.js');
 
 //       console.error('[combat.js]: ❌ Error in /combat command:', error);
 //       return await interaction.editReply(`❌ An unexpected error occurred during combat.`);

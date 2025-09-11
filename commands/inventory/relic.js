@@ -189,7 +189,7 @@
 //             await interaction.deferReply();
 //           }
 //         } catch (error) {
-//           handleError(error, 'relic.js');
+//           handleInteractionError(error, 'relic.js');
 
 //           if (error.code === 40060) {
 //             console.warn(`[relic.js]: Interaction already acknowledged for subcommand "${sub}".`);
@@ -236,7 +236,7 @@
 //             const fileData = fs.readFileSync(relicStoragePath, 'utf8');
 //             relicStorage = fileData.trim() ? JSON.parse(fileData) : [];
 //           } catch (err) {
-//             handleError(err, 'relic.js');
+//             handleInteractionError(err, 'relic.js');
 
 //             console.error('[relic.js]: Error reading relicStorage.json:', err);
 //             relicStorage = [];
@@ -258,7 +258,7 @@
 
 //           fs.writeFileSync(relicStoragePath, JSON.stringify(relicStorage, null, 2));
 //         } catch (err) {
-//           handleError(err, 'relic.js');
+//           handleInteractionError(err, 'relic.js');
 //           console.error('[relic.js]: Error writing to relicStorage.json:', err);
 //         }
 
@@ -271,7 +271,7 @@
 
 // *You can now use /relic appraisalrequest to request its appraisal.*`);
 //         } catch (finalError) {
-//           handleError(finalError, 'relic.js');
+//           handleInteractionError(finalError, 'relic.js');
 
 //           // If editReply fails because no reply was sent, fall back to a direct reply.
 //           if (finalError.code === 'InteractionNotReplied' || finalError.message.includes("has not been sent or deferred")) {
@@ -282,7 +282,7 @@
 
 // *You can now use /relic appraisalrequest to request its appraisal.*`);
 //             } catch (fallbackError) {
-//               handleError(fallbackError, 'relic.js');
+//               handleInteractionError(fallbackError, 'relic.js');
 
 //               console.error('[relic.js]: Failed to send fallback reply in test subcommand:', fallbackError);
 //             }
@@ -416,7 +416,7 @@
 //         return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
 //       }
 //     } catch (error) {
-//       handleError(error, 'relic.js');
+//       handleInteractionError(error, 'relic.js');
 
 //       console.error('[relic.js]: Error executing relic command:', error);
 //       if (interaction.deferred || interaction.replied) {

@@ -486,7 +486,7 @@ module.exports = {
         await handleEditModCharacter(interaction);
       }
     } catch (error) {
-      handleError(error, 'modCharacter.js', {
+      handleInteractionError(error, 'modCharacter.js', {
         commandName: 'modCharacter',
         userTag: interaction.user.tag,
         userId: interaction.user.id,
@@ -546,7 +546,7 @@ module.exports = {
       }
     } catch (error) {
       console.error('[modCharacter.js]: ❌ Autocomplete error:', error);
-      handleError(error, 'modCharacter.js', {
+      handleInteractionError(error, 'modCharacter.js', {
         operation: 'autocomplete',
         userTag: interaction.user.tag,
         userId: interaction.user.id
@@ -662,7 +662,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
         });
         iconUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
       } catch (err) {
-        handleError(err, 'modCharacter.js');
+        handleInteractionError(err, 'modCharacter.js');
         // fallback to default
         iconUrl = DEFAULT_IMAGE_URL;
       }
@@ -732,7 +732,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
     });
 
   } catch (error) {
-    handleError(error, 'modCharacter.js', {
+    handleInteractionError(error, 'modCharacter.js', {
       commandName: 'handleCreateModCharacter',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -796,7 +796,7 @@ async function handleViewModCharacter(interaction) {
     });
 
   } catch (error) {
-    handleError(error, 'modCharacter.js', {
+    handleInteractionError(error, 'modCharacter.js', {
       commandName: 'handleViewModCharacter',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
@@ -852,7 +852,7 @@ async function handleListModCharacters(interaction) {
     });
 
   } catch (error) {
-    handleError(error, 'modCharacter.js', {
+    handleInteractionError(error, 'modCharacter.js', {
       commandName: 'handleListModCharacters',
       userTag: interaction.user.tag,
       userId: interaction.user.id
@@ -1041,7 +1041,7 @@ async function handleEditModCharacter(interaction) {
         // Generate public URL for the uploaded icon
         finalUpdatedValue = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
       } catch (err) {
-        handleError(err, 'modCharacter.js');
+        handleInteractionError(err, 'modCharacter.js');
         await interaction.editReply({
           content: "❌ Failed to upload the new icon. Please try again later.",
           flags: [MessageFlags.Ephemeral]
@@ -1084,7 +1084,7 @@ async function handleEditModCharacter(interaction) {
     });
 
   } catch (error) {
-    handleError(error, 'modCharacter.js', {
+    handleInteractionError(error, 'modCharacter.js', {
       commandName: 'handleEditModCharacter',
       userTag: interaction.user.tag,
       userId: interaction.user.id,

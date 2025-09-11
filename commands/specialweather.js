@@ -619,7 +619,7 @@ module.exports = {
     } catch (error) {
       // Only log errors that aren't inventory sync related
       if (!error.message.includes('inventory is not synced')) {
-        handleError(error, 'specialweather.js', {
+        handleInteractionError(error, 'specialweather.js', {
           commandName: '/specialweather',
           userTag: interaction.user.tag,
           userId: interaction.user.id,
