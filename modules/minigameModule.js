@@ -6,6 +6,7 @@
 // ------------------- Standard Libraries -------------------
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const Jimp = require('jimp');
+const { GifWrap } = require('gifwrap');
 const { AttachmentBuilder } = require('discord.js');
 
 // ============================================================================
@@ -99,6 +100,78 @@ function getAlienPositions(gameData) {
   }));
 }
 
+// ------------------- Function: createAnimatedExplosion -------------------
+// Creates an animated explosion GIF effect
+async function createAnimatedExplosion(size, position) {
+  const frames = [];
+  const frameCount = 8; // Number of frames for animation
+  const explosionSize = size;
+  
+  for (let frame = 0; frame < frameCount; frame++) {
+    // Create explosion circle for this frame
+    const explosionImg = new Jimp(explosionSize, explosionSize, 0x00000000);
+    
+    // Calculate animation progress (0 to 1)
+    const progress = frame / (frameCount - 1);
+    
+    // Create pulsing effect
+    const pulseIntensity = Math.sin(progress * Math.PI); // 0 to 1 and back
+    const currentSize = explosionSize * (0.3 + 0.7 * pulseIntensity);
+    
+    for (let i = 0; i < explosionSize; i++) {
+      for (let j = 0; j < explosionSize; j++) {
+        const centerX = explosionSize / 2;
+        const centerY = explosionSize / 2;
+        const distance = Math.sqrt((i - centerX) ** 2 + (j - centerY) ** 2);
+        
+        if (distance < currentSize / 2) {
+          // Create radial gradient with pulsing effect
+          const intensity = Math.max(0, Math.min(1, 1 - (distance / (currentSize / 2))));
+          const frameIntensity = intensity * pulseIntensity;
+          
+          // More vibrant colors for better visibility
+          const red = Math.max(0, Math.min(255, Math.floor(255 * frameIntensity)));
+          const green = Math.max(0, Math.min(255, Math.floor(200 * frameIntensity * 0.8)));
+          const blue = Math.max(0, Math.min(255, Math.floor(50 * frameIntensity)));
+          const alpha = Math.max(0, Math.min(255, Math.floor(220 * frameIntensity)));
+          
+          const color = Jimp.rgbaToInt(red, green, blue, alpha);
+          explosionImg.setPixelColor(color, i, j);
+        }
+      }
+    }
+    
+    // Add white flash in center for some frames
+    if (frame < frameCount / 2) {
+      const flashSize = 15 + (frame * 2);
+      const flashX = explosionSize / 2 - flashSize / 2;
+      const flashY = explosionSize / 2 - flashSize / 2;
+      
+      for (let i = 0; i < flashSize; i++) {
+        for (let j = 0; j < flashSize; j++) {
+          const centerX = flashSize / 2;
+          const centerY = flashSize / 2;
+          const distance = Math.sqrt((i - centerX) ** 2 + (j - centerY) ** 2);
+          
+          if (distance < flashSize / 2) {
+            const intensity = Math.max(0, Math.min(1, 1 - (distance / (flashSize / 2))));
+            const white = Math.floor(255 * intensity);
+            const alpha = Math.floor(180 * intensity);
+            const color = Jimp.rgbaToInt(white, white, white, alpha);
+            explosionImg.setPixelColor(color, flashX + i, flashY + j);
+          }
+        }
+      }
+    }
+    
+    frames.push(explosionImg);
+  }
+  
+  // Create animated GIF
+  const gif = new GifWrap(explosionSize, explosionSize, frames);
+  return gif;
+}
+
 // ------------------- Function: generateAlienOverlayImage -------------------
 // Generates a composite image with aliens overlaid on the village background
 async function generateAlienOverlayImage(gameData, sessionId) {
@@ -174,19 +247,21 @@ async function generateAlienOverlayImage(gameData, sessionId) {
     }
     
     // Add explosion effects for defeated aliens
+    console.log(`[MINIGAME] Rendering ${gameData.explosions?.length || 0} explosion effects`);
     for (const explosion of gameData.explosions || []) {
       if (explosion.position) {
         const { x, y } = explosion.position;
+        console.log(`[MINIGAME] Rendering explosion at position (${x}, ${y}) for alien ${explosion.alienId}`);
         
         // Create explosion effect using colored circles
-        const explosionSize = 80;
+        const explosionSize = 100; // Increased size for better visibility
         const explosionX = Math.max(0, x - explosionSize / 2);
         const explosionY = Math.max(0, y - explosionSize / 2);
         
-        // Create explosion circle (red with yellow center)
+        // Create explosion circle (bright orange/red with yellow center)
         const explosionImg = new Jimp(explosionSize, explosionSize, 0x00000000); // Transparent background
         
-        // Draw explosion effect
+        // Draw explosion effect with multiple layers for more impact
         for (let i = 0; i < explosionSize; i++) {
           for (let j = 0; j < explosionSize; j++) {
             const centerX = explosionSize / 2;
@@ -194,41 +269,185 @@ async function generateAlienOverlayImage(gameData, sessionId) {
             const distance = Math.sqrt((i - centerX) ** 2 + (j - centerY) ** 2);
             
             if (distance < explosionSize / 2) {
-              // Create radial gradient from yellow center to red edges
-              const intensity = 1 - (distance / (explosionSize / 2));
-              const red = Math.floor(255 * intensity);
-              const green = Math.floor(255 * intensity * 0.7);
-              const blue = 0;
-              const alpha = Math.floor(200 * intensity);
+              // Create radial gradient from bright yellow center to red edges
+              const intensity = Math.max(0, Math.min(1, 1 - (distance / (explosionSize / 2))));
               
-              const color = (alpha << 24) | (red << 16) | (green << 8) | blue;
+              // More vibrant colors for better visibility
+              const red = Math.max(0, Math.min(255, Math.floor(255 * intensity)));
+              const green = Math.max(0, Math.min(255, Math.floor(200 * intensity * 0.8))); // More green for yellow center
+              const blue = Math.max(0, Math.min(255, Math.floor(50 * intensity))); // Slight blue for depth
+              const alpha = Math.max(0, Math.min(255, Math.floor(220 * intensity))); // Higher alpha for visibility
+              
+              // Use Jimp's color function instead of manual bit shifting
+              const color = Jimp.rgbaToInt(red, green, blue, alpha);
               explosionImg.setPixelColor(color, i, j);
             }
           }
         }
         
-        // Composite explosion onto village
+        // Add a bright white flash in the center for extra impact
+        const flashSize = 20;
+        const flashX = explosionSize / 2 - flashSize / 2;
+        const flashY = explosionSize / 2 - flashSize / 2;
+        
+        for (let i = 0; i < flashSize; i++) {
+          for (let j = 0; j < flashSize; j++) {
+            const centerX = flashSize / 2;
+            const centerY = flashSize / 2;
+            const distance = Math.sqrt((i - centerX) ** 2 + (j - centerY) ** 2);
+            
+            if (distance < flashSize / 2) {
+              const intensity = Math.max(0, Math.min(1, 1 - (distance / (flashSize / 2))));
+              const white = Math.floor(255 * intensity);
+              const alpha = Math.floor(180 * intensity);
+              const color = Jimp.rgbaToInt(white, white, white, alpha);
+              explosionImg.setPixelColor(color, flashX + i, flashY + j);
+            }
+          }
+        }
+        
+        // Composite explosion onto village with more visible blending
         if (explosionX + explosionSize <= villageImg.bitmap.width && 
             explosionY + explosionSize <= villageImg.bitmap.height) {
           villageImg.composite(explosionImg, explosionX, explosionY, {
-            mode: Jimp.BLEND_SOURCE_OVER,
-            opacitySource: 0.8,
+            mode: Jimp.BLEND_SCREEN, // Screen blend mode for bright explosion effect
+            opacitySource: 0.9,
             opacityDest: 1
           });
         }
       }
     }
     
-    // Generate the final image
+    // Check if we have explosions to determine output format
+    const hasExplosions = gameData.explosions && gameData.explosions.length > 0;
+    
+    if (hasExplosions) {
+      // Generate animated GIF with explosions
+      return await generateAnimatedMinigameImage(villageImg, gameData, sessionId);
+    } else {
+      // Generate static PNG
+      const buffer = await villageImg.getBufferAsync(Jimp.MIME_PNG);
+      const attachment = new AttachmentBuilder(buffer, { 
+        name: `minigame-${sessionId}-overlay.png` 
+      });
+      return attachment;
+    }
+  } catch (error) {
+    console.error('[minigameModule.js]: Error generating alien overlay image:', error);
+    return null;
+  }
+}
+
+// ------------------- Function: generateAnimatedMinigameImage -------------------
+// Generates an animated GIF with explosion effects
+async function generateAnimatedMinigameImage(villageImg, gameData, sessionId) {
+  try {
+    const frames = [];
+    const frameCount = 8; // Number of frames for animation
+    const baseVillageImg = villageImg.clone();
+    
+    // Create frames with pulsing explosion effects
+    for (let frame = 0; frame < frameCount; frame++) {
+      const frameImg = baseVillageImg.clone();
+      
+      // Add explosion effects for this frame
+      for (const explosion of gameData.explosions || []) {
+        if (explosion.position) {
+          const { x, y } = explosion.position;
+          
+          // Create pulsing explosion effect
+          const explosionSize = 100;
+          const explosionX = Math.max(0, x - explosionSize / 2);
+          const explosionY = Math.max(0, y - explosionSize / 2);
+          
+          // Calculate animation progress (0 to 1)
+          const progress = frame / (frameCount - 1);
+          const pulseIntensity = Math.sin(progress * Math.PI); // 0 to 1 and back
+          const currentSize = explosionSize * (0.3 + 0.7 * pulseIntensity);
+          
+          // Create explosion circle for this frame
+          const explosionImg = new Jimp(explosionSize, explosionSize, 0x00000000);
+          
+          for (let i = 0; i < explosionSize; i++) {
+            for (let j = 0; j < explosionSize; j++) {
+              const centerX = explosionSize / 2;
+              const centerY = explosionSize / 2;
+              const distance = Math.sqrt((i - centerX) ** 2 + (j - centerY) ** 2);
+              
+              if (distance < currentSize / 2) {
+                // Create radial gradient with pulsing effect
+                const intensity = Math.max(0, Math.min(1, 1 - (distance / (currentSize / 2))));
+                const frameIntensity = intensity * pulseIntensity;
+                
+                // More vibrant colors for better visibility
+                const red = Math.max(0, Math.min(255, Math.floor(255 * frameIntensity)));
+                const green = Math.max(0, Math.min(255, Math.floor(200 * frameIntensity * 0.8)));
+                const blue = Math.max(0, Math.min(255, Math.floor(50 * frameIntensity)));
+                const alpha = Math.max(0, Math.min(255, Math.floor(220 * frameIntensity)));
+                
+                const color = Jimp.rgbaToInt(red, green, blue, alpha);
+                explosionImg.setPixelColor(color, i, j);
+              }
+            }
+          }
+          
+          // Add white flash in center for some frames
+          if (frame < frameCount / 2) {
+            const flashSize = 15 + (frame * 2);
+            const flashX = explosionSize / 2 - flashSize / 2;
+            const flashY = explosionSize / 2 - flashSize / 2;
+            
+            for (let i = 0; i < flashSize; i++) {
+              for (let j = 0; j < flashSize; j++) {
+                const centerX = flashSize / 2;
+                const centerY = flashSize / 2;
+                const distance = Math.sqrt((i - centerX) ** 2 + (j - centerY) ** 2);
+                
+                if (distance < flashSize / 2) {
+                  const intensity = Math.max(0, Math.min(1, 1 - (distance / (flashSize / 2))));
+                  const white = Math.floor(255 * intensity);
+                  const alpha = Math.floor(180 * intensity);
+                  const color = Jimp.rgbaToInt(white, white, white, alpha);
+                  explosionImg.setPixelColor(color, flashX + i, flashY + j);
+                }
+              }
+            }
+          }
+          
+          // Composite explosion onto frame
+          if (explosionX + explosionSize <= frameImg.bitmap.width && 
+              explosionY + explosionSize <= frameImg.bitmap.height) {
+            frameImg.composite(explosionImg, explosionX, explosionY, {
+              mode: Jimp.BLEND_SCREEN,
+              opacitySource: 0.9,
+              opacityDest: 1
+            });
+          }
+        }
+      }
+      
+      frames.push(frameImg);
+    }
+    
+    // Create animated GIF
+    const gif = new GifWrap(villageImg.bitmap.width, villageImg.bitmap.height, frames);
+    const buffer = await gif.getBuffer();
+    
+    const attachment = new AttachmentBuilder(buffer, { 
+      name: `minigame-${sessionId}-animated.gif` 
+    });
+    
+    console.log(`[MINIGAME] Generated animated GIF with ${frames.length} frames`);
+    return attachment;
+    
+  } catch (error) {
+    console.error('[minigameModule.js]: Error generating animated minigame image:', error);
+    // Fallback to static PNG
     const buffer = await villageImg.getBufferAsync(Jimp.MIME_PNG);
     const attachment = new AttachmentBuilder(buffer, { 
       name: `minigame-${sessionId}-overlay.png` 
     });
-    
     return attachment;
-  } catch (error) {
-    console.error('[minigameModule.js]: Error generating alien overlay image:', error);
-    return null;
   }
 }
 
@@ -718,5 +937,7 @@ module.exports = {
   getAvailableVillages,
   getAlienPosition,
   getAlienPositions,
-  generateAlienOverlayImage
+  generateAlienOverlayImage,
+  generateAnimatedMinigameImage,
+  createAnimatedExplosion
 };
