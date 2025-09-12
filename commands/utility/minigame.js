@@ -101,7 +101,7 @@ function determineMinigameRewards(animalsLost, village) {
   
   if (animalsLost === 0) {
     // Perfect defense - Spirit Orb (fat chance)
-    rewards.push({ name: 'Spirit Orb', quantity: 1, description: 'Perfect defense! No animals lost!' });
+    rewards.push({ name: 'Job Voucher', quantity: 1, description: 'Perfect defense! No animals lost!' }); // Job Voucher for testing. revert to Spirit Orb after testing
   } else if (animalsLost >= 1 && animalsLost <= 5) {
     // Good defense - Colored gem based on village
     let gemName;
