@@ -173,6 +173,52 @@ async function generateAlienOverlayImage(gameData, sessionId) {
       }
     }
     
+    // Add explosion effects for defeated aliens
+    for (const explosion of gameData.explosions || []) {
+      if (explosion.position) {
+        const { x, y } = explosion.position;
+        
+        // Create explosion effect using colored circles
+        const explosionSize = 80;
+        const explosionX = Math.max(0, x - explosionSize / 2);
+        const explosionY = Math.max(0, y - explosionSize / 2);
+        
+        // Create explosion circle (red with yellow center)
+        const explosionImg = new Jimp(explosionSize, explosionSize, 0x00000000); // Transparent background
+        
+        // Draw explosion effect
+        for (let i = 0; i < explosionSize; i++) {
+          for (let j = 0; j < explosionSize; j++) {
+            const centerX = explosionSize / 2;
+            const centerY = explosionSize / 2;
+            const distance = Math.sqrt((i - centerX) ** 2 + (j - centerY) ** 2);
+            
+            if (distance < explosionSize / 2) {
+              // Create radial gradient from yellow center to red edges
+              const intensity = 1 - (distance / (explosionSize / 2));
+              const red = Math.floor(255 * intensity);
+              const green = Math.floor(255 * intensity * 0.7);
+              const blue = 0;
+              const alpha = Math.floor(200 * intensity);
+              
+              const color = (alpha << 24) | (red << 16) | (green << 8) | blue;
+              explosionImg.setPixelColor(color, i, j);
+            }
+          }
+        }
+        
+        // Composite explosion onto village
+        if (explosionX + explosionSize <= villageImg.bitmap.width && 
+            explosionY + explosionSize <= villageImg.bitmap.height) {
+          villageImg.composite(explosionImg, explosionX, explosionY, {
+            mode: Jimp.BLEND_SOURCE_OVER,
+            opacitySource: 0.8,
+            opacityDest: 1
+          });
+        }
+      }
+    }
+    
     // Generate the final image
     const buffer = await villageImg.getBufferAsync(Jimp.MIME_PNG);
     const attachment = new AttachmentBuilder(buffer, { 
@@ -303,6 +349,7 @@ function createAlienDefenseGame(channelId, guildId, createdBy, village = 'rudani
     currentTurnIndex: 0, // Current player's turn
     turnPhase: 'waiting', // waiting, rolling, advancing
     village: village, // Selected village
+    explosions: [], // Track aliens that were defeated this round for explosion effects
     images: {
       alien: getAlienImage(),
       village: getCurrentVillageImage(village)
@@ -352,10 +399,13 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     }
   }
   
+  console.log(`[MINIGAME] Looking for alien ${cleanAlienId} in aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+  
   const alien = gameData.aliens.find(a => a.id === cleanAlienId && !a.defeated);
   
   if (!alien) {
     console.log(`[MINIGAME] Alien not found: ${cleanAlienId} (original: ${targetAlienId})`);
+    console.log(`[MINIGAME] Available aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
     return {
       success: false,
       message: '❌ Target alien not found or already defeated!',
@@ -374,6 +424,14 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     alien.defeatedBy = playerId;
     alien.defeatedAt = new Date();
     
+    // Add to explosions array for visual effect
+    gameData.explosions.push({
+      alienId: alien.id,
+      position: getAlienPosition(alien.id),
+      defeatedAt: new Date()
+    });
+    console.log(`[MINIGAME] Added explosion effect for ${alien.id}`);
+    
     // Advance to next player's turn
     if (gameData.turnOrder.length > 0) {
       gameData.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.turnOrder.length;
@@ -382,7 +440,7 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     
     // Check if all players have taken their turn (completed a full cycle)
     const shouldAdvanceRound = gameData.turnOrder.length > 0 && gameData.currentTurnIndex === 0;
-    console.log(`[MINIGAME] Should advance round: ${shouldAdvanceRound}`);
+    console.log(`[MINIGAME] Should advance round: ${shouldAdvanceRound} (turnOrder.length: ${gameData.turnOrder.length}, currentTurnIndex: ${gameData.currentTurnIndex})`);
     
     return {
       success: true,
@@ -400,7 +458,7 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     
     // Check if all players have taken their turn (completed a full cycle)
     const shouldAdvanceRound = gameData.turnOrder.length > 0 && gameData.currentTurnIndex === 0;
-    console.log(`[MINIGAME] Should advance round: ${shouldAdvanceRound}`);
+    console.log(`[MINIGAME] Should advance round: ${shouldAdvanceRound} (turnOrder.length: ${gameData.turnOrder.length}, currentTurnIndex: ${gameData.currentTurnIndex})`);
     
     return {
       success: false,
@@ -415,6 +473,10 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
 // Advances the game to the next round, moving undefeated aliens inward
 function advanceAlienDefenseRound(gameData) {
   console.log(`[MINIGAME] === ADVANCING ROUND ${gameData.currentRound} ===`);
+  
+  // Clear explosions from previous round
+  gameData.explosions = [];
+  console.log(`[MINIGAME] Cleared explosion effects from previous round`);
   
   // Check if we've reached the maximum rounds (8) - don't advance further
   if (gameData.currentRound >= 8) {
