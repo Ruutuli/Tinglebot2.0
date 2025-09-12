@@ -1477,65 +1477,114 @@ async function handleMinigameJoin(interaction) {
     const userId = interaction.user.id;
     const username = interaction.user.username;
     
+    console.log(`[MINIGAME COMPONENT JOIN] ${username} (${userId}) attempting to join session ${sessionId} via button`);
+    
     // Find the minigame session
     const Minigame = require('../models/MinigameModel');
     const session = await Minigame.findOne({ sessionId: sessionId });
     
     if (!session) {
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} failed - session not found: ${sessionId}`);
       return await interaction.reply({
         content: '❌ Game session not found or has expired.',
         flags: 64
       });
     }
     
+    console.log(`[MINIGAME COMPONENT JOIN] ${username} session found - Status: ${session.status}, Players: ${session.players.length}`);
+    
     // Check if player already joined
     const alreadyJoined = session.players.find(p => p.discordId === userId);
     if (alreadyJoined) {
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} failed - already joined`);
       return await interaction.reply({
         content: '✅ You\'re already in the game!',
         flags: 64
       });
     }
     
-    // Add player to game
+    // Add player to game - Critical section with race condition protection
+    console.log(`[MINIGAME COMPONENT JOIN] ${username} adding to game - Players before: ${session.players.length}`);
+    
+    // Double-check for duplicates right before adding (race condition protection)
+    const duplicateCheck = session.players.find(p => p.discordId === userId);
+    if (duplicateCheck) {
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} race condition detected - player already joined during processing`);
+      return await interaction.reply({
+        content: '✅ You\'re already in the game!',
+        flags: 64
+      });
+    }
+    
     session.players.push({
       discordId: userId,
       username: username,
       joinedAt: new Date()
     });
+    console.log(`[MINIGAME COMPONENT JOIN] ${username} added to players array - Players after: ${session.players.length}`);
     
-    await session.save();
+    session.markModified('players');
+    
+    try {
+      await session.save();
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} session saved successfully`);
+    } catch (error) {
+      console.error(`[MINIGAME COMPONENT JOIN] ${username} failed to save session:`, error);
+      return await interaction.reply({
+        content: `❌ Failed to join the game. Please try again.`,
+        flags: 64
+      });
+    }
     
     await interaction.reply({
       content: `🎮 **${username}** joined the game!`,
       flags: 64
     });
+    console.log(`[MINIGAME COMPONENT JOIN] ${username} join completed successfully`);
     
     // Check if we have 6 players and should auto-start (separate message)
     if (session.players.length === 6 && session.status === 'waiting') {
-      console.log(`[MINIGAME] Auto-starting game with 6 players for session ${session.sessionId}`);
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} triggering auto-start - 6 players reached for session ${session.sessionId}`);
       
       // Auto-start the game
       const { spawnAliens } = require('../modules/minigameModule');
       const playerCount = session.gameData.turnOrder.length || session.players.length;
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} spawning aliens for auto-start - Player count: ${playerCount}`);
       const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} aliens spawned: ${spawnResult.spawnCount} aliens`);
       
       // Update session status
       session.gameData.currentRound = 1;
       session.status = 'active';
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} session status updated to active`);
       
       session.markModified('gameData');
-      await session.save();
+      session.markModified('gameData.aliens');
+      session.markModified('gameData.turnOrder');
+      session.markModified('gameData.currentTurnIndex');
+      
+      try {
+        await session.save();
+        console.log(`[MINIGAME COMPONENT JOIN] ${username} auto-start session saved successfully`);
+      } catch (error) {
+        console.error(`[MINIGAME COMPONENT JOIN] ${username} failed to save auto-start session:`, error);
+        return await interaction.followUp({
+          content: `❌ Failed to auto-start the game. Please try again.`,
+          flags: 64
+        });
+      }
       
       // Get first player in turn order for mention
       const firstPlayer = session.gameData.turnOrder[0];
       const firstPlayerMention = firstPlayer ? `<@${firstPlayer.discordId}>` : '';
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} first player: ${firstPlayer?.username || 'None'}`);
       
       // Post auto-start as follow-up message
       await interaction.followUp({
         content: `🎮 **Game Auto-Started!** ${spawnResult.message}\n\n🎯 ${firstPlayerMention}, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
         flags: 64
       });
+      console.log(`[MINIGAME COMPONENT JOIN] ${username} auto-start process completed successfully`);
     }
     
   } catch (error) {

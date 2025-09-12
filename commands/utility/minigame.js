@@ -351,6 +351,9 @@ module.exports = {
     const resolvedCharacterName = interaction.options.getString('character');
     const questId = interaction.options.getString('questid');
     const userId = interaction.user.id;
+    const username = interaction.user.username;
+    
+    console.log(`[MINIGAME JOIN] ${username} (${userId}) attempting to join session with character "${resolvedCharacterName}"`);
     
     // Extract session ID from the full display text if needed
     // Handle cases where sessionId might be "⚔ A868409 | 4 players | Created: 9/7/2025"
@@ -359,32 +362,41 @@ module.exports = {
       sessionId = sessionIdMatch[0];
     }
     
+    console.log(`[MINIGAME JOIN] Extracted session ID: ${sessionId}`);
+    
     // Defer reply to prevent interaction timeout
     if (!interaction.deferred && !interaction.replied) {
       await interaction.deferReply();
+      console.log(`[MINIGAME JOIN] Deferred reply for ${username}`);
     }
     
     // Validate character name
     if (!resolvedCharacterName) {
+      console.log(`[MINIGAME JOIN] ${username} failed validation - no character name provided`);
       return await interaction.editReply({
         content: '❌ Please specify a character name to join.'
       });
     }
     
+    console.log(`[MINIGAME JOIN] ${username} validating character "${resolvedCharacterName}"`);
+    
     // TODO: Make quest ID required after testing - currently optional for testing
     let quest = null;
     if (questId) {
+      console.log(`[MINIGAME JOIN] ${username} validating quest participation for quest ID: ${questId}`);
       // Validate quest participation if quest ID provided
       const Quest = require('../../models/QuestModel');
       quest = await Quest.findOne({ questID: questId });
       
       if (!quest) {
+        console.log(`[MINIGAME JOIN] ${username} failed validation - quest not found: ${questId}`);
         return await interaction.editReply({
           content: `❌ Quest with ID "${questId}" not found.`
         });
       }
       
       if (!quest.participants.has(userId)) {
+        console.log(`[MINIGAME JOIN] ${username} failed validation - not a quest participant`);
         return await interaction.editReply({
           content: `❌ You must first join the quest "${quest.title}" before participating in the minigame. Use /quest join questid:${questId} charactername:${resolvedCharacterName}`
         });
@@ -393,46 +405,65 @@ module.exports = {
       // Verify the character matches the quest participant
       const participant = quest.participants.get(userId);
       if (participant.characterName !== resolvedCharacterName) {
+        console.log(`[MINIGAME JOIN] ${username} failed validation - character mismatch. Quest character: ${participant.characterName}, Provided: ${resolvedCharacterName}`);
         return await interaction.editReply({
           content: `❌ You are participating in this quest with character "${participant.characterName}", not "${resolvedCharacterName}".`
         });
       }
+      console.log(`[MINIGAME JOIN] ${username} quest validation passed`);
     }
     
     // Fetch character
+    console.log(`[MINIGAME JOIN] ${username} fetching character "${resolvedCharacterName}" from database`);
     const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('../../database/db');
     let character = await fetchCharacterByNameAndUserId(resolvedCharacterName, userId);
     
     // If not found as regular character, try as mod character
     if (!character) {
+      console.log(`[MINIGAME JOIN] ${username} character not found as regular character, trying mod character`);
       character = await fetchModCharacterByNameAndUserId(resolvedCharacterName, userId);
     }
     
     if (!character) {
+      console.log(`[MINIGAME JOIN] ${username} failed validation - character not found: "${resolvedCharacterName}"`);
       return await interaction.editReply({
         content: `❌ Character "${resolvedCharacterName}" not found or does not belong to you.`
       });
     }
     
-    const username = character.name;
+    console.log(`[MINIGAME JOIN] ${username} character found: ${character.name} (ID: ${character._id})`);
     
     // Check session with detailed error messages
+    console.log(`[MINIGAME JOIN] ${username} validating session ${sessionId}`);
     const sessionError = await getSessionDiagnosticMessage(sessionId);
     if (sessionError) {
+      console.log(`[MINIGAME JOIN] ${username} session validation failed: ${sessionError}`);
       return await interaction.editReply({
         content: sessionError
       });
     }
     
     // Find the specific session (we know it exists and is valid now)
+    console.log(`[MINIGAME JOIN] ${username} fetching session from database`);
     const session = await Minigame.findOne({
       sessionId: sessionId,
       gameType: 'theycame',
       status: { $in: ['waiting', 'active'] }
     });
     
+    if (!session) {
+      console.log(`[MINIGAME JOIN] ${username} session not found in database after validation - possible race condition`);
+      return await interaction.editReply({
+        content: `❌ Session ${sessionId} not found or no longer available.`
+      });
+    }
+    
+    console.log(`[MINIGAME JOIN] ${username} session found - Status: ${session.status}, Players: ${session.players.length}, Village: ${session.village}`);
+    
     // Check if character is in the correct village for this minigame
+    console.log(`[MINIGAME JOIN] ${username} checking village location - Character: ${character.currentVillage}, Session: ${session.village}`);
     if (session.village && character.currentVillage !== session.village) {
+      console.log(`[MINIGAME JOIN] ${username} failed validation - wrong village location`);
       const villageDisplayName = session.village.charAt(0).toUpperCase() + session.village.slice(1);
       const currentVillageDisplayName = character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1);
       const villageEmoji = getVillageEmojiByName(session.village) || '';
@@ -469,14 +500,27 @@ module.exports = {
     }
     
     // Check if character already joined
+    console.log(`[MINIGAME JOIN] ${username} checking for duplicate players - Current players: ${session.players.map(p => p.characterName).join(', ')}`);
     const alreadyJoined = session.players.find(p => p.characterId === character._id.toString());
     if (alreadyJoined) {
+      console.log(`[MINIGAME JOIN] ${username} failed validation - character already joined`);
       return await interaction.editReply({
         content: `✅ **${character.name}** is already in the game!`
       });
     }
     
-    // Add character to game
+    // Add character to game - Critical section with race condition protection
+    console.log(`[MINIGAME JOIN] ${username} adding character to game - Players before: ${session.players.length}`);
+    
+    // Double-check for duplicates right before adding (race condition protection)
+    const duplicateCheck = session.players.find(p => p.characterId === character._id.toString());
+    if (duplicateCheck) {
+      console.log(`[MINIGAME JOIN] ${username} race condition detected - character already joined during processing`);
+      return await interaction.editReply({
+        content: `✅ **${character.name}** is already in the game!`
+      });
+    }
+    
     session.players.push({
       discordId: userId,
       characterName: character.name,
@@ -484,17 +528,63 @@ module.exports = {
       isModCharacter: character.isModCharacter || false,
       joinedAt: new Date()
     });
+    console.log(`[MINIGAME JOIN] ${username} character added to players array - Players after: ${session.players.length}`);
     
     // Add player to turn order
+    console.log(`[MINIGAME JOIN] ${username} adding to turn order`);
     const result = addPlayerToTurnOrder(session.gameData, userId, username);
+    console.log(`[MINIGAME JOIN] ${username} turn order result: ${result.message}`);
     
+    // Check if we have 6 players and should auto-start BEFORE saving
+    let shouldAutoStart = session.players.length === 6 && session.status === 'waiting';
+    let spawnResult = null;
+    
+    if (shouldAutoStart) {
+      console.log(`[MINIGAME JOIN] ${username} triggering auto-start - 6 players reached for session ${session.sessionId}`);
+      
+      // Auto-start the game
+      const { spawnAliens } = require('../../modules/minigameModule');
+      const playerCount = session.gameData.turnOrder.length || session.players.length;
+      console.log(`[MINIGAME JOIN] ${username} spawning aliens for auto-start - Player count: ${playerCount}`);
+      spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
+      console.log(`[MINIGAME JOIN] ${username} aliens spawned: ${spawnResult.spawnCount} aliens`);
+      
+      // Update session status
+      session.gameData.currentRound = 1;
+      session.status = 'active';
+      console.log(`[MINIGAME JOIN] ${username} session status updated to active`);
+    }
+    
+    // Save session to database (single save for both join and auto-start)
+    console.log(`[MINIGAME JOIN] ${username} saving session to database`);
     session.markModified('gameData');
-    await session.save();
+    session.markModified('gameData.aliens');
+    session.markModified('gameData.turnOrder');
+    session.markModified('gameData.currentTurnIndex');
+    session.markModified('players');
+    
+    try {
+      await session.save();
+      console.log(`[MINIGAME JOIN] ${username} session saved successfully`);
+      
+      // Debug: Verify aliens are still in the session after save
+      if (shouldAutoStart) {
+        console.log(`[MINIGAME JOIN] ${username} DEBUG - Aliens after save:`, session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+        console.log(`[MINIGAME JOIN] ${username} DEBUG - Active aliens after save:`, session.gameData.aliens.filter(a => !a.defeated).map(a => `${a.id}(${a.ring}${a.segment})`));
+      }
+    } catch (error) {
+      console.error(`[MINIGAME JOIN] ${username} failed to save session:`, error);
+      return await interaction.editReply({
+        content: `❌ Failed to join the game. Please try again.`
+      });
+    }
     
     // Update the game message
+    console.log(`[MINIGAME JOIN] ${username} updating game message`);
     await this.updateGameMessage(interaction, session);
     
     // Create join confirmation embed
+    console.log(`[MINIGAME JOIN] ${username} creating join confirmation embed`);
     const embedResult = await this.createJoinEmbed(session, character, result.message);
     const replyOptions = {
       embeds: [embedResult.embed]
@@ -504,29 +594,24 @@ module.exports = {
     }
     
     await interaction.editReply(replyOptions);
+    console.log(`[MINIGAME JOIN] ${username} join process completed successfully`);
     
-    // Check if we have 6 players and should auto-start (separate message)
-    if (session.players.length === 6 && session.status === 'waiting') {
-      console.log(`[MINIGAME] Auto-starting game with 6 players for session ${session.sessionId}`);
-      
-      // Auto-start the game
-      const { spawnAliens } = require('../../modules/minigameModule');
-      const playerCount = session.gameData.turnOrder.length || session.players.length;
-      const spawnResult = spawnAliens(session.gameData, playerCount, 0); // Pass 0 for first turn
-      
-      // Update session status
-      session.gameData.currentRound = 1;
-      session.status = 'active';
-      
+    // Handle auto-start follow-up message if needed
+    if (shouldAutoStart) {
       
       // Update the game message
+      console.log(`[MINIGAME JOIN] ${username} updating game message for auto-start`);
       await this.updateGameMessage(interaction, session);
       
       // Get first player in turn order for mention
       const firstPlayer = session.gameData.turnOrder[0];
       const firstPlayerMention = firstPlayer ? `<@${firstPlayer.discordId}>` : '';
+      const firstPlayerCharacter = session.players.find(p => p.discordId === firstPlayer?.discordId);
+      const firstPlayerCharacterName = firstPlayerCharacter ? firstPlayerCharacter.characterName : firstPlayer?.username || 'None';
+      console.log(`[MINIGAME JOIN] ${username} first player: ${firstPlayerCharacterName}`);
       
       // Create auto-start embed (like start game embed)
+      console.log(`[MINIGAME JOIN] ${username} creating auto-start embed`);
       const startEmbedResult = await this.createMinigameEmbed(session, 'Game Started!');
       const startReplyOptions = {
         content: `🎮 **Game Auto-Started!** ${spawnResult.message}\n\n🎯 ${firstPlayerMention}, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
@@ -538,6 +623,7 @@ module.exports = {
       
       // Post auto-start as follow-up message
       await interaction.followUp(startReplyOptions);
+      console.log(`[MINIGAME JOIN] ${username} auto-start process completed successfully`);
     }
   },
 
@@ -622,10 +708,18 @@ module.exports = {
     const result = processAlienDefenseRoll(session.gameData, userId, username, target, roll);
     
     console.log(`[MINIGAME] Roll result: ${result.success ? 'SUCCESS' : 'FAILED'} - ${result.message}`);
+    console.log(`[MINIGAME] Aliens before save:`, session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
     
     // Save the session data after roll processing (which may have advanced the turn)
+    // Explicitly mark the aliens array as modified to ensure Mongoose detects the change
     session.markModified('gameData');
+    session.markModified('gameData.aliens');
+    session.markModified('gameData.explosions');
+    session.markModified('gameData.turnOrder');
+    session.markModified('gameData.currentTurnIndex');
     await session.save();
+    
+    console.log(`[MINIGAME] Aliens after save:`, session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
     
     if (result.success) {
       // Create embed for successful roll AFTER saving session to show correct turn order
@@ -657,6 +751,7 @@ module.exports = {
         
         // Save the session after round advancement
         session.markModified('gameData');
+        session.markModified('gameData.explosions');
         await session.save();
         
         // Only proceed with round advancement logic if it was successful
@@ -672,17 +767,38 @@ module.exports = {
       // Check if game should end BEFORE sending turn notifications
       const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
       if (gameEndCheck.gameEnded) {
-        // Send immediate game over message
+        // Calculate quick stats for immediate display
+        const animalsSaved = gameEndCheck.finalScore;
+        const totalAnimals = GAME_CONFIGS.theycame.startingAnimals;
+        const animalsLost = totalAnimals - animalsSaved;
+        const percentage = Math.round((animalsSaved / totalAnimals) * 100);
+        const aliensDefeated = session.gameData.aliens.filter(a => a.defeated).length;
+        
+        // Send immediate game over message with key stats
         await interaction.followUp({
-          content: '🏁 **Game Over! Processing...**'
+          content: `🏁 **Game Over!** Processing results...\n\n🐄 **Animals Saved:** ${animalsSaved}/${totalAnimals} (${percentage}%)\n👾 **Aliens Defeated:** ${aliensDefeated}\n⏱️ **Rounds Completed:** ${session.gameData.currentRound}/${session.gameData.maxRounds}`
         });
         
         session.status = 'finished';
         session.results.finalScore = gameEndCheck.finalScore;
         session.results.completedAt = new Date();
         
-        // Calculate animals lost for reward distribution
-        const animalsLost = GAME_CONFIGS.theycame.startingAnimals - gameEndCheck.finalScore;
+        // Save the completed game to database
+        session.markModified('status');
+        session.markModified('results');
+        session.markModified('results.finalScore');
+        session.markModified('results.completedAt');
+        session.markModified('gameData');
+        session.markModified('gameData.villageAnimals');
+        
+        try {
+          await session.save();
+          console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+        } catch (error) {
+          console.error(`[MINIGAME] Failed to save game completion to database:`, error);
+        }
+        
+        // Use already calculated animalsLost variable
         console.log(`[MINIGAME] Game ended - Animals saved: ${gameEndCheck.finalScore}, Animals lost: ${animalsLost}`);
         
         // Distribute rewards to all players
@@ -805,6 +921,7 @@ module.exports = {
         
         // Save the session after round advancement
         session.markModified('gameData');
+        session.markModified('gameData.explosions');
         await session.save();
         
         // Only proceed with round advancement logic if it was successful
@@ -820,17 +937,38 @@ module.exports = {
       // Check if game should end BEFORE sending turn notifications
       const gameEndCheck = checkAlienDefenseGameEnd(session.gameData);
       if (gameEndCheck.gameEnded) {
-        // Send immediate game over message
+        // Calculate quick stats for immediate display
+        const animalsSaved = gameEndCheck.finalScore;
+        const totalAnimals = GAME_CONFIGS.theycame.startingAnimals;
+        const animalsLost = totalAnimals - animalsSaved;
+        const percentage = Math.round((animalsSaved / totalAnimals) * 100);
+        const aliensDefeated = session.gameData.aliens.filter(a => a.defeated).length;
+        
+        // Send immediate game over message with key stats
         await interaction.followUp({
-          content: '🏁 **Game Over! Processing...**'
+          content: `🏁 **Game Over!** Processing results...\n\n🐄 **Animals Saved:** ${animalsSaved}/${totalAnimals} (${percentage}%)\n👾 **Aliens Defeated:** ${aliensDefeated}\n⏱️ **Rounds Completed:** ${session.gameData.currentRound}/${session.gameData.maxRounds}`
         });
         
         session.status = 'finished';
         session.results.finalScore = gameEndCheck.finalScore;
         session.results.completedAt = new Date();
         
-        // Calculate animals lost for reward distribution
-        const animalsLost = GAME_CONFIGS.theycame.startingAnimals - gameEndCheck.finalScore;
+        // Save the completed game to database
+        session.markModified('status');
+        session.markModified('results');
+        session.markModified('results.finalScore');
+        session.markModified('results.completedAt');
+        session.markModified('gameData');
+        session.markModified('gameData.villageAnimals');
+        
+        try {
+          await session.save();
+          console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+        } catch (error) {
+          console.error(`[MINIGAME] Failed to save game completion to database:`, error);
+        }
+        
+        // Use already calculated animalsLost variable
         console.log(`[MINIGAME] Game ended - Animals saved: ${gameEndCheck.finalScore}, Animals lost: ${animalsLost}`);
         
         // Distribute rewards to all players
@@ -927,26 +1065,59 @@ module.exports = {
       const currentPlayer = session.gameData.turnOrder[session.gameData.currentTurnIndex];
       const currentUserId = interaction.user.id;
       
-      console.log(`[MINIGAME] Turn notification check - Session: ${session.sessionId}, Current Player: ${currentPlayer.username} (${currentPlayer.discordId}), Interaction User: ${interaction.user.username} (${currentUserId}), Turn Index: ${session.gameData.currentTurnIndex}`);
+      // Get character name from session.players array for consistency
+      const playerCharacter = session.players.find(p => p.discordId === currentPlayer.discordId);
+      const characterName = playerCharacter ? playerCharacter.characterName : currentPlayer.username;
+      console.log(`[MINIGAME] Turn notification check - Session: ${session.sessionId}, Current Player: ${characterName} (${currentPlayer.discordId}), Interaction User: ${interaction.user.username} (${currentUserId}), Turn Index: ${session.gameData.currentTurnIndex}`);
       
       // Only send notification if it's someone else's turn
       if (currentPlayer.discordId !== currentUserId) {
         try {
-          console.log(`[MINIGAME] Sending turn notification to ${currentPlayer.username} (${currentPlayer.discordId}) for session ${session.sessionId}`);
+          console.log(`[MINIGAME] Sending turn notification to ${characterName} (${currentPlayer.discordId}) for session ${session.sessionId}`);
           
-          await interaction.followUp({
+          // Add timeout to prevent hanging on connection issues
+          const notificationPromise = interaction.followUp({
             content: `🎯 <@${currentPlayer.discordId}>, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
             allowedMentions: {
               users: [currentPlayer.discordId]
             }
           });
           
-          console.log(`[MINIGAME] Successfully sent turn notification to ${currentPlayer.username} for session ${session.sessionId}`);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Notification timeout after 8 seconds')), 8000)
+          );
+          
+          await Promise.race([notificationPromise, timeoutPromise]);
+          
+          console.log(`[MINIGAME] Successfully sent turn notification to ${characterName} for session ${session.sessionId}`);
         } catch (error) {
-          console.error(`[MINIGAME] Error sending turn notification to ${currentPlayer.username} for session ${session.sessionId}:`, error);
+          console.error(`[MINIGAME] Error sending turn notification to ${characterName} for session ${session.sessionId}:`, error);
+          
+          // Fallback: Try to send a simpler notification without mentions
+          try {
+            console.log(`[MINIGAME] Attempting fallback notification for ${characterName} in session ${session.sessionId}`);
+            
+            const fallbackPromise = interaction.followUp({
+              content: `🎯 **${characterName}**, it's your turn! Use \`/minigame theycame-roll\` to attack aliens!`,
+              allowedMentions: { users: [] } // Disable mentions to avoid potential issues
+            });
+            
+            const fallbackTimeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Fallback notification timeout after 5 seconds')), 5000)
+            );
+            
+            await Promise.race([fallbackPromise, fallbackTimeoutPromise]);
+            
+            console.log(`[MINIGAME] Fallback notification sent successfully to ${characterName} for session ${session.sessionId}`);
+          } catch (fallbackError) {
+            console.error(`[MINIGAME] Fallback notification also failed for ${characterName} in session ${session.sessionId}:`, fallbackError);
+            
+            // Final fallback: Just log the information for debugging
+            console.log(`[MINIGAME] NOTIFICATION FAILED - ${characterName} should take their turn in session ${session.sessionId}. Current turn index: ${session.gameData.currentTurnIndex}`);
+          }
         }
       } else {
-        console.log(`[MINIGAME] Skipping turn notification - same player (${currentPlayer.username}) is taking the turn`);
+        console.log(`[MINIGAME] Skipping turn notification - same player (${characterName}) is taking the turn`);
       }
     } else {
       console.log(`[MINIGAME] No turn order available for session ${session.sessionId} - skipping turn notification`);
@@ -1003,9 +1174,12 @@ module.exports = {
     
     // Combined defenders and turn order info - only show if there are players
     if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
-      const turnOrderText = session.gameData.turnOrder.map((player, index) => 
-        `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${player.username}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`
-      ).join('\n');
+      const turnOrderText = session.gameData.turnOrder.map((player, index) => {
+        // Get character name from session.players array to ensure consistency
+        const playerCharacter = session.players.find(p => p.discordId === player.discordId);
+        const characterName = playerCharacter ? playerCharacter.characterName : player.username;
+        return `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${characterName}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`;
+      }).join('\n');
       // Add next turn message for active games
       let turnOrderValue = turnOrderText;
       if (session.status === 'active') {
@@ -1112,9 +1286,12 @@ module.exports = {
     
     // Combined defenders and turn order info - only show if there are players
     if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
-      const turnOrderText = session.gameData.turnOrder.map((player, index) => 
-        `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${player.username}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`
-      ).join('\n');
+      const turnOrderText = session.gameData.turnOrder.map((player, index) => {
+        // Get character name from session.players array to ensure consistency
+        const playerCharacter = session.players.find(p => p.discordId === player.discordId);
+        const characterName = playerCharacter ? playerCharacter.characterName : player.username;
+        return `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${characterName}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`;
+      }).join('\n');
       // Add next turn message for active games
       let turnOrderValue = turnOrderText;
       if (session.status === 'active') {
@@ -1241,9 +1418,12 @@ module.exports = {
     
     // Combined defenders and turn order info - only show if there are players
     if (session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
-      const turnOrderText = session.gameData.turnOrder.map((player, index) => 
-        `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${player.username}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`
-      ).join('\n');
+      const turnOrderText = session.gameData.turnOrder.map((player, index) => {
+        // Get character name from session.players array to ensure consistency
+        const playerCharacter = session.players.find(p => p.discordId === player.discordId);
+        const characterName = playerCharacter ? playerCharacter.characterName : player.username;
+        return `${index === session.gameData.currentTurnIndex ? '➤' : '•'} **${characterName}**${index === session.gameData.currentTurnIndex ? ' *(Current Turn)*' : ''}`;
+      }).join('\n');
       
       embed.addFields(
         { 
@@ -1276,7 +1456,31 @@ module.exports = {
       );
     }
     
-    embed.setFooter({ text: '🎮 Use /minigame commands to participate! • Good luck defending your village! 🛡️' });
+    // Create dynamic footer with turn and round information
+    let footerText = '🎮 Use /minigame commands to participate! • Good luck defending your village! 🛡️';
+    
+    if (session.status === 'active' && session.gameData.turnOrder && session.gameData.turnOrder.length > 0) {
+      // Get current player character name
+      const currentPlayer = session.gameData.turnOrder[session.gameData.currentTurnIndex];
+      const playerCharacter = session.players.find(p => p.discordId === currentPlayer.discordId);
+      const characterName = playerCharacter ? playerCharacter.characterName : currentPlayer.username;
+      
+      // Calculate turn number (currentTurnIndex + 1) and total turns
+      const currentTurn = session.gameData.currentTurnIndex + 1;
+      const totalTurns = session.gameData.turnOrder.length;
+      
+      // Get current round and max rounds
+      const currentRound = session.gameData.currentRound;
+      const maxRounds = session.gameData.maxRounds;
+      
+      // Get animal count
+      const animalsSaved = session.gameData.villageAnimals;
+      const maxAnimals = 25; // Starting animals count
+      
+      footerText = `🎯 ${characterName} turn ${currentTurn}/${totalTurns} | Round ${currentRound}/${maxRounds} | Animals: ${animalsSaved}/${maxAnimals}`;
+    }
+    
+    embed.setFooter({ text: footerText });
     
     // Return both embed and attachment
     return {
@@ -1327,9 +1531,20 @@ module.exports = {
     const percentage = Math.round((animalsSaved / totalAnimals) * 100);
     const animalsLost = totalAnimals - animalsSaved;
     
+    // Calculate detailed statistics
+    const totalAliens = session.gameData.aliens.length;
+    const aliensDefeated = session.gameData.aliens.filter(a => a.defeated).length;
+    const aliensReachedBarn = session.gameData.aliens.filter(a => a.defeatedBy === 'barn').length;
+    const aliensDefeatedByPlayers = aliensDefeated - aliensReachedBarn;
+    const defenseRate = totalAliens > 0 ? Math.round((aliensDefeatedByPlayers / totalAliens) * 100) : 0;
+    
+    // Calculate round efficiency
+    const roundsPlayed = session.gameData.currentRound;
+    const aliensPerRound = roundsPlayed > 0 ? Math.round((totalAliens / roundsPlayed) * 10) / 10 : 0;
+    
     embed.addFields(
       { 
-        name: '🏁 **GAME COMPLETE**', 
+        name: '🏁 **GAME COMPLETE**',
         value: `**Status:** FINISHED • **Rounds:** ${session.gameData.currentRound}/${session.gameData.maxRounds}`, 
         inline: false 
       },
@@ -1340,7 +1555,12 @@ module.exports = {
       },
       { 
         name: '__👾 Alien Defense Stats__', 
-        value: `**${status.defeatedAliens}** aliens defeated\n**${status.animalsLost}** animals stolen`, 
+        value: `**${aliensDefeatedByPlayers}** aliens defeated by players\n**${aliensReachedBarn}** aliens reached the barn\n**${defenseRate}%** defense success rate`, 
+        inline: true 
+      },
+      { 
+        name: '__📊 Battle Statistics__', 
+        value: `**${totalAliens}** total aliens spawned\n**${aliensPerRound}** aliens per round average\n**${session.players.length}** defenders participated`, 
         inline: true 
       }
     );
@@ -1384,11 +1604,40 @@ module.exports = {
       }
     }
     
+    // Performance rating
+    let performanceRating = '';
+    let performanceColor = 0x00FF00; // Green
+    
+    if (percentage >= 90) {
+      performanceRating = '🏆 **LEGENDARY DEFENSE** - Outstanding performance!';
+      performanceColor = 0xFFD700; // Gold
+    } else if (percentage >= 75) {
+      performanceRating = '🥇 **EXCELLENT DEFENSE** - Great job protecting the village!';
+      performanceColor = 0xFFA500; // Orange
+    } else if (percentage >= 50) {
+      performanceRating = '🥈 **GOOD DEFENSE** - Solid protection of the animals!';
+      performanceColor = 0x00FF00; // Green
+    } else if (percentage >= 25) {
+      performanceRating = '🥉 **FAIR DEFENSE** - Some animals were lost, but you tried!';
+      performanceColor = 0xFFFF00; // Yellow
+    } else {
+      performanceRating = '💀 **POOR DEFENSE** - The aliens had their way with the village...';
+      performanceColor = 0xFF0000; // Red
+    }
+    
+    // Update embed color based on performance
+    embed.setColor(performanceColor);
+    
     // Game end message
     embed.addFields(
       { 
         name: '__🎯 Final Result__', 
         value: gameEndCheck.message, 
+        inline: false 
+      },
+      { 
+        name: '__⭐ Performance Rating__', 
+        value: performanceRating, 
         inline: false 
       }
     );

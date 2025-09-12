@@ -3527,6 +3527,8 @@ async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
     const activeAliens = session.gameData.aliens.filter(alien => !alien.defeated);
     
     console.log(`[handleMinigameTargetAutocomplete]: Found ${activeAliens.length} active aliens for session ${sessionId}`);
+    console.log(`[handleMinigameTargetAutocomplete]: All aliens in session:`, session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+    console.log(`[handleMinigameTargetAutocomplete]: Active aliens:`, activeAliens.map(a => `${a.id}(${a.ring}${a.segment})`));
     
     let choices = activeAliens
       .filter((alien) => {

@@ -36,6 +36,7 @@ const {
   createMonsterEncounterEmbed,
   createSafeTravelDayEmbed,
   createTravelingEmbed,
+  createWeatherTravelRestrictionEmbed,
   pathEmojis
 } = require('../../embeds/embeds.js');
 
@@ -392,16 +393,30 @@ module.exports = {
       // ------------------- Check Severe Weather -------------------
       const severeWeather = await checkSevereWeather(startingVillage);
       if (severeWeather.blocked) {
+        const weatherEmbed = createWeatherTravelRestrictionEmbed(
+          character, 
+          severeWeather.condition, 
+          severeWeather.emoji, 
+          startingVillage, 
+          false
+        );
         return interaction.editReply({
-          content: `❌ **${character.name}** cannot travel due to severe weather conditions: ${severeWeather.emoji} **${severeWeather.condition}** in **${capitalizeFirstLetter(startingVillage)}**.\nPlease wait for the weather to improve.`
+          embeds: [weatherEmbed]
         });
       }
 
       // Check destination weather as well
       const destinationSevereWeather = await checkSevereWeather(destination);
       if (destinationSevereWeather.blocked) {
+        const weatherEmbed = createWeatherTravelRestrictionEmbed(
+          character, 
+          destinationSevereWeather.condition, 
+          destinationSevereWeather.emoji, 
+          destination, 
+          true
+        );
         return interaction.editReply({
-          content: `❌ **${character.name}** cannot travel to **${capitalizeFirstLetter(destination)}** due to severe weather conditions: ${destinationSevereWeather.emoji} **${destinationSevereWeather.condition}**.\nPlease wait for the weather to improve.`
+          embeds: [weatherEmbed]
         });
       }
 

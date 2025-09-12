@@ -2426,6 +2426,62 @@ const createEquippedItemErrorEmbed = (itemName) => {
   return embed;
 };
 
+// ------------------- Function: createWeatherTravelRestrictionEmbed -------------------
+// Creates an embed for when travel is blocked due to severe weather conditions
+const createWeatherTravelRestrictionEmbed = (character, weatherCondition, emoji, village, isDestination = false) => {
+  const settings = getCommonEmbedSettings(character);
+  const villageEmoji = getVillageEmojiByName(village) || '🏘️';
+  const villageName = capitalizeFirstLetter(village);
+  
+  const title = isDestination 
+    ? `❌ Travel to ${villageEmoji} ${villageName} Blocked`
+    : `❌ Travel from ${villageEmoji} ${villageName} Blocked`;
+    
+  const description = isDestination
+    ? `**${character.name}** cannot travel to **${villageEmoji} ${villageName}** due to severe weather conditions.`
+    : `**${character.name}** cannot travel from **${villageEmoji} ${villageName}** due to severe weather conditions.`;
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .setColor('#FF6B6B') // Weather warning red
+    .setAuthor({
+      name: `${character.name} 🔗`,
+      iconURL: character.icon || DEFAULT_IMAGE_URL,
+      url: character.inventory || "",
+    })
+    .addFields(
+      {
+        name: '🌊 __Weather Condition__',
+        value: `> ${emoji} **${weatherCondition}**`,
+        inline: true
+      },
+      {
+        name: '📍 __Location__',
+        value: `> ${villageEmoji} ${villageName}`,
+        inline: true
+      },
+      {
+        name: '⏰ __Status__',
+        value: '> Travel temporarily suspended',
+        inline: true
+      },
+      {
+        name: '💡 __What to do__',
+        value: '> Please wait for the weather to improve before attempting to travel again.',
+        inline: false
+      }
+    )
+    .setFooter({ 
+      text: 'Severe weather conditions prevent safe travel',
+      iconURL: character.icon || DEFAULT_IMAGE_URL
+    })
+    .setTimestamp();
+
+  setDefaultImage(embed);
+  return embed;
+};
+
 // ============================================================================
 // MODULE EXPORTS
 // ============================================================================
@@ -2498,6 +2554,7 @@ module.exports = {
  createRaidVictoryEmbed,
  createDailyRollsResetEmbed,
  createEquippedItemErrorEmbed,
+ createWeatherTravelRestrictionEmbed,
 };
 
 
