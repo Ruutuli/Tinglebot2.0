@@ -24,7 +24,7 @@
 // ============================================================================
 const { EmbedBuilder } = require('discord.js');
 const dbConfig = require('../config/database');
-const { trackDatabaseError, isDatabaseError } = require('./errorTracking');
+const { trackDatabaseError, isDatabaseError, isDiscordAPIError } = require('./errorTracking');
 
 // ------------------- Standard Libraries -------------------
 const ERROR_LOG_CHANNEL_ID = process.env.CONSOLE_LOG_CHANNEL;
@@ -65,8 +65,25 @@ async function handleError(error, source = "Unknown Source", context = {}) {
   const message = error?.stack || error?.message || String(error) || 'Unknown error occurred';
   const timestamp = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
 
-  // ---- Extra context for Mongo/network errors ----
+  // ---- Extra context for Discord API errors ----
   let extraInfo = "";
+  if (
+    error?.name === "HTTPError" ||
+    (error?.message && error.message.includes('Service Unavailable')) ||
+    (error?.message && error.message.includes('HTTPError'))
+  ) {
+    extraInfo += `\n🤖 **Discord API Error Details:**\n`;
+    extraInfo += `• Error Type: ${error.name || 'HTTPError'}\n`;
+    if (error.message?.includes('Service Unavailable')) {
+      extraInfo += `• Issue: Discord API is temporarily unavailable\n`;
+      extraInfo += `• Recommendation: This is usually a temporary Discord issue\n`;
+    }
+    if (context.commandName) extraInfo += `• Command: ${context.commandName}\n`;
+    if (context.userId && context.userId !== 'unknown') extraInfo += `• User ID: ${context.userId}\n`;
+    if (context.characterName && context.characterName !== 'unknown') extraInfo += `• Character: ${context.characterName}\n`;
+  }
+  
+  // ---- Extra context for Mongo/network errors ----
   if (
     error?.name === "MongoNetworkError" ||
     error?.code === 'ETIMEDOUT' ||
@@ -116,6 +133,11 @@ Error: ${message}
   if (isDatabaseError(error)) {
     await trackDatabaseError(error, source);
   }
+  
+  // Log Discord API errors but don't track them for shutdown (they're usually temporary)
+  if (isDiscordAPIError(error)) {
+    console.log(`[globalErrorHandler.js]: 🤖 Discord API error detected: ${error.message}`);
+  }
 
   let trelloLink = null;
 
@@ -142,14 +164,20 @@ Error: ${message}
     const errorChannel = client.channels.cache.get(ERROR_LOG_CHANNEL_ID);
 
     if (errorChannel) {
+      // Determine embed title and color based on error type
+      const isDiscordError = isDiscordAPIError(error);
+      const embedTitle = isDiscordError ? `🤖 Discord API Issue in ${source}` : `❌ Error Detected in ${source}`;
+      const embedColor = isDiscordError ? 0xFFA500 : 0xFF0000; // Orange for Discord errors, Red for other errors
+
       const errorEmbed = new EmbedBuilder()
-        .setColor(0xFF0000)
-        .setTitle(`❌ Error Detected in ${source}`)
+        .setColor(embedColor)
+        .setTitle(embedTitle)
         .addFields(
           { name: "🧠 Command Used", value: context.commandName && context.commandName !== 'unknown' ? context.commandName : "unknown", inline: false },
           { name: "🙋 User", value: context.userTag && context.userTag !== 'unknown' ? `${context.userTag} (${context.userId})` : "unknown (unknown)", inline: false },
           { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
           { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` || "No error message available" },
+          ...(isDiscordError ? [{ name: "🤖 Error Type", value: "**Discord API Issue** - This is not a bot problem. Discord's servers are experiencing issues." }] : []),
           ...(extraInfo ? [{ name: "🌐 Context", value: extraInfo }] : []),
           { name: "🔗 Trello Link", value: trelloLink ? trelloLink : "No Trello card available." }
         )
@@ -159,9 +187,19 @@ Error: ${message}
         // Create user mention content
         let mentionContent = "";
         if (context.userId && context.userId !== 'unknown') {
-          mentionContent = `HEY! <@${context.userId}>! 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\nError: ${error.message || 'Unknown error occurred'}`;
+          // Check if this is a Discord API error
+          if (isDiscordAPIError(error)) {
+            mentionContent = `HEY! <@${context.userId}>! 🤖\n\n**This is a Discord API issue, not your fault!**\n\nDiscord's servers are experiencing problems right now. Please wait a few minutes and try your command again. This is not caused by our bot or anything you did wrong.\n\nError: ${error.message || 'Discord API Error'}`;
+          } else {
+            mentionContent = `HEY! <@${context.userId}>! 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\nError: ${error.message || 'Unknown error occurred'}`;
+          }
         } else {
-          mentionContent = `HEY! @everyone! 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!`;
+          // Check if this is a Discord API error for unknown users
+          if (isDiscordAPIError(error)) {
+            mentionContent = `HEY! @everyone! 🤖\n\n**Discord API is currently experiencing issues!**\n\nThis is not a bot problem - Discord's servers are having trouble. Please wait a few minutes before trying commands again.`;
+          } else {
+            mentionContent = `HEY! @everyone! 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!`;
+          }
         }
         
         await errorChannel.send({ 
@@ -223,8 +261,9 @@ async function handleInteractionError(error, interaction, context = {}) {
     ...context,
     interaction: interaction,
     commandName: context.commandName || interaction?.commandName || 'unknown',
-    userTag: interaction?.user?.tag || 'unknown',
-    userId: interaction?.user?.id || 'unknown',
+    userTag: context.userTag || interaction?.user?.tag || 'unknown',
+    userId: context.userId || interaction?.user?.id || 'unknown',
+    characterName: context.characterName || 'unknown',
     options: interaction?.options?.data || context.options,
     subcommand: interaction?.options?.getSubcommand() || context.subcommand,
     responseType: context.responseType || ERROR_RESPONSE_TYPES.REPLY

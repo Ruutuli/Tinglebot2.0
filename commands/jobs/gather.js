@@ -157,6 +157,14 @@ module.exports = {
     let currentVillage;
     let hasResponded = false;
 
+    // ------------------- Capture User Info Early ------------------
+    // Capture user information before any operations that might fail
+    const userInfo = {
+      userId: interaction.user?.id || 'unknown',
+      userTag: interaction.user?.tag || 'unknown',
+      characterName: interaction.options?.getString('charactername') || 'unknown'
+    };
+
     // ------------------- Helper Function: Safe Reply ------------------
     // Helper function to safely respond to interaction
     const safeReply = async (content, options = {}) => {
@@ -1003,9 +1011,9 @@ module.exports = {
       if (!error.message.includes('inventory is not synced')) {
         handleInteractionError(error, 'gather.js', {
           commandName: '/gather',
-          userTag: interaction.user.tag,
-          userId: interaction.user.id,
-          characterName: interaction.options.getString('charactername'),
+          userTag: userInfo.userTag,
+          userId: userInfo.userId,
+          characterName: userInfo.characterName,
           options: {
             job: job,
             region: region,
@@ -1017,8 +1025,8 @@ module.exports = {
         console.error(`[gather.js]: Error during gathering process: ${error.message}`, {
           stack: error.stack,
           interactionData: {
-            userId: interaction.user.id,
-            characterName: interaction.options.getString('charactername'),
+            userId: userInfo.userId,
+            characterName: userInfo.characterName,
             guildId: interaction.guildId,
             channelId: interaction.channelId,
           },
