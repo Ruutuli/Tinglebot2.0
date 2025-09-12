@@ -200,10 +200,34 @@ function isDatabaseError(error) {
   );
 }
 
+// ------------------- Check if Discord API Error -------------------
+function isDiscordAPIError(error) {
+  if (!error || !error.message) return false;
+  
+  const discordErrorPatterns = [
+    'HTTPError',
+    'Service Unavailable',
+    'Rate Limited',
+    'Unauthorized',
+    'Forbidden',
+    'Not Found',
+    'Bad Request',
+    'Internal Server Error',
+    'Gateway Timeout'
+  ];
+  
+  return discordErrorPatterns.some(pattern => 
+    error.message.includes(pattern) || 
+    error.name === pattern ||
+    error.code === pattern
+  );
+}
+
 module.exports = {
   initializeErrorTracking,
   trackDatabaseError,
   resetErrorCounter,
   getErrorStats,
-  isDatabaseError
+  isDatabaseError,
+  isDiscordAPIError
 };
