@@ -2482,6 +2482,23 @@ const createWeatherTravelRestrictionEmbed = (character, weatherCondition, emoji,
   return embed;
 };
 
+// ------------------- Function: createGameOverEmbed -------------------
+// Creates a game over embed for minigame results
+const createGameOverEmbed = (animalsSaved, totalAnimals, aliensDefeated, roundsCompleted, totalRounds) => {
+  const savePercentage = Math.round((animalsSaved / totalAnimals) * 100);
+  
+  return new EmbedBuilder()
+    .setTitle("🏁 Game Over! Processing results...")
+    .addFields(
+      { name: "🐄 Animals Saved", value: `${animalsSaved}/${totalAnimals} (${savePercentage}%)`, inline: true },
+      { name: "👾 Aliens Defeated", value: aliensDefeated.toString(), inline: true },
+      { name: "⏱️ Rounds Completed", value: `${roundsCompleted}/${totalRounds}`, inline: true }
+    )
+    .setColor("#FF6B6B")
+    .setTimestamp()
+    .setImage(DEFAULT_IMAGE_URL);
+};
+
 // ============================================================================
 // MODULE EXPORTS
 // ============================================================================
@@ -2555,6 +2572,7 @@ module.exports = {
  createDailyRollsResetEmbed,
  createEquippedItemErrorEmbed,
  createWeatherTravelRestrictionEmbed,
+ createGameOverEmbed,
 };
 
 
