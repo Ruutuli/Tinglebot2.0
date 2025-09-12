@@ -117,35 +117,21 @@ async function generateAlienOverlayImage(gameData, sessionId) {
     // Load alien image once
     const alienImg = await Jimp.read(alienImageUrl);
     
-    // Load explosion emoji image
-    const explosionEmojiUrl = 'https://images.emojiterra.com/twitter/v14.0/128px/1f4a5.png';
-    const explosionImg = await Jimp.read(explosionEmojiUrl);
-    
     // Resize images to appropriate size while maintaining aspect ratio
     const alienSize = 100; // Larger size for better visibility
-    const explosionSize = 100; // Same size as alien for consistency
     alienImg.resize(alienSize, Jimp.AUTO); // Maintain aspect ratio
-    explosionImg.resize(explosionSize, Jimp.AUTO); // Maintain aspect ratio
-    
-    // Get list of defeated alien IDs for quick lookup
-    const defeatedAlienIds = new Set((gameData.explosions || []).map(exp => exp.alienId));
     
     // Composite each alien onto the village image
     for (const alien of alienPositions) {
       if (alien.position) {
         const { x, y } = alien.position;
         
-        // Check if this alien was defeated
-        const isDefeated = defeatedAlienIds.has(alien.id);
-        
-        // Choose image based on defeat status
-        const imageToUse = isDefeated ? explosionImg : alienImg;
-        const imageClone = imageToUse.clone();
-        
-        // Log the replacement for debugging
-        if (isDefeated) {
-          console.log(`[MINIGAME] Replacing alien ${alien.id} with explosion emoji at position (${x}, ${y})`);
+        // Only render active (non-defeated) aliens
+        if (alien.defeated) {
+          continue;
         }
+        
+        const imageClone = alienImg.clone();
         
         // Get actual dimensions of the resized image
         const imageWidth = imageClone.bitmap.width;

@@ -714,7 +714,6 @@ module.exports = {
     // Explicitly mark the aliens array as modified to ensure Mongoose detects the change
     session.markModified('gameData');
     session.markModified('gameData.aliens');
-    session.markModified('gameData.explosions');
     session.markModified('gameData.turnOrder');
     session.markModified('gameData.currentTurnIndex');
     await session.save();
@@ -751,7 +750,6 @@ module.exports = {
         
         // Save the session after round advancement
         session.markModified('gameData');
-        session.markModified('gameData.explosions');
         await session.save();
         
         // Only proceed with round advancement logic if it was successful
@@ -921,7 +919,6 @@ module.exports = {
         
         // Save the session after round advancement
         session.markModified('gameData');
-        session.markModified('gameData.explosions');
         await session.save();
         
         // Only proceed with round advancement logic if it was successful
