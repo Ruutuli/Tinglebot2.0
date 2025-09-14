@@ -178,22 +178,33 @@ async function syncToInventoryDatabase(character, item, interaction) {
     };
 
     // First, update the database
-    const existingItem = await inventoryCollection.findOne({
+    const existingItems = await inventoryCollection.find({
       characterId: character._id,
       itemName: dbDoc.itemName
-    });
+    }).toArray();
 
-    if (existingItem) {
-      // If we're adding crafted items and the existing item wasn't crafted, create a new entry
-      if (dbDoc.obtain === 'Crafting' && !existingItem.obtain?.toLowerCase().includes('crafting')) {
+    if (existingItems.length > 0) {
+      // If we're adding crafted items and no existing item was crafted, create a new entry
+      if (dbDoc.obtain === 'Crafting' && !existingItems.some(item => item.obtain?.toLowerCase().includes('crafting'))) {
         // Create a new entry for the crafted items
         await inventoryCollection.insertOne(dbDoc);
       } else {
-        // Update existing item by incrementing quantity (for same obtain method)
-        await inventoryCollection.updateOne(
-          { characterId: character._id, itemName: dbDoc.itemName },
-          { $inc: { quantity: dbDoc.quantity } }
-        );
+        // For removal (negative quantity), find the entry with the most quantity to remove from
+        if (dbDoc.quantity < 0) {
+          const itemToUpdate = existingItems.reduce((max, item) => 
+            (item.quantity || 0) > (max.quantity || 0) ? item : max
+          );
+          await inventoryCollection.updateOne(
+            { _id: itemToUpdate._id },
+            { $inc: { quantity: dbDoc.quantity } }
+          );
+        } else {
+          // For addition (positive quantity), update the first matching entry
+          await inventoryCollection.updateOne(
+            { characterId: character._id, itemName: dbDoc.itemName },
+            { $inc: { quantity: dbDoc.quantity } }
+          );
+        }
       }
     } else {
       // Insert new item
@@ -511,40 +522,48 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     
     const inventoryCollection = db.collection(collectionName);
 
-    // First try exact match
-    let inventoryItem;
+    // Find all matching items
+    let inventoryItems;
     if (itemName.includes('+')) {
-      inventoryItem = await inventoryCollection.findOne({
+      inventoryItems = await inventoryCollection.find({
         characterId: character._id,
         itemName: itemName.trim()
-      });
+      }).toArray();
     } else {
-      inventoryItem = await inventoryCollection.findOne({
+      inventoryItems = await inventoryCollection.find({
         characterId: character._id,
         itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
-      });
+      }).toArray();
     }
 
     // If no exact match, try case-insensitive match (only for non-+ items)
-    if (!inventoryItem && !itemName.includes('+')) {
-      inventoryItem = await inventoryCollection.findOne({
+    if (inventoryItems.length === 0 && !itemName.includes('+')) {
+      inventoryItems = await inventoryCollection.find({
         characterId: character._id,
         itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
-      });
+      }).toArray();
     }
 
-    if (!inventoryItem) {
+    // Calculate total available quantity
+    const totalQuantity = inventoryItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    
+    // Find the item with the most quantity to remove from
+    const inventoryItem = inventoryItems.reduce((max, item) => 
+      (item.quantity || 0) > (max.quantity || 0) ? item : max
+    );
+
+    if (!inventoryItem || inventoryItems.length === 0) {
       return false;
     }
 
-    if (inventoryItem.quantity < quantity) {
+    if (totalQuantity < quantity) {
       const errorEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
         .setTitle('❌ Insufficient Items')
         .setDescription(`Not enough ${itemName} in inventory`)
         .addFields(
           { name: 'Required', value: quantity.toString(), inline: true },
-          { name: 'Available', value: inventoryItem.quantity.toString(), inline: true }
+          { name: 'Available', value: totalQuantity.toString(), inline: true }
         )
         .setFooter({ text: 'Check your inventory and try again' })
         .setTimestamp();
@@ -556,8 +575,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
 
     if (newQuantity === 0) {
       const deleteResult = await inventoryCollection.deleteOne({
-        characterId: character._id,
-        itemName: inventoryItem.itemName
+        _id: inventoryItem._id
       });
       
       if (deleteResult.deletedCount === 0) {
@@ -566,7 +584,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       }
     } else {
       const updateResult = await inventoryCollection.updateOne(
-        { characterId: character._id, itemName: inventoryItem.itemName },
+        { _id: inventoryItem._id },
         { $inc: { quantity: -quantity } }
       );
       

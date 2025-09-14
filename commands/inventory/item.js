@@ -169,6 +169,12 @@ module.exports = {
       // Use the already cleaned item name for inventory lookup
       const cleanItemNameForInventory = cleanItemName.toLowerCase();
       
+      // Sum up all quantities of the same item (case-insensitive)
+      const totalQuantity = inventoryItems
+        .filter(invItem => invItem.itemName?.toLowerCase() === cleanItemNameForInventory)
+        .reduce((sum, invItem) => sum + (invItem.quantity || 0), 0);
+      
+      // Find the first item entry for display purposes
       const ownedItem = inventoryItems.find(invItem =>
         invItem.itemName?.toLowerCase() === cleanItemNameForInventory
       );
@@ -176,12 +182,12 @@ module.exports = {
       // Skip inventory check for mod characters using job vouchers
       const isModCharacterUsingJobVoucher = character.isModCharacter && item.itemName.toLowerCase() === 'job voucher';
       
-      if (!isModCharacterUsingJobVoucher && (!ownedItem || ownedItem.quantity < quantity)) {
+      if (!isModCharacterUsingJobVoucher && (!ownedItem || totalQuantity < quantity)) {
         return void await interaction.editReply({
           embeds: [{
             color: 0xAA926A,
             title: '🎫 Job Voucher Usage',
-            description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(cleanItemNameForInventory)}" in their inventory.`,
+            description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(cleanItemNameForInventory)}" in their inventory.\n\n**Available:** ${totalQuantity}\n**Requested:** ${quantity}`,
             image: {
               url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
