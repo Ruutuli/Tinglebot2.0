@@ -1056,10 +1056,15 @@ async function processTravelDay(day, context) {
           new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(character.currentStamina === 0)
         );
         const encounterMessage = await channel.send({ embeds: [encounterEmbed], components: [buttons] });
+        let encounterInteractionProcessed = false; // Flag to prevent multiple interactions
         const collector = encounterMessage.createMessageComponentCollector({ 
           filter: i => {
             if (i.user.id !== interaction.user.id) {
               i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true });
+              return false;
+            }
+            if (encounterInteractionProcessed) {
+              i.reply({ content: '❌ You have already made a choice for this encounter.', ephemeral: true });
               return false;
             }
             return true;
@@ -1068,6 +1073,18 @@ async function processTravelDay(day, context) {
         });
 
         collector.on('collect', async i => {
+          if (encounterInteractionProcessed) {
+            return; // Prevent multiple interactions
+          }
+          encounterInteractionProcessed = true; // Mark interaction as processed
+          
+          // Immediately disable buttons to prevent additional clicks
+          const disabledButtons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('fight').setLabel('⚔️ Fight').setStyle(ButtonStyle.Primary).setDisabled(true),
+            new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(true)
+          );
+          await encounterMessage.edit({ components: [disabledButtons] }).catch(console.error);
+          
           try {
             const decision = await handleTravelInteraction(
               i,
@@ -1149,10 +1166,15 @@ async function processTravelDay(day, context) {
       );
       await safeMessage.edit({ embeds: [safeEmbed], components: [buttons] });
 
+      let interactionProcessed = false; // Flag to prevent multiple interactions
       const collector = safeMessage.createMessageComponentCollector({ 
         filter: i => {
           if (i.user.id !== interaction.user.id) {
             i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true });
+            return false;
+          }
+          if (interactionProcessed) {
+            i.reply({ content: '❌ You have already made a choice for this day.', ephemeral: true });
             return false;
           }
           return true;
@@ -1160,6 +1182,19 @@ async function processTravelDay(day, context) {
         time: 120000 // Reduced from 300000 (5 min) to 120000 (2 min)
       });
       collector.on('collect', async i => {
+        if (interactionProcessed) {
+          return; // Prevent multiple interactions
+        }
+        interactionProcessed = true; // Mark interaction as processed
+        
+        // Immediately disable buttons to prevent additional clicks
+        const disabledButtons = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(true),
+          new ButtonBuilder().setCustomId('gather').setLabel('🌿 Gather').setStyle(ButtonStyle.Success).setDisabled(true),
+          new ButtonBuilder().setCustomId('do_nothing').setLabel('✨ Do Nothing').setStyle(ButtonStyle.Secondary).setDisabled(true)
+        );
+        await safeMessage.edit({ components: [disabledButtons] }).catch(console.error);
+        
         try {
           const decision = await handleTravelInteraction(
             i,

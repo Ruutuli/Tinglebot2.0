@@ -66,6 +66,68 @@ const { handleError } = require('../utils/globalErrorHandler');
 const Character = require('../models/CharacterModel');
 
 // ============================================================================
+// ------------------- Daily Roll Functions -------------------
+// ============================================================================
+
+// ------------------- Daily Roll Functions ------------------
+// Check if a daily roll is available for a specific activity
+function canUseDailyRoll(character, activity, userId) {
+  // If character has an active job voucher, they can always use the command
+  if (character.jobVoucher) {
+    return true;
+  }
+
+  // Special case for specific user ID
+  if (userId === '668281042414600212') {
+    return true;
+  }
+
+  const now = new Date();
+  // Compute the most recent 12:00 UTC (8am EST) rollover
+  const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+  if (now < rollover) {
+    // If before today's 12:00 UTC, use yesterday's 12:00 UTC
+    rollover.setUTCDate(rollover.getUTCDate() - 1);
+  }
+
+  // Check both gather and loot activities since they share the same daily limit
+  const lastGatherRoll = character.dailyRoll?.get('gather');
+  const lastLootRoll = character.dailyRoll?.get('loot');
+  
+  if (!lastGatherRoll && !lastLootRoll) {
+    return true;
+  }
+
+  const lastGatherDate = lastGatherRoll ? new Date(lastGatherRoll) : null;
+  const lastLootDate = lastLootRoll ? new Date(lastLootRoll) : null;
+  
+  // If either activity was used today, deny the action
+  if (lastGatherDate && lastGatherDate >= rollover) {
+    return false;
+  }
+  if (lastLootDate && lastLootDate >= rollover) {
+    return false;
+  }
+
+  return true;
+}
+
+// Update the daily roll timestamp for an activity
+async function updateDailyRoll(character, activity) {
+  try {
+    if (!character.dailyRoll) {
+      character.dailyRoll = new Map();
+    }
+    const now = new Date().toISOString();
+    character.dailyRoll.set(activity, now);
+    await character.save();
+  } catch (error) {
+    console.error(`[travelHandler.js]: ❌ Failed to update daily roll:`, error);
+    throw error;
+  }
+}
+
+// ============================================================================
 // ------------------- Travel Embeds -------------------
 // ============================================================================
 
@@ -281,6 +343,73 @@ async function handleGather(interaction, character, currentPath, encounterMessag
   }
   
   try {
+    // ------------------- Daily Roll Check ------------------
+    // Check for job voucher and daily roll
+    if (character.jobVoucher || character.isModCharacter) {
+      // Job voucher is active or mod character - no need for daily roll check
+    } else {
+      // Check if gather has been used today
+      const userId = interaction?.user?.id || 'unknown';
+      const canGather = canUseDailyRoll(character, 'gather', userId);
+      
+      if (!canGather) {
+        const nextRollover = new Date();
+        nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
+        if (nextRollover < new Date()) {
+          nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+        }
+        const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
+        
+        const decision = `❌ **Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`;
+        
+        // Update embed
+        const description = 
+          `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+          `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+          `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+
+        const embed = createUpdatedTravelEmbed({
+          encounterMessage,
+          character,
+          description,
+          fields: [{ name: '🔹 __Outcome__', value: 'Daily gathering limit reached', inline: false }],
+        });
+        
+        if (typeof encounterMessage?.edit === 'function') {
+          await encounterMessage.edit({ embeds: [embed], components: [] });
+        }
+
+        return decision;
+      }
+
+      // Update daily roll AFTER all validations pass
+      try {
+        await updateDailyRoll(character, 'gather');
+      } catch (error) {
+        console.error(`[travelHandler.js]: ❌ Failed to update daily roll:`, error);
+        const decision = `❌ **An error occurred while updating your daily roll. Please try again.**`;
+        
+        // Update embed
+        const description = 
+          `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+          `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+          `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+
+        const embed = createUpdatedTravelEmbed({
+          encounterMessage,
+          character,
+          description,
+          fields: [{ name: '🔹 __Outcome__', value: 'Error updating daily roll', inline: false }],
+        });
+        
+        if (typeof encounterMessage?.edit === 'function') {
+          await encounterMessage.edit({ embeds: [embed], components: [] });
+        }
+
+        return decision;
+      }
+    }
+
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
     character.perk = jobPerk?.perks[0];
@@ -304,7 +433,8 @@ async function handleGather(interaction, character, currentPath, encounterMessag
         category: Array.isArray(chosen.category) ? chosen.category : [chosen.category],
         type: Array.isArray(chosen.type) ? chosen.type : [chosen.type],
         subtype: Array.isArray(chosen.subtype) ? chosen.subtype : chosen.subtype ? [chosen.subtype] : [],
-        perk: "" // Explicitly set perk to empty for gathered items
+        perk: "", // Explicitly set perk to empty for gathered items
+        obtain: "Travel" // Set the correct source for travel-gathered items
       };
 
       await syncToInventoryDatabase(character, formattedItem, interaction);
