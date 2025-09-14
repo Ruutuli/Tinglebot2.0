@@ -209,7 +209,10 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
         throw new Error(`❌ **General category ${generalCategoryItemName} is not defined.**`);
     }
 
-    let specificItems = inventory.filter(item => generalCategories[generalCategoryItemName].includes(item.itemName));
+    let specificItems = inventory.filter(item => 
+        generalCategories[generalCategoryItemName].includes(item.itemName) && 
+        item.quantity > 0 // Only show items with quantity > 0
+    );
     specificItems = sortItemsByRarity(specificItems);
 
     let availableItems = specificItems.map((item, index) => ({
