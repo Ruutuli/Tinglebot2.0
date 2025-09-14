@@ -2003,10 +2003,11 @@ async function handleTradeItemAutocomplete(interaction, focusedValue) {
     const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
     
-    // Aggregate by name, exclude 'Initial Item'
+    // Aggregate by name, exclude 'Initial Item' and items with quantity <= 0
     const itemMap = new Map();
     for (const item of items) {
       if (!item.itemName || item.itemName.toLowerCase() === 'initial item') continue;
+      if (item.quantity <= 0) continue; // Skip items with zero quantity
       const key = item.itemName.trim().toLowerCase();
       if (!itemMap.has(key)) {
         itemMap.set(key, { name: item.itemName, quantity: item.quantity });
@@ -2415,9 +2416,10 @@ async function handleItemAutocomplete(interaction, focusedOption) {
 
         choices = Object.entries(itemTotals)
           .filter(
-            ([name]) =>
+            ([name, total]) =>
               name.includes(searchQuery) &&
-              name !== "initial item"
+              name !== "initial item" &&
+              total > 0 // Only show items with quantity > 0
           )
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([name, total]) => ({
@@ -2428,9 +2430,10 @@ async function handleItemAutocomplete(interaction, focusedOption) {
         // For non-sell subcommands, show all items in inventory
         choices = Object.entries(itemTotals)
           .filter(
-            ([name]) =>
+            ([name, total]) =>
               name.includes(searchQuery) &&
-              name !== "initial item"
+              name !== "initial item" &&
+              total > 0 // Only show items with quantity > 0
           )
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([name, total]) => ({
@@ -2874,6 +2877,9 @@ async function handleGearAutocomplete(interaction, focusedOption) {
   const characterInventory = await inventoryCollection.find().toArray();
 
   const filteredItems = characterInventory.filter((item) => {
+   // Only show items with quantity > 0
+   if (item.quantity <= 0) return false;
+   
    // Handle category - could be string or array
    const categories = Array.isArray(item.category) 
      ? item.category 

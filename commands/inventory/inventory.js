@@ -237,6 +237,7 @@ module.exports = {
           }
           return acc;
         }, [])
+        .filter(item => item.quantity > 0) // Remove items with zero quantity
         .sort((a, b) => a.itemName.localeCompare(b.itemName));
 
       // Group items by type
