@@ -4,7 +4,7 @@
 // (No standard libraries imported here)
 
 // Third-Party Libraries
-const { SlashCommandBuilder } = require("discord.js"); // Used to create slash commands for Discord bots
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); // Used to create slash commands for Discord bots
 const { v4: uuidv4 } = require("uuid"); // Generates unique identifiers
 const dotenv = require('dotenv');
 const env = process.env.NODE_ENV || 'development';
@@ -355,20 +355,19 @@ module.exports = {
 
    // ---- Blight Rain Infection Check ----
    const weather = await getWeatherWithoutGeneration(character.currentVillage);
+   let blightRainMessage = null;
    if (weather?.special?.label === 'Blight Rain') {
      // Mod characters are immune to blight infection
      if (character.isModCharacter) {
-       const immuneMsg =
+       blightRainMessage =
          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
          `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
-       await interaction.editReply({ content: immuneMsg, ephemeral: false });
-       return; // Add return here to prevent further execution
+       console.log(`[loot.js]: 👑 Mod character ${character.name} is immune to blight rain`);
      } else if (character.blighted) {
-       const alreadyMsg =
+       blightRainMessage =
          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
          `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-       await interaction.editReply({ content: alreadyMsg, ephemeral: false });
-       return; // Add return here to prevent further execution
+       console.log(`[loot.js]: 🧿 Character ${character.name} is already blighted`);
      } else {
        // Check for resistance buffs
        const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
@@ -453,11 +452,11 @@ module.exports = {
            user.blightedcharacter = true;
            await user.save();
          }
-         return; // Add return here to prevent further execution
+         return; // Return early only on blight infection
        } else {
          let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
          
-                   if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+         if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
            safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
            safeMsg += "The protective effects of your elixir kept you safe from the blight.";
            
@@ -478,8 +477,8 @@ module.exports = {
            safeMsg += "You feel lucky... but be careful out there.";
          }
          
-         await interaction.editReply({ content: safeMsg, ephemeral: false });
-         return; // Add return here to prevent further execution
+         blightRainMessage = safeMsg;
+         console.log(`[loot.js]: 🧿 Character ${character.name} avoided blight infection`);
        }
      }
    }
@@ -1238,7 +1237,8 @@ async function processLootingLogic(
      null, // entertainerBonusItem
      null, // boostCategoryOverride
      elixirBuffInfo, // Pass elixirBuffInfo to the embed
-     originalRoll // Pass originalRoll to the embed
+     originalRoll, // Pass originalRoll to the embed
+     blightRainMessage // Pass blight rain message to the embed
     );
     await interaction.editReply({
      content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
@@ -1266,7 +1266,8 @@ async function processLootingLogic(
    null, // entertainerBonusItem
    null, // boostCategoryOverride
    elixirBuffInfo, // Pass elixirBuffInfo to the embed
-   originalRoll // Pass originalRoll to the embed
+   originalRoll, // Pass originalRoll to the embed
+   blightRainMessage // Pass blight rain message to the embed
    );
   await interaction.editReply({ embeds: [embed] });
 
