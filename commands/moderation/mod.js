@@ -1608,7 +1608,7 @@ async function handleMount(interaction) {
 async function handleQuestCompletionFromSubmission(submission, userId) {
   try {
     const Quest = require('../models/QuestModel');
-    const questRewardModule = require('../modules/questRewardModule');
+    const questRewardModule = require('../../modules/questRewardModule');
     
     const questID = submission.questEvent;
     console.log(`[mod.js]: 🎯 Processing quest completion for quest ${questID} and user ${userId}`);
@@ -1819,12 +1819,12 @@ async function handleApprove(interaction) {
             submission.approvedSubmissionData = true; // Flag to skip approval check
             
             // Try Help Wanted Quest completion first
-            const { checkAndCompleteQuestFromSubmission } = require('../modules/helpWantedModule');
+            const { checkAndCompleteQuestFromSubmission } = require('../../modules/helpWantedModule');
             await checkAndCompleteQuestFromSubmission(submission, interaction.client);
             
             // Also try main Quest system completion for Art and Writing quests
             if (submission.category === 'art') {
-              const { processArtQuestCompletionFromSubmission } = require('../modules/questRewardModule');
+              const { processArtQuestCompletionFromSubmission } = require('../../modules/questRewardModule');
               const questResult = await processArtQuestCompletionFromSubmission(submission, userId);
               
               if (questResult.success) {
@@ -1836,7 +1836,7 @@ async function handleApprove(interaction) {
                 console.log(`[mod.js]: ℹ️ No main quest completion needed: ${questResult.reason || questResult.error}`);
               }
             } else if (submission.category === 'writing') {
-              const { processWritingQuestCompletionFromSubmission } = require('../modules/questRewardModule');
+              const { processWritingQuestCompletionFromSubmission } = require('../../modules/questRewardModule');
               const questResult = await processWritingQuestCompletionFromSubmission(submission, userId);
               
               if (questResult.success) {
