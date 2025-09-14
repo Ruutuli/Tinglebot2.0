@@ -550,11 +550,40 @@ module.exports = {
       );
 
       if (specialWeatherItems.length === 0) {
+        // Create weather-specific warning messages
+        const warningMessages = {
+          "Flood": {
+            title: `🌊 **${weather.special.label} Warning**`,
+            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of flood exposure\n\n🌊 The floodwaters create dangerous conditions. Consider waiting for the waters to recede.`
+          },
+          "Blight Rain": {
+            title: `🌧️🧿 **${weather.special.label} Warning**`,
+            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of blight exposure\n\n<:blight_eye:805576955725611058> The blighted rain creates dangerous conditions. Consider waiting for clearer weather.`
+          },
+          "Avalanche": {
+            title: `🏔️ **${weather.special.label} Warning**`,
+            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of avalanche exposure\n\n🏔️ The avalanche debris creates dangerous conditions. Consider waiting for safer conditions.`
+          },
+          "Drought": {
+            title: `🌵 **${weather.special.label} Warning**`,
+            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of dehydration\n\n🌵 The drought creates harsh conditions. Consider waiting for more favorable weather.`
+          },
+          "Rock Slide": {
+            title: `⛏️ **${weather.special.label} Warning**`,
+            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of rock slide exposure\n\n⛏️ The rock slide debris creates dangerous conditions. Consider waiting for safer conditions.`
+          }
+        };
+
+        const warningConfig = warningMessages[weather.special.label] || {
+          title: `⚠️ **${weather.special.label} Warning**`,
+          description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of weather exposure\n\n⚠️ The weather conditions create dangerous situations. Consider waiting for better conditions.`
+        };
+
         // Create a warning embed for when no special items are available
         const warningEmbed = {
           color: 0x8B0000, // Dark red color for warning
-          title: `🌧️🧿 **${weather.special.label} Warning**`,
-          description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Looting** - Items may be contaminated\n• **Gathering** - Resources may be tainted\n• **Traveling** - Risk of blight exposure\n\n<:blight_eye:805576955725611058> The blighted rain creates dangerous conditions. Consider waiting for clearer weather.`,
+          title: warningConfig.title,
+          description: warningConfig.description,
           thumbnail: {
             url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },

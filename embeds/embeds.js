@@ -1319,7 +1319,8 @@ const createMonsterEncounterEmbed = async (
  entertainerBonusItem = null,
  boostCategoryOverride = null,
  elixirBuffInfo = null,
- originalRoll = null
+ originalRoll = null,
+ blightRainMessage = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1419,6 +1420,15 @@ const createMonsterEncounterEmbed = async (
  // Add progress field if available
  if (progressField) {
   embed.addFields(progressField);
+ }
+
+ // Add blight rain message if available
+ if (blightRainMessage) {
+  embed.addFields({
+   name: "🌧️ __Blight Rain__",
+   value: blightRainMessage,
+   inline: false,
+  });
  }
 
  embed.addFields({
