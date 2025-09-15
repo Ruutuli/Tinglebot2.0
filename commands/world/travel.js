@@ -782,6 +782,11 @@ async function processTravelDay(day, context) {
       mode
     } = context;
 
+    // ------------------- Reset Travel Gathering Flag ------------------
+    // Reset the travel gathering flag for each new travel day
+    // This allows gathering once per travel day, not per real day
+    character.travelGathered = false;
+
 
     // ------------------- Mount Travel: Skip Encounters & Gathering -------------------
     // if (mode === 'on mount') {
