@@ -343,24 +343,16 @@ async function handleGather(interaction, character, currentPath, encounterMessag
   }
   
   try {
-    // ------------------- Daily Roll Check ------------------
-    // Check for job voucher and daily roll
+    // ------------------- Travel Day Gathering Check ------------------
+    // For travel, we only check if gathering has been used in this specific travel session
+    // No daily roll check - travel gathering is per travel day, not per real day
     if (character.jobVoucher || character.isModCharacter) {
-      // Job voucher is active or mod character - no need for daily roll check
+      // Job voucher is active or mod character - no need for gathering limit check
     } else {
-      // Check if gather has been used today
-      const userId = interaction?.user?.id || 'unknown';
-      const canGather = canUseDailyRoll(character, 'gather', userId);
-      
-      if (!canGather) {
-        const nextRollover = new Date();
-        nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
-        if (nextRollover < new Date()) {
-          nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
-        }
-        const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
-        
-        const decision = `❌ **Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`;
+      // Check if character has already gathered during this travel session
+      // We'll use a simple flag in the character object to track this
+      if (character.travelGathered) {
+        const decision = `❌ **You have already gathered during this travel day.**\n\n*You can only gather once per travel day.*`;
         
         // Update embed
         const description = 
@@ -372,7 +364,7 @@ async function handleGather(interaction, character, currentPath, encounterMessag
           encounterMessage,
           character,
           description,
-          fields: [{ name: '🔹 __Outcome__', value: 'Daily gathering limit reached', inline: false }],
+          fields: [{ name: '🔹 __Outcome__', value: 'Already gathered this travel day', inline: false }],
         });
         
         if (typeof encounterMessage?.edit === 'function') {
@@ -382,32 +374,8 @@ async function handleGather(interaction, character, currentPath, encounterMessag
         return decision;
       }
 
-      // Update daily roll AFTER all validations pass
-      try {
-        await updateDailyRoll(character, 'gather');
-      } catch (error) {
-        console.error(`[travelHandler.js]: ❌ Failed to update daily roll:`, error);
-        const decision = `❌ **An error occurred while updating your daily roll. Please try again.**`;
-        
-        // Update embed
-        const description = 
-          `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
-          `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
-          `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-
-        const embed = createUpdatedTravelEmbed({
-          encounterMessage,
-          character,
-          description,
-          fields: [{ name: '🔹 __Outcome__', value: 'Error updating daily roll', inline: false }],
-        });
-        
-        if (typeof encounterMessage?.edit === 'function') {
-          await encounterMessage.edit({ embeds: [embed], components: [] });
-        }
-
-        return decision;
-      }
+      // Mark that character has gathered during this travel session
+      character.travelGathered = true;
     }
 
     travelLog = Array.isArray(travelLog) ? travelLog : [];
