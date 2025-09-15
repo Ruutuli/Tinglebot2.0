@@ -737,7 +737,8 @@ module.exports = {
     encounteredMonster,
     bloodMoonActive,
     character.jobVoucher && !voucherCheck?.skipVoucher, // Deactivate job voucher if needed
-    originalRoll // Pass originalRoll for blight boost display
+    originalRoll, // Pass originalRoll for blight boost display
+    blightRainMessage // Pass blight rain message
    );
 
    
@@ -876,7 +877,8 @@ async function handleBloodMoonRerolls(
      encounteredMonster,
      bloodMoonActive,
      true, // Deactivate job voucher for reroll encounters
-     originalRoll // Pass originalRoll for blight boost display
+     originalRoll, // Pass originalRoll for blight boost display
+     blightRainMessage // Pass blight rain message
     );
     return; // End reroll processing after looting
    }
@@ -946,7 +948,8 @@ async function processLootingLogic(
  encounteredMonster,
  bloodMoonActive,
  shouldDeactivateVoucher = false,
- originalRoll = null
+ originalRoll = null,
+ blightRainMessage = null
 ) {
   try {
   const items = await fetchItemsByMonster(encounteredMonster.name);
