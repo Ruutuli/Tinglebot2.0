@@ -697,7 +697,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
     if (blightedCharacters.length > 0) {
       victoryEmbed.addFields({
         name: '<:blight_eye:805576955725611058> **Gloom Hands Blight Effect**',
-        value: `The following characters have been **blighted** by the Gloom Hands encounter:\n${blightedCharacters.map(name => `• **${name}**`).join('\n')}\n\nYou can be healed by **Oracles, Sages & Dragons**\n▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)`,
+        value: `The following characters have been **blighted** by the Gloom Hands encounter:\n${blightedCharacters.map(name => `• **${name}**`).join('\n')}\n\nYou can be healed by **Oracles, Sages & Dragons**\n▹ [Blight Information](https://rootsofthewild.com/world/blight)`,
         inline: false
       });
     }

@@ -2057,8 +2057,7 @@ async function postBlightRollCall(client) {
       `Use this command:  \n` +
       `\`/blight roll character_name\`  \n` + `➸ And you're done until the next time!\n\n` +
       `**~~────────────────────~~**  \n` +
-      `▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight 'Blight Information')  \n` +
-      `▹ [Currently Available Blight Healers](https://discord.com/channels/${process.env.GUILD_ID}/651614266046152705/845481974671736842 'Blight Healers')  \n` +
+      `▹ [Blight Information](https://rootsofthewild.com/world/blight 'Blight Information')  \n` +
       `**~~────────────────────~~**  \n` +
       `:clock8: Blight calls happen every day around 8:00 PM EST!  \n` +
       `:alarm_clock: You must complete your roll before the next call for it to be counted!  \n` +
