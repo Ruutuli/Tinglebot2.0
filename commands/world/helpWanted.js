@@ -1001,18 +1001,17 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   
   // ------------------- Blight Rain Infection Check -------------------
   const weather = await getWeatherWithoutGeneration(character.currentVillage);
+  let blightRainMessage = null;
   if (weather?.special?.label === 'Blight Rain') {
     // Mod characters are immune to blight infection
     if (character.isModCharacter) {
-      const immuneMsg =
+      blightRainMessage =
         "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
         `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
-      await interaction.editReply({ content: immuneMsg, ephemeral: false });
     } else if (character.blighted) {
-      const alreadyMsg =
+      blightRainMessage =
         "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
         `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-      await interaction.editReply({ content: alreadyMsg, ephemeral: false });
     } else {
       // Check for resistance buffs
       const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
@@ -1045,39 +1044,13 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
       
       if (Math.random() < infectionChance) {
-        // Create fancy blight infection embed
-        const blightEmbed = new EmbedBuilder()
-          .setColor('#AD1457')
-          .setTitle('<:blight_eye:805576955725611058> Blight Infection!')
-          .setDescription(`◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈`)
-          .addFields(
-            {
-              name: '🏥 Healing Available',
-              value: 'You can be healed by **Oracles, Sages & Dragons**',
-              inline: true
-            },
-            {
-              name: '📋 Blight Information',
-              value: '[Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)',
-              inline: true
-            },
-            {
-              name: '⚠️ STAGE 1',
-              value: 'Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.',
-              inline: false
-            },
-            {
-              name: '🎲 Daily Rolling',
-              value: '**Starting tomorrow, you\'ll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today\'s blight roll if you were just infected.*',
-              inline: false
-            }
-          )
-          .setThumbnail(character.icon)
-          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-          .setFooter({ text: 'Blight Infection System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
-          .setTimestamp();
-
-        await interaction.editReply({ embeds: [blightEmbed], ephemeral: false });
+        blightRainMessage = 
+          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+          `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+          "🏥 **Healing Available:** You can be healed by **Oracles, Sages & Dragons**\n" +
+          "📋 **Blight Information:** [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n" +
+          "⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+          "🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today's blight roll if you were just infected.*";
         // Update character in DB
         character.blighted = true;
         character.blightedAt = new Date();
@@ -1097,11 +1070,11 @@ async function handleMonsterHunt(interaction, questId, characterName) {
           await user.save();
         }
       } else {
-        let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
+        blightRainMessage = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
         
         if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
-          safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
-          safeMsg += "The protective effects of your elixir kept you safe from the blight.";
+          blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
+          blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
           
           // Consume chilly or fireproof elixirs after use
           if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
@@ -1110,17 +1083,15 @@ async function handleMonsterHunt(interaction, questId, characterName) {
             const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
             const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
             await updateFunction(character._id, { buff: character.buff });
-            safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
+            blightRainMessage += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
           } else if (character.buff?.active) {
             // Log when elixir is not used due to conditions not being met
             console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
           }
         } else {
-          safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
-          safeMsg += "You feel lucky... but be careful out there.";
+          blightRainMessage += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
+          blightRainMessage += "You feel lucky... but be careful out there.";
         }
-        
-        await interaction.editReply({ content: safeMsg, ephemeral: false });
       }
     }
   }
@@ -1540,18 +1511,17 @@ module.exports = {
 
         // ------------------- Blight Rain Infection Check -------------------
         const weather = await getWeatherWithoutGeneration(character.currentVillage);
+        let blightRainMessage = null;
         if (weather?.special?.label === 'Blight Rain') {
           // Mod characters are immune to blight infection
           if (character.isModCharacter) {
-            const immuneMsg =
+            blightRainMessage =
               "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
               `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
-            await interaction.editReply({ content: immuneMsg, ephemeral: false });
           } else if (character.blighted) {
-            const alreadyMsg =
+            blightRainMessage =
               "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
               `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-            await interaction.editReply({ content: alreadyMsg, ephemeral: false });
           } else {
             // Check for resistance buffs
             const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
@@ -1584,39 +1554,13 @@ module.exports = {
             infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
             
             if (Math.random() < infectionChance) {
-              // Create fancy blight infection embed
-              const blightEmbed = new EmbedBuilder()
-                .setColor('#AD1457')
-                .setTitle('<:blight_eye:805576955725611058> Blight Infection!')
-                .setDescription(`◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈`)
-                .addFields(
-                  {
-                    name: '🏥 Healing Available',
-                    value: 'You can be healed by **Oracles, Sages & Dragons**',
-                    inline: true
-                  },
-                  {
-                    name: '📋 Blight Information',
-                    value: '[Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)',
-                    inline: true
-                  },
-                  {
-                    name: '⚠️ STAGE 1',
-                    value: 'Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.',
-                    inline: false
-                  },
-                  {
-                    name: '🎲 Daily Rolling',
-                    value: '**Starting tomorrow, you\'ll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today\'s blight roll if you were just infected.*',
-                    inline: false
-                  }
-                )
-                .setThumbnail(character.icon)
-                .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-                .setFooter({ text: 'Blight Infection System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
-                .setTimestamp();
-
-              await interaction.editReply({ embeds: [blightEmbed], ephemeral: false });
+              blightRainMessage = 
+                "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+                `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+                "🏥 **Healing Available:** You can be healed by **Oracles, Sages & Dragons**\n" +
+                "📋 **Blight Information:** [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n" +
+                "⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+                "🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today's blight roll if you were just infected.*";
               // Update character in DB
               character.blighted = true;
               character.blightedAt = new Date();
@@ -1636,11 +1580,11 @@ module.exports = {
                 await user.save();
               }
             } else {
-              let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
+              blightRainMessage = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
               
               if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
-                safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
-                safeMsg += "The protective effects of your elixir kept you safe from the blight.";
+                blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
+                blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
                 
                 // Consume chilly or fireproof elixirs after use
                 if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
@@ -1649,17 +1593,16 @@ module.exports = {
                   const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
                   const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
                   await updateFunction(character._id, { buff: character.buff });
-                  safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
+                  blightRainMessage += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
                 } else if (character.buff?.active) {
                   // Log when elixir is not used due to conditions not being met
                   console.log(`[helpWanted.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
                 }
               } else {
-                safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
-                safeMsg += "You feel lucky... but be careful out there.";
+                blightRainMessage += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
+                blightRainMessage += "You feel lucky... but be careful out there.";
               }
               
-              await interaction.editReply({ content: safeMsg, ephemeral: false });
             }
           }
         }
@@ -1689,7 +1632,8 @@ module.exports = {
 
         // Send success response
         const successEmbed = createQuestCompletionEmbed(character, quest, interaction.user.id);
-        await interaction.editReply({ embeds: [successEmbed] });
+        const content = blightRainMessage ? blightRainMessage : undefined;
+        await interaction.editReply({ content, embeds: [successEmbed] });
 
       } catch (error) {
         handleInteractionError(error, 'helpWanted.js', {
