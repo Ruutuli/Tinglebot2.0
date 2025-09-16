@@ -1317,6 +1317,23 @@ function initializeScheduler(client) {
   checkQuestCompletions(client)
  );
 
+ // Quest posting check - runs daily at midnight to check if it's time to post quests
+ createCronJob("0 0 * * *", "quest posting check", async () => {
+  try {
+   // Set quest channel ID for quest posting
+   process.env.TEST_CHANNEL_ID = '706880599863853097';
+   
+   // Clear the require cache to ensure the module picks up the new env var
+   delete require.cache[require.resolve('./scripts/questAnnouncements')];
+   const { postQuests } = require('./scripts/questAnnouncements');
+   
+   await postQuests(client);
+  } catch (error) {
+   handleError(error, 'scheduler.js');
+   console.error('[scheduler.js]: ❌ Quest posting check failed:', error.message);
+  }
+ }, "America/New_York");
+
  // Monthly quest posting - 1st of each month at 12:00 AM EST (5:00 AM UTC) - DISABLED
  // createCronJob("0 5 1 * *", "monthly quest posting", async () => {
  //  console.log('[scheduler.js]: 📅 Starting monthly quest posting...');
