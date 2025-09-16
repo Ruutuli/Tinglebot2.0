@@ -400,39 +400,13 @@ module.exports = {
        infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
        
        if (Math.random() < infectionChance) {
-         // Create fancy blight infection embed
-         const blightEmbed = new EmbedBuilder()
-           .setColor('#AD1457')
-           .setTitle('<:blight_eye:805576955725611058> Blight Infection!')
-           .setDescription(`◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈`)
-           .addFields(
-             {
-               name: '🏥 Healing Available',
-               value: 'You can be healed by **Oracles, Sages & Dragons**',
-               inline: true
-             },
-             {
-               name: '📋 Blight Information',
-               value: '[Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)',
-               inline: true
-             },
-             {
-               name: '⚠️ STAGE 1',
-               value: 'Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.',
-               inline: false
-             },
-             {
-               name: '🎲 Daily Rolling',
-               value: '**Starting tomorrow, you\'ll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today\'s blight roll if you were just infected.*',
-               inline: false
-             }
-           )
-           .setThumbnail(character.icon)
-           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-           .setFooter({ text: 'Blight Infection System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
-           .setTimestamp();
-
-         await interaction.editReply({ embeds: [blightEmbed], ephemeral: false });
+         blightRainMessage = 
+           "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+           `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+           "🏥 **Healing Available:** You can be healed by **Oracles, Sages & Dragons**\n" +
+           "📋 **Blight Information:** [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n" +
+           "⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+           "🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today's blight roll if you were just infected.*";
          // Update character in DB
          character.blighted = true;
          character.blightedAt = new Date();

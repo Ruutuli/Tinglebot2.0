@@ -533,6 +533,7 @@ async function simulateWeightedWeather(village, season, options = {}) {
       emoji: special.emoji,
       probability: `${specialProbability.toFixed(1)}%`
     };
+    console.log(`[weatherService.js]: ✨ Special weather generated for ${village}: ${special.label}`);
   }
   
   // Validate weather combination if requested
@@ -585,6 +586,17 @@ async function getWeatherWithoutGeneration(village) {
         $gte: startOfPeriodUTC,
         $lte: endOfPeriodUTC
       }
+    });
+    
+    console.log(`[weatherService.js]: 🌤️ Weather query for ${normalizedVillage}:`, {
+      hasWeather: !!weather,
+      specialLabel: weather?.special?.label,
+      precipitationLabel: weather?.precipitation?.label,
+      dateRange: {
+        start: startOfPeriodUTC.toISOString(),
+        end: endOfPeriodUTC.toISOString()
+      },
+      currentTime: new Date().toISOString()
     });
     
     return weather;
