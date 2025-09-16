@@ -84,7 +84,58 @@ function parseTokenReward(tokenReward) {
         return 0;
     }
     
+    // Handle per_unit format: per_unit:222 unit:submission max:3
+    if (tokenReward.includes('per_unit:')) {
+        const perUnitMatch = tokenReward.match(/per_unit:(\d+)/);
+        const maxMatch = tokenReward.match(/max:(\d+)/);
+        
+        if (perUnitMatch && maxMatch) {
+            const perUnit = parseInt(perUnitMatch[1]);
+            const maxUnits = parseInt(maxMatch[1]);
+            return perUnit * maxUnits; // Return total possible tokens
+        } else if (perUnitMatch) {
+            return parseInt(perUnitMatch[1]); // Return per unit if no max specified
+        }
+    }
+    
     return 0;
+}
+
+// ------------------- parseTokenRewardDetails -
+function parseTokenRewardDetails(tokenReward) {
+    if (!tokenReward || tokenReward === 'N/A') return null;
+    if (typeof tokenReward === 'number') return { type: 'flat', amount: tokenReward };
+    
+    const parsed = parseFloat(tokenReward);
+    if (!isNaN(parsed)) return { type: 'flat', amount: parsed };
+    
+    if (tokenReward.toLowerCase().includes('no reward') || 
+        tokenReward.toLowerCase().includes('none')) {
+        return null;
+    }
+    
+    // Handle per_unit format: per_unit:222 unit:submission max:3
+    if (tokenReward.includes('per_unit:')) {
+        const perUnitMatch = tokenReward.match(/per_unit:(\d+)/);
+        const maxMatch = tokenReward.match(/max:(\d+)/);
+        const unitMatch = tokenReward.match(/unit:(\w+)/);
+        
+        if (perUnitMatch) {
+            const perUnit = parseInt(perUnitMatch[1]);
+            const maxUnits = maxMatch ? parseInt(maxMatch[1]) : 1;
+            const unit = unitMatch ? unitMatch[1] : 'submission';
+            
+            return {
+                type: 'per_unit',
+                perUnit: perUnit,
+                maxUnits: maxUnits,
+                unit: unit,
+                total: perUnit * maxUnits
+            };
+        }
+    }
+    
+    return null;
 }
 
 // ------------------- appendBotNote -
@@ -366,11 +417,15 @@ function formatQuestEmbed(quest) {
         });
     }
 
-    // Rewards - Simplified
+    // Rewards - Enhanced with detailed token info
     const rewards = [];
-    const normalizedTokenReward = quest.getNormalizedTokenReward ? quest.getNormalizedTokenReward() : parseTokenReward(quest.tokenReward);
-    if (normalizedTokenReward > 0) {
-        rewards.push(`💰 **${normalizedTokenReward} tokens**`);
+    const tokenDetails = parseTokenRewardDetails(quest.tokenReward);
+    if (tokenDetails) {
+        if (tokenDetails.type === 'per_unit') {
+            rewards.push(`💰 **${tokenDetails.perUnit} tokens per ${tokenDetails.unit}** (max ${tokenDetails.maxUnits} ${tokenDetails.unit}s = **${tokenDetails.total} tokens total**)`);
+        } else {
+            rewards.push(`💰 **${tokenDetails.amount} tokens**`);
+        }
     }
     
     if (quest.itemRewards && quest.itemRewards.length > 0) {
@@ -396,6 +451,9 @@ function formatQuestEmbed(quest) {
     }
     if (quest.postRequirement) {
         participation.push(`💬 **${quest.postRequirement} posts**`);
+    }
+    if (quest.minRequirements && quest.minRequirements !== 0) {
+        participation.push(`📝 **Min requirement: ${quest.minRequirements}**`);
     }
     if (quest.signupDeadline && quest.signupDeadline !== 'No Deadline') {
         let formattedDate = quest.signupDeadline;
@@ -827,12 +885,22 @@ async function saveQuestToDatabase(quest) {
 // ============================================================================
 
 // ------------------- postQuests -
-async function postQuests() {
+async function postQuests(externalClient = null) {
     console.log('[questAnnouncements.js] 🚀 Starting quest posting process...');
     
-    const questChannel = await client.channels.fetch(QUEST_CHANNEL_ID);
-    if (!questChannel) {
-        console.error('[questAnnouncements.js] ❌ Quest channel not found!');
+    // Use external client if provided, otherwise use the internal client
+    const activeClient = externalClient || client;
+    
+    let questChannel;
+    try {
+        questChannel = await activeClient.channels.fetch(QUEST_CHANNEL_ID);
+        
+        if (!questChannel) {
+            console.error('[questAnnouncements.js] ❌ Quest channel not found!');
+            return;
+        }
+    } catch (error) {
+        console.error('[questAnnouncements.js] ❌ Error fetching quest channel:', error);
         return;
     }
 
@@ -846,7 +914,49 @@ async function postQuests() {
 
     console.log(`[questAnnouncements.js] 📊 Retrieved ${questData.length} quests from sheet`);
 
-    const unpostedQuests = questData.filter((quest, index) => {
+    // Check if it's time to post quests based on column D (month/year)
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // getMonth() returns 0-11, we need 1-12
+    const currentYear = currentDate.getFullYear();
+    
+    // Check if any quests are scheduled for the current month/year
+    const questsForCurrentMonth = questData.filter(quest => {
+        const parsedQuest = parseQuestRow(quest);
+        const questDate = parsedQuest.date; // This should be the month/year from column D
+        
+        if (!questDate) return false;
+        
+        // Parse the quest date (assuming format like "October 2025" or "10/2025")
+        let questMonth, questYear;
+        
+        if (questDate.includes(' ')) {
+            // Format: "October 2025"
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                              'July', 'August', 'September', 'October', 'November', 'December'];
+            const parts = questDate.split(' ');
+            const monthName = parts[0];
+            questMonth = monthNames.indexOf(monthName) + 1;
+            questYear = parseInt(parts[1]);
+        } else if (questDate.includes('/')) {
+            // Format: "10/2025"
+            const parts = questDate.split('/');
+            questMonth = parseInt(parts[0]);
+            questYear = parseInt(parts[1]);
+        } else {
+            return false;
+        }
+        
+        return questMonth === currentMonth && questYear === currentYear;
+    });
+    
+    if (questsForCurrentMonth.length === 0) {
+        console.log(`[questAnnouncements.js] ℹ️ No quests scheduled for ${currentMonth}/${currentYear}. Skipping quest posting.`);
+        return;
+    }
+    
+    console.log(`[questAnnouncements.js] ✅ Found ${questsForCurrentMonth.length} quests scheduled for ${currentMonth}/${currentYear}. Proceeding with posting.`);
+
+    const unpostedQuests = questsForCurrentMonth.filter((quest, index) => {
         const parsedQuest = parseQuestRow(quest);
         const sanitizedPosted = parsedQuest.posted ? parsedQuest.posted.trim().toLowerCase() : '';
         
@@ -865,8 +975,7 @@ async function postQuests() {
 
     console.log(`[questAnnouncements.js] 📝 Found ${unpostedQuests.length} quests to post`);
     const guild = questChannel.guild;
-    const questsToProcess = unpostedQuests; // Process all quests regardless of test mode
-    console.log(`[questAnnouncements.js] 🔄 Processing ${questsToProcess.length} quest(s) ${process.env.TEST_CHANNEL_ID ? '(TEST MODE)' : '(all quests)'}`);
+    const questsToProcess = unpostedQuests;
 
     for (const [rowIndex, quest] of questsToProcess.entries()) {
         const parsedQuest = parseQuestRow(quest);
@@ -944,11 +1053,9 @@ async function postQuests() {
                     const completionResult = await quest.checkAutoCompletion();
                     if (completionResult.completed) {
                         completedCount++;
-                        console.log(`[questAnnouncements.js] ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
                     }
                 }
             } catch (questError) {
-                console.warn(`[questAnnouncements.js] ⚠️ Error processing quest "${quest.title}":`, questError.message);
                 // Continue with other quests
             }
         }
