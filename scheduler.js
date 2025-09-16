@@ -20,7 +20,6 @@ const HelpWantedQuest = require('./models/HelpWantedQuestModel');
 // Database functions
 const {
  generateVendingStockList,
- getCurrentVendingStockList,
  resetPetRollsForAllCharacters,
 } = require("./database/db");
 
@@ -47,7 +46,6 @@ const {
 const { recoverDailyStamina } = require("./modules/characterStatsModule");
 const { bloodmoonDates, convertToHyruleanDate } = require("./modules/calendarModule");
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest } = require('./modules/helpWantedModule');
-const { removeExpiredBuffs } = require('./modules/elixirModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 
 // Services
@@ -74,8 +72,21 @@ const {
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
 
-// Disabled imports
-// const { postMonthlyQuests } = require('./scripts/monthlyQuestScheduler'); // Monthly quests not yet implemented
+// Channel mappings
+const TOWNHALL_CHANNELS = {
+ Rudania: process.env.RUDANIA_TOWNHALL,
+ Inariko: process.env.INARIKO_TOWNHALL,
+ Vhintl: process.env.VHINTL_TOWNHALL,
+};
+
+const BLOOD_MOON_CHANNELS = [
+ process.env.RUDANIA_TOWNHALL,
+ process.env.INARIKO_TOWNHALL,
+ process.env.VHINTL_TOWNHALL,
+];
+
+// Monthly quest posting (uses existing postQuests function)
+const { postQuests } = require('./scripts/questAnnouncements');
 
 // ============================================================================
 // ------------------- Environment Setup -------------------
@@ -143,24 +154,12 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 
 // Helper function to get the appropriate village channel ID
 function getVillageChannelId(villageName) {
-  const villageChannels = {
-    'Rudania': process.env.RUDANIA_TOWNHALL,
-    'Inariko': process.env.INARIKO_TOWNHALL,
-    'Vhintl': process.env.VHINTL_TOWNHALL
-  };
-  
-  return villageChannels[villageName] || process.env.HELP_WANTED_TEST_CHANNEL;
+  return TOWNHALL_CHANNELS[villageName] || HELP_WANTED_TEST_CHANNEL;
 }
 
 // ============================================================================
 // ------------------- Weather Functions -------------------
 // ============================================================================
-
-const TOWNHALL_CHANNELS = {
- Rudania: process.env.RUDANIA_TOWNHALL,
- Inariko: process.env.INARIKO_TOWNHALL,
- Vhintl: process.env.VHINTL_TOWNHALL,
-};
 
 // ------------------- Weather Helper Functions ------------------
 
@@ -338,16 +337,20 @@ async function runDailyCleanupTasks(client) {
 // ============================================================================
 
 async function executeBirthdayAnnouncements(client) {
+ console.log(`[scheduler.js]: 🎂 Starting birthday announcement check...`);
+ 
  const now = new Date();
  const estNow = new Date(
   now.toLocaleString("en-US", { timeZone: "America/New_York" })
  );
  const today = estNow.toISOString().slice(5, 10);
  const guildIds = [process.env.GUILD_ID];
+ 
+ console.log(`[scheduler.js]: 📅 Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
 
  const guildChannelMap = {
   [process.env.GUILD_ID]:
-   process.env.BIRTHDAY_CHANNEL_ID || "1326997448085995530",
+   process.env.BIRTHDAY_CHANNEL_ID || "606004354419392513",
  };
 
  const birthdayMessages = [
@@ -366,15 +369,40 @@ async function executeBirthdayAnnouncements(client) {
 
  for (const guildId of guildIds) {
   const birthdayChannelId = guildChannelMap[guildId];
-  if (!birthdayChannelId) continue;
+  console.log(`[scheduler.js]: 🏰 Guild ID: ${guildId}, Birthday Channel ID: ${birthdayChannelId}`);
+  
+  if (!birthdayChannelId) {
+   console.log(`[scheduler.js]: ❌ No birthday channel ID found for guild ${guildId}`);
+   continue;
+  }
 
   const guild = client.guilds.cache.get(guildId);
-  if (!guild) continue;
+  if (!guild) {
+   console.log(`[scheduler.js]: ❌ Guild ${guildId} not found in cache`);
+   continue;
+  }
 
   const announcementChannel = guild.channels.cache.get(birthdayChannelId);
-  if (!announcementChannel) continue;
+  if (!announcementChannel) {
+   console.log(`[scheduler.js]: ❌ Birthday channel ${birthdayChannelId} not found in guild ${guildId}`);
+   continue;
+  }
 
+  console.log(`[scheduler.js]: ✅ Found birthday channel: ${announcementChannel.name} (${birthdayChannelId})`);
+  
   const characters = await Character.find({ birthday: today });
+  console.log(`[scheduler.js]: 👥 Found ${characters.length} characters with birthday on ${today}`);
+  
+  if (characters.length > 0) {
+   console.log(`[scheduler.js]: 🎂 Characters with birthdays today:`, characters.map(c => `${c.name} (${c.birthday})`));
+  } else {
+   // Debug: Check if there are any characters with birthdays at all
+   const allCharactersWithBirthdays = await Character.find({ birthday: { $exists: true, $ne: null } });
+   console.log(`[scheduler.js]: 🔍 Total characters with birthdays: ${allCharactersWithBirthdays.length}`);
+   if (allCharactersWithBirthdays.length > 0) {
+    console.log(`[scheduler.js]: 📅 Sample birthday formats:`, allCharactersWithBirthdays.slice(0, 5).map(c => `${c.name}: ${c.birthday}`));
+   }
+  }
 
   for (const character of characters) {
    try {
@@ -880,6 +908,66 @@ async function checkQuestCompletions(client) {
   }
 }
 
+// ------------------- Quest Posting Helper Functions ------------------
+
+async function handleEscortQuestWeather(quest) {
+  if (quest.type === 'escort') {
+    const travelBlocked = await isTravelBlockedByWeather(quest.village);
+    if (travelBlocked) {
+      console.log(`[scheduler.js]: 🌤️ Regenerating escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
+      try {
+        await regenerateEscortQuest(quest);
+        console.log(`[scheduler.js]: ✅ Successfully regenerated quest ${quest.questId} as ${quest.type} quest`);
+        return true;
+      } catch (error) {
+        console.error(`[scheduler.js]: ❌ Failed to regenerate escort quest ${quest.questId}:`, error);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+async function postQuestToChannel(client, quest, context = '') {
+  try {
+    const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
+    const embed = embedsByVillage[quest.village];
+    
+    if (!embed) return false;
+    
+    const villageChannelId = getVillageChannelId(quest.village);
+    const channel = await client.channels.fetch(villageChannelId);
+    
+    if (!channel) {
+      console.log(`[scheduler.js]: ❌ Could not fetch channel for ${quest.village} (ID: ${villageChannelId})`);
+      return false;
+    }
+    
+    const message = await channel.send({ embeds: [embed] });
+    const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
+      { _id: quest._id, messageId: null },
+      { 
+        messageId: message.id,
+        channelId: channel.id
+      },
+      { new: true }
+    );
+    
+    if (updatedQuest) {
+      console.log(`[scheduler.js]: ✅ Posted quest ${quest.questId} for ${quest.village}${context}`);
+      return true;
+    } else {
+      console.log(`[scheduler.js]: ℹ️ Quest ${quest.questId} was already posted by another process, skipping`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`[scheduler.js]: ❌ Error posting quest ${quest.questId}:`, error);
+    return false;
+  }
+}
+
+// ------------------- Quest Posting Functions ------------------
+
 async function checkAndPostMissedQuests(client) {
   try {
     const now = new Date();
@@ -894,13 +982,11 @@ async function checkAndPostMissedQuests(client) {
     });
     
     if (!unpostedQuests.length) {
-      console.log(`[scheduler.js]: No missed quests to post during startup`);
-      return;
+      console.log(`[scheduler.js]: ℹ️ No missed quests to post during startup`);
+      return 0;
     }
     
-    // Randomize the order of quests before posting to avoid always posting in the same order
     const shuffledQuests = unpostedQuests.sort(() => Math.random() - 0.5);
-    
     let posted = 0;
     
     for (const quest of shuffledQuests) {
@@ -912,54 +998,16 @@ async function checkAndPostMissedQuests(client) {
       
       const scheduledMinute = parseInt(parts[0]);
       const scheduledHour = parseInt(parts[1]);
-      
       const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
       const currentTimeInMinutes = currentHour * 60 + currentMinute;
       
       if (currentTimeInMinutes >= scheduledTimeInMinutes) {
-        // Check if this is an escort quest and if travel is blocked by weather
-        if (quest.type === 'escort') {
-          const travelBlocked = await isTravelBlockedByWeather(quest.village);
-          if (travelBlocked) {
-            console.log(`[scheduler.js]: 🌤️ Regenerating missed escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
-            try {
-              await regenerateEscortQuest(quest);
-              console.log(`[scheduler.js]: ✅ Successfully regenerated missed quest ${quest.questId} as ${quest.type} quest`);
-            } catch (error) {
-              console.error(`[scheduler.js]: ❌ Failed to regenerate missed escort quest ${quest.questId}:`, error);
-              continue; // Skip this quest if regeneration fails
-            }
-          }
-        }
+        const weatherHandled = await handleEscortQuestWeather(quest);
+        if (!weatherHandled) continue;
         
-        const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
-        const embed = embedsByVillage[quest.village];
-        if (embed) {
-          // Get the appropriate village channel
-          const villageChannelId = getVillageChannelId(quest.village);
-          const channel = await client.channels.fetch(villageChannelId);
-          
-          if (channel) {
-            const message = await channel.send({ embeds: [embed] });
-            const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
-              { _id: quest._id, messageId: null },
-              { 
-                messageId: message.id,
-                channelId: channel.id
-              },
-              { new: true }
-            );
-            
-            if (updatedQuest) {
-              console.log(`[scheduler.js]: Posted missed quest ${quest.questId} for ${quest.village} in ${quest.village} town hall (was scheduled for ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')})`);
-              posted++;
-            } else {
-              console.log(`[scheduler.js]: Quest ${quest.questId} was already posted by another process, skipping`);
-            }
-          } else {
-            console.log(`[scheduler.js]: Could not fetch channel for ${quest.village} (ID: ${villageChannelId})`);
-          }
-        }
+        const context = ` in ${quest.village} town hall (was scheduled for ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')})`;
+        const success = await postQuestToChannel(client, quest, context);
+        if (success) posted++;
       }
     }
     
@@ -967,9 +1015,11 @@ async function checkAndPostMissedQuests(client) {
       console.log(`[scheduler.js]: 📤 Posted ${posted} missed quests during startup`);
     }
     
+    return posted;
   } catch (error) {
     handleError(error, 'scheduler.js', { commandName: 'checkAndPostMissedQuests' });
     console.error('[scheduler.js]: ❌ Error checking for missed quests:', error);
+    return 0;
   }
 }
 
@@ -985,75 +1035,38 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     });
     
     if (!questsToPost.length) {
-      console.log(`[scheduler.js]: No quests scheduled for ${cronTime} on ${today}`);
-      return;
+      console.log(`[scheduler.js]: ℹ️ No quests scheduled for ${cronTime} on ${today}`);
+      return 0;
     }
     
-    // Randomize the order of quests before posting to avoid always posting in the same order
     const shuffledQuests = questsToPost.sort(() => Math.random() - 0.5);
-    
     let posted = 0;
     
     for (const quest of shuffledQuests) {
-      // Check if this is an escort quest and if travel is blocked by weather
-      if (quest.type === 'escort') {
-        const travelBlocked = await isTravelBlockedByWeather(quest.village);
-        if (travelBlocked) {
-          console.log(`[scheduler.js]: 🌤️ Regenerating escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
-          try {
-            await regenerateEscortQuest(quest);
-            console.log(`[scheduler.js]: ✅ Successfully regenerated quest ${quest.questId} as ${quest.type} quest`);
-          } catch (error) {
-            console.error(`[scheduler.js]: ❌ Failed to regenerate escort quest ${quest.questId}:`, error);
-            continue; // Skip this quest if regeneration fails
-          }
-        }
-      }
+      const weatherHandled = await handleEscortQuestWeather(quest);
+      if (!weatherHandled) continue;
       
-      const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
-      const embed = embedsByVillage[quest.village];
-      if (embed) {
-        // Get the appropriate village channel
-        const villageChannelId = getVillageChannelId(quest.village);
-        const channel = await client.channels.fetch(villageChannelId);
-        
-        if (channel) {
-          const message = await channel.send({ embeds: [embed] });
-          const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
-            { _id: quest._id, messageId: null },
-            { 
-              messageId: message.id,
-              channelId: channel.id
-            },
-            { new: true }
-          );
-          
-          const parts = cronTime.split(' ');
-          const scheduledMinute = parseInt(parts[0]);
-          const scheduledHour = parseInt(parts[1]);
-          
-          if (updatedQuest) {
-            console.log(`[scheduler.js]: Posted quest ${quest.questId} for ${quest.village} in ${quest.village} town hall at ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (scheduled time: ${cronTime})`);
-            posted++;
-          } else {
-            console.log(`[scheduler.js]: Quest ${quest.questId} was already posted by another process, skipping`);
-          }
-        } else {
-          console.log(`[scheduler.js]: Could not fetch channel for ${quest.village} (ID: ${villageChannelId})`);
-        }
-      }
+      const parts = cronTime.split(' ');
+      const scheduledMinute = parseInt(parts[0]);
+      const scheduledHour = parseInt(parts[1]);
+      const context = ` in ${quest.village} town hall at ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (scheduled time: ${cronTime})`;
+      
+      const success = await postQuestToChannel(client, quest, context);
+      if (success) posted++;
     }
     
     if (posted > 0) {
-      console.log(`[scheduler.js]: Posted ${posted} scheduled quests for ${cronTime}`);
+      console.log(`[scheduler.js]: 📤 Posted ${posted} scheduled quests for ${cronTime}`);
     }
     
+    return posted;
   } catch (error) {
     handleError(error, 'scheduler.js', {
       commandName: 'checkAndPostScheduledQuests',
       scheduledTime: cronTime
     });
-    console.error('[scheduler.js]: Error checking and posting scheduled quests:', error);
+    console.error('[scheduler.js]: ❌ Error checking and posting scheduled quests:', error);
+    return 0;
   }
 }
 
@@ -1079,39 +1092,42 @@ function setupHelpWantedFixedScheduler(client) {
 // ------------------- Blood Moon Functions -------------------
 // ============================================================================
 
+// ------------------- Blood Moon Helper Functions ------------------
+
+async function sendBloodMoonAnnouncementsToChannels(client, message) {
+ const channels = BLOOD_MOON_CHANNELS.filter(channelId => channelId);
+ let successCount = 0;
+
+ for (const channelId of channels) {
+  try {
+   await sendBloodMoonAnnouncement(client, channelId, message);
+   successCount++;
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error(`[scheduler.js]: ❌ Blood Moon announcement failed for channel ${channelId}: ${error.message}`);
+  }
+ }
+
+ return successCount;
+}
+
+// ------------------- Main Blood Moon Functions ------------------
+
 async function handleBloodMoonStart(client) {
   console.log(`[scheduler.js]: 🌕 Starting Blood Moon start check at 8 PM EST`);
 
-  const channels = [
-   process.env.RUDANIA_TOWNHALL,
-   process.env.INARIKO_TOWNHALL,
-   process.env.VHINTL_TOWNHALL,
-  ];
-
-  // Use the corrected isBloodMoonDay() function to check if blood moon is active
   const isBloodMoonActive = isBloodMoonDay();
   
   if (isBloodMoonActive) {
    console.log(`[scheduler.js]: 🌕 Blood Moon is active - processing channels`);
    await renameChannels(client);
 
-   for (const channelId of channels) {
-    if (!channelId) {
-     console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon start check`);
-     continue;
-    }
-
-    try {
-     await sendBloodMoonAnnouncement(
-      client,
-      channelId,
-      "The Blood Moon rises at nightfall! Beware!"
-     );
-    } catch (error) {
-     handleError(error, "scheduler.js");
-     console.error(`[scheduler.js]: ❌ Blood Moon start announcement failed for channel ${channelId}: ${error.message}`);
-    }
-   }
+   const successCount = await sendBloodMoonAnnouncementsToChannels(
+    client, 
+    "The Blood Moon rises at nightfall! Beware!"
+   );
+   
+   console.log(`[scheduler.js]: ✅ Blood Moon start announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
   } else {
    console.log(`[scheduler.js]: 📅 Blood Moon not active - no announcement needed`);
   }
@@ -1122,70 +1138,14 @@ async function handleBloodMoonStart(client) {
 async function handleBloodMoonEnd(client) {
   console.log(`[scheduler.js]: 🌙 Starting Blood Moon end check at 8 AM EST`);
 
-  const channels = [
-   process.env.RUDANIA_TOWNHALL,
-   process.env.INARIKO_TOWNHALL,
-   process.env.VHINTL_TOWNHALL,
-  ];
-
-  // Check if we're transitioning from a Blood Moon period (yesterday was Blood Moon, today is not)
-  const now = new Date();
-  const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const today = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
+  const wasBloodMoonYesterday = checkBloodMoonTransition();
   
-  // Check if yesterday was in a Blood Moon period
-  let wasBloodMoonYesterday = false;
-  if (bloodmoonDates && Array.isArray(bloodmoonDates)) {
-    for (const { realDate } of bloodmoonDates) {
-      const [month, day] = realDate.split('-').map(Number);
-      const currentYearBloodMoonDate = new Date(today.getFullYear(), month - 1, day);
-      const dayBefore = new Date(currentYearBloodMoonDate);
-      dayBefore.setDate(currentYearBloodMoonDate.getDate() - 1);
-      const dayAfter = new Date(currentYearBloodMoonDate);
-      dayAfter.setDate(currentYearBloodMoonDate.getDate() + 1);
-      
-      // Check if yesterday was within this Blood Moon period
-      if (yesterday >= dayBefore && yesterday <= dayAfter) {
-        // Check if yesterday was actually active (considering time)
-        const yesterdayHour = 23; // Assume 8 AM check means yesterday ended at 8 AM
-        let wasActiveYesterday = false;
-        
-        if (yesterday.getTime() === dayBefore.getTime()) {
-          wasActiveYesterday = yesterdayHour >= 20; // 8 PM or later
-        } else if (yesterday.getTime() === currentYearBloodMoonDate.getTime()) {
-          wasActiveYesterday = true; // Full day active
-        } else if (yesterday.getTime() === dayAfter.getTime()) {
-          wasActiveYesterday = yesterdayHour < 8; // Before 8 AM
-        }
-        
-        if (wasActiveYesterday) {
-          wasBloodMoonYesterday = true;
-          break;
-        }
-      }
-    }
-  }
-  
-  // Only send end announcements if we're transitioning from Blood Moon to non-Blood Moon
   if (wasBloodMoonYesterday && !isBloodMoonDay()) {
    console.log(`[scheduler.js]: 🌙 Blood Moon has ended - transitioning from Blood Moon period`);
    await revertChannelNames(client);
 
-   for (const channelId of channels) {
-    if (!channelId) {
-     console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon end check`);
-     continue;
-    }
-
-    try {
-     await sendBloodMoonEndAnnouncement(client, channelId);
-    } catch (error) {
-     handleError(error, "scheduler.js");
-     console.error(`[scheduler.js]: ❌ Blood Moon end announcement failed for channel ${channelId}: ${error.message}`);
-    }
-   }
+   const successCount = await sendBloodMoonEndAnnouncementsToChannels(client);
+   console.log(`[scheduler.js]: ✅ Blood Moon end announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
   } else {
    console.log(`[scheduler.js]: 📅 No Blood Moon transition detected - no end announcement needed`);
   }
@@ -1193,68 +1153,148 @@ async function handleBloodMoonEnd(client) {
   console.log(`[scheduler.js]: ✅ Blood Moon end check completed`);
 }
 
+// ------------------- Blood Moon Transition Helper ------------------
+
+function checkBloodMoonTransition() {
+  const now = new Date();
+  const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const today = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  
+  if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
+    return false;
+  }
+  
+  for (const { realDate } of bloodmoonDates) {
+    const [month, day] = realDate.split('-').map(Number);
+    const currentYearBloodMoonDate = new Date(today.getFullYear(), month - 1, day);
+    const dayBefore = new Date(currentYearBloodMoonDate);
+    dayBefore.setDate(currentYearBloodMoonDate.getDate() - 1);
+    const dayAfter = new Date(currentYearBloodMoonDate);
+    dayAfter.setDate(currentYearBloodMoonDate.getDate() + 1);
+    
+    if (yesterday >= dayBefore && yesterday <= dayAfter) {
+      const yesterdayHour = 23; // Assume 8 AM check means yesterday ended at 8 AM
+      let wasActiveYesterday = false;
+      
+      if (yesterday.getTime() === dayBefore.getTime()) {
+        wasActiveYesterday = yesterdayHour >= 20; // 8 PM or later
+      } else if (yesterday.getTime() === currentYearBloodMoonDate.getTime()) {
+        wasActiveYesterday = true; // Full day active
+      } else if (yesterday.getTime() === dayAfter.getTime()) {
+        wasActiveYesterday = yesterdayHour < 8; // Before 8 AM
+      }
+      
+      if (wasActiveYesterday) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+async function sendBloodMoonEndAnnouncementsToChannels(client) {
+  const channels = BLOOD_MOON_CHANNELS.filter(channelId => channelId);
+  let successCount = 0;
+
+  for (const channelId of channels) {
+   try {
+    await sendBloodMoonEndAnnouncement(client, channelId);
+    successCount++;
+   } catch (error) {
+    handleError(error, "scheduler.js");
+    console.error(`[scheduler.js]: ❌ Blood Moon end announcement failed for channel ${channelId}: ${error.message}`);
+   }
+  }
+
+  return successCount;
+}
+
 // ============================================================================
 // ------------------- Scheduler Initialization -------------------
 // ============================================================================
 
-function initializeScheduler(client) {
- if (!client || !client.isReady()) {
-  console.error(
-   "[scheduler.js]: Invalid or unready Discord client provided to scheduler"
-  );
-  return;
- }
+// ------------------- Startup Functions ------------------
 
- // Startup checks
- (async () => {
-  try {
+async function runStartupChecks(client) {
+ try {
+  console.log(`[scheduler.js]: 🚀 Running startup checks...`);
+  
+  // Blood Moon startup check
   const isBloodMoonActive = isBloodMoonDay();
   if (isBloodMoonActive) {
    await renameChannels(client);
-   
-   const channels = [
-    process.env.RUDANIA_TOWNHALL,
-    process.env.INARIKO_TOWNHALL,
-    process.env.VHINTL_TOWNHALL,
-   ];
-   
-   for (const channelId of channels) {
-    if (channelId) {
-     await sendBloodMoonAnnouncement(
-      client,
-      channelId,
-      "The Blood Moon is upon us! Beware!"
-     );
-    }
-   }
+   const successCount = await sendBloodMoonAnnouncementsToChannels(
+    client, 
+    "The Blood Moon is upon us! Beware!"
+   );
+   console.log(`[scheduler.js]: 🌕 Blood Moon startup announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
   } else {
    await revertChannelNames(client);
   }
 
-   await handleDebuffExpiry(client);
-   await handleBuffExpiry(client);
-   await checkAndGenerateDailyQuests();
-   await checkAndPostMissedQuests(client);
-   await handleQuestExpirationAtMidnight(client);
+  // Character and quest startup tasks
+  await Promise.all([
+   handleDebuffExpiry(client),
+   handleBuffExpiry(client),
+   checkAndGenerateDailyQuests(),
+   checkAndPostMissedQuests(client),
+   handleQuestExpirationAtMidnight(client)
+  ]);
 
-   console.log(`[scheduler.js]: ✅ Startup completed`);
-  } catch (error) {
-   handleError(error, "scheduler.js");
-   console.error(`[scheduler.js]: ❌ Startup checks failed: ${error.message}`);
-  }
- })();
+  console.log(`[scheduler.js]: ✅ Startup completed`);
+ } catch (error) {
+  handleError(error, "scheduler.js");
+  console.error(`[scheduler.js]: ❌ Startup checks failed: ${error.message}`);
+ }
+}
 
- // Daily tasks
- createCronJob("0 0 * * *", "jail release check", () =>
-  handleJailRelease(client)
- );
+// ------------------- Scheduler Setup Functions ------------------
+
+function setupDailyTasks(client) {
+ // Daily tasks at midnight
+ createCronJob("0 0 * * *", "jail release check", () => handleJailRelease(client));
+ createCronJob("0 0 * * *", "reset pet last roll dates", () => resetPetLastRollDates(client));
+ createCronJob("0 0 * * *", "birthday announcements", () => executeBirthdayAnnouncements(client));
+ createCronJob("0 0 * * *", "midnight quest generation", () => generateDailyQuestsAtMidnight());
+ createCronJob("0 0 * * *", "quest expiration check", () => handleQuestExpirationAtMidnight(client));
+ createCronJob("0 0 * * *", "request expiration and cleanup", () => runDailyCleanupTasks(client));
+
+ // Daily tasks at 8 AM
  createCronJob("0 8 * * *", "reset daily rolls", () => resetDailyRolls(client));
- createCronJob("0 8 * * *", "daily stamina recovery", () =>
-  recoverDailyStamina(client)
- );
- createCronJob("0 0 1 * *", "monthly vending stock generation", () =>
-  generateVendingStockList(client)
- );
+ createCronJob("0 8 * * *", "daily stamina recovery", () => recoverDailyStamina(client));
+
+ // Daily tasks at 5 AM
+ createCronJob("0 5 * * *", "debuff expiry check", () => handleDebuffExpiry(client));
+ createCronJob("0 5 * * *", "buff expiry check", () => handleBuffExpiry(client));
+ createCronJob("0 5 * * *", "reset global steal protections", () => {
+  console.log(`[scheduler.js]: 🛡️ Starting global steal protection reset`);
+  try {
+   const { resetAllStealProtections } = require('./commands/jobs/steal.js');
+   resetAllStealProtections();
+   console.log(`[scheduler.js]: ✅ Global steal protections reset completed`);
+  } catch (error) {
+   console.error(`[scheduler.js]: ❌ Error resetting global steal protections:`, error);
+  }
+ }, "America/New_York");
+
+ // Weekly tasks
+ createCronJob("0 0 * * 0", "weekly pet rolls reset", () => resetPetRollsForAllCharacters(client));
+
+ // Monthly tasks
+ createCronJob("0 0 1 * *", "monthly vending stock generation", () => generateVendingStockList(client));
+ createCronJob("0 5 1 * *", "monthly quest posting", async () => {
+  try {
+   console.log('[scheduler.js]: 📅 Starting monthly quest posting...');
+   await postQuests(client);
+   console.log('[scheduler.js]: ✅ Monthly quest posting completed');
+  } catch (error) {
+   handleError(error, 'scheduler.js');
+   console.error('[scheduler.js]: ❌ Monthly quest posting failed:', error.message);
+  }
+ }, "America/New_York");
  createCronJob("0 1 1 * *", "monthly quest reward distribution", async () => {
   try {
    console.log('[scheduler.js]: 🏆 Starting monthly quest reward distribution...');
@@ -1265,106 +1305,80 @@ function initializeScheduler(client) {
    console.error('[scheduler.js]: ❌ Monthly quest reward distribution failed:', error.message);
   }
  });
- createCronJob("0 0 * * 0", "weekly pet rolls reset", () =>
-  resetPetRollsForAllCharacters(client)
- );
- createCronJob("0 0 * * *", "reset pet last roll dates", () =>
-  resetPetLastRollDates(client)
- );
- createCronJob("0 0 * * *", "request expiration and cleanup", async () => {
-  try {
-    console.log('[scheduler.js]: Running daily cleanup tasks...');
-    const results = await Promise.all([
-     cleanupExpiredEntries(),
-     cleanupExpiredHealingRequests(),
-     checkExpiredRequests(client),
-           cleanupExpiredBlightRequests(client),
-     cleanupExpiredRaids(),
-     cleanupOldRuuGameSessions(),
-    ]);
-    
-    const blightResult = results[3];
-    if (blightResult && typeof blightResult === 'object') {
-      console.log(`[scheduler.js]: Daily blight cleanup - Expired: ${blightResult.expiredCount}, Notified: ${blightResult.notifiedUsers}, Deleted: ${blightResult.deletedCount}`);
-    }
-  } catch (error) {
-    handleError(error, 'scheduler.js');
-    console.error('[scheduler.js]: Error during daily cleanup:', error);
-  }
+
+ // Hourly tasks
+ createCronJob("0 */6 * * *", "quest completion check", () => checkQuestCompletions(client));
+ createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
+  console.log(`[scheduler.js]: 🧹 Starting Blood Moon tracking cleanup`);
+  cleanupOldTrackingData();
+  console.log(`[scheduler.js]: ✅ Blood Moon tracking cleanup completed`);
  });
- createCronJob("0 5 * * *", "debuff expiry check", () =>
- handleDebuffExpiry(client)
-);
- createCronJob("0 5 * * *", "buff expiry check", () =>
- handleBuffExpiry(client)
-);
- createCronJob("0 0 * * *", "birthday announcements", () =>
-  executeBirthdayAnnouncements(client)
- );
- 
- createCronJob("0 0 * * *", "midnight quest generation", () =>
-  generateDailyQuestsAtMidnight()
- );
+}
 
- createCronJob("0 0 * * *", "quest expiration check", () =>
-  handleQuestExpirationAtMidnight(client)
- );
-
- createCronJob("0 */6 * * *", "quest completion check", () =>
-  checkQuestCompletions(client)
- );
-
- // Quest posting check - runs daily at midnight to check if it's time to post quests
+function setupQuestPosting(client) {
+ // Quest posting check - runs daily at midnight
  createCronJob("0 0 * * *", "quest posting check", async () => {
   try {
-   // Set quest channel ID for quest posting
    process.env.TEST_CHANNEL_ID = '706880599863853097';
-   
-   // Clear the require cache to ensure the module picks up the new env var
    delete require.cache[require.resolve('./scripts/questAnnouncements')];
    const { postQuests } = require('./scripts/questAnnouncements');
-   
    await postQuests(client);
   } catch (error) {
    handleError(error, 'scheduler.js');
    console.error('[scheduler.js]: ❌ Quest posting check failed:', error.message);
   }
  }, "America/New_York");
+}
 
- // Monthly quest posting - 1st of each month at 12:00 AM EST (5:00 AM UTC) - DISABLED
- // createCronJob("0 5 1 * *", "monthly quest posting", async () => {
- //  console.log('[scheduler.js]: 📅 Starting monthly quest posting...');
- //  try {
- //   await postMonthlyQuests();
- //   console.log('[scheduler.js]: ✅ Monthly quest posting completed');
- //  } catch (error) {
- //   handleError(error, 'scheduler.js');
- //   console.error('[scheduler.js]: ❌ Monthly quest posting failed:', error.message);
- //  }
- // }, "America/New_York");
+function setupBloodMoonScheduling(client) {
+ createCronJob("0 20 * * *", "blood moon start announcement", () => handleBloodMoonStart(client), "America/New_York");
+ createCronJob("0 8 * * *", "blood moon end announcement", () => handleBloodMoonEnd(client), "America/New_York");
+}
 
- createCronJob("0 5 * * *", "reset global steal protections", () => {
-  console.log(`[scheduler.js]: 🛡️ Starting global steal protection reset`);
+function setupGoogleSheetsRetry() {
+ createCronJob("*/15 * * * *", "retry pending Google Sheets operations", async () => {
   try {
-    // Import the steal command to access the global protection reset function
-    const { resetAllStealProtections } = require('./commands/jobs/steal.js');
-    resetAllStealProtections();
-    console.log(`[scheduler.js]: ✅ Global steal protections reset completed`);
+   const pendingCount = await getPendingSheetOperationsCount();
+   if (pendingCount > 0) {
+    console.log(`[scheduler.js]: 🔄 Retrying ${pendingCount} pending Google Sheets operations`);
+    const result = await retryPendingSheetOperations();
+    if (result.success) {
+     console.log(`[scheduler.js]: ✅ Retry completed: ${result.retried} successful, ${result.failed} failed`);
+    } else {
+     console.error(`[scheduler.js]: ❌ Retry failed: ${result.error}`);
+    }
+   } else {
+    console.log(`[scheduler.js]: ✅ No pending Google Sheets operations to retry`);
+   }
   } catch (error) {
-    console.error(`[scheduler.js]: ❌ Error resetting global steal protections:`, error);
+   handleError(error, "scheduler.js");
+   console.error(`[scheduler.js]: ❌ Google Sheets retry task failed: ${error.message}`);
   }
  }, "America/New_York");
+}
 
- createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
-  console.log(`[scheduler.js]: 🧹 Starting Blood Moon tracking cleanup`);
-  cleanupOldTrackingData();
-  console.log(`[scheduler.js]: ✅ Blood Moon tracking cleanup completed`);
- });
+// ------------------- Main Initialization Function ------------------
+
+function initializeScheduler(client) {
+ if (!client || !client.isReady()) {
+  console.error("[scheduler.js]: ❌ Invalid or unready Discord client provided to scheduler");
+  return;
+ }
+
+ // Run startup checks
+ runStartupChecks(client);
+
+ // Setup all schedulers
+ setupDailyTasks(client);
+ setupQuestPosting(client);
+ setupBloodMoonScheduling(client);
+ setupGoogleSheetsRetry();
 
  // Initialize specialized schedulers
  setupBlightScheduler(client);
  setupBoostingScheduler(client);
  setupWeatherScheduler(client);
+ setupHelpWantedFixedScheduler(client);
  
  // Check and post weather on restart if needed
  (async () => {
@@ -1378,51 +1392,8 @@ function initializeScheduler(client) {
      });
    }
  })();
- 
- setupHelpWantedFixedScheduler(client);
 
- // Blood Moon scheduling
- createCronJob(
-  "0 20 * * *",
-  "blood moon start announcement",
-  () => handleBloodMoonStart(client),
-  "America/New_York"
- );
-
- createCronJob(
-  "0 8 * * *",
-  "blood moon end announcement",
-  () => handleBloodMoonEnd(client),
-  "America/New_York"
- );
-
- // Google Sheets retry
- createCronJob(
-  "*/15 * * * *",
-  "retry pending Google Sheets operations",
-  async () => {
-   try {
-    const pendingCount = await getPendingSheetOperationsCount();
-    if (pendingCount > 0) {
-     console.log(`[scheduler.js]: 🔄 Retrying ${pendingCount} pending Google Sheets operations`);
-     const result = await retryPendingSheetOperations();
-     if (result.success) {
-      console.log(`[scheduler.js]: ✅ Retry completed: ${result.retried} successful, ${result.failed} failed`);
-     } else {
-      console.error(`[scheduler.js]: ❌ Retry failed: ${result.error}`);
-     }
-    } else {
-     console.log(`[scheduler.js]: ✅ No pending Google Sheets operations to retry`);
-    }
-   } catch (error) {
-    handleError(error, "scheduler.js");
-    console.error(`[scheduler.js]: ❌ Google Sheets retry task failed: ${error.message}`);
-   }
-  },
-  "America/New_York"
- );
-
- console.log("[scheduler.js]: All scheduled tasks initialized");
+ console.log("[scheduler.js]: ✅ All scheduled tasks initialized");
 }
 
 module.exports = {
