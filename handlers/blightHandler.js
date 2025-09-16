@@ -176,11 +176,30 @@ async function saveBlightSubmissions(data) {
 // ============================================================================
 
 // ------------------- Function: getRandomHealingRequirement -------------------
-// Randomly selects a healing requirement for a character.
+// Weighted selection of healing requirement for a character.
+// Items are most likely, writing is medium, art is least likely.
 function getRandomHealingRequirement(healer, characterName) {
   const requirements = healer.getHealingRequirements(characterName);
-  const randomIndex = Math.floor(Math.random() * requirements.length);
-  return requirements[randomIndex];
+  
+  // Define weights for each requirement type
+  const weights = {
+    'item': 5,    // Highest weight - most likely
+    'writing': 3, // Medium weight
+    'art': 1      // Lowest weight - least likely
+  };
+  
+  // Create weighted array
+  const weightedRequirements = [];
+  requirements.forEach(req => {
+    const weight = weights[req.type] || 1; // Default weight of 1 if type not found
+    for (let i = 0; i < weight; i++) {
+      weightedRequirements.push(req);
+    }
+  });
+  
+  // Select random requirement from weighted array
+  const randomIndex = Math.floor(Math.random() * weightedRequirements.length);
+  return weightedRequirements[randomIndex];
 }
 
 // ------------------- Function: healBlight -------------------
