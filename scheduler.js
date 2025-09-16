@@ -1,14 +1,30 @@
+// ============================================================================
+// ------------------- Imports -------------------
+// ============================================================================
+
+// Core dependencies
 const dotenv = require("dotenv");
 const path = require("path");
 const cron = require("node-cron");
-const { handleError } = require("./utils/globalErrorHandler");
+
+// Discord.js
 const { EmbedBuilder } = require("discord.js");
-const { recoverDailyStamina } = require("./modules/characterStatsModule");
+
+// Database models
+const Character = require("./models/CharacterModel");
+const Pet = require("./models/PetModel");
+const Raid = require("./models/RaidModel");
+const RuuGame = require("./models/RuuGameModel");
+const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+
+// Database functions
 const {
  generateVendingStockList,
  getCurrentVendingStockList,
  resetPetRollsForAllCharacters,
 } = require("./database/db");
+
+// Handlers
 const {
  postBlightRollCall,
  cleanupExpiredBlightRequests,
@@ -16,6 +32,8 @@ const {
  sendBlightReminders,
  checkMissedRolls,
 } = require("./handlers/blightHandler");
+
+// Scripts
 const {
  sendBloodMoonAnnouncement,
  sendBloodMoonEndAnnouncement,
@@ -24,7 +42,22 @@ const {
  revertChannelNames,
  cleanupOldTrackingData,
 } = require("./scripts/bloodmoon");
-const { bloodmoonDates } = require("./modules/calendarModule");
+
+// Modules
+const { recoverDailyStamina } = require("./modules/characterStatsModule");
+const { bloodmoonDates, convertToHyruleanDate } = require("./modules/calendarModule");
+const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest } = require('./modules/helpWantedModule');
+const { removeExpiredBuffs } = require('./modules/elixirModule');
+const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
+
+// Services
+const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("./services/weatherService");
+
+// Utils
+const { handleError } = require("./utils/globalErrorHandler");
+const { sendUserDM } = require("./utils/messageUtils");
+const { checkExpiredRequests } = require("./utils/expirationHandler");
+const { isValidImageUrl } = require("./utils/validation");
 const {
  cleanupExpiredEntries,
  cleanupExpiredHealingRequests,
@@ -36,24 +69,13 @@ const {
  retryPendingSheetOperations,
  getPendingSheetOperationsCount,
 } = require("./utils/googleSheetsUtils");
-const { convertToHyruleanDate } = require("./modules/calendarModule");
-const Character = require("./models/CharacterModel");
-const { sendUserDM } = require("./utils/messageUtils");
-const { checkExpiredRequests } = require("./utils/expirationHandler");
-const { isValidImageUrl } = require("./utils/validation");
-const DEFAULT_IMAGE_URL =
- "https://storage.googleapis.com/tinglebot/Graphics/border.png";
- const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("./services/weatherService");
-const Pet = require("./models/PetModel");
-const Raid = require("./models/RaidModel");
-const RuuGame = require("./models/RuuGameModel");
-const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest } = require('./modules/helpWantedModule');
-const HelpWantedQuest = require('./models/HelpWantedQuestModel');
-const { removeExpiredBuffs } = require('./modules/elixirModule');
-const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
-// const { postMonthlyQuests } = require('./scripts/monthlyQuestScheduler'); // Monthly quests not yet implemented
 
+// Constants
+const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
+
+// Disabled imports
+// const { postMonthlyQuests } = require('./scripts/monthlyQuestScheduler'); // Monthly quests not yet implemented
 
 // ============================================================================
 // ------------------- Environment Setup -------------------
@@ -140,158 +162,98 @@ const TOWNHALL_CHANNELS = {
  Vhintl: process.env.VHINTL_TOWNHALL,
 };
 
-async function postWeatherUpdate(client) {
+// ------------------- Weather Helper Functions ------------------
+
+async function postWeatherForVillage(client, village, checkExisting = false) {
  try {
-  const villages = Object.keys(TOWNHALL_CHANNELS);
-  let postedCount = 0;
-
-  for (const village of villages) {
-   try {
-    const weather = await getCurrentWeather(village);
-
-    if (!weather) {
-     console.error(`[scheduler.js]: Failed to get or generate weather for ${village}`);
-     continue;
-    }
-
-    const channelId = TOWNHALL_CHANNELS[village];
-    const channel = client.channels.cache.get(channelId);
-
-    if (!channel) {
-     console.error(`[scheduler.js]: Channel not found: ${channelId}`);
-     continue;
-    }
-
-    const { embed, files } = await generateWeatherEmbed(village, weather);
-    await channel.send({ embeds: [embed], files });
-    postedCount++;
-   } catch (error) {
-    console.error(`[scheduler.js]: Error posting weather for ${village}:`, error.message);
+  if (checkExisting) {
+   const existingWeather = await getWeatherWithoutGeneration(village);
+   if (existingWeather) {
+    return false; // Weather already exists
    }
   }
 
-  console.log(`[scheduler.js]: ✅ Weather posted to ${postedCount}/${villages.length} villages`);
+  const weather = await getCurrentWeather(village);
+  if (!weather) {
+   console.error(`[scheduler.js]: ❌ Failed to get weather for ${village}`);
+   return false;
+  }
+
+  const channelId = TOWNHALL_CHANNELS[village];
+  const channel = client.channels.cache.get(channelId);
+
+  if (!channel) {
+   console.error(`[scheduler.js]: ❌ Channel not found: ${channelId}`);
+   return false;
+  }
+
+  const { embed, files } = await generateWeatherEmbed(village, weather);
+  await channel.send({ embeds: [embed], files });
+  return true;
  } catch (error) {
-  console.error("[scheduler.js]: Weather update process failed:", error.message);
+  console.error(`[scheduler.js]: ❌ Error posting weather for ${village}:`, error.message);
+  handleError(error, "scheduler.js", {
+   commandName: 'postWeatherForVillage',
+   village: village
+  });
+  return false;
  }
 }
 
-async function checkAndPostWeatherIfNeeded(client) {
+async function processWeatherForAllVillages(client, checkExisting = false, context = '') {
  try {
   const villages = Object.keys(TOWNHALL_CHANNELS);
   let postedCount = 0;
 
   for (const village of villages) {
-   try {
-    // Check if weather exists for today without generating new weather
-    const existingWeather = await getWeatherWithoutGeneration(village);
-    
-    if (existingWeather) {
-     continue;
-    }
-    
-    // Weather doesn't exist in database, generate and post new weather
-    const weather = await getCurrentWeather(village);
-    
-    if (!weather) {
-     console.error(`[scheduler.js]: Failed to get or generate weather for ${village}`);
-     continue;
-    }
-
-    const channelId = TOWNHALL_CHANNELS[village];
-    const channel = client.channels.cache.get(channelId);
-
-    if (!channel) {
-     console.error(`[scheduler.js]: Channel not found: ${channelId}`);
-     continue;
-    }
-
-    const { embed, files } = await generateWeatherEmbed(village, weather);
-    await channel.send({ embeds: [embed], files });
-    postedCount++;
-    
-   } catch (error) {
-    console.error(`[scheduler.js]: Error in backup weather check for ${village}:`, error.message);
-    handleError(error, "scheduler.js", {
-     commandName: 'checkAndPostWeatherIfNeeded',
-     village: village
-    });
-   }
+   const posted = await postWeatherForVillage(client, village, checkExisting);
+   if (posted) postedCount++;
   }
 
   if (postedCount > 0) {
-   console.log(`[scheduler.js]: ✅ Backup weather posted to ${postedCount} villages`);
+   const contextText = context ? ` ${context}` : '';
+   console.log(`[scheduler.js]: ✅ Weather posted to ${postedCount}/${villages.length} villages${contextText}`);
   }
-  
+
+  return postedCount;
  } catch (error) {
-  console.error("[scheduler.js]: Backup weather check process failed:", error.message);
+  console.error(`[scheduler.js]: ❌ Weather process failed${context ? ` (${context})` : ''}:`, error.message);
   handleError(error, "scheduler.js", {
-   commandName: 'checkAndPostWeatherIfNeeded'
+   commandName: 'processWeatherForAllVillages',
+   context: context
   });
+  return 0;
  }
+}
+
+// ------------------- Main Weather Functions ------------------
+
+async function postWeatherUpdate(client) {
+ return await processWeatherForAllVillages(client, false, 'update');
+}
+
+async function checkAndPostWeatherIfNeeded(client) {
+ return await processWeatherForAllVillages(client, true, 'backup check');
 }
 
 async function checkAndPostWeatherOnRestart(client) {
  try {
-  // Check if it's 8 AM or later - only generate weather after 8 AM
   const now = new Date();
   const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const currentHour = estTime.getHours();
   
   if (currentHour < 8) {
-   return;
+   console.log(`[scheduler.js]: ⏰ Too early for weather generation (${currentHour}:00 AM)`);
+   return 0;
   }
   
-  const villages = Object.keys(TOWNHALL_CHANNELS);
-  let postedCount = 0;
-
-  for (const village of villages) {
-   try {
-    // Check if weather exists for today without generating new weather
-    const existingWeather = await getWeatherWithoutGeneration(village);
-    
-    if (existingWeather) {
-     continue;
-    }
-    
-    // Weather doesn't exist in database, generate and post new weather
-    const weather = await getCurrentWeather(village);
-    
-    if (!weather) {
-     console.error(`[scheduler.js]: Failed to get or generate weather for ${village}`);
-     continue;
-    }
-
-    const channelId = TOWNHALL_CHANNELS[village];
-    const channel = client.channels.cache.get(channelId);
-
-    if (!channel) {
-     console.error(`[scheduler.js]: Channel not found: ${channelId}`);
-     continue;
-    }
-
-    const { embed, files } = await generateWeatherEmbed(village, weather);
-    await channel.send({ embeds: [embed], files });
-    postedCount++;
-    
-   } catch (error) {
-    console.error(`[scheduler.js]: Error in restart weather check for ${village}:`, error.message);
-    handleError(error, "scheduler.js", {
-     commandName: 'checkAndPostWeatherOnRestart',
-     village: village
-    });
-   }
-  }
-
-  if (postedCount > 0) {
-   console.log(`[scheduler.js]: ✅ Weather posted to ${postedCount} villages on restart`);
-  }
-  
+  return await processWeatherForAllVillages(client, true, 'restart check');
  } catch (error) {
-  console.error("[scheduler.js]: Restart weather check process failed:", error.message);
+  console.error("[scheduler.js]: ❌ Restart weather check failed:", error.message);
   handleError(error, "scheduler.js", {
    commandName: 'checkAndPostWeatherOnRestart'
   });
+  return 0;
  }
 }
 
@@ -299,16 +261,19 @@ async function checkAndPostWeatherOnRestart(client) {
 // ------------------- Cleanup Functions -------------------
 // ============================================================================
 
+// ------------------- Individual Cleanup Functions ------------------
+
 async function cleanupExpiredRaids() {
  try {
   const expiredCount = await Raid.cleanupExpiredRaids();
-
   if (expiredCount > 0) {
    console.log(`[scheduler.js]: 🧹 Cleaned up ${expiredCount} expired raids`);
   }
+  return { expiredCount };
  } catch (error) {
-  console.error(`[scheduler.js]: Error cleaning up expired raids:`, error);
+  console.error(`[scheduler.js]: ❌ Error cleaning up expired raids:`, error);
   handleError(error, "scheduler.js");
+  return { expiredCount: 0 };
  }
 }
 
@@ -320,7 +285,7 @@ async function cleanupOldRuuGameSessions() {
   
   if (result.deletedCount === 0) {
    console.log(`[scheduler.js]: ✅ No old RuuGame sessions to clean up`);
-   return;
+   return result;
   }
   
   console.log(`[scheduler.js]: ✅ RuuGame cleanup completed - deleted ${result.deletedCount} sessions`);
@@ -332,9 +297,39 @@ async function cleanupOldRuuGameSessions() {
    console.log(`[scheduler.js]: ⏰ Cleaned up ${result.expiredCount} expired sessions`);
   }
   
+  return result;
  } catch (error) {
-  console.error(`[scheduler.js]: Error cleaning up old RuuGame sessions:`, error);
+  console.error(`[scheduler.js]: ❌ Error cleaning up old RuuGame sessions:`, error);
   handleError(error, "scheduler.js");
+  return { deletedCount: 0, finishedCount: 0, expiredCount: 0 };
+ }
+}
+
+// ------------------- Combined Cleanup Functions ------------------
+
+async function runDailyCleanupTasks(client) {
+ try {
+  console.log('[scheduler.js]: 🧹 Running daily cleanup tasks...');
+  
+  const results = await Promise.all([
+   cleanupExpiredEntries(),
+   cleanupExpiredHealingRequests(),
+   checkExpiredRequests(client),
+   cleanupExpiredBlightRequests(client),
+   cleanupExpiredRaids(),
+   cleanupOldRuuGameSessions(),
+  ]);
+  
+  const blightResult = results[3];
+  if (blightResult && typeof blightResult === 'object') {
+   console.log(`[scheduler.js]: ✅ Daily blight cleanup - Expired: ${blightResult.expiredCount}, Notified: ${blightResult.notifiedUsers}, Deleted: ${blightResult.deletedCount}`);
+  }
+  
+  return results;
+ } catch (error) {
+  console.error('[scheduler.js]: ❌ Error during daily cleanup:', error);
+  handleError(error, 'scheduler.js');
+  return [];
  }
 }
 
@@ -754,6 +749,8 @@ function setupWeatherScheduler(client) {
 // ============================================================================
 // ------------------- Help Wanted Functions -------------------
 // ============================================================================
+
+// ------------------- Quest Generation Functions ------------------
 
 async function checkAndGenerateDailyQuests() {
   try {
