@@ -89,6 +89,12 @@ function initializeErrorHandler(trelloLoggerFunction, discordClient) {
   console.log("[globalErrorHandler.js]: ✅ Error handling system initialized");
 }
 
+function initializeErrorTracking(discordClient) {
+  // Error tracking is already initialized through initializeErrorHandler
+  // This function exists for backward compatibility
+  console.log("[globalErrorHandler.js]: ✅ Error tracking system initialized");
+}
+
 // ============================================================================
 // ------------------- Database Error Tracking -------------------
 // ============================================================================
@@ -494,5 +500,6 @@ module.exports = {
   // Utilities
   createErrorContext,
   ERROR_RESPONSE_TYPES,
-  initializeErrorHandler
+  initializeErrorHandler,
+  initializeErrorTracking
 };

@@ -30,8 +30,8 @@ const { startExpirationChecks } = require('./utils/expirationHandler');
 const {
   handleError,
   initializeErrorHandler,
+  initializeErrorTracking,
 } = require("./utils/globalErrorHandler");
-const { initializeErrorTracking } = require("./utils/errorTracking");
 const {
   createTrelloCard,
   logWishlistToTrello,

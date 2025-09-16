@@ -7,7 +7,7 @@ const {
  MessageFlags,
 } = require("discord.js");
 const { handleInteractionError } = require("../../utils/globalErrorHandler.js");
-const { trackDatabaseError, isDatabaseError } = require("../../utils/errorTracking.js");
+const { trackDatabaseError, isDatabaseError } = require("../../utils/globalErrorHandler.js");
 const { handleTokenError } = require('../../utils/tokenUtils.js');
 const { enforceJail } = require('../../utils/jailCheck');
 const { v4: uuidv4 } = require("uuid");
