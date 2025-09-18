@@ -1073,7 +1073,14 @@ async function generateDailyQuests() {
     const shuffledVillages = shuffleArray([...VILLAGES]);
     
     // Generate quest posting times with variable buffer (3-6 hours) between each
-    const selectedTimes = selectTimesWithVariableBuffer(FIXED_CRON_TIMES, VILLAGES.length);
+    // For art/writing quests, only use times before 12pm EST
+    let availableTimes = FIXED_CRON_TIMES;
+    if (isAfterNoon) {
+      // If generating after 12pm, only use times before 12pm for any remaining art/writing quests
+      availableTimes = FIXED_CRON_TIMES.filter(cronTime => cronToHour(cronTime) < 12);
+    }
+    
+    const selectedTimes = selectTimesWithVariableBuffer(availableTimes, VILLAGES.length);
     const quests = [];
     
     // Generate quests sequentially to ensure unique NPCs
