@@ -975,6 +975,9 @@ async function checkAndPostMissedQuests(client) {
     const currentHour = estTime.getHours();
     const currentMinute = estTime.getMinutes();
     
+    // Check if it's after 12pm EST - if so, don't post art/writing quests
+    const isAfterNoon = currentHour >= 12;
+    
     const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     const unpostedQuests = await HelpWantedQuest.find({
       date: today,
@@ -986,7 +989,22 @@ async function checkAndPostMissedQuests(client) {
       return 0;
     }
     
-    const shuffledQuests = unpostedQuests.sort(() => Math.random() - 0.5);
+    // Filter out art and writing quests if it's after 12pm EST
+    let filteredQuests = unpostedQuests;
+    if (isAfterNoon) {
+      filteredQuests = unpostedQuests.filter(quest => quest.type !== 'art' && quest.type !== 'writing');
+      const skippedCount = unpostedQuests.length - filteredQuests.length;
+      if (skippedCount > 0) {
+        console.log(`[scheduler.js]: ⏰ After 12pm EST (${currentHour}:00) - Skipping ${skippedCount} art/writing quest(s) to ensure adequate completion time`);
+      }
+    }
+    
+    if (!filteredQuests.length) {
+      console.log(`[scheduler.js]: ℹ️ No missed quests to post during startup (filtered out art/writing quests)`);
+      return 0;
+    }
+    
+    const shuffledQuests = filteredQuests.sort(() => Math.random() - 0.5);
     let posted = 0;
     
     for (const quest of shuffledQuests) {
@@ -1028,6 +1046,10 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     const now = new Date();
     const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     
+    // Check if it's after 12pm EST - if so, don't post art/writing quests
+    const estHour = parseInt(now.toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}));
+    const isAfterNoon = estHour >= 12;
+    
     const questsToPost = await HelpWantedQuest.find({
       date: today,
       scheduledPostTime: cronTime,
@@ -1039,7 +1061,22 @@ async function checkAndPostScheduledQuests(client, cronTime) {
       return 0;
     }
     
-    const shuffledQuests = questsToPost.sort(() => Math.random() - 0.5);
+    // Filter out art and writing quests if it's after 12pm EST
+    let filteredQuests = questsToPost;
+    if (isAfterNoon) {
+      filteredQuests = questsToPost.filter(quest => quest.type !== 'art' && quest.type !== 'writing');
+      const skippedCount = questsToPost.length - filteredQuests.length;
+      if (skippedCount > 0) {
+        console.log(`[scheduler.js]: ⏰ After 12pm EST (${estHour}:00) - Skipping ${skippedCount} art/writing quest(s) to ensure adequate completion time`);
+      }
+    }
+    
+    if (!filteredQuests.length) {
+      console.log(`[scheduler.js]: ℹ️ No quests to post for ${cronTime} on ${today} (filtered out art/writing quests)`);
+      return 0;
+    }
+    
+    const shuffledQuests = filteredQuests.sort(() => Math.random() - 0.5);
     let posted = 0;
     
     for (const quest of shuffledQuests) {
