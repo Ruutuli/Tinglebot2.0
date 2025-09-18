@@ -154,7 +154,9 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 
 // Helper function to get the appropriate village channel ID
 function getVillageChannelId(villageName) {
-  return TOWNHALL_CHANNELS[villageName] || HELP_WANTED_TEST_CHANNEL;
+  // Capitalize the village name to match the TOWNHALL_CHANNELS keys
+  const capitalizedVillage = villageName.charAt(0).toUpperCase() + villageName.slice(1).toLowerCase();
+  return TOWNHALL_CHANNELS[capitalizedVillage] || HELP_WANTED_TEST_CHANNEL;
 }
 
 // ============================================================================
@@ -470,9 +472,9 @@ async function handleJailRelease(client) {
    "Town Hall Records • Reformed & Released"
   );
 
-  // Post announcement in character's home village town hall channel
+  // Post announcement in character's current village town hall channel
   try {
-   const villageChannelId = getVillageChannelId(character.homeVillage);
+   const villageChannelId = getVillageChannelId(character.currentVillage);
    const villageChannel = await client.channels.fetch(villageChannelId);
    
    if (villageChannel) {
@@ -481,12 +483,12 @@ async function handleJailRelease(client) {
      embeds: [releaseEmbed],
     });
     releasedCount++;
-    console.log(`[scheduler.js]: 🔓 Posted jail release for ${character.name} in ${character.homeVillage} town hall`);
+    console.log(`[scheduler.js]: 🔓 Posted jail release for ${character.name} in ${character.currentVillage} town hall`);
    } else {
-    console.error(`[scheduler.js]: ❌ Could not find town hall channel for ${character.homeVillage} (ID: ${villageChannelId})`);
+    console.error(`[scheduler.js]: ❌ Could not find town hall channel for ${character.currentVillage} (ID: ${villageChannelId})`);
    }
   } catch (error) {
-   console.error(`[scheduler.js]: ❌ Error posting jail release for ${character.name} in ${character.homeVillage}:`, error.message);
+   console.error(`[scheduler.js]: ❌ Error posting jail release for ${character.name} in ${character.currentVillage}:`, error.message);
   }
 
   const dmSent = await sendUserDM(
