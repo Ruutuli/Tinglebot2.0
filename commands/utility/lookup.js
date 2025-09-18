@@ -969,11 +969,15 @@ async function fetchCharactersWithItem(itemName) {
     const inventoryCollection = await getCharacterInventoryCollection(char.name);
     const inventory = await inventoryCollection.find().toArray();
 
-    const itemEntry = inventory.find(item => 
+    // Find all entries for this item and combine their quantities
+    const matchingItems = inventory.filter(item => 
       item.itemName.toLowerCase() === itemName.toLowerCase()
     );
-    if (itemEntry) {
-      charactersWithItem.push({ name: char.name, quantity: itemEntry.quantity });
+    
+    if (matchingItems.length > 0) {
+      // Sum up quantities from all matching entries (like inventory view does)
+      const totalQuantity = matchingItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      charactersWithItem.push({ name: char.name, quantity: totalQuantity });
     }
   }
 
