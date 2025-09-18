@@ -192,22 +192,11 @@ function validateSheetData(questData) {
         throw new Error('No quest data found');
     }
     
-    // Check actual column count from the data
+    // Log basic info about the data
     const actualColumns = questData[0] ? questData[0].length : 0;
-    console.log(`[questAnnouncements.js] 📊 Actual columns in sheet: ${actualColumns}`);
+    console.log(`[questAnnouncements.js] 📊 Retrieved ${questData.length} rows with ${actualColumns} columns from Google Sheets`);
     
-    const invalidRows = questData.filter((row, index) => {
-        if (!Array.isArray(row) || row.length < actualColumns) {
-            console.warn(`[questAnnouncements.js] ⚠️ Row ${index + 2}: Expected ${actualColumns} columns, got ${row.length}`);
-            return true;
-        }
-        return false;
-    });
-    
-    if (invalidRows.length > 0) {
-        console.warn(`[questAnnouncements.js] ⚠️ Found ${invalidRows.length} rows with invalid column count`);
-    }
-    
+    // No validation needed - parseQuestRow handles missing columns with padding
     return questData;
 }
 

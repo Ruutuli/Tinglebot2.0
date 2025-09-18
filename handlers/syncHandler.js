@@ -9,6 +9,7 @@
 
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
+const path = require('path');
 const { google } = require('googleapis');
 
 // ============================================================================
@@ -44,7 +45,7 @@ const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googl
 
 const BATCH_SIZE = 10;
 const BATCH_DELAY = 2000;
-const SERVICE_ACCOUNT_PATH = './service-account.json';
+const SERVICE_ACCOUNT_PATH = path.join(__dirname, '../config/service_account.json');
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000;
 
