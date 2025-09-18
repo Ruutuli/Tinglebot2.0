@@ -1020,8 +1020,16 @@ module.exports = {
      const rollsDisplay = getRollsDisplay(pet.rollsRemaining, pet.level);
 
      // ------------------- Create and Send Roll Result Embed -------------------
+     // Debug pet image URL processing for roll command
+     const encodedPetUrlRoll = encodePetImageUrl(pet.imageUrl);
+     const finalPetUrlRoll = sanitizeUrl(encodedPetUrlRoll || pet.imageUrl);
+     console.log(`[pet.js]: Pet roll image URL processing for ${pet.name}:`);
+     console.log(`[pet.js]: Original URL: ${pet.imageUrl}`);
+     console.log(`[pet.js]: Encoded URL: ${encodedPetUrlRoll}`);
+     console.log(`[pet.js]: Final URL: ${finalPetUrlRoll}`);
+
      const rollEmbed = new EmbedBuilder()
-      .setAuthor({ name: `${pet.name} the ${pet.species}`, iconURL: sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl) })
+      .setAuthor({ name: `${pet.name} the ${pet.species}`, iconURL: finalPetUrlRoll })
       .setThumbnail(sanitizeUrl(randomItem.image || "https://storage.googleapis.com/tinglebot/Graphics/border.png"))
       .setTitle(
        `${character.name}'s Pet Roll - ${pet.name} | Level ${pet.level}`
@@ -1294,10 +1302,18 @@ module.exports = {
           upgradeCost = `${cost.toLocaleString()} tokens`;
         }
         
+        // Debug pet image URL processing
+        const encodedPetUrl = encodePetImageUrl(pet.imageUrl);
+        const finalPetUrl = sanitizeUrl(encodedPetUrl || pet.imageUrl);
+        console.log(`[pet.js]: Pet image URL processing for ${pet.name}:`);
+        console.log(`[pet.js]: Original URL: ${pet.imageUrl}`);
+        console.log(`[pet.js]: Encoded URL: ${encodedPetUrl}`);
+        console.log(`[pet.js]: Final URL: ${finalPetUrl}`);
+
         const viewEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })
           .setTitle(`🐾 ${pet.name} — Pet Details`)
-          .setThumbnail(sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl))
+          .setThumbnail(finalPetUrl)
           .setColor(embedColor)
           .setImage(sanitizeUrl("https://storage.googleapis.com/tinglebot/Graphics/border.png"))
           .addFields(
