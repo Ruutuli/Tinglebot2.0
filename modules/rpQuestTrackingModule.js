@@ -109,6 +109,8 @@ async function processValidRPPost(quest, participant, channelId) {
         // Mark participant as completed
         participant.progress = 'completed';
         participant.completedAt = new Date();
+        participant.completionProcessed = false; // Mark for reward processing
+        participant.lastCompletionCheck = new Date();
         
         // Send notification in the RP thread
         await sendRequirementMetNotification(quest, participant, channelId);
@@ -122,13 +124,16 @@ async function processValidRPPost(quest, participant, channelId) {
     // Check for quest completion
     const completionResult = await quest.checkAutoCompletion();
     
-    if (completionResult.completed) {
+    if (completionResult.completed && completionResult.needsRewardProcessing) {
         console.log(`[rpQuestTracking] ✅ Quest ${quest.questID} completed: ${completionResult.reason}`);
         
         // Distribute rewards if quest was completed
         if (completionResult.reason === 'all_participants_completed' || completionResult.reason.includes('participants completed')) {
             const questRewardModule = require('./questRewardModule');
             await questRewardModule.processQuestCompletion(quest.questID);
+            
+            // Mark completion as processed to prevent duplicates
+            await quest.markCompletionProcessed();
         }
     } else if (completionResult.reason.includes('participants completed')) {
         console.log(`[rpQuestTracking] 📊 ${completionResult.reason} in quest ${quest.questID}`);

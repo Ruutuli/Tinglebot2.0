@@ -882,16 +882,21 @@ async function checkQuestCompletions(client) {
     
     for (const quest of activeQuests) {
       try {
-        const completionResult = await quest.checkAutoCompletion();
+        const completionResult = await quest.checkAutoCompletion(true); // Force check for scheduler
         
-        if (completionResult.completed) {
+        if (completionResult.completed && completionResult.needsRewardProcessing) {
           completedCount++;
           console.log(`[scheduler.js]: ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
           
           // Distribute rewards if quest was completed
           if (completionResult.reason === 'all_participants_completed' || completionResult.reason === 'time_expired') {
             await questRewardModule.processQuestCompletion(quest.questID);
+            
+            // Mark completion as processed to prevent duplicates
+            await quest.markCompletionProcessed();
           }
+        } else if (completionResult.completed) {
+          console.log(`[scheduler.js]: ℹ️ Quest "${quest.title}" already processed: ${completionResult.reason}`);
         }
         
         processedCount++;

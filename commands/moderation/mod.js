@@ -1642,6 +1642,8 @@ async function handleQuestCompletionFromSubmission(submission, userId) {
     // Mark quest as completed for this participant
     participant.progress = 'completed';
     participant.completedAt = new Date();
+    participant.completionProcessed = false; // Mark for reward processing
+    participant.lastCompletionCheck = new Date();
     
     // Clear the quest submission info since it's been processed
     participant.questSubmissionInfo = null;
@@ -1652,11 +1654,14 @@ async function handleQuestCompletionFromSubmission(submission, userId) {
     // Use unified completion system
     const completionResult = await quest.checkAutoCompletion();
     
-    if (completionResult.completed) {
+    if (completionResult.completed && completionResult.needsRewardProcessing) {
       console.log(`[mod.js]: ✅ Quest ${questID} completed: ${completionResult.reason}`);
       
       // Distribute rewards for all participants
       await questRewardModule.processQuestCompletion(questID);
+      
+      // Mark completion as processed to prevent duplicates
+      await quest.markCompletionProcessed();
     } else if (completionResult.reason.includes('participants completed')) {
       console.log(`[mod.js]: 📊 ${completionResult.reason} in quest ${questID}`);
     }
