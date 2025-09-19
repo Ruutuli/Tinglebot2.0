@@ -3,10 +3,15 @@
 // Handles automatic tracking of RP posts in quest threads
 // ============================================================================
 
+const { EmbedBuilder } = require('discord.js');
 const Quest = require('../models/QuestModel');
 const { handleError } = require('../utils/globalErrorHandler');
+const { QUEST_TYPES, BORDER_IMAGE, DEFAULT_POST_REQUIREMENT } = require('./questRewardModule');
 
-// ------------------- Validation Constants -------------------
+// ============================================================================
+// ------------------- Constants -------------------
+// ============================================================================
+
 const VALIDATION_RULES = {
     MIN_CONTENT_LENGTH: 10,
     MIN_RP_LENGTH: 20,
@@ -33,190 +38,189 @@ const VALIDATION_REGEX = {
     KEYBOARD_MASH: /^[qwertyuiopasdfghjklzxcvbnm]{10,}$/i
 };
 
+const QUEST_SEARCH_CRITERIA = {
+    STATUS: 'active',
+    QUEST_TYPE: QUEST_TYPES.RP
+};
+
+// ============================================================================
+// ------------------- Main Tracking Functions -------------------
+// ============================================================================
+
 // ------------------- Handle RP Post Tracking -------------------
 async function handleRPPostTracking(message) {
     try {
-        // Check if this thread is an RP quest thread
-        if (!isRPQuestThread(message.channel)) {
-            return;
-        }
+        if (!isRPQuestThread(message.channel)) return;
 
-        console.log(`[rpQuestTracking] 📝 Tracking post in ${message.channel.name}`);
+        console.log(`[rpQuestTrackingModule.js] 📝 Tracking post in ${message.channel.name}`);
 
-        // Find and validate quest
         const quest = await findQuestByThreadId(message.channel.id);
         if (!quest || !isValidRPQuest(quest)) {
-            console.log(`[rpQuestTracking] ❌ No valid RP quest found for thread ${message.channel.id}`);
+            console.log(`[rpQuestTrackingModule.js] ❌ No valid RP quest found for thread ${message.channel.id}`);
             return;
         }
 
-        // Find and validate participant
         const participant = quest.getParticipant(message.author.id);
         if (!participant) {
-            console.log(`[rpQuestTracking] ❌ User not participant in quest ${quest.questID}`);
+            console.log(`[rpQuestTrackingModule.js] ❌ User not participant in quest ${quest.questID}`);
             return;
         }
 
-        // Validate RP post
         const validationResult = validateRPPostWithReason(message);
         if (!validationResult.valid) {
-            console.log(`[rpQuestTracking] ❌ Invalid post from ${message.author.id} - ${validationResult.reason}`);
+            console.log(`[rpQuestTrackingModule.js] ❌ Invalid post from ${message.author.id} - ${validationResult.reason}`);
             return;
         }
 
-        // Check village location for RP quest participants
         const villageCheck = await quest.checkParticipantVillage(participant.userId);
         if (!villageCheck.valid) {
-            console.log(`[rpQuestTracking] ❌ Participant ${participant.characterName} disqualified: ${villageCheck.reason}`);
+            console.log(`[rpQuestTrackingModule.js] ❌ Participant ${participant.characterName} disqualified: ${villageCheck.reason}`);
             quest.disqualifyParticipant(participant.userId, villageCheck.reason);
             await quest.save();
             return;
         }
 
-        // Process valid RP post
         await processValidRPPost(quest, participant, message.channel.id);
 
     } catch (error) {
-        console.error(`[rpQuestTracking] ❌ Error tracking RP post:`, error);
+        console.error(`[rpQuestTrackingModule.js] ❌ Error tracking RP post:`, error);
         handleError(error, 'rpQuestTrackingModule.js');
     }
 }
 
+// ============================================================================
 // ------------------- Helper Functions -------------------
+// ============================================================================
+
+// ------------------- Thread and Quest Validation -------------------
 function isRPQuestThread(channel) {
     const threadName = channel.name.toLowerCase();
     return threadName.includes('📜') && threadName.includes('rp thread');
 }
 
 function isValidRPQuest(quest) {
-    return quest && quest.questType === 'RP' && quest.status === 'active';
+    return quest && quest.questType === QUEST_SEARCH_CRITERIA.QUEST_TYPE && quest.status === QUEST_SEARCH_CRITERIA.STATUS;
 }
 
+// ------------------- Process Valid RP Post -------------------
 async function processValidRPPost(quest, participant, channelId) {
-    // Increment the RP post count
     quest.incrementRPPosts(participant);
     
-    // Update the RP thread ID if not set
     if (!participant.rpThreadId) {
         participant.rpThreadId = channelId;
     }
 
-    // Check if participant now meets requirements
     const meetsRequirements = quest.meetsRequirements(participant, quest);
     const wasNotCompleted = participant.progress !== 'completed';
+    const postRequirement = quest.postRequirement || DEFAULT_POST_REQUIREMENT;
     
     if (meetsRequirements && wasNotCompleted) {
-        // Mark participant as completed
         participant.progress = 'completed';
         participant.completedAt = new Date();
-        participant.completionProcessed = false; // Mark for reward processing
+        participant.completionProcessed = false;
         participant.lastCompletionCheck = new Date();
         
-        // Send notification in the RP thread
         await sendRequirementMetNotification(quest, participant, channelId);
-        
-        console.log(`[rpQuestTracking] ✅ ${participant.characterName} has met the RP requirements (${participant.rpPostCount}/${quest.postRequirement || 15} posts)!`);
+        console.log(`[rpQuestTrackingModule.js] ✅ ${participant.characterName} has met the RP requirements (${participant.rpPostCount}/${postRequirement} posts)!`);
     }
 
-    // Save the quest
     await quest.save();
 
-    // Update quest embed using centralized manager
     try {
         const questModule = require('../commands/world/quest');
         await questModule.updateQuestEmbed(null, quest, null, 'rpQuestTracking');
     } catch (error) {
-        console.error(`[rpQuestTracking] ❌ Error updating quest embed:`, error);
+        console.error(`[rpQuestTrackingModule.js] ❌ Error updating quest embed:`, error);
     }
 
-    // Check for quest completion
     const completionResult = await quest.checkAutoCompletion();
     
     if (completionResult.completed && completionResult.needsRewardProcessing) {
-        console.log(`[rpQuestTracking] ✅ Quest ${quest.questID} completed: ${completionResult.reason}`);
+        console.log(`[rpQuestTrackingModule.js] ✅ Quest ${quest.questID} completed: ${completionResult.reason}`);
         
-        // Distribute rewards if quest was completed
         if (completionResult.reason === 'all_participants_completed' || completionResult.reason.includes('participants completed')) {
             const questRewardModule = require('./questRewardModule');
             await questRewardModule.processQuestCompletion(quest.questID);
-            
-            // Mark completion as processed to prevent duplicates
             await quest.markCompletionProcessed();
         }
     } else if (completionResult.reason.includes('participants completed')) {
-        console.log(`[rpQuestTracking] 📊 ${completionResult.reason} in quest ${quest.questID}`);
+        console.log(`[rpQuestTrackingModule.js] 📊 ${completionResult.reason} in quest ${quest.questID}`);
     }
 
-    console.log(`[rpQuestTracking] 📊 Updated RP post count for ${participant.characterName}: ${participant.rpPostCount}/${quest.postRequirement || 15}`);
+    console.log(`[rpQuestTrackingModule.js] 📊 Updated RP post count for ${participant.characterName}: ${participant.rpPostCount}/${postRequirement}`);
 }
+
+// ============================================================================
+// ------------------- Notification Functions -------------------
+// ============================================================================
 
 // ------------------- Send Requirement Met Notification -------------------
 async function sendRequirementMetNotification(quest, participant, channelId) {
     try {
-        // Get the Discord client from the main index.js
         const { client } = require('../index.js');
         if (!client) {
-            console.log(`[rpQuestTracking] ❌ Discord client not available for notification`);
+            console.log(`[rpQuestTrackingModule.js] ❌ Discord client not available for notification`);
             return;
         }
 
         const channel = await client.channels.fetch(channelId);
         if (!channel) {
-            console.log(`[rpQuestTracking] ❌ Could not find channel ${channelId} for notification`);
+            console.log(`[rpQuestTrackingModule.js] ❌ Could not find channel ${channelId} for notification`);
             return;
         }
 
-        const { EmbedBuilder } = require('discord.js');
-        
+        const postRequirement = quest.postRequirement || DEFAULT_POST_REQUIREMENT;
         const embed = new EmbedBuilder()
-            .setColor(0x00FF00) // Green for success
+            .setColor(0x00FF00)
             .setTitle('🎉 Quest Requirements Met!')
             .setDescription(`**${participant.characterName}** has successfully met the quest requirements!`)
             .addFields(
-                { name: 'Posts Completed', value: `${participant.rpPostCount}/${quest.postRequirement || 15}`, inline: true },
+                { name: 'Posts Completed', value: `${participant.rpPostCount}/${postRequirement}`, inline: true },
                 { name: 'Status', value: '✅ Completed', inline: true },
                 { name: 'Quest ID', value: `\`${quest.questID}\``, inline: true }
             )
-            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setImage(BORDER_IMAGE)
             .setTimestamp();
 
         await channel.send({ 
             content: `<@${participant.userId}>`,
             embeds: [embed] 
         });
-        console.log(`[rpQuestTracking] ✅ Sent requirement met notification for ${participant.characterName} in quest ${quest.questID}`);
+        console.log(`[rpQuestTrackingModule.js] ✅ Sent requirement met notification for ${participant.characterName} in quest ${quest.questID}`);
 
     } catch (error) {
-        console.error(`[rpQuestTracking] ❌ Error sending requirement met notification:`, error);
+        console.error(`[rpQuestTrackingModule.js] ❌ Error sending requirement met notification:`, error);
     }
 }
+
+// ============================================================================
+// ------------------- Quest Finding Functions -------------------
+// ============================================================================
 
 // ------------------- Find Quest by Thread ID -------------------
 async function findQuestByThreadId(threadId) {
     try {
-        // Primary search: Look for quests where rpThreadParentChannel matches
         const quest = await Quest.findOne({ 
-            status: 'active',
-            questType: 'RP',
+            status: QUEST_SEARCH_CRITERIA.STATUS,
+            questType: QUEST_SEARCH_CRITERIA.QUEST_TYPE,
             rpThreadParentChannel: threadId
         });
 
         if (quest) {
-            console.log(`[rpQuestTracking] ✅ Found quest ${quest.questID} by parent channel`);
+            console.log(`[rpQuestTrackingModule.js] ✅ Found quest ${quest.questID} by parent channel`);
             return quest;
         }
 
-        // Fallback: Search by participant thread ID
         const fallbackQuest = await findQuestByParticipantThreadId(threadId);
         if (fallbackQuest) {
-            console.log(`[rpQuestTracking] ✅ Found quest ${fallbackQuest.questID} by participant thread`);
+            console.log(`[rpQuestTrackingModule.js] ✅ Found quest ${fallbackQuest.questID} by participant thread`);
             return fallbackQuest;
         }
 
-        console.log(`[rpQuestTracking] ❌ No quest found for thread ${threadId}`);
+        console.log(`[rpQuestTrackingModule.js] ❌ No quest found for thread ${threadId}`);
         return null;
     } catch (error) {
-        console.error(`[rpQuestTracking] ❌ Error finding quest by thread ID:`, error);
+        console.error(`[rpQuestTrackingModule.js] ❌ Error finding quest by thread ID:`, error);
         return null;
     }
 }
@@ -225,8 +229,8 @@ async function findQuestByThreadId(threadId) {
 async function findQuestByParticipantThreadId(threadId) {
     try {
         const quests = await Quest.find({ 
-            status: 'active',
-            questType: 'RP'
+            status: QUEST_SEARCH_CRITERIA.STATUS,
+            questType: QUEST_SEARCH_CRITERIA.QUEST_TYPE
         });
 
         for (const quest of quests) {
@@ -241,34 +245,32 @@ async function findQuestByParticipantThreadId(threadId) {
 
         return null;
     } catch (error) {
-        console.error(`[rpQuestTracking] ❌ Error finding quest by participant thread ID:`, error);
+        console.error(`[rpQuestTrackingModule.js] ❌ Error finding quest by participant thread ID:`, error);
         return null;
     }
 }
+
+// ============================================================================
+// ------------------- Validation Functions -------------------
+// ============================================================================
 
 // ------------------- Validate RP Post with Reason -------------------
 function validateRPPostWithReason(message) {
     const content = message.content.trim();
     
-    console.log(`[rpQuestTracking] Validating post from ${message.author.id}: "${content}"`);
-    
-    // Basic content validation
-    const basicValidation = validateBasicContent(content);
-    if (!basicValidation.valid) return basicValidation;
+    const validations = [
+        () => validateBasicContent(content),
+        () => validateRegexPatterns(content),
+        () => validateAttachments(message, content),
+        () => validateAdvancedContent(content)
+    ];
 
-    // Regex pattern validation
-    const regexValidation = validateRegexPatterns(content);
-    if (!regexValidation.valid) return regexValidation;
+    for (const validation of validations) {
+        const result = validation();
+        if (!result.valid) return result;
+    }
 
-    // Message attachment validation
-    const attachmentValidation = validateAttachments(message, content);
-    if (!attachmentValidation.valid) return attachmentValidation;
-
-    // Advanced content validation
-    const advancedValidation = validateAdvancedContent(content);
-    if (!advancedValidation.valid) return advancedValidation;
-
-    console.log(`[rpQuestTracking] ✅ Valid RP post`);
+    console.log(`[rpQuestTrackingModule.js] ✅ Valid RP post`);
     return { valid: true, reason: null };
 }
 
@@ -305,15 +307,12 @@ function validateRegexPatterns(content) {
 
     for (const { regex, reason } of validations) {
         if (regex.test(content)) {
-            console.log(`[rpQuestTracking] ❌ Rejected - ${reason}`);
             return { valid: false, reason };
         }
     }
 
-    // Check reaction patterns
     for (const pattern of REACTION_PATTERNS) {
         if (pattern.test(content)) {
-            console.log(`[rpQuestTracking] ❌ Rejected - Content is just a reaction-style response`);
             return { valid: false, reason: 'Content is just a reaction-style response' };
         }
     }
@@ -323,25 +322,19 @@ function validateRegexPatterns(content) {
 
 // ------------------- Attachment Validation -------------------
 function validateAttachments(message, content) {
-    if (message.embeds && message.embeds.length > 0) {
-        const hasOnlyEmbeds = !content || content.trim().length === 0;
-        if (hasOnlyEmbeds) {
-            console.log(`[rpQuestTracking] ❌ Rejected - Content is only GIFs/stickers/embeds`);
-            return { valid: false, reason: 'Content is only GIFs/stickers/embeds' };
-        }
+    const hasOnlyEmbeds = message.embeds?.length > 0 && (!content || content.trim().length === 0);
+    if (hasOnlyEmbeds) {
+        return { valid: false, reason: 'Content is only GIFs/stickers/embeds' };
     }
 
-    if (message.stickers && message.stickers.size > 0 && (!content || content.trim().length === 0)) {
-        console.log(`[rpQuestTracking] ❌ Rejected - Content is only stickers`);
+    const hasOnlyStickers = message.stickers?.size > 0 && (!content || content.trim().length === 0);
+    if (hasOnlyStickers) {
         return { valid: false, reason: 'Content is only stickers' };
     }
 
-    if (message.attachments && message.attachments.size > 0) {
-        const hasOnlyAttachments = !content || content.trim().length < VALIDATION_RULES.MIN_CONTENT_LENGTH;
-        if (hasOnlyAttachments) {
-            console.log(`[rpQuestTracking] ❌ Rejected - Content is only attachments without meaningful text`);
-            return { valid: false, reason: 'Content is only attachments without meaningful text' };
-        }
+    const hasOnlyAttachments = message.attachments?.size > 0 && (!content || content.trim().length < VALIDATION_RULES.MIN_CONTENT_LENGTH);
+    if (hasOnlyAttachments) {
+        return { valid: false, reason: 'Content is only attachments without meaningful text' };
     }
 
     return { valid: true, reason: null };
@@ -349,27 +342,27 @@ function validateAttachments(message, content) {
 
 // ------------------- Advanced Content Validation -------------------
 function validateAdvancedContent(content) {
-    // Check for repeated single words
     const words = content.split(/\s+/);
     if (words.length > 1) {
         const uniqueWords = new Set(words.map(w => w.toLowerCase()));
         if (uniqueWords.size === 1 && words.length >= VALIDATION_RULES.MIN_UNIQUE_WORDS) {
-            console.log(`[rpQuestTracking] ❌ Rejected - Content is just repeated single words`);
             return { valid: false, reason: 'Content is just repeated single words' };
         }
     }
 
-    // Check letter percentage
     const letterCount = (content.match(/[a-zA-Z]/g) || []).length;
     const totalChars = content.replace(/\s/g, '').length;
     if (totalChars > 0 && (letterCount / totalChars) < VALIDATION_RULES.MIN_LETTER_PERCENTAGE) {
         const percentage = Math.round((letterCount / totalChars) * 100);
-        console.log(`[rpQuestTracking] ❌ Rejected - Content has too few letters (${percentage}% letters, minimum ${VALIDATION_RULES.MIN_LETTER_PERCENTAGE * 100}%)`);
         return { valid: false, reason: `Content has too few letters (${percentage}% letters, minimum ${VALIDATION_RULES.MIN_LETTER_PERCENTAGE * 100}%)` };
     }
 
     return { valid: true, reason: null };
 }
+
+// ============================================================================
+// ------------------- Utility Functions -------------------
+// ============================================================================
 
 // ------------------- Validate RP Post (Legacy) -------------------
 function isValidRPPost(message) {
@@ -393,7 +386,6 @@ async function updateRPPostCount(questID, userId, newCount) {
         participant.rpPostCount = Math.max(0, newCount);
         participant.updatedAt = new Date();
 
-        // Check if participant now meets requirements
         const meetsRequirements = quest.meetsRequirements(participant, quest);
         if (meetsRequirements && participant.progress === 'active') {
             participant.progress = 'completed';
@@ -401,22 +393,13 @@ async function updateRPPostCount(questID, userId, newCount) {
         }
 
         await quest.save();
+        console.log(`[rpQuestTrackingModule.js] 📊 Manually updated RP post count for user ${userId} in quest ${questID}: ${oldCount} → ${newCount}`);
 
-        console.log(`[rpQuestTracking] 📊 Manually updated RP post count for user ${userId} in quest ${questID}: ${oldCount} → ${newCount}`);
-
-        return {
-            success: true,
-            oldCount,
-            newCount,
-            meetsRequirements
-        };
+        return { success: true, oldCount, newCount, meetsRequirements };
 
     } catch (error) {
-        console.error(`[rpQuestTracking] ❌ Error updating RP post count:`, error);
-        return {
-            success: false,
-            error: error.message
-        };
+        console.error(`[rpQuestTrackingModule.js] ❌ Error updating RP post count:`, error);
+        return { success: false, error: error.message };
     }
 }
 
@@ -428,7 +411,7 @@ async function getRPQuestStatus(questID) {
             throw new Error(`Quest ${questID} not found`);
         }
 
-        if (quest.questType !== 'RP') {
+        if (quest.questType !== QUEST_SEARCH_CRITERIA.QUEST_TYPE) {
             throw new Error(`Quest ${questID} is not an RP quest`);
         }
 
@@ -437,7 +420,7 @@ async function getRPQuestStatus(questID) {
             questID,
             title: quest.title,
             status: quest.status,
-            postRequirement: quest.postRequirement || 15,
+            postRequirement: quest.postRequirement || DEFAULT_POST_REQUIREMENT,
             participants: participants.map(p => ({
                 userId: p.userId,
                 characterName: p.characterName,
@@ -448,15 +431,12 @@ async function getRPQuestStatus(questID) {
             }))
         };
 
-        console.log(`[rpQuestTracking] 📊 Retrieved status for quest ${questID}`);
+        console.log(`[rpQuestTrackingModule.js] 📊 Retrieved status for quest ${questID}`);
         return status;
 
     } catch (error) {
-        console.error(`[rpQuestTracking] ❌ Error getting RP quest status:`, error);
-        return {
-            success: false,
-            error: error.message
-        };
+        console.error(`[rpQuestTrackingModule.js] ❌ Error getting RP quest status:`, error);
+        return { success: false, error: error.message };
     }
 }
 

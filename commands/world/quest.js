@@ -1,29 +1,28 @@
-const {
- SlashCommandBuilder,
- PermissionFlagsBits,
-} = require("@discordjs/builders");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("@discordjs/builders");
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require("discord.js");
 const { handleInteractionError } = require("../../utils/globalErrorHandler");
-const {
- EmbedBuilder,
- ActionRowBuilder,
- ButtonBuilder,
- ButtonStyle,
- MessageFlags,
-} = require("discord.js");
 const Quest = require("../../models/QuestModel");
 const Character = require("../../models/CharacterModel");
+const { 
+    BORDER_IMAGE, 
+    QUEST_CHANNEL_ID, 
+    QUEST_COLORS, 
+    QUEST_TYPES, 
+    RP_SIGNUP_WINDOW_DAYS,
+    createBaseEmbed, 
+    addQuestInfoFields,
+    validateRPQuestVillage,
+    validateQuestParticipation,
+    validateQuestTypeRules,
+    extractVillageFromLocation,
+    formatQuestRules,
+    formatLocationText,
+    formatSignupDeadline
+} = require("../../modules/questRewardModule");
 
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
-const QUEST_CHANNEL_ID = "1305486549252706335";
-const RP_SIGNUP_WINDOW_DAYS = 7;
-const EMBED_COLORS = {
- SUCCESS: 0x00ff00,
- ERROR: 0xff0000,
- INFO: 0x0099ff,
-};
-const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
 // Embed update queue to prevent race conditions
 const embedUpdateQueue = new Map(); // questID -> { isUpdating: boolean, pendingUpdates: Array }
@@ -35,21 +34,19 @@ const updateTimeouts = new Map(); // questID -> timeout
 module.exports = {
  data: new SlashCommandBuilder()
   .setName("quest")
-  .setDescription(
-   "Quest participation system - join, submit, and manage your quest participation!"
-  )
-  .addSubcommand((subcommand) =>
+  .setDescription("Quest participation system - join, submit, and manage your quest participation!")
+  .addSubcommand(subcommand =>
    subcommand
     .setName("join")
     .setDescription("Join a quest with your character")
-    .addStringOption((option) =>
+    .addStringOption(option =>
      option
       .setName("questid")
       .setDescription("The ID of the quest you want to join")
       .setRequired(true)
       .setAutocomplete(true)
     )
-    .addStringOption((option) =>
+    .addStringOption(option =>
      option
       .setName("charactername")
       .setDescription("The name of your character")
@@ -57,11 +54,11 @@ module.exports = {
       .setAutocomplete(true)
     )
   )
-  .addSubcommand((subcommand) =>
+  .addSubcommand(subcommand =>
    subcommand
     .setName("leave")
     .setDescription("Leave a quest you are currently participating in")
-    .addStringOption((option) =>
+    .addStringOption(option =>
      option
       .setName("questid")
       .setDescription("The ID of the quest you want to leave")
@@ -69,17 +66,21 @@ module.exports = {
       .setAutocomplete(true)
     )
   )
-  .addSubcommand((subcommand) =>
-   subcommand.setName("list").setDescription("List all active quests from the quest board")
+  .addSubcommand(subcommand =>
+   subcommand
+    .setName("list")
+    .setDescription("List all active quests from the quest board")
   )
-  .addSubcommand((subcommand) =>
-   subcommand.setName("status").setDescription("Check your current quest participation status")
+  .addSubcommand(subcommand =>
+   subcommand
+    .setName("status")
+    .setDescription("Check your current quest participation status")
   )
-  .addSubcommand((subcommand) =>
+  .addSubcommand(subcommand =>
    subcommand
     .setName("postcount")
     .setDescription("Display post counts for all participants in an RP quest")
-    .addStringOption((option) =>
+    .addStringOption(option =>
      option
       .setName("questid")
       .setDescription("ID of the RP quest to check post counts for")
@@ -95,32 +96,27 @@ module.exports = {
   const subcommand = interaction.options.getSubcommand();
 
   try {
-   switch (subcommand) {
-    case "join":
-     await this.handleJoinQuest(interaction);
-     break;
-    case "leave":
-     await this.handleLeaveQuest(interaction);
-     break;
-    case "list":
-     await this.handleListQuests(interaction);
-     break;
-    case "status":
-     await this.handleQuestStatus(interaction);
-     break;
-    case "postcount":
-     await this.handlePostCount(interaction);
-     break;
-    default:
-     await interaction.reply({
-      content: "Unknown subcommand.",
-      ephemeral: true,
-     });
+   const handlers = {
+    join: () => this.handleJoinQuest(interaction),
+    leave: () => this.handleLeaveQuest(interaction),
+    list: () => this.handleListQuests(interaction),
+    status: () => this.handleQuestStatus(interaction),
+    postcount: () => this.handlePostCount(interaction)
+   };
+
+   const handler = handlers[subcommand];
+   if (handler) {
+    await handler();
+   } else {
+    await interaction.reply({
+     content: "[quest.js]❌ Unknown subcommand.",
+     ephemeral: true,
+    });
    }
   } catch (error) {
    await handleInteractionError(error, interaction, {
-     source: 'quest.js',
-     subcommand: interaction.options?.getSubcommand()
+    source: 'quest.js',
+    subcommand: interaction.options?.getSubcommand()
    });
   }
  },
@@ -129,76 +125,29 @@ module.exports = {
  // ------------------- Quest Join Handler -------------------
  // ============================================================================
  async handleJoinQuest(interaction) {
-  const characterName = interaction.options.getString("charactername");
-  const questID = interaction.options.getString("questid");
-  const userID = interaction.user.id;
-  const userName = interaction.user.username;
+  const { characterName, questID, userID, userName } = this.extractJoinData(interaction);
 
-  // Validate quest exists and is active
-  const quest = await this.validateQuest(interaction, questID);
-  if (!quest) return;
+  // Validate all requirements
+  const validationResult = await this.performJoinValidations(interaction, questID, characterName, userID);
+  if (!validationResult.success) return;
 
-  // Validate character ownership
-  const character = await this.validateCharacter(interaction, characterName, userID);
-  if (!character) return;
+  const { quest, character } = validationResult;
 
-  // Validate quest participation eligibility
-  const participationCheck = await this.validateQuestParticipation(interaction, quest, userID, characterName);
-  if (!participationCheck) return;
+  // Process quest join
+  await this.processQuestJoin(interaction, quest, userID, characterName);
 
-  // Check member-capped quest restrictions
-  if (quest.participantCap) {
-   const cappedQuestCheck = await this.checkCappedQuestRestrictions(interaction, quest, userID);
-   if (!cappedQuestCheck) return;
-  }
-
-  // Validate quest type specific rules
-  const questTypeCheck = await this.validateQuestTypeRules(interaction, quest);
-  if (!questTypeCheck) return;
-
-  // For RP quests, validate character is in the correct village
+  // Handle RP quest specific requirements
   if (quest.questType.toLowerCase() === 'rp') {
-    const villageCheck = await this.validateRPQuestVillage(interaction, quest, character);
-    if (!villageCheck) return;
+   await this.handleRPQuestJoin(quest, character);
   }
 
-  // Add role if quest has one
-  await this.assignQuestRole(interaction, quest, userID);
-
-  // Handle quest voucher usage if applicable
-  const voucherUsed = await this.handleQuestVoucherUsage(interaction, quest, userID);
-  
-  // Add participant to quest
-  const participant = quest.addParticipant(userID, characterName);
-  
-  // For RP quests, set the required village
-  if (quest.questType.toLowerCase() === 'rp') {
-    const questLocation = quest.location.toLowerCase();
-    let requiredVillage = null;
-    
-    if (questLocation.includes('rudania')) {
-      requiredVillage = 'rudania';
-    } else if (questLocation.includes('inariko')) {
-      requiredVillage = 'inariko';
-    } else if (questLocation.includes('vhintl')) {
-      requiredVillage = 'vhintl';
-    }
-    
-    if (requiredVillage) {
-      participant.requiredVillage = requiredVillage;
-      quest.setRequiredVillage(requiredVillage);
-    }
-  }
-  
   await quest.save();
 
-  // Update quest embed
+  // Update quest embed and send response
   await this.updateQuestEmbed(interaction.guild, quest, interaction.client, 'questJoin');
-
-  // Add user to RP thread if applicable
   await this.addUserToRPThread(interaction, quest, userID, userName);
 
-  // Send success response
+  const voucherUsed = await this.handleQuestVoucherUsage(interaction, quest, userID);
   const successEmbed = this.createSuccessEmbed(quest, characterName, userName, character, voucherUsed);
   return interaction.reply({ embeds: [successEmbed] });
  },
@@ -210,49 +159,20 @@ module.exports = {
   const questID = interaction.options.getString("questid");
   const userID = interaction.user.id;
 
-  const quest = await Quest.findOne({ questID });
-  if (!quest) {
-   return interaction.reply({
-    content: `[quest.js]❌ Quest with ID \`${questID}\` does not exist.`,
-    ephemeral: true,
-   });
-  }
+  // Validate quest and participation
+  const validationResult = await this.validateLeaveRequest(interaction, questID, userID);
+  if (!validationResult.success) return;
 
-  if (!quest.participants.has(userID)) {
-   return interaction.reply({
-    content: `[quest.js]❌ You are not participating in the quest \`${quest.title}\`.`,
-    ephemeral: true,
-   });
-  }
+  const { quest, characterName } = validationResult;
 
-  const characterName = quest.participants.get(userID);
-  quest.removeParticipant(userID);
-  await quest.save();
+  // Process quest leave
+  await this.processQuestLeave(interaction, quest, userID);
 
-  // Remove role if quest has one
-  if (quest.roleID) {
-   const role = interaction.guild.roles.cache.find((r) => r.id === quest.roleID);
-   if (role) {
-    const member = interaction.guild.members.cache.get(userID);
-    if (member && member.roles.cache.has(quest.roleID)) {
-     await member.roles.remove(role);
-    }
-   }
-  }
-
+  // Update quest embed
   await this.updateQuestEmbed(interaction.guild, quest, interaction.client, 'questLeave');
 
-  let leaveMessage = `[quest.js]✅ You have left the quest **${quest.title}** (Character: **${characterName}**).`;
-
-  if (quest.participantCap) {
-   const wasFull = quest.participants.size >= quest.participantCap;
-   leaveMessage += `\n**Note**: Since this was a member-capped quest, you can now join another member-capped quest if available.`;
-   
-   if (wasFull) {
-    leaveMessage += `\n**🎯 Quest Status**: This quest now has an available spot!`;
-   }
-  }
-
+  // Send response
+  const leaveMessage = this.createLeaveMessage(quest, characterName);
   return interaction.reply({
    content: leaveMessage,
    ephemeral: true,
@@ -267,68 +187,12 @@ module.exports = {
 
   if (quests.length === 0) {
    return interaction.reply({
-    content:
-     "No active quests available.\n\n**About Quests**: Quests are posted on the quest board and are smaller, optional, fun timed tasks that happen every other month! They can be Art, Writing, Interactive, or RP based.",
+    content: "No active quests available.\n\n**About Quests**: Quests are posted on the quest board and are smaller, optional, fun timed tasks that happen every other month! They can be Art, Writing, Interactive, or RP based.",
     ephemeral: true,
    });
   }
 
-  const embed = new EmbedBuilder()
-   .setColor(0x4A90E2)
-   .setTitle("Active Quests - Every Other Month Events!")
-   .setDescription("Official bimonthly quests! Smaller, optional, fun timed tasks for community rewards!")
-   .setImage(BORDER_IMAGE)
-   .setTimestamp();
-
-  // Build quest list as description text instead of fields
-  let questList = "";
-  quests.slice(0, 10).forEach((quest) => {
-   const participantCount = quest.participantCap
-    ? `${quest.participants.size}/${quest.participantCap}${quest.participants.size >= quest.participantCap ? " 🔒 FULL" : ""}`
-    : `${quest.participants.size} 📝`;
-
-   // Quest type emoji mapping
-   const typeEmojis = {
-    'rp': '🎭',
-    'art': '🎨',
-    'writing': '✍️',
-    'interactive': '🎮',
-    'art / writing': '🎨✍️'
-   };
-   
-   const questTypeEmoji = typeEmojis[quest.questType.toLowerCase()] || '📋';
-   const questTypeDisplay = `${questTypeEmoji} ${quest.questType.toUpperCase()}`;
-
-   // Create clickable link if messageID exists
-   let questLink = quest.title;
-   if (quest.messageID && quest.targetChannel) {
-    const questChannelId = quest.targetChannel;
-    const questUrl = `https://discord.com/channels/${interaction.guild.id}/${questChannelId}/${quest.messageID}`;
-    questLink = `[${quest.title}](${questUrl})`;
-   }
-
-   questList += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-   questList += `📜 **${questLink}**\n`;
-   questList += `🆔 ID: \`${quest.questID}\`\n`;
-   questList += `📋 Type: ${questTypeDisplay}\n`;
-   questList += `👥 Participants: ${participantCount}\n`;
-   questList += `📍 Location: ${quest.location}\n\n`;
-  });
-
-  embed.setDescription(embed.data.description + "\n\n" + questList);
-
-  if (quests.length > 10) {
-   embed.setFooter({
-    text: `Showing first 10 of ${quests.length} active quests`,
-   });
-  }
-
-  embed.addFields({
-   name: "🚀 How to Join",
-   value: "```/quest join questid: [ID] charactername: [Name]```\n*Click on quest titles above to view full details!*",
-   inline: false,
-  });
-
+  const embed = this.createQuestListEmbed(interaction, quests);
   return interaction.reply({ embeds: [embed], ephemeral: true });
  },
 
@@ -339,12 +203,8 @@ module.exports = {
   const userID = interaction.user.id;
 
   try {
-   // Find all active quests where the user is a participant
-   const userQuests = await Quest.find({ 
-    status: "active",
-    [`participants.${userID}`]: { $exists: true }
-   }).sort({ date: 1 });
-
+   const userQuests = await this.getUserActiveQuests(userID);
+   
    if (userQuests.length === 0) {
     return interaction.reply({
      content: "You are not currently participating in any active quests.\n\nUse `/quest list` to see available quests!",
@@ -352,88 +212,13 @@ module.exports = {
     });
    }
 
-   const embed = new EmbedBuilder()
-    .setColor(0x4A90E2)
-    .setTitle("📊 Your Quest Status")
-    .setDescription("Here are all the quests you're currently participating in:")
-    .setImage(BORDER_IMAGE)
-    .setTimestamp();
-
-   userQuests.forEach((quest) => {
-    const participant = quest.participants.get(userID);
-    if (!participant) return;
-
-    // Quest type emoji mapping
-    const typeEmojis = {
-     'rp': '🎭',
-     'art': '🎨',
-     'writing': '✍️',
-     'interactive': '🎮',
-     'art / writing': '🎨✍️'
-    };
-    
-    const questTypeEmoji = typeEmojis[quest.questType.toLowerCase()] || '📋';
-    const questTypeDisplay = `${questTypeEmoji} ${quest.questType.toUpperCase()}`;
-
-    // Create clickable link if messageID exists
-    let questLink = quest.title;
-    if (quest.messageID && quest.targetChannel) {
-     const questChannelId = quest.targetChannel;
-     const questUrl = `https://discord.com/channels/${interaction.guild.id}/${questChannelId}/${quest.messageID}`;
-     questLink = `[${quest.title}](${questUrl})`;
-    }
-
-    let questInfo = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    questInfo += `📜 **${questLink}**\n`;
-    questInfo += `🆔 ID: \`${quest.questID}\`\n`;
-    questInfo += `📋 Type: ${questTypeDisplay}\n`;
-    questInfo += `👤 Character: **${participant.characterName}**\n`;
-    questInfo += `📊 Status: **${participant.progress.toUpperCase()}**\n`;
-    questInfo += `📍 Location: ${quest.location}\n`;
-
-    // Add quest-specific progress info
-    if (quest.questType.toLowerCase() === "rp" && quest.postRequirement) {
-     const rpPostCount = participant.rpPostCount || 0;
-     const progress = Math.min((rpPostCount / quest.postRequirement) * 100, 100);
-     questInfo += `📝 RP Progress: ${rpPostCount}/${quest.postRequirement} posts (${Math.round(progress)}%)\n`;
-    }
-
-    if (quest.participantCap) {
-     const participantCount = quest.participants.size;
-     questInfo += `👥 Quest Status: ${participantCount}/${quest.participantCap} participants\n`;
-    }
-
-    // Add submission info if available
-    if (participant.submissions && participant.submissions.length > 0) {
-     const approvedSubmissions = participant.submissions.filter(sub => sub.approved).length;
-     if (quest.questType === 'Art / Writing') {
-       const artSubmissions = participant.submissions.filter(sub => sub.type === 'art' && sub.approved).length;
-       const writingSubmissions = participant.submissions.filter(sub => sub.type === 'writing' && sub.approved).length;
-       questInfo += `✅ Submissions: ${artSubmissions} art, ${writingSubmissions} writing (need both)\n`;
-     } else {
-       questInfo += `✅ Submissions: ${approvedSubmissions} approved\n`;
-     }
-    }
-
-    embed.addFields({
-     name: '\u200b',
-     value: questInfo,
-     inline: false,
-    });
-   });
-
-   embed.addFields({
-    name: "💡 Tips",
-    value: "• Use `/quest leave` to leave a quest\n• Use `/quest postcount` to check RP progress\n• Click quest titles to view full details!",
-    inline: false,
-   });
-
+   const embed = this.createQuestStatusEmbed(interaction, userQuests, userID);
    return interaction.reply({ embeds: [embed], ephemeral: true });
 
   } catch (error) {
-   console.error('[quest.js] Error in handleQuestStatus:', error);
+   console.error('[quest.js]❌ Error in handleQuestStatus:', error);
    return interaction.reply({
-    content: "❌ An error occurred while checking your quest status.",
+    content: "[quest.js]❌ An error occurred while checking your quest status.",
     ephemeral: true,
    });
   }
@@ -870,9 +655,8 @@ module.exports = {
  async handlePostCount(interaction) {
   try {
    const questID = interaction.options.getString("questid");
+   const quest = await Quest.findOne({ questID });
 
-   // Find the quest by questID field instead of MongoDB _id
-   const quest = await Quest.findOne({ questID: questID });
    if (!quest) {
     return interaction.reply({
      content: "[quest.js]❌ Quest not found. Please check the quest ID and try again.",
@@ -880,136 +664,22 @@ module.exports = {
     });
    }
 
-  if (quest.questType !== "RP" && quest.questType !== "Interactive") {
+   if (quest.questType !== QUEST_TYPES.RP && quest.questType !== QUEST_TYPES.INTERACTIVE) {
     return interaction.reply({
      content: "[quest.js]❌ This command only works with RP and Interactive quests. The specified quest is not an RP or Interactive quest.",
      ephemeral: true,
     });
-  }
+   }
 
-     // Get participant details
-  const participants = Array.from(quest.participants.values());
-  
-  if (participants.length === 0) {
-   return interaction.reply({
-    content: "[quest.js]❌ No participants found for this quest.",
-    ephemeral: true,
-   });
-  }
-
-  // Get requirements based on quest type
-  let requirementText = "";
-  let requirementValue = 0;
-  
-  if (quest.questType === "RP") {
-    requirementValue = quest.postRequirement || 15;
-    requirementText = "posts";
-  } else if (quest.questType === "Interactive") {
-    requirementValue = quest.requiredRolls || 1;
-    requirementText = "successful rolls";
-  }
-
-  // Create participant list with progress and usernames
-  const participantList = await Promise.all(
-   participants.map(async (participant) => {
-    try {
-     const user = await interaction.client.users.fetch(participant.userId);
-     let status = "❌";
-     let statusText = "";
-     let progressText = "";
-     
-     if (participant.progress === 'disqualified') {
-      status = "🚫";
-      statusText = ` (DISQUALIFIED: ${participant.disqualificationReason || 'Left quest village'})`;
-     } else if (quest.questType === "RP") {
-      if (participant.rpPostCount >= requirementValue) {
-        status = "✅";
-      }
-      progressText = `${participant.rpPostCount}/${requirementValue} ${requirementText}`;
-     } else if (quest.questType === "Interactive") {
-      if (participant.successfulRolls >= requirementValue) {
-        status = "✅";
-      }
-      progressText = `${participant.successfulRolls}/${requirementValue} ${requirementText}`;
-      if (participant.tableRollResults && participant.tableRollResults.length > 0) {
-        const totalRolls = participant.tableRollResults.length;
-        progressText += ` (${totalRolls} total rolls)`;
-      }
-     }
-     
-     return `${status} **${participant.characterName}** (${user.username}): ${progressText}${statusText}`;
-    } catch (error) {
-     // Fallback to user ID if username can't be fetched
-     let status = "❌";
-     let statusText = "";
-     let progressText = "";
-     
-     if (participant.progress === 'disqualified') {
-      status = "🚫";
-      statusText = ` (DISQUALIFIED: ${participant.disqualificationReason || 'Left quest village'})`;
-     } else if (quest.questType === "RP") {
-      if (participant.rpPostCount >= requirementValue) {
-        status = "✅";
-      }
-      progressText = `${participant.rpPostCount}/${requirementValue} ${requirementText}`;
-     } else if (quest.questType === "Interactive") {
-      if (participant.successfulRolls >= requirementValue) {
-        status = "✅";
-      }
-      progressText = `${participant.successfulRolls}/${requirementValue} ${requirementText}`;
-      if (participant.tableRollResults && participant.tableRollResults.length > 0) {
-        const totalRolls = participant.tableRollResults.length;
-        progressText += ` (${totalRolls} total rolls)`;
-      }
-     }
-     
-     return `${status} **${participant.characterName}** (${participant.userId}): ${progressText}${statusText}`;
-    }
-   })
-  );
-
-   const participantListText = participantList.join('\n');
-
-   const embed = new EmbedBuilder()
-    .setColor(EMBED_COLORS.INFO)
-    .setTitle(`📊 ${quest.questType} Quest Progress: ${quest.title}`)
-    .setDescription(`Quest ID: ${quest.questID || questID}`)
-    .addFields(
-     { name: quest.questType === 'RP' ? 'Post Requirement' : 'Roll Requirement', value: `${requirementValue} ${requirementText}`, inline: true },
-     { name: 'Participants', value: participants.length.toString(), inline: true }
-    )
-    .addFields({
-     name: '__Participant Progress__',
-     value: participantListText.length > 1024 ? participantListText.substring(0, 1021) + '...' : participantListText,
-     inline: false
-    })
-    .addFields({
-     name: quest.questType === 'RP' ? '__❌ Posts That DON\'T Count__' : '__🎲 Table Roll Instructions__',
-     value: quest.questType === 'RP' 
-       ? `• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters`
-       : `• Use </tableroll roll:1389946995468271729> to roll on the ${quest.tableRollName} table\n• Each successful roll counts toward your quest progress\n• Check your progress with this command\n• Quest completes when you reach ${requirementValue} successful rolls`,
-     inline: false
-    })
-    .addFields({
-     name: quest.questType === 'RP' ? '__💬 Meta Comments__' : '__📊 Quest Progress__',
-     value: quest.questType === 'RP' 
-       ? `If you want to talk outside of the RP for meta reasons, please use the gossip and mossy stone or format your comments in this thread "like this text lorem ipsum yada yada ))" - messages with this format don't count as RP posts.`
-       : `Use this command to check your table roll progress. Each successful roll on the ${quest.tableRollName} table counts toward completing the quest.`,
-     inline: false
+   const participants = Array.from(quest.participants.values());
+   if (participants.length === 0) {
+    return interaction.reply({
+     content: "[quest.js]❌ No participants found for this quest.",
+     ephemeral: true,
     });
-    
-    // Add table roll information for RP quests if applicable
-    if (quest.questType === 'RP' && quest.tableroll) {
-      embed.addFields({
-        name: '__🎲 Optional Table Roll__',
-        value: `This RP quest has an optional table roll available!\n• Use </tableroll roll:1389946995468271729> to roll on **${quest.tableroll}** table\n• Table rolls are optional and don't affect quest completion\n• They may provide additional rewards or flavor text`,
-        inline: false
-      });
-    }
-    
-    embed.setImage(BORDER_IMAGE)
-         .setTimestamp();
+   }
 
+   const embed = this.createPostCountEmbed(interaction, quest, participants);
    return interaction.reply({ embeds: [embed] });
 
   } catch (error) {
@@ -1080,34 +750,12 @@ module.exports = {
   return character;
  },
 
- async validateQuestParticipation(interaction, quest, userID, characterName) {
-  if (quest.participants.has(userID)) {
-   const existingParticipant = quest.participants.get(userID);
+ async handleQuestParticipationValidation(interaction, quest, userID, characterName) {
+  const validation = await validateQuestParticipation(quest, userID, characterName);
+  
+  if (!validation.valid) {
    await interaction.reply({
-    content: `[quest.js]❌ You are already participating in the quest \`${quest.title}\` with character **${existingParticipant.characterName}**.`,
-    ephemeral: true,
-   });
-   return false;
-  }
-
-  // Check if this character is already in this quest (by any user)
-  const participants = Array.from(quest.participants.values());
-  const characterAlreadyInQuest = participants.some(participant => 
-   participant.characterName.toLowerCase() === characterName.toLowerCase()
-  );
-
-  if (characterAlreadyInQuest) {
-   await interaction.reply({
-    content: `[quest.js]❌ Character **${characterName}** is already participating in the quest \`${quest.title}\`!`,
-    ephemeral: true,
-   });
-   return false;
-  }
-
-  // Check if this character has previously left this quest
-  if (quest.hasCharacterLeft(characterName)) {
-   await interaction.reply({
-    content: `[quest.js]❌ Character **${characterName}** has already left the quest \`${quest.title}\` and cannot rejoin!`,
+    content: `[quest.js]❌ ${validation.message}`,
     ephemeral: true,
    });
    return false;
@@ -1116,57 +764,26 @@ module.exports = {
   return true;
  },
 
- async validateRPQuestVillage(interaction, quest, character) {
-  // Extract village from quest location
-  const questLocation = quest.location.toLowerCase();
-  let requiredVillage = null;
-  
-  if (questLocation.includes('rudania')) {
-    requiredVillage = 'rudania';
-  } else if (questLocation.includes('inariko')) {
-    requiredVillage = 'inariko';
-  } else if (questLocation.includes('vhintl')) {
-    requiredVillage = 'vhintl';
-  }
-  
-  if (!requiredVillage) {
-    await interaction.reply({
-      content: `[quest.js]❌ Could not determine required village from quest location: ${quest.location}`,
-      ephemeral: true,
-    });
-    return false;
-  }
-  
-  const characterVillage = character.currentVillage.toLowerCase();
-  
-  if (characterVillage !== requiredVillage) {
-    await interaction.reply({
-      content: `[quest.js]❌ **RP Quest Village Requirement**: Your character **${character.name}** must be in **${requiredVillage.charAt(0).toUpperCase() + requiredVillage.slice(1)}** to join this RP quest. Currently in: **${characterVillage.charAt(0).toUpperCase() + characterVillage.slice(1)}**.\n\n**Rule**: RP quest participants must stay in the quest village for the entire duration. Use \`/travel\` to move to the correct village first.`,
-      ephemeral: true,
-    });
-    return false;
-  }
-  
-  return true;
+ async handleRPQuestVillageValidation(interaction, quest, character) {
+  return await validateRPQuestVillage(interaction, quest, character);
  },
 
  // ============================================================================
  // ------------------- Embed Creation Helper Methods -------------------
  // ============================================================================
  createSuccessEmbed(quest, characterName, userName, character, voucherUsed = false) {
-  const embed = new EmbedBuilder()
-   .setColor(EMBED_COLORS.SUCCESS)
-   .setTitle(`🎯 Quest Joined Successfully!`)
-   .setDescription(`**${characterName}** (${userName}) joined the quest **${quest.title}**!`)
-   .addFields(
-    { name: 'Quest ID', value: `\`${quest.questID}\``, inline: false }
-   )
-   .setImage(BORDER_IMAGE)
-   .setTimestamp();
+  const embed = createBaseEmbed(
+   `🎯 Quest Joined Successfully!`,
+   `**${characterName}** (${userName}) joined the quest **${quest.title}**!`,
+   QUEST_COLORS.SUCCESS
+  );
 
   if (character.icon) {
    embed.setThumbnail(character.icon);
   }
+
+  // Add quest info fields
+  addQuestInfoFields(embed, quest);
 
   // Add voucher information if used
   if (voucherUsed) {
@@ -1187,12 +804,7 @@ module.exports = {
  },
 
  createErrorEmbed(title, description) {
-  return new EmbedBuilder()
-   .setColor(EMBED_COLORS.ERROR)
-   .setTitle(title)
-   .setDescription(description)
-   .setImage(BORDER_IMAGE)
-   .setTimestamp();
+  return createBaseEmbed(title, description, QUEST_COLORS.ERROR);
  },
 
  // ============================================================================
@@ -1310,31 +922,15 @@ module.exports = {
   }
  },
 
- async validateQuestTypeRules(interaction, quest) {
-  const now = new Date();
+ async handleQuestTypeRulesValidation(interaction, quest) {
+  const validation = await validateQuestTypeRules(quest);
   
-  switch (quest.questType.toLowerCase()) {
-   case "rp":
-    if (quest.posted) {
-     const questPostDate = new Date(quest.date);
-     const rpSignupDeadline = new Date(
-      questPostDate.getTime() + RP_SIGNUP_WINDOW_DAYS * 24 * 60 * 60 * 1000
-     );
-
-     if (now > rpSignupDeadline) {
-      await interaction.reply({
-       content: `[quest.js]❌ The signup window for RP quest \`${quest.title}\` has closed. **RULE**: RP quests have a 1-week signup window after posting.`,
-       ephemeral: true,
-      });
-      return false;
-     }
-    }
-    break;
-
-   case "art":
-   case "writing":
-   case "interactive":
-    break;
+  if (!validation.valid) {
+   await interaction.reply({
+    content: `[quest.js]❌ ${validation.message}`,
+    ephemeral: true,
+   });
+   return false;
   }
 
   return true;
@@ -1365,6 +961,392 @@ module.exports = {
    } catch (error) {
     console.error(`[quest.js]❌ Failed to add user to RP thread: ${error.message}`);
    }
+  }
+ },
+
+ // ============================================================================
+ // ------------------- Quest Join Helper Methods -------------------
+ // ============================================================================
+ extractJoinData(interaction) {
+  return {
+   characterName: interaction.options.getString("charactername"),
+   questID: interaction.options.getString("questid"),
+   userID: interaction.user.id,
+   userName: interaction.user.username
+  };
+ },
+
+ async performJoinValidations(interaction, questID, characterName, userID) {
+  // Validate quest exists and is active
+  const quest = await this.validateQuest(interaction, questID);
+  if (!quest) return { success: false };
+
+  // Validate character ownership
+  const character = await this.validateCharacter(interaction, characterName, userID);
+  if (!character) return { success: false };
+
+  // Validate quest participation eligibility
+  const participationCheck = await this.handleQuestParticipationValidation(interaction, quest, userID, characterName);
+  if (!participationCheck) return { success: false };
+
+  // Check member-capped quest restrictions
+  if (quest.participantCap) {
+   const cappedQuestCheck = await this.checkCappedQuestRestrictions(interaction, quest, userID);
+   if (!cappedQuestCheck) return { success: false };
+  }
+
+  // Validate quest type specific rules
+  const questTypeCheck = await this.handleQuestTypeRulesValidation(interaction, quest);
+  if (!questTypeCheck) return { success: false };
+
+  // For RP quests, validate character is in the correct village
+  if (quest.questType.toLowerCase() === QUEST_TYPES.RP.toLowerCase()) {
+   const villageCheck = await this.handleRPQuestVillageValidation(interaction, quest, character);
+   if (!villageCheck) return { success: false };
+  }
+
+  return { success: true, quest, character };
+ },
+
+ async processQuestJoin(interaction, quest, userID, characterName) {
+  // Add role if quest has one
+  await this.assignQuestRole(interaction, quest, userID);
+  
+  // Add participant to quest
+  quest.addParticipant(userID, characterName);
+ },
+
+ async handleRPQuestJoin(quest, character) {
+  const requiredVillage = extractVillageFromLocation(quest.location);
+  
+  if (requiredVillage) {
+   const participant = quest.participants.get(character.userId);
+   if (participant) {
+    participant.requiredVillage = requiredVillage;
+    quest.setRequiredVillage(requiredVillage);
+   }
+  }
+ },
+
+ // ============================================================================
+ // ------------------- Quest Leave Helper Methods -------------------
+ // ============================================================================
+ async validateLeaveRequest(interaction, questID, userID) {
+  const quest = await Quest.findOne({ questID });
+  if (!quest) {
+   await interaction.reply({
+    content: `[quest.js]❌ Quest with ID \`${questID}\` does not exist.`,
+    ephemeral: true,
+   });
+   return { success: false };
+  }
+
+  if (!quest.participants.has(userID)) {
+   await interaction.reply({
+    content: `[quest.js]❌ You are not participating in the quest \`${quest.title}\`.`,
+    ephemeral: true,
+   });
+   return { success: false };
+  }
+
+  const characterName = quest.participants.get(userID);
+  return { success: true, quest, characterName };
+ },
+
+ async processQuestLeave(interaction, quest, userID) {
+  quest.removeParticipant(userID);
+  await quest.save();
+
+  // Remove role if quest has one
+  if (quest.roleID) {
+   const role = interaction.guild.roles.cache.find((r) => r.id === quest.roleID);
+   if (role) {
+    const member = interaction.guild.members.cache.get(userID);
+    if (member && member.roles.cache.has(quest.roleID)) {
+     await member.roles.remove(role);
+    }
+   }
+  }
+ },
+
+ createLeaveMessage(quest, characterName) {
+  let leaveMessage = `[quest.js]✅ You have left the quest **${quest.title}** (Character: **${characterName}**).`;
+
+  if (quest.participantCap) {
+   const wasFull = quest.participants.size >= quest.participantCap;
+   leaveMessage += `\n**Note**: Since this was a member-capped quest, you can now join another member-capped quest if available.`;
+   
+   if (wasFull) {
+    leaveMessage += `\n**🎯 Quest Status**: This quest now has an available spot!`;
+   }
+  }
+
+  return leaveMessage;
+ },
+
+ // ============================================================================
+ // ------------------- Quest List Helper Methods -------------------
+ // ============================================================================
+ createQuestListEmbed(interaction, quests) {
+  const embed = createBaseEmbed(
+   "Active Quests - Every Other Month Events!",
+   "Official bimonthly quests! Smaller, optional, fun timed tasks for community rewards!",
+   0x4A90E2
+  );
+
+  const questList = this.buildQuestList(interaction, quests.slice(0, 10));
+  embed.setDescription(embed.data.description + "\n\n" + questList);
+
+  if (quests.length > 10) {
+   embed.setFooter({
+    text: `Showing first 10 of ${quests.length} active quests`,
+   });
+  }
+
+  embed.addFields({
+   name: "🚀 How to Join",
+   value: "```/quest join questid: [ID] charactername: [Name]```\n*Click on quest titles above to view full details!*",
+   inline: false,
+  });
+
+  return embed;
+ },
+
+ buildQuestList(interaction, quests) {
+  const typeEmojis = {
+   [QUEST_TYPES.RP.toLowerCase()]: '🎭',
+   [QUEST_TYPES.ART.toLowerCase()]: '🎨',
+   [QUEST_TYPES.WRITING.toLowerCase()]: '✍️',
+   [QUEST_TYPES.INTERACTIVE.toLowerCase()]: '🎮',
+   [QUEST_TYPES.ART_WRITING.toLowerCase()]: '🎨✍️'
+  };
+
+  return quests.map(quest => {
+   const participantCount = quest.participantCap
+    ? `${quest.participants.size}/${quest.participantCap}${quest.participants.size >= quest.participantCap ? " 🔒 FULL" : ""}`
+    : `${quest.participants.size} 📝`;
+
+   const questTypeEmoji = typeEmojis[quest.questType.toLowerCase()] || '📋';
+   const questTypeDisplay = `${questTypeEmoji} ${quest.questType.toUpperCase()}`;
+
+   const questLink = this.createQuestLink(interaction, quest);
+
+   return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📜 **${questLink}**
+🆔 ID: \`${quest.questID}\`
+📋 Type: ${questTypeDisplay}
+👥 Participants: ${participantCount}
+📍 Location: ${quest.location}
+
+`;
+  }).join('');
+ },
+
+ createQuestLink(interaction, quest) {
+  if (quest.messageID && quest.targetChannel) {
+   const questUrl = `https://discord.com/channels/${interaction.guild.id}/${quest.targetChannel}/${quest.messageID}`;
+   return `[${quest.title}](${questUrl})`;
+  }
+  return quest.title;
+ },
+
+ // ============================================================================
+ // ------------------- Quest Status Helper Methods -------------------
+ // ============================================================================
+ async getUserActiveQuests(userID) {
+  return await Quest.find({ 
+   status: "active",
+   [`participants.${userID}`]: { $exists: true }
+  }).sort({ date: 1 });
+ },
+
+ createQuestStatusEmbed(interaction, userQuests, userID) {
+  const embed = createBaseEmbed(
+   "📊 Your Quest Status",
+   "Here are all the quests you're currently participating in:",
+   0x4A90E2
+  );
+
+  userQuests.forEach(quest => {
+   const participant = quest.participants.get(userID);
+   if (!participant) return;
+
+   const questInfo = this.buildQuestStatusInfo(interaction, quest, participant);
+   embed.addFields({
+    name: '\u200b',
+    value: questInfo,
+    inline: false,
+   });
+  });
+
+  embed.addFields({
+   name: "💡 Tips",
+   value: "• Use `/quest leave` to leave a quest\n• Use `/quest postcount` to check RP progress\n• Click quest titles to view full details!",
+   inline: false,
+  });
+
+  return embed;
+ },
+
+ buildQuestStatusInfo(interaction, quest, participant) {
+  const typeEmojis = {
+   [QUEST_TYPES.RP.toLowerCase()]: '🎭',
+   [QUEST_TYPES.ART.toLowerCase()]: '🎨',
+   [QUEST_TYPES.WRITING.toLowerCase()]: '✍️',
+   [QUEST_TYPES.INTERACTIVE.toLowerCase()]: '🎮',
+   [QUEST_TYPES.ART_WRITING.toLowerCase()]: '🎨✍️'
+  };
+  
+  const questTypeEmoji = typeEmojis[quest.questType.toLowerCase()] || '📋';
+  const questTypeDisplay = `${questTypeEmoji} ${quest.questType.toUpperCase()}`;
+  const questLink = this.createQuestLink(interaction, quest);
+
+  let questInfo = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📜 **${questLink}**
+🆔 ID: \`${quest.questID}\`
+📋 Type: ${questTypeDisplay}
+👤 Character: **${participant.characterName}**
+📊 Status: **${participant.progress.toUpperCase()}**
+📍 Location: ${quest.location}`;
+
+  // Add quest-specific progress info
+  if (quest.questType.toLowerCase() === QUEST_TYPES.RP.toLowerCase() && quest.postRequirement) {
+   const rpPostCount = participant.rpPostCount || 0;
+   const progress = Math.min((rpPostCount / quest.postRequirement) * 100, 100);
+   questInfo += `\n📝 RP Progress: ${rpPostCount}/${quest.postRequirement} posts (${Math.round(progress)}%)`;
+  }
+
+  if (quest.participantCap) {
+   const participantCount = quest.participants.size;
+   questInfo += `\n👥 Quest Status: ${participantCount}/${quest.participantCap} participants`;
+  }
+
+  // Add submission info if available
+  if (participant.submissions && participant.submissions.length > 0) {
+   const approvedSubmissions = participant.submissions.filter(sub => sub.approved).length;
+  if (quest.questType === QUEST_TYPES.ART_WRITING) {
+   const artSubmissions = participant.submissions.filter(sub => sub.type === 'art' && sub.approved).length;
+   const writingSubmissions = participant.submissions.filter(sub => sub.type === 'writing' && sub.approved).length;
+   questInfo += `\n✅ Submissions: ${artSubmissions} art, ${writingSubmissions} writing (need both)`;
+  } else {
+   questInfo += `\n✅ Submissions: ${approvedSubmissions} approved`;
+  }
+  }
+
+  return questInfo;
+ },
+
+ // ============================================================================
+ // ------------------- Post Count Helper Methods -------------------
+ // ============================================================================
+ createPostCountEmbed(interaction, quest, participants) {
+  const { requirementValue, requirementText } = this.getQuestRequirements(quest);
+  const participantList = this.buildParticipantList(interaction, quest, participants, requirementValue, requirementText);
+  
+  const embed = createBaseEmbed(
+   `📊 ${quest.questType} Quest Progress: ${quest.title}`,
+   `Quest ID: ${quest.questID}`,
+   QUEST_COLORS.INFO
+  );
+  
+  embed.addFields(
+   { name: quest.questType === 'RP' ? 'Post Requirement' : 'Roll Requirement', value: `${requirementValue} ${requirementText}`, inline: true },
+   { name: 'Participants', value: participants.length.toString(), inline: true }
+  );
+  
+  embed.addFields({
+   name: '__Participant Progress__',
+   value: participantList.length > 1024 ? participantList.substring(0, 1021) + '...' : participantList,
+   inline: false
+  });
+  
+  embed.addFields({
+   name: quest.questType === 'RP' ? '__❌ Posts That DON\'T Count__' : '__🎲 Table Roll Instructions__',
+   value: this.getQuestInstructions(quest, requirementValue),
+   inline: false
+  });
+  
+  embed.addFields({
+   name: quest.questType === 'RP' ? '__💬 Meta Comments__' : '__📊 Quest Progress__',
+   value: this.getQuestMetaInfo(quest),
+   inline: false
+  });
+
+  // Add table roll information for RP quests if applicable
+  if (quest.questType === 'RP' && quest.tableroll) {
+   embed.addFields({
+    name: '__🎲 Optional Table Roll__',
+    value: `This RP quest has an optional table roll available!\n• Use </tableroll roll:1389946995468271729> to roll on **${quest.tableroll}** table\n• Table rolls are optional and don't affect quest completion\n• They may provide additional rewards or flavor text`,
+    inline: false
+   });
+  }
+
+  return embed;
+ },
+
+ getQuestRequirements(quest) {
+  if (quest.questType === QUEST_TYPES.RP) {
+   return { requirementValue: quest.postRequirement || 15, requirementText: "posts" };
+  } else if (quest.questType === QUEST_TYPES.INTERACTIVE) {
+   return { requirementValue: quest.requiredRolls || 1, requirementText: "successful rolls" };
+  }
+  return { requirementValue: 0, requirementText: "" };
+ },
+
+ async buildParticipantList(interaction, quest, participants, requirementValue, requirementText) {
+  const participantList = await Promise.all(
+   participants.map(async (participant) => {
+    try {
+     const user = await interaction.client.users.fetch(participant.userId);
+     return this.formatParticipantStatus(quest, participant, user.username, requirementValue, requirementText);
+    } catch (error) {
+     return this.formatParticipantStatus(quest, participant, participant.userId, requirementValue, requirementText);
+    }
+   })
+  );
+  return participantList.join('\n');
+ },
+
+ formatParticipantStatus(quest, participant, username, requirementValue, requirementText) {
+  let status = "❌";
+  let statusText = "";
+  let progressText = "";
+  
+  if (participant.progress === 'disqualified') {
+   status = "🚫";
+   statusText = ` (DISQUALIFIED: ${participant.disqualificationReason || 'Left quest village'})`;
+  } else if (quest.questType === QUEST_TYPES.RP) {
+   if (participant.rpPostCount >= requirementValue) {
+    status = "✅";
+   }
+   progressText = `${participant.rpPostCount}/${requirementValue} ${requirementText}`;
+  } else if (quest.questType === QUEST_TYPES.INTERACTIVE) {
+   if (participant.successfulRolls >= requirementValue) {
+    status = "✅";
+   }
+   progressText = `${participant.successfulRolls}/${requirementValue} ${requirementText}`;
+   if (participant.tableRollResults && participant.tableRollResults.length > 0) {
+    const totalRolls = participant.tableRollResults.length;
+    progressText += ` (${totalRolls} total rolls)`;
+   }
+  }
+  
+  return `${status} **${participant.characterName}** (${username}): ${progressText}${statusText}`;
+ },
+
+ getQuestInstructions(quest, requirementValue) {
+  if (quest.questType === QUEST_TYPES.RP) {
+   return `• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters`;
+  } else {
+   return `• Use </tableroll roll:1389946995468271729> to roll on the ${quest.tableRollName} table\n• Each successful roll counts toward your quest progress\n• Check your progress with this command\n• Quest completes when you reach ${requirementValue} successful rolls`;
+  }
+ },
+
+ getQuestMetaInfo(quest) {
+  if (quest.questType === QUEST_TYPES.RP) {
+   return `If you want to talk outside of the RP for meta reasons, please use the gossip and mossy stone or format your comments in this thread "like this text lorem ipsum yada yada ))" - messages with this format don't count as RP posts.`;
+  } else {
+   return `Use this command to check your table roll progress. Each successful roll on the ${quest.tableRollName} table counts toward completing the quest.`;
   }
  },
 
