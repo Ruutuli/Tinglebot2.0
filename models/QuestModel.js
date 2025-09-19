@@ -357,6 +357,100 @@ questSchema.methods.setRequiredVillage = function(village) {
     return this;
 };
 
+
+questSchema.methods.disqualifyParticipant = function(userId, reason) {
+    const participant = this.getParticipant(userId);
+    if (!participant) return false;
+    
+    participant.progress = 'disqualified';
+    participant.disqualifiedAt = new Date();
+    participant.disqualificationReason = reason;
+    participant.updatedAt = new Date();
+    
+    return true;
+};
+
+questSchema.methods.checkAllParticipantsVillages = async function() {
+    if (this.questType !== 'RP' || !this.requiredVillage) {
+        return { checked: 0, disqualified: 0 };
+    }
+    
+    const participants = Array.from(this.participants.values());
+    let checked = 0;
+    let disqualified = 0;
+    const now = new Date();
+    
+    for (const participant of participants) {
+        if (participant.progress === 'active') {
+            const villageCheck = await this.checkParticipantVillage(participant.userId);
+            checked++;
+            
+            if (!villageCheck.valid) {
+                this.disqualifyParticipant(participant.userId, villageCheck.reason);
+                disqualified++;
+                console.log(`[QuestModel] Disqualified ${participant.characterName}: ${villageCheck.reason}`);
+                
+                // Log detailed disqualification info
+                console.log(`[QuestModel] 🚫 ${participant.characterName} disqualified from quest "${this.title}" at ${now.toISOString()}`);
+            } else {
+                // Update last successful village check
+                participant.lastVillageCheck = now;
+                participant.updatedAt = now;
+            }
+        }
+    }
+    
+    return { checked, disqualified };
+};
+
+// ------------------- Check Village Violations for Completed Participants ------------------
+questSchema.methods.checkCompletedParticipantsVillages = async function() {
+    if (this.questType !== 'RP' || !this.requiredVillage) {
+        return { checked: 0, disqualified: 0 };
+    }
+    
+    const participants = Array.from(this.participants.values());
+    let checked = 0;
+    let disqualified = 0;
+    const now = new Date();
+    
+    for (const participant of participants) {
+        // Check both active and completed participants
+        if (participant.progress === 'active' || participant.progress === 'completed') {
+            const villageCheck = await this.checkParticipantVillage(participant.userId);
+            checked++;
+            
+            if (!villageCheck.valid) {
+                // Disqualify even if they were completed
+                this.disqualifyParticipant(participant.userId, `Village violation after completion: ${villageCheck.reason}`);
+                disqualified++;
+                console.log(`[QuestModel] 🚫 Disqualified completed participant ${participant.characterName}: ${villageCheck.reason}`);
+            }
+        }
+    }
+    
+    return { checked, disqualified };
+};
+
+// ------------------- Get Village Tracking Statistics ------------------
+questSchema.methods.getVillageTrackingStats = function() {
+    if (this.questType !== 'RP' || !this.requiredVillage) {
+        return { totalParticipants: 0, activeParticipants: 0, completedParticipants: 0, disqualifiedParticipants: 0 };
+    }
+    
+    const participants = Array.from(this.participants.values());
+    const stats = {
+        totalParticipants: participants.length,
+        activeParticipants: participants.filter(p => p.progress === 'active').length,
+        completedParticipants: participants.filter(p => p.progress === 'completed').length,
+        disqualifiedParticipants: participants.filter(p => p.progress === 'disqualified').length,
+        requiredVillage: this.requiredVillage
+    };
+    
+    return stats;
+};
+
+// ------------------- Enhanced Village Check with Better Logging ------------------
 questSchema.methods.checkParticipantVillage = async function(userId) {
     const participant = this.getParticipant(userId);
     if (!participant) return { valid: false, reason: 'Participant not found' };
@@ -379,7 +473,12 @@ questSchema.methods.checkParticipantVillage = async function(userId) {
     const requiredVillage = this.requiredVillage.toLowerCase();
     
     if (currentVillage !== requiredVillage) {
-        return { valid: false, reason: `Character is in ${currentVillage}, must be in ${requiredVillage}` };
+        return { 
+            valid: false, 
+            reason: `Character is in ${currentVillage}, must be in ${requiredVillage}`,
+            currentVillage: character.currentVillage,
+            requiredVillage: this.requiredVillage
+        };
     }
     
     // Update last village check time
@@ -387,43 +486,6 @@ questSchema.methods.checkParticipantVillage = async function(userId) {
     participant.updatedAt = new Date();
     
     return { valid: true, reason: 'Village location valid' };
-};
-
-questSchema.methods.disqualifyParticipant = function(userId, reason) {
-    const participant = this.getParticipant(userId);
-    if (!participant) return false;
-    
-    participant.progress = 'disqualified';
-    participant.disqualifiedAt = new Date();
-    participant.disqualificationReason = reason;
-    participant.updatedAt = new Date();
-    
-    return true;
-};
-
-questSchema.methods.checkAllParticipantsVillages = async function() {
-    if (this.questType !== 'RP' || !this.requiredVillage) {
-        return { checked: 0, disqualified: 0 };
-    }
-    
-    const participants = Array.from(this.participants.values());
-    let checked = 0;
-    let disqualified = 0;
-    
-    for (const participant of participants) {
-        if (participant.progress === 'active') {
-            const villageCheck = await this.checkParticipantVillage(participant.userId);
-            checked++;
-            
-            if (!villageCheck.valid) {
-                this.disqualifyParticipant(participant.userId, villageCheck.reason);
-                disqualified++;
-                console.log(`[QuestModel] Disqualified ${participant.characterName}: ${villageCheck.reason}`);
-            }
-        }
-    }
-    
-    return { checked, disqualified };
 };
 
 // ------------------- Art Quest Completion from Submission ------------------
@@ -766,6 +828,12 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         const villageCheckResult = await this.checkAllParticipantsVillages();
         if (villageCheckResult.disqualified > 0) {
             console.log(`[QuestModel.js] ⚠️ Disqualified ${villageCheckResult.disqualified} participants for leaving quest village`);
+        }
+        
+        // Also check completed participants for village violations
+        const completedVillageCheck = await this.checkCompletedParticipantsVillages();
+        if (completedVillageCheck.disqualified > 0) {
+            console.log(`[QuestModel.js] ⚠️ Disqualified ${completedVillageCheck.disqualified} completed participants for village violations`);
         }
     }
     

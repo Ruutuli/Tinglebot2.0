@@ -115,12 +115,16 @@ async function processAllParticipants(quest, participants) {
 // ------------------- Process Individual Participant Reward ------------------
 async function processParticipantReward(quest, participant) {
     try {
-        if (participant.progress === 'rewarded') {
+        // Use unified reward status checking
+        const rewardStatus = getParticipantRewardStatus(participant);
+        
+        if (rewardStatus === 'already_rewarded') {
+            console.log(`[questRewardModule.js] ℹ️ Participant ${participant.characterName} already rewarded`);
             return 'already_rewarded';
         }
 
         if (!meetsRequirements(participant, quest)) {
-            console.log(`[questRewardModule.js] :warning: Participant ${participant.characterName} does not meet requirements for quest ${quest.questID}`);
+            console.log(`[questRewardModule.js] ⚠️ Participant ${participant.characterName} does not meet requirements for quest ${quest.questID}`);
             return 'requirements_not_met';
         }
 
@@ -131,16 +135,17 @@ async function processParticipantReward(quest, participant) {
 
         const rewardResult = await distributeRewards(quest, participant);
         if (rewardResult.success) {
-            updateParticipantRewardData(participant, quest, rewardResult);
-            console.log(`[questRewardModule.js] :white_check_mark: Successfully rewarded participant ${participant.characterName} for quest ${quest.questID}`);
+            // Use enhanced reward data update with comprehensive tracking
+            updateParticipantRewardDataEnhanced(participant, quest, rewardResult);
+            console.log(`[questRewardModule.js] ✅ Successfully rewarded participant ${participant.characterName} for quest ${quest.questID}`);
             return 'rewarded';
         } else {
-            console.error(`[questRewardModule.js] :x: Failed to distribute rewards for ${participant.characterName}:`, rewardResult.error);
+            console.error(`[questRewardModule.js] ❌ Failed to distribute rewards for ${participant.characterName}:`, rewardResult.error);
             return 'reward_failed';
         }
 
     } catch (error) {
-        console.error(`[questRewardModule.js] :x: Error processing reward for participant ${participant.characterName}:`, error);
+        console.error(`[questRewardModule.js] ❌ Error processing reward for participant ${participant.characterName}:`, error);
         return 'error';
     }
 }
@@ -151,6 +156,17 @@ function updateParticipantRewardData(participant, quest, rewardResult) {
     participant.rewardedAt = new Date();
     participant.tokensEarned = rewardResult.tokensAdded;
     participant.itemsEarned = quest.itemReward ? [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }] : [];
+}
+
+// ------------------- Update Participant Reward Data Enhanced ------------------
+function updateParticipantRewardDataEnhanced(participant, quest, rewardResult) {
+    participant.progress = 'rewarded';
+    participant.rewardedAt = new Date();
+    participant.tokensEarned = rewardResult.tokensAdded;
+    participant.itemsEarned = quest.itemReward ? [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }] : [];
+    participant.rewardProcessed = true; // Additional safety flag
+    participant.lastRewardCheck = new Date();
+    participant.rewardSource = 'immediate'; // Track how they were rewarded
 }
 
 // ============================================================================
@@ -391,21 +407,26 @@ async function processMonthlyQuestRewards() {
     try {
         console.log('[questRewardModule.js] 🏆 Starting monthly quest reward distribution...');
         
-        // Find all completed quests that haven't been rewarded yet
+        // Find all completed quests that might need reward processing
         const completedQuests = await Quest.find({
             status: 'completed',
-            'participants.progress': { $in: ['completed'] }
+            $or: [
+                { 'participants.progress': 'completed' },
+                { 'participants.tokensEarned': 0 },
+                { 'participants.rewardProcessed': { $ne: true } }
+            ]
         });
         
         if (completedQuests.length === 0) {
             console.log('[questRewardModule.js] ℹ️ No completed quests found for reward distribution');
-            return { processed: 0, rewarded: 0, errors: 0 };
+            return { processed: 0, rewarded: 0, alreadyRewarded: 0, errors: 0 };
         }
         
         console.log(`[questRewardModule.js] 📋 Found ${completedQuests.length} completed quests to process`);
         
         let totalProcessed = 0;
         let totalRewarded = 0;
+        let totalAlreadyRewarded = 0;
         let totalErrors = 0;
         
         for (const quest of completedQuests) {
@@ -413,6 +434,7 @@ async function processMonthlyQuestRewards() {
                 const result = await processQuestMonthlyRewards(quest);
                 totalProcessed += result.processed;
                 totalRewarded += result.rewarded;
+                totalAlreadyRewarded += result.alreadyRewarded || 0;
                 totalErrors += result.errors;
             } catch (error) {
                 console.error(`[questRewardModule.js] ❌ Error processing quest ${quest.questID}:`, error);
@@ -420,11 +442,12 @@ async function processMonthlyQuestRewards() {
             }
         }
         
-        console.log(`[questRewardModule.js] ✅ Monthly reward distribution completed - Processed: ${totalProcessed}, Rewarded: ${totalRewarded}, Errors: ${totalErrors}`);
+        console.log(`[questRewardModule.js] ✅ Monthly reward distribution completed - Processed: ${totalProcessed}, Rewarded: ${totalRewarded}, Already Rewarded: ${totalAlreadyRewarded}, Errors: ${totalErrors}`);
         
         return {
             processed: totalProcessed,
             rewarded: totalRewarded,
+            alreadyRewarded: totalAlreadyRewarded,
             errors: totalErrors
         };
         
@@ -442,24 +465,36 @@ async function processQuestMonthlyRewards(quest) {
         let processed = 0;
         let rewarded = 0;
         let errors = 0;
+        let alreadyRewarded = 0;
         
         for (const participant of participants) {
             try {
-                // Only reward participants who completed the quest and haven't been rewarded yet
-                if (participant.progress === 'completed' && participant.tokensEarned === 0) {
+                // Enhanced reward status checking to prevent double-rewarding
+                const rewardStatus = getParticipantRewardStatus(participant);
+                
+                if (rewardStatus === 'already_rewarded') {
+                    alreadyRewarded++;
+                    console.log(`[questRewardModule.js] ℹ️ Participant ${participant.characterName} already rewarded (${participant.progress})`);
+                } else if (rewardStatus === 'needs_rewarding') {
                     const rewardResult = await distributeParticipantMonthlyRewards(quest, participant);
                     
                     if (rewardResult.success) {
+                        // Mark as rewarded with comprehensive tracking
                         participant.progress = 'rewarded';
                         participant.rewardedAt = new Date();
                         participant.tokensEarned = rewardResult.tokensAdded;
                         participant.itemsEarned = rewardResult.itemsAdded || [];
+                        participant.rewardProcessed = true; // Additional safety flag
+                        participant.lastRewardCheck = new Date();
+                        participant.rewardSource = 'monthly'; // Track how they were rewarded
                         rewarded++;
                         console.log(`[questRewardModule.js] ✅ Rewarded ${participant.characterName} for quest ${quest.questID}`);
                     } else {
                         console.error(`[questRewardModule.js] ❌ Failed to reward ${participant.characterName}: ${rewardResult.error}`);
                         errors++;
                     }
+                } else {
+                    console.log(`[questRewardModule.js] ℹ️ Participant ${participant.characterName} doesn't need rewarding (${rewardStatus})`);
                 }
                 
                 processed++;
@@ -472,11 +507,78 @@ async function processQuestMonthlyRewards(quest) {
         // Save the quest with updated participant data
         await quest.save();
         
-        return { processed, rewarded, errors };
+        console.log(`[questRewardModule.js] 📊 Quest ${quest.questID} monthly processing: ${processed} processed, ${rewarded} rewarded, ${alreadyRewarded} already rewarded, ${errors} errors`);
+        
+        return { processed, rewarded, alreadyRewarded, errors };
         
     } catch (error) {
         console.error(`[questRewardModule.js] ❌ Error processing quest monthly rewards for ${quest.questID}:`, error);
         throw error;
+    }
+}
+
+// ------------------- Get Participant Reward Status ------------------
+function getParticipantRewardStatus(participant) {
+    // Check if already fully rewarded
+    if (participant.progress === 'rewarded' || participant.rewardProcessed === true) {
+        return 'already_rewarded';
+    }
+    
+    // Check if has tokens earned (indicates previous reward)
+    if (participant.tokensEarned > 0) {
+        return 'already_rewarded';
+    }
+    
+    // Check if completed but not rewarded
+    if (participant.progress === 'completed') {
+        return 'needs_rewarding';
+    }
+    
+    // Check if has items earned (indicates previous reward)
+    if (participant.itemsEarned && participant.itemsEarned.length > 0) {
+        return 'already_rewarded';
+    }
+    
+    // Not completed yet
+    return 'not_completed';
+}
+
+// ------------------- Validate Quest Reward Status ------------------
+async function validateQuestRewardStatus(questId) {
+    try {
+        const quest = await Quest.findOne({ questID: questId });
+        if (!quest) {
+            return { error: 'Quest not found' };
+        }
+
+        const participants = Array.from(quest.participants.values());
+        const validation = {
+            questId: quest.questID,
+            questTitle: quest.title,
+            questStatus: quest.status,
+            totalParticipants: participants.length,
+            participants: []
+        };
+
+        for (const participant of participants) {
+            const rewardStatus = getParticipantRewardStatus(participant);
+            validation.participants.push({
+                characterName: participant.characterName,
+                progress: participant.progress,
+                tokensEarned: participant.tokensEarned,
+                itemsEarned: participant.itemsEarned,
+                rewardProcessed: participant.rewardProcessed,
+                rewardSource: participant.rewardSource,
+                rewardedAt: participant.rewardedAt,
+                lastRewardCheck: participant.lastRewardCheck,
+                status: rewardStatus
+            });
+        }
+
+        return validation;
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Error validating quest reward status:`, error);
+        return { error: error.message };
     }
 }
 
@@ -693,5 +795,7 @@ module.exports = {
     distributeParticipantMonthlyRewards,
     getQuestRewardSummary,
     processArtQuestCompletionFromSubmission,
-    processWritingQuestCompletionFromSubmission
+    processWritingQuestCompletionFromSubmission,
+    validateQuestRewardStatus,
+    getParticipantRewardStatus
 };

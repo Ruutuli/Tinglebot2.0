@@ -915,6 +915,74 @@ async function checkQuestCompletions(client) {
   }
 }
 
+// ============================================================================
+// ------------------- Function: checkVillageTracking -------------------
+// Checks village locations for all active RP quest participants
+// ============================================================================
+async function checkVillageTracking(client) {
+  try {
+    console.log('[scheduler.js]: 🏘️ Starting village tracking check...');
+    
+    const Quest = require('./models/QuestModel');
+    
+    // Find all active RP quests
+    const activeRPQuests = await Quest.find({ 
+      status: 'active', 
+      questType: 'RP',
+      requiredVillage: { $exists: true, $ne: null }
+    });
+    
+    if (activeRPQuests.length === 0) {
+      console.log('[scheduler.js]: ✅ No active RP quests with village requirements to check');
+      return;
+    }
+    
+    console.log(`[scheduler.js]: 📋 Found ${activeRPQuests.length} active RP quests with village requirements`);
+    
+    let totalChecked = 0;
+    let totalDisqualified = 0;
+    
+    for (const quest of activeRPQuests) {
+      try {
+        console.log(`[scheduler.js]: 🏘️ Checking village locations for quest "${quest.title}" (${quest.questID})`);
+        
+        const villageCheckResult = await quest.checkAllParticipantsVillages();
+        totalChecked += villageCheckResult.checked;
+        totalDisqualified += villageCheckResult.disqualified;
+        
+        if (villageCheckResult.disqualified > 0) {
+          console.log(`[scheduler.js]: ⚠️ Disqualified ${villageCheckResult.disqualified} participants from quest "${quest.title}" for village violations`);
+          
+          // Check if quest should be completed after disqualifications
+          const completionResult = await quest.checkAutoCompletion(true);
+          if (completionResult.completed && completionResult.needsRewardProcessing) {
+            console.log(`[scheduler.js]: ✅ Quest "${quest.title}" completed after village disqualifications: ${completionResult.reason}`);
+            
+            // Distribute rewards if quest was completed
+            const questRewardModule = require('./modules/questRewardModule');
+            await questRewardModule.processQuestCompletion(quest.questID);
+            await quest.markCompletionProcessed();
+          }
+        }
+        
+        // Save quest after village checks
+        await quest.save();
+        
+      } catch (error) {
+        console.error(`[scheduler.js]: ❌ Error checking village locations for quest ${quest.questID}:`, error);
+      }
+    }
+    
+    console.log(`[scheduler.js]: ✅ Village tracking check completed - ${totalChecked} participants checked, ${totalDisqualified} disqualified`);
+    
+  } catch (error) {
+    handleError(error, 'scheduler.js', {
+      commandName: 'checkVillageTracking'
+    });
+    console.error('[scheduler.js]: ❌ Error during village tracking check:', error);
+  }
+}
+
 // ------------------- Quest Posting Helper Functions ------------------
 
 async function handleEscortQuestWeather(quest) {
@@ -1352,6 +1420,7 @@ function setupDailyTasks(client) {
 
  // Hourly tasks
  createCronJob("0 */6 * * *", "quest completion check", () => checkQuestCompletions(client));
+ createCronJob("0 */2 * * *", "village tracking check", () => checkVillageTracking(client)); // Every 2 hours
  createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
   console.log(`[scheduler.js]: 🧹 Starting Blood Moon tracking cleanup`);
   cleanupOldTrackingData();

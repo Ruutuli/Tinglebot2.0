@@ -161,6 +161,9 @@ module.exports = {
   // Add role if quest has one
   await this.assignQuestRole(interaction, quest, userID);
 
+  // Handle quest voucher usage if applicable
+  const voucherUsed = await this.handleQuestVoucherUsage(interaction, quest, userID);
+  
   // Add participant to quest
   const participant = quest.addParticipant(userID, characterName);
   
@@ -192,7 +195,7 @@ module.exports = {
   await this.addUserToRPThread(interaction, quest, userID, userName);
 
   // Send success response
-  const successEmbed = this.createSuccessEmbed(quest, characterName, userName, character);
+  const successEmbed = this.createSuccessEmbed(quest, characterName, userName, character, voucherUsed);
   return interaction.reply({ embeds: [successEmbed] });
  },
 
@@ -238,7 +241,12 @@ module.exports = {
   let leaveMessage = `[quest.js]✅ You have left the quest **${quest.title}** (Character: **${characterName}**).`;
 
   if (quest.participantCap) {
+   const wasFull = quest.participants.size >= quest.participantCap;
    leaveMessage += `\n**Note**: Since this was a member-capped quest, you can now join another member-capped quest if available.`;
+   
+   if (wasFull) {
+    leaveMessage += `\n**🎯 Quest Status**: This quest now has an available spot!`;
+   }
   }
 
   return interaction.reply({
@@ -788,7 +796,7 @@ module.exports = {
  // ============================================================================
  // ------------------- Embed Creation Helper Methods -------------------
  // ============================================================================
- createSuccessEmbed(quest, characterName, userName, character) {
+ createSuccessEmbed(quest, characterName, userName, character, voucherUsed = false) {
   const embed = new EmbedBuilder()
    .setColor(EMBED_COLORS.SUCCESS)
    .setTitle(`🎯 Quest Joined Successfully!`)
@@ -801,6 +809,15 @@ module.exports = {
 
   if (character.icon) {
    embed.setThumbnail(character.icon);
+  }
+
+  // Add voucher information if used
+  if (voucherUsed) {
+   embed.addFields({
+    name: '🎫 Quest Voucher Used',
+    value: 'You used a Quest Voucher to join this full quest!',
+    inline: false
+   });
   }
 
   embed.addFields({
@@ -825,6 +842,10 @@ module.exports = {
  // ------------------- Quest Join Helper Methods -------------------
  // ============================================================================
  async checkCappedQuestRestrictions(interaction, quest, userID) {
+  // Check if user has an active quest voucher
+  const hasQuestVoucher = await this.checkQuestVoucher(interaction, userID);
+  
+  // Always check for other capped quests (voucher doesn't bypass this)
   const otherCappedQuests = await Quest.find({
    participantCap: { $ne: null },
    status: "active",
@@ -847,15 +868,89 @@ module.exports = {
    }
   }
 
-  if (quest.participants.size >= quest.participantCap) {
+  // Check if quest is full - quest vouchers allow joining even when full
+  if (quest.participants.size >= quest.participantCap && !hasQuestVoucher) {
    await interaction.reply({
-    content: `[quest.js]❌ The member-capped quest \`${quest.title}\` has reached its participant limit of ${quest.participantCap}. Consider getting a Quest Voucher if you miss consecutive member-capped quests!`,
+    content: `[quest.js]❌ The member-capped quest \`${quest.title}\` has reached its participant limit of ${quest.participantCap}.\n\n**💡 Tip:** Use a Quest Voucher to join even when the quest is full!`,
     ephemeral: true,
    });
    return false;
   }
 
   return true;
+ },
+
+ // ------------------- Check Quest Voucher -------------------
+ async checkQuestVoucher(interaction, userID) {
+  try {
+   const Character = require("../../models/CharacterModel");
+   const character = await Character.findOne({ userId: userID });
+   
+   if (!character) return false;
+   
+   // Check if character has an active quest voucher
+   return character.questVoucher === true;
+  } catch (error) {
+   console.error(`[quest.js] Error checking quest voucher for user ${userID}:`, error);
+   return false;
+  }
+ },
+
+ // ------------------- Handle Quest Voucher Usage -------------------
+ async handleQuestVoucherUsage(interaction, quest, userID) {
+  try {
+   const Character = require("../../models/CharacterModel");
+   const character = await Character.findOne({ userId: userID });
+   
+   if (!character || !character.questVoucher) return false;
+   
+   // Mark voucher as used for this quest
+   character.questVoucher = false;
+   character.questVoucherUsedAt = new Date();
+   character.questVoucherUsedFor = quest.questID;
+   await character.save();
+   
+   console.log(`[quest.js] ✅ Quest voucher used by ${character.name} for quest ${quest.questID}`);
+   return true;
+  } catch (error) {
+   console.error(`[quest.js] Error handling quest voucher usage:`, error);
+   return false;
+  }
+ },
+
+
+ // ------------------- Get Capped Quest Statistics -------------------
+ async getCappedQuestStatistics() {
+  try {
+   const activeCappedQuests = await Quest.find({
+    participantCap: { $ne: null },
+    status: "active"
+   });
+   
+   const stats = {
+    totalCappedQuests: activeCappedQuests.length,
+    totalParticipants: 0,
+    totalCapacity: 0,
+    availableSpots: 0,
+    fullQuests: 0
+   };
+   
+   for (const quest of activeCappedQuests) {
+    stats.totalParticipants += quest.participants.size;
+    stats.totalCapacity += quest.participantCap;
+    
+    if (quest.participants.size >= quest.participantCap) {
+     stats.fullQuests++;
+    } else {
+     stats.availableSpots += (quest.participantCap - quest.participants.size);
+    }
+   }
+   
+   return stats;
+  } catch (error) {
+   console.error(`[quest.js] Error getting capped quest statistics:`, error);
+   return null;
+  }
  },
 
  async validateQuestTypeRules(interaction, quest) {
@@ -915,5 +1010,6 @@ module.exports = {
    }
   }
  },
+
 
 };
