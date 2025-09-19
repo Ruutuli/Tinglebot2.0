@@ -1217,6 +1217,21 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: villagecheck -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('villagecheck')
+    .setDescription('🏘️ Check village locations for all participants in an RP quest')
+    .addStringOption(option =>
+      option
+        .setName('questid')
+        .setDescription('ID of the RP quest to check village locations for')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+)
+
+
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -1335,6 +1350,8 @@ async function execute(interaction) {
         return await handleRPPosts(interaction);
     } else if (subcommand === 'minigame') {
         return await handleMinigame(interaction);
+    } else if (subcommand === 'villagecheck') {
+        return await handleVillageCheck(interaction);
     } else {
         return await safeReply(interaction, '❌ Unknown subcommand.');
     }
@@ -5055,6 +5072,101 @@ function getGameStatusColor(status) {
     default: return 0x808080; // Gray
   }
 }
+
+// ------------------- Function: handleVillageCheck -------------------
+// Checks village locations for all participants in an RP quest
+async function handleVillageCheck(interaction) {
+  try {
+    const questID = interaction.options.getString('questid');
+    const Quest = require('../../models/QuestModel');
+
+    // Find the quest
+    const quest = await Quest.findOne({ questID });
+    if (!quest) {
+      return await safeReply(interaction, `❌ Quest with ID \`${questID}\` not found.`);
+    }
+
+    // Check if it's an RP quest
+    if (quest.questType !== 'RP') {
+      return await safeReply(interaction, '❌ This command can only be used with RP quests.');
+    }
+
+    // Check if quest has village requirements
+    if (!quest.requiredVillage) {
+      return await safeReply(interaction, '❌ This RP quest has no village requirements.');
+    }
+
+    // Get village tracking stats
+    const stats = quest.getVillageTrackingStats();
+    
+    // Perform village checks
+    const villageCheckResult = await quest.checkAllParticipantsVillages();
+    const completedVillageCheck = await quest.checkCompletedParticipantsVillages();
+    
+    // Save quest after checks
+    await quest.save();
+
+    // Create embed
+    const embed = new EmbedBuilder()
+      .setColor(0x4A90E2)
+      .setTitle(`🏘️ Village Check Results - ${quest.title}`)
+      .setDescription(`**Quest ID:** \`${quest.questID}\`\n**Required Village:** ${quest.requiredVillage}`)
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setTimestamp();
+
+    // Add statistics
+    embed.addFields(
+      { name: "📊 Participant Statistics", value: `**Total:** ${stats.totalParticipants}\n**Active:** ${stats.activeParticipants}\n**Completed:** ${stats.completedParticipants}\n**Disqualified:** ${stats.disqualifiedParticipants}`, inline: true },
+      { name: "🔍 Village Check Results", value: `**Active Participants Checked:** ${villageCheckResult.checked}\n**Active Disqualified:** ${villageCheckResult.disqualified}\n**Completed Participants Checked:** ${completedVillageCheck.checked}\n**Completed Disqualified:** ${completedVillageCheck.disqualified}`, inline: true }
+    );
+
+    // Add detailed participant information
+    const participants = Array.from(quest.participants.values());
+    let participantInfo = "";
+    
+    for (const participant of participants) {
+      const status = participant.progress === 'active' ? '🟢' : 
+                    participant.progress === 'completed' ? '✅' : 
+                    participant.progress === 'disqualified' ? '🚫' : '⚪';
+      
+      const lastCheck = participant.lastVillageCheck ? 
+        new Date(participant.lastVillageCheck).toLocaleDateString() : 'Never';
+      
+      participantInfo += `${status} **${participant.characterName}** (${participant.progress}) - Last check: ${lastCheck}\n`;
+    }
+
+    if (participantInfo) {
+      embed.addFields({
+        name: "👥 Participants",
+        value: participantInfo.length > 1024 ? participantInfo.substring(0, 1020) + "..." : participantInfo,
+        inline: false
+      });
+    }
+
+    // Add summary
+    const totalDisqualified = villageCheckResult.disqualified + completedVillageCheck.disqualified;
+    if (totalDisqualified > 0) {
+      embed.addFields({
+        name: "⚠️ Summary",
+        value: `**${totalDisqualified} participants were disqualified** for village violations during this check.`,
+        inline: false
+      });
+    } else {
+      embed.addFields({
+        name: "✅ Summary",
+        value: "All participants are in the correct village.",
+        inline: false
+      });
+    }
+
+    await interaction.editReply({ embeds: [embed] });
+
+  } catch (error) {
+    console.error('[mod.js]: Error in handleVillageCheck:', error);
+    return await safeReply(interaction, '❌ An error occurred while checking village locations. Please try again later.');
+  }
+}
+
 
 // ============================================================================
 // ------------------- Export Command -------------------
