@@ -21,9 +21,10 @@ function meetsRequirements(participant, quest) {
             sub.type === quest.questType.toLowerCase() && sub.approved
         );
     } else if (quest.questType === 'Art / Writing') {
-        return participant.submissions.some(sub => 
-            (sub.type === 'art' || sub.type === 'writing') && sub.approved
-        );
+        // For Art/Writing combined quests, require BOTH art AND writing submissions
+        const hasArtSubmission = participant.submissions.some(sub => sub.type === 'art' && sub.approved);
+        const hasWritingSubmission = participant.submissions.some(sub => sub.type === 'writing' && sub.approved);
+        return hasArtSubmission && hasWritingSubmission;
     }
     return false;
 }

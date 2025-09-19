@@ -234,9 +234,10 @@ function meetsRequirements(participant, quest) {
     }
     
     if (questType === 'Art / Writing') {
-        return submissions.some(sub => 
-            (sub.type === 'art' || sub.type === 'writing') && sub.approved
-        );
+        // For Art/Writing combined quests, require BOTH art AND writing submissions
+        const hasArtSubmission = submissions.some(sub => sub.type === 'art' && sub.approved);
+        const hasWritingSubmission = submissions.some(sub => sub.type === 'writing' && sub.approved);
+        return hasArtSubmission && hasWritingSubmission;
     }
     
     if (questType === QUEST_TYPES.INTERACTIVE) {
@@ -652,6 +653,50 @@ questSchema.methods.linkSubmission = async function(userId, submissionData) {
         
     } catch (error) {
         console.error(`[QuestModel] ❌ Error linking submission to quest:`, error);
+        return { success: false, error: error.message };
+    }
+};
+
+// ------------------- Interactive Quest Completion from Table Roll ------------------
+questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
+    try {
+        const participant = this.getParticipant(userId);
+        if (!participant) {
+            throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
+        }
+        
+        if (this.questType !== 'Interactive') {
+            throw new Error(`Quest ${this.questID} is not an Interactive quest`);
+        }
+        
+        if (participant.progress !== 'active') {
+            console.log(`[QuestModel] Participant ${participant.characterName} is not active (status: ${participant.progress})`);
+            return { success: false, reason: 'Participant not active' };
+        }
+        
+        // Process the table roll
+        const rollResult_data = await this.processTableRoll(userId, rollResult);
+        
+        if (!rollResult_data.success) {
+            return rollResult_data;
+        }
+        
+        // Check if quest is now completed
+        if (rollResult_data.questCompleted) {
+            participant.progress = 'completed';
+            participant.completedAt = new Date();
+            participant.completionProcessed = false; // Mark for reward processing
+            participant.lastCompletionCheck = new Date();
+            
+            await this.save();
+            
+            console.log(`[QuestModel] ✅ Interactive quest completed for ${participant.characterName} in quest ${this.questID}`);
+        }
+        
+        return rollResult_data;
+        
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error completing interactive quest from table roll:`, error);
         return { success: false, error: error.message };
     }
 };
