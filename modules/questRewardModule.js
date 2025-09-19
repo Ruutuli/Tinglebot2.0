@@ -7,25 +7,418 @@ const Quest = require('../models/QuestModel');
 const Character = require('../models/CharacterModel');
 const User = require('../models/UserModel');
 const { handleError } = require('../utils/globalErrorHandler');
+const { EmbedBuilder } = require('discord.js');
+
+// ============================================================================
+// ------------------- Constants -------------------
+// ============================================================================
+const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+const QUEST_CHANNEL_ID = '1305486549252706335';
+const DEFAULT_POST_REQUIREMENT = 15;
+const DEFAULT_ROLL_REQUIREMENT = 1;
+const RP_SIGNUP_WINDOW_DAYS = 7;
+const QUEST_COLORS = {
+    SUCCESS: 0x00FF00,
+    EXPIRED: 0xFFA500,
+    ERROR: 0xff0000,
+    INFO: 0x0099ff
+};
+
+// Quest Type Constants
+const QUEST_TYPES = {
+    ART: 'Art',
+    WRITING: 'Writing',
+    INTERACTIVE: 'Interactive',
+    RP: 'RP',
+    ART_WRITING: 'Art / Writing'
+};
+
+const SUBMISSION_TYPES = {
+    ART: 'art',
+    WRITING: 'writing',
+    INTERACTIVE: 'interactive',
+    RP_POSTS: 'rp_posts'
+};
+
+const PROGRESS_STATUS = {
+    ACTIVE: 'active',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    REWARDED: 'rewarded',
+    DISQUALIFIED: 'disqualified'
+};
+
+// ============================================================================
+// ------------------- Notification Functions -------------------
+// ============================================================================
+
+// ------------------- Send Quest Completion Notification -------------------
+async function sendQuestCompletionNotification(quest, participant, channelId = null) {
+    try {
+        console.log(`[questRewardModule] 🎉 Sending completion notification for ${participant.characterName} in quest ${quest.questID}`);
+        
+        // Get the Discord client
+        const { client } = require('../index.js');
+        if (!client) {
+            console.log(`[questRewardModule] ❌ Discord client not available for notification`);
+            return { success: false, error: 'Discord client not available' };
+        }
+
+        // Determine the channel to send the notification to
+        let targetChannelId = channelId;
+        if (!targetChannelId) {
+            targetChannelId = await getQuestNotificationChannel(quest, participant);
+        }
+
+        if (!targetChannelId) {
+            console.log(`[questRewardModule] ❌ No suitable channel found for quest notification`);
+            return { success: false, error: 'No suitable channel found' };
+        }
+
+        const channel = await client.channels.fetch(targetChannelId);
+        if (!channel) {
+            console.log(`[questRewardModule] ❌ Could not find channel ${targetChannelId} for notification`);
+            return { success: false, error: 'Channel not found' };
+        }
+
+        // Create appropriate notification based on quest type
+        const notificationEmbed = await createCompletionNotificationEmbed(quest, participant);
+        
+        if (!notificationEmbed) {
+            console.log(`[questRewardModule] ❌ Failed to create notification embed`);
+            return { success: false, error: 'Failed to create notification embed' };
+        }
+
+        await channel.send({ 
+            content: `<@${participant.userId}>`,
+            embeds: [notificationEmbed] 
+        });
+
+        console.log(`[questRewardModule] ✅ Sent completion notification for ${participant.characterName} in quest ${quest.questID}`);
+        return { success: true };
+
+    } catch (error) {
+        console.error(`[questRewardModule] ❌ Error sending quest completion notification:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+// ------------------- Get Quest Notification Channel -------------------
+async function getQuestNotificationChannel(quest, participant) {
+    try {
+        // For RP quests, use the RP thread if available
+        if (quest.questType.toLowerCase() === 'rp' && participant.rpThreadId) {
+            return participant.rpThreadId;
+        }
+
+        // For other quest types, use the quest channel or general channel
+        if (quest.targetChannel) {
+            return quest.targetChannel;
+        }
+
+        // Fallback to quest channel constant
+        return QUEST_CHANNEL_ID;
+
+    } catch (error) {
+        console.error(`[questRewardModule] ❌ Error getting notification channel:`, error);
+        return null;
+    }
+}
+
+// ------------------- Create Completion Notification Embed -------------------
+async function createCompletionNotificationEmbed(quest, participant) {
+    try {
+        const handler = QUEST_TYPE_HANDLERS[quest.questType];
+        
+        let title, description, progressField;
+        
+        if (handler) {
+            title = handler.getTitle();
+            description = handler.getDescription(participant.characterName);
+            progressField = handler.getProgressField(participant, quest);
+        } else {
+            // Default fallback
+            title = '🎉 Quest Completed!';
+            description = `**${participant.characterName}** has successfully completed the quest!`;
+            progressField = {
+                name: 'Status',
+                value: '✅ Completed',
+                inline: true
+            };
+        }
+
+        const embed = createBaseEmbed(title, description);
+        
+        // Add progress field if available
+        const additionalFields = [];
+        if (progressField) {
+            additionalFields.push(progressField);
+        }
+        additionalFields.push({ name: 'Status', value: '✅ Completed', inline: true });
+        
+        addQuestInfoFields(embed, quest, additionalFields);
+
+        // Add quest-specific information
+        if (quest.tableRollName && quest.questType === 'Interactive') {
+            embed.addFields({
+                name: 'Table Roll',
+                value: quest.tableRollName,
+                inline: true
+            });
+        }
+
+        if (quest.requiredVillage && quest.questType === 'RP') {
+            embed.addFields({
+                name: 'Quest Village',
+                value: quest.requiredVillage.charAt(0).toUpperCase() + quest.requiredVillage.slice(1),
+                inline: true
+            });
+        }
+
+        return embed;
+
+    } catch (error) {
+        console.error(`[questRewardModule] ❌ Error creating completion notification embed:`, error);
+        return null;
+    }
+}
+
+// ------------------- Send Quest Completion Summary -------------------
+async function sendQuestCompletionSummary(quest, completionReason) {
+    try {
+        console.log(`[questRewardModule] 📊 Sending quest completion summary for ${quest.questID}`);
+
+        const { client } = require('../index.js');
+        if (!client) {
+            console.log(`[questRewardModule] ❌ Discord client not available for summary notification`);
+            return { success: false, error: 'Discord client not available' };
+        }
+
+        // Use quest channel or fallback
+        const channelId = quest.targetChannel || QUEST_CHANNEL_ID;
+        const channel = await client.channels.fetch(channelId);
+        
+        if (!channel) {
+            console.log(`[questRewardModule] ❌ Could not find channel ${channelId} for summary notification`);
+            return { success: false, error: 'Channel not found' };
+        }
+
+        const participants = Array.from(quest.participants.values());
+        const completedParticipants = participants.filter(p => p.progress === 'completed');
+        const rewardedParticipants = participants.filter(p => p.progress === 'rewarded');
+
+        let summaryTitle = '🏁 Quest Completed!';
+        let summaryDescription = `The quest **${quest.title}** has been completed!`;
+        
+        if (completionReason === 'time_expired') {
+            summaryTitle = '⏰ Quest Time Expired!';
+            summaryDescription = `The quest **${quest.title}** has ended due to time expiration.`;
+        }
+
+        const embed = createBaseEmbed(
+            summaryTitle, 
+            summaryDescription, 
+            completionReason === 'time_expired' ? QUEST_COLORS.EXPIRED : QUEST_COLORS.SUCCESS
+        );
+        
+        const additionalFields = [
+            { name: 'Total Participants', value: participants.length.toString(), inline: true },
+            { name: 'Completed', value: completedParticipants.length.toString(), inline: true },
+            { name: 'Rewarded', value: rewardedParticipants.length.toString(), inline: true },
+            { name: 'Completion Reason', value: completionReason.replace('_', ' ').toUpperCase(), inline: true }
+        ];
+        
+        addQuestInfoFields(embed, quest, additionalFields);
+
+        await channel.send({ embeds: [embed] });
+
+        console.log(`[questRewardModule] ✅ Sent quest completion summary for ${quest.questID}`);
+        return { success: true };
+
+    } catch (error) {
+        console.error(`[questRewardModule] ❌ Error sending quest completion summary:`, error);
+        return { success: false, error: error.message };
+    }
+}
 
 // ============================================================================
 // ------------------- Helper Functions -------------------
 // ============================================================================
 
+// ------------------- Standardized Error Handling ------------------
+function handleQuestError(error, context, questId = null) {
+    const questInfo = questId ? ` for quest ${questId}` : '';
+    console.error(`[questRewardModule.js] ❌ Error ${context}${questInfo}:`, error);
+    return {
+        success: false,
+        error: error.message || 'Unknown error occurred'
+    };
+}
+
+// ------------------- Standardized Success Response ------------------
+function createSuccessResponse(data = {}) {
+    return {
+        success: true,
+        ...data
+    };
+}
+
+// ------------------- Database Helper Functions ------------------
+async function findQuestSafely(questId) {
+    try {
+        const quest = await Quest.findOne({ questID: questId });
+        if (!quest) {
+            throw new Error(`Quest not found: ${questId}`);
+        }
+        return quest;
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Database error finding quest ${questId}:`, error);
+        throw error;
+    }
+}
+
+async function findUserSafely(userId) {
+    try {
+        const user = await User.findOne({ discordId: userId });
+        if (!user) {
+            throw new Error(`User not found: ${userId}`);
+        }
+        return user;
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Database error finding user ${userId}:`, error);
+        throw error;
+    }
+}
+
+async function findCharacterSafely(characterName, userId) {
+    try {
+        const character = await Character.findOne({ 
+            name: characterName, 
+            userId: userId 
+        });
+        if (!character) {
+            throw new Error(`Character not found: ${characterName}`);
+        }
+        return character;
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Database error finding character ${characterName}:`, error);
+        throw error;
+    }
+}
+
+// ------------------- Embed Creation Helpers ------------------
+function createBaseEmbed(title, description, color = QUEST_COLORS.SUCCESS) {
+    return new EmbedBuilder()
+        .setColor(color)
+        .setTitle(title)
+        .setDescription(description)
+        .setImage(BORDER_IMAGE)
+        .setTimestamp();
+}
+
+function addQuestInfoFields(embed, quest, additionalFields = []) {
+    const fields = [
+        { name: 'Quest ID', value: `\`${quest.questID}\``, inline: true },
+        { name: 'Quest Type', value: quest.questType, inline: true },
+        ...additionalFields
+    ];
+    
+    embed.addFields(fields);
+    return embed;
+}
+
+// ------------------- Quest Type Specific Logic ------------------
+const QUEST_TYPE_HANDLERS = {
+    [QUEST_TYPES.RP]: {
+        checkRequirements: (participant, quest) => 
+            participant.rpPostCount >= (quest.postRequirement || DEFAULT_POST_REQUIREMENT),
+        getProgressField: (participant, quest) => ({
+            name: 'Posts Completed',
+            value: `${participant.rpPostCount}/${quest.postRequirement || DEFAULT_POST_REQUIREMENT}`,
+            inline: true
+        }),
+        getTitle: () => '🎭 RP Quest Completed!',
+        getDescription: (characterName) => `**${characterName}** has successfully completed the RP quest!`
+    },
+    [QUEST_TYPES.ART]: {
+        checkRequirements: (participant) => 
+            participant.submissions.some(sub => sub.type === SUBMISSION_TYPES.ART && sub.approved),
+        getProgressField: () => ({
+            name: 'Art Submission',
+            value: '✅ Approved',
+            inline: true
+        }),
+        getTitle: () => '🎨 Art Quest Completed!',
+        getDescription: (characterName) => `**${characterName}** has successfully submitted their art for the quest!`
+    },
+    [QUEST_TYPES.WRITING]: {
+        checkRequirements: (participant) => 
+            participant.submissions.some(sub => sub.type === SUBMISSION_TYPES.WRITING && sub.approved),
+        getProgressField: () => ({
+            name: 'Writing Submission',
+            value: '✅ Approved',
+            inline: true
+        }),
+        getTitle: () => '✍️ Writing Quest Completed!',
+        getDescription: (characterName) => `**${characterName}** has successfully submitted their writing for the quest!`
+    },
+    [QUEST_TYPES.ART_WRITING]: {
+        checkRequirements: (participant) => {
+            const hasArtSubmission = participant.submissions.some(sub => sub.type === SUBMISSION_TYPES.ART && sub.approved);
+            const hasWritingSubmission = participant.submissions.some(sub => sub.type === SUBMISSION_TYPES.WRITING && sub.approved);
+            return hasArtSubmission && hasWritingSubmission;
+        },
+        getProgressField: (participant) => {
+            const artSubmissions = participant.submissions.filter(sub => sub.type === SUBMISSION_TYPES.ART && sub.approved).length;
+            const writingSubmissions = participant.submissions.filter(sub => sub.type === SUBMISSION_TYPES.WRITING && sub.approved).length;
+            return {
+                name: 'Submissions',
+                value: `🎨 ${artSubmissions} art, ✍️ ${writingSubmissions} writing`,
+                inline: true
+            };
+        },
+        getTitle: () => '🎨✍️ Art & Writing Quest Completed!',
+        getDescription: (characterName) => `**${characterName}** has successfully submitted both art and writing for the quest!`
+    },
+    [QUEST_TYPES.INTERACTIVE]: {
+        checkRequirements: () => true, // Interactive quests have different completion logic
+        getProgressField: (participant, quest) => ({
+            name: 'Successful Rolls',
+            value: `${participant.successfulRolls}/${quest.requiredRolls || DEFAULT_ROLL_REQUIREMENT}`,
+            inline: true
+        }),
+        getTitle: () => '🎮 Interactive Quest Completed!',
+        getDescription: (characterName) => `**${characterName}** has successfully completed the interactive quest!`
+    }
+};
+
 // ------------------- Requirements Check ------------------
 function meetsRequirements(participant, quest) {
-    if (quest.questType === 'RP') {
-        return participant.rpPostCount >= (quest.postRequirement || 15);
-    } else if (quest.questType === 'Art' || quest.questType === 'Writing') {
-        return participant.submissions.some(sub => 
-            sub.type === quest.questType.toLowerCase() && sub.approved
+    const { questType, postRequirement, requiredRolls } = quest;
+    const { rpPostCount, submissions, successfulRolls } = participant;
+    
+    if (questType === QUEST_TYPES.RP) {
+        return rpPostCount >= (postRequirement || DEFAULT_POST_REQUIREMENT);
+    }
+    
+    if (questType === QUEST_TYPES.ART || questType === QUEST_TYPES.WRITING) {
+        const submissionType = questType.toLowerCase();
+        return submissions.some(sub => 
+            sub.type === submissionType && sub.approved
         );
-    } else if (quest.questType === 'Art / Writing') {
+    }
+    
+    if (questType === QUEST_TYPES.ART_WRITING) {
         // For Art/Writing combined quests, require BOTH art AND writing submissions
-        const hasArtSubmission = participant.submissions.some(sub => sub.type === 'art' && sub.approved);
-        const hasWritingSubmission = participant.submissions.some(sub => sub.type === 'writing' && sub.approved);
+        const hasArtSubmission = submissions.some(sub => sub.type === 'art' && sub.approved);
+        const hasWritingSubmission = submissions.some(sub => sub.type === 'writing' && sub.approved);
         return hasArtSubmission && hasWritingSubmission;
     }
+    
+    if (questType === QUEST_TYPES.INTERACTIVE) {
+        return successfulRolls >= (requiredRolls || DEFAULT_ROLL_REQUIREMENT);
+    }
+    
     return false;
 }
 
@@ -37,12 +430,12 @@ function computeTokens(quest) {
 // ------------------- Group Members Retrieval ------------------
 async function getGroupMembers(questId, groupId) {
     try {
-        const quest = await Quest.findOne({ questID: questId });
-        if (!quest || !quest.participants) return [];
+        const quest = await findQuestSafely(questId);
+        if (!quest.participants) return [];
         
         return Array.from(quest.participants.values()).filter(p => p.group === groupId);
     } catch (error) {
-        console.error(`[questRewardModule.js] :x: Error getting group members for quest ${questId}, group ${groupId}:`, error);
+        console.error(`[questRewardModule.js] ❌ Error getting group members for quest ${questId}, group ${groupId}:`, error);
         return [];
     }
 }
@@ -54,20 +447,17 @@ async function getGroupMembers(questId, groupId) {
 // ------------------- Quest Completion Processing ------------------
 async function processQuestCompletion(questId) {
     try {
-        const quest = await Quest.findOne({ questID: questId });
-        if (!quest) {
-            throw new Error(`Quest not found: ${questId}`);
-        }
+        const quest = await findQuestSafely(questId);
 
         if (quest.status !== 'active') {
-            console.log(`[questRewardModule.js] :information_source: Quest ${questId} is not active, skipping completion processing.`);
+            console.log(`[questRewardModule.js] ℹ️ Quest ${questId} is not active, skipping completion processing.`);
             return;
         }
 
-        console.log(`[questRewardModule.js] :gear: Processing completion for quest: ${quest.title}`);
+        console.log(`[questRewardModule.js] ⚙️ Processing completion for quest: ${quest.title}`);
 
         if (!quest.participants || quest.participants.size === 0) {
-            console.log(`[questRewardModule.js] :warning: No participants found for quest ${questId}`);
+            console.log(`[questRewardModule.js] ⚠️ No participants found for quest ${questId}`);
             return;
         }
 
@@ -76,15 +466,15 @@ async function processQuestCompletion(questId) {
 
         if (results.rewardedCount > 0 && results.rewardedCount === participants.length) {
             await markQuestAsCompleted(quest);
-            console.log(`[questRewardModule.js] :white_check_mark: Quest ${questId} marked as completed. All participants rewarded.`);
+            console.log(`[questRewardModule.js] ✅ Quest ${questId} marked as completed. All participants rewarded.`);
         }
 
         await quest.save();
-        console.log(`[questRewardModule.js] :white_check_mark: Quest completion processing finished. Completed: ${results.completedCount}, Rewarded: ${results.rewardedCount}, Errors: ${results.errorCount}`);
+        console.log(`[questRewardModule.js] ✅ Quest completion processing finished. Completed: ${results.completedCount}, Rewarded: ${results.rewardedCount}, Errors: ${results.errorCount}`);
 
     } catch (error) {
         handleError(error, 'questRewardModule.js');
-        console.error(`[questRewardModule.js] :x: Error processing quest completion for ${questId}:`, error);
+        console.error(`[questRewardModule.js] ❌ Error processing quest completion for ${questId}:`, error);
     }
 }
 
@@ -105,7 +495,7 @@ async function processAllParticipants(quest, participants) {
                 errorCount++;
             }
         } catch (error) {
-            console.error(`[questRewardModule.js] :x: Error processing participant ${participant.characterName}:`, error);
+            console.error(`[questRewardModule.js] ❌ Error processing participant ${participant.characterName}:`, error);
             errorCount++;
         }
     }
@@ -136,8 +526,7 @@ async function processParticipantReward(quest, participant) {
 
         const rewardResult = await distributeRewards(quest, participant);
         if (rewardResult.success) {
-            // Use enhanced reward data update with comprehensive tracking
-            updateParticipantRewardDataEnhanced(participant, quest, rewardResult);
+            updateParticipantRewardData(participant, quest, rewardResult, 'immediate');
             console.log(`[questRewardModule.js] ✅ Successfully rewarded participant ${participant.characterName} for quest ${quest.questID}`);
             return 'rewarded';
         } else {
@@ -152,22 +541,14 @@ async function processParticipantReward(quest, participant) {
 }
 
 // ------------------- Update Participant Reward Data ------------------
-function updateParticipantRewardData(participant, quest, rewardResult) {
+function updateParticipantRewardData(participant, quest, rewardResult, rewardSource = 'immediate') {
     participant.progress = 'rewarded';
     participant.rewardedAt = new Date();
     participant.tokensEarned = rewardResult.tokensAdded;
     participant.itemsEarned = quest.itemReward ? [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }] : [];
-}
-
-// ------------------- Update Participant Reward Data Enhanced ------------------
-function updateParticipantRewardDataEnhanced(participant, quest, rewardResult) {
-    participant.progress = 'rewarded';
-    participant.rewardedAt = new Date();
-    participant.tokensEarned = rewardResult.tokensAdded;
-    participant.itemsEarned = quest.itemReward ? [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }] : [];
-    participant.rewardProcessed = true; // Additional safety flag
+    participant.rewardProcessed = true;
     participant.lastRewardCheck = new Date();
-    participant.rewardSource = 'immediate'; // Track how they were rewarded
+    participant.rewardSource = rewardSource;
 }
 
 // ============================================================================
@@ -223,14 +604,11 @@ async function distributeRewards(quest, participant) {
 // ------------------- Distribute Tokens ------------------
 async function distributeTokens(userId, tokensToAward) {
     try {
-        const user = await User.findOne({ discordId: userId });
-        if (!user) {
-            return { success: false, error: `User not found: ${userId}` };
-        }
+        const user = await findUserSafely(userId);
 
         user.tokens = (user.tokens || 0) + tokensToAward;
         await user.save();
-        console.log(`[questRewardModule.js] :money_with_wings: Added ${tokensToAward} tokens to user ${userId}`);
+        console.log(`[questRewardModule.js] 💰 Added ${tokensToAward} tokens to user ${userId}`);
         
         return { success: true, tokensAdded: tokensToAward };
     } catch (error) {
@@ -241,14 +619,7 @@ async function distributeTokens(userId, tokensToAward) {
 // ------------------- Distribute Items ------------------
 async function distributeItems(quest, participant) {
     try {
-        const character = await Character.findOne({ 
-            name: participant.characterName, 
-            userId: participant.userId 
-        });
-        
-        if (!character) {
-            return { success: false, error: `Character not found: ${participant.characterName}` };
-        }
+        const character = await findCharacterSafely(participant.characterName, participant.userId);
 
         if (!character.inventory) {
             character.inventory = [];
@@ -267,7 +638,7 @@ async function distributeItems(quest, participant) {
         }
         
         await character.save();
-        console.log(`[questRewardModule.js] :package: Added ${quest.itemRewardQty}x ${quest.itemReward} to character ${participant.characterName}`);
+        console.log(`[questRewardModule.js] 📦 Added ${quest.itemRewardQty}x ${quest.itemReward} to character ${participant.characterName}`);
         
         return { success: true, itemsAdded: quest.itemRewardQty };
     } catch (error) {
@@ -285,14 +656,14 @@ async function markQuestAsCompleted(quest) {
         quest.status = 'completed';
         await quest.save();
         
-        console.log(`[questRewardModule.js] :white_check_mark: Quest ${quest.questID} marked as completed`);
+        console.log(`[questRewardModule.js] ✅ Quest ${quest.questID} marked as completed`);
         
         if (quest.roleID) {
-            console.log(`[questRewardModule.js] :information_source: Quest role ${quest.roleID} should be deleted (requires guild context)`);
+            console.log(`[questRewardModule.js] ℹ️ Quest role ${quest.roleID} should be deleted (requires guild context)`);
         }
         
     } catch (error) {
-        console.error(`[questRewardModule.js] :x: Error marking quest as completed:`, error);
+        console.error(`[questRewardModule.js] ❌ Error marking quest as completed:`, error);
         throw error;
     }
 }
@@ -300,16 +671,13 @@ async function markQuestAsCompleted(quest) {
 // ------------------- Manual Quest Completion ------------------
 async function manuallyCompleteQuest(questId, adminUserId) {
     try {
-        const quest = await Quest.findOne({ questID: questId });
-        if (!quest) {
-            throw new Error(`Quest not found: ${questId}`);
-        }
+        const quest = await findQuestSafely(questId);
 
         if (quest.status === 'completed') {
             throw new Error(`Quest ${questId} is already completed`);
         }
 
-        console.log(`[questRewardModule.js] :gear: Admin ${adminUserId} manually completing quest ${questId}`);
+        console.log(`[questRewardModule.js] ⚙️ Admin ${adminUserId} manually completing quest ${questId}`);
         
         await processQuestCompletion(questId);
         
@@ -324,10 +692,7 @@ async function manuallyCompleteQuest(questId, adminUserId) {
 // ------------------- Check Quest Status ------------------
 async function getQuestStatus(questId) {
     try {
-        const quest = await Quest.findOne({ questID: questId });
-        if (!quest) {
-            return { error: 'Quest not found' };
-        }
+        const quest = await findQuestSafely(questId);
 
         const participants = Array.from(quest.participants.values());
         
@@ -362,14 +727,14 @@ async function getQuestStatus(questId) {
 // ------------------- Process RP Quest Completion ------------------
 async function processRPQuestCompletion(quest, participant) {
     try {
-        console.log(`[questRewardModule.js] :gear: Processing RP quest completion for ${participant.characterName} in quest ${quest.questID}`);
+        console.log(`[questRewardModule.js] ⚙️ Processing RP quest completion for ${participant.characterName} in quest ${quest.questID}`);
         
         const meetsReq = meetsRequirements(participant, quest);
         if (!meetsReq) {
-            console.log(`[questRewardModule.js] :warning: Participant ${participant.characterName} does not meet RP requirements (${participant.rpPostCount}/${quest.postRequirement || 15} posts)`);
+            console.log(`[questRewardModule.js] ⚠️ Participant ${participant.characterName} does not meet RP requirements (${participant.rpPostCount}/${quest.postRequirement || DEFAULT_POST_REQUIREMENT} posts)`);
             return {
                 success: false,
-                error: `Participant needs ${(quest.postRequirement || 15) - participant.rpPostCount} more posts to complete the quest`
+                error: `Participant needs ${(quest.postRequirement || DEFAULT_POST_REQUIREMENT) - participant.rpPostCount} more posts to complete the quest`
             };
         }
         
@@ -379,19 +744,19 @@ async function processRPQuestCompletion(quest, participant) {
         const rewardResult = await distributeRewards(quest, participant);
         
         if (rewardResult.success) {
-            console.log(`[questRewardModule.js] :white_check_mark: RP quest completed and rewards distributed for ${participant.characterName}`);
+            console.log(`[questRewardModule.js] ✅ RP quest completed and rewards distributed for ${participant.characterName}`);
             return {
                 success: true,
                 tokensAdded: rewardResult.tokensAdded,
                 itemsAdded: rewardResult.itemsAdded
             };
         } else {
-            console.error(`[questRewardModule.js] :x: Failed to distribute rewards for RP quest:`, rewardResult.error);
+            console.error(`[questRewardModule.js] ❌ Failed to distribute rewards for RP quest:`, rewardResult.error);
             return rewardResult;
         }
         
     } catch (error) {
-        console.error(`[questRewardModule.js] :x: Error processing RP quest completion:`, error);
+        console.error(`[questRewardModule.js] ❌ Error processing RP quest completion:`, error);
         return {
             success: false,
             error: error.message
@@ -480,14 +845,7 @@ async function processQuestMonthlyRewards(quest) {
                     const rewardResult = await distributeParticipantMonthlyRewards(quest, participant);
                     
                     if (rewardResult.success) {
-                        // Mark as rewarded with comprehensive tracking
-                        participant.progress = 'rewarded';
-                        participant.rewardedAt = new Date();
-                        participant.tokensEarned = rewardResult.tokensAdded;
-                        participant.itemsEarned = rewardResult.itemsAdded || [];
-                        participant.rewardProcessed = true; // Additional safety flag
-                        participant.lastRewardCheck = new Date();
-                        participant.rewardSource = 'monthly'; // Track how they were rewarded
+                        updateParticipantRewardData(participant, quest, rewardResult, 'monthly');
                         rewarded++;
                         console.log(`[questRewardModule.js] ✅ Rewarded ${participant.characterName} for quest ${quest.questID}`);
                     } else {
@@ -547,10 +905,7 @@ function getParticipantRewardStatus(participant) {
 // ------------------- Validate Quest Reward Status ------------------
 async function validateQuestRewardStatus(questId) {
     try {
-        const quest = await Quest.findOne({ questID: questId });
-        if (!quest) {
-            return { error: 'Quest not found' };
-        }
+        const quest = await findQuestSafely(questId);
 
         const participants = Array.from(quest.participants.values());
         const validation = {
@@ -585,50 +940,8 @@ async function validateQuestRewardStatus(questId) {
 
 // ------------------- Distribute Participant Monthly Rewards ------------------
 async function distributeParticipantMonthlyRewards(quest, participant) {
-    try {
-        const results = {
-            success: true,
-            errors: [],
-            tokensAdded: 0,
-            itemsAdded: []
-        };
-
-        // Calculate token reward
-        const tokensToAward = quest.getNormalizedTokenReward();
-        
-        if (tokensToAward > 0) {
-            const tokenResult = await distributeTokens(participant.userId, tokensToAward);
-            if (tokenResult.success) {
-                results.tokensAdded = tokenResult.tokensAdded;
-            } else {
-                results.errors.push(tokenResult.error);
-            }
-        }
-
-        // Distribute item rewards
-        if (quest.itemReward && quest.itemRewardQty > 0) {
-            const itemResult = await distributeItems(quest, participant);
-            if (itemResult.success) {
-                results.itemsAdded = itemResult.itemsAdded;
-            } else {
-                results.errors.push(itemResult.error);
-            }
-        }
-
-        if (results.errors.length > 0) {
-            results.success = false;
-            results.error = results.errors.join('; ');
-        }
-
-        return results;
-
-    } catch (error) {
-        return {
-            success: false,
-            error: error.message,
-            errors: [error.message]
-        };
-    }
+    // Use the existing distributeRewards function for consistency
+    return await distributeRewards(quest, participant);
 }
 
 // ------------------- Get Quest Reward Summary ------------------
@@ -685,11 +998,7 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
         }
         
         // Find the quest
-        const quest = await Quest.findOne({ questID });
-        if (!quest) {
-            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} not found`);
-            return { success: false, reason: 'Quest not found' };
-        }
+        const quest = await findQuestSafely(questID);
         
         // Check if quest is active
         if (quest.status !== 'active') {
@@ -738,11 +1047,7 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         }
         
         // Find the quest
-        const quest = await Quest.findOne({ questID });
-        if (!quest) {
-            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} not found`);
-            return { success: false, reason: 'Quest not found' };
-        }
+        const quest = await findQuestSafely(questID);
         
         // Check if quest is active
         if (quest.status !== 'active') {
@@ -780,10 +1085,226 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
 }
 
 // ============================================================================
+// ------------------- Village Validation Functions -------------------
+// ============================================================================
+
+// ------------------- Extract Village from Quest Location ------------------
+function extractVillageFromLocation(location) {
+    const questLocation = location.toLowerCase();
+    
+    if (questLocation.includes('rudania')) {
+        return 'rudania';
+    } else if (questLocation.includes('inariko')) {
+        return 'inariko';
+    } else if (questLocation.includes('vhintl')) {
+        return 'vhintl';
+    }
+    
+    return null;
+}
+
+// ------------------- Validate RP Quest Village ------------------
+async function validateRPQuestVillage(interaction, quest, character) {
+    const requiredVillage = extractVillageFromLocation(quest.location);
+    
+    if (!requiredVillage) {
+        await interaction.reply({
+            content: `[quest.js]❌ Could not determine required village from quest location: ${quest.location}`,
+            ephemeral: true,
+        });
+        return false;
+    }
+    
+    const characterVillage = character.currentVillage.toLowerCase();
+    
+    if (characterVillage !== requiredVillage) {
+        await interaction.reply({
+            content: `[quest.js]❌ **RP Quest Village Requirement**: Your character **${character.name}** must be in **${requiredVillage.charAt(0).toUpperCase() + requiredVillage.slice(1)}** to join this RP quest. Currently in: **${characterVillage.charAt(0).toUpperCase() + characterVillage.slice(1)}**.\n\n**Rule**: RP quest participants must stay in the quest village for the entire duration. Use \`/travel\` to move to the correct village first.`,
+            ephemeral: true,
+        });
+        return false;
+    }
+    
+    return true;
+}
+
+// ------------------- Check Character Village for Quest ------------------
+async function checkCharacterVillageForQuest(character, quest) {
+    if (quest.questType !== QUEST_TYPES.RP) {
+        return { valid: true, reason: 'Not an RP quest' };
+    }
+    
+    const requiredVillage = extractVillageFromLocation(quest.location);
+    if (!requiredVillage) {
+        return { valid: false, reason: 'Could not determine required village from quest location' };
+    }
+    
+    const currentVillage = character.currentVillage.toLowerCase();
+    const requiredVillageLower = requiredVillage.toLowerCase();
+    
+    if (currentVillage !== requiredVillageLower) {
+        return { 
+            valid: false, 
+            reason: `Character is in ${currentVillage}, must be in ${requiredVillage}`,
+            currentVillage: character.currentVillage,
+            requiredVillage: requiredVillage
+        };
+    }
+    
+    return { valid: true, reason: 'Village location valid' };
+}
+
+// ============================================================================
+// ------------------- Quest Validation Functions -------------------
+// ============================================================================
+
+// ------------------- Validate Quest Participation ------------------
+async function validateQuestParticipation(quest, userID, characterName) {
+    if (quest.participants.has(userID)) {
+        const existingParticipant = quest.participants.get(userID);
+        return {
+            valid: false,
+            message: `You are already participating in the quest \`${quest.title}\` with character **${existingParticipant.characterName}**.`
+        };
+    }
+
+    // Check if this character is already in this quest (by any user)
+    const participants = Array.from(quest.participants.values());
+    const characterAlreadyInQuest = participants.some(participant => 
+        participant.characterName.toLowerCase() === characterName.toLowerCase()
+    );
+
+    if (characterAlreadyInQuest) {
+        return {
+            valid: false,
+            message: `Character **${characterName}** is already participating in the quest \`${quest.title}\`!`
+        };
+    }
+
+    // Check if this character has previously left this quest
+    if (quest.hasCharacterLeft && quest.hasCharacterLeft(characterName)) {
+        return {
+            valid: false,
+            message: `Character **${characterName}** has already left the quest \`${quest.title}\` and cannot rejoin!`
+        };
+    }
+
+    return { valid: true };
+}
+
+// ------------------- Validate Quest Type Rules ------------------
+async function validateQuestTypeRules(quest) {
+    const now = new Date();
+    
+    switch (quest.questType.toLowerCase()) {
+        case QUEST_TYPES.RP.toLowerCase():
+            if (quest.posted) {
+                const questPostDate = new Date(quest.date);
+                const rpSignupDeadline = new Date(
+                    questPostDate.getTime() + RP_SIGNUP_WINDOW_DAYS * 24 * 60 * 60 * 1000
+                );
+
+                if (now > rpSignupDeadline) {
+                    return {
+                        valid: false,
+                        message: `The signup window for RP quest \`${quest.title}\` has closed. **RULE**: RP quests have a 1-week signup window after posting.`
+                    };
+                }
+            }
+            break;
+
+        case QUEST_TYPES.ART.toLowerCase():
+        case QUEST_TYPES.WRITING.toLowerCase():
+        case QUEST_TYPES.INTERACTIVE.toLowerCase():
+            break;
+    }
+
+    return { valid: true };
+}
+
+// ============================================================================
+// ------------------- Quest Embed Functions -------------------
+// ============================================================================
+
+// ------------------- Format Quest Rules ------------------
+function formatQuestRules(quest) {
+    let rulesText = '';
+    
+    if (quest.rules) {
+        rulesText += `**Rules:**\n${quest.rules}\n\n`;
+    }
+    
+    if (quest.collabAllowed) {
+        rulesText += `**Collaboration:** ${quest.collabRule || 'Allowed'}\n\n`;
+    }
+    
+    if (quest.specialNote) {
+        rulesText += `**Special Note:** ${quest.specialNote}\n\n`;
+    }
+    
+    if (quest.participantCap) {
+        rulesText += `**Participant Limit:** ${quest.participantCap} members\n\n`;
+    }
+    
+    if (quest.signupDeadline) {
+        rulesText += `**Signup Deadline:** ${quest.signupDeadline}\n\n`;
+    }
+    
+    return rulesText;
+}
+
+// ------------------- Format Location Text ------------------
+function formatLocationText(location) {
+    if (!location) return 'Not specified';
+    
+    // Handle special location formatting
+    if (location.toLowerCase().includes('rudania')) {
+        return '🏔️ Rudania';
+    } else if (location.toLowerCase().includes('inariko')) {
+        return '🌸 Inariko';
+    } else if (location.toLowerCase().includes('vhintl')) {
+        return '🌊 Vhintl';
+    }
+    
+    return location;
+}
+
+// ------------------- Format Signup Deadline ------------------
+function formatSignupDeadline(signupDeadline) {
+    if (!signupDeadline || signupDeadline === 'N/A') return null;
+    
+    try {
+        const deadline = new Date(signupDeadline);
+        return deadline.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (error) {
+        return signupDeadline;
+    }
+}
+
+// ============================================================================
 // ------------------- Module Exports -------------------
 // ============================================================================
 
 module.exports = {
+    // Constants
+    BORDER_IMAGE,
+    QUEST_CHANNEL_ID,
+    QUEST_COLORS,
+    QUEST_TYPES,
+    SUBMISSION_TYPES,
+    PROGRESS_STATUS,
+    DEFAULT_POST_REQUIREMENT,
+    DEFAULT_ROLL_REQUIREMENT,
+    RP_SIGNUP_WINDOW_DAYS,
+    
+    // Core Functions
     processQuestCompletion,
     processParticipantReward,
     distributeRewards,
@@ -798,5 +1319,28 @@ module.exports = {
     processArtQuestCompletionFromSubmission,
     processWritingQuestCompletionFromSubmission,
     validateQuestRewardStatus,
-    getParticipantRewardStatus
+    getParticipantRewardStatus,
+    sendQuestCompletionNotification,
+    sendQuestCompletionSummary,
+    createCompletionNotificationEmbed,
+    getQuestNotificationChannel,
+    
+    // Village Validation Functions
+    extractVillageFromLocation,
+    validateRPQuestVillage,
+    checkCharacterVillageForQuest,
+    
+    // Quest Validation Functions
+    validateQuestParticipation,
+    validateQuestTypeRules,
+    
+    // Quest Embed Functions
+    formatQuestRules,
+    formatLocationText,
+    formatSignupDeadline,
+    
+    // Helper Functions
+    createBaseEmbed,
+    addQuestInfoFields,
+    meetsRequirements
 };

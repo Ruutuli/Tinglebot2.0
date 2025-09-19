@@ -2,6 +2,14 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 // ============================================================================
+// ------------------- Imports -------------------
+// ============================================================================
+
+// Import consolidated constants and functions
+const { QUEST_TYPES, SUBMISSION_TYPES, PROGRESS_STATUS } = require('../modules/questRewardModule');
+const { meetsRequirements } = require('../modules/questRewardModule');
+
+// ============================================================================
 // ------------------- Schema Field Definitions -------------------
 // ============================================================================
 
@@ -177,7 +185,7 @@ questSchema.pre('save', function(next) {
         for (const [key, value] of this.participants.entries()) {
             if (typeof value === 'string') {
                 // Skip primitive string values - they're invalid
-                console.warn(`[QuestModel] Skipping invalid participant data: ${key} = ${value}`);
+                console.warn(`[QuestModel.js] ⚠️ Skipping invalid participant data: ${key} = ${value}`);
                 continue;
             } else if (typeof value === 'object' && value !== null) {
                 // Valid participant object
@@ -192,60 +200,27 @@ questSchema.pre('save', function(next) {
 });
 
 // ============================================================================
-// ------------------- Helper Functions -------------------
+// ------------------- Constants -------------------
 // ============================================================================
 
-// ------------------- Quest Type Constants ------------------
-const QUEST_TYPES = {
-    ART: 'Art',
-    WRITING: 'Writing',
-    INTERACTIVE: 'Interactive',
-    RP: 'RP'
+// ------------------- Completion Reasons ------------------
+const COMPLETION_REASONS = {
+    TIME_EXPIRED: 'time_expired',
+    ALL_PARTICIPANTS_COMPLETED: 'all_participants_completed',
+    MANUAL: 'manual'
 };
 
-const SUBMISSION_TYPES = {
-    ART: 'art',
-    WRITING: 'writing',
-    INTERACTIVE: 'interactive',
-    RP_POSTS: 'rp_posts'
+// ------------------- Time Parsing Constants ------------------
+const TIME_MULTIPLIERS = {
+    HOUR: 60 * 60 * 1000,
+    DAY: 24 * 60 * 60 * 1000,
+    WEEK: 7 * 24 * 60 * 60 * 1000,
+    MONTH: 30 * 24 * 60 * 60 * 1000
 };
 
-const PROGRESS_STATUS = {
-    ACTIVE: 'active',
-    COMPLETED: 'completed',
-    FAILED: 'failed',
-    REWARDED: 'rewarded'
-};
-
-// ------------------- Requirements Check ------------------
-function meetsRequirements(participant, quest) {
-    const { questType, postRequirement, requiredRolls } = quest;
-    const { rpPostCount, submissions, successfulRolls } = participant;
-    
-    if (questType === QUEST_TYPES.RP) {
-        return rpPostCount >= (postRequirement || 15);
-    }
-    
-    if (questType === QUEST_TYPES.ART || questType === QUEST_TYPES.WRITING) {
-        const submissionType = questType.toLowerCase();
-        return submissions.some(sub => 
-            sub.type === submissionType && sub.approved
-        );
-    }
-    
-    if (questType === 'Art / Writing') {
-        // For Art/Writing combined quests, require BOTH art AND writing submissions
-        const hasArtSubmission = submissions.some(sub => sub.type === 'art' && sub.approved);
-        const hasWritingSubmission = submissions.some(sub => sub.type === 'writing' && sub.approved);
-        return hasArtSubmission && hasWritingSubmission;
-    }
-    
-    if (questType === QUEST_TYPES.INTERACTIVE) {
-        return successfulRolls >= (requiredRolls || 1);
-    }
-    
-    return false;
-}
+// ============================================================================
+// ------------------- Helper Functions -------------------
+// ============================================================================
 
 // ------------------- Submission Management ------------------
 function addSubmission(participant, type, url = null) {
@@ -268,6 +243,55 @@ function incrementRPPosts(participant) {
     participant.rpPostCount += 1;
     participant.updatedAt = new Date();
     return participant;
+}
+
+// ------------------- Quest Submission Creation ------------------
+function createQuestSubmission(type, submissionData) {
+    const submission = {
+        type,
+        submittedAt: new Date(),
+        approved: true,
+        approvedBy: submissionData.approvedBy || 'System',
+        approvedAt: new Date()
+    };
+    
+    if (type === 'art') {
+        submission.url = submissionData.messageUrl || submissionData.fileUrl;
+    } else if (type === 'writing') {
+        submission.url = submissionData.messageUrl || submissionData.link;
+    }
+    
+    return submission;
+}
+
+// ------------------- Quest Completion Notification ------------------
+async function sendCompletionNotification(quest, participant) {
+    try {
+        const questRewardModule = require('../modules/questRewardModule');
+        await questRewardModule.sendQuestCompletionNotification(quest, participant);
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error sending quest completion notification:`, error);
+    }
+}
+
+// ------------------- Quest Summary Notification ------------------
+async function sendQuestSummary(quest, reason) {
+    try {
+        const questRewardModule = require('../modules/questRewardModule');
+        await questRewardModule.sendQuestCompletionSummary(quest, reason);
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error sending quest completion summary:`, error);
+    }
+}
+
+// ------------------- Quest Completion Handler ------------------
+function markParticipantCompleted(participant) {
+    participant.progress = 'completed';
+    participant.completedAt = new Date();
+    participant.updatedAt = new Date();
+    participant.completionProcessed = false; // Mark for reward processing
+    participant.lastCompletionCheck = new Date();
+    participant.questSubmissionInfo = null; // Clear quest submission info
 }
 
 // ============================================================================
@@ -389,10 +413,10 @@ questSchema.methods.checkAllParticipantsVillages = async function() {
             if (!villageCheck.valid) {
                 this.disqualifyParticipant(participant.userId, villageCheck.reason);
                 disqualified++;
-                console.log(`[QuestModel] Disqualified ${participant.characterName}: ${villageCheck.reason}`);
+                console.log(`[QuestModel.js] 🚫 Disqualified ${participant.characterName}: ${villageCheck.reason}`);
                 
                 // Log detailed disqualification info
-                console.log(`[QuestModel] 🚫 ${participant.characterName} disqualified from quest "${this.title}" at ${now.toISOString()}`);
+                console.log(`[QuestModel.js] 🚫 ${participant.characterName} disqualified from quest "${this.title}" at ${now.toISOString()}`);
             } else {
                 // Update last successful village check
                 participant.lastVillageCheck = now;
@@ -425,7 +449,7 @@ questSchema.methods.checkCompletedParticipantsVillages = async function() {
                 // Disqualify even if they were completed
                 this.disqualifyParticipant(participant.userId, `Village violation after completion: ${villageCheck.reason}`);
                 disqualified++;
-                console.log(`[QuestModel] 🚫 Disqualified completed participant ${participant.characterName}: ${villageCheck.reason}`);
+                console.log(`[QuestModel.js] 🚫 Disqualified completed participant ${participant.characterName}: ${villageCheck.reason}`);
             }
         }
     }
@@ -507,33 +531,21 @@ questSchema.methods.completeFromArtSubmission = async function(userId, submissio
         }
         
         // Add the approved submission to participant's submissions
-        const submission = {
-            type: 'art',
-            url: submissionData.messageUrl || submissionData.fileUrl,
-            submittedAt: new Date(),
-            approved: true,
-            approvedBy: submissionData.approvedBy || 'System',
-            approvedAt: new Date()
-        };
-        
+        const submission = createQuestSubmission('art', submissionData);
         participant.submissions.push(submission);
-        participant.progress = 'completed';
-        participant.completedAt = new Date();
-        participant.updatedAt = new Date();
-        participant.completionProcessed = false; // Mark for reward processing
-        participant.lastCompletionCheck = new Date();
-        
-        // Clear quest submission info if it exists
-        participant.questSubmissionInfo = null;
+        markParticipantCompleted(participant);
         
         await this.save();
         
-        console.log(`[QuestModel] ✅ Art quest completed for ${participant.characterName} in quest ${this.questID}`);
+        // Send completion notification
+        await sendCompletionNotification(this, participant);
+        
+        console.log(`[QuestModel.js] ✅ Art quest completed for ${participant.characterName} in quest ${this.questID}`);
         
         return { success: true, participant };
         
     } catch (error) {
-        console.error(`[QuestModel] ❌ Error completing art quest from submission:`, error);
+        console.error(`[QuestModel.js] ❌ Error completing art quest from submission:`, error);
         return { success: false, error: error.message };
     }
 };
@@ -556,33 +568,21 @@ questSchema.methods.completeFromWritingSubmission = async function(userId, submi
         }
         
         // Add the approved submission to participant's submissions
-        const submission = {
-            type: 'writing',
-            url: submissionData.messageUrl || submissionData.link,
-            submittedAt: new Date(),
-            approved: true,
-            approvedBy: submissionData.approvedBy || 'System',
-            approvedAt: new Date()
-        };
-        
+        const submission = createQuestSubmission('writing', submissionData);
         participant.submissions.push(submission);
-        participant.progress = 'completed';
-        participant.completedAt = new Date();
-        participant.updatedAt = new Date();
-        participant.completionProcessed = false; // Mark for reward processing
-        participant.lastCompletionCheck = new Date();
-        
-        // Clear quest submission info if it exists
-        participant.questSubmissionInfo = null;
+        markParticipantCompleted(participant);
         
         await this.save();
         
-        console.log(`[QuestModel] ✅ Writing quest completed for ${participant.characterName} in quest ${this.questID}`);
+        // Send completion notification
+        await sendCompletionNotification(this, participant);
+        
+        console.log(`[QuestModel.js] ✅ Writing quest completed for ${participant.characterName} in quest ${this.questID}`);
         
         return { success: true, participant };
         
     } catch (error) {
-        console.error(`[QuestModel] ❌ Error completing writing quest from submission:`, error);
+        console.error(`[QuestModel.js] ❌ Error completing writing quest from submission:`, error);
         return { success: false, error: error.message };
     }
 };
@@ -647,12 +647,12 @@ questSchema.methods.linkSubmission = async function(userId, submissionData) {
         participant.updatedAt = new Date();
         await this.save();
         
-        console.log(`[QuestModel] ✅ Submission linked for ${participant.characterName} in quest ${this.questID}`);
+        console.log(`[QuestModel.js] ✅ Submission linked for ${participant.characterName} in quest ${this.questID}`);
         
         return { success: true, participant };
         
     } catch (error) {
-        console.error(`[QuestModel] ❌ Error linking submission to quest:`, error);
+        console.error(`[QuestModel.js] ❌ Error linking submission to quest:`, error);
         return { success: false, error: error.message };
     }
 };
@@ -683,20 +683,20 @@ questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
         
         // Check if quest is now completed
         if (rollResult_data.questCompleted) {
-            participant.progress = 'completed';
-            participant.completedAt = new Date();
-            participant.completionProcessed = false; // Mark for reward processing
-            participant.lastCompletionCheck = new Date();
+            markParticipantCompleted(participant);
             
             await this.save();
             
-            console.log(`[QuestModel] ✅ Interactive quest completed for ${participant.characterName} in quest ${this.questID}`);
+            // Send completion notification
+            await sendCompletionNotification(this, participant);
+            
+            console.log(`[QuestModel.js] ✅ Interactive quest completed for ${participant.characterName} in quest ${this.questID}`);
         }
         
         return rollResult_data;
         
     } catch (error) {
-        console.error(`[QuestModel] ❌ Error completing interactive quest from table roll:`, error);
+        console.error(`[QuestModel.js] ❌ Error completing interactive quest from table roll:`, error);
         return { success: false, error: error.message };
     }
 };
@@ -890,7 +890,7 @@ questSchema.methods.processTableRoll = async function(userId, rollResult) {
         participant.updatedAt = new Date();
         await this.save();
         
-        console.log(`[QuestModel] ✅ Table roll processed for ${participant.characterName} in quest ${this.questID} - Success: ${isSuccess}`);
+        console.log(`[QuestModel.js] ✅ Table roll processed for ${participant.characterName} in quest ${this.questID} - Success: ${isSuccess}`);
         
         return { 
             success: true, 
@@ -902,7 +902,7 @@ questSchema.methods.processTableRoll = async function(userId, rollResult) {
         };
         
     } catch (error) {
-        console.error(`[QuestModel] ❌ Error processing table roll:`, error);
+        console.error(`[QuestModel.js] ❌ Error processing table roll:`, error);
         return { success: false, error: error.message };
     }
 };
@@ -917,7 +917,7 @@ questSchema.methods.evaluateRollSuccess = function(rollResult) {
         // Parse and evaluate success criteria
         const evaluationResult = this.parseAndEvaluateCriteria(this.rollSuccessCriteria, rollResult);
         
-        console.log(`[QuestModel] 🎯 Roll success evaluation for quest ${this.questID}:`, {
+        console.log(`[QuestModel.js] 🎯 Roll success evaluation for quest ${this.questID}:`, {
             criteria: this.rollSuccessCriteria,
             rollResult: rollResult,
             success: evaluationResult.success,
@@ -927,7 +927,7 @@ questSchema.methods.evaluateRollSuccess = function(rollResult) {
         return evaluationResult.success;
         
     } catch (error) {
-        console.error(`[QuestModel] ❌ Error evaluating roll success:`, error);
+        console.error(`[QuestModel.js] ❌ Error evaluating roll success:`, error);
         // Default to true to avoid blocking quest progress
         return true;
     }
@@ -945,7 +945,7 @@ questSchema.methods.parseAndEvaluateCriteria = function(criteriaString, rollResu
         return this.evaluateSimpleCriteria(criteriaString, rollResult);
         
     } catch (error) {
-        console.error(`[QuestModel] ❌ Error parsing criteria "${criteriaString}":`, error);
+        console.error(`[QuestModel.js] ❌ Error parsing criteria "${criteriaString}":`, error);
         return { success: false, reason: `Invalid criteria format: ${error.message}` };
     }
 };
@@ -1122,7 +1122,7 @@ questSchema.methods.evaluateComplexCriteria = function(criteriaString, rollResul
         return this.evaluateSimpleCriteria(criteriaString, rollResult);
         
     } catch (error) {
-        console.error(`[QuestModel] ❌ Error evaluating complex criteria:`, error);
+        console.error(`[QuestModel.js] ❌ Error evaluating complex criteria:`, error);
         return { success: false, reason: `Complex criteria evaluation failed: ${error.message}` };
     }
 };
@@ -1130,21 +1130,6 @@ questSchema.methods.evaluateComplexCriteria = function(criteriaString, rollResul
 // ============================================================================
 // ------------------- Quest Completion System -------------------
 // ============================================================================
-
-// ------------------- Completion Reasons ------------------
-const COMPLETION_REASONS = {
-    TIME_EXPIRED: 'time_expired',
-    ALL_PARTICIPANTS_COMPLETED: 'all_participants_completed',
-    MANUAL: 'manual'
-};
-
-// ------------------- Time Parsing Constants ------------------
-const TIME_MULTIPLIERS = {
-    HOUR: 60 * 60 * 1000,
-    DAY: 24 * 60 * 60 * 1000,
-    WEEK: 7 * 24 * 60 * 60 * 1000,
-    MONTH: 30 * 24 * 60 * 60 * 1000
-};
 
 // ------------------- Auto Completion Check ------------------
 questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
@@ -1167,6 +1152,10 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         this.completionReason = COMPLETION_REASONS.TIME_EXPIRED;
         this.completionProcessed = false; // Mark for reward processing
         await this.save();
+        
+        // Send quest completion summary notification
+        await sendQuestSummary(this, COMPLETION_REASONS.TIME_EXPIRED);
+        
         console.log(`[QuestModel.js] ⏰ Quest "${this.title}" completed due to time expiration`);
         return { completed: true, reason: COMPLETION_REASONS.TIME_EXPIRED, needsRewardProcessing: true };
     }
@@ -1176,13 +1165,15 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
     
     for (const [userId, participant] of this.participants) {
         if (participant.progress === PROGRESS_STATUS.ACTIVE && meetsRequirements(participant, this)) {
-            participant.progress = PROGRESS_STATUS.COMPLETED;
-            participant.completedAt = new Date();
-            participant.completionProcessed = false; // Mark for reward processing
-            participant.lastCompletionCheck = new Date();
+            markParticipantCompleted(participant);
             participantsCompleted++;
             newCompletions++;
             console.log(`[QuestModel.js] ✅ Auto-completed quest for ${participant.characterName} in quest ${this.title}`);
+            
+            // Send completion notification for non-RP quests (RP quests handle their own notifications)
+            if (this.questType !== QUEST_TYPES.RP) {
+                await sendCompletionNotification(this, participant);
+            }
         }
     }
     
@@ -1208,6 +1199,10 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         this.completionProcessed = false; // Mark for reward processing
         console.log(`[QuestModel.js] 🎉 Quest "${this.title}" completed - all participants finished`);
         await this.save();
+        
+        // Send quest completion summary notification
+        await sendQuestSummary(this, COMPLETION_REASONS.ALL_PARTICIPANTS_COMPLETED);
+        
         return { completed: true, reason: COMPLETION_REASONS.ALL_PARTICIPANTS_COMPLETED, needsRewardProcessing: true };
     }
     
