@@ -605,11 +605,14 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
         // Check if the entire quest should be completed
         const autoCompletionResult = await quest.checkAutoCompletion();
         
-        if (autoCompletionResult.completed) {
+        if (autoCompletionResult.completed && autoCompletionResult.needsRewardProcessing) {
             console.log(`[questRewardModule.js] ✅ Quest ${questID} completed: ${autoCompletionResult.reason}`);
             
             // Process quest completion and distribute rewards
             await processQuestCompletion(questID);
+            
+            // Mark completion as processed to prevent duplicates
+            await quest.markCompletionProcessed();
         }
         
         return { success: true, questCompleted: autoCompletionResult.completed };
@@ -655,11 +658,14 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         // Check if the entire quest should be completed
         const autoCompletionResult = await quest.checkAutoCompletion();
         
-        if (autoCompletionResult.completed) {
+        if (autoCompletionResult.completed && autoCompletionResult.needsRewardProcessing) {
             console.log(`[questRewardModule.js] ✅ Quest ${questID} completed: ${autoCompletionResult.reason}`);
             
             // Process quest completion and distribute rewards
             await processQuestCompletion(questID);
+            
+            // Mark completion as processed to prevent duplicates
+            await quest.markCompletionProcessed();
         }
         
         return { success: true, questCompleted: autoCompletionResult.completed };

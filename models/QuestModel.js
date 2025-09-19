@@ -54,7 +54,10 @@ const integrationFields = {
 // ------------------- Quest Status Fields ------------------
 const statusFields = {
     status: { type: String, enum: ['active', 'completed'], default: 'active' },
-    completionReason: { type: String, default: null }
+    completionReason: { type: String, default: null },
+    completedAt: { type: Date, default: null },
+    completionProcessed: { type: Boolean, default: false }, // Prevents duplicate reward processing
+    lastCompletionCheck: { type: Date, default: null } // Tracks when completion was last checked
 };
 
 // ------------------- Submission Schema ------------------
@@ -111,7 +114,10 @@ const participantSchema = {
         success: { type: Boolean, default: false }
     }], // Track table roll results for interactive quests
     successfulRolls: { type: Number, default: 0 }, // Count of successful rolls
-    updatedAt: { type: Date, default: Date.now }
+    updatedAt: { type: Date, default: Date.now },
+    // Completion tracking
+    completionProcessed: { type: Boolean, default: false }, // Prevents duplicate reward processing
+    lastCompletionCheck: { type: Date, default: null } // Tracks when completion was last checked
 };
 
 // ------------------- Left Participant Schema ------------------
@@ -451,6 +457,8 @@ questSchema.methods.completeFromArtSubmission = async function(userId, submissio
         participant.progress = 'completed';
         participant.completedAt = new Date();
         participant.updatedAt = new Date();
+        participant.completionProcessed = false; // Mark for reward processing
+        participant.lastCompletionCheck = new Date();
         
         // Clear quest submission info if it exists
         participant.questSubmissionInfo = null;
@@ -498,6 +506,8 @@ questSchema.methods.completeFromWritingSubmission = async function(userId, submi
         participant.progress = 'completed';
         participant.completedAt = new Date();
         participant.updatedAt = new Date();
+        participant.completionProcessed = false; // Mark for reward processing
+        participant.lastCompletionCheck = new Date();
         
         // Clear quest submission info if it exists
         participant.questSubmissionInfo = null;
@@ -712,28 +722,41 @@ const TIME_MULTIPLIERS = {
 };
 
 // ------------------- Auto Completion Check ------------------
-questSchema.methods.checkAutoCompletion = async function() {
+questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
+    // Prevent duplicate processing unless forced
+    if (!forceCheck && this.completionProcessed) {
+        return { completed: false, reason: 'Already processed' };
+    }
+    
     if (this.status !== PROGRESS_STATUS.ACTIVE) {
         return { completed: false, reason: 'Quest not active' };
     }
+    
+    // Update last completion check time
+    this.lastCompletionCheck = new Date();
     
     const timeExpired = this.checkTimeExpiration();
     if (timeExpired) {
         this.status = PROGRESS_STATUS.COMPLETED;
         this.completedAt = new Date();
         this.completionReason = COMPLETION_REASONS.TIME_EXPIRED;
+        this.completionProcessed = false; // Mark for reward processing
         await this.save();
         console.log(`[QuestModel.js] ⏰ Quest "${this.title}" completed due to time expiration`);
-        return { completed: true, reason: COMPLETION_REASONS.TIME_EXPIRED };
+        return { completed: true, reason: COMPLETION_REASONS.TIME_EXPIRED, needsRewardProcessing: true };
     }
     
     let participantsCompleted = 0;
+    let newCompletions = 0;
     
     for (const [userId, participant] of this.participants) {
         if (participant.progress === PROGRESS_STATUS.ACTIVE && meetsRequirements(participant, this)) {
             participant.progress = PROGRESS_STATUS.COMPLETED;
             participant.completedAt = new Date();
+            participant.completionProcessed = false; // Mark for reward processing
+            participant.lastCompletionCheck = new Date();
             participantsCompleted++;
+            newCompletions++;
             console.log(`[QuestModel.js] ✅ Auto-completed quest for ${participant.characterName} in quest ${this.title}`);
         }
     }
@@ -751,17 +774,25 @@ questSchema.methods.checkAutoCompletion = async function() {
         this.status = PROGRESS_STATUS.COMPLETED;
         this.completedAt = new Date();
         this.completionReason = COMPLETION_REASONS.ALL_PARTICIPANTS_COMPLETED;
+        this.completionProcessed = false; // Mark for reward processing
         console.log(`[QuestModel.js] 🎉 Quest "${this.title}" completed - all participants finished`);
         await this.save();
-        return { completed: true, reason: COMPLETION_REASONS.ALL_PARTICIPANTS_COMPLETED };
+        return { completed: true, reason: COMPLETION_REASONS.ALL_PARTICIPANTS_COMPLETED, needsRewardProcessing: true };
     }
     
     if (participantsCompleted > 0) {
         await this.save();
-        return { completed: false, reason: `${participantsCompleted} participants completed` };
+        return { completed: false, reason: `${participantsCompleted} participants completed`, newCompletions };
     }
     
     return { completed: false, reason: 'No participants completed' };
+};
+
+// ------------------- Mark Completion as Processed ------------------
+questSchema.methods.markCompletionProcessed = async function() {
+    this.completionProcessed = true;
+    await this.save();
+    console.log(`[QuestModel.js] ✅ Marked quest ${this.questID} completion as processed`);
 };
 
 // ------------------- Time Expiration Check ------------------
