@@ -1668,6 +1668,14 @@ async function handleQuestCompletionFromSubmission(submission, userId) {
     // Save the quest with updated participant data
     await quest.save();
     
+    // Update quest embed using centralized manager
+    try {
+        const questModule = require('../world/quest');
+        await questModule.updateQuestEmbed(null, quest, interaction.client, 'modAction');
+    } catch (error) {
+        console.error(`[mod.js] ❌ Error updating quest embed:`, error);
+    }
+    
     // Use unified completion system
     const completionResult = await quest.checkAutoCompletion();
     
