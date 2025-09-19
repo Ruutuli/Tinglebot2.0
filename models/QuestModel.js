@@ -662,12 +662,147 @@ questSchema.methods.setTableRollConfig = function(tableRollName, config = {}) {
         throw new Error(`Quest ${this.questID} is not an Interactive quest`);
     }
     
+    // Validate success criteria if provided
+    if (config.successCriteria) {
+        const validation = this.validateSuccessCriteria(config.successCriteria);
+        if (!validation.valid) {
+            throw new Error(`Invalid success criteria: ${validation.error}`);
+        }
+    }
+    
     this.tableRollName = tableRollName;
     this.tableRollConfig = config;
     this.requiredRolls = config.requiredRolls || 1;
     this.rollSuccessCriteria = config.successCriteria || null;
     
     return this;
+};
+
+// ------------------- Validate Success Criteria Format ------------------
+questSchema.methods.validateSuccessCriteria = function(criteria) {
+    try {
+        if (!criteria || typeof criteria !== 'string') {
+            return { valid: false, error: 'Criteria must be a non-empty string' };
+        }
+        
+        const criteriaTrimmed = criteria.trim();
+        if (criteriaTrimmed.length === 0) {
+            return { valid: false, error: 'Criteria cannot be empty' };
+        }
+        
+        // Check for valid criteria types
+        const validTypes = ['item:', 'flavor:', 'weight:', 'thumbnail:', 'exact:', 'regex:'];
+        const hasValidType = validTypes.some(type => criteriaTrimmed.toLowerCase().includes(type));
+        
+        if (!hasValidType && !criteriaTrimmed.includes(' AND ') && !criteriaTrimmed.includes(' OR ')) {
+            return { valid: false, error: `Criteria must start with one of: ${validTypes.join(', ')} or contain AND/OR logic` };
+        }
+        
+        // Validate weight criteria format
+        if (criteriaTrimmed.toLowerCase().includes('weight:')) {
+            const weightValidation = this.validateWeightCriteria(criteriaTrimmed);
+            if (!weightValidation.valid) {
+                return weightValidation;
+            }
+        }
+        
+        // Validate regex criteria format
+        if (criteriaTrimmed.toLowerCase().includes('regex:')) {
+            const regexValidation = this.validateRegexCriteria(criteriaTrimmed);
+            if (!regexValidation.valid) {
+                return regexValidation;
+            }
+        }
+        
+        return { valid: true, error: null };
+        
+    } catch (error) {
+        return { valid: false, error: `Validation error: ${error.message}` };
+    }
+};
+
+// ------------------- Validate Weight Criteria Format ------------------
+questSchema.methods.validateWeightCriteria = function(criteria) {
+    const weightMatches = criteria.match(/weight:\s*([^ANDOR]+)/gi);
+    if (!weightMatches) {
+        return { valid: true, error: null }; // No weight criteria found
+    }
+    
+    for (const match of weightMatches) {
+        const weightPart = match.split(':')[1].trim();
+        
+        // Check for valid weight operators
+        const validOperators = ['>=', '<=', '>', '<', '-'];
+        const hasValidOperator = validOperators.some(op => weightPart.includes(op));
+        
+        if (!hasValidOperator && isNaN(parseFloat(weightPart))) {
+            return { valid: false, error: `Invalid weight criteria: "${weightPart}". Must use operators (>=, <=, >, <, -) or exact number` };
+        }
+        
+        // Validate range format
+        if (weightPart.includes('-')) {
+            const [min, max] = weightPart.split('-').map(x => x.trim());
+            if (isNaN(parseFloat(min)) || isNaN(parseFloat(max))) {
+                return { valid: false, error: `Invalid range format: "${weightPart}". Both values must be numbers` };
+            }
+            if (parseFloat(min) >= parseFloat(max)) {
+                return { valid: false, error: `Invalid range: minimum (${min}) must be less than maximum (${max})` };
+            }
+        }
+    }
+    
+    return { valid: true, error: null };
+};
+
+// ------------------- Validate Regex Criteria Format ------------------
+questSchema.methods.validateRegexCriteria = function(criteria) {
+    const regexMatches = criteria.match(/regex:\s*([^ANDOR]+)/gi);
+    if (!regexMatches) {
+        return { valid: true, error: null }; // No regex criteria found
+    }
+    
+    for (const match of regexMatches) {
+        const regexPart = match.split(':')[1].trim();
+        try {
+            new RegExp(regexPart, 'i');
+        } catch (error) {
+            return { valid: false, error: `Invalid regex pattern: "${regexPart}". ${error.message}` };
+        }
+    }
+    
+    return { valid: true, error: null };
+};
+
+// ------------------- Get Supported Criteria Types ------------------
+questSchema.methods.getSupportedCriteriaTypes = function() {
+    return {
+        simple: [
+            'item:text - Item name contains text',
+            'flavor:text - Flavor text contains text', 
+            'weight:>5 - Weight greater than 5',
+            'weight:>=5 - Weight greater than or equal to 5',
+            'weight:<10 - Weight less than 10',
+            'weight:<=10 - Weight less than or equal to 10',
+            'weight:5-10 - Weight between 5 and 10',
+            'weight:5 - Exact weight of 5',
+            'thumbnail:text - Thumbnail URL contains text',
+            'exact:text - Item name exactly matches text',
+            'regex:pattern - Matches regex pattern'
+        ],
+        complex: [
+            'item:sword AND weight:>5 - Item contains "sword" AND weight > 5',
+            'flavor:magic OR item:staff - Flavor contains "magic" OR item contains "staff"',
+            'item:sword AND weight:>5 AND flavor:enchanted - Multiple AND conditions',
+            'item:sword OR item:staff OR item:bow - Multiple OR conditions'
+        ],
+        examples: [
+            'item:sword - Find any sword',
+            'weight:>10 - Find heavy items',
+            'flavor:enchanted AND weight:>5 - Find heavy enchanted items',
+            'item:sword OR item:staff - Find weapons',
+            'regex:^[A-Z].* - Find items starting with capital letter'
+        ]
+    };
 };
 
 questSchema.methods.processTableRoll = async function(userId, rollResult) {
@@ -733,35 +868,218 @@ questSchema.methods.evaluateRollSuccess = function(rollResult) {
         return true;
     }
     
-    // Parse success criteria (e.g., "item:sword", "rarity:rare", "weight:>5")
-    const criteria = this.rollSuccessCriteria.toLowerCase();
-    
-    if (criteria.startsWith('item:')) {
-        const requiredItem = criteria.split(':')[1];
-        return rollResult.item && rollResult.item.toLowerCase().includes(requiredItem);
+    try {
+        // Parse and evaluate success criteria
+        const evaluationResult = this.parseAndEvaluateCriteria(this.rollSuccessCriteria, rollResult);
+        
+        console.log(`[QuestModel] 🎯 Roll success evaluation for quest ${this.questID}:`, {
+            criteria: this.rollSuccessCriteria,
+            rollResult: rollResult,
+            success: evaluationResult.success,
+            reason: evaluationResult.reason
+        });
+        
+        return evaluationResult.success;
+        
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error evaluating roll success:`, error);
+        // Default to true to avoid blocking quest progress
+        return true;
     }
-    
-    if (criteria.startsWith('rarity:')) {
-        const requiredRarity = criteria.split(':')[1];
-        return rollResult.rarity && rollResult.rarity.toLowerCase() === requiredRarity;
-    }
-    
-    if (criteria.startsWith('weight:')) {
-        const weightCondition = criteria.split(':')[1];
-        if (weightCondition.startsWith('>')) {
-            const minWeight = parseFloat(weightCondition.substring(1));
-            return rollResult.weight && rollResult.weight > minWeight;
+};
+
+// ------------------- Parse and Evaluate Success Criteria ------------------
+questSchema.methods.parseAndEvaluateCriteria = function(criteriaString, rollResult) {
+    try {
+        // Handle complex criteria with AND/OR logic
+        if (criteriaString.includes(' AND ') || criteriaString.includes(' OR ')) {
+            return this.evaluateComplexCriteria(criteriaString, rollResult);
         }
-        if (weightCondition.startsWith('<')) {
-            const maxWeight = parseFloat(weightCondition.substring(1));
-            return rollResult.weight && rollResult.weight < maxWeight;
-        }
-        const exactWeight = parseFloat(weightCondition);
-        return rollResult.weight && rollResult.weight === exactWeight;
+        
+        // Handle simple single criteria
+        return this.evaluateSimpleCriteria(criteriaString, rollResult);
+        
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error parsing criteria "${criteriaString}":`, error);
+        return { success: false, reason: `Invalid criteria format: ${error.message}` };
+    }
+};
+
+// ------------------- Evaluate Simple Single Criteria ------------------
+questSchema.methods.evaluateSimpleCriteria = function(criteria, rollResult) {
+    const criteriaLower = criteria.toLowerCase().trim();
+    
+    // Item criteria
+    if (criteriaLower.startsWith('item:')) {
+        const requiredItem = criteria.split(':')[1].trim();
+        const hasItem = rollResult.item && rollResult.item.toLowerCase().includes(requiredItem.toLowerCase());
+        return { 
+            success: hasItem, 
+            reason: hasItem ? `Item "${rollResult.item}" contains "${requiredItem}"` : `Item "${rollResult.item}" does not contain "${requiredItem}"`
+        };
     }
     
-    // Default: any roll is successful
-    return true;
+    // Flavor criteria
+    if (criteriaLower.startsWith('flavor:')) {
+        const requiredFlavor = criteria.split(':')[1].trim();
+        const hasFlavor = rollResult.flavor && rollResult.flavor.toLowerCase().includes(requiredFlavor.toLowerCase());
+        return { 
+            success: hasFlavor, 
+            reason: hasFlavor ? `Flavor contains "${requiredFlavor}"` : `Flavor does not contain "${requiredFlavor}"`
+        };
+    }
+    
+    // Weight criteria with operators
+    if (criteriaLower.startsWith('weight:')) {
+        const weightCondition = criteria.split(':')[1].trim();
+        return this.evaluateWeightCriteria(weightCondition, rollResult);
+    }
+    
+    // Thumbnail criteria
+    if (criteriaLower.startsWith('thumbnail:')) {
+        const requiredThumbnail = criteria.split(':')[1].trim();
+        const hasThumbnail = rollResult.thumbnailImage && rollResult.thumbnailImage.toLowerCase().includes(requiredThumbnail.toLowerCase());
+        return { 
+            success: hasThumbnail, 
+            reason: hasThumbnail ? `Thumbnail contains "${requiredThumbnail}"` : `Thumbnail does not contain "${requiredThumbnail}"`
+        };
+    }
+    
+    // Exact match criteria
+    if (criteriaLower.startsWith('exact:')) {
+        const requiredExact = criteria.split(':')[1].trim();
+        const isExact = rollResult.item && rollResult.item.toLowerCase() === requiredExact.toLowerCase();
+        return { 
+            success: isExact, 
+            reason: isExact ? `Item exactly matches "${requiredExact}"` : `Item "${rollResult.item}" does not exactly match "${requiredExact}"`
+        };
+    }
+    
+    // Regex criteria
+    if (criteriaLower.startsWith('regex:')) {
+        const regexPattern = criteria.split(':')[1].trim();
+        try {
+            const regex = new RegExp(regexPattern, 'i');
+            const matches = regex.test(rollResult.item || '') || regex.test(rollResult.flavor || '');
+            return { 
+                success: matches, 
+                reason: matches ? `Matches regex pattern "${regexPattern}"` : `Does not match regex pattern "${regexPattern}"`
+            };
+        } catch (error) {
+            return { success: false, reason: `Invalid regex pattern: ${error.message}` };
+        }
+    }
+    
+    // Unknown criteria type
+    return { 
+        success: false, 
+        reason: `Unknown criteria type: ${criteria.split(':')[0]}` 
+    };
+};
+
+// ------------------- Evaluate Weight Criteria ------------------
+questSchema.methods.evaluateWeightCriteria = function(weightCondition, rollResult) {
+    if (!rollResult.weight) {
+        return { success: false, reason: 'No weight value in roll result' };
+    }
+    
+    const rollWeight = parseFloat(rollResult.weight);
+    const condition = weightCondition.trim();
+    
+    // Greater than
+    if (condition.startsWith('>=')) {
+        const minWeight = parseFloat(condition.substring(2));
+        const success = rollWeight >= minWeight;
+        return { 
+            success, 
+            reason: success ? `Weight ${rollWeight} >= ${minWeight}` : `Weight ${rollWeight} < ${minWeight}`
+        };
+    }
+    
+    if (condition.startsWith('>')) {
+        const minWeight = parseFloat(condition.substring(1));
+        const success = rollWeight > minWeight;
+        return { 
+            success, 
+            reason: success ? `Weight ${rollWeight} > ${minWeight}` : `Weight ${rollWeight} <= ${minWeight}`
+        };
+    }
+    
+    // Less than
+    if (condition.startsWith('<=')) {
+        const maxWeight = parseFloat(condition.substring(2));
+        const success = rollWeight <= maxWeight;
+        return { 
+            success, 
+            reason: success ? `Weight ${rollWeight} <= ${maxWeight}` : `Weight ${rollWeight} > ${maxWeight}`
+        };
+    }
+    
+    if (condition.startsWith('<')) {
+        const maxWeight = parseFloat(condition.substring(1));
+        const success = rollWeight < maxWeight;
+        return { 
+            success, 
+            reason: success ? `Weight ${rollWeight} < ${maxWeight}` : `Weight ${rollWeight} >= ${maxWeight}`
+        };
+    }
+    
+    // Range (e.g., "5-10")
+    if (condition.includes('-')) {
+        const [min, max] = condition.split('-').map(x => parseFloat(x.trim()));
+        const success = rollWeight >= min && rollWeight <= max;
+        return { 
+            success, 
+            reason: success ? `Weight ${rollWeight} is in range ${min}-${max}` : `Weight ${rollWeight} is not in range ${min}-${max}`
+        };
+    }
+    
+    // Exact match
+    const exactWeight = parseFloat(condition);
+    const success = Math.abs(rollWeight - exactWeight) < 0.001; // Account for floating point precision
+    return { 
+        success, 
+        reason: success ? `Weight ${rollWeight} exactly matches ${exactWeight}` : `Weight ${rollWeight} does not match ${exactWeight}`
+    };
+};
+
+// ------------------- Evaluate Complex Criteria (AND/OR Logic) ------------------
+questSchema.methods.evaluateComplexCriteria = function(criteriaString, rollResult) {
+    try {
+        // Parse AND/OR logic
+        const andParts = criteriaString.split(' AND ');
+        if (andParts.length > 1) {
+            // Handle AND logic
+            const results = andParts.map(part => this.evaluateSimpleCriteria(part.trim(), rollResult));
+            const allSuccess = results.every(result => result.success);
+            return {
+                success: allSuccess,
+                reason: allSuccess ? 
+                    `All AND conditions met: ${results.map(r => r.reason).join('; ')}` :
+                    `AND conditions failed: ${results.filter(r => !r.success).map(r => r.reason).join('; ')}`
+            };
+        }
+        
+        const orParts = criteriaString.split(' OR ');
+        if (orParts.length > 1) {
+            // Handle OR logic
+            const results = orParts.map(part => this.evaluateSimpleCriteria(part.trim(), rollResult));
+            const anySuccess = results.some(result => result.success);
+            return {
+                success: anySuccess,
+                reason: anySuccess ? 
+                    `At least one OR condition met: ${results.filter(r => r.success).map(r => r.reason).join('; ')}` :
+                    `All OR conditions failed: ${results.map(r => r.reason).join('; ')}`
+            };
+        }
+        
+        // Fallback to simple criteria
+        return this.evaluateSimpleCriteria(criteriaString, rollResult);
+        
+    } catch (error) {
+        console.error(`[QuestModel] ❌ Error evaluating complex criteria:`, error);
+        return { success: false, reason: `Complex criteria evaluation failed: ${error.message}` };
+    }
 };
 
 // ============================================================================
