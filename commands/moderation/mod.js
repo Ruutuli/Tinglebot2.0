@@ -1231,7 +1231,6 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -5174,7 +5173,6 @@ async function handleVillageCheck(interaction) {
     return await safeReply(interaction, '❌ An error occurred while checking village locations. Please try again later.');
   }
 }
-
 
 // ============================================================================
 // ------------------- Export Command -------------------

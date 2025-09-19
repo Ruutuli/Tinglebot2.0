@@ -367,12 +367,32 @@ module.exports = {
         if (quest.tableRollName === tableName) {
           console.log(`[tableroll.js] Processing table roll for quest ${quest.questID} (${quest.title})`);
           try {
-            const questResult = await quest.processTableRoll(userId, result.result);
+            // Use the new completion method that handles quest completion
+            const questResult = await quest.completeFromTableRoll(userId, result.result);
             questIntegrationResults.push({
               quest: quest,
               result: questResult
             });
             console.log(`[tableroll.js] ✅ Quest integration successful for quest ${quest.questID}:`, questResult);
+            
+            // If quest was completed, check for auto-completion and rewards
+            if (questResult.questCompleted) {
+              try {
+                const autoCompletionResult = await quest.checkAutoCompletion();
+                if (autoCompletionResult.completed && autoCompletionResult.needsRewardProcessing) {
+                  console.log(`[tableroll.js] 🎉 Quest ${quest.questID} completed: ${autoCompletionResult.reason}`);
+                  
+                  // Import and use quest reward module
+                  const questRewardModule = require('../../modules/questRewardModule');
+                  await questRewardModule.processQuestCompletion(quest.questID);
+                  
+                  // Mark completion as processed
+                  await quest.markCompletionProcessed();
+                }
+              } catch (rewardError) {
+                console.error(`[tableroll.js] ❌ Error processing quest rewards:`, rewardError);
+              }
+            }
           } catch (error) {
             console.error(`[tableroll.js] ❌ Quest integration failed for quest ${quest.questID}:`, error);
             questIntegrationResults.push({

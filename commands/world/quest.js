@@ -406,7 +406,13 @@ module.exports = {
     // Add submission info if available
     if (participant.submissions && participant.submissions.length > 0) {
      const approvedSubmissions = participant.submissions.filter(sub => sub.approved).length;
-     questInfo += `✅ Submissions: ${approvedSubmissions} approved\n`;
+     if (quest.questType === 'Art / Writing') {
+       const artSubmissions = participant.submissions.filter(sub => sub.type === 'art' && sub.approved).length;
+       const writingSubmissions = participant.submissions.filter(sub => sub.type === 'writing' && sub.approved).length;
+       questInfo += `✅ Submissions: ${artSubmissions} art, ${writingSubmissions} writing (need both)\n`;
+     } else {
+       questInfo += `✅ Submissions: ${approvedSubmissions} approved\n`;
+     }
     }
 
     embed.addFields({
