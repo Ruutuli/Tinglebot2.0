@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchItemByName } = require('../../database/db');
 const TableRoll = require('../../models/TableRollModel');
+const Quest = require('../../models/QuestModel');
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 const { safeAppendDataToSheet, extractSpreadsheetId, isValidGoogleSheetsUrl, authorizeSheets } = require('../../utils/googleSheetsUtils');
 const { DEFAULT_IMAGE_URL } = require('../../embeds/embeds.js');
@@ -45,6 +46,25 @@ async function getItemImage(itemName) {
   
   // Fallback to default image if not found in database
   return null;
+}
+
+// ------------------- Helper function to find active interactive quests for user -------------------
+async function findActiveInteractiveQuests(userId) {
+  try {
+    const quests = await Quest.find({
+      status: 'active',
+      questType: 'Interactive',
+      [`participants.${userId}`]: { $exists: true }
+    });
+    
+    return quests.filter(quest => {
+      const participant = quest.participants.get(userId);
+      return participant && participant.progress === 'active' && quest.tableRollName;
+    });
+  } catch (error) {
+    console.error(`Error finding active interactive quests for user ${userId}:`, error);
+    return [];
+  }
 }
 
 // ------------------- Exporting the slash command for table rolls -------------------
@@ -336,6 +356,35 @@ module.exports = {
       const rolledRarity = result.result.rarity;
       const totalEntries = table.entries.length;
       
+      // Check for active interactive quests and process table roll
+      const activeInteractiveQuests = await findActiveInteractiveQuests(userId);
+      let questIntegrationResults = [];
+      
+      console.log(`[tableroll.js] Found ${activeInteractiveQuests.length} active interactive quests for user ${userId}`);
+      
+      for (const quest of activeInteractiveQuests) {
+        // Check if this quest uses the same table roll
+        if (quest.tableRollName === tableName) {
+          console.log(`[tableroll.js] Processing table roll for quest ${quest.questID} (${quest.title})`);
+          try {
+            const questResult = await quest.processTableRoll(userId, result.result);
+            questIntegrationResults.push({
+              quest: quest,
+              result: questResult
+            });
+            console.log(`[tableroll.js] ✅ Quest integration successful for quest ${quest.questID}:`, questResult);
+          } catch (error) {
+            console.error(`[tableroll.js] ❌ Quest integration failed for quest ${quest.questID}:`, error);
+            questIntegrationResults.push({
+              quest: quest,
+              result: { success: false, error: error.message }
+            });
+          }
+        } else {
+          console.log(`[tableroll.js] Quest ${quest.questID} uses table '${quest.tableRollName}', skipping (current table: '${tableName}')`);
+        }
+      }
+      
       // Find the rolled index in the table
       const rolledIndex = table.entries.findIndex(e => 
         e.item === rolledItemName && 
@@ -440,6 +489,46 @@ module.exports = {
          embed.addFields({
            name: '__✅ Inventory Updated__',
            value: `> **${rolledItemName}** has been added to ${character.name}'s inventory!`,
+           inline: false
+         });
+       }
+       
+       // Add quest integration feedback to embed
+       if (questIntegrationResults.length > 0) {
+         const questFields = [];
+         
+         for (const questResult of questIntegrationResults) {
+           const { quest, result } = questResult;
+           const participant = quest.participants.get(userId);
+           
+           if (result.success) {
+             const questProgressText = `**${quest.title}** (ID: \`${quest.questID}\`)\n` +
+               `> 🎯 Progress: ${result.totalSuccessfulRolls}/${result.requiredRolls} successful rolls\n` +
+               `> ${result.isSuccess ? '✅' : '❌'} This roll was ${result.isSuccess ? 'successful' : 'unsuccessful'}\n` +
+               `> ${result.questCompleted ? '🏆 Quest completed!' : '⏳ Quest in progress...'}`;
+             
+             questFields.push({
+               name: '__🎮 Quest Progress__',
+               value: questProgressText,
+               inline: false
+             });
+           } else {
+             questFields.push({
+               name: '__⚠️ Quest Integration Warning__',
+               value: `> **${quest.title}**: ${result.error || result.reason || 'Unknown error'}`,
+               inline: false
+             });
+           }
+         }
+         
+         // Add all quest fields to the embed
+         questFields.forEach(field => embed.addFields(field));
+       } else if (activeInteractiveQuests.length > 0) {
+         // User has active interactive quests but none use this table
+         const questNames = activeInteractiveQuests.map(q => `**${q.title}** (uses \`${q.tableRollName}\`)`).join('\n');
+         embed.addFields({
+           name: '__ℹ️ Quest Information__',
+           value: `> You have active interactive quests, but none use the **${tableName}** table:\n> ${questNames}`,
            inline: false
          });
        }
