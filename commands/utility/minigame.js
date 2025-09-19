@@ -21,7 +21,6 @@ const User = require('../../models/UserModel');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
-const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 
 // ============================================================================
 // ------------------- Import minigame module -------------------
@@ -94,179 +93,8 @@ function createSimpleErrorEmbed(message, characterIcon = null) {
   return embed;
 }
 
-// ------------------- Function: determineMinigameRewards -------------------
-// Determines rewards based on animals lost and village type
-function determineMinigameRewards(animalsLost, village) {
-  const rewards = [];
-  
-  if (animalsLost === 0) {
-    // Perfect defense - Spirit Orb (fat chance)
-    rewards.push({ name: 'Job Voucher', quantity: 1, description: 'Perfect defense! No animals lost!' }); // Job Voucher for testing. revert to Spirit Orb after testing
-  } else if (animalsLost >= 1 && animalsLost <= 5) {
-    // Good defense - Colored gem based on village
-    let gemName;
-    switch (village) {
-      case 'rudania':
-        gemName = 'Ruby';
-        break;
-      case 'inariko':
-        gemName = 'Sapphire';
-        break;
-      case 'vhintl':
-        gemName = 'Emerald';
-        break;
-      default:
-        gemName = 'Ruby'; // Default to Ruby
-    }
-    rewards.push({ name: gemName, quantity: 1, description: `Good defense! Only ${animalsLost} animals lost.` });
-  } else if (animalsLost >= 6 && animalsLost <= 10) {
-    // Poor defense - Knight's Broadsword
-    rewards.push({ name: 'Knight\'s Broadsword', quantity: 1, description: `They clearly need new weapons at this point, right? (${animalsLost} animals lost)` });
-  } else if (animalsLost >= 11 && animalsLost <= 15) {
-    // Very poor defense - Hateno Cheese
-    rewards.push({ name: 'Hateno Cheese', quantity: 2, description: `Well, you tried, have some produce? (${animalsLost} animals lost)` });
-  } else if (animalsLost >= 16 && animalsLost <= 24) {
-    // Terrible defense - Swift Carrot
-    rewards.push({ name: 'Swift Carrot', quantity: 3, description: `You clearly need to be faster! (${animalsLost} animals lost)` });
-  } else if (animalsLost === 25) {
-    // Total failure - Wool and Leather
-    rewards.push({ name: 'Wool', quantity: 3, description: 'All the animals are gone... a pile of these appeared in the morning...' });
-    rewards.push({ name: 'Leather', quantity: 3, description: 'All the animals are gone... a pile of these appeared in the morning...' });
-  }
-  
-  return rewards;
-}
 
-// ------------------- Function: distributeMinigameRewards -------------------
-// Distributes rewards to all players who participated in the minigame
-async function distributeMinigameRewards(session, animalsLost, interaction) {
-  const rewards = determineMinigameRewards(animalsLost, session.village);
-  const results = {
-    success: true,
-    errors: [],
-    rewardsGiven: [],
-    totalPlayers: session.players.length,
-    tokensAwarded: 0
-  };
-  
-  if (rewards.length === 0) {
-    console.log(`[MINIGAME] No rewards to distribute for ${animalsLost} animals lost`);
-    return results;
-  }
-  
-  console.log(`[MINIGAME] Distributing rewards for ${animalsLost} animals lost:`, rewards.map(r => `${r.quantity}x ${r.name}`).join(', '));
-  
-  // Process each player
-  for (const player of session.players) {
-    try {
-      // Fetch character
-      const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('../../database/db');
-      let character = await fetchCharacterByNameAndUserId(player.characterName, player.discordId);
-      
-      // If not found as regular character, try as mod character
-      if (!character) {
-        character = await fetchModCharacterByNameAndUserId(player.characterName, player.discordId);
-      }
-      
-      if (!character) {
-        console.error(`[MINIGAME] Character not found: ${player.characterName} (${player.discordId})`);
-        results.errors.push(`Character ${player.characterName} not found`);
-        continue;
-      }
-      
-      // Distribute each reward to the character
-      for (const reward of rewards) {
-        try {
-          await addItemInventoryDatabase(
-            character._id,
-            reward.name,
-            reward.quantity,
-            interaction,
-            'Minigame Reward'
-          );
-          
-          console.log(`[MINIGAME] Added ${reward.quantity}x ${reward.name} to ${character.name}`);
-        } catch (itemError) {
-          console.error(`[MINIGAME] Failed to add ${reward.name} to ${character.name}:`, itemError);
-          results.errors.push(`Failed to add ${reward.name} to ${character.name}: ${itemError.message}`);
-        }
-      }
-      
-      // Calculate and distribute token rewards based on submissions
-      const tokenReward = calculateMinigameTokenReward(animalsLost);
-      if (tokenReward > 0) {
-        try {
-          const User = require('../../models/UserModel');
-          const user = await User.findOne({ discordId: player.discordId });
-          if (user) {
-            user.tokens = (user.tokens || 0) + tokenReward;
-            await user.save();
-            results.tokensAwarded += tokenReward;
-            console.log(`[MINIGAME] Added ${tokenReward} tokens to ${character.name}`);
-          } else {
-            console.error(`[MINIGAME] User not found for token distribution: ${player.discordId}`);
-            results.errors.push(`User not found for token distribution: ${player.characterName}`);
-          }
-        } catch (tokenError) {
-          console.error(`[MINIGAME] Failed to add tokens to ${character.name}:`, tokenError);
-          results.errors.push(`Failed to add tokens to ${character.name}: ${tokenError.message}`);
-        }
-      }
-      
-      results.rewardsGiven.push({
-        characterName: character.name,
-        rewards: rewards.map(r => ({ name: r.name, quantity: r.quantity })),
-        tokensAwarded: tokenReward
-      });
-      
-    } catch (error) {
-      console.error(`[MINIGAME] Error processing rewards for player ${player.characterName}:`, error);
-      results.errors.push(`Error processing rewards for ${player.characterName}: ${error.message}`);
-    }
-  }
-  
-  if (results.errors.length > 0) {
-    results.success = false;
-  }
-  
-  return results;
-}
 
-// ------------------- Function: calculateMinigameTokenReward -------------------
-// Calculates token rewards based on animals lost (per_unit: 222, max: 3 submissions)
-function calculateMinigameTokenReward(animalsLost) {
-  const perUnit = 222;
-  const maxSubmissions = 3;
-  
-  // Calculate submissions based on performance
-  // Better performance = more submissions allowed
-  let submissions = 0;
-  
-  if (animalsLost === 0) {
-    // Perfect defense - all 3 submissions
-    submissions = 3;
-  } else if (animalsLost >= 1 && animalsLost <= 5) {
-    // Good defense - 2 submissions
-    submissions = 2;
-  } else if (animalsLost >= 6 && animalsLost <= 10) {
-    // Poor defense - 1 submission
-    submissions = 1;
-  } else if (animalsLost >= 11 && animalsLost <= 15) {
-    // Very poor defense - 1 submission
-    submissions = 1;
-  } else if (animalsLost >= 16 && animalsLost <= 24) {
-    // Terrible defense - 1 submission
-    submissions = 1;
-  } else if (animalsLost === 25) {
-    // Total failure - 0 submissions
-    submissions = 0;
-  }
-  
-  // Cap at maximum submissions
-  submissions = Math.min(submissions, maxSubmissions);
-  
-  return submissions * perUnit;
-}
 
 // ============================================================================
 // ------------------- Export the slash command -------------------
@@ -799,12 +627,8 @@ module.exports = {
         // Use already calculated animalsLost variable
         console.log(`[MINIGAME] Game ended - Animals saved: ${gameEndCheck.finalScore}, Animals lost: ${animalsLost}`);
         
-        // Distribute rewards to all players
-        const rewardResults = await distributeMinigameRewards(session, animalsLost, interaction);
-        console.log(`[MINIGAME] Reward distribution completed - Success: ${rewardResults.success}, Players rewarded: ${rewardResults.rewardsGiven.length}`);
-        
         // Create special end-game embed for round 8 completion
-        const endGameEmbed = await this.createEndGameEmbed(session, gameEndCheck, rewardResults);
+        const endGameEmbed = await this.createEndGameEmbed(session, gameEndCheck);
         const endGameOptions = {
           embeds: [endGameEmbed.embed]
         };
@@ -968,12 +792,8 @@ module.exports = {
         // Use already calculated animalsLost variable
         console.log(`[MINIGAME] Game ended - Animals saved: ${gameEndCheck.finalScore}, Animals lost: ${animalsLost}`);
         
-        // Distribute rewards to all players
-        const rewardResults = await distributeMinigameRewards(session, animalsLost, interaction);
-        console.log(`[MINIGAME] Reward distribution completed - Success: ${rewardResults.success}, Players rewarded: ${rewardResults.rewardsGiven.length}`);
-        
         // Create special end-game embed for round 8 completion
-        const endGameEmbed = await this.createEndGameEmbed(session, gameEndCheck, rewardResults);
+        const endGameEmbed = await this.createEndGameEmbed(session, gameEndCheck);
         const endGameOptions = {
           embeds: [endGameEmbed.embed]
         };
@@ -1499,7 +1319,7 @@ module.exports = {
   // ------------------- End Game Embed Creation -------------------
   // ============================================================================
   
-  async createEndGameEmbed(session, gameEndCheck, rewardResults = null) {
+  async createEndGameEmbed(session, gameEndCheck) {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     
@@ -1574,32 +1394,6 @@ module.exports = {
       );
     }
     
-    // Rewards section
-    if (rewardResults && rewardResults.rewardsGiven.length > 0) {
-      const rewardsText = rewardResults.rewardsGiven.map(player => {
-        const rewardList = player.rewards.map(r => `${r.quantity}x ${r.name}`).join(', ');
-        return `• **${player.characterName}**: ${rewardList}`;
-      }).join('\n');
-      
-      embed.addFields(
-        { 
-          name: '__🎁 Rewards Distributed__', 
-          value: rewardsText, 
-          inline: false 
-        }
-      );
-      
-      // Add error messages if any
-      if (rewardResults.errors && rewardResults.errors.length > 0) {
-        embed.addFields(
-          { 
-            name: '__⚠️ Reward Errors__', 
-            value: rewardResults.errors.slice(0, 5).join('\n'), // Limit to first 5 errors
-            inline: false 
-          }
-        );
-      }
-    }
     
     // Performance rating
     let performanceRating = '';
