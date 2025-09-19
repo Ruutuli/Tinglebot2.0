@@ -25,6 +25,10 @@ const EMBED_COLORS = {
 };
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
+// Embed update queue to prevent race conditions
+const embedUpdateQueue = new Map(); // questID -> { isUpdating: boolean, pendingUpdates: Array }
+const updateTimeouts = new Map(); // questID -> timeout
+
 // ============================================================================
 // ------------------- Command Definition -------------------
 // ============================================================================
@@ -189,7 +193,7 @@ module.exports = {
   await quest.save();
 
   // Update quest embed
-  await this.updateQuestEmbed(interaction.guild, quest, interaction.client);
+  await this.updateQuestEmbed(interaction.guild, quest, interaction.client, 'questJoin');
 
   // Add user to RP thread if applicable
   await this.addUserToRPThread(interaction, quest, userID, userName);
@@ -236,7 +240,7 @@ module.exports = {
    }
   }
 
-  await this.updateQuestEmbed(interaction.guild, quest, interaction.client);
+  await this.updateQuestEmbed(interaction.guild, quest, interaction.client, 'questLeave');
 
   let leaveMessage = `[quest.js]✅ You have left the quest **${quest.title}** (Character: **${characterName}**).`;
 
@@ -432,56 +436,220 @@ module.exports = {
  // ============================================================================
  // ------------------- Quest Embed Update Handler -------------------
  // ============================================================================
- async updateQuestEmbed(guild, quest, client = null) {
-  if (!quest.messageID) {
-   console.log(`[quest.js]⚠️ No messageID for quest ${quest.title}, skipping embed update`);
+ async updateQuestEmbed(guild, quest, client = null, updateSource = 'questJoin') {
+  try {
+   if (!quest || !quest.messageID) {
+    console.log(`[quest.js]⚠️ No quest or messageID provided, skipping embed update`);
+    return { success: false, reason: 'No quest or messageID' };
+   }
+
+   const questID = quest.questID || quest.questId;
+   if (!questID) {
+    console.log(`[quest.js]⚠️ No questID found, skipping embed update`);
+    return { success: false, reason: 'No questID' };
+   }
+
+   // Check if we're already updating this quest
+   if (isQuestBeingUpdated(questID)) {
+    console.log(`[quest.js]⏳ Quest ${questID} is already being updated, queuing request from ${updateSource}`);
+    queueEmbedUpdate(questID, quest, client, updateSource);
+    return { success: true, reason: 'Queued for update' };
+   }
+
+   // Mark as updating
+   markQuestAsUpdating(questID);
+
+   // Perform the actual update
+   const result = await performEmbedUpdate(quest, client, updateSource);
+
+   // Clear update status
+   clearQuestUpdateStatus(questID);
+
+   // Process any queued updates
+   await processQueuedUpdates(questID, client);
+
+   return result;
+
+  } catch (error) {
+   console.error(`[quest.js]❌ Error updating quest embed:`, error);
+   
+   // Clear update status on error
+   if (quest && quest.questID) {
+    clearQuestUpdateStatus(quest.questID);
+   }
+   
+   return { success: false, error: error.message };
+  }
+ },
+
+ // ============================================================================
+ // ------------------- Embed Queue Management -------------------
+ // ============================================================================
+ isQuestBeingUpdated(questID) {
+  const queueEntry = embedUpdateQueue.get(questID);
+  return queueEntry && queueEntry.isUpdating;
+ },
+
+ markQuestAsUpdating(questID) {
+  if (!embedUpdateQueue.has(questID)) {
+   embedUpdateQueue.set(questID, { isUpdating: false, pendingUpdates: [] });
+  }
+  embedUpdateQueue.get(questID).isUpdating = true;
+ },
+
+ clearQuestUpdateStatus(questID) {
+  const queueEntry = embedUpdateQueue.get(questID);
+  if (queueEntry) {
+   queueEntry.isUpdating = false;
+   // Clear timeout if it exists
+   if (updateTimeouts.has(questID)) {
+    clearTimeout(updateTimeouts.get(questID));
+    updateTimeouts.delete(questID);
+   }
+  }
+ },
+
+ queueEmbedUpdate(questID, quest, client, updateSource) {
+  if (!embedUpdateQueue.has(questID)) {
+   embedUpdateQueue.set(questID, { isUpdating: false, pendingUpdates: [] });
+  }
+  
+  const queueEntry = embedUpdateQueue.get(questID);
+  queueEntry.pendingUpdates.push({ quest, client, updateSource, timestamp: Date.now() });
+  
+  // Set a timeout to process queued updates if they're not processed quickly
+  if (!updateTimeouts.has(questID)) {
+   const timeout = setTimeout(() => {
+    processQueuedUpdates(questID, client);
+   }, 2000); // 2 second timeout
+   updateTimeouts.set(questID, timeout);
+  }
+ },
+
+ async processQueuedUpdates(questID, client) {
+  const queueEntry = embedUpdateQueue.get(questID);
+  if (!queueEntry || queueEntry.pendingUpdates.length === 0) {
    return;
   }
 
+  // Get the most recent update (latest quest data)
+  const updates = queueEntry.pendingUpdates.sort((a, b) => b.timestamp - a.timestamp);
+  const latestUpdate = updates[0];
+  
+  // Clear the queue
+  queueEntry.pendingUpdates = [];
+  
+  if (latestUpdate) {
+   console.log(`[quest.js]🔄 Processing queued update for quest ${questID} from ${latestUpdate.updateSource}`);
+   await updateQuestEmbed(null, latestUpdate.quest, latestUpdate.client, latestUpdate.updateSource);
+  }
+ },
+
+ // ============================================================================
+ // ------------------- Core Update Logic -------------------
+ // ============================================================================
+ async performEmbedUpdate(quest, client, updateSource) {
   try {
+   console.log(`[quest.js]🔄 Updating embed for quest ${quest.questID || quest.questId} from ${updateSource}`);
+
+   // Get the quest channel and message
    const questChannelId = quest.targetChannel || QUEST_CHANNEL_ID;
-   const questChannel = guild.channels.cache.get(questChannelId);
+   const questChannel = client.channels.cache.get(questChannelId);
+   
    if (!questChannel) {
     console.log(`[quest.js]⚠️ Quest channel not found (${questChannelId})`);
-    return;
+    return { success: false, reason: 'Channel not found' };
    }
 
    const questMessage = await questChannel.messages.fetch(quest.messageID);
    if (!questMessage) {
     console.log(`[quest.js]⚠️ Quest message not found (${quest.messageID})`);
-    return;
+    return { success: false, reason: 'Message not found' };
    }
 
-   const embed = EmbedBuilder.from(questMessage.embeds[0]);
-   const participantEntries = Array.from(quest.participants.entries());
+   // Get current embed
+   const currentEmbed = questMessage.embeds[0];
+   if (!currentEmbed) {
+    console.log(`[quest.js]⚠️ No embed found in quest message`);
+    return { success: false, reason: 'No embed found' };
+   }
+
+   // Create updated embed based on quest type
+   const updatedEmbed = await createUpdatedEmbed(quest, client, currentEmbed, updateSource);
+
+   // Update the message
+   await questMessage.edit({ embeds: [updatedEmbed] });
+
+   console.log(`[quest.js]✅ Successfully updated quest embed for ${quest.questID || quest.questId}`);
+   return { success: true, reason: 'Updated successfully' };
+
+  } catch (error) {
+   console.error(`[quest.js]❌ Error performing embed update:`, error);
+   return { success: false, error: error.message };
+  }
+ },
+
+ // ============================================================================
+ // ------------------- Embed Creation -------------------
+ // ============================================================================
+ async createUpdatedEmbed(quest, client, currentEmbed, updateSource) {
+  try {
+   // Start with current embed to preserve existing data
+   const embed = EmbedBuilder.from(currentEmbed);
+
+   // Update participant information
+   await updateParticipantFields(quest, client, embed);
+
+   // Update quest status information
+   updateStatusFields(quest, embed, updateSource);
+
+   // Update quest-specific information
+   await updateQuestSpecificFields(quest, client, embed, updateSource);
+
+   // Add update source info to footer
+   updateFooter(embed, updateSource);
+
+   return embed;
+
+  } catch (error) {
+   console.error(`[quest.js]❌ Error creating updated embed:`, error);
+   return currentEmbed; // Return original embed on error
+  }
+ },
+
+ async updateParticipantFields(quest, client, embed) {
+  try {
+   const participants = quest.participants ? Array.from(quest.participants.values()) : [];
    
+   // Create participant list
    const participantList = await Promise.all(
-    participantEntries.map(async ([userId, participant]) => {
+    participants.map(async (participant) => {
      try {
       if (client) {
-        const user = await client.users.fetch(userId);
-        return `• ${participant.characterName} (${user.username})`;
+       const user = await client.users.fetch(participant.userId);
+       return `• ${participant.characterName} (${user.username})`;
       } else {
-        return `• ${participant.characterName} (${userId})`;
+       return `• ${participant.characterName} (${participant.userId})`;
       }
      } catch (error) {
-      return `• ${participant.characterName} (${userId})`;
+      return `• ${participant.characterName} (${participant.userId})`;
      }
     })
    );
 
    const participantListText = participantList.length > 0 ? participantList.join("\n") : "None";
-   console.log(`[quest.js]✅ Updating embed for quest ${quest.title} with ${participantEntries.length} participants`);
 
+   // Update participant count
+   const participantCount = quest.participantCap
+    ? `${participants.length}/${quest.participantCap}${
+       participants.length >= quest.participantCap ? " - FULL" : ""
+      }`
+    : participants.length.toString();
+
+   // Find and update participants field
    const existingParticipantsFieldIndex = embed.data.fields.findIndex(field => 
     field.name.includes("Participants") || field.name.includes("👥")
    );
-
-   const participantCount = quest.participantCap
-    ? `${participantEntries.length}/${quest.participantCap}${
-       participantEntries.length >= quest.participantCap ? " - FULL" : ""
-      }`
-    : `${participantEntries.length}`;
 
    const participantsField = {
     name: `👥 __Participants__ (${participantCount})`,
@@ -493,16 +661,199 @@ module.exports = {
 
    if (existingParticipantsFieldIndex >= 0) {
     embed.data.fields[existingParticipantsFieldIndex] = participantsField;
-    console.log(`[quest.js]✅ Updated existing participants field for quest ${quest.title}`);
    } else {
     embed.addFields(participantsField);
-    console.log(`[quest.js]✅ Added new participants field for quest ${quest.title}`);
    }
 
-   await questMessage.edit({ embeds: [embed] });
-   console.log(`[quest.js]✅ Successfully updated quest embed for ${quest.title}`);
   } catch (error) {
-   console.warn("[quest.js]❌ Failed to update quest embed:", error);
+   console.error(`[quest.js]❌ Error updating participant fields:`, error);
+  }
+ },
+
+ updateStatusFields(quest, embed, updateSource) {
+  try {
+   // Update quest status
+   const statusFieldIndex = embed.data.fields.findIndex(field => 
+    field.name.includes("Status") || field.name.includes("__Status__")
+   );
+
+   if (statusFieldIndex >= 0) {
+    const statusText = quest.status === 'active' ? '🟢 Active' : 
+                     quest.status === 'completed' ? '✅ Completed' : 
+                     quest.status === 'cancelled' ? '❌ Cancelled' : 
+                     quest.status === 'expired' ? '⏰ Expired' : quest.status;
+
+    embed.data.fields[statusFieldIndex] = {
+     name: "__Status__",
+     value: statusText,
+     inline: true
+    };
+   }
+
+   // Update quest type specific fields
+   if (quest.questType === 'RP') {
+    updateRPQuestFields(quest, embed);
+   } else if (quest.questType === 'Interactive') {
+    updateInteractiveQuestFields(quest, embed);
+   }
+
+  } catch (error) {
+   console.error(`[quest.js]❌ Error updating status fields:`, error);
+  }
+ },
+
+ updateRPQuestFields(quest, embed) {
+  try {
+   // Update RP post requirements
+   const rpFieldIndex = embed.data.fields.findIndex(field => 
+    field.name.includes("RP Posts") || field.name.includes("Posts Required")
+   );
+
+   if (rpFieldIndex >= 0) {
+    const postRequirement = quest.postRequirement || 15;
+    const participants = quest.participants ? Array.from(quest.participants.values()) : [];
+    
+    const rpStatus = participants.map(p => 
+     `${p.characterName}: ${p.rpPostCount || 0}/${postRequirement}`
+    ).join('\n');
+
+    embed.data.fields[rpFieldIndex] = {
+     name: `📝 RP Posts Required (${postRequirement})`,
+     value: rpStatus.length > 1024 ? rpStatus.substring(0, 1021) + "..." : rpStatus,
+     inline: false
+    };
+   }
+
+  } catch (error) {
+   console.error(`[quest.js]❌ Error updating RP quest fields:`, error);
+  }
+ },
+
+ updateInteractiveQuestFields(quest, embed) {
+  try {
+   // Update table roll information
+   if (quest.tableRollName) {
+    const tableRollFieldIndex = embed.data.fields.findIndex(field => 
+     field.name.includes("Table Roll") || field.name.includes("Rolls Required")
+    );
+
+    if (tableRollFieldIndex >= 0) {
+     const requiredRolls = quest.requiredRolls || 1;
+     const participants = quest.participants ? Array.from(quest.participants.values()) : [];
+     
+     const rollStatus = participants.map(p => {
+      const successfulRolls = p.successfulRolls || 0;
+      return `${p.characterName}: ${successfulRolls}/${requiredRolls}`;
+     }).join('\n');
+
+     embed.data.fields[tableRollFieldIndex] = {
+      name: `🎲 Table Rolls Required (${requiredRolls})`,
+      value: rollStatus.length > 1024 ? rollStatus.substring(0, 1021) + "..." : rollStatus,
+      inline: false
+     };
+    }
+   }
+
+  } catch (error) {
+   console.error(`[quest.js]❌ Error updating interactive quest fields:`, error);
+  }
+ },
+
+ async updateQuestSpecificFields(quest, client, embed, updateSource) {
+  try {
+   // Add quest-specific information based on the update source
+   if (updateSource === 'rpQuestTracking') {
+    // RP quest specific updates
+    await updateRPQuestSpecificFields(quest, embed);
+   } else if (updateSource === 'questJoin' || updateSource === 'questLeave') {
+    // Participant change updates
+    await updateParticipantChangeFields(quest, embed, updateSource);
+   } else if (updateSource === 'modAction') {
+    // Mod action updates
+    await updateModActionFields(quest, embed);
+   }
+
+  } catch (error) {
+   console.error(`[quest.js]❌ Error updating quest-specific fields:`, error);
+  }
+ },
+
+ async updateRPQuestSpecificFields(quest, embed) {
+  // Add RP quest specific information
+  if (quest.requiredVillage) {
+   const villageFieldIndex = embed.data.fields.findIndex(field => 
+    field.name.includes("Village") || field.name.includes("Location")
+   );
+
+   if (villageFieldIndex >= 0) {
+    embed.data.fields[villageFieldIndex] = {
+     name: "__Location__",
+     value: `${quest.requiredVillage} (RP Quest)`,
+     inline: true
+    };
+   }
+  }
+ },
+
+ async updateParticipantChangeFields(quest, embed, updateSource) {
+  // Add participant change information
+  const changeField = {
+   name: "📊 Recent Activity",
+   value: updateSource === 'questJoin' ? 
+     "🟢 New participant joined" : 
+     "🔴 Participant left",
+   inline: true
+  };
+
+  // Remove existing activity field if it exists
+  const existingActivityIndex = embed.data.fields.findIndex(field => 
+   field.name.includes("Recent Activity") || field.name.includes("Activity")
+  );
+
+  if (existingActivityIndex >= 0) {
+   embed.data.fields[existingActivityIndex] = changeField;
+  } else {
+   embed.addFields(changeField);
+  }
+ },
+
+ async updateModActionFields(quest, embed) {
+  // Add mod action information
+  const modField = {
+   name: "🔧 Mod Action",
+   value: "Quest updated by moderator",
+   inline: true
+  };
+
+  // Remove existing mod field if it exists
+  const existingModIndex = embed.data.fields.findIndex(field => 
+   field.name.includes("Mod Action") || field.name.includes("Moderator")
+  );
+
+  if (existingModIndex >= 0) {
+   embed.data.fields[existingModIndex] = modField;
+  } else {
+   embed.addFields(modField);
+  }
+ },
+
+ updateFooter(embed, updateSource) {
+  try {
+   const currentFooter = embed.data.footer;
+   const timestamp = new Date().toISOString();
+   
+   let footerText = `Last updated: ${timestamp}`;
+   if (updateSource !== 'unknown') {
+    footerText += ` | Source: ${updateSource}`;
+   }
+
+   embed.setFooter({
+    text: footerText,
+    iconURL: currentFooter?.iconURL
+   });
+
+  } catch (error) {
+   console.error(`[quest.js]❌ Error updating footer:`, error);
   }
  },
 

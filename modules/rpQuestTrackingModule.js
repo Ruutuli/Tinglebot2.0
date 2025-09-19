@@ -121,6 +121,14 @@ async function processValidRPPost(quest, participant, channelId) {
     // Save the quest
     await quest.save();
 
+    // Update quest embed using centralized manager
+    try {
+        const questModule = require('../commands/world/quest');
+        await questModule.updateQuestEmbed(null, quest, null, 'rpQuestTracking');
+    } catch (error) {
+        console.error(`[rpQuestTracking] ❌ Error updating quest embed:`, error);
+    }
+
     // Check for quest completion
     const completionResult = await quest.checkAutoCompletion();
     
