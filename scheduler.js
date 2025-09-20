@@ -1397,16 +1397,6 @@ function setupDailyTasks(client) {
 
  // Monthly tasks
  createCronJob("0 0 1 * *", "monthly vending stock generation", () => generateVendingStockList(client));
- createCronJob("0 5 1 * *", "monthly quest posting", async () => {
-  try {
-   console.log('[scheduler.js]: 📅 Starting monthly quest posting...');
-   await postQuests(client);
-   console.log('[scheduler.js]: ✅ Monthly quest posting completed');
-  } catch (error) {
-   handleError(error, 'scheduler.js');
-   console.error('[scheduler.js]: ❌ Monthly quest posting failed:', error.message);
-  }
- }, "America/New_York");
  createCronJob("0 1 1 * *", "monthly quest reward distribution", async () => {
   try {
    console.log('[scheduler.js]: 🏆 Starting monthly quest reward distribution...');
@@ -1429,8 +1419,8 @@ function setupDailyTasks(client) {
 }
 
 function setupQuestPosting(client) {
- // Quest posting check - runs daily at midnight
- createCronJob("0 0 * * *", "quest posting check", async () => {
+ // Quest posting check - runs on 1st of month at midnight
+ createCronJob("0 0 1 * *", "quest posting check", async () => {
   try {
    process.env.TEST_CHANNEL_ID = '706880599863853097';
    delete require.cache[require.resolve('./scripts/questAnnouncements')];

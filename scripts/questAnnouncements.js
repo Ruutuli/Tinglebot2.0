@@ -137,18 +137,40 @@ function parseTokenRewardDetails(tokenReward) {
         const perUnitMatch = tokenReward.match(/per_unit:(\d+)/);
         const maxMatch = tokenReward.match(/max:(\d+)/);
         const unitMatch = tokenReward.match(/unit:(\w+)/);
+        const collabBonusMatch = tokenReward.match(/collab_bonus:(\d+)/);
         
         if (perUnitMatch) {
             const perUnit = parseInt(perUnitMatch[1]);
             const maxUnits = maxMatch ? parseInt(maxMatch[1]) : 1;
             const unit = unitMatch ? unitMatch[1] : 'submission';
+            const collabBonus = collabBonusMatch ? parseInt(collabBonusMatch[1]) : 0;
             
             return {
                 type: 'per_unit',
                 perUnit: perUnit,
                 maxUnits: maxUnits,
                 unit: unit,
-                total: perUnit * maxUnits
+                total: perUnit * maxUnits,
+                collabBonus: collabBonus,
+                maxWithCollab: (perUnit + collabBonus) * maxUnits
+            };
+        }
+    }
+    
+    // Handle flat format with collab bonus: flat:300 collab_bonus:200
+    if (tokenReward.includes('flat:')) {
+        const flatMatch = tokenReward.match(/flat:(\d+)/);
+        const collabBonusMatch = tokenReward.match(/collab_bonus:(\d+)/);
+        
+        if (flatMatch) {
+            const flatAmount = parseInt(flatMatch[1]);
+            const collabBonus = collabBonusMatch ? parseInt(collabBonusMatch[1]) : 0;
+            
+            return {
+                type: 'flat',
+                amount: flatAmount,
+                collabBonus: collabBonus,
+                maxWithCollab: flatAmount + collabBonus
             };
         }
     }
@@ -201,11 +223,11 @@ function parseQuestRow(questRow) {
     // Parse token reward - handle complex formats
     let tokenReward = paddedRow[COLUMN_MAPPING.TOKEN_REWARD] || 'No reward';
     if (tokenReward.includes('flat:')) {
-        tokenReward = tokenReward.split('flat:')[1];
+        // Keep the full flat format for proper parsing later
+        tokenReward = tokenReward;
     } else if (tokenReward.includes('per_unit:')) {
-        // Extract the per_unit value
-        const perUnitMatch = tokenReward.match(/per_unit:(\d+)/);
-        tokenReward = perUnitMatch ? perUnitMatch[1] : '0';
+        // Keep the full per_unit format for proper parsing later
+        tokenReward = tokenReward;
     } else if (tokenReward === 'TBD') {
         tokenReward = 'No reward';
     }
@@ -493,9 +515,17 @@ function formatQuestEmbed(quest) {
     const tokenDetails = parseTokenRewardDetails(quest.tokenReward);
     if (tokenDetails) {
         if (tokenDetails.type === 'per_unit') {
-            rewards.push(`💰 **${tokenDetails.perUnit} tokens per ${tokenDetails.unit}** (max ${tokenDetails.maxUnits} ${tokenDetails.unit}s = **${tokenDetails.total} tokens total**)`);
+            if (tokenDetails.collabBonus > 0) {
+                rewards.push(`💰 **${tokenDetails.perUnit} tokens per ${tokenDetails.unit}** + **${tokenDetails.collabBonus} collab bonus** (max ${tokenDetails.maxUnits} ${tokenDetails.unit}s = **${tokenDetails.total} tokens** or **${tokenDetails.maxWithCollab} tokens with collab**)`);
+            } else {
+                rewards.push(`💰 **${tokenDetails.perUnit} tokens per ${tokenDetails.unit}** (max ${tokenDetails.maxUnits} ${tokenDetails.unit}s = **${tokenDetails.total} tokens total**)`);
+            }
         } else {
-            rewards.push(`💰 **${tokenDetails.amount} tokens**`);
+            if (tokenDetails.collabBonus > 0) {
+                rewards.push(`💰 **${tokenDetails.amount} tokens** + **${tokenDetails.collabBonus} collab bonus** (max **${tokenDetails.maxWithCollab} tokens with collab**)`);
+            } else {
+                rewards.push(`💰 **${tokenDetails.amount} tokens**`);
+            }
         }
     }
     
