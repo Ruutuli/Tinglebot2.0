@@ -77,8 +77,8 @@ function canUseDailyRoll(character, activity, userId) {
     return true;
   }
 
-  // Special case for specific user ID
-  if (userId === '668281042414600212') {
+  // Special case for test characters
+  if (character.name === 'Tingle test' || character.name === 'Tingle' || character.name === 'John') {
     return true;
   }
 

@@ -186,6 +186,16 @@ function clearExpiredNPCCache() {
 // ------------------- Daily Steal Limit Functions -------------------
 // Check if a daily steal is available for a specific activity
 function canUseDailySteal(character, activity) {
+  // If character has an active job voucher, they can always use the command
+  if (character.jobVoucher) {
+    return true;
+  }
+
+  // Special case for test characters
+  if (character.name === 'Tingle test' || character.name === 'Tingle' || character.name === 'John') {
+    return true;
+  }
+
   const now = new Date();
   // Compute the most recent 12:00 UTC (8am EST) rollover
   const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
