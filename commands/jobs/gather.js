@@ -588,8 +588,27 @@ module.exports = {
 
       // Helper function to generate looted items
       async function generateLootedItem(encounteredMonster, weightedItems) {
-        const randomIndex = Math.floor(Math.random() * weightedItems.length);
-        const lootedItem = { ...weightedItems[randomIndex] };
+        // Use weighted random selection for loot
+        const totalWeight = weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0);
+        const randomWeight = Math.random() * totalWeight;
+        let currentWeight = 0;
+        let selectedItem = null;
+        
+        for (const item of weightedItems) {
+          currentWeight += item.weight || 1;
+          if (randomWeight <= currentWeight) {
+            selectedItem = item;
+            break;
+          }
+        }
+        
+        // Fallback to uniform selection if weighted selection fails
+        if (!selectedItem) {
+          const randomIndex = Math.floor(Math.random() * weightedItems.length);
+          selectedItem = weightedItems[randomIndex];
+        }
+        
+        const lootedItem = { ...selectedItem };
         if (encounteredMonster.name.includes('Chuchu')) {
           const jellyType = determineJellyType(encounteredMonster.name);
           const quantity = determineJellyQuantity(encounteredMonster.name);
@@ -918,11 +937,11 @@ module.exports = {
         // Calculate total weight for selection
         // For Fortune Teller boost, each item represents its weight (no individual weight property)
         // For normal boosts, use the weight property
-        const totalWeight = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller' 
+        const totalWeightForLogging = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller' 
           ? weightedItems.length  // Fortune Teller: each item in the array represents its weight
           : weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0); // Normal: sum of weight properties
         
-        console.log(`[gather.js]: 🎲 Item Selection - Total items: ${weightedItems.length}, Total weight: ${totalWeight}`);
+        console.log(`[gather.js]: 🎲 Item Selection - Total items: ${weightedItems.length}, Total weight: ${totalWeightForLogging}`);
         
         // Log weight distribution by rarity for debugging
         const rarityWeights = {};
@@ -943,26 +962,37 @@ module.exports = {
         console.log(`[gather.js]: 📊 Weight distribution by rarity:`, Object.keys(rarityWeights)
           .sort((a, b) => b - a)
           .map(r => {
-            const probability = ((rarityWeights[r].totalWeight / totalWeight) * 100).toFixed(1);
+            const probability = ((rarityWeights[r].totalWeight / totalWeightForLogging) * 100).toFixed(1);
             return `Rarity ${r}: ${rarityWeights[r].count} items, ${rarityWeights[r].totalWeight} weight (${probability}% chance)`;
           })
           .join(', '));
         
-        // Use weighted random selection for Fortune Teller boost, uniform for others
+        // Use weighted random selection for all cases
         let randomItem;
-        let randomIndex;
         
-        if (character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller') {
-          // Fortune Teller: weighted random selection (each item in array represents its weight)
-          randomIndex = Math.floor(Math.random() * weightedItems.length);
-          randomItem = weightedItems[randomIndex];
-          console.log(`[gather.js]: 🎯 Fortune Teller Weighted Selection - Index: ${randomIndex}/${weightedItems.length}, Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}`);
-        } else {
-          // Normal: uniform random selection
-          randomIndex = Math.floor(Math.random() * weightedItems.length);
-          randomItem = weightedItems[randomIndex];
-          console.log(`[gather.js]: 🎯 Normal Selection - Index: ${randomIndex}/${weightedItems.length}, Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
+        // Calculate total weight for weighted selection
+        const totalWeightForSelection = weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0);
+        
+        // Use weighted random selection
+        const randomWeight = Math.random() * totalWeightForSelection;
+        let currentWeight = 0;
+        
+        for (const item of weightedItems) {
+          currentWeight += item.weight || 1;
+          if (randomWeight <= currentWeight) {
+            randomItem = item;
+            break;
+          }
         }
+        
+        // Fallback to uniform selection if weighted selection fails
+        if (!randomItem) {
+          const randomIndex = Math.floor(Math.random() * weightedItems.length);
+          randomItem = weightedItems[randomIndex];
+        }
+        
+        const isFortuneTellerBoost = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller';
+        console.log(`[gather.js]: 🎯 ${isFortuneTellerBoost ? 'Fortune Teller' : 'Normal'} Weighted Selection - Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
         
         const quantity = 1;
         
