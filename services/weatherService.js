@@ -588,16 +588,6 @@ async function getWeatherWithoutGeneration(village) {
       }
     });
     
-    console.log(`[weatherService.js]: 🌤️ Weather query for ${normalizedVillage}:`, {
-      hasWeather: !!weather,
-      specialLabel: weather?.special?.label,
-      precipitationLabel: weather?.precipitation?.label,
-      dateRange: {
-        start: startOfPeriodUTC.toISOString(),
-        end: endOfPeriodUTC.toISOString()
-      },
-      currentTime: new Date().toISOString()
-    });
     
     return weather;
   } catch (error) {

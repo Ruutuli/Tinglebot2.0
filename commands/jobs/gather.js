@@ -373,55 +373,33 @@ module.exports = {
       }
 
       // ------------------- Blight Rain Infection Check ------------------
-      console.log(`[gather.js]: 🌧️ Checking weather for ${character.name} in ${character.currentVillage}`);
-      const weather = await getWeatherWithoutGeneration(character.currentVillage);
-      console.log(`[gather.js]: 🌧️ Weather data for ${character.currentVillage}:`, {
-        hasWeather: !!weather,
-        specialLabel: weather?.special?.label,
-        precipitationLabel: weather?.precipitation?.label,
-        temperatureLabel: weather?.temperature?.label,
-        windLabel: weather?.wind?.label,
-        date: weather?.date
-      });
+      const weatherData = await getWeatherWithoutGeneration(character.currentVillage);
       
       // Store blight rain message to add to gather response
       let blightRainMessage = null;
       
-      if (weather?.special?.label === 'Blight Rain') {
-        console.log(`[gather.js]: 🌧️ Blight Rain detected for ${character.name} in ${character.currentVillage}`);
+      if (weatherData?.special?.label === 'Blight Rain') {
         // Mod characters are immune to blight infection
         if (character.isModCharacter) {
-          console.log(`[gather.js]: 👑 Mod character ${character.name} is immune to blight rain`);
           blightRainMessage = 
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
         } else if (character.blighted) {
-          console.log(`[gather.js]: 🧿 Character ${character.name} is already blighted`);
           blightRainMessage = 
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
         } else {
-          console.log(`[gather.js]: 🎲 Character ${character.name} is vulnerable to blight rain - checking infection chance`);
           // Check for resistance buffs
           const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
           const buffEffects = getActiveBuffEffects(character);
           let infectionChance = 0.75; // Base 75% chance
           
-          console.log(`[gather.js]: 🧪 Buff effects for ${character.name}:`, {
-            blightResistance: buffEffects?.blightResistance || 0,
-            fireResistance: buffEffects?.fireResistance || 0,
-            hasActiveBuff: !!character.buff?.active,
-            buffType: character.buff?.type
-          });
-          
           // Apply resistance buffs
           if (buffEffects && buffEffects.blightResistance > 0) {
             infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
-            console.log(`[gather.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
           }
           if (buffEffects && buffEffects.fireResistance > 0) {
             infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-            console.log(`[gather.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
           }
           
           // Consume elixirs after applying their effects
@@ -431,19 +409,14 @@ module.exports = {
             const { updateCharacterById, updateModCharacterById } = require('../../database/db.js');
             const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
             await updateFunction(character._id, { buff: character.buff });
-          } else if (character.buff?.active) {
-            // Log when elixir is not used due to conditions not met
-            console.log(`[gather.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
           }
           
           // Ensure chance stays within reasonable bounds
           infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
           
           const infectionRoll = Math.random();
-          console.log(`[gather.js]: 🎲 Infection roll for ${character.name}: ${infectionRoll.toFixed(3)} (threshold: ${infectionChance.toFixed(3)})`);
           
           if (infectionRoll < infectionChance) {
-            console.log(`[gather.js]: 💀 ${character.name} got infected by blight rain!`);
             blightRainMessage = 
               "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
               `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
@@ -470,11 +443,9 @@ module.exports = {
               await user.save();
             }
           } else {
-            console.log(`[gather.js]: 🍀 ${character.name} avoided blight infection!`);
             blightRainMessage = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
             
             if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
-              console.log(`[gather.js]: 🧪 ${character.name} avoided infection thanks to elixir buffs`);
               blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
               blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
               
@@ -486,20 +457,14 @@ module.exports = {
                 const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
                 await updateFunction(character._id, { buff: character.buff });
                 blightRainMessage += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
-              } else if (character.buff?.active) {
-                // Log when elixir is not used due to conditions not being met
-                console.log(`[gather.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
               }
             } else {
-              console.log(`[gather.js]: 🍀 ${character.name} avoided infection through pure luck!`);
               blightRainMessage += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
               blightRainMessage += "You feel lucky... but be careful out there.";
             }
             
           }
         }
-      } else {
-        console.log(`[gather.js]: ☀️ No blight rain detected for ${character.name} in ${character.currentVillage} - continuing with normal gathering`);
       }
 
       // ------------------- Daily Roll Check ------------------
@@ -671,7 +636,6 @@ module.exports = {
       if (bloodMoonActive && randomChance < 0.25) {
         // Check if character has blight stage 3 or higher (monsters don't attack them)
         if (character.blighted && character.blightStage >= 3) {
-          console.log(`[gather.js]: 🧿 Character ${character.name} has blight stage 3 - no monster encounters during Blood Moon`);
           // Continue with gathering instead of monster encounter
         } else {
           const allMonsters = await fetchAllMonsters();
@@ -928,7 +892,6 @@ module.exports = {
           } else if (boosterCharacter.job !== 'Scholar') {
             // Normal boost application for all other jobs (including Priest) - apply to available items
             // Skip Scholar since we already handled the region change above
-            const originalItemCount = availableItems.length;
             boostedAvailableItems = await applyGatheringBoost(character.name, availableItems);
           }
         }
@@ -939,13 +902,68 @@ module.exports = {
           boostedAvailableItems = availableItems; // Fallback to original items
         }
         
-        const weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
+        let weightedItems;
+        console.log(`[gather.js]: 🔍 Boost Check - character.boostedBy: "${character.boostedBy}", boosterCharacter: ${boosterCharacter?.name || 'null'}, boosterJob: "${boosterCharacter?.job || 'null'}"`);
+        
+        if (character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller') {
+          // Fortune Teller boost already creates properly weighted items - use them directly
+          console.log(`[gather.js]: 🔮 Using Fortune Teller boosted items directly (${boostedAvailableItems.length} items)`);
+          weightedItems = boostedAvailableItems;
+        } else {
+          // Normal weighting for other boosts or no boost
+          console.log(`[gather.js]: ⚙️ Using createWeightedItemList for ${boostedAvailableItems.length} items`);
+          weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
+        }
         
         // Calculate total weight for selection
-        const totalWeight = weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0);
+        // For Fortune Teller boost, each item represents its weight (no individual weight property)
+        // For normal boosts, use the weight property
+        const totalWeight = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller' 
+          ? weightedItems.length  // Fortune Teller: each item in the array represents its weight
+          : weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0); // Normal: sum of weight properties
         
-        const randomIndex = Math.floor(Math.random() * weightedItems.length);
-        const randomItem = weightedItems[randomIndex];
+        console.log(`[gather.js]: 🎲 Item Selection - Total items: ${weightedItems.length}, Total weight: ${totalWeight}`);
+        
+        // Log weight distribution by rarity for debugging
+        const rarityWeights = {};
+        weightedItems.forEach(item => {
+          const rarity = item.itemRarity || 1;
+          if (!rarityWeights[rarity]) {
+            rarityWeights[rarity] = { count: 0, totalWeight: 0 };
+          }
+          rarityWeights[rarity].count++;
+          // For Fortune Teller boost, each item represents 1 unit of weight
+          // For normal boosts, use the item's weight property
+          const itemWeight = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller' 
+            ? 1  // Fortune Teller: each item = 1 weight unit
+            : (item.weight || 1); // Normal: use weight property
+          rarityWeights[rarity].totalWeight += itemWeight;
+        });
+        
+        console.log(`[gather.js]: 📊 Weight distribution by rarity:`, Object.keys(rarityWeights)
+          .sort((a, b) => b - a)
+          .map(r => {
+            const probability = ((rarityWeights[r].totalWeight / totalWeight) * 100).toFixed(1);
+            return `Rarity ${r}: ${rarityWeights[r].count} items, ${rarityWeights[r].totalWeight} weight (${probability}% chance)`;
+          })
+          .join(', '));
+        
+        // Use weighted random selection for Fortune Teller boost, uniform for others
+        let randomItem;
+        let randomIndex;
+        
+        if (character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller') {
+          // Fortune Teller: weighted random selection (each item in array represents its weight)
+          randomIndex = Math.floor(Math.random() * weightedItems.length);
+          randomItem = weightedItems[randomIndex];
+          console.log(`[gather.js]: 🎯 Fortune Teller Weighted Selection - Index: ${randomIndex}/${weightedItems.length}, Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}`);
+        } else {
+          // Normal: uniform random selection
+          randomIndex = Math.floor(Math.random() * weightedItems.length);
+          randomItem = weightedItems[randomIndex];
+          console.log(`[gather.js]: 🎯 Normal Selection - Index: ${randomIndex}/${weightedItems.length}, Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
+        }
+        
         const quantity = 1;
         
 

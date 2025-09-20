@@ -1194,7 +1194,6 @@ function setupHelpWantedFixedScheduler(client) {
       () => checkAndPostScheduledQuests(client, cronTime),
       'America/New_York'
     );
-    console.log(`[scheduler.js]: 📋 Scheduled Help Wanted board check for ${cronTime}`);
   });
   
   console.log(`[scheduler.js]: ✅ Help Wanted scheduler configured with ${FIXED_CRON_TIMES.length} time slots (full 24-hour coverage with variable 3-6 hour buffer in quest generation)`);

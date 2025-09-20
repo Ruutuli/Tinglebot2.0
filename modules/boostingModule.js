@@ -1,7 +1,7 @@
 // ============================================================================
 // ------------------- Imports and Dependencies -------------------
 // ============================================================================
-
+ 
 const { fetchCharacterByName } = require("../database/db");
 const Item = require("../models/ItemModel");
 const generalCategories = require("../models/GeneralItemCategories");
@@ -457,13 +457,20 @@ function applyFortuneTellerOtherBoost(villageWeatherData) {
 }
 
 function applyFortuneTellerGatheringBoost(gatherTable) {
- const validItems = gatherTable.filter((item) => item.itemRarity && item.itemRarity >= 3);
+ console.log(`[boostingModule.js]: 🔮 Fortune Teller Gathering Boost - Input: ${gatherTable.length} items`);
+ 
+ // Only include rarity 4+ items for dramatic rarity reversal effect
+ const validItems = gatherTable.filter((item) => item.itemRarity && item.itemRarity >= 4);
+ console.log(`[boostingModule.js]: 🔮 Valid items (rarity ≥ 4): ${validItems.length} items`);
 
  if (validItems.length === 0) {
+  console.log(`[boostingModule.js]: 🔮 No valid items found (rarity 4+) - returning original table`);
   return gatherTable;
  }
 
  const maxRarity = Math.max(...validItems.map((item) => item.itemRarity));
+ console.log(`[boostingModule.js]: 🔮 Max rarity in table: ${maxRarity}`);
+ 
  const boostedTable = [];
  const rarityGroups = {};
 
@@ -475,30 +482,23 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
   rarityGroups[rarity].push(item);
  });
 
+ console.log(`[boostingModule.js]: 🔮 Rarity groups:`, Object.keys(rarityGroups).map(r => `${r}: ${rarityGroups[r].length} items`).join(', '));
+
+ // Progressive scaling: Rarity 10 gets highest weight, then 9, 8, 7, etc.
  Object.keys(rarityGroups)
   .sort((a, b) => b - a)
   .forEach((rarity) => {
    const items = rarityGroups[rarity];
    const rarityNum = parseInt(rarity);
 
-   let weight;
-   if (maxRarity >= 8) {
-    if (rarityNum >= 8) {
-     weight = 10;
-    } else if (rarityNum >= 5) {
-     weight = 3;
-    } else {
-     weight = 1;
-    }
-   } else if (maxRarity >= 5) {
-    if (rarityNum >= 5) {
-     weight = 8;
-    } else {
-     weight = 2;
-    }
-   } else {
-    weight = rarityNum === maxRarity ? 5 : 1;
-   }
+   // Progressive weight scaling: 10=20x, 9=18x, 8=16x, 7=14x, 6=12x, 5=10x, 4=8x, 3=6x, 2=4x, 1=2x
+   const weight = (rarityNum * 2);
+   
+   console.log(`[boostingModule.js]: 🔮 Rarity ${rarityNum}: ${items.length} items → weight ${weight}`);
+   
+   // Log sample items for this rarity
+   const sampleItems = items.slice(0, 2).map(item => item.itemName);
+   console.log(`[boostingModule.js]: 🔮 Sample items for rarity ${rarityNum}:`, sampleItems.join(', '));
 
    items.forEach((item) => {
     for (let i = 0; i < weight; i++) {
@@ -507,6 +507,7 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
    });
   });
 
+ console.log(`[boostingModule.js]: 🔮 Fortune Teller boost complete - Output: ${boostedTable.length} items (${(boostedTable.length / gatherTable.length).toFixed(2)}x multiplier)`);
  return boostedTable;
 }
 
