@@ -532,11 +532,11 @@ function createPetEmbed(type, options = {}) {
 
   // Ensure result object has required properties for rollReset type
   if (type === 'rollReset' && result) {
-    if (!result.oldRolls || !result.newRolls) {
+    if (result.oldRolls === undefined || result.newRolls === undefined) {
       console.warn(`[mod.js]: Result object missing oldRolls or newRolls:`, result);
       // Provide fallback values
-      result.oldRolls = result.oldRolls || 0;
-      result.newRolls = result.newRolls || 0;
+      result.oldRolls = result.oldRolls ?? 0;
+      result.newRolls = result.newRolls ?? 0;
     }
   }
 

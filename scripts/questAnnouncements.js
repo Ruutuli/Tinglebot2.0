@@ -1057,8 +1057,18 @@ async function postQuests(externalClient = null) {
             return;
         }
     } catch (error) {
-        console.error('[questAnnouncements.js] ❌ Error fetching quest channel:', error);
-        return;
+        if (error.code === 50001) {
+            console.error('[questAnnouncements.js] ❌ Missing Access: Bot does not have permission to access quest channel');
+            console.error('[questAnnouncements.js] ❌ Please ensure the bot has access to channel:', QUEST_CHANNEL_ID);
+            return;
+        } else if (error.code === 10003) {
+            console.error('[questAnnouncements.js] ❌ Unknown Channel: Quest channel does not exist');
+            console.error('[questAnnouncements.js] ❌ Please check the QUEST_CHANNEL_ID:', QUEST_CHANNEL_ID);
+            return;
+        } else {
+            console.error('[questAnnouncements.js] ❌ Error fetching quest channel:', error);
+            return;
+        }
     }
 
     // Get quest data from Google Sheets
