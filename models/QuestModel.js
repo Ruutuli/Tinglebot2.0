@@ -8,6 +8,9 @@ const { Schema } = mongoose;
 // Import consolidated constants and functions - moved to avoid circular dependency
 // These will be defined locally to break the circular dependency
 
+// Import Character model for village checking
+const Character = require('./CharacterModel');
+
 // ============================================================================
 // ------------------- Schema Field Definitions -------------------
 // ============================================================================
@@ -329,7 +332,8 @@ function createQuestSubmission(type, submissionData) {
 // ------------------- Quest Completion Notification ------------------
 async function sendCompletionNotification(quest, participant) {
     try {
-        const questRewardModule = require('../modules/questRewardModule');
+        // Use dynamic import to avoid circular dependency
+        const questRewardModule = await import('../modules/questRewardModule.js');
         await questRewardModule.sendQuestCompletionNotification(quest, participant);
     } catch (error) {
         console.error(`[QuestModel] ❌ Error sending quest completion notification:`, error);
@@ -339,7 +343,8 @@ async function sendCompletionNotification(quest, participant) {
 // ------------------- Quest Summary Notification ------------------
 async function sendQuestSummary(quest, reason) {
     try {
-        const questRewardModule = require('../modules/questRewardModule');
+        // Use dynamic import to avoid circular dependency
+        const questRewardModule = await import('../modules/questRewardModule.js');
         await questRewardModule.sendQuestCompletionSummary(quest, reason);
     } catch (error) {
         console.error(`[QuestModel] ❌ Error sending quest completion summary:`, error);
@@ -546,7 +551,6 @@ questSchema.methods.checkParticipantVillage = async function(userId) {
         return { valid: true, reason: 'Not an RP quest or no village requirement' };
     }
     
-    const Character = require('./CharacterModel');
     const character = await Character.findOne({
         name: participant.characterName,
         userId: participant.userId

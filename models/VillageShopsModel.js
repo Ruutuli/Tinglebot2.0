@@ -48,5 +48,38 @@ const VillageShopItemSchema = new Schema({
   stock: { type: Number, required: true },
 }, { collection: 'villageShops', timestamps: true, strict: true }); // strict:true ensures only defined fields are saved
 
+// ------------------- Pre-save hook to fix data type issues -------------------
+VillageShopItemSchema.pre('save', function(next) {
+  // Fix craftingMaterial if it contains stringified arrays
+  if (this.craftingMaterial && Array.isArray(this.craftingMaterial)) {
+    this.craftingMaterial = this.craftingMaterial.map(item => {
+      if (typeof item === 'string' && item.startsWith('[') && item.endsWith(']')) {
+        try {
+          // Try to parse the stringified array
+          const parsed = JSON.parse(item);
+          return Array.isArray(parsed) ? parsed[0] : item; // Take first element if it's an array
+        } catch (e) {
+          console.warn(`[VillageShopsModel]: Could not parse craftingMaterial item: ${item}`);
+          return item; // Return as-is if parsing fails
+        }
+      }
+      return item;
+    });
+  }
+  
+  // Ensure all array fields are properly formatted
+  const arrayFields = ['category', 'type', 'subtype', 'recipeTag', 'obtain', 'obtainTags', 
+                      'craftingJobs', 'craftingTags', 'locations', 'locationsTags', 'allJobs', 'allJobsTags'];
+  
+  for (const field of arrayFields) {
+    if (this[field] && !Array.isArray(this[field])) {
+      console.warn(`[VillageShopsModel]: Converting ${field} from ${typeof this[field]} to array`);
+      this[field] = [this[field]];
+    }
+  }
+  
+  next();
+});
+
 // ------------------- Export the VillageShopItem model -------------------
 module.exports = mongoose.model('VillageShopItem', VillageShopItemSchema);
