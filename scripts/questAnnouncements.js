@@ -205,7 +205,6 @@ function validateSheetData(questData) {
     
     // Log basic info about the data
     const actualColumns = questData[0] ? questData[0].length : 0;
-    console.log(`[questAnnouncements.js] 📊 Retrieved ${questData.length} rows with ${actualColumns} columns from Google Sheets`);
     
     // No validation needed - parseQuestRow handles missing columns with padding
     return questData;
@@ -372,7 +371,6 @@ async function sendModNotification(guild, questTitle, questID, errorType, errorD
             embeds: [embed] 
         });
         
-        console.log(`[questAnnouncements.js] ✅ Sent mod notification for quest ${questID}`);
     } catch (error) {
         console.error('[questAnnouncements.js] ❌ Failed to send mod notification:', error);
     }
@@ -790,7 +788,6 @@ async function handleInteractiveQuestSetup(sanitizedQuest, guild) {
                 successCriteria
             };
             
-            console.log(`[questAnnouncements.js] ✅ Interactive quest "${sanitizedQuest.title}" configured with table roll: ${tableName}`);
         } else {
             sanitizedQuest.botNotes = `WARNING: Invalid table roll configuration format: ${minRequirements}`;
         }
@@ -819,7 +816,6 @@ async function createQuestRole(guild, questTitle) {
             mentionable: true,
             reason: `Automatically created for the quest: "${questTitle}"`
         });
-        console.log(`[questAnnouncements.js] ✅ Role created for quest: "${questTitle}" with ID: ${role.id}`);
     }
     
     return role;
@@ -855,7 +851,6 @@ async function createRPThread(guild, quest) {
             type: 11
         });
         
-        console.log(`[questAnnouncements.js] ✅ Created RP thread: ${rpThread.name} (${rpThread.id})`);
         
         const rpThreadEmbed = new EmbedBuilder()
             .setColor(0xAA926A)
@@ -876,13 +871,11 @@ async function createRPThread(guild, quest) {
             .setTimestamp();
 
         await rpThread.send({ embeds: [rpThreadEmbed] });
-        console.log(`[questAnnouncements.js] ✅ Posted initial message in RP thread`);
         
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         quest.rpThreadParentChannel = rpThread.id;
         quest.guildId = guild.id;
-        console.log(`[questAnnouncements.js] ✅ Stored RP thread ID ${rpThread.id} and guild ID ${guild.id} for quest "${quest.title}"`);
         
         return rpThread;
     } catch (error) {
@@ -906,11 +899,9 @@ async function saveQuestToDatabase(quest) {
                 )
             ]);
             
-            console.log(`[questAnnouncements.js] ✅ Quest "${quest.title}" saved to database with ID: ${savedQuest._id}`);
             return savedQuest;
         } catch (error) {
             retryCount++;
-            console.log(`[questAnnouncements.js] ⚠️ Database save attempt ${retryCount}/${maxRetries} failed for quest "${quest.title}": ${error.message}`);
             
             if (retryCount >= maxRetries) {
                 throw error;
@@ -967,7 +958,6 @@ function filterUnpostedQuests(quests) {
         const sanitizedPosted = parsedQuest.posted ? parsedQuest.posted.trim().toLowerCase() : '';
         
         if (sanitizedPosted === 'posted' && parsedQuest.questID && parsedQuest.questID !== 'N/A') {
-            console.log(`[questAnnouncements.js] ⏭️ Skipping quest "${parsedQuest.title}" - Already posted with ID ${parsedQuest.questID}`);
             return false;
         }
         
@@ -978,7 +968,6 @@ function filterUnpostedQuests(quests) {
 // ------------------- processIndividualQuest -
 async function processIndividualQuest(quest, guild, questChannel, auth, rowIndex) {
     const parsedQuest = parseQuestRow(quest);
-    console.log(`[questAnnouncements.js] 🔍 Processing quest: "${parsedQuest.title}"`);
 
     try {
         const sanitizedQuest = sanitizeQuestData(parsedQuest);
@@ -1019,7 +1008,6 @@ async function processIndividualQuest(quest, guild, questChannel, auth, rowIndex
         
         try {
             await markQuestAsPosted(auth, rowIndex, sanitizedQuest.questID);
-            console.log(`[questAnnouncements.js] ✅ Quest "${sanitizedQuest.title}" marked as posted in Google Sheets`);
         } catch (sheetError) {
             console.error(`[questAnnouncements.js] ❌ Failed to mark quest as posted in Google Sheets:`, sheetError.message);
             await sendModNotification(guild, sanitizedQuest.title, sanitizedQuest.questID, 'Sheet Update Failed', sheetError.message);
@@ -1060,7 +1048,6 @@ async function checkQuestCompletions() {
         }
         
         if (completedCount > 0) {
-            console.log(`[questAnnouncements.js] ✅ Processed ${completedCount} quest completions`);
         }
     } catch (error) {
         console.error('[questAnnouncements.js] ❌ Error checking quest completion:', error);
@@ -1073,7 +1060,6 @@ async function checkQuestCompletions() {
 
 // ------------------- postQuests -
 async function postQuests(externalClient = null) {
-    console.log('[questAnnouncements.js] 🚀 Starting quest posting process...');
     
     // Use external client if provided, otherwise use the internal client
     const activeClient = externalClient || client;
@@ -1106,11 +1092,9 @@ async function postQuests(externalClient = null) {
     const questData = await fetchQuestData();
 
     if (!questData.length) {
-        console.log('[questAnnouncements.js] ℹ️ No quest data found in Google Sheets');
         return;
     }
 
-    console.log(`[questAnnouncements.js] 📊 Retrieved ${questData.length} quests from sheet`);
 
     // Filter quests for current month
     const questsForCurrentMonth = filterQuestsForCurrentMonth(questData);
@@ -1119,21 +1103,17 @@ async function postQuests(externalClient = null) {
         const currentDate = new Date();
         const currentMonth = currentDate.getMonth() + 1;
         const currentYear = currentDate.getFullYear();
-        console.log(`[questAnnouncements.js] ℹ️ No quests scheduled for ${currentMonth}/${currentYear}. Skipping quest posting.`);
         return;
     }
     
-    console.log(`[questAnnouncements.js] ✅ Found ${questsForCurrentMonth.length} quests scheduled for current month. Proceeding with posting.`);
 
     // Filter unposted quests
     const unpostedQuests = filterUnpostedQuests(questsForCurrentMonth);
 
     if (!unpostedQuests.length) {
-        console.log('[questAnnouncements.js] ℹ️ No new quests to post. All quests are already marked as "Posted"');
         return;
     }
 
-    console.log(`[questAnnouncements.js] 📝 Found ${unpostedQuests.length} quests to post`);
     const guild = questChannel.guild;
 
     // Process each quest
@@ -1141,7 +1121,6 @@ async function postQuests(externalClient = null) {
         await processIndividualQuest(quest, guild, questChannel, auth, rowIndex);
     }
        
-    console.log('[questAnnouncements.js] ✅ Finished processing quests');
     
     // Check quest completions
     await checkQuestCompletions();
@@ -1154,10 +1133,8 @@ async function postQuests(externalClient = null) {
 // ------------------- markQuestAsPosted -
 async function markQuestAsPosted(auth, rowIndex, questID) {
     try {
-        console.log(`[questAnnouncements.js] 📝 Marking quest as posted in Google Sheets (Row: ${rowIndex + 2}, Quest ID: ${questID})`);
         const now = new Date().toISOString();
         await writeSheetData(auth, SHEET_ID, `loggedQuests!Q${rowIndex + 2}:T${rowIndex + 2}`, [[questID, 'active', 'Posted', now]]);
-        console.log(`[questAnnouncements.js] ✅ Quest marked as posted in Google Sheets (Row: ${rowIndex + 2})`);
     } catch (error) {
         handleError(error, 'questAnnouncements.js');
         console.error('[questAnnouncements.js] ❌ Failed to mark quest as posted in Google Sheets:', error);
@@ -1171,7 +1148,6 @@ async function markQuestAsPosted(auth, rowIndex, questID) {
 // ------------------- Test Command Handler -
 client.on('messageCreate', async (message) => {
     if (message.content.trim() === '!testQuests') {
-        console.log('[questAnnouncements.js] 🧪 Triggering quest posting manually');
         try {
             await postQuests();
             await message.reply('✅ Quests have been posted for testing!');
@@ -1185,7 +1161,6 @@ client.on('messageCreate', async (message) => {
 
 // ------------------- Bot Ready Handler -
 client.once('ready', () => {
-    console.log(`[questAnnouncements.js] 🤖 Logged in as ${client.user.tag}`);
 });
 
 // ------------------- Bot Error Handler -

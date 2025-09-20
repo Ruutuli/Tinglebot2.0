@@ -19,12 +19,14 @@ async function applyBoostToAction(characterName, category, data, additionalData 
     // Check if character has an active boost for this category
     const { isBoostActive, getActiveBoostEffect } = require('../commands/jobs/boosting');
     const hasBoost = await isBoostActive(characterName, category);
+    
     if (!hasBoost) {
       return data; // No boost active, return original data
     }
 
     // Get the boost effect
     const boostEffect = await getActiveBoostEffect(characterName, category);
+    
     if (!boostEffect) {
       return data; // No valid boost effect found
     }
@@ -41,8 +43,8 @@ async function applyBoostToAction(characterName, category, data, additionalData 
     const boostedData = await applyBoostEffect(activeBoost.boostingCharacter, category, data, additionalData);
     
     return boostedData;
-  } catch (error) {
-    console.error(`[boostIntegration.js]: Error applying boost to ${characterName} for ${category}:`, error);
+  } catch (err) {
+    console.error(`Failed to apply boost to ${characterName} for ${category}:`, err);
     return data; // Return original data on error to prevent breaking the action
   }
 }
@@ -198,8 +200,8 @@ async function getCharacterBoostStatus(characterName) {
       timeRemaining: activeBoost.boostExpiresAt - currentTime,
       targetVillage: activeBoost.targetVillage // For Scholar boosts
     };
-  } catch (error) {
-    console.error(`[boostIntegration.js]: Error checking boost status for ${characterName}:`, error);
+  } catch (err) {
+    console.error(`Failed to check boost status for ${characterName}:`, err);
     return null;
   }
 }
@@ -225,8 +227,8 @@ async function addBoostNotificationToEmbed(embed, characterName, category) {
         inline: false
       });
     }
-  } catch (error) {
-    console.error(`[boostIntegration.js]: Error adding boost notification:`, error);
+  } catch (err) {
+    console.error(`Failed to add boost notification:`, err);
     // Don't throw - just skip the notification
   }
 }

@@ -34,10 +34,7 @@ const { retrieveFromStorage, saveToStorage } = require('../utils/storage');
 
 // ------------------- Battle Logging Function -------------------
 function logBattleDetails(tier, characterName, monsterName, roll, damage, monsterDamage) {
-            console.log(`[encounterModule.js]: ⚔️ ${characterName} vs ${monsterName} (T${tier})`);
-    if (damage > 0 || monsterDamage > 0) {
-        console.log(`[encounterModule.js]: 💥 ${characterName}: ${damage} hearts, ${monsterName}: ${monsterDamage} hearts`);
-    }
+    // Battle logging removed for cleaner output
 }
 
 // ------------------- Calculate Damage Function -------------------
@@ -56,7 +53,6 @@ function calculateDamage(attacker, defender) {
                 // Electric resistance reduces damage by 50% per level
                 const resistanceReduction = buffEffects.electricResistance * 0.5;
                 baseDamage = Math.max(0, baseDamage - resistanceReduction);
-                console.log(`[encounterModule.js]: ⚡ Electric resistance: damage reduced to ${baseDamage} hearts`);
                 
                 // Consume electro elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
