@@ -5,9 +5,8 @@ const { Schema } = mongoose;
 // ------------------- Imports -------------------
 // ============================================================================
 
-// Import consolidated constants and functions
-const { QUEST_TYPES, SUBMISSION_TYPES, PROGRESS_STATUS } = require('../modules/questRewardModule');
-const { meetsRequirements } = require('../modules/questRewardModule');
+// Import consolidated constants and functions - moved to avoid circular dependency
+// These will be defined locally to break the circular dependency
 
 // ============================================================================
 // ------------------- Schema Field Definitions -------------------
@@ -203,6 +202,32 @@ questSchema.pre('save', function(next) {
 // ------------------- Constants -------------------
 // ============================================================================
 
+// Quest Types - moved from questRewardModule to avoid circular dependency
+const QUEST_TYPES = {
+    ART: 'Art',
+    WRITING: 'Writing',
+    INTERACTIVE: 'Interactive',
+    RP: 'RP',
+    ART_WRITING: 'Art / Writing'
+};
+
+// Submission Types - moved from questRewardModule to avoid circular dependency
+const SUBMISSION_TYPES = {
+    ART: 'art',
+    WRITING: 'writing',
+    INTERACTIVE: 'interactive',
+    RP_POSTS: 'rp_posts'
+};
+
+// Progress Status - moved from questRewardModule to avoid circular dependency
+const PROGRESS_STATUS = {
+    ACTIVE: 'active',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    REWARDED: 'rewarded',
+    DISQUALIFIED: 'disqualified'
+};
+
 // ------------------- Completion Reasons ------------------
 const COMPLETION_REASONS = {
     TIME_EXPIRED: 'time_expired',
@@ -221,6 +246,37 @@ const TIME_MULTIPLIERS = {
 // ============================================================================
 // ------------------- Helper Functions -------------------
 // ============================================================================
+
+// ------------------- Requirements Check ------------------
+// Moved from questRewardModule to avoid circular dependency
+function meetsRequirements(participant, quest) {
+    const { questType, postRequirement, requiredRolls } = quest;
+    const { rpPostCount, submissions, successfulRolls } = participant;
+    
+    if (questType === QUEST_TYPES.RP) {
+        return rpPostCount >= (postRequirement || 15); // DEFAULT_POST_REQUIREMENT
+    }
+    
+    if (questType === QUEST_TYPES.ART || questType === QUEST_TYPES.WRITING) {
+        const submissionType = questType.toLowerCase();
+        return submissions.some(sub => 
+            sub.type === submissionType && sub.approved
+        );
+    }
+    
+    if (questType === QUEST_TYPES.ART_WRITING) {
+        // For Art/Writing combined quests, require BOTH art AND writing submissions
+        const hasArtSubmission = submissions.some(sub => sub.type === 'art' && sub.approved);
+        const hasWritingSubmission = submissions.some(sub => sub.type === 'writing' && sub.approved);
+        return hasArtSubmission && hasWritingSubmission;
+    }
+    
+    if (questType === QUEST_TYPES.INTERACTIVE) {
+        return successfulRolls >= (requiredRolls || 1); // DEFAULT_ROLL_REQUIREMENT
+    }
+    
+    return false;
+}
 
 // ------------------- Submission Management ------------------
 function addSubmission(participant, type, url = null) {

@@ -61,9 +61,13 @@ const sheetCache = new Map();
 
 // Function to get service account credentials
 function getServiceAccountCredentials() {
-    // Check if we're in a deployed environment (Railway)
-    if (process.env.RAILWAY_ENVIRONMENT) {
+    // Check if we're in a deployed environment (Railway) or if environment variables are set
+    const hasEnvVars = process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_PROJECT_ID;
+    const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_NAME;
+    
+    if (isRailway || hasEnvVars) {
         // Create service account object from environment variables
+        console.log(`[googleSheetsUtils.js]: 🌐 Using environment variables for Google Sheets authentication`);
         return {
             type: "service_account",
             project_id: process.env.GOOGLE_PROJECT_ID,
@@ -79,11 +83,18 @@ function getServiceAccountCredentials() {
         };
     } else {
         // Local environment - read from file
+        console.log(`[googleSheetsUtils.js]: 🏠 Using local service account file for Google Sheets authentication`);
         try {
+            if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+                console.warn(`[googleSheetsUtils.js]: ⚠️ Service account file not found at ${SERVICE_ACCOUNT_PATH}`);
+                console.warn(`[googleSheetsUtils.js]: ⚠️ Google Sheets functionality will be disabled`);
+                return null;
+            }
             return JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH));
         } catch (err) {
             console.error(`[googleSheetsUtils.js]: ❌ Error loading service account file: ${err}`);
-            throw new Error(`Error loading service account file: ${err}`);
+            console.warn(`[googleSheetsUtils.js]: ⚠️ Google Sheets functionality will be disabled`);
+            return null;
         }
     }
 }
@@ -94,6 +105,10 @@ async function authorizeSheets() {
     return new Promise((resolve, reject) => {
         try {
             const credentials = getServiceAccountCredentials();
+            if (!credentials) {
+                console.warn(`[googleSheetsUtils.js]: ⚠️ No credentials available, Google Sheets functionality disabled`);
+                return reject(new Error('Google Sheets functionality disabled - no credentials available'));
+            }
             const { client_email, private_key } = credentials;
             const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
             
@@ -504,7 +519,15 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
             });
         } catch (error) {
             if (error.status === 403 || error.message.includes('does not have permission')) {
-                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+                let serviceAccountEmail = 'tinglebot@rotw-tinglebot.iam.gserviceaccount.com'; // Default fallback
+                try {
+                    if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+                        const credentials = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH));
+                        serviceAccountEmail = credentials.client_email;
+                    }
+                } catch (err) {
+                    // Use default email if file read fails
+                }
                 console.error(`[googleSheetsUtils.js]: ❌ Permission denied: ${serviceAccountEmail}`);
                 return {
                     success: false,
@@ -791,7 +814,15 @@ async function validateTokenTrackerSheet(spreadsheetUrl) {
 
     } catch (error) {
         if (error.status === 403 || error.message.includes('does not have permission')) {
-            const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+            let serviceAccountEmail = 'tinglebot@rotw-tinglebot.iam.gserviceaccount.com'; // Default fallback
+            try {
+                if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+                    const credentials = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH));
+                    serviceAccountEmail = credentials.client_email;
+                }
+            } catch (err) {
+                // Use default email if file read fails
+            }
             return {
                 success: false,
                 message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
@@ -1289,14 +1320,24 @@ function diagnoseGoogleSheetsSetup() {
     
     console.log(`[googleSheetsUtils.js]: 🔍 **Google Sheets Setup Diagnostic**`);
     console.log(`[googleSheetsUtils.js]: 📊 Environment: ${env}`);
+    
+    if (!credentials) {
+      console.log(`[googleSheetsUtils.js]: ❌ **No Google Sheets credentials available**`);
+      console.log(`[googleSheetsUtils.js]: ⚠️ Google Sheets functionality is disabled`);
+      return;
+    }
+    
     console.log(`[googleSheetsUtils.js]: 📧 Service Account Email: ${credentials.client_email}`);
     console.log(`[googleSheetsUtils.js]: 🆔 Project ID: ${credentials.project_id}`);
     console.log(`[googleSheetsUtils.js]: 🔑 Private Key: ${credentials.private_key ? '✅ Present' : '❌ Missing'}`);
     console.log(`[googleSheetsUtils.js]: 🏷️ Private Key ID: ${credentials.private_key_id ? '✅ Present' : '❌ Missing'}`);
     
     // Check environment variables
-    if (env === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-      console.log(`[googleSheetsUtils.js]: 🌐 Railway Environment: ${process.env.RAILWAY_ENVIRONMENT ? '✅ Yes' : '❌ No'}`);
+    const hasEnvVars = process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_PROJECT_ID;
+    const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_NAME;
+    
+    if (isRailway || hasEnvVars) {
+      console.log(`[googleSheetsUtils.js]: 🌐 Railway Environment: ${isRailway ? '✅ Yes' : '❌ No'}`);
       console.log(`[googleSheetsUtils.js]: 🔐 GOOGLE_CLIENT_EMAIL: ${process.env.GOOGLE_CLIENT_EMAIL ? '✅ Set' : '❌ Missing'}`);
       console.log(`[googleSheetsUtils.js]: 🔑 GOOGLE_PRIVATE_KEY: ${process.env.GOOGLE_PRIVATE_KEY ? '✅ Set' : '❌ Missing'}`);
       console.log(`[googleSheetsUtils.js]: 🆔 GOOGLE_PROJECT_ID: ${process.env.GOOGLE_PROJECT_ID ? '✅ Set' : '❌ Missing'}`);
