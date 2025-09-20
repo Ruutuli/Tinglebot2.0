@@ -2666,10 +2666,10 @@ async function handlePetRolls(interaction) {
     
     if (action === 'all') {
       // Reset all pet rolls for all characters
-      await resetPetRollsForAllCharacters();
+      const result = await resetPetRollsForAllCharacters();
       
       return interaction.editReply({
-        content: "✅ Pet rolls have been manually reset for all active pets.",
+        content: `✅ Pet rolls have been manually reset for all active pets.\n📊 Reset ${result.totalPets} pets: ${result.oldRolls} → ${result.newRolls} total rolls`,
         ephemeral: true
       });
     } else if (action === 'specific') {

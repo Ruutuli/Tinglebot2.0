@@ -65,6 +65,12 @@ function getServiceAccountCredentials() {
     const hasEnvVars = process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_PROJECT_ID;
     const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_NAME;
     
+    // Log environment status for debugging
+    console.log(`[googleSheetsUtils.js]: 🔍 Environment check - hasEnvVars: ${hasEnvVars}, isRailway: ${isRailway}`);
+    if (hasEnvVars) {
+        console.log(`[googleSheetsUtils.js]: ✅ Using environment variables for Google Sheets authentication`);
+    }
+    
     if (isRailway || hasEnvVars) {
         // Create service account object from environment variables
         return {

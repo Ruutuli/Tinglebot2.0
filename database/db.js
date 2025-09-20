@@ -809,6 +809,8 @@ async function resetPetRollsForAllCharacters() {
   // Update each pet's rolls based on their level
   let successCount = 0;
   let failCount = 0;
+  let totalOldRolls = 0;
+  let totalNewRolls = 0;
   
   for (const pet of activePets) {
     try {
@@ -822,6 +824,8 @@ async function resetPetRollsForAllCharacters() {
         { $set: { rollsRemaining: newRolls } }
       );
       
+      totalOldRolls += oldRolls;
+      totalNewRolls += newRolls;
       console.log(`[db.js]: ✅ Reset pet "${pet.name}" (${pet.ownerName}) from ${oldRolls} to ${newRolls} rolls`);
       successCount++;
     } catch (petError) {
@@ -831,6 +835,16 @@ async function resetPetRollsForAllCharacters() {
   }
   
   console.log(`[db.js]: 📊 Pet roll reset complete. Success: ${successCount}, Failed: ${failCount}`);
+  
+  // Return result object with oldRolls and newRolls for mod.js compatibility
+  return {
+    success: true,
+    oldRolls: totalOldRolls,
+    newRolls: totalNewRolls,
+    successCount,
+    failCount,
+    totalPets: activePets.length
+  };
  } catch (error) {
   handleError(error, "db.js");
   console.error(
