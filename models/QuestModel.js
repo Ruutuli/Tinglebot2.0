@@ -36,6 +36,12 @@ const tokenRewardValidation = {
         if (typeof value === 'number') return value >= 0;
         if (typeof value === 'string') {
             if (['N/A', 'No reward', 'No reward specified', 'None'].includes(value)) return true;
+            
+            // Check for complex formats
+            if (value.includes('per_unit:') || value.includes('flat:') || value.includes('collab_bonus:')) {
+                return true; // Accept complex reward formats
+            }
+            
             const parsed = parseFloat(value);
             return !isNaN(parsed) && parsed >= 0;
         }
