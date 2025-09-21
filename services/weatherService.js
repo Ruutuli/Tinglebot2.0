@@ -139,7 +139,7 @@ function normalizeSeason(season) {
   if (!season) return 'spring';
   const s = season.toLowerCase();
   if (s === 'autumn') return 'fall';
-  if (s === 'fall') return 'autumn';
+  if (s === 'fall') return 'fall';
   return s;
 }
 
@@ -400,7 +400,7 @@ async function simulateWeightedWeather(village, season, options = {}) {
   } = options;
   
   // Convert 'fall' to 'autumn' for data lookup since seasonsData uses 'Autumn'
-  const lookupSeason = season === 'fall' ? 'autumn' : season;
+  const lookupSeason = season.toLowerCase() === 'fall' ? 'autumn' : season.toLowerCase();
   const seasonKey = capitalizeFirstLetter(lookupSeason);
   const villageData = seasonsData[village];
   if (!villageData || !villageData.seasons[seasonKey]) {
@@ -637,7 +637,6 @@ async function getCurrentWeather(village) {
     // Only generate new weather if none exists for the current period
     if (!weather) {
       const season = getCurrentSeason();
-      const capitalizedSeason = capitalizeFirstLetter(season);
       
       // Try to generate valid weather with retry limit
       let newWeather = null;
@@ -646,7 +645,7 @@ async function getCurrentWeather(village) {
       
       while (attempts < maxAttempts) {
         attempts++;
-        newWeather = await simulateWeightedWeather(normalizedVillage, capitalizedSeason, { useDatabaseHistory: true });
+        newWeather = await simulateWeightedWeather(normalizedVillage, season, { useDatabaseHistory: true });
         
         if (!newWeather) {
           if (attempts === maxAttempts) {
