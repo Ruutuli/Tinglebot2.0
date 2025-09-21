@@ -477,6 +477,18 @@ async function removeQuestItems(character, quest, interaction) {
     
   } catch (error) {
     console.error(`[helpWanted.js]: ❌ Error removing items for quest completion:`, error);
+    
+    // Use global error handler for proper error tracking and user notification
+    await handleInteractionError(error, null, {
+      source: 'removeQuestItems',
+      commandName: 'helpwanted',
+      userTag: 'unknown',
+      userId: 'unknown',
+      characterName: 'unknown',
+      options: { questType: quest?.type, requirements: quest?.requirements },
+      responseType: 'console'
+    });
+    
     return false;
   }
 }
@@ -512,6 +524,17 @@ async function updateVillageShopsStock(itemName, amountUsed) {
     }
   } catch (error) {
     console.error(`[helpWanted.js]: ❌ Error updating VillageShops stock for ${itemName}:`, error);
+    
+    // Use global error handler for proper error tracking and user notification
+    await handleInteractionError(error, null, {
+      source: 'updateVillageShopsStock',
+      commandName: 'helpwanted',
+      userTag: 'unknown',
+      userId: 'unknown',
+      characterName: 'unknown',
+      options: { itemName, amountUsed },
+      responseType: 'console'
+    });
   }
 }
 
