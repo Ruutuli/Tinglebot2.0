@@ -58,7 +58,9 @@ const DISCORD_ERROR_PATTERNS = [
   'Not Found',
   'Bad Request',
   'Internal Server Error',
-  'Gateway Timeout'
+  'Gateway Timeout',
+  'Unknown interaction',
+  'DiscordAPIError'
 ];
 
 function isDatabaseError(error) {
@@ -71,9 +73,13 @@ function isDatabaseError(error) {
 }
 
 function isDiscordAPIError(error) {
-  if (!error?.message) return false;
+  if (!error?.message && !error?.code) return false;
+  
+  // Check for Discord API error codes
+  if (error.code === 10062) return true; // Unknown interaction
+  
   return DISCORD_ERROR_PATTERNS.some(pattern => 
-    error.message.includes(pattern) || 
+    error.message?.includes(pattern) || 
     error.name === pattern ||
     error.code === pattern
   );
@@ -230,11 +236,17 @@ function buildErrorContext(error, context) {
   if (isDiscordAPIError(error)) {
     extraInfo += `\n🤖 **Discord API Error Details:**\n`;
     extraInfo += `• Error Type: ${error.name || 'HTTPError'}\n`;
-    if (error.message?.includes('Service Unavailable')) {
+    extraInfo += `• Error Code: ${error.code || 'Unknown'}\n`;
+    
+    if (error.code === 10062) {
+      extraInfo += `• Issue: Interaction has expired (Discord interactions expire after 15 minutes)\n`;
+      extraInfo += `• Recommendation: User should restart the command - this is normal behavior\n`;
+    } else if (error.message?.includes('Service Unavailable')) {
       extraInfo += `• Issue: Discord API is temporarily unavailable\n`;
       extraInfo += `• Recommendation: This is usually a temporary Discord issue\n`;
     }
-    if (context.commandName) extraInfo += `• Command: ${context.commandName}\n`;
+    
+    if (context.commandName && context.commandName !== 'unknown') extraInfo += `• Command: ${context.commandName}\n`;
     if (context.userId && context.userId !== 'unknown') extraInfo += `• User ID: ${context.userId}\n`;
     if (context.characterName && context.characterName !== 'unknown') extraInfo += `• Character: ${context.characterName}\n`;
   }
@@ -331,13 +343,21 @@ function buildMentionContent(error, context) {
   
   if (context.userId && context.userId !== 'unknown') {
     if (isDiscordError) {
-      return `HEY! <@${context.userId}>! 🤖\n\n**This is a Discord API issue, not your fault!**\n\nDiscord's servers are experiencing problems right now. Please wait a few minutes and try your command again. This is not caused by our bot or anything you did wrong.\n\nError: ${error.message || 'Discord API Error'}`;
+      if (error.code === 10062) {
+        return `HEY! <@${context.userId}>! ⏰\n\n**Your interaction has expired!**\n\nDiscord interactions automatically expire after 15 minutes of inactivity. This is normal behavior - just run your command again to continue!\n\nError: ${error.message || 'Interaction expired'}`;
+      } else {
+        return `HEY! <@${context.userId}>! 🤖\n\n**This is a Discord API issue, not your fault!**\n\nDiscord's servers are experiencing problems right now. Please wait a few minutes and try your command again. This is not caused by our bot or anything you did wrong.\n\nError: ${error.message || 'Discord API Error'}`;
+      }
     } else {
       return `HEY! <@${context.userId}>! 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\nError: ${error.message || 'Unknown error occurred'}`;
     }
   } else {
     if (isDiscordError) {
-      return `HEY! @everyone! 🤖\n\n**Discord API is currently experiencing issues!**\n\nThis is not a bot problem - Discord's servers are having trouble. Please wait a few minutes before trying commands again.`;
+      if (error.code === 10062) {
+        return `HEY! @everyone! ⏰\n\n**Interaction timeouts are normal!**\n\nDiscord interactions expire after 15 minutes. If you see this error, just restart your command - it's not a bug!`;
+      } else {
+        return `HEY! @everyone! 🤖\n\n**Discord API is currently experiencing issues!**\n\nThis is not a bot problem - Discord's servers are having trouble. Please wait a few minutes before trying commands again.`;
+      }
     } else {
       return `HEY! @everyone! 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!`;
     }
@@ -352,19 +372,19 @@ async function handleErrorResponse(error, context) {
   try {
     switch (responseType) {
       case ERROR_RESPONSE_TYPES.REPLY:
-        if (interaction && !interaction.replied && !interaction.deferred) {
+        if (interaction && interaction.isRepliable && !interaction.replied && !interaction.deferred) {
           return await interaction.reply({ content: errorMessage, ephemeral: true });
         }
         break;
       
       case ERROR_RESPONSE_TYPES.FOLLOWUP:
-        if (interaction && (interaction.replied || interaction.deferred)) {
+        if (interaction && interaction.followUp && (interaction.replied || interaction.deferred)) {
           return await interaction.followUp({ content: errorMessage, ephemeral: true });
         }
         break;
       
       case ERROR_RESPONSE_TYPES.EDIT:
-        if (interaction && (interaction.replied || interaction.deferred)) {
+        if (interaction && interaction.editReply && (interaction.replied || interaction.deferred)) {
           return await interaction.editReply({ content: errorMessage, ephemeral: true });
         }
         break;
@@ -423,12 +443,33 @@ Error: ${message}
 // ============================================================================
 
 async function handleInteractionError(error, interaction, context = {}) {
+  // Extract command information from interaction
+  let commandName = 'unknown';
+  if (interaction?.commandName) {
+    commandName = interaction.commandName;
+  } else if (interaction?.command?.name) {
+    commandName = interaction.command.name;
+  } else if (context.commandName) {
+    commandName = context.commandName;
+  }
+
+  // Extract user information from interaction
+  let userTag = 'unknown';
+  let userId = 'unknown';
+  if (interaction?.user) {
+    userTag = interaction.user.tag || `${interaction.user.username}#${interaction.user.discriminator}` || 'unknown';
+    userId = interaction.user.id || 'unknown';
+  } else if (context.userTag && context.userId) {
+    userTag = context.userTag;
+    userId = context.userId;
+  }
+
   const errorContext = {
     ...context,
     interaction: interaction,
-    commandName: context.commandName || interaction?.commandName || 'unknown',
-    userTag: context.userTag || interaction?.user?.tag || 'unknown',
-    userId: context.userId || interaction?.user?.id || 'unknown',
+    commandName: commandName,
+    userTag: userTag,
+    userId: userId,
     characterName: context.characterName || 'unknown',
     options: interaction?.options?.data || context.options,
     subcommand: interaction?.options?.getSubcommand() || context.subcommand,

@@ -306,26 +306,30 @@ module.exports = {
             ]
           });
         } catch (error) {
-          handleInteractionError(error, 'inventory.js');
           console.error('[inventory.js]: ❌ Error updating interaction', error);
           
           if (error.code === 10062) { // Unknown interaction error
-            console.log('[inventory.js]: 🔄 Interaction expired, removing components');
+            console.log('[inventory.js]: 🔄 Interaction expired, stopping collector');
             collector.stop();
-          } else if (i.isRepliable()) {
-            await i.reply({ 
-              content: '❌ An error occurred while updating the inventory view.',
-              flags: [MessageFlags.Ephemeral]
-            }).catch(() => {});
+            return;
           }
+          
+          // Handle other errors with proper context
+          await handleInteractionError(error, i, {
+            source: 'inventory.js',
+            commandName: 'inventory view',
+            characterName: character.name,
+            subcommand: 'view'
+          });
         }
       });
 
       collector.on('end', async () => {
         try {
-          await interaction.editReply({ components: [] }).catch(() => {});
+          if (interaction.isRepliable()) {
+            await interaction.editReply({ components: [] }).catch(() => {});
+          }
         } catch (err) {
-          handleInteractionError(err, 'inventory.js');
           console.error('[inventory.js]: ❌ Error clearing components on collector end', err);
         }
       });
