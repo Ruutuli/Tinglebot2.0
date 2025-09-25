@@ -45,7 +45,7 @@ const {
 // Modules
 const { recoverDailyStamina } = require("./modules/characterStatsModule");
 const { bloodmoonDates, convertToHyruleanDate } = require("./modules/calendarModule");
-const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest } = require('./modules/helpWantedModule');
+const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest, regenerateArtWritingQuest } = require('./modules/helpWantedModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 
 // Services
@@ -306,6 +306,32 @@ async function cleanupOldRuuGameSessions() {
  }
 }
 
+async function cleanupFinishedMinigameSessions() {
+ try {
+  console.log(`[scheduler.js]: 🎮 Starting Minigame session cleanup`);
+  
+  const Minigame = require('./models/MinigameModel');
+  const result = await Minigame.cleanupOldSessions();
+  
+  if (result.deletedCount === 0) {
+   console.log(`[scheduler.js]: ✅ No finished Minigame sessions to clean up`);
+   return result;
+  }
+  
+  console.log(`[scheduler.js]: ✅ Minigame cleanup completed - deleted ${result.deletedCount} sessions`);
+  
+  if (result.finishedCount > 0) {
+   console.log(`[scheduler.js]: 🏆 Cleaned up ${result.finishedCount} completed minigame sessions`);
+  }
+  
+  return result;
+ } catch (error) {
+  console.error(`[scheduler.js]: ❌ Error cleaning up finished Minigame sessions:`, error);
+  handleError(error, "scheduler.js");
+  return { deletedCount: 0, finishedCount: 0 };
+ }
+}
+
 // ------------------- Combined Cleanup Functions ------------------
 
 async function runDailyCleanupTasks(client) {
@@ -319,6 +345,7 @@ async function runDailyCleanupTasks(client) {
    cleanupExpiredBlightRequests(client),
    cleanupExpiredRaids(),
    cleanupOldRuuGameSessions(),
+   cleanupFinishedMinigameSessions(),
   ]);
   
   const blightResult = results[3];
@@ -1064,22 +1091,31 @@ async function checkAndPostMissedQuests(client) {
       return 0;
     }
     
-    // Filter out art and writing quests if it's after 12pm EST
-    let filteredQuests = unpostedQuests;
+    // Regenerate art and writing quests if it's after 12pm EST
+    let processedQuests = unpostedQuests;
     if (isAfterNoon) {
-      filteredQuests = unpostedQuests.filter(quest => quest.type !== 'art' && quest.type !== 'writing');
-      const skippedCount = unpostedQuests.length - filteredQuests.length;
-      if (skippedCount > 0) {
-        console.log(`[scheduler.js]: ⏰ After 12pm EST (${currentHour}:00) - Skipping ${skippedCount} art/writing quest(s) to ensure adequate completion time`);
+      const artWritingQuests = unpostedQuests.filter(quest => quest.type === 'art' || quest.type === 'writing');
+      if (artWritingQuests.length > 0) {
+        console.log(`[scheduler.js]: ⏰ After 12pm EST (${currentHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
+        
+        // Regenerate each art/writing quest
+        for (const quest of artWritingQuests) {
+          try {
+            await regenerateArtWritingQuest(quest);
+            console.log(`[scheduler.js]: ✅ Regenerated ${quest.type} quest ${quest.questId} for ${quest.village}`);
+          } catch (error) {
+            console.error(`[scheduler.js]: ❌ Failed to regenerate quest ${quest.questId}:`, error);
+          }
+        }
       }
     }
     
-    if (!filteredQuests.length) {
-      console.log(`[scheduler.js]: ℹ️ No missed quests to post during startup (filtered out art/writing quests)`);
+    if (!processedQuests.length) {
+      console.log(`[scheduler.js]: ℹ️ No missed quests to post during startup`);
       return 0;
     }
     
-    const shuffledQuests = filteredQuests.sort(() => Math.random() - 0.5);
+    const shuffledQuests = processedQuests.sort(() => Math.random() - 0.5);
     let posted = 0;
     
     for (const quest of shuffledQuests) {
@@ -1136,22 +1172,31 @@ async function checkAndPostScheduledQuests(client, cronTime) {
       return 0;
     }
     
-    // Filter out art and writing quests if it's after 12pm EST
-    let filteredQuests = questsToPost;
+    // Regenerate art and writing quests if it's after 12pm EST
+    let processedQuests = questsToPost;
     if (isAfterNoon) {
-      filteredQuests = questsToPost.filter(quest => quest.type !== 'art' && quest.type !== 'writing');
-      const skippedCount = questsToPost.length - filteredQuests.length;
-      if (skippedCount > 0) {
-        console.log(`[scheduler.js]: ⏰ After 12pm EST (${estHour}:00) - Skipping ${skippedCount} art/writing quest(s) to ensure adequate completion time`);
+      const artWritingQuests = questsToPost.filter(quest => quest.type === 'art' || quest.type === 'writing');
+      if (artWritingQuests.length > 0) {
+        console.log(`[scheduler.js]: ⏰ After 12pm EST (${estHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
+        
+        // Regenerate each art/writing quest
+        for (const quest of artWritingQuests) {
+          try {
+            await regenerateArtWritingQuest(quest);
+            console.log(`[scheduler.js]: ✅ Regenerated ${quest.type} quest ${quest.questId} for ${quest.village}`);
+          } catch (error) {
+            console.error(`[scheduler.js]: ❌ Failed to regenerate quest ${quest.questId}:`, error);
+          }
+        }
       }
     }
     
-    if (!filteredQuests.length) {
-      console.log(`[scheduler.js]: ℹ️ No quests to post for ${cronTime} on ${today} (filtered out art/writing quests)`);
+    if (!processedQuests.length) {
+      console.log(`[scheduler.js]: ℹ️ No quests to post for ${cronTime} on ${today}`);
       return 0;
     }
     
-    const shuffledQuests = filteredQuests.sort(() => Math.random() - 0.5);
+    const shuffledQuests = processedQuests.sort(() => Math.random() - 0.5);
     let posted = 0;
     
     for (const quest of shuffledQuests) {

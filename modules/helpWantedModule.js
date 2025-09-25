@@ -192,6 +192,41 @@ async function regenerateEscortQuest(quest) {
   }
 }
 
+// ------------------- Function: regenerateArtWritingQuest -------------------
+// Regenerates an art or writing quest as a different quest type when it's after 12pm EST
+async function regenerateArtWritingQuest(quest) {
+  try {
+    console.log(`[helpWantedModule.js]: 🔄 Regenerating ${quest.type} quest ${quest.questId} for ${quest.village} due to time restriction (after 12pm EST)`);
+    
+    // Get available quest pools
+    const pools = await getAllQuestPools();
+    
+    // Get available NPCs (excluding the current one to avoid duplicates)
+    const allNPCs = Object.keys(NPCs);
+    const availableNPCs = allNPCs.filter(npc => npc !== quest.npcName);
+    
+    // Generate new quest excluding art and writing types
+    const availableTypes = QUEST_TYPES.filter(type => type !== 'art' && type !== 'writing');
+    const newType = getRandomElement(availableTypes);
+    const newRequirements = generateQuestRequirements(newType, pools, quest.village);
+    const newNpcName = getRandomElement(availableNPCs);
+    
+    // Update the quest
+    quest.type = newType;
+    quest.requirements = newRequirements;
+    quest.npcName = newNpcName;
+    
+    await quest.save();
+    
+    console.log(`[helpWantedModule.js]: ✅ Regenerated quest ${quest.questId} as ${newType} quest with NPC ${newNpcName} for ${quest.village}`);
+    
+    return quest;
+  } catch (error) {
+    console.error(`[helpWantedModule.js]: ❌ Error regenerating ${quest.type} quest ${quest.questId}:`, error);
+    throw error;
+  }
+}
+
 // ------------------- Function: shuffleArray -------------------
 // Shuffles an array in place using Fisher-Yates algorithm
 function shuffleArray(array) {
@@ -1988,5 +2023,6 @@ module.exports = {
   isQuestExpired,
   checkAndCompleteQuestFromSubmission,
   isTravelBlockedByWeather,
-  regenerateEscortQuest
+  regenerateEscortQuest,
+  regenerateArtWritingQuest
 }; 

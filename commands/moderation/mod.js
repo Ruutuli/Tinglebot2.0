@@ -4226,6 +4226,12 @@ async function handleTheyCameAdvance(interaction, sessionId) {
     session.markModified('gameData');
     await session.save();
     
+    // Delete the finished session immediately after saving if game ended
+    if (gameEndCheck.gameEnded) {
+      await Minigame.deleteOne({ _id: session._id });
+      console.log(`[MOD] Finished minigame session ${session.sessionId} deleted from database`);
+    }
+    
     const embedResult = await createMinigameEmbed(session, 'Round Advanced!');
     const replyOptions = {
       content: result.message,
@@ -4262,6 +4268,10 @@ async function handleTheyCameEnd(interaction, sessionId) {
   session.results.completedAt = new Date();
   
   await session.save();
+  
+  // Delete the finished session immediately after saving
+  await Minigame.deleteOne({ _id: session._id });
+  console.log(`[MOD] Finished minigame session ${session.sessionId} deleted from database`);
   
   const embedResult = await createMinigameEmbed(session, 'Game Ended!');
   const replyOptions = {
@@ -4343,14 +4353,19 @@ async function handleCreateMinigame(interaction, questId, village) {
   // TODO: Make quest ID required after testing - currently optional for testing
   let quest = null;
   if (questId) {
-    // Validate quest exists if provided
-    const Quest = require('../../models/QuestModel');
-    quest = await Quest.findOne({ questID: questId });
-    
-    if (!quest) {
-      return interaction.editReply({
-        content: `❌ Quest with ID "${questId}" not found. Please check the quest ID and try again.`
-      });
+    // Special case for testing - allow "TEST" quest ID to bypass validation
+    if (questId === 'TEST') {
+      console.log(`[MINIGAME CREATE] Using TEST quest ID - bypassing quest validation`);
+    } else {
+      // Validate quest exists if provided
+      const Quest = require('../../models/QuestModel');
+      quest = await Quest.findOne({ questID: questId });
+      
+      if (!quest) {
+        return interaction.editReply({
+          content: `❌ Quest with ID "${questId}" not found. Please check the quest ID and try again.`
+        });
+      }
     }
   }
   
@@ -4410,7 +4425,7 @@ async function handleCreateMinigame(interaction, questId, village) {
       },
       { 
         name: '⚙️ Admin', 
-        value: `</mod minigame:1413434285934903366>\n**Session:** \`${newSession.sessionId}\``, 
+        value: `</mod minigame:1413434285934903366>\n**Session:** \`${newSession.sessionId}\`${newSession.questId ? `\n**Quest ID:** \`${newSession.questId}\`` : ''}`, 
         inline: true 
       }
     )
@@ -4743,6 +4758,10 @@ async function handleEndMinigame(interaction) {
   
   await session.save();
   
+  // Delete the finished session immediately after saving
+  await Minigame.deleteOne({ _id: session._id });
+  console.log(`[MOD] Finished minigame session ${session.sessionId} deleted from database`);
+  
   const embedResult = await createMinigameEmbed(session, 'Game Ended!');
   const replyOptions = {
     content: `🏁 **Game ended by ${interaction.user.username}!** Final score: ${session.gameData.villageAnimals} animals saved!`,
@@ -4857,10 +4876,14 @@ async function createMinigameEmbed(session, title) {
   );
   
   // Game info - more compact
+  const sessionInfoText = session.questId ? 
+    `**ID:** \`${session.sessionId}\`\n**Quest ID:** \`${session.questId}\`` : 
+    `**ID:** \`${session.sessionId}\``;
+  
   embed.addFields(
     { 
       name: '🎯 Session Info', 
-      value: `**ID:** \`${session.sessionId}\``, 
+      value: sessionInfoText, 
       inline: false 
     }
   );
