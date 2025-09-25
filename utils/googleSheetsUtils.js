@@ -65,11 +65,6 @@ function getServiceAccountCredentials() {
     const hasEnvVars = process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_PROJECT_ID;
     const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_NAME;
     
-    // Log environment status for debugging
-    console.log(`[googleSheetsUtils.js]: 🔍 Environment check - hasEnvVars: ${hasEnvVars}, isRailway: ${isRailway}`);
-    if (hasEnvVars) {
-        console.log(`[googleSheetsUtils.js]: ✅ Using environment variables for Google Sheets authentication`);
-    }
     
     if (isRailway || hasEnvVars) {
         // Create service account object from environment variables
@@ -1098,9 +1093,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             throw apiError;
         }
         
-        // Log successful sheet update
-        const entityName = isCharacterObject ? character.name : `User ${character.discordId}`;
-        console.log(`[googleSheetsUtils.js]: ✅ Inventory update logged to sheet for ${entityName}`);
 
     } catch (error) {
         console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);

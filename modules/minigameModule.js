@@ -146,7 +146,7 @@ async function generateAlienOverlayImage(gameData, sessionId) {
             adjustedY + imageHeight <= villageImg.bitmap.height) {
           
           // Add ring-based color tinting only for active aliens (not defeated ones)
-          if (!isDefeated) {
+          if (!alien.defeated) {
             if (alien.ring === 1) {
               // Outer ring - red tint
               imageClone.color([
@@ -180,8 +180,6 @@ async function generateAlienOverlayImage(gameData, sessionId) {
       }
     }
     
-    // Log explosion effects (now handled by emoji replacement above)
-    console.log(`[MINIGAME] Rendering ${gameData.explosions?.length || 0} explosion effects using emoji replacement`);
     
     // Generate static PNG
     const buffer = await villageImg.getBufferAsync(Jimp.MIME_PNG);
@@ -313,7 +311,6 @@ function createAlienDefenseGame(channelId, guildId, createdBy, village = 'rudani
     currentTurnIndex: 0, // Current player's turn
     turnPhase: 'waiting', // waiting, rolling, advancing
     village: village, // Selected village
-    explosions: [], // Track aliens that were defeated this round for explosion effects
     images: {
       alien: getAlienImage(),
       village: getCurrentVillageImage(village)
@@ -388,25 +385,25 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     alien.defeatedBy = playerId;
     alien.defeatedAt = new Date();
     
-    // Add to explosions array for visual effect
-    gameData.explosions.push({
-      alienId: alien.id,
-      position: getAlienPosition(alien.id),
-      defeatedAt: new Date()
-    });
-    console.log(`[MINIGAME] Added explosion effect for ${alien.id}`);
+    // Check if game should end immediately after defeating this alien
+    const gameEndCheck = checkAlienDefenseGameEnd(gameData);
+    if (gameEndCheck.gameEnded) {
+      console.log(`[MINIGAME] Game ended after defeating ${alien.id} - ${gameEndCheck.message}`);
+      return {
+        success: true,
+        message: `🎯 **${playerName}** defeated alien ${alien.id} with a ${roll}! (Required: ${requiredRoll}+)\n\n${gameEndCheck.message}`,
+        gameData: gameData,
+        shouldAdvanceRound: false,
+        gameEnded: true,
+        gameEndResult: gameEndCheck
+      };
+    }
     
     // Advance to next player's turn
     if (gameData.turnOrder.length > 0) {
       gameData.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.turnOrder.length;
       console.log(`[MINIGAME] Turn advanced to index ${gameData.currentTurnIndex}`);
       
-      // Clear explosions when turn advances (for targeted effect)
-      if (gameData.currentTurnIndex === 0) {
-        // Only clear explosions when starting a new round cycle
-        gameData.explosions = [];
-        console.log(`[MINIGAME] Cleared explosion effects for new round cycle`);
-      }
     }
     
     // Check if all players have taken their turn (completed a full cycle)
@@ -426,12 +423,6 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
       gameData.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.turnOrder.length;
       console.log(`[MINIGAME] Turn advanced to index ${gameData.currentTurnIndex}`);
       
-      // Clear explosions when turn advances (for targeted effect)
-      if (gameData.currentTurnIndex === 0) {
-        // Only clear explosions when starting a new round cycle
-        gameData.explosions = [];
-        console.log(`[MINIGAME] Cleared explosion effects for new round cycle`);
-      }
     }
     
     // Check if all players have taken their turn (completed a full cycle)
@@ -452,20 +443,50 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
 function advanceAlienDefenseRound(gameData) {
   console.log(`[MINIGAME] === ADVANCING ROUND ${gameData.currentRound} ===`);
   
-  // Clear explosions from previous round
-  gameData.explosions = [];
-  console.log(`[MINIGAME] Cleared explosion effects from previous round`);
   
-  // Check if we've reached the maximum rounds (8) - don't advance further
+  // Check if we've reached the maximum rounds (8) - end the game
   if (gameData.currentRound >= 8) {
-    console.log(`[MINIGAME] Max rounds reached (8), no round advancement`);
+    console.log(`[MINIGAME] Max rounds reached (8), ending game`);
+    
+    // Any remaining aliens steal animals at the end of round 8
+    const activeAliens = gameData.aliens.filter(a => !a.defeated);
+    let finalAnimalsLost = 0;
+    let barnAliens = [];
+    
+    if (activeAliens.length > 0) {
+      finalAnimalsLost = activeAliens.length;
+      gameData.villageAnimals = Math.max(0, gameData.villageAnimals - finalAnimalsLost);
+      
+      // Mark remaining aliens as defeated by barn
+      activeAliens.forEach(alien => {
+        alien.defeated = true;
+        alien.defeatedBy = 'barn';
+        alien.defeatedAt = new Date();
+        barnAliens.push(alien.id);
+      });
+    }
+    
+    const animalsSaved = gameData.villageAnimals;
+    const totalAnimals = GAME_CONFIGS.theycame.startingAnimals;
+    const percentage = Math.round((animalsSaved / totalAnimals) * 100);
+    
+    let endMessage;
+    if (finalAnimalsLost > 0) {
+      endMessage = `💀 **Game Over!** ${finalAnimalsLost} alien${finalAnimalsLost > 1 ? 's' : ''} reached the barn and stole ${finalAnimalsLost} animal${finalAnimalsLost > 1 ? 's' : ''}! Village saved ${animalsSaved}/${totalAnimals} animals (${percentage}%)!`;
+    } else {
+      endMessage = `🏁 **Game Over!** Village saved ${animalsSaved}/${totalAnimals} animals (${percentage}%)!`;
+    }
+    
+    console.log(`[MINIGAME] Game ended - Animals saved: ${animalsSaved}, Animals lost: ${finalAnimalsLost}`);
+    
     return {
-      success: false,
-      message: 'Game has reached maximum rounds (8)',
+      success: true,
+      message: endMessage,
       gameData: gameData,
       spawnLocations: [],
       movementMessages: [],
-      barnAliens: []
+      barnAliens: barnAliens,
+      gameEnded: true
     };
   }
   

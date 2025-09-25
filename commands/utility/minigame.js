@@ -123,7 +123,7 @@ module.exports = {
         .addStringOption(option =>
           option.setName('questid')
             .setDescription('Quest ID - required for quest participation')
-            .setRequired(false)
+            .setRequired(true)
             .setAutocomplete(true)
         )
     )
@@ -208,18 +208,47 @@ module.exports = {
     
     console.log(`[MINIGAME JOIN] ${username} validating character "${resolvedCharacterName}"`);
     
-    // TODO: Make quest ID required after testing - currently optional for testing
-    let quest = null;
-    if (questId) {
-      console.log(`[MINIGAME JOIN] ${username} validating quest participation for quest ID: ${questId}`);
-      // Validate quest participation if quest ID provided
+    // Validate quest participation - quest ID is now required
+    console.log(`[MINIGAME JOIN] ${username} validating quest participation for quest ID: ${questId}`);
+    
+    // Special case for testing - allow "TEST" quest ID to bypass validation
+    if (questId === 'TEST') {
+      console.log(`[MINIGAME JOIN] ${username} using TEST quest ID - bypassing quest validation`);
+    } else {
       const Quest = require('../../models/QuestModel');
-      quest = await Quest.findOne({ questID: questId });
+      const quest = await Quest.findOne({ questID: questId });
       
       if (!quest) {
         console.log(`[MINIGAME JOIN] ${username} failed validation - quest not found: ${questId}`);
+        
+        // Create helpful error embed
+        const errorEmbed = new EmbedBuilder()
+          .setTitle('❌ Quest Not Found')
+          .setDescription(`Quest with ID **"${questId}"** could not be found in the database.`)
+          .setColor('#FF0000')
+          .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .addFields(
+            {
+              name: '🔍 What you might be doing wrong:',
+              value: `• **Typo in Quest ID** - Double-check the quest ID spelling\n• **Quest doesn't exist** - The quest may have been deleted or expired\n• **Wrong format** - Quest IDs are usually longer strings (e.g., "ABC123", "QUEST001")\n• **Case sensitivity** - Quest IDs are case-sensitive`,
+              inline: false
+            },
+            {
+              name: '✅ How to fix this:',
+              value: `• Check the quest ID with the quest creator\n• Use \`/quest list\` to see available quests\n• For testing, use \`questid:TEST\` to bypass quest validation`,
+              inline: false
+            },
+            {
+              name: '🎮 Testing Mode:',
+              value: `If you're testing the minigame, use:\n\`/minigame theycame-join session_id:${sessionId} character:${resolvedCharacterName} questid:TEST\``,
+              inline: false
+            }
+          )
+          .setFooter({ text: 'Need help? Contact a moderator or quest creator.' })
+          .setTimestamp();
+          
         return await interaction.editReply({
-          content: `❌ Quest with ID "${questId}" not found.`
+          embeds: [errorEmbed]
         });
       }
       
@@ -238,8 +267,8 @@ module.exports = {
           content: `❌ You are participating in this quest with character "${participant.characterName}", not "${resolvedCharacterName}".`
         });
       }
-      console.log(`[MINIGAME JOIN] ${username} quest validation passed`);
     }
+    console.log(`[MINIGAME JOIN] ${username} quest validation passed`);
     
     // Fetch character
     console.log(`[MINIGAME JOIN] ${username} fetching character "${resolvedCharacterName}" from database`);
@@ -496,7 +525,7 @@ module.exports = {
     
     if (!playerCharacter) {
       return await interaction.editReply({
-        content: `❌ You haven't joined this game session yet. Use \`/minigame theycame-join session_id:${sessionId} character:YourCharacter\` to join first.`
+        content: `❌ You haven't joined this game session yet. Use \`/minigame theycame-join session_id:${sessionId} character:YourCharacter questid:QuestID\` to join first.`
       });
     }
     
@@ -537,6 +566,68 @@ module.exports = {
     
     console.log(`[MINIGAME] Roll result: ${result.success ? 'SUCCESS' : 'FAILED'} - ${result.message}`);
     console.log(`[MINIGAME] Aliens before save:`, session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+    
+    // Check if game ended immediately from this roll
+    if (result.gameEnded) {
+      console.log(`[MINIGAME] Game ended immediately from roll - ${result.gameEndResult.message}`);
+      
+      // Save the session data
+      session.markModified('gameData');
+      session.markModified('gameData.aliens');
+      await session.save();
+      
+      // Calculate quick stats for immediate display
+      const animalsSaved = result.gameEndResult.finalScore;
+      const totalAnimals = GAME_CONFIGS.theycame.startingAnimals;
+      const animalsLost = totalAnimals - animalsSaved;
+      const percentage = Math.round((animalsSaved / totalAnimals) * 100);
+      const aliensDefeated = session.gameData.aliens.filter(a => a.defeated).length;
+      
+      // Send immediate game over message with key stats
+      await interaction.editReply({
+        content: `🏁 **Game Over!** Processing results...\n\n🐄 **Animals Saved:** ${animalsSaved}/${totalAnimals} (${percentage}%)\n👾 **Aliens Defeated:** ${aliensDefeated}\n⏱️ **Rounds Completed:** ${session.gameData.currentRound}/${session.gameData.maxRounds}`
+      });
+      
+      session.status = 'finished';
+      session.results.finalScore = result.gameEndResult.finalScore;
+      session.results.completedAt = new Date();
+      
+      // Save the completed game to database
+      session.markModified('status');
+      session.markModified('results');
+      session.markModified('results.finalScore');
+      session.markModified('results.completedAt');
+      session.markModified('gameData');
+      session.markModified('gameData.villageAnimals');
+      
+      try {
+        await session.save();
+        console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+      } catch (error) {
+        console.error(`[MINIGAME] Failed to save game completion to database:`, error);
+      }
+      
+      // Create and post the final end-game embed
+      const endGameEmbed = await this.createEndGameEmbed(session, result.gameEndResult);
+      const endGameOptions = {
+        embeds: [endGameEmbed.embed]
+      };
+      if (endGameEmbed.attachment) {
+        endGameOptions.files = [endGameEmbed.attachment];
+      }
+      
+      // Post the final embed after a short delay
+      setTimeout(async () => {
+        try {
+          await interaction.followUp(endGameOptions);
+        } catch (error) {
+          console.error(`[MINIGAME] Failed to post end-game embed:`, error);
+        }
+      }, 2000); // 2 second delay to let the quick stats message show first
+      
+      console.log(`[MINIGAME] Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
+      return;
+    }
     
     // Save the session data after roll processing (which may have advanced the turn)
     // Explicitly mark the aliens array as modified to ensure Mongoose detects the change
@@ -580,6 +671,66 @@ module.exports = {
         session.markModified('gameData');
         await session.save();
         
+        // Check if the round advancement ended the game
+        if (advanceResult.gameEnded) {
+          console.log(`[MINIGAME] Game ended from round advancement - ${advanceResult.message}`);
+          
+          // Calculate quick stats for immediate display
+          const animalsSaved = session.gameData.villageAnimals;
+          const totalAnimals = GAME_CONFIGS.theycame.startingAnimals;
+          const animalsLost = totalAnimals - animalsSaved;
+          const percentage = Math.round((animalsSaved / totalAnimals) * 100);
+          const aliensDefeated = session.gameData.aliens.filter(a => a.defeated).length;
+          
+          // Send immediate game over message with key stats
+          await interaction.followUp({
+            content: `🏁 **Game Over!** Processing results...\n\n🐄 **Animals Saved:** ${animalsSaved}/${totalAnimals} (${percentage}%)\n👾 **Aliens Defeated:** ${aliensDefeated}\n⏱️ **Rounds Completed:** ${session.gameData.currentRound}/${session.gameData.maxRounds}`
+          });
+          
+          session.status = 'finished';
+          session.results.finalScore = animalsSaved;
+          session.results.completedAt = new Date();
+          
+          // Save the completed game to database
+          session.markModified('status');
+          session.markModified('results');
+          session.markModified('results.finalScore');
+          session.markModified('results.completedAt');
+          session.markModified('gameData');
+          session.markModified('gameData.villageAnimals');
+          
+          try {
+            await session.save();
+            console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+          } catch (error) {
+            console.error(`[MINIGAME] Failed to save game completion to database:`, error);
+          }
+          
+          // Create and post the final end-game embed
+          const endGameEmbed = await this.createEndGameEmbed(session, { 
+            finalScore: animalsSaved, 
+            message: advanceResult.message 
+          });
+          const endGameOptions = {
+            embeds: [endGameEmbed.embed]
+          };
+          if (endGameEmbed.attachment) {
+            endGameOptions.files = [endGameEmbed.attachment];
+          }
+          
+          // Post the final embed after a short delay
+          setTimeout(async () => {
+            try {
+              await interaction.followUp(endGameOptions);
+            } catch (error) {
+              console.error(`[MINIGAME] Failed to post end-game embed:`, error);
+            }
+          }, 2000); // 2 second delay to let the quick stats message show first
+          
+          console.log(`[MINIGAME] Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
+          return;
+        }
+        
         // Only proceed with round advancement logic if it was successful
         if (advanceResult.success) {
           // Check if turn order has reset to the first player (turn index 0)
@@ -620,6 +771,7 @@ module.exports = {
         try {
           await session.save();
           console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+          
         } catch (error) {
           console.error(`[MINIGAME] Failed to save game completion to database:`, error);
         }
@@ -745,6 +897,66 @@ module.exports = {
         session.markModified('gameData');
         await session.save();
         
+        // Check if the round advancement ended the game
+        if (advanceResult.gameEnded) {
+          console.log(`[MINIGAME] Game ended from round advancement - ${advanceResult.message}`);
+          
+          // Calculate quick stats for immediate display
+          const animalsSaved = session.gameData.villageAnimals;
+          const totalAnimals = GAME_CONFIGS.theycame.startingAnimals;
+          const animalsLost = totalAnimals - animalsSaved;
+          const percentage = Math.round((animalsSaved / totalAnimals) * 100);
+          const aliensDefeated = session.gameData.aliens.filter(a => a.defeated).length;
+          
+          // Send immediate game over message with key stats
+          await interaction.followUp({
+            content: `🏁 **Game Over!** Processing results...\n\n🐄 **Animals Saved:** ${animalsSaved}/${totalAnimals} (${percentage}%)\n👾 **Aliens Defeated:** ${aliensDefeated}\n⏱️ **Rounds Completed:** ${session.gameData.currentRound}/${session.gameData.maxRounds}`
+          });
+          
+          session.status = 'finished';
+          session.results.finalScore = animalsSaved;
+          session.results.completedAt = new Date();
+          
+          // Save the completed game to database
+          session.markModified('status');
+          session.markModified('results');
+          session.markModified('results.finalScore');
+          session.markModified('results.completedAt');
+          session.markModified('gameData');
+          session.markModified('gameData.villageAnimals');
+          
+          try {
+            await session.save();
+            console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+          } catch (error) {
+            console.error(`[MINIGAME] Failed to save game completion to database:`, error);
+          }
+          
+          // Create and post the final end-game embed
+          const endGameEmbed = await this.createEndGameEmbed(session, { 
+            finalScore: animalsSaved, 
+            message: advanceResult.message 
+          });
+          const endGameOptions = {
+            embeds: [endGameEmbed.embed]
+          };
+          if (endGameEmbed.attachment) {
+            endGameOptions.files = [endGameEmbed.attachment];
+          }
+          
+          // Post the final embed after a short delay
+          setTimeout(async () => {
+            try {
+              await interaction.followUp(endGameOptions);
+            } catch (error) {
+              console.error(`[MINIGAME] Failed to post end-game embed:`, error);
+            }
+          }, 2000); // 2 second delay to let the quick stats message show first
+          
+          console.log(`[MINIGAME] Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
+          return;
+        }
+        
         // Only proceed with round advancement logic if it was successful
         if (advanceResult.success) {
           // Check if turn order has reset to the first player (turn index 0)
@@ -785,6 +997,7 @@ module.exports = {
         try {
           await session.save();
           console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+          
         } catch (error) {
           console.error(`[MINIGAME] Failed to save game completion to database:`, error);
         }

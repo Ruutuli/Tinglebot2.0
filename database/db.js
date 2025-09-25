@@ -136,26 +136,47 @@ async function connectToInventories() {
 
 // ------------------- connectToInventoriesNative -------------------
 const connectToInventoriesNative = async () => {
- if (!inventoriesDbNativeConnection) {
-  const uri = dbConfig.inventories;
-  
-  if (!uri) {
-    throw new Error('Missing MongoDB URI for inventories database');
+ try {
+  // Always check if we have a valid connection first
+  if (inventoriesDbNativeConnection) {
+    // Test the connection to make sure it's still alive
+    try {
+      await inventoriesDbNativeConnection.admin().ping();
+      return inventoriesDbNativeConnection;
+    } catch (pingError) {
+      console.log("[db.js]: Native inventories connection lost, reconnecting...");
+      // Connection is dead, reset and reconnect
+      inventoriesDbNativeConnection = null;
+    }
   }
   
-  const client = new MongoClient(uri, {
-    maxPoolSize: 5,
-    minPoolSize: 1,
-    serverSelectionTimeoutMS: 10000, // 10 seconds
-    connectTimeoutMS: 10000,         // 10 seconds
-    socketTimeoutMS: 30000           // 30 seconds
-  });
+  // If no connection, create a new one
+  if (!inventoriesDbNativeConnection) {
+    const uri = dbConfig.inventories;
+    
+    if (!uri) {
+      throw new Error('Missing MongoDB URI for inventories database');
+    }
+    
+    const client = new MongoClient(uri, {
+      maxPoolSize: 5,
+      minPoolSize: 1,
+      serverSelectionTimeoutMS: 10000, // 10 seconds
+      connectTimeoutMS: 10000,         // 10 seconds
+      socketTimeoutMS: 30000           // 30 seconds
+    });
+    
+    await client.connect();
+    inventoriesDbNativeConnection = client.db('inventories');
+    console.log("[db.js]: ✅ Native inventories database connected");
+  }
   
-  await client.connect();
-  inventoriesDbNativeConnection = client.db('inventories');
-  console.log("[db.js]: ✅ Native inventories database connected");
+  return inventoriesDbNativeConnection;
+ } catch (error) {
+  console.error("[db.js]: ❌ Error connecting to Native inventories database:", error.message);
+  inventoriesDbNativeConnection = null;
+  throw error;
  }
- return inventoriesDbNativeConnection;
 };
 
 // ------------------- getInventoryCollection -------------------
@@ -2181,6 +2202,21 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
 
 const connectToInventoriesForItems = async (context = {}) => {
     try {
+        // Always check if we have a valid connection first
+        if (inventoriesClient && inventoriesDb) {
+            // Test the connection to make sure it's still alive
+            try {
+                await inventoriesClient.db('admin').admin().ping();
+                return inventoriesDb;
+            } catch (pingError) {
+                console.log("[db.js]: Connection lost, reconnecting...");
+                // Connection is dead, reset and reconnect
+                inventoriesClient = null;
+                inventoriesDb = null;
+            }
+        }
+        
+        // If no client or connection failed, create a new one
         if (!inventoriesClient) {
             const uri = dbConfig.inventories || dbConfig.tinglebot;
             
