@@ -105,7 +105,18 @@ function isValidUrl(string) {
 const sanitizeUrl = (url) => {
   if (!url) return "https://i.imgur.com/placeholder.png";
   try {
-    const encodedUrl = encodeURI(url).replace(/!/g, '%21');
+    // Check if URL is already properly encoded (contains %20, %21, etc.)
+    const isAlreadyEncoded = /%[0-9A-Fa-f]{2}/.test(url);
+    
+    let encodedUrl;
+    if (isAlreadyEncoded) {
+      // URL is already encoded, use as-is
+      encodedUrl = url;
+    } else {
+      // URL needs encoding
+      encodedUrl = encodeURI(url).replace(/!/g, '%21');
+    }
+    
     const urlObj = new URL(encodedUrl);
     return urlObj.protocol === 'http:' || urlObj.protocol === 'https:' ? encodedUrl : "https://i.imgur.com/placeholder.png";
   } catch (_) {
