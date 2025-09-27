@@ -176,8 +176,17 @@ function validateAndSanitizeUrl(url, fallbackUrl = "https://i.imgur.com/placehol
     let cleaned = url.replace(/[;\s]+$/, '').trim();
     cleaned = cleaned.replace(/;+$/, '');
     
-    // Encode the URL properly
-    const encodedUrl = encodeURI(cleaned).replace(/!/g, '%21');
+    // Check if URL is already properly encoded (contains %20, %21, etc.)
+    const isAlreadyEncoded = /%[0-9A-Fa-f]{2}/.test(cleaned);
+    
+    let encodedUrl;
+    if (isAlreadyEncoded) {
+      // URL is already encoded, use as-is
+      encodedUrl = cleaned;
+    } else {
+      // URL needs encoding
+      encodedUrl = encodeURI(cleaned).replace(/!/g, '%21');
+    }
     
     // Validate the URL structure
     const urlObj = new URL(encodedUrl);
