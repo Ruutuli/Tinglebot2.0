@@ -87,6 +87,12 @@ VillageShopItemSchema.pre('save', function(next) {
       }
     }
     
+    // Fix specialWeather field if it's an object instead of boolean
+    if (this.specialWeather && typeof this.specialWeather === 'object') {
+      console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean for item: ${this.itemName}`);
+      this.specialWeather = false; // Default to false since we can't determine which specific weather condition
+    }
+    
     next();
   } catch (error) {
     console.error(`[VillageShopsModel]: Error in pre-save hook:`, error);
