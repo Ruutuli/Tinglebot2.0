@@ -659,26 +659,34 @@ module.exports = {
       // Provide more specific error messages based on the error type
       let errorMessage;
       if (error.message.includes('inventory is not synced')) {
-        await interaction.editReply({
-          embeds: [{
-            color: 0xFF0000, // Red color
-            title: '❌ Inventory Not Synced',
-            description: error.message,
-            fields: [
-              {
-                name: 'How to Fix',
-                value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+        try {
+          await interaction.editReply({
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Inventory Not Synced',
+              description: error.message,
+              fields: [
+                {
+                  name: 'How to Fix',
+                  value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+                }
+              ],
+              image: {
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+              },
+              footer: {
+                text: 'Inventory Sync Required'
               }
-            ],
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Inventory Sync Required'
-            }
-          }],
-          ephemeral: true
-        });
+            }],
+            ephemeral: true
+          });
+        } catch (replyError) {
+          if (replyError.code === 10062) {
+            console.warn(`[specialweather.js]: Interaction expired for user ${interaction.user.tag}, cannot send inventory sync error response`);
+          } else {
+            throw replyError;
+          }
+        }
         return;
       } else if (error.message.includes('MongoDB')) {
         errorMessage = '❌ **Database connection error.** Please try again in a few moments.';
@@ -695,10 +703,36 @@ module.exports = {
       }
 
       if (errorMessage) {
-        await interaction.editReply({
-          content: errorMessage,
-          ephemeral: true
-        });
+        // Check if interaction is still valid before trying to reply
+        if (!interaction.replied && !interaction.deferred) {
+          try {
+            await interaction.reply({
+              content: errorMessage,
+              ephemeral: true
+            });
+          } catch (replyError) {
+            if (replyError.code === 10062) {
+              // Interaction expired, log but don't try to respond
+              console.warn(`[specialweather.js]: Interaction expired for user ${interaction.user.tag}, cannot send error response`);
+            } else {
+              throw replyError;
+            }
+          }
+        } else if (interaction.deferred) {
+          try {
+            await interaction.editReply({
+              content: errorMessage,
+              ephemeral: true
+            });
+          } catch (editError) {
+            if (editError.code === 10062) {
+              // Interaction expired, log but don't try to respond
+              console.warn(`[specialweather.js]: Interaction expired for user ${interaction.user.tag}, cannot send error response`);
+            } else {
+              throw editError;
+            }
+          }
+        }
       }
     }
   },

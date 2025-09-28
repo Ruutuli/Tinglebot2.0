@@ -486,11 +486,15 @@ async function simulateWeightedWeather(village, season, options = {}) {
     
     if (specialLabel) {
       const specialObj = specials.find(s => s.label === specialLabel);
-      special = {
-        label: specialObj.label,
-        emoji: specialObj.emoji,
-        probability: '10%'
-      };
+      if (specialObj) {
+        special = {
+          label: specialObj.label,
+          emoji: specialObj.emoji,
+          probability: '10%'
+        };
+      } else {
+        console.warn(`[weatherService.js]: Special weather label "${specialLabel}" not found in specials array for ${village}`);
+      }
     }
   }
   
