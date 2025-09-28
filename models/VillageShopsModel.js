@@ -90,7 +90,9 @@ VillageShopItemSchema.pre('save', function(next) {
     // Fix specialWeather field if it's an object instead of boolean
     if (this.specialWeather && typeof this.specialWeather === 'object') {
       console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean for item: ${this.itemName}`);
-      this.specialWeather = false; // Default to false since we can't determine which specific weather condition
+      // Check if any weather condition is true in the object
+      const hasSpecialWeather = Object.values(this.specialWeather).some(value => value === true);
+      this.specialWeather = hasSpecialWeather;
     }
     
     next();
