@@ -108,8 +108,8 @@ const approvedSubmissionSchema = new mongoose.Schema({
   
   // ------------------- Collaboration -------------------
   collab: {
-    type: String,
-    default: null
+    type: [String], // Array of Discord user mentions
+    default: []
   },
   
   // ------------------- Blight Healing Information -------------------
@@ -172,11 +172,13 @@ approvedSubmissionSchema.index({ approvedAt: -1 });
 
 // ------------------- Virtual Fields -------------------
 approvedSubmissionSchema.virtual('isCollaboration').get(function() {
-  return this.collab !== null && this.collab !== 'N/A';
+  return this.collab && this.collab.length > 0;
 });
 
 approvedSubmissionSchema.virtual('splitTokens').get(function() {
-  return this.isCollaboration ? Math.floor(this.finalTokenAmount / 2) : this.finalTokenAmount;
+  if (!this.isCollaboration) return this.finalTokenAmount;
+  const totalParticipants = 1 + this.collab.length; // 1 submitter + collaborators
+  return Math.floor(this.finalTokenAmount / totalParticipants);
 });
 
 // ------------------- Methods -------------------
@@ -184,9 +186,15 @@ approvedSubmissionSchema.methods.getDisplayTitle = function() {
   return this.title || this.fileName || 'Untitled Submission';
 };
 
+approvedSubmissionSchema.methods.getCollaboratorIds = function() {
+  if (!this.collab || this.collab.length === 0) return [];
+  return this.collab.map(mention => mention.replace(/[<@>]/g, ''));
+};
+
 approvedSubmissionSchema.methods.getCollaboratorId = function() {
-  if (!this.collab) return null;
-  return this.collab.replace(/[<@>]/g, '');
+  // Legacy method for backwards compatibility
+  const ids = this.getCollaboratorIds();
+  return ids.length > 0 ? ids[0] : null;
 };
 
 // ------------------- Statics -------------------

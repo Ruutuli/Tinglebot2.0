@@ -108,7 +108,7 @@ module.exports = {
         .addStringOption(option =>
           option
             .setName('collab')
-            .setDescription('Collaborator username if this is a collaboration')
+            .setDescription('Collaborators (mention multiple users separated by spaces)')
             .setRequired(false)
         )
         .addStringOption(option =>
@@ -160,23 +160,39 @@ module.exports = {
         const attachedFile = interaction.options.getAttachment('file');
         const title = interaction.options.getString('title')?.trim() || attachedFile.name; // Use user-input title or default to file name
         const questId = interaction.options.getString('questid') || 'N/A';
-        const collab = interaction.options.getString('collab');
+        const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
 
-        // Validate collaboration format if provided
-        if (collab && !collab.match(/^<@\d+>$/)) {
-          await interaction.editReply({ 
-            content: '❌ **Invalid collaboration format.** Please use the autocomplete to select a collaborator from the server. The collaborator must be mentioned with @username format.' 
-          });
-          return;
-        }
-
-        // Prevent self-collaboration
-        if (collab) {
-          const collaboratorId = collab.match(/<@(\d+)>/)?.[1];
-          if (collaboratorId === user.id) {
+        // Parse and validate collaborators
+        let collab = [];
+        if (collabInput) {
+          // Extract all user mentions from the input
+          const mentionRegex = /<@(\d+)>/g;
+          const mentions = collabInput.match(mentionRegex);
+          
+          if (!mentions || mentions.length === 0) {
             await interaction.editReply({ 
-              content: '❌ **You cannot collaborate with yourself.** Please select a different collaborator or remove the collaboration option.' 
+              content: '❌ **Invalid collaboration format.** Please mention users with @username format (e.g., @User1 @User2).' 
+            });
+            return;
+          }
+
+          collab = mentions;
+
+          // Prevent self-collaboration
+          const collaboratorIds = mentions.map(m => m.match(/<@(\d+)>/)?.[1]);
+          if (collaboratorIds.includes(user.id)) {
+            await interaction.editReply({ 
+              content: '❌ **You cannot collaborate with yourself.** Please remove your own mention from the collaborators.' 
+            });
+            return;
+          }
+
+          // Check for duplicate collaborators
+          const uniqueIds = new Set(collaboratorIds);
+          if (uniqueIds.size !== collaboratorIds.length) {
+            await interaction.editReply({ 
+              content: '❌ **Duplicate collaborators detected.** Please mention each collaborator only once.' 
             });
             return;
           }
@@ -215,7 +231,7 @@ module.exports = {
           category: 'art',
           questEvent: questId,
           questBonus: 'N/A',
-          collab: collab || null,
+          collab: collab.length > 0 ? collab : [],
           blightId: blightId,
           tokenTracker: userData.tokenTracker || null,
         };
@@ -261,23 +277,39 @@ module.exports = {
         }
         const description = interaction.options.getString('description') || 'No description provided.';
         const questId = interaction.options.getString('questid') || 'N/A';
-        const collab = interaction.options.getString('collab');
+        const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
 
-        // Validate collaboration format if provided
-        if (collab && !collab.match(/^<@\d+>$/)) {
-          await interaction.editReply({ 
-            content: '❌ **Invalid collaboration format.** Please use the autocomplete to select a collaborator from the server. The collaborator must be mentioned with @username format.' 
-          });
-          return;
-        }
-
-        // Prevent self-collaboration
-        if (collab) {
-          const collaboratorId = collab.match(/<@(\d+)>/)?.[1];
-          if (collaboratorId === user.id) {
+        // Parse and validate collaborators
+        let collab = [];
+        if (collabInput) {
+          // Extract all user mentions from the input
+          const mentionRegex = /<@(\d+)>/g;
+          const mentions = collabInput.match(mentionRegex);
+          
+          if (!mentions || mentions.length === 0) {
             await interaction.editReply({ 
-              content: '❌ **You cannot collaborate with yourself.** Please select a different collaborator or remove the collaboration option.' 
+              content: '❌ **Invalid collaboration format.** Please mention users with @username format (e.g., @User1 @User2).' 
+            });
+            return;
+          }
+
+          collab = mentions;
+
+          // Prevent self-collaboration
+          const collaboratorIds = mentions.map(m => m.match(/<@(\d+)>/)?.[1]);
+          if (collaboratorIds.includes(user.id)) {
+            await interaction.editReply({ 
+              content: '❌ **You cannot collaborate with yourself.** Please remove your own mention from the collaborators.' 
+            });
+            return;
+          }
+
+          // Check for duplicate collaborators
+          const uniqueIds = new Set(collaboratorIds);
+          if (uniqueIds.size !== collaboratorIds.length) {
+            await interaction.editReply({ 
+              content: '❌ **Duplicate collaborators detected.** Please mention each collaborator only once.' 
             });
             return;
           }
@@ -310,7 +342,7 @@ module.exports = {
           description,
           questEvent: questId,
           questBonus: 'N/A',
-          collab: collab || null,
+          collab: collab.length > 0 ? collab : [],
           blightId: blightId,
           tokenTracker: userData.tokenTracker || null,
         };
@@ -336,8 +368,9 @@ module.exports = {
           if (approvalChannel?.isTextBased()) {
             // Calculate token display based on collaboration
             let tokenDisplay = `${finalTokenAmount} tokens`;
-            if (collab && collab !== 'N/A') {
-              const splitTokens = Math.floor(finalTokenAmount / 2);
+            if (collab && collab.length > 0) {
+              const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
+              const splitTokens = Math.floor(finalTokenAmount / totalParticipants);
               tokenDisplay = `${finalTokenAmount} tokens (${splitTokens} each)`;
             }
 
@@ -352,8 +385,8 @@ module.exports = {
             ];
 
             // Add collaboration field if present
-            if (collab && collab !== 'N/A') {
-              const collabDisplay = collab.startsWith('<@') && collab.endsWith('>') ? collab : `@${collab}`;
+            if (collab && collab.length > 0) {
+              const collabDisplay = collab.join(', ');
               notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
             }
 

@@ -139,9 +139,19 @@ function calculateTokens({
   // Final Token Calculation
   const totalTokens = regularTotal + specialWorksTotal;
 
+  // Calculate split tokens based on number of collaborators
+  let splitTokens = totalTokens;
+  if (collab && Array.isArray(collab) && collab.length > 0) {
+    const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
+    splitTokens = Math.floor(totalTokens / totalParticipants);
+  } else if (collab && typeof collab === 'string') {
+    // Legacy support for single collaborator string
+    splitTokens = Math.floor(totalTokens / 2);
+  }
+
   return {
     totalTokens,
-    splitTokens: collab ? totalTokens / 2 : totalTokens, // Split if collaborator exists
+    splitTokens,
     breakdown: {
       baseTotal,
       typeMultiplierTotal,
@@ -291,8 +301,18 @@ function generateTokenBreakdown({
   breakdown += `-----------------------------\n`;
   breakdown += ` ${finalTokenAmount} Tokens`;
   
+  // Calculate collaboration token split
   if (collab) {
-    breakdown += `\n\nCollab Total Each: ${Math.floor(finalTokenAmount / 2)} Tokens`;
+    let splitTokens;
+    if (Array.isArray(collab) && collab.length > 0) {
+      const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
+      splitTokens = Math.floor(finalTokenAmount / totalParticipants);
+      breakdown += `\n\nCollab Total Each (${totalParticipants} people): ${splitTokens} Tokens`;
+    } else if (typeof collab === 'string') {
+      // Legacy support for single collaborator
+      splitTokens = Math.floor(finalTokenAmount / 2);
+      breakdown += `\n\nCollab Total Each: ${splitTokens} Tokens`;
+    }
   }
   
   breakdown += '```';
@@ -311,9 +331,19 @@ function calculateWritingTokens(wordCount) {
 function calculateWritingTokensWithCollab(wordCount, collab = null) {
   const totalTokens = Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
   
+  // Calculate split tokens based on number of collaborators
+  let splitTokens = totalTokens;
+  if (collab && Array.isArray(collab) && collab.length > 0) {
+    const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
+    splitTokens = Math.floor(totalTokens / totalParticipants);
+  } else if (collab && typeof collab === 'string') {
+    // Legacy support for single collaborator string
+    splitTokens = Math.floor(totalTokens / 2);
+  }
+  
   return {
     totalTokens,
-    splitTokens: collab ? Math.floor(totalTokens / 2) : totalTokens, // Split if collaborator exists
+    splitTokens,
     breakdown: {
       wordCount,
       tokensPerHundredWords: 10,

@@ -178,8 +178,12 @@ async function handleSubmissionCompletion(interaction) {
         
         // Calculate token display based on collaboration
         let tokenDisplay = `${totalTokens} tokens`;
-        if (submissionData.collab && submissionData.collab !== 'N/A') {
-          const splitTokens = Math.floor(totalTokens / 2);
+        const hasCollaborators = submissionData.collab && ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) || (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
+        
+        if (hasCollaborators) {
+          const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
+          const totalParticipants = 1 + collaborators.length;
+          const splitTokens = Math.floor(totalTokens / totalParticipants);
           tokenDisplay = `${totalTokens} tokens (${splitTokens} each)`;
         }
 
@@ -194,8 +198,9 @@ async function handleSubmissionCompletion(interaction) {
         ];
 
         // Add collaboration field if present
-        if (submissionData.collab && submissionData.collab !== 'N/A') {
-          const collabDisplay = submissionData.collab.startsWith('<@') && submissionData.collab.endsWith('>') ? submissionData.collab : `@${submissionData.collab}`;
+        if (hasCollaborators) {
+          const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
+          const collabDisplay = collaborators.join(', ');
           notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
         }
 
@@ -359,15 +364,22 @@ async function handleSubmitAction(interaction) {
       const submissionUrl = submission.fileUrl;
       
       // If a collaboration exists, split tokens; otherwise, assign all tokens to the main user.
-      if (submission.collab) {
-        const splitTokens = Math.floor(submission.finalTokenAmount / 2);
+      if (submission.collab && ((Array.isArray(submission.collab) && submission.collab.length > 0) || typeof submission.collab === 'string')) {
+        // Handle both array and legacy string format
+        const collaborators = Array.isArray(submission.collab) ? submission.collab : [submission.collab];
+        const totalParticipants = 1 + collaborators.length; // 1 submitter + collaborators
+        const splitTokens = Math.floor(submission.finalTokenAmount / totalParticipants);
+        
         // Update tokens for the main user
         await appendEarnedTokens(user.id, submissionTitle, submissionCategory, splitTokens, submissionUrl);
         await updateTokenBalance(user.id, splitTokens);
-        // Update tokens for the collaborator (extracting their user ID)
-        const collaboratorId = submission.collab.replace(/[<@>]/g, '');
-        await appendEarnedTokens(collaboratorId, submissionTitle, submissionCategory, splitTokens, submissionUrl);
-        await updateTokenBalance(collaboratorId, splitTokens);
+        
+        // Update tokens for each collaborator
+        for (const collaboratorMention of collaborators) {
+          const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
+          await appendEarnedTokens(collaboratorId, submissionTitle, submissionCategory, splitTokens, submissionUrl);
+          await updateTokenBalance(collaboratorId, splitTokens);
+        }
       } else {
         // No collaboration; assign all tokens to the main user.
         await appendEarnedTokens(user.id, submissionTitle, submissionCategory, submission.finalTokenAmount, submissionUrl);

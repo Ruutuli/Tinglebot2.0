@@ -888,16 +888,20 @@ const createWritingSubmissionEmbed = (submissionData) => {
  }
  
  // Add collab field if present
- if (submissionData.collab && submissionData.collab !== 'N/A') {
-   // Format collab display - if it's a Discord mention, show it as a mention, otherwise show as is
-   const collabDisplay = submissionData.collab.startsWith('<@') && submissionData.collab.endsWith('>') ? submissionData.collab : `@${submissionData.collab}`;
+ const hasCollaborators = submissionData.collab && ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) || (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
+ 
+ if (hasCollaborators) {
+   const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
+   const collabDisplay = collaborators.join(', ');
    fields.push({ name: "Collaboration", value: `Collaborating with ${collabDisplay}`, inline: true });
  }
  
    // Calculate token display based on collaboration
   let tokenDisplay = `${submissionData.finalTokenAmount} Tokens`;
-  if (submissionData.collab && submissionData.collab !== 'N/A') {
-    const splitTokens = Math.floor(submissionData.finalTokenAmount / 2);
+  if (hasCollaborators) {
+    const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
+    const totalParticipants = 1 + collaborators.length;
+    const splitTokens = Math.floor(submissionData.finalTokenAmount / totalParticipants);
     tokenDisplay = `${submissionData.finalTokenAmount} Tokens (${splitTokens} each)`;
   }
   
@@ -1029,13 +1033,24 @@ const createArtSubmissionEmbed = (submissionData) => {
   }
   
   // Add collab field if present
-  if (collab && collab !== 'N/A') {
-    // Format collab display - if it's a Discord mention, show it as a mention, otherwise show as is
-    const collabDisplay = collab.startsWith('<@') && collab.endsWith('>') ? collab : `@${collab}`;
+  const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab !== 'N/A'));
+  
+  if (hasCollaborators) {
+    const collaborators = Array.isArray(collab) ? collab : [collab];
+    const collabDisplay = collaborators.join(', ');
     fields.push({ name: 'Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
   }
   
-  fields.push({ name: 'Token Total', value: `${finalTokenAmount || 0} Tokens`, inline: true });
+  // Calculate token display based on collaboration
+  let tokenDisplay = `${finalTokenAmount || 0} Tokens`;
+  if (hasCollaborators) {
+    const collaborators = Array.isArray(collab) ? collab : [collab];
+    const totalParticipants = 1 + collaborators.length;
+    const splitTokens = Math.floor(finalTokenAmount / totalParticipants);
+    tokenDisplay = `${finalTokenAmount || 0} Tokens (${splitTokens} each)`;
+  }
+  
+  fields.push({ name: 'Token Total', value: tokenDisplay, inline: true });
   fields.push({ name: 'Token Calculation', value: `\n${breakdown}\n`, inline: false });
 
   // Build the embed
