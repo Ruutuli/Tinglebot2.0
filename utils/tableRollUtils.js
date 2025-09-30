@@ -75,12 +75,25 @@ function validateTableEntries(entries) {
 // ------------------- CSV Processing Functions -------------------
 // ============================================================================
 
+// ------------------- Function: validateURL -------------------
+// Validates URL format (same logic as Mongoose model)
+function validateURL(url) {
+  if (!url) return true; // Empty is allowed
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ------------------- Function: parseCSVData -------------------
 // Parses CSV data into table entries with validation
 function parseCSVData(csvText) {
   try {
     const lines = csvText.split('\n');
     const entries = [];
+    const validationErrors = [];
     
     // Skip header line and process data
     for (let i = 1; i < lines.length; i++) {
@@ -99,7 +112,14 @@ function parseCSVData(csvText) {
         
         // Validate weight
         if (weight <= 0) {
-          continue; // Skip invalid entries
+          validationErrors.push(`Row ${i + 1}: Invalid weight (${values[0]})`);
+          continue;
+        }
+        
+        // Validate thumbnail URL
+        if (thumbnailImage && !validateURL(thumbnailImage)) {
+          validationErrors.push(`Row ${i + 1}: Invalid URL format for thumbnail image (${thumbnailImage})`);
+          continue;
         }
         
         // Validate rarity
@@ -115,6 +135,14 @@ function parseCSVData(csvText) {
           rarity: finalRarity
         });
       }
+    }
+    
+    // Return validation errors if any found
+    if (validationErrors.length > 0) {
+      return { 
+        success: false, 
+        error: `Validation errors found:\n${validationErrors.join('\n')}` 
+      };
     }
     
     return { success: true, entries };
