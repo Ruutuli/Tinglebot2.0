@@ -79,6 +79,13 @@ function validateTableEntries(entries) {
 // Validates URL format (same logic as Mongoose model)
 function validateURL(url) {
   if (!url) return true; // Empty is allowed
+  
+  // Check if it looks like a URL (starts with http/https or contains common URL patterns)
+  const urlPattern = /^(https?:\/\/|www\.|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/;
+  if (!urlPattern.test(url.trim())) {
+    return true; // If it doesn't look like a URL, consider it valid (probably just text)
+  }
+  
   try {
     new URL(url);
     return true;
