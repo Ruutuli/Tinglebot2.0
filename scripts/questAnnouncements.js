@@ -1116,6 +1116,30 @@ async function postQuests(externalClient = null) {
 
     const guild = questChannel.guild;
 
+    // Post month image before quests (only for the first quest batch of the month)
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1;
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june',
+                        'july', 'august', 'september', 'october', 'november', 'december'];
+    const monthName = monthNames[currentMonth - 1];
+    const monthImageUrl = `https://storage.googleapis.com/tinglebot/Quests/${monthName}.png`;
+    
+    // Check if this is the first batch of quests for this month
+    const existingQuestsThisMonth = await Quest.findOne({ 
+        date: { $regex: new RegExp(`${currentMonth}/|${monthNames[currentMonth - 1]}`, 'i') },
+        posted: true 
+    });
+    
+    // If no quests have been posted yet this month, post the month image
+    if (!existingQuestsThisMonth && unpostedQuests.length > 0) {
+        try {
+            await questChannel.send(monthImageUrl);
+            console.log(`[questAnnouncements.js] ✅ Posted month image for ${monthName}`);
+        } catch (error) {
+            console.error(`[questAnnouncements.js] ❌ Failed to post month image:`, error);
+        }
+    }
+
     // Process each quest
     for (const [rowIndex, quest] of unpostedQuests.entries()) {
         await processIndividualQuest(quest, guild, questChannel, auth, rowIndex);
