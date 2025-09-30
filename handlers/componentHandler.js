@@ -330,8 +330,12 @@ async function handleConfirmation(interaction, userId, submissionData) {
         
         // Calculate token display based on collaboration
         let tokenDisplay = `${totalTokens} tokens`;
-        if (submissionData.collab && submissionData.collab !== 'N/A') {
-          const splitTokens = Math.floor(totalTokens / 2);
+        const hasCollaborators = submissionData.collab && ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) || (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
+        
+        if (hasCollaborators) {
+          const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
+          const totalParticipants = 1 + collaborators.length;
+          const splitTokens = Math.floor(totalTokens / totalParticipants);
           tokenDisplay = `${totalTokens} tokens (${splitTokens} each)`;
         }
 
@@ -346,8 +350,9 @@ async function handleConfirmation(interaction, userId, submissionData) {
         ];
 
         // Add collaboration field if present
-        if (submissionData.collab && submissionData.collab !== 'N/A') {
-          const collabDisplay = submissionData.collab.startsWith('<@') && submissionData.collab.endsWith('>') ? submissionData.collab : `@${submissionData.collab}`;
+        if (hasCollaborators) {
+          const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
+          const collabDisplay = collaborators.join(', ');
           notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
         }
 

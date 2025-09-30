@@ -467,28 +467,41 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
   const userTokenTracker = user?.tokenTracker || 'No token tracker set up';
   const userTrackerLink = userTokenTracker !== 'No token tracker set up' ? `[View Token Tracker](${userTokenTracker})` : 'No token tracker set up';
   
+  // Check if collaboration exists (handle both array and legacy string format)
+  const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab !== 'N/A'));
+  
   // Add token tracker links for collaboration
-  if (collab) {
-    const collaboratorId = collab.replace(/[<@>]/g, '');
-    const splitTokens = Math.floor(tokenAmount / 2);
+  if (hasCollaborators) {
+    const collaborators = Array.isArray(collab) ? collab : [collab];
+    const totalParticipants = 1 + collaborators.length;
+    const splitTokens = Math.floor(tokenAmount / totalParticipants);
     
-    // Get collaborator token tracker URL
-    const collaborator = await User.findOne({ discordId: collaboratorId });
-    const collabTokenTracker = collaborator?.tokenTracker || 'No token tracker set up';
-    const collabTrackerLink = collabTokenTracker !== 'No token tracker set up' ? `[View Token Tracker](${collabTokenTracker})` : 'No token tracker set up';
-    
+    // Add main user field
     embed.addFields(
       { 
         name: '💰 Main User Tokens', 
         value: `<@${userId}> received **${splitTokens} tokens**\n${userTrackerLink}`, 
         inline: true 
-      },
-      { 
-        name: '💰 Collaborator Tokens', 
-        value: `<@${collaboratorId}> received **${splitTokens} tokens**\n${collabTrackerLink}`, 
-        inline: true 
       }
     );
+    
+    // Add field for each collaborator
+    for (const collaboratorMention of collaborators) {
+      const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
+      
+      // Get collaborator token tracker URL
+      const collaborator = await User.findOne({ discordId: collaboratorId });
+      const collabTokenTracker = collaborator?.tokenTracker || 'No token tracker set up';
+      const collabTrackerLink = collabTokenTracker !== 'No token tracker set up' ? `[View Token Tracker](${collabTokenTracker})` : 'No token tracker set up';
+      
+      embed.addFields(
+        { 
+          name: '💰 Collaborator Tokens', 
+          value: `<@${collaboratorId}> received **${splitTokens} tokens**\n${collabTrackerLink}`, 
+          inline: true 
+        }
+      );
+    }
   } else {
     embed.addFields(
       { 
@@ -1793,10 +1806,16 @@ async function handleApprove(interaction) {
 
         let tokenErrors = [];
         
-        if (collab) {
-          const splitTokens = Math.floor(tokenAmount / 2);
-          const collaboratorId = collab.replace(/[<@>]/g, '');
+        // Check if collaboration exists (handle both array and legacy string format)
+        const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab !== 'N/A'));
+        
+        if (hasCollaborators) {
+          // Handle both array and legacy string format
+          const collaborators = Array.isArray(collab) ? collab : [collab];
+          const totalParticipants = 1 + collaborators.length; // 1 submitter + collaborators
+          const splitTokens = Math.floor(tokenAmount / totalParticipants);
 
+          // Update tokens for the main user
           try {
             await updateTokenBalance(userId, splitTokens);
             await appendEarnedTokens(userId, title, category, splitTokens, messageUrl);
@@ -1805,12 +1824,17 @@ async function handleApprove(interaction) {
             tokenErrors.push(`Main user (${userId})`);
           }
 
-          try {
-            await updateTokenBalance(collaboratorId, splitTokens);
-            await appendEarnedTokens(collaboratorId, title, category, splitTokens, messageUrl);
-          } catch (tokenError) {
-            console.error(`[mod.js]: ❌ Error updating tokens for collaborator ${collaboratorId}:`, tokenError);
-            tokenErrors.push(`Collaborator (${collaboratorId})`);
+          // Update tokens for each collaborator
+          for (const collaboratorMention of collaborators) {
+            const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
+            
+            try {
+              await updateTokenBalance(collaboratorId, splitTokens);
+              await appendEarnedTokens(collaboratorId, title, category, splitTokens, messageUrl);
+            } catch (tokenError) {
+              console.error(`[mod.js]: ❌ Error updating tokens for collaborator ${collaboratorId}:`, tokenError);
+              tokenErrors.push(`Collaborator (${collaboratorId})`);
+            }
           }
 
           // Send embed DM to main user
@@ -1821,12 +1845,16 @@ async function handleApprove(interaction) {
             console.error(`[mod.js]: ❌ Error sending DM to main user ${userId}:`, dmError);
           }
 
-          // Send embed DM to collaborator
-          try {
-            const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, splitTokens);
-            await interaction.client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
-          } catch (dmError) {
-            console.error(`[mod.js]: ❌ Error sending DM to collaborator ${collaboratorId}:`, dmError);
+          // Send embed DM to each collaborator
+          for (const collaboratorMention of collaborators) {
+            const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
+            
+            try {
+              const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, splitTokens);
+              await interaction.client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
+            } catch (dmError) {
+              console.error(`[mod.js]: ❌ Error sending DM to collaborator ${collaboratorId}:`, dmError);
+            }
           }
         } else {
           // No collaboration - assign all tokens to the main user
