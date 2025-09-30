@@ -797,12 +797,12 @@ module.exports = {
                 encounteredMonster,
                 outcomeMessage,
                 heartsRemaining,
-                null, // lootItem
+                lootedItem, // lootItem - FIX: Pass the actual looted item instead of null
                 bloodMoonActive,
                 null, // adjustedRandomValue
                 null, // currentMonster
                 null, // totalMonsters
-                null, // entertainerBonusItem
+                entertainerBonusForEmbed || null, // entertainerBonusItem
                 'Gathering', // boostCategoryOverride
                 null // elixirBuffInfo - not implemented for gather yet
               );
