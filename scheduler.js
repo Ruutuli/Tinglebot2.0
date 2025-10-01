@@ -1459,11 +1459,22 @@ function setupDailyTasks(client) {
 
  // Monthly tasks
  createCronJob("0 0 1 * *", "monthly vending stock generation", () => generateVendingStockList(client));
- createCronJob("0 1 1 * *", "monthly quest reward distribution", async () => {
+ // Monthly quest reward distribution - runs at 11:59 PM daily, but only processes on last day of month
+ createCronJob("59 23 * * *", "monthly quest reward distribution", async () => {
   try {
-   console.log('[scheduler.js]: 🏆 Starting monthly quest reward distribution...');
-   const result = await processMonthlyQuestRewards();
-   console.log(`[scheduler.js]: ✅ Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
+   // Check if today is the last day of the month
+   const now = new Date();
+   const tomorrow = new Date(now);
+   tomorrow.setDate(tomorrow.getDate() + 1);
+   
+   // If tomorrow is the 1st, then today is the last day of the month
+   if (tomorrow.getDate() === 1) {
+    console.log('[scheduler.js]: 🏆 Starting monthly quest reward distribution (last day of month)...');
+    const result = await processMonthlyQuestRewards();
+    console.log(`[scheduler.js]: ✅ Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
+   } else {
+    console.log('[scheduler.js]: ℹ️ Not last day of month, skipping monthly quest reward distribution');
+   }
   } catch (error) {
    handleError(error, 'scheduler.js');
    console.error('[scheduler.js]: ❌ Monthly quest reward distribution failed:', error.message);

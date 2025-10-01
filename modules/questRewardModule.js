@@ -773,14 +773,11 @@ async function processMonthlyQuestRewards() {
     try {
         console.log('[questRewardModule.js] 🏆 Starting monthly quest reward distribution...');
         
-        // Find all completed quests that might need reward processing
+        // Find all completed quests
+        // NOTE: Can't use dotted notation to query Map fields like 'participants.progress'
+        // Instead, we fetch all completed quests and filter participants in memory
         const completedQuests = await Quest.find({
-            status: 'completed',
-            $or: [
-                { 'participants.progress': 'completed' },
-                { 'participants.tokensEarned': 0 },
-                { 'participants.rewardProcessed': { $ne: true } }
-            ]
+            status: 'completed'
         });
         
         if (completedQuests.length === 0) {
