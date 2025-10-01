@@ -547,8 +547,13 @@ questSchema.methods.checkParticipantVillage = async function(userId) {
     const participant = this.getParticipant(userId);
     if (!participant) return { valid: false, reason: 'Participant not found' };
     
-    if (this.questType !== 'RP' || !this.requiredVillage) {
-        return { valid: true, reason: 'Not an RP quest or no village requirement' };
+    if (this.questType !== 'RP') {
+        return { valid: true, reason: 'Not an RP quest' };
+    }
+    
+    // Check if participant has a required village set
+    if (!participant.requiredVillage) {
+        return { valid: true, reason: 'No village requirement for this participant' };
     }
     
     const character = await Character.findOne({
@@ -561,14 +566,14 @@ questSchema.methods.checkParticipantVillage = async function(userId) {
     }
     
     const currentVillage = character.currentVillage.toLowerCase();
-    const requiredVillage = this.requiredVillage.toLowerCase();
+    const requiredVillage = participant.requiredVillage.toLowerCase();
     
     if (currentVillage !== requiredVillage) {
         return { 
             valid: false, 
             reason: `Character is in ${currentVillage}, must be in ${requiredVillage}`,
             currentVillage: character.currentVillage,
-            requiredVillage: this.requiredVillage
+            requiredVillage: participant.requiredVillage
         };
     }
     

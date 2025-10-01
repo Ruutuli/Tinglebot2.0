@@ -1017,13 +1017,25 @@ module.exports = {
  },
 
  async handleRPQuestJoin(quest, character) {
-  const requiredVillage = extractVillageFromLocation(quest.location);
+  const requiredVillages = extractVillageFromLocation(quest.location);
   
-  if (requiredVillage) {
+  if (requiredVillages) {
    const participant = quest.participants.get(character.userId);
    if (participant) {
-    participant.requiredVillage = requiredVillage;
-    quest.setRequiredVillage(requiredVillage);
+    // Store the character's CURRENT village as their required village
+    // This is the village they must stay in for the entire quest duration
+    const characterVillage = character.currentVillage.toLowerCase();
+    participant.requiredVillage = characterVillage;
+    
+    // Store all allowed villages on the quest (for reference)
+    if (!quest.requiredVillage || !Array.isArray(quest.requiredVillages)) {
+     quest.requiredVillages = requiredVillages;
+    }
+    
+    // For backward compatibility, set requiredVillage to the first village
+    if (!quest.requiredVillage) {
+     quest.setRequiredVillage(requiredVillages[0]);
+    }
    }
   }
  },

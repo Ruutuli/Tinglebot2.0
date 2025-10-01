@@ -1091,23 +1091,27 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
 // ------------------- Extract Village from Quest Location ------------------
 function extractVillageFromLocation(location) {
     const questLocation = location.toLowerCase();
+    const villages = [];
     
     if (questLocation.includes('rudania')) {
-        return 'rudania';
-    } else if (questLocation.includes('inariko')) {
-        return 'inariko';
-    } else if (questLocation.includes('vhintl')) {
-        return 'vhintl';
+        villages.push('rudania');
+    }
+    if (questLocation.includes('inariko')) {
+        villages.push('inariko');
+    }
+    if (questLocation.includes('vhintl')) {
+        villages.push('vhintl');
     }
     
-    return null;
+    // Return array of villages, or null if none found
+    return villages.length > 0 ? villages : null;
 }
 
 // ------------------- Validate RP Quest Village ------------------
 async function validateRPQuestVillage(interaction, quest, character) {
-    const requiredVillage = extractVillageFromLocation(quest.location);
+    const requiredVillages = extractVillageFromLocation(quest.location);
     
-    if (!requiredVillage) {
+    if (!requiredVillages) {
         await interaction.reply({
             content: `[quest.js]❌ Could not determine required village from quest location: ${quest.location}`,
             ephemeral: true,
@@ -1117,9 +1121,13 @@ async function validateRPQuestVillage(interaction, quest, character) {
     
     const characterVillage = character.currentVillage.toLowerCase();
     
-    if (characterVillage !== requiredVillage) {
+    // Check if character is in ANY of the allowed villages
+    if (!requiredVillages.includes(characterVillage)) {
+        // Format the list of allowed villages for the error message
+        const villageList = requiredVillages.map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(', ');
+        
         await interaction.reply({
-            content: `[quest.js]❌ **RP Quest Village Requirement**: Your character **${character.name}** must be in **${requiredVillage.charAt(0).toUpperCase() + requiredVillage.slice(1)}** to join this RP quest. Currently in: **${characterVillage.charAt(0).toUpperCase() + characterVillage.slice(1)}**.\n\n**Rule**: RP quest participants must stay in the quest village for the entire duration. Use \`/travel\` to move to the correct village first.`,
+            content: `[quest.js]❌ **RP Quest Village Requirement**: Your character **${character.name}** must be in one of these villages to join this RP quest: **${villageList}**. Currently in: **${characterVillage.charAt(0).toUpperCase() + characterVillage.slice(1)}**.\n\n**Rule**: RP quest participants must stay in the quest village for the entire duration. Use \`/travel\` to move to the correct village first.`,
             ephemeral: true,
         });
         return false;
@@ -1134,20 +1142,21 @@ async function checkCharacterVillageForQuest(character, quest) {
         return { valid: true, reason: 'Not an RP quest' };
     }
     
-    const requiredVillage = extractVillageFromLocation(quest.location);
-    if (!requiredVillage) {
+    const requiredVillages = extractVillageFromLocation(quest.location);
+    if (!requiredVillages) {
         return { valid: false, reason: 'Could not determine required village from quest location' };
     }
     
     const currentVillage = character.currentVillage.toLowerCase();
-    const requiredVillageLower = requiredVillage.toLowerCase();
     
-    if (currentVillage !== requiredVillageLower) {
+    // Check if character is in ANY of the allowed villages
+    if (!requiredVillages.includes(currentVillage)) {
+        const villageList = requiredVillages.map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(', ');
         return { 
             valid: false, 
-            reason: `Character is in ${currentVillage}, must be in ${requiredVillage}`,
+            reason: `Character is in ${currentVillage}, must be in one of: ${villageList}`,
             currentVillage: character.currentVillage,
-            requiredVillage: requiredVillage
+            requiredVillages: requiredVillages
         };
     }
     

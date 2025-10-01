@@ -986,9 +986,11 @@ async function processIndividualQuest(quest, guild, questChannel, auth, rowIndex
         const role = await createQuestRole(guild, sanitizedQuest.title);
         sanitizedQuest.roleID = role.id;
         
-        // Set required village for RP quests
+        // Set required village(s) for RP quests
         if (sanitizedQuest.questType.toLowerCase() === QUEST_TYPES.RP.toLowerCase()) {
-            sanitizedQuest.requiredVillage = extractVillageFromLocation(sanitizedQuest.location);
+            const villages = extractVillageFromLocation(sanitizedQuest.location);
+            // For backward compatibility, set requiredVillage to first village or join them
+            sanitizedQuest.requiredVillage = villages ? (villages.length === 1 ? villages[0] : villages.join(', ')) : null;
         }
         
         // Create RP thread if needed
