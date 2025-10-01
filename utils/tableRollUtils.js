@@ -76,18 +76,22 @@ function validateTableEntries(entries) {
 // ============================================================================
 
 // ------------------- Function: validateURL -------------------
-// Validates URL format (same logic as Mongoose model)
+// Validates URL format (consistent with Mongoose model)
 function validateURL(url) {
   if (!url) return true; // Empty is allowed
   
+  // Trim whitespace
+  const trimmedUrl = url.trim();
+  if (!trimmedUrl) return true; // Empty after trimming is allowed
+  
   // Check if it looks like a URL (starts with http/https or contains common URL patterns)
   const urlPattern = /^(https?:\/\/|www\.|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/;
-  if (!urlPattern.test(url.trim())) {
+  if (!urlPattern.test(trimmedUrl)) {
     return true; // If it doesn't look like a URL, consider it valid (probably just text)
   }
   
   try {
-    new URL(url);
+    new URL(trimmedUrl);
     return true;
   } catch {
     return false;
@@ -111,11 +115,11 @@ function parseCSVData(csvText) {
       const values = parseCSVLine(line);
       if (values.length >= 3) {
         const weight = parseFloat(values[0]) || 1;
-        const flavor = values[1] || '';
-        const item = values[2] || '';
-        const thumbnailImage = values[3] || '';
-        const category = values[4] || 'general';
-        const rarity = values[5] || 'common';
+        const flavor = (values[1] || '').trim();
+        const item = (values[2] || '').trim();
+        const thumbnailImage = (values[3] || '').trim();
+        const category = (values[4] || 'general').trim();
+        const rarity = (values[5] || 'common').trim();
         
         // Validate weight
         if (weight <= 0) {

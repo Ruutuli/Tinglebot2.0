@@ -25,8 +25,15 @@ const TableRollEntrySchema = new Schema({
     default: '',
     validate: {
       validator: function(v) {
-        // Basic URL validation
+        // Lenient URL validation - same logic as CSV parser
         if (!v) return true; // Empty is allowed
+        
+        // Check if it looks like a URL (starts with http/https or contains common URL patterns)
+        const urlPattern = /^(https?:\/\/|www\.|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/;
+        if (!urlPattern.test(v.trim())) {
+          return true; // If it doesn't look like a URL, consider it valid (probably just text)
+        }
+        
         try {
           new URL(v);
           return true;

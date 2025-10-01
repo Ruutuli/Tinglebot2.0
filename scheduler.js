@@ -1272,10 +1272,28 @@ async function sendBloodMoonAnnouncementsToChannels(client, message) {
 async function handleBloodMoonStart(client) {
   console.log(`[scheduler.js]: 🌕 Starting Blood Moon start check at 8 PM EST`);
 
-  const isBloodMoonActive = isBloodMoonDay();
+  // Check if today is specifically the day BEFORE a Blood Moon (not the actual day or day after)
+  const now = new Date();
+  const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const today = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
   
-  if (isBloodMoonActive) {
-   console.log(`[scheduler.js]: 🌕 Blood Moon is active - processing channels`);
+  let isDayBeforeBloodMoon = false;
+  
+  for (const { realDate } of bloodmoonDates) {
+    const [month, day] = realDate.split('-').map(Number);
+    const bloodMoonDate = new Date(today.getFullYear(), month - 1, day);
+    const dayBefore = new Date(bloodMoonDate);
+    dayBefore.setDate(bloodMoonDate.getDate() - 1);
+    
+    if (today.getTime() === dayBefore.getTime()) {
+      isDayBeforeBloodMoon = true;
+      console.log(`[scheduler.js]: 📅 Today is the day before Blood Moon (${bloodMoonDate.toDateString()})`);
+      break;
+    }
+  }
+  
+  if (isDayBeforeBloodMoon) {
+   console.log(`[scheduler.js]: 🌕 Sending Blood Moon rising announcement - processing channels`);
    await renameChannels(client);
 
    const successCount = await sendBloodMoonAnnouncementsToChannels(
@@ -1285,7 +1303,7 @@ async function handleBloodMoonStart(client) {
    
    console.log(`[scheduler.js]: ✅ Blood Moon start announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
   } else {
-   console.log(`[scheduler.js]: 📅 Blood Moon not active - no announcement needed`);
+   console.log(`[scheduler.js]: 📅 Not the day before Blood Moon - no announcement needed`);
   }
 
   console.log(`[scheduler.js]: ✅ Blood Moon start check completed`);

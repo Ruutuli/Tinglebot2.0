@@ -269,9 +269,11 @@ module.exports = {
 
       // Show sample entries (first 5)
       const sampleEntries = parseResult.entries.slice(0, 5).map((entry, index) => {
-        const itemName = entry.item || 'Flavor Only';
+        const displayText = entry.item || entry.flavor || 'Empty Entry';
         const weight = entry.weight;
-        return `**${index + 1}.** ${itemName} (Weight: ${weight})`;
+        // Truncate long flavor text for display
+        const truncatedText = displayText.length > 60 ? displayText.substring(0, 57) + '...' : displayText;
+        return `**${index + 1}.** ${truncatedText} (Weight: ${weight})`;
       }).join('\n');
 
       const embed = new EmbedBuilder()
@@ -675,9 +677,11 @@ module.exports = {
 
       // Show all entries in a cleaner format
       const allEntries = table.entries.map((entry, index) => {
-        const itemName = entry.item || 'Flavor Only';
+        const displayText = entry.item || entry.flavor || 'Empty Entry';
         const weight = entry.weight;
-        return `**${index + 1}.** ${itemName} (Weight: ${weight})`;
+        // Truncate long flavor text for display
+        const truncatedText = displayText.length > 80 ? displayText.substring(0, 77) + '...' : displayText;
+        return `**${index + 1}.** ${truncatedText} (Weight: ${weight})`;
       }).join('\n');
 
       embed.addFields({
@@ -783,7 +787,10 @@ module.exports = {
 
       // Show first few entries as preview
       const previewEntries = table.entries.slice(0, 5).map((entry, index) => {
-        return `${index + 1}. **${entry.item || 'Flavor Only'}** (Weight: ${entry.weight})`;
+        const displayText = entry.item || entry.flavor || 'Empty Entry';
+        // Truncate long flavor text for display
+        const truncatedText = displayText.length > 60 ? displayText.substring(0, 57) + '...' : displayText;
+        return `${index + 1}. **${truncatedText}** (Weight: ${entry.weight})`;
       }).join('\n');
 
       if (previewEntries) {
