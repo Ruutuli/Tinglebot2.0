@@ -240,24 +240,24 @@ module.exports = {
     return { success: false, reason: 'No questID' };
    }
 
-   // Check if we're already updating this quest
-   if (isQuestBeingUpdated(questID)) {
-    console.log(`[quest.js]⏳ Quest ${questID} is already being updated, queuing request from ${updateSource}`);
-    queueEmbedUpdate(questID, quest, client, updateSource);
-    return { success: true, reason: 'Queued for update' };
-   }
+  // Check if we're already updating this quest
+  if (this.isQuestBeingUpdated(questID)) {
+   console.log(`[quest.js]⏳ Quest ${questID} is already being updated, queuing request from ${updateSource}`);
+   this.queueEmbedUpdate(questID, quest, client, updateSource);
+   return { success: true, reason: 'Queued for update' };
+  }
 
-   // Mark as updating
-   markQuestAsUpdating(questID);
+  // Mark as updating
+  this.markQuestAsUpdating(questID);
 
-   // Perform the actual update
-   const result = await performEmbedUpdate(quest, client, updateSource);
+  // Perform the actual update
+  const result = await this.performEmbedUpdate(quest, client, updateSource);
 
-   // Clear update status
-   clearQuestUpdateStatus(questID);
+  // Clear update status
+  this.clearQuestUpdateStatus(questID);
 
-   // Process any queued updates
-   await processQueuedUpdates(questID, client);
+  // Process any queued updates
+  await this.processQueuedUpdates(questID, client);
 
    return result;
 
@@ -266,7 +266,7 @@ module.exports = {
    
    // Clear update status on error
    if (quest && quest.questID) {
-    clearQuestUpdateStatus(quest.questID);
+    this.clearQuestUpdateStatus(quest.questID);
    }
    
    return { success: false, error: error.message };
@@ -311,7 +311,7 @@ module.exports = {
   // Set a timeout to process queued updates if they're not processed quickly
   if (!updateTimeouts.has(questID)) {
    const timeout = setTimeout(() => {
-    processQueuedUpdates(questID, client);
+    this.processQueuedUpdates(questID, client);
    }, 2000); // 2 second timeout
    updateTimeouts.set(questID, timeout);
   }
@@ -332,7 +332,7 @@ module.exports = {
   
   if (latestUpdate) {
    console.log(`[quest.js]🔄 Processing queued update for quest ${questID} from ${latestUpdate.updateSource}`);
-   await updateQuestEmbed(null, latestUpdate.quest, latestUpdate.client, latestUpdate.updateSource);
+   await this.updateQuestEmbed(null, latestUpdate.quest, latestUpdate.client, latestUpdate.updateSource);
   }
  },
 
@@ -366,7 +366,7 @@ module.exports = {
    }
 
    // Create updated embed based on quest type
-   const updatedEmbed = await createUpdatedEmbed(quest, client, currentEmbed, updateSource);
+   const updatedEmbed = await this.createUpdatedEmbed(quest, client, currentEmbed, updateSource);
 
    // Update the message
    await questMessage.edit({ embeds: [updatedEmbed] });
@@ -389,16 +389,16 @@ module.exports = {
    const embed = EmbedBuilder.from(currentEmbed);
 
    // Update participant information
-   await updateParticipantFields(quest, client, embed);
+   await this.updateParticipantFields(quest, client, embed);
 
    // Update quest status information
-   updateStatusFields(quest, embed, updateSource);
+   this.updateStatusFields(quest, embed, updateSource);
 
    // Update quest-specific information
-   await updateQuestSpecificFields(quest, client, embed, updateSource);
+   await this.updateQuestSpecificFields(quest, client, embed, updateSource);
 
    // Add update source info to footer
-   updateFooter(embed, updateSource);
+   this.updateFooter(embed, updateSource);
 
    return embed;
 
@@ -483,9 +483,9 @@ module.exports = {
 
    // Update quest type specific fields
    if (quest.questType === 'RP') {
-    updateRPQuestFields(quest, embed);
+    this.updateRPQuestFields(quest, embed);
    } else if (quest.questType === 'Interactive') {
-    updateInteractiveQuestFields(quest, embed);
+    this.updateInteractiveQuestFields(quest, embed);
    }
 
   } catch (error) {
@@ -555,13 +555,13 @@ module.exports = {
    // Add quest-specific information based on the update source
    if (updateSource === 'rpQuestTracking') {
     // RP quest specific updates
-    await updateRPQuestSpecificFields(quest, embed);
+    await this.updateRPQuestSpecificFields(quest, embed);
    } else if (updateSource === 'questJoin' || updateSource === 'questLeave') {
     // Participant change updates
-    await updateParticipantChangeFields(quest, embed, updateSource);
+    await this.updateParticipantChangeFields(quest, embed, updateSource);
    } else if (updateSource === 'modAction') {
     // Mod action updates
-    await updateModActionFields(quest, embed);
+    await this.updateModActionFields(quest, embed);
    }
 
   } catch (error) {
