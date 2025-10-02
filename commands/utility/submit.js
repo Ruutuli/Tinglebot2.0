@@ -322,8 +322,16 @@ module.exports = {
           return;
         }
     
+        // Get quest bonus if quest is linked
+        let questBonus = 0;
+        if (questId && questId !== 'N/A') {
+          const { getQuestBonus } = require('../../utils/tokenUtils');
+          questBonus = await getQuestBonus(questId);
+          console.log(`[submit.js]: 🎯 Quest bonus for ${questId}: ${questBonus}`);
+        }
+
         // Calculate tokens for the writing submission with collaboration splitting
-        const tokenCalculation = calculateWritingTokensWithCollab(wordCount, collab);
+        const tokenCalculation = calculateWritingTokensWithCollab(wordCount, collab, questBonus);
         const finalTokenAmount = tokenCalculation.totalTokens;
     
         // Create a unique submission ID and save to database
@@ -341,7 +349,7 @@ module.exports = {
           link,
           description,
           questEvent: questId,
-          questBonus: 'N/A',
+          questBonus: questBonus,
           collab: collab.length > 0 ? collab : [],
           blightId: blightId,
           tokenTracker: userData.tokenTracker || null,
@@ -366,12 +374,19 @@ module.exports = {
         try {
           const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
           if (approvalChannel?.isTextBased()) {
-            // Calculate token display based on collaboration
+            // Calculate token display based on collaboration and quest bonus
             let tokenDisplay = `${finalTokenAmount} tokens`;
+            
+            // Add quest bonus breakdown if present
+            if (questBonus && questBonus > 0) {
+              const baseTokens = finalTokenAmount - questBonus;
+              tokenDisplay = `${baseTokens} + ${questBonus} quest bonus = ${finalTokenAmount} tokens`;
+            }
+            
             if (collab && collab.length > 0) {
               const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
               const splitTokens = Math.floor(finalTokenAmount / totalParticipants);
-              tokenDisplay = `${finalTokenAmount} tokens (${splitTokens} each)`;
+              tokenDisplay += ` (${splitTokens} each)`;
             }
 
             // Build notification fields dynamically
@@ -388,6 +403,23 @@ module.exports = {
             if (collab && collab.length > 0) {
               const collabDisplay = collab.join(', ');
               notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+            }
+
+            // Add quest/event fields if present
+            if (questId && questId !== 'N/A') {
+              notificationFields.push({ 
+                name: '🎯 Quest/Event', 
+                value: `\`${questId}\``, 
+                inline: true 
+              });
+            }
+
+            if (questBonus && questBonus > 0) {
+              notificationFields.push({ 
+                name: '🎁 Quest Bonus', 
+                value: `+${questBonus} tokens`, 
+                inline: true 
+              });
             }
 
             // Add blight ID if provided

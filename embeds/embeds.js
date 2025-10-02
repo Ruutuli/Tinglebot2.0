@@ -887,6 +887,15 @@ const createWritingSubmissionEmbed = (submissionData) => {
    fields.push({ name: "🩸 Blight Healing ID", value: `\`${submissionData.blightId}\``, inline: true });
  }
  
+ // Add quest/event fields if present
+ if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+   fields.push({ name: "Quest/Event", value: `\`${submissionData.questEvent}\``, inline: true });
+ }
+ 
+ if (submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0) {
+   fields.push({ name: "Quest Bonus", value: `+${submissionData.questBonus} tokens`, inline: true });
+ }
+
  // Add collab field if present
  const hasCollaborators = submissionData.collab && ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) || (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
  
@@ -896,13 +905,20 @@ const createWritingSubmissionEmbed = (submissionData) => {
    fields.push({ name: "Collaboration", value: `Collaborating with ${collabDisplay}`, inline: true });
  }
  
-   // Calculate token display based on collaboration
+   // Calculate token display based on collaboration and quest bonus
   let tokenDisplay = `${submissionData.finalTokenAmount} Tokens`;
+  
+  // Add quest bonus breakdown if present
+  if (submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0) {
+    const baseTokens = submissionData.finalTokenAmount - submissionData.questBonus;
+    tokenDisplay = `${baseTokens} + ${submissionData.questBonus} quest bonus = ${submissionData.finalTokenAmount} Tokens`;
+  }
+  
   if (hasCollaborators) {
     const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
     const totalParticipants = 1 + collaborators.length;
     const splitTokens = Math.floor(submissionData.finalTokenAmount / totalParticipants);
-    tokenDisplay = `${submissionData.finalTokenAmount} Tokens (${splitTokens} each)`;
+    tokenDisplay += ` (${splitTokens} each)`;
   }
   
   fields.push({

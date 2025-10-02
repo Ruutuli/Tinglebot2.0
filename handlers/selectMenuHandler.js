@@ -223,8 +223,19 @@ async function handleSelectMenuInteraction(interaction) {
       // Get the updated submission data
       const updatedSubmissionData = await retrieveSubmissionFromStorage(submissionId);
       
+      // Get quest bonus if quest is linked
+      let questBonus = 0;
+      if (updatedSubmissionData.questEvent && updatedSubmissionData.questEvent !== 'N/A') {
+        const { getQuestBonus } = require('../utils/tokenUtils');
+        questBonus = await getQuestBonus(updatedSubmissionData.questEvent);
+        console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${updatedSubmissionData.questEvent}: ${questBonus}`);
+      }
+
       // Calculate tokens with complete data
-      const { totalTokens, breakdown } = calculateTokens(updatedSubmissionData);
+      const { totalTokens, breakdown } = calculateTokens({
+        ...updatedSubmissionData,
+        questBonus
+      });
       
       // Generate the breakdown string
       const breakdownString = generateTokenBreakdown({
@@ -236,7 +247,8 @@ async function handleSelectMenuInteraction(interaction) {
         specialWorksApplied: updatedSubmissionData.specialWorksApplied,
         typeMultiplierCounts: updatedSubmissionData.typeMultiplierCounts,
         finalTokenAmount: totalTokens,
-        collab: updatedSubmissionData.collab
+        collab: updatedSubmissionData.collab,
+        questBonus
       });
 
       // Update with final calculations
@@ -313,6 +325,14 @@ async function confirmSubmission(interaction) {
       });
       return;
     }
+    // Get quest bonus if quest is linked
+    let questBonus = 0;
+    if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+      const { getQuestBonus } = require('../utils/tokenUtils');
+      questBonus = await getQuestBonus(submissionData.questEvent);
+      console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
+    }
+
     // Calculate tokens and generate breakdown
     const { totalTokens, breakdown } = calculateTokens({
       baseSelections: submissionData.baseSelections,
@@ -322,7 +342,8 @@ async function confirmSubmission(interaction) {
       addOnsApplied: submissionData.addOnsApplied,
       specialWorksApplied: submissionData.specialWorksApplied,
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
-      collab: submissionData.collab
+      collab: submissionData.collab,
+      questBonus
     });
     // Update submission data with final calculations
     submissionData.finalTokenAmount = totalTokens;
@@ -340,7 +361,8 @@ async function confirmSubmission(interaction) {
       specialWorksApplied: submissionData.specialWorksApplied,
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
       finalTokenAmount: totalTokens,
-      collab: submissionData.collab
+      collab: submissionData.collab,
+      questBonus
     });
     // ------------------- Display Confirmation -------------------
     await interaction.update({
