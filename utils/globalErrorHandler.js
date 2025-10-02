@@ -464,6 +464,17 @@ async function handleInteractionError(error, interaction, context = {}) {
     userId = context.userId;
   }
 
+  // Safely get subcommand - only if the command has subcommands
+  let subcommand = context.subcommand;
+  if (interaction?.options) {
+    try {
+      subcommand = interaction.options.getSubcommand();
+    } catch (error) {
+      // Command doesn't have subcommands, which is fine
+      subcommand = context.subcommand;
+    }
+  }
+
   const errorContext = {
     ...context,
     interaction: interaction,
@@ -472,7 +483,7 @@ async function handleInteractionError(error, interaction, context = {}) {
     userId: userId,
     characterName: context.characterName || 'unknown',
     options: interaction?.options?.data || context.options,
-    subcommand: interaction?.options?.getSubcommand() || context.subcommand,
+    subcommand: subcommand,
     responseType: context.responseType || ERROR_RESPONSE_TYPES.REPLY
   };
   

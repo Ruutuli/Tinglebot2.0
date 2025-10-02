@@ -110,7 +110,7 @@ module.exports = {
    } else {
     await interaction.reply({
      content: "[quest.js]❌ Unknown subcommand.",
-     ephemeral: true,
+     flags: MessageFlags.Ephemeral,
     });
    }
   } catch (error) {
@@ -175,7 +175,7 @@ module.exports = {
   const leaveMessage = this.createLeaveMessage(quest, characterName);
   return interaction.reply({
    content: leaveMessage,
-   ephemeral: true,
+   flags: MessageFlags.Ephemeral,
   });
  },
 
@@ -188,12 +188,12 @@ module.exports = {
   if (quests.length === 0) {
    return interaction.reply({
     content: "No active quests available.\n\n**About Quests**: Quests are posted on the quest board and are smaller, optional, fun timed tasks that happen every other month! They can be Art, Writing, Interactive, or RP based.",
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
   }
 
   const embed = this.createQuestListEmbed(interaction, quests);
-  return interaction.reply({ embeds: [embed], ephemeral: true });
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
  },
 
  // ============================================================================
@@ -208,18 +208,18 @@ module.exports = {
    if (userQuests.length === 0) {
     return interaction.reply({
      content: "You are not currently participating in any active quests.\n\nUse `/quest list` to see available quests!",
-     ephemeral: true,
+     flags: MessageFlags.Ephemeral,
     });
    }
 
    const embed = this.createQuestStatusEmbed(interaction, userQuests, userID);
-   return interaction.reply({ embeds: [embed], ephemeral: true });
+   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 
   } catch (error) {
    console.error('[quest.js]❌ Error in handleQuestStatus:', error);
    return interaction.reply({
     content: "[quest.js]❌ An error occurred while checking your quest status.",
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
   }
  },
@@ -342,6 +342,12 @@ module.exports = {
  async performEmbedUpdate(quest, client, updateSource) {
   try {
    console.log(`[quest.js]🔄 Updating embed for quest ${quest.questID || quest.questId} from ${updateSource}`);
+
+   // Validate client is available
+   if (!client) {
+    console.log(`[quest.js]⚠️ No client provided for embed update, skipping`);
+    return { success: false, reason: 'No client provided' };
+   }
 
    // Get the quest channel and message
    const questChannelId = quest.targetChannel || QUEST_CHANNEL_ID;
@@ -660,14 +666,14 @@ module.exports = {
    if (!quest) {
     return interaction.reply({
      content: "[quest.js]❌ Quest not found. Please check the quest ID and try again.",
-     ephemeral: true,
+     flags: MessageFlags.Ephemeral,
     });
    }
 
    if (quest.questType !== QUEST_TYPES.RP && quest.questType !== QUEST_TYPES.INTERACTIVE) {
     return interaction.reply({
      content: "[quest.js]❌ This command only works with RP and Interactive quests. The specified quest is not an RP or Interactive quest.",
-     ephemeral: true,
+     flags: MessageFlags.Ephemeral,
     });
    }
 
@@ -675,7 +681,7 @@ module.exports = {
    if (participants.length === 0) {
     return interaction.reply({
      content: "[quest.js]❌ No participants found for this quest.",
-     ephemeral: true,
+     flags: MessageFlags.Ephemeral,
     });
    }
 
@@ -692,7 +698,7 @@ module.exports = {
 
    return interaction.reply({
     content: "[quest.js]❌ An error occurred while fetching post counts. Please try again later.",
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
   }
  },
@@ -705,7 +711,7 @@ module.exports = {
   if (!quest) {
    await interaction.reply({
     content: `[quest.js]❌ Quest with ID \`${questID}\` does not exist.`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
    return null;
   }
@@ -713,7 +719,7 @@ module.exports = {
   if (quest.status !== "active") {
    await interaction.reply({
     content: `[quest.js]❌ The quest \`${quest.title}\` is no longer active.`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
    return null;
   }
@@ -724,7 +730,7 @@ module.exports = {
    if (now > deadline) {
     await interaction.reply({
      content: `[quest.js]❌ The signup deadline for quest \`${quest.title}\` has passed.`,
-     ephemeral: true,
+     flags: MessageFlags.Ephemeral,
     });
     return null;
    }
@@ -742,7 +748,7 @@ module.exports = {
   if (!character) {
    await interaction.reply({
     content: `[quest.js]❌ You do not own a character named \`${characterName}\`. Please use one of your registered characters.`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
    return null;
   }
@@ -756,7 +762,7 @@ module.exports = {
   if (!validation.valid) {
    await interaction.reply({
     content: `[quest.js]❌ ${validation.message}`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
    return false;
   }
@@ -841,7 +847,7 @@ module.exports = {
   if (quest.participants.size >= quest.participantCap && !hasQuestVoucher) {
    await interaction.reply({
     content: `[quest.js]❌ The member-capped quest \`${quest.title}\` has reached its participant limit of ${quest.participantCap}.\n\n**💡 Tip:** Use a Quest Voucher to join even when the quest is full!`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
    return false;
   }
@@ -928,7 +934,7 @@ module.exports = {
   if (!validation.valid) {
    await interaction.reply({
     content: `[quest.js]❌ ${validation.message}`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
    return false;
   }
@@ -1048,7 +1054,7 @@ module.exports = {
   if (!quest) {
    await interaction.reply({
     content: `[quest.js]❌ Quest with ID \`${questID}\` does not exist.`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
    return { success: false };
   }
@@ -1056,7 +1062,7 @@ module.exports = {
   if (!quest.participants.has(userID)) {
    await interaction.reply({
     content: `[quest.js]❌ You are not participating in the quest \`${quest.title}\`.`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
    });
    return { success: false };
   }
