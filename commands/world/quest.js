@@ -800,9 +800,16 @@ module.exports = {
    });
   }
 
+  let joinText = `</quest join:1389946995468271729>`;
+  
+  // Add RINGER information for alien minigames
+  if (quest.title && quest.title.toLowerCase().includes('alien') && quest.title.toLowerCase().includes('defense')) {
+    joinText += `\n\n🆘 **Want to help but not signed up?** Use \`RINGER\` in quest id to help!`;
+  }
+  
   embed.addFields({
    name: '💡 Want to join this quest?',
-   value: `</quest join:1389946995468271729>`,
+   value: joinText,
    inline: false
   });
 
@@ -1123,7 +1130,7 @@ module.exports = {
 
   embed.addFields({
    name: "🚀 How to Join",
-   value: "```/quest join questid: [ID] charactername: [Name]```\n*Click on quest titles above to view full details!*",
+   value: "```/quest join questid: [ID] charactername: [Name]```\n*Click on quest titles above to view full details!*\n\n🆘 **For Alien Defense quests:** Use \`RINGER\` as questid to join as backup!",
    inline: false,
   });
 

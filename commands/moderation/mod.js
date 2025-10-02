@@ -4452,7 +4452,7 @@ async function handleCreateMinigame(interaction, questId, village) {
     .addFields(
       { 
         name: '🎮 How to Play', 
-        value: `**Join:** </minigame theycame-join:1413815457118556201>\n**Attack:** </minigame theycame-roll:1413815457118556201>\n\n**Target Aliens:**\n• Outer Ring (5+ to hit) • Middle Ring (4+ to hit) • Inner Ring (3+ to hit)`, 
+        value: `**Join:** </minigame theycame-join:1413815457118556201>\n**Attack:** </minigame theycame-roll:1413815457118556201>\n\n**Target Aliens:**\n• Outer Ring (5+ to hit) • Middle Ring (4+ to hit) • Inner Ring (3+ to hit)\n\n🆘 **Want to help but not signed up?** Use \`RINGER\` in quest id to help!`, 
         inline: false 
       },
       { 

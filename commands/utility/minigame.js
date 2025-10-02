@@ -122,7 +122,7 @@ module.exports = {
         )
         .addStringOption(option =>
           option.setName('questid')
-            .setDescription('Quest ID - required for quest participation')
+            .setDescription('Quest ID - required for quest participation, or use RINGER to join as backup')
             .setRequired(true)
             .setAutocomplete(true)
         )
@@ -212,8 +212,11 @@ module.exports = {
     console.log(`[MINIGAME JOIN] ${username} validating quest participation for quest ID: ${questId}`);
     
     // Special case for testing - allow "TEST" quest ID to bypass validation
+    // Special case for RINGER - allow non-quest participants to join as backup
     if (questId === 'TEST') {
       console.log(`[MINIGAME JOIN] ${username} using TEST quest ID - bypassing quest validation`);
+    } else if (questId === 'RINGER') {
+      console.log(`[MINIGAME JOIN] ${username} using RINGER - joining as backup player`);
     } else {
       const Quest = require('../../models/QuestModel');
       const quest = await Quest.findOne({ questID: questId });
@@ -235,12 +238,17 @@ module.exports = {
             },
             {
               name: '✅ How to fix this:',
-              value: `• Check the quest ID with the quest creator\n• Use \`/quest list\` to see available quests\n• For testing, use \`questid:TEST\` to bypass quest validation`,
+              value: `• Check the quest ID with the quest creator\n• Use \`/quest list\` to see available quests\n• For testing, use \`questid:TEST\` to bypass quest validation\n• To join as backup, use \`questid:RINGER\``,
               inline: false
             },
             {
               name: '🎮 Testing Mode:',
               value: `If you're testing the minigame, use:\n\`/minigame theycame-join session_id:${sessionId} character:${resolvedCharacterName} questid:TEST\``,
+              inline: false
+            },
+            {
+              name: '🆘 Backup Player:',
+              value: `To join as a backup player (RINGER), use:\n\`/minigame theycame-join session_id:${sessionId} character:${resolvedCharacterName} questid:RINGER\``,
               inline: false
             }
           )
@@ -383,6 +391,7 @@ module.exports = {
       characterName: character.name,
       characterId: character._id.toString(),
       isModCharacter: character.isModCharacter || false,
+      isRinger: questId === 'RINGER',
       joinedAt: new Date()
     });
     console.log(`[MINIGAME JOIN] ${username} character added to players array - Players after: ${session.players.length}`);
@@ -442,7 +451,7 @@ module.exports = {
     
     // Create join confirmation embed
     console.log(`[MINIGAME JOIN] ${username} creating join confirmation embed`);
-    const embedResult = await this.createJoinEmbed(session, character, result.message);
+    const embedResult = await this.createJoinEmbed(session, character, result.message, questId);
     const replyOptions = {
       embeds: [embedResult.embed]
     };
@@ -1154,14 +1163,14 @@ module.exports = {
     }
   },
   
-  async createJoinEmbed(session, character, joinMessage) {
+  async createJoinEmbed(session, character, joinMessage, questId = null) {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     const availableSlots = gameConfig.maxPlayers - session.players.length;
     
-    // Create player list with character names
+    // Create player list with character names and RINGER status
     const playerList = session.players.length > 0 
-      ? session.players.map(p => `• **${p.characterName}**`).join('\n')
+      ? session.players.map(p => `• **${p.characterName}**${p.isRinger ? ' 🆘 (RINGER)' : ''}`).join('\n')
       : '*No defenders joined yet*';
     
     // Generate overlay image with aliens
@@ -1169,8 +1178,9 @@ module.exports = {
     
     const villageDisplayName = session.village ? session.village.charAt(0).toUpperCase() + session.village.slice(1) : 'Village';
     const villageEmoji = session.village ? getVillageEmojiByName(session.village) || '' : '';
+    const ringerStatus = questId === 'RINGER' ? ' 🆘 (RINGER)' : '';
     const embed = new EmbedBuilder()
-      .setTitle(`🎮 ${character.name} joined the ${villageDisplayName} alien defense!`)
+      .setTitle(`🎮 ${character.name} joined the ${villageDisplayName} alien defense!${ringerStatus}`)
       .setDescription(`*Defend your village from alien invaders! Work together to protect the livestock.*`)
       .setColor(0x00ff00) // Green for join success
       .setTimestamp()
@@ -1267,9 +1277,9 @@ module.exports = {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     
-    // Create player list with character names
+    // Create player list with character names and RINGER status
     const playerList = session.players.length > 0 
-      ? session.players.map(p => `• **${p.characterName}**`).join('\n')
+      ? session.players.map(p => `• **${p.characterName}**${p.isRinger ? ' 🆘 (RINGER)' : ''}`).join('\n')
       : '*No defenders joined yet*';
     
     // Generate overlay image with aliens
@@ -1401,9 +1411,9 @@ module.exports = {
     const gameConfig = GAME_CONFIGS.theycame;
     const status = getAlienDefenseGameStatus(session.gameData);
     
-    // Create player list with character names
+    // Create player list with character names and RINGER status
     const playerList = session.players.length > 0 
-      ? session.players.map(p => `• **${p.characterName}**`).join('\n')
+      ? session.players.map(p => `• **${p.characterName}**${p.isRinger ? ' 🆘 (RINGER)' : ''}`).join('\n')
       : '*No defenders joined yet*';
     
     // Create alien status with better formatting
