@@ -332,6 +332,18 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 } else if (focusedOption.name === "character") {
                   await handleModMinigameCharacterAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "rpposts_questid") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption);
+                }
+              } else if (modSubcommand === "rpposts_user") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption);
+                }
+              } else if (modSubcommand === "rpposts_count") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
