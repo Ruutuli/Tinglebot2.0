@@ -582,9 +582,16 @@ function formatQuestEmbed(quest) {
 
     // Call to Action
     if (quest.questID) {
+        let joinText = `</quest join:1389946995468271729> questid:${quest.questID}`;
+        
+        // Add RINGER information for alien minigames
+        if (quest.title && quest.title.toLowerCase().includes('alien') && quest.title.toLowerCase().includes('defense')) {
+            joinText += `\n\n🆘 **Want to help but not signed up?** Use \`RINGER\` in quest id to help!`;
+        }
+        
         embed.addFields({
             name: '__🎯 Join This Quest__',
-            value: `</quest join:1389946995468271729> questid:${quest.questID}`,
+            value: joinText,
             inline: false
         });
     }
