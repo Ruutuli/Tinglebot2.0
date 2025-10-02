@@ -7,6 +7,19 @@ const { EmbedBuilder } = require('discord.js');
 const Quest = require('../models/QuestModel');
 const { handleError } = require('../utils/globalErrorHandler');
 const { QUEST_TYPES, BORDER_IMAGE, DEFAULT_POST_REQUIREMENT } = require('./questRewardModule');
+const questModule = require('../commands/world/quest');
+const questRewardModule = require('./questRewardModule');
+
+// Helper function to get Discord client
+function getDiscordClient() {
+    try {
+        const { client } = require('../index.js');
+        return client;
+    } catch (error) {
+        console.error(`[rpQuestTrackingModule.js] ❌ Error getting Discord client:`, error);
+        return null;
+    }
+}
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -127,8 +140,12 @@ async function processValidRPPost(quest, participant, channelId) {
     await quest.save();
 
     try {
-        const questModule = require('../commands/world/quest');
-        await questModule.updateQuestEmbed(null, quest, null, 'rpQuestTracking');
+        const client = getDiscordClient();
+        if (client) {
+            await questModule.updateQuestEmbed(null, quest, client, 'rpQuestTracking');
+        } else {
+            console.log(`[rpQuestTrackingModule.js] ⚠️ Discord client not available for embed update`);
+        }
     } catch (error) {
         console.error(`[rpQuestTrackingModule.js] ❌ Error updating quest embed:`, error);
     }
@@ -139,7 +156,6 @@ async function processValidRPPost(quest, participant, channelId) {
         console.log(`[rpQuestTrackingModule.js] ✅ Quest ${quest.questID} completed: ${completionResult.reason}`);
         
         if (completionResult.reason === 'all_participants_completed' || completionResult.reason.includes('participants completed')) {
-            const questRewardModule = require('./questRewardModule');
             await questRewardModule.processQuestCompletion(quest.questID);
             await quest.markCompletionProcessed();
         }
@@ -157,7 +173,7 @@ async function processValidRPPost(quest, participant, channelId) {
 // ------------------- Send Requirement Met Notification -------------------
 async function sendRequirementMetNotification(quest, participant, channelId) {
     try {
-        const { client } = require('../index.js');
+        const client = getDiscordClient();
         if (!client) {
             console.log(`[rpQuestTrackingModule.js] ❌ Discord client not available for notification`);
             return;

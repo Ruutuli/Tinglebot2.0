@@ -478,31 +478,53 @@ function logTokenBalanceChange(user, amount, action) {
 async function getQuestBonus(questId) {
     try {
         if (!questId || questId === 'N/A') {
+            console.log(`[tokenUtils.js]: ⚠️ No quest ID provided or quest ID is N/A`);
             return 0;
         }
 
+        console.log(`[tokenUtils.js]: 🔍 Looking up quest bonus for quest ID: ${questId}`);
         const quest = await Quest.findOne({ questID: questId });
         if (!quest) {
-            console.log(`[tokenUtils.js]: ⚠️ Quest ${questId} not found`);
+            console.log(`[tokenUtils.js]: ⚠️ Quest ${questId} not found in database`);
             return 0;
         }
+
+        console.log(`[tokenUtils.js]: 📋 Found quest: ${quest.title} (${quest.questType})`);
+        console.log(`[tokenUtils.js]: 💰 Quest token reward: ${quest.tokenReward}`);
 
         // Parse quest bonus from token reward
         const tokenReward = quest.tokenReward;
         if (!tokenReward || typeof tokenReward !== 'string') {
+            console.log(`[tokenUtils.js]: ⚠️ No valid token reward string found for quest ${questId}`);
             return 0;
         }
 
-        // Look for quest bonus in the token reward string
-        // Format: "per_unit:222 unit:submission max:3 quest_bonus:50"
+        // Look for different quest bonus formats in the token reward string
+        // Format 1: "per_unit:222 unit:submission max:3 quest_bonus:50"
+        // Format 2: "per_unit:222 unit:submission max:3 collab_bonus:50" (collab bonus used as quest bonus)
+        // Format 3: "flat:300 quest_bonus:50"
+        // Format 4: "flat:300 collab_bonus:50" (collab bonus used as quest bonus)
+        
+        let questBonus = 0;
+        
+        // Check for explicit quest_bonus
         const questBonusMatch = tokenReward.match(/quest_bonus:(\d+)/);
         if (questBonusMatch) {
-            const questBonus = parseInt(questBonusMatch[1], 10);
-            console.log(`[tokenUtils.js]: 🎯 Found quest bonus: ${questBonus} for quest ${questId}`);
+            questBonus = parseInt(questBonusMatch[1], 10);
+            console.log(`[tokenUtils.js]: 🎯 Found explicit quest bonus: ${questBonus} for quest ${questId}`);
+            return questBonus;
+        }
+        
+        // Check for collab_bonus (often used as quest bonus in practice)
+        const collabBonusMatch = tokenReward.match(/collab_bonus:(\d+)/);
+        if (collabBonusMatch) {
+            questBonus = parseInt(collabBonusMatch[1], 10);
+            console.log(`[tokenUtils.js]: 🎯 Found collab bonus (using as quest bonus): ${questBonus} for quest ${questId}`);
             return questBonus;
         }
 
         // If no quest bonus found, return 0
+        console.log(`[tokenUtils.js]: ⚠️ No quest bonus found in token reward for quest ${questId}`);
         return 0;
     } catch (error) {
         console.error(`[tokenUtils.js]: ❌ Error retrieving quest bonus for quest ${questId}:`, error);

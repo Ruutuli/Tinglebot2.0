@@ -229,6 +229,11 @@ async function handleSelectMenuInteraction(interaction) {
         const { getQuestBonus } = require('../utils/tokenUtils');
         questBonus = await getQuestBonus(updatedSubmissionData.questEvent);
         console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${updatedSubmissionData.questEvent}: ${questBonus}`);
+        
+        // Update submission data with the actual quest bonus
+        await updateSubmissionData(submissionId, {
+          questBonus: questBonus
+        });
       }
 
       // Calculate tokens with complete data
@@ -331,6 +336,9 @@ async function confirmSubmission(interaction) {
       const { getQuestBonus } = require('../utils/tokenUtils');
       questBonus = await getQuestBonus(submissionData.questEvent);
       console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
+      
+      // Update submission data with the actual quest bonus
+      submissionData.questBonus = questBonus;
     }
 
     // Calculate tokens and generate breakdown

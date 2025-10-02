@@ -118,6 +118,9 @@ async function handleSubmissionCompletion(interaction) {
       const { getQuestBonus } = require('../utils/tokenUtils');
       questBonus = await getQuestBonus(submissionData.questEvent);
       console.log(`[submissionHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
+      
+      // Update submission data with the actual quest bonus
+      submissionData.questBonus = questBonus;
     }
 
     const { totalTokens, breakdown } = calculateTokens({
