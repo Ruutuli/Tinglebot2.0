@@ -1151,11 +1151,11 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: rpposts -------------------
+// ------------------- Subcommand: rpposts_questid -------------------
 .addSubcommand(sub =>
   sub
-    .setName('rpposts')
-    .setDescription('📝 Update RP post count for a quest participant')
+    .setName('rpposts_questid')
+    .setDescription('📝 Update RP post count by quest ID')
     .addStringOption(option =>
       option
         .setName('questid')
@@ -1175,6 +1175,60 @@ const modCommand = new SlashCommandBuilder()
         .setDescription('New post count')
         .setRequired(true)
         .setMinValue(0)
+    )
+)
+
+// ------------------- Subcommand: rpposts_user -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('rpposts_user')
+    .setDescription('📝 Update RP post count by user')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User to update post count for')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('questid')
+        .setDescription('ID of the RP quest')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('count')
+        .setDescription('New post count')
+        .setRequired(true)
+        .setMinValue(0)
+    )
+)
+
+// ------------------- Subcommand: rpposts_count -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('rpposts_count')
+    .setDescription('📝 Update RP post count by count')
+    .addIntegerOption(option =>
+      option
+        .setName('count')
+        .setDescription('New post count')
+        .setRequired(true)
+        .setMinValue(0)
+    )
+    .addStringOption(option =>
+      option
+        .setName('questid')
+        .setDescription('ID of the RP quest')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User to update post count for')
+        .setRequired(true)
     )
 )
 
@@ -1367,7 +1421,11 @@ async function execute(interaction) {
         return await handleDebuff(interaction);
     } else if (subcommand === 'sheets') {
         return await handleSheets(interaction);
-    } else if (subcommand === 'rpposts') {
+    } else if (subcommand === 'rpposts_questid') {
+        return await handleRPPosts(interaction);
+    } else if (subcommand === 'rpposts_user') {
+        return await handleRPPosts(interaction);
+    } else if (subcommand === 'rpposts_count') {
         return await handleRPPosts(interaction);
     } else if (subcommand === 'minigame') {
         return await handleMinigame(interaction);
@@ -3976,9 +4034,29 @@ async function handleSheets(interaction) {
 
 async function handleRPPosts(interaction) {
   try {
-    const questID = interaction.options.getString('questid');
-    const user = interaction.options.getUser('user');
-    const newCount = interaction.options.getInteger('count');
+    const subcommand = interaction.options.getSubcommand();
+    
+    let questID, user, newCount;
+    
+    // Extract parameters based on subcommand
+    if (subcommand === 'rpposts_questid') {
+      questID = interaction.options.getString('questid');
+      user = interaction.options.getUser('user');
+      newCount = interaction.options.getInteger('count');
+    } else if (subcommand === 'rpposts_user') {
+      user = interaction.options.getUser('user');
+      questID = interaction.options.getString('questid');
+      newCount = interaction.options.getInteger('count');
+    } else if (subcommand === 'rpposts_count') {
+      newCount = interaction.options.getInteger('count');
+      questID = interaction.options.getString('questid');
+      user = interaction.options.getUser('user');
+    } else {
+      return interaction.editReply({
+        content: '❌ Unknown rpposts subcommand.',
+        ephemeral: true
+      });
+    }
 
     const { updateRPPostCount } = require('../../modules/rpQuestTrackingModule');
     const result = await updateRPPostCount(questID, user.id, newCount);
