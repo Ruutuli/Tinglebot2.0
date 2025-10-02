@@ -112,6 +112,14 @@ async function handleSubmissionCompletion(interaction) {
       addOnsApplied
     });
     
+    // Get quest bonus if quest is linked
+    let questBonus = 0;
+    if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+      const { getQuestBonus } = require('../utils/tokenUtils');
+      questBonus = await getQuestBonus(submissionData.questEvent);
+      console.log(`[submissionHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
+    }
+
     const { totalTokens, breakdown } = calculateTokens({
       baseSelections,
       baseCounts: submissionData.baseCounts || new Map(),
@@ -120,7 +128,8 @@ async function handleSubmissionCompletion(interaction) {
       addOnsApplied,
       typeMultiplierCounts: submissionData.typeMultiplierCounts || {},
       specialWorksApplied: submissionData.specialWorksApplied || [],
-      collab: submissionData.collab
+      collab: submissionData.collab,
+      questBonus
     });
     console.log(`[submissionHandler.js]: 💰 Calculated tokens: ${totalTokens}`);
     console.log(`[submissionHandler.js]: 📊 Token breakdown:`, breakdown);
@@ -176,15 +185,21 @@ async function handleSubmissionCompletion(interaction) {
         const typeEmoji = isWriting ? '📝' : '🎨';
         const typeColor = isWriting ? '#FF6B35' : '#FF0000'; // Orange for writing, red for art
         
-        // Calculate token display based on collaboration
+        // Calculate token display based on collaboration and quest bonus
         let tokenDisplay = `${totalTokens} tokens`;
         const hasCollaborators = submissionData.collab && ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) || (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
+        
+        // Add quest bonus breakdown if present
+        if (submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0) {
+          const baseTokens = totalTokens - submissionData.questBonus;
+          tokenDisplay = `${baseTokens} + ${submissionData.questBonus} quest bonus = ${totalTokens} tokens`;
+        }
         
         if (hasCollaborators) {
           const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
           const totalParticipants = 1 + collaborators.length;
           const splitTokens = Math.floor(totalTokens / totalParticipants);
-          tokenDisplay = `${totalTokens} tokens (${splitTokens} each)`;
+          tokenDisplay += ` (${splitTokens} each)`;
         }
 
         // Build notification fields dynamically
@@ -202,6 +217,23 @@ async function handleSubmissionCompletion(interaction) {
           const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
           const collabDisplay = collaborators.join(', ');
           notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+        }
+
+        // Add quest/event fields if present
+        if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+          notificationFields.push({ 
+            name: '🎯 Quest/Event', 
+            value: `\`${submissionData.questEvent}\``, 
+            inline: true 
+          });
+        }
+
+        if (submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0) {
+          notificationFields.push({ 
+            name: '🎁 Quest Bonus', 
+            value: `+${submissionData.questBonus} tokens`, 
+            inline: true 
+          });
         }
 
         // Add blight ID if provided

@@ -6,6 +6,7 @@
 // Modules for token calculations and formatting
 const artModule = require('../modules/artModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
+const Quest = require('../models/QuestModel');
 
 // Mapping for display names
 const getDisplayName = (value) => {
@@ -85,6 +86,7 @@ function calculateTokens({
   typeMultiplierCounts = {}, // Include multiplier counts
   specialWorksApplied = [],
   collab = null, // Add collab as a parameter
+  questBonus = 0, // Add quest bonus parameter
 }) {
   // Base Token Calculation with individual counts
   const baseTotal = baseSelections.reduce((total, base) => {
@@ -136,8 +138,8 @@ function calculateTokens({
 
   // Regular Total Calculation
   const regularTotal = Math.ceil(baseTotal * typeMultiplierTotal * productMultiplier + addOnTotal);
-  // Final Token Calculation
-  const totalTokens = regularTotal + specialWorksTotal;
+  // Final Token Calculation (including quest bonus)
+  const totalTokens = regularTotal + specialWorksTotal + questBonus;
 
   // Calculate split tokens based on number of collaborators
   let splitTokens = totalTokens;
@@ -158,6 +160,7 @@ function calculateTokens({
       productMultiplier,
       addOnTotal,
       specialWorksTotal,
+      questBonus,
       regularTotal,
       finalTotal: totalTokens,
     },
@@ -176,6 +179,7 @@ function generateTokenBreakdown({
   typeMultiplierCounts = {}, // Add typeMultiplierCounts here
   finalTokenAmount,
   collab = null, // Add collab parameter
+  questBonus = 0, // Add quest bonus parameter
 }) {
   const baseSection = baseSelections
     .map(base => {
@@ -298,6 +302,11 @@ function generateTokenBreakdown({
     breakdown += `+ ${specialLines.join(' + ')}\n`;
   }
   
+  // Quest bonus
+  if (questBonus > 0) {
+    breakdown += `+ Quest Bonus (${questBonus})\n`;
+  }
+  
   breakdown += `-----------------------------\n`;
   breakdown += ` ${finalTokenAmount} Tokens`;
   
@@ -328,8 +337,9 @@ function calculateWritingTokens(wordCount) {
 
 // ------------------- Calculate Writing Tokens with Collaboration -------------------
 // Calculates tokens for writing submissions with collaboration splitting
-function calculateWritingTokensWithCollab(wordCount, collab = null) {
-  const totalTokens = Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
+function calculateWritingTokensWithCollab(wordCount, collab = null, questBonus = 0) {
+  const baseTokens = Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
+  const totalTokens = baseTokens + questBonus; // Add quest bonus
   
   // Calculate split tokens based on number of collaborators
   let splitTokens = totalTokens;
@@ -347,7 +357,10 @@ function calculateWritingTokensWithCollab(wordCount, collab = null) {
     breakdown: {
       wordCount,
       tokensPerHundredWords: 10,
-      calculation: `${wordCount} words ÷ 100 × 10 = ${totalTokens} tokens`,
+      questBonus,
+      calculation: questBonus > 0 
+        ? `${wordCount} words ÷ 100 × 10 + ${questBonus} quest bonus = ${totalTokens} tokens`
+        : `${wordCount} words ÷ 100 × 10 = ${totalTokens} tokens`,
       finalTotal: totalTokens,
     }
   };
@@ -460,6 +473,43 @@ function logTokenBalanceChange(user, amount, action) {
     console.log(`[tokenUtils.js]: 💰 New token balance: ${newBalance}`);
 }
 
+// ------------------- Get Quest Bonus -------------------
+// Retrieves quest bonus from quest data based on quest ID
+async function getQuestBonus(questId) {
+    try {
+        if (!questId || questId === 'N/A') {
+            return 0;
+        }
+
+        const quest = await Quest.findOne({ questID: questId });
+        if (!quest) {
+            console.log(`[tokenUtils.js]: ⚠️ Quest ${questId} not found`);
+            return 0;
+        }
+
+        // Parse quest bonus from token reward
+        const tokenReward = quest.tokenReward;
+        if (!tokenReward || typeof tokenReward !== 'string') {
+            return 0;
+        }
+
+        // Look for quest bonus in the token reward string
+        // Format: "per_unit:222 unit:submission max:3 quest_bonus:50"
+        const questBonusMatch = tokenReward.match(/quest_bonus:(\d+)/);
+        if (questBonusMatch) {
+            const questBonus = parseInt(questBonusMatch[1], 10);
+            console.log(`[tokenUtils.js]: 🎯 Found quest bonus: ${questBonus} for quest ${questId}`);
+            return questBonus;
+        }
+
+        // If no quest bonus found, return 0
+        return 0;
+    } catch (error) {
+        console.error(`[tokenUtils.js]: ❌ Error retrieving quest bonus for quest ${questId}:`, error);
+        return 0;
+    }
+}
+
 // ------------------- Exported Functions -------------------
 // Exporting the unified `calculateTokens` and other utility functions.
 module.exports = {
@@ -470,4 +520,5 @@ module.exports = {
   generateTokenBreakdown,
   handleTokenError,
   logTokenBalanceChange,
+  getQuestBonus,
 };
