@@ -685,7 +685,7 @@ module.exports = {
     });
    }
 
-   const embed = this.createPostCountEmbed(interaction, quest, participants);
+   const embed = await this.createPostCountEmbed(interaction, quest, participants);
    return interaction.reply({ embeds: [embed] });
 
   } catch (error) {
@@ -1264,9 +1264,9 @@ module.exports = {
  // ============================================================================
  // ------------------- Post Count Helper Methods -------------------
  // ============================================================================
- createPostCountEmbed(interaction, quest, participants) {
+ async createPostCountEmbed(interaction, quest, participants) {
   const { requirementValue, requirementText } = this.getQuestRequirements(quest);
-  const participantList = this.buildParticipantList(interaction, quest, participants, requirementValue, requirementText);
+  const participantList = await this.buildParticipantList(interaction, quest, participants, requirementValue, requirementText);
   
   const embed = createBaseEmbed(
    `📊 ${quest.questType} Quest Progress: ${quest.title}`,
