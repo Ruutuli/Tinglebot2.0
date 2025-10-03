@@ -188,12 +188,13 @@ module.exports = {
       const craftingTagsLower = item.craftingTags.map(tag => tag.toLowerCase());
       if (!jobPerk || !jobPerk.perks.includes('CRAFTING') || !craftingTagsLower.includes(job.toLowerCase())) {
         console.error(`[crafting.js]: ❌ Invalid job "${job}" for ${character.name} - missing crafting skills`);
+        const errorResponse = getJobVoucherErrorMessage('MISSING_SKILLS', {
+          characterName: character.name,
+          jobName: job,
+          activity: 'crafting'
+        });
         return interaction.editReply({ 
-          content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-            characterName: character.name,
-            jobName: job,
-            activity: 'crafting'
-          }).message,
+          embeds: [errorResponse.embed],
           ephemeral: false 
         });
       }
@@ -210,18 +211,19 @@ module.exports = {
           if (character.jobVoucherJob === null) {
             console.log(`[crafting.js]: 🔄 Unrestricted job voucher - proceeding with "${job}"`);
           } else {
-            console.error(`[crafting.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
-            return interaction.editReply({ content: voucherCheck.message, flags: [MessageFlags.Ephemeral] });
+            console.error(`[crafting.js]: ❌ Voucher validation failed`);
+            return interaction.editReply({ embeds: [voucherCheck.embed], flags: [MessageFlags.Ephemeral] });
           }
         } else {
           // Restrict crafting of items that require more than 5 stamina when using a job voucher
           if (item.staminaToCraft > 5) {
             console.error(`[crafting.js]: ❌ Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit`);
+            const staminaError = getJobVoucherErrorMessage('STAMINA_LIMIT', {
+              characterName: character.name,
+              itemName: itemName
+            });
             await interaction.editReply({
-              content: getJobVoucherErrorMessage('STAMINA_LIMIT', {
-                characterName: character.name,
-                itemName: itemName
-              }).message,
+              embeds: [staminaError.embed],
               flags: [MessageFlags.Ephemeral],
             });
             return;
@@ -230,12 +232,13 @@ module.exports = {
           const lockedVillage = isVillageExclusiveJob(job);
           if (lockedVillage && character.currentVillage.toLowerCase() !== lockedVillage.toLowerCase()) {
             console.error(`[crafting.js]: ❌ ${character.name} must be in ${lockedVillage} to use ${job} voucher`);
+            const villageError = getJobVoucherErrorMessage('MISSING_SKILLS', {
+              characterName: character.name,
+              jobName: job,
+              activity: 'crafting'
+            });
             return interaction.editReply({ 
-              content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-                characterName: character.name,
-                jobName: job,
-                activity: 'crafting'
-              }).message,
+              embeds: [villageError.embed],
               flags: [MessageFlags.Ephemeral] 
             });
           }
@@ -243,7 +246,7 @@ module.exports = {
           // Fetch the job voucher item for later activation
           const fetchResult = await fetchJobVoucherItem();
           if (!fetchResult.success) {
-            await interaction.editReply({ content: fetchResult.message, flags: [MessageFlags.Ephemeral] });
+            await interaction.editReply({ embeds: [fetchResult.embed], flags: [MessageFlags.Ephemeral] });
             return;
           }
           jobVoucherItem = fetchResult.item;

@@ -24,12 +24,52 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             ],
             color: '#FF0000'
         },
-        NO_VOUCHER: '❌ No active job voucher found.',
-        WRONG_JOB: `❌ The job voucher is locked to **${capitalizeWords(data.voucherJob || '')}**, not **${capitalizeWords(data.requestedJob || '')}**. Please use the correct job.`,
-        ALREADY_ACTIVE: `❌ ${data.characterName || 'Character'} already has an active Job Voucher for ${capitalizeWords(data.jobName || '')}. Please complete the current job before using another voucher.`,
-        MISSING_SKILLS: data.activity === 'village-specific job' 
-            ? `❌ ${data.characterName || 'Character'} must be in **${capitalizeWords(data.requiredVillage || '')}** to use the ${capitalizeWords(data.jobName || '')} job voucher. Currently in: **${capitalizeWords(data.currentVillage || '')}**`
-            : `❌ ${data.characterName || 'Character'} cannot use the ${data.activity || 'looting'} perk as a ${capitalizeWords(data.jobName || '')}.`,
+        NO_VOUCHER: {
+            title: '❌ No Job Voucher Found',
+            description: 'No active job voucher found.',
+            fields: [
+                { name: 'What Happened', value: '> You do not have an active job voucher.' },
+                { name: 'How to Fix', value: '> Use a Job Voucher item from your inventory first.' }
+            ],
+            color: '#FF0000'
+        },
+        WRONG_JOB: {
+            title: '❌ Wrong Job Voucher',
+            description: `The job voucher is locked to **${capitalizeWords(data.voucherJob || '')}**, not **${capitalizeWords(data.requestedJob || '')}**.`,
+            fields: [
+                { name: 'Voucher Job', value: `> ${capitalizeWords(data.voucherJob || '')}` },
+                { name: 'Requested Job', value: `> ${capitalizeWords(data.requestedJob || '')}` },
+                { name: 'How to Fix', value: '> Use the correct job voucher or get a new one.' }
+            ],
+            color: '#FF0000'
+        },
+        ALREADY_ACTIVE: {
+            title: '❌ Job Voucher Already Active',
+            description: `${data.characterName || 'Character'} already has an active Job Voucher for ${capitalizeWords(data.jobName || '')}.`,
+            fields: [
+                { name: 'Current Job', value: `> ${capitalizeWords(data.jobName || '')}` },
+                { name: 'How to Fix', value: '> Complete the current job before using another voucher.' }
+            ],
+            color: '#FF0000'
+        },
+        MISSING_SKILLS: {
+            title: '❌ Missing Required Skills',
+            description: data.activity === 'village-specific job' 
+                ? `${data.characterName || 'Character'} must be in **${capitalizeWords(data.requiredVillage || '')}** to use the ${capitalizeWords(data.jobName || '')} job voucher.`
+                : `${data.characterName || 'Character'} cannot use the ${data.activity || 'looting'} perk as a ${capitalizeWords(data.jobName || '')}.`,
+            fields: data.activity === 'village-specific job' 
+                ? [
+                    { name: 'Required Village', value: `> ${capitalizeWords(data.requiredVillage || '')}` },
+                    { name: 'Current Village', value: `> ${capitalizeWords(data.currentVillage || '')}` },
+                    { name: 'How to Fix', value: '> Travel to the correct village to use this job voucher.' }
+                ]
+                : [
+                    { name: 'Job', value: `> ${capitalizeWords(data.jobName || '')}` },
+                    { name: 'Required Perk', value: `> ${data.activity || 'looting'}` },
+                    { name: 'How to Fix', value: '> Choose a different job or get the required skills.' }
+                ],
+            color: '#FF0000'
+        },
         ACTIVATION_ERROR: {
             title: '❌ Job Voucher Activation Failed',
             description: 'An error occurred while activating the job voucher.',
