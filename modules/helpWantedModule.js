@@ -2024,5 +2024,7 @@ module.exports = {
   checkAndCompleteQuestFromSubmission,
   isTravelBlockedByWeather,
   regenerateEscortQuest,
-  regenerateArtWritingQuest
+  regenerateArtWritingQuest,
+  getRandomNPCName,
+  getRandomNPCNameFromPool
 }; 
