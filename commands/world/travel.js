@@ -260,12 +260,14 @@ module.exports = {
       // Log character loaded
       console.log(`[travel.js]: 📋 Character loaded: ${character.name} (${character.job}) in ${character.currentVillage}`);
 
-      // ---- Blight Rain Infection Check ----
+      // Note: Starting village blight rain check moved to after successful travel completion
+      // This prevents characters from being blighted if they don't actually arrive at their destination
+      
       const startingVillage = character.currentVillage.toLowerCase();
+      
+      // Check starting village for blight rain (moved to after travel completion)
       const startingWeather = await getWeatherWithoutGeneration(startingVillage);
-
-      // Check starting village for blight rain
-      if (startingWeather?.special?.label === 'Blight Rain') {
+      if (false && startingWeather?.special?.label === 'Blight Rain') {
         // Mod characters are immune to blight infection
         if (character.isModCharacter) {
           const immuneMsg =
@@ -971,6 +973,132 @@ async function processTravelDay(day, context) {
             `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n` +
             "You feel lucky... but be careful out there.";
           await finalChannel.send({ content: safeMsg });
+        }
+      }
+      
+      // Check starting village for blight rain AFTER successful travel completion
+      // This ensures characters are only blighted from starting village if they actually complete the journey
+      if (startingWeather?.special?.label === 'Blight Rain') {
+        // Mod characters are immune to blight infection
+        if (character.isModCharacter) {
+          const immuneMsg =
+            "<:blight_eye:805576955725611058> **Blight Rain at Departure!**\n\n" +
+            `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain, but as a ${character.modTitle} of ${character.modType} they are immune to blight infection! ◈`;
+          await finalChannel.send({ content: immuneMsg });
+        } else if (character.blighted) {
+          const alreadyMsg =
+            "<:blight_eye:805576955725611058> **Blight Rain at Departure!**\n\n" +
+            `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain, but they're already blighted... guess it doesn't matter! ◈`;
+          await finalChannel.send({ content: alreadyMsg });
+        } else {
+          // Check for resistance buffs
+          const buffEffects = getActiveBuffEffects(character);
+          let infectionChance = 0.75; // Base 75% chance
+          
+          // Apply resistance buffs
+          if (buffEffects && buffEffects.blightResistance > 0) {
+            infectionChance -= (buffEffects.blightResistance * 0.1); // Each level reduces by 10%
+            console.log(`[travel.js]: 🧪 Starting village blight resistance: ${infectionChance} chance`);
+          }
+          if (buffEffects && buffEffects.fireResistance > 0) {
+            infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
+            console.log(`[travel.js]: 🧪 Starting village fire resistance: ${infectionChance - (buffEffects.fireResistance * 0.05)} chance`);
+          }
+          
+          // Consume elixirs after applying their effects
+          if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
+            consumeElixirBuff(character);
+            // Update character in database
+            const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+            await updateFunction(character._id, { buff: character.buff });
+          } else if (character.buff?.active) {
+            // Log when elixir is not used due to conditions not being met
+            console.log(`[travel.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+          }
+          
+          // Ensure chance stays within reasonable bounds
+          infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
+          
+          if (Math.random() < infectionChance) {
+            // Create fancy blight infection embed
+            const blightEmbed = new EmbedBuilder()
+              .setColor('#AD1457')
+              .setTitle('<:blight_eye:805576955725611058> Blight Infection!')
+              .setDescription(`◈ Oh no... your character **${character.name}** was exposed to blight rain when departing from **${capitalizeFirstLetter(startingVillage)}** and has been **blighted**! ◈`)
+              .addFields(
+                {
+                  name: '🏥 Healing Available',
+                  value: 'You can be healed by **Oracles, Sages & Dragons**',
+                  inline: true
+                },
+                {
+                  name: '📋 Blight Information',
+                  value: '[Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)',
+                  inline: true
+                },
+                {
+                  name: '⚠️ STAGE 1',
+                  value: 'Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.',
+                  inline: false
+                },
+                {
+                  name: '🎲 Daily Rolling',
+                  value: '**Starting tomorrow, you\'ll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today\'s blight roll if you were just infected.*',
+                  inline: false
+                }
+              )
+              .setThumbnail(character.icon)
+              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+              .setFooter({ text: 'Blight Infection System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
+              .setTimestamp();
+
+            await finalChannel.send({ embeds: [blightEmbed], ephemeral: false });
+            // Update character in DB
+            character.blighted = true;
+            character.blightedAt = new Date();
+            character.blightStage = 1;
+            await character.save();
+            // Assign blighted role
+            const guild = interaction.guild;
+            if (guild) {
+              const member = await guild.members.fetch(interaction.user.id);
+              await member.roles.add('798387447967907910');
+            }
+            
+            // Update user's blightedcharacter status
+            const user = await User.findOne({ discordId: interaction.user.id });
+            if (user) {
+              user.blightedcharacter = true;
+              await user.save();
+            }
+            
+            // Add to travel log
+            context.travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight when departing from **${capitalizeFirstLetter(startingVillage)}**!`);
+          } else {
+            let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain at Departure!**\n\n";
+            
+            if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+              safeMsg += `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
+              safeMsg += "The protective effects of your elixir kept you safe from the blight.";
+              
+              // Consume chilly or fireproof elixirs after use
+              if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
+                consumeElixirBuff(character);
+                // Update character in database
+                const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+                await updateFunction(character._id, { buff: character.buff });
+                safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
+              } else if (character.buff?.active) {
+                // Log when elixir is not used due to conditions not being met
+                console.log(`[travel.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+              }
+            } else {
+              safeMsg += `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain but managed to avoid infection this time! ◈\n`;
+              safeMsg += "You feel lucky... but be careful out there.";
+            }
+            
+            await finalChannel.send({ content: safeMsg });
+          }
         }
       }
     
