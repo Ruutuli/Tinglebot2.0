@@ -1357,10 +1357,9 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
       const [character, allCraftableItems, inventoryCollection] = await Promise.all([
         fetchCharacterByNameAndUserId(characterName, userId),
         Item.find({
-          craftingTags: { $exists: true },
-          craftingMaterial: { $exists: true }
+          crafting: true
         })
-        .select('itemName craftingTags craftingMaterial')
+        .select('itemName craftingTags craftingMaterial cook blacksmith craftsman maskMaker researcher weaver artist')
         .lean(),
         getCharacterInventoryCollection(characterName)
       ]);
@@ -1389,10 +1388,24 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
         return await safeAutocompleteResponse(interaction, []);
       }
 
-      // Filter items by job first
-      const jobFilteredItems = allCraftableItems.filter(item => 
-        item.craftingTags.some(tag => tag.toLowerCase() === job.toLowerCase())
-      );
+      // Filter items by job first using boolean fields
+      const jobFilteredItems = allCraftableItems.filter(item => {
+        const jobLower = job.toLowerCase();
+        
+        // Map job names to their corresponding boolean fields
+        const jobFieldMap = {
+          'cook': 'cook',
+          'blacksmith': 'blacksmith',
+          'craftsman': 'craftsman',
+          'mask maker': 'maskMaker',
+          'researcher': 'researcher',
+          'weaver': 'weaver',
+          'artist': 'artist'
+        };
+        
+        const jobField = jobFieldMap[jobLower];
+        return jobField && item[jobField] === true;
+      });
 
       // Then filter by inventory availability
       craftableItems = jobFilteredItems.filter(item => {

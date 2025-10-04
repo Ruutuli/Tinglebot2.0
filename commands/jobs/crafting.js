@@ -185,8 +185,22 @@ module.exports = {
 
       // ------------------- Validate Job Perks -------------------
       const jobPerk = getJobPerk(job);
-      const craftingTagsLower = item.craftingTags.map(tag => tag.toLowerCase());
-      if (!jobPerk || !jobPerk.perks.includes('CRAFTING') || !craftingTagsLower.includes(job.toLowerCase())) {
+      
+      // Check if character's job matches item's crafting requirements using boolean fields
+      const jobLower = job.toLowerCase();
+      const jobFieldMap = {
+        'cook': 'cook',
+        'blacksmith': 'blacksmith',
+        'craftsman': 'craftsman',
+        'mask maker': 'maskMaker',
+        'researcher': 'researcher',
+        'weaver': 'weaver',
+        'artist': 'artist'
+      };
+      const jobField = jobFieldMap[jobLower];
+      const canCraftItem = jobField && item[jobField] === true;
+      
+      if (!jobPerk || !jobPerk.perks.includes('CRAFTING') || !canCraftItem) {
         console.error(`[crafting.js]: ❌ Invalid job "${job}" for ${character.name} - missing crafting skills`);
         const errorResponse = getJobVoucherErrorMessage('MISSING_SKILLS', {
           characterName: character.name,
