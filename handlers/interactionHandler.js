@@ -130,6 +130,45 @@ const initializeReactionHandler = (client) => {
                   if (submissionData) {
                     // Update the message URL in submission data
                     submissionData.messageUrl = messageUrl;
+                    
+                    // Check for blight healing completion first
+                    if (submissionData.blightId && submissionData.blightId !== 'N/A') {
+                      console.log(`[interactionHandler.js]: Processing blight healing completion for submission ${submissionId} with blightId: ${submissionData.blightId}`);
+                      
+                      try {
+                        const { retrieveBlightRequestFromStorage, deleteBlightRequestFromStorage } = require('../utils/storage');
+                        const { completeBlightHealing } = require('./blightHandler');
+                        const { fetchCharacterByName } = require('../database/db');
+                        
+                        // Get the blight healing request
+                        const blightRequest = await retrieveBlightRequestFromStorage(submissionData.blightId);
+                        if (blightRequest && blightRequest.status === 'pending') {
+                          // Get the character to heal
+                          const character = await fetchCharacterByName(blightRequest.characterName);
+                          if (character && character.blighted) {
+                            console.log(`[interactionHandler.js]: Completing blight healing for character: ${character.name}`);
+                            
+                            // Complete the blight healing
+                            await completeBlightHealing(character, null);
+                            
+                            // Mark the blight request as completed
+                            blightRequest.status = 'completed';
+                            blightRequest.submittedAt = new Date().toISOString();
+                            await deleteBlightRequestFromStorage(submissionData.blightId);
+                            
+                            console.log(`[interactionHandler.js]: ✅ Blight healing completed for character: ${character.name}`);
+                          } else {
+                            console.log(`[interactionHandler.js]: Character ${blightRequest.characterName} not found or not blighted`);
+                          }
+                        } else {
+                          console.log(`[interactionHandler.js]: Blight request ${submissionData.blightId} not found or already processed`);
+                        }
+                      } catch (blightError) {
+                        console.error(`[interactionHandler.js]: Error processing blight healing for submission ${submissionId}:`, blightError);
+                      }
+                    }
+                    
+                    // Process quest completion
                     await checkAndCompleteQuestFromSubmission(submissionData, client);
                   }
                 } catch (error) {

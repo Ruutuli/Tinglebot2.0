@@ -37,7 +37,7 @@ const QUEST_TYPE_EMOJIS = {
  */
 function createBlightRejectionEmbed(character) {
   const { EmbedBuilder } = require('discord.js');
-  const { getRandomNPCName } = require('../../modules/NPCsModule');
+  const { getRandomNPCName } = require('../../modules/helpWantedModule');
   const NPCs = require('../../modules/NPCsModule').NPCs;
   
   // Get a random NPC name for the rejection message
@@ -1437,7 +1437,9 @@ module.exports = {
           characterName
         });
         
-        await interaction.editReply({ content: '❌ An error occurred during the monster hunt. Please try again later.' });
+        await interaction.editReply({ 
+          content: '❌ **Monster Hunt Failed**\n\nAn unexpected error occurred while processing your monster hunt quest. This has been automatically reported to the development team.\n\n**What happened:** The system encountered an internal error while validating your character\'s eligibility for the quest.\n\n**What you can do:**\n• Try again in a few minutes\n• Make sure your character is not KO\'d, debuffed, or in jail\n• If the problem persists, report it in the bug reports channel\n\n**Quest ID:** `' + questId + '`\n**Character:** `' + characterName + '`' 
+        });
       }
       return;
     }
@@ -1667,7 +1669,9 @@ module.exports = {
           questId: questId
         });
         
-        await interaction.editReply({ content: '❌ An error occurred. Please try again later.' });
+        await interaction.editReply({ 
+          content: '❌ **Quest Completion Failed**\n\nAn unexpected error occurred while processing your quest completion. This has been automatically reported to the development team.\n\n**What happened:** The system encountered an internal error while validating your quest requirements or character status.\n\n**What you can do:**\n• Try again in a few minutes\n• Check that your character meets all quest requirements\n• Make sure your character is not KO\'d, debuffed, or in jail\n• If the problem persists, report it in the bug reports channel\n\n**Quest ID:** `' + questId + '`\n**Character:** `' + characterName + '`' 
+        });
       }
       return;
     }
@@ -1789,7 +1793,9 @@ module.exports = {
           reward: reward
         });
         
-        await interaction.editReply({ content: '❌ An error occurred during the exchange. Please try again later.' });
+        await interaction.editReply({ 
+          content: '❌ **Quest Exchange Failed**\n\nAn unexpected error occurred while processing your quest exchange. This has been automatically reported to the development team.\n\n**What happened:** The system encountered an internal error while processing your reward exchange.\n\n**What you can do:**\n• Try again in a few minutes\n• Make sure you have at least 50 quest completions\n• If the problem persists, report it in the bug reports channel\n\n**Character:** `' + characterName + '`\n**Reward:** `' + reward + '`' 
+        });
       }
       return;
     }
@@ -1912,7 +1918,9 @@ module.exports = {
           userId: interaction.user.id
         });
         
-        await interaction.editReply({ content: '❌ An error occurred while fetching history. Please try again later.' });
+        await interaction.editReply({ 
+          content: '❌ **History Retrieval Failed**\n\nAn unexpected error occurred while fetching your quest history. This has been automatically reported to the development team.\n\n**What happened:** The system encountered an internal error while retrieving your quest completion data.\n\n**What you can do:**\n• Try again in a few minutes\n• If the problem persists, report it in the bug reports channel\n\n**User:** `' + interaction.user.tag + '`' 
+        });
       }
       return;
     }
