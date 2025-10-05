@@ -656,7 +656,8 @@ module.exports = {
         currentChannel: interaction.channelId,
         travelLog: [],
         mount: null,
-        mode
+        mode,
+        startingWeather
       });
       
     } catch (error) {
@@ -781,7 +782,8 @@ async function processTravelDay(day, context) {
       travelLog,
       channel: savedChannel,
       mount,
-      mode
+      mode,
+      startingWeather
     } = context;
 
     // ------------------- Reset Travel Gathering Flag ------------------
