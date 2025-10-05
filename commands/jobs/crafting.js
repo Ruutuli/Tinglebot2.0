@@ -195,7 +195,8 @@ module.exports = {
         'mask maker': 'maskMaker',
         'researcher': 'researcher',
         'weaver': 'weaver',
-        'artist': 'artist'
+        'artist': 'artist',
+        'witch': 'witch'
       };
       const jobField = jobFieldMap[jobLower];
       const canCraftItem = jobField && item[jobField] === true;
