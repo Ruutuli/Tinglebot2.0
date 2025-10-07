@@ -22,11 +22,11 @@ const { useHearts, handleKO } = require('../modules/characterStatsModule');
 // Encounter Probabilities
 // ------------------- Define encounter probabilities for standard encounters -------------------
 const encounterProbabilities = {
-  noEncounter: 25,
-  tier1: 40,
-  tier2: 22,
-  tier3: 8,
-  tier4: 5
+  noEncounter: 20,
+  tier1: 42,
+  tier2: 23,
+  tier3: 9,
+  tier4: 6
 };
 
 // ------------------- Define encounter probabilities for Blood Moon -------------------
