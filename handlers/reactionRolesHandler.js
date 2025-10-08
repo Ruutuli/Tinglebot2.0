@@ -36,8 +36,9 @@ const REACTION_ROLES = {
   
   // Notification roles - using actual emoji IDs and role IDs from server-data.json
   notifications: {
-    '📜': '961807270201659442', // scroll -> RP Watch
-    '💬': '1118238707078668348', // speech_balloon -> qotd
+    '1300300616826200084': '961807270201659442', // scroll (custom emoji) -> RP Watch
+    '📜': '961807270201659442', // scroll (fallback) -> RP Watch
+    '💬': '1118238707078668348', // speech_balloon -> QOTD
     '🆘': 'Call for Help', // sos -> Call for Help (need to find role ID)
     '🎉': '1325998630032773140' // tada -> Member Event
   },
@@ -232,31 +233,9 @@ const getRoleId = (category, emoji, emojiId) => {
  */
 const createPronounsEmbed = () => {
   return new EmbedBuilder()
-    .setDescription('**First, choose your own pronouns!**\n\nReact with the emoji that matches your pronouns to get the corresponding role.')
-    .addFields(
-      {
-        name: '<a:potionpink:795050612496531486> @She / Her',
-        value: 'For those who use she/her pronouns',
-        inline: false
-      },
-      {
-        name: '<a:potionblue:795050612198604822> @He / Him', 
-        value: 'For those who use he/him pronouns',
-        inline: false
-      },
-      {
-        name: '<a:potionpurple:795050612550402069> @They / Them',
-        value: 'For those who use they/them pronouns',
-        inline: false
-      },
-      {
-        name: '<:discordpotionyellow:1086881430077984789> @Other / Ask',
-        value: 'For those who use other pronouns or prefer to be asked',
-        inline: false
-      }
-    )
+    .setTitle('Pronouns')
+    .setDescription('<:bp2:1300264497823735828> First, choose your own pronouns!\n\n<a:potionpink:795050612496531486> @She / Her\n<a:potionblue:795050612198604822> @He / Him\n<a:potionpurple:795050612550402069> @They / Them\n<:discordpotionyellow:1086881430077984789> @Other / Ask')
     .setColor('#FF69B4')
-    .setFooter({ text: 'Click the reactions below to assign yourself a pronoun role' })
     .setTimestamp();
 };
 
@@ -266,26 +245,9 @@ const createPronounsEmbed = () => {
  */
 const createVillageEmbed = () => {
   return new EmbedBuilder()
-    .setDescription('**Only choose the village of your FIRST/MAIN character.**\n\nSelect your character\'s home village to get the corresponding role.')
-    .addFields(
-      {
-        name: '<:rudania:899492917452890142> @Rudania',
-        value: 'Click the reaction to get the Rudania role',
-        inline: false
-      },
-      {
-        name: '<:inariko:899493009073274920> @Inariko',
-        value: 'Click the reaction to get the Inariko role',
-        inline: false
-      },
-      {
-        name: '<:vhintl:899492879205007450> @Vhintl',
-        value: 'Click the reaction to get the Vhintl role',
-        inline: false
-      }
-    )
+    .setTitle('Village')
+    .setDescription('<:blank:1284697992430067793> <:bp2:1300264497823735828> Only choose the village of your FIRST/MAIN character.\n\n<:rudania:899492917452890142> @Rudania | <:inariko:899493009073274920> @Inariko | <:vhintl:899492879205007450> @Vhintl')
     .setColor('#00CED1')
-    .setFooter({ text: 'Click the reactions below to assign yourself a village role' })
     .setTimestamp();
 };
 
@@ -295,27 +257,16 @@ const createVillageEmbed = () => {
  */
 const createInactiveEmbed = () => {
   return new EmbedBuilder()
-    .setTitle('⏸️ Inactive Role Information')
-    .setDescription(`**If you have the <@&788148064182730782> role, this means you are currently marked as inactive.**\n\nWhile you have this role, your access to server channels will be limited.`)
+    .setTitle('Inactive')
+    .setDescription('<:bb0:1300264428894359643> Inactive Role <:bb5:1300264445885005874>\nIf you have the @INACTIVE role, this means you are currently marked as inactive. While you have this role, your access to server channels will be limited.\n\n<:bp:1300264484698980372> If you haven\'t participated in the server for 3 months, you will be marked as INACTIVE.\n<:bp2:1300264497823735828> If you know you\'ll be away or busy for a while, you can set yourself as inactive early by typing !inactive in 🔔》sheikah-slate.\n◈ If you miss 3 consecutive activity checks (held quarterly), you will be removed from the server to make room for new members. ◈')
     .addFields(
       {
-        name: '📋 Inactivity Rules',
-        value: '• **3 months of inactivity** → Marked as INACTIVE\n• **Early inactive status** → Use `!inactive` in 🔔》sheikah-slate\n• **3 missed activity checks** → Removal from server',
-        inline: false
-      },
-      {
-        name: '🔄 Returning to Active Status',
-        value: '1. **Read the rules** → Check 🔔》rules for updates\n2. **Mark yourself active** → Use `!active` in 🔔》sheikah-slate\n3. **Re-select roles** → Go to 🔔》roles to regain access',
-        inline: false
-      },
-      {
-        name: '💡 Need Help?',
-        value: 'Contact a moderator if you need assistance with your inactive status.',
+        name: 'Active',
+        value: '<:bb0:1300264428894359643> To Return to Active Status <:bb5:1300264445885005874>\n\n<:bp2:1300264497823735828> 1. When you\'re ready to return, carefully read through 🔔》rules to get updated on any rule changes. Then click the reaction at the bottom to confirm you agree.\n\n<:bp2:1300264497823735828> 2. Go to 🔔》sheikah-slate and type !active to mark yourself as active again.\n\n<:bp2:1300264497823735828> 3. Head over to 🔔》roles and re-select your roles to regain full access to the server.',
         inline: false
       }
     )
     .setColor('#FF8C00')
-    .setFooter({ text: 'Inactive role management • Contact mods for help' })
     .setTimestamp();
 };
 
@@ -325,36 +276,32 @@ const createInactiveEmbed = () => {
  */
 const createNotificationRolesEmbed = () => {
   return new EmbedBuilder()
-    .setDescription('**These roles are completely optional and meant to help you stay informed about server activity that interests you.**\n\nClick the appropriate emoji to assign yourself the role!')
+    .setTitle('Opt-In Roles for Notifications')
+    .setDescription('<:bb0:1300264428894359643> Opt-In Roles for Notifications <:bb5:1300264445885005874>\n\nThese roles are completely optional and meant to help you stay informed about server activity that interests you. Click the appropriate emoji to assign yourself the role!\n\n────────────────────')
     .addFields(
       {
-        name: '📜 @RP Watch',
-        value: '**Want to be notified when a new Thread RP starts?**\n\n• Use this tag when starting new thread RPs\n• Helps observers find and follow threads\n• Makes it easier to stay in the loop!',
+        name: '<:scroll:1300300616826200084> @RP Watch',
+        value: 'Want to be notified when a new Thread RP starts?\nClick the <:scroll:1300300616826200084> emoji below to receive the RP Watch role!\n\n<:bp2:1300264497823735828> Please use this tag once when starting a new thread RP (if you\'re comfortable)! It helps observers find and follow the thread.\n<:bp2:1300264497823735828> People can still join a thread manually, but this role makes it easier to stay in the loop!\n\n────────────────────',
         inline: false
       },
       {
-        name: '💬 @qotd',
-        value: '**Want to be pinged when a new Question of the Day is asked in 💬》headcanons or 💬》nsfw-boinkcanons?**\n\n• Anyone can use this tag! Please avoid spamming or it may be revoked\n• You\'re also welcome to start a thread with your question!',
+        name: '💬 @QOTD',
+        value: 'Want to be pinged when a new Question of the Day is asked in 💬》headcanons or 💬》nsfw-boinkcanons?\nClick the 💬 emoji below to opt-in!\n\n<:bp2:1300264497823735828> Anyone can use this tag! Please avoid spamming or it may be revoked.\n<:bp2:1300264497823735828> You\'re also welcome to start a thread with your question!\n\n────────────────────',
         inline: false
       },
       {
         name: '🆘 @Call for Help',
-        value: '**Need backup?** This role is used when a high-tier monster appears in a village and characters are needed to defend or respond.',
+        value: 'Need backup? This role is used when a high-tier monster appears in a village and characters are needed to defend or respond.\nClick the 🆘 emoji below to be notified of these moments!\n\n────────────────────',
         inline: false
       },
       {
         name: '🎉 @Member Events',
-        value: '**Want to know when member-run events are happening?**\n\n• This tag is for approved event runners only—please don\'t use it unless you\'re running a registered event!',
-        inline: false
-      },
-      {
-        name: '✨ Stay Connected',
-        value: 'React below to get any of the roles above and stay connected to what matters most to you!',
+        value: 'Want to know when member-run events are happening?\nClick the 🎉 emoji below to be notified about new or ongoing community events!\n\n<:bp2:1300264497823735828> This tag is for approved event runners only—please don\'t use it unless you\'re running a registered event!\n\n────────────────────',
         inline: false
       }
     )
+    .setFooter({ text: 'React below to get any of the roles above and stay connected to what matters most to you! ✨' })
     .setColor('#32CD32')
-    .setFooter({ text: 'Stay connected with notification roles • Click reactions to join' })
     .setTimestamp();
 };
 
@@ -637,11 +584,25 @@ const setupNotificationReactionRoles = async (channel) => {
   const embed = createNotificationRolesEmbed();
   const message = await channel.send({ embeds: [embed] });
   
-  // Add reactions (using standard emojis for notifications)
-  await message.react('📜');
-  await message.react('💬');
-  await message.react('🆘');
-  await message.react('🎉');
+  // Add reactions using custom scroll emoji and standard emojis
+  try {
+    // Get custom scroll emoji from the guild
+    const scroll = channel.guild.emojis.cache.get('1300300616826200084');
+    
+    if (scroll) await message.react(scroll);
+    else await message.react('📜'); // Fallback to standard emoji
+    
+    await message.react('💬');
+    await message.react('🆘');
+    await message.react('🎉');
+  } catch (error) {
+    console.log('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
+    // Fallback to standard emojis if custom ones don't exist
+    await message.react('📜');
+    await message.react('💬');
+    await message.react('🆘');
+    await message.react('🎉');
+  }
   
   return message;
 };
