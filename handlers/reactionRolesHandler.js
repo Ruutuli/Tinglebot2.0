@@ -121,11 +121,31 @@ const handleReactionRole = async (reaction, user, action) => {
       if (!member.roles.cache.has(role.id)) {
         await member.roles.add(role);
         console.log(`[reactionRolesHandler.js]: Added role "${role.name}" to ${user.tag}`);
+        
+        // Send ephemeral confirmation message
+        try {
+          await user.send({
+            content: `✅ **Role Added!**\nYou now have the **${role.name}** role.`,
+            ephemeral: false // DM instead of ephemeral since we can't reply to reactions
+          });
+        } catch (error) {
+          console.log(`[reactionRolesHandler.js]: Could not send DM to ${user.tag} (DMs may be disabled)`);
+        }
       }
     } else if (action === 'remove') {
       if (member.roles.cache.has(role.id)) {
         await member.roles.remove(role);
         console.log(`[reactionRolesHandler.js]: Removed role "${role.name}" from ${user.tag}`);
+        
+        // Send ephemeral confirmation message
+        try {
+          await user.send({
+            content: `❌ **Role Removed!**\nYou no longer have the **${role.name}** role.`,
+            ephemeral: false // DM instead of ephemeral since we can't reply to reactions
+          });
+        } catch (error) {
+          console.log(`[reactionRolesHandler.js]: Could not send DM to ${user.tag} (DMs may be disabled)`);
+        }
       }
     }
     
