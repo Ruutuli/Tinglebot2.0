@@ -10,7 +10,7 @@ const { connectToTinglebot } = require('../database/db');
  * Formula: XP = 5 × (level²) + 50 × level + 100
  */
 function calculateTotalXPForLevel(targetLevel) {
-  if (targetLevel <= 1) return 155; // Level 1 requires 155 XP
+  if (targetLevel < 1) return 0;
   return 5 * Math.pow(targetLevel, 2) + 50 * targetLevel + 100;
 }
 
@@ -242,7 +242,8 @@ async function validateAllUsers() {
       critical: 0,
       high: 0,
       medium: 0,
-      users: []
+      validUsers: [],
+      invalidUsers: []
     };
     
     for (const user of users) {
@@ -250,6 +251,7 @@ async function validateAllUsers() {
       
       if (validation.valid) {
         results.valid++;
+        results.validUsers.push(validation);
       } else {
         results.invalid++;
         
@@ -263,11 +265,37 @@ async function validateAllUsers() {
         // Generate fix suggestions
         validation.fixes = generateFixSuggestion(validation);
         
-        results.users.push(validation);
+        results.invalidUsers.push(validation);
       }
     }
     
-    // Print results
+    // Print all users
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('                    ALL USERS REPORT                           ');
+    console.log('═══════════════════════════════════════════════════════════════\n');
+    
+    // Sort all users by level (descending)
+    const allUsers = [...results.validUsers, ...results.invalidUsers].sort((a, b) => {
+      return (b.leveling?.level || 0) - (a.leveling?.level || 0);
+    });
+    
+    console.log('┌────┬──────────────────────┬─────────┬──────────────┬──────────┐');
+    console.log('│ #  │ Username             │ Level   │ XP           │ Status   │');
+    console.log('├────┼──────────────────────┼─────────┼──────────────┼──────────┤');
+    
+    allUsers.forEach((user, index) => {
+      const username = (user.username || 'Unknown').substring(0, 20).padEnd(20);
+      const level = String(user.leveling?.level || 0).padStart(7);
+      const xp = String((user.leveling?.xp || 0).toLocaleString()).padStart(12);
+      const status = user.valid ? '   ✅    ' : '   ❌    ';
+      const num = String(index + 1).padStart(3);
+      
+      console.log(`│ ${num} │ ${username} │ ${level} │ ${xp} │ ${status} │`);
+    });
+    
+    console.log('└────┴──────────────────────┴─────────┴──────────────┴──────────┘\n');
+    
+    // Print summary
     console.log('═══════════════════════════════════════════════════════════════');
     console.log('                    VALIDATION SUMMARY                         ');
     console.log('═══════════════════════════════════════════════════════════════\n');
@@ -285,7 +313,7 @@ async function validateAllUsers() {
       console.log('                    INVALID USERS DETAIL                       ');
       console.log('═══════════════════════════════════════════════════════════════\n');
       
-      results.users.forEach((validation, index) => {
+      results.invalidUsers.forEach((validation, index) => {
         console.log(`\n[${index + 1}] User: ${validation.username} (${validation.userId})`);
         console.log(`    Current Data: Level ${validation.leveling.level}, XP ${validation.leveling.xp}`);
         if (validation.leveling.hasImportedFromMee6) {
