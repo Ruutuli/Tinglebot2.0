@@ -264,13 +264,107 @@ async function checkAndPostWeatherOnRestart(client) {
 
 // ------------------- Individual Cleanup Functions ------------------
 
-async function cleanupExpiredRaids() {
+async function cleanupExpiredRaids(client = null) {
  try {
-  const expiredCount = await Raid.cleanupExpiredRaids();
-  if (expiredCount > 0) {
-   console.log(`[scheduler.js]: 🧹 Cleaned up ${expiredCount} expired raids`);
+  const expiredRaids = await Raid.findExpiredRaids();
+  
+  if (expiredRaids.length === 0) {
+   return { expiredCount: 0 };
   }
-  return { expiredCount };
+  
+  console.log(`[scheduler.js]: 🧹 Found ${expiredRaids.length} expired raid(s) to clean up`);
+  
+  const { EmbedBuilder } = require('discord.js');
+  let cleanedCount = 0;
+  
+  for (const raid of expiredRaids) {
+   try {
+    console.log(`[scheduler.js]: ⏰ Processing expired raid ${raid.raidId} - ${raid.monster.name} in ${raid.village}`);
+    
+    // Mark raid as failed and KO all participants
+    await raid.failRaid();
+    
+    // Send failure message if client is available
+    if (client) {
+     const failureEmbed = new EmbedBuilder()
+       .setColor('#FF0000')
+       .setTitle('💥 **Raid Failed!**')
+       .setDescription(`The raid against **${raid.monster.name}** has failed!`)
+       .addFields(
+         {
+           name: '__Monster Status__',
+           value: `💙 **Hearts:** ${raid.monster.currentHearts}/${raid.monster.maxHearts}`,
+           inline: false
+         },
+         {
+           name: '__Participants__',
+           value: (raid.participants && raid.participants.length > 0)
+             ? raid.participants.map(p => `• **${p.name}** (${p.damage} hearts) - **KO'd**`).join('\n')
+             : 'No participants',
+           inline: false
+         },
+         {
+           name: '__Failure__',
+           value: (raid.participants && raid.participants.length > 0)
+             ? `The raid timer expired! All participants have been knocked out! 💀`
+             : `The monster caused havoc as no one defended the village from it and then ran off!`,
+           inline: false
+         }
+       )
+       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+       .setFooter({ text: `Raid ID: ${raid.raidId}` })
+       .setTimestamp();
+     
+     // Try to send to thread first, then channel
+     let sent = false;
+     if (raid.threadId) {
+       try {
+         const thread = await client.channels.fetch(raid.threadId);
+         if (thread) {
+           await thread.send({ embeds: [failureEmbed] });
+           console.log(`[scheduler.js]: 💬 Failure message sent to raid thread ${raid.threadId}`);
+           sent = true;
+         }
+       } catch (threadError) {
+         console.error(`[scheduler.js]: ❌ Error sending failure message to thread:`, threadError);
+       }
+     }
+     
+     if (!sent && raid.channelId) {
+       try {
+         const channel = await client.channels.fetch(raid.channelId);
+         if (channel) {
+           await channel.send({ embeds: [failureEmbed] });
+           console.log(`[scheduler.js]: 💬 Failure message sent to raid channel ${raid.channelId}`);
+           sent = true;
+         }
+       } catch (channelError) {
+         console.error(`[scheduler.js]: ❌ Error sending failure message to channel:`, channelError);
+       }
+     }
+     
+     if (!sent) {
+       console.log(`[scheduler.js]: ⚠️ Could not send failure message for raid ${raid.raidId} - no valid channel found`);
+     }
+    }
+    
+    cleanedCount++;
+    console.log(`[scheduler.js]: ✅ Cleaned up expired raid ${raid.raidId}`);
+    
+   } catch (raidError) {
+    console.error(`[scheduler.js]: ❌ Error cleaning up raid ${raid.raidId}:`, raidError);
+    handleError(raidError, "scheduler.js", {
+     raidId: raid.raidId,
+     functionName: 'cleanupExpiredRaids'
+    });
+   }
+  }
+  
+  if (cleanedCount > 0) {
+   console.log(`[scheduler.js]: 🧹 Cleaned up ${cleanedCount} expired raid(s)`);
+  }
+  
+  return { expiredCount: cleanedCount };
  } catch (error) {
   console.error(`[scheduler.js]: ❌ Error cleaning up expired raids:`, error);
   handleError(error, "scheduler.js");
@@ -343,7 +437,7 @@ async function runDailyCleanupTasks(client) {
    cleanupExpiredHealingRequests(),
    checkExpiredRequests(client),
    cleanupExpiredBlightRequests(client),
-   cleanupExpiredRaids(),
+   cleanupExpiredRaids(client),
    cleanupOldRuuGameSessions(),
    cleanupFinishedMinigameSessions(),
   ]);
@@ -1633,6 +1727,10 @@ async function runStartupChecks(client) {
  try {
   console.log(`[scheduler.js]: 🚀 Running startup checks...`);
   
+  // Raid expiration check (critical - do this first in case bot restarted during a raid)
+  console.log(`[scheduler.js]: 🐉 Checking for expired raids...`);
+  await cleanupExpiredRaids(client);
+  
   // Blood Moon startup check
   const isBloodMoonActive = isBloodMoonDay();
   if (isBloodMoonActive) {
@@ -1719,6 +1817,19 @@ function setupDailyTasks(client) {
   } catch (error) {
    handleError(error, 'scheduler.js');
    console.error('[scheduler.js]: ❌ Monthly quest reward distribution failed:', error.message);
+  }
+ });
+
+ // Periodic raid expiration check (every 5 minutes) to ensure raids timeout even if bot restarts
+ createCronJob("*/5 * * * *", "raid expiration check", async () => {
+  try {
+   const result = await cleanupExpiredRaids(client);
+   if (result.expiredCount > 0) {
+    console.log(`[scheduler.js]: ⏰ Periodic raid check - ${result.expiredCount} raid(s) expired`);
+   }
+  } catch (error) {
+   handleError(error, 'scheduler.js');
+   console.error('[scheduler.js]: ❌ Periodic raid expiration check failed:', error);
   }
  });
 
@@ -1834,4 +1945,5 @@ module.exports = {
  generateDailyQuestsAtMidnight,
  checkAndPostMissedQuests,
  cleanupOldRuuGameSessions,
+ cleanupExpiredRaids,
 };

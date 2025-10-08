@@ -232,7 +232,6 @@ const getRoleId = (category, emoji, emojiId) => {
  */
 const createPronounsEmbed = () => {
   return new EmbedBuilder()
-    .setImage('https://media.discordapp.net/attachments/787807438119370752/895700602896670760/header_-_pronouns.png?ex=68e68931&is=68e537b1&hm=7cae44768fb69f5369408d58b4c91d4d6115d4551191c583ebe1a6fa6fbc9b1d&=&format=webp&quality=lossless')
     .setDescription('**First, choose your own pronouns!**\n\nReact with the emoji that matches your pronouns to get the corresponding role.')
     .addFields(
       {
@@ -267,7 +266,6 @@ const createPronounsEmbed = () => {
  */
 const createVillageEmbed = () => {
   return new EmbedBuilder()
-    .setImage('https://media.discordapp.net/attachments/787807438119370752/895702437669765130/header_-_village.png?ex=68e68ae6&is=68e53966&hm=21ae0a642607d9a7a50ca8bf974fc3d4dd9baeccccbc22f0986755b43044da3a&=&format=webp&quality=lossless')
     .setDescription('**Only choose the village of your FIRST/MAIN character.**\n\nSelect your character\'s home village to get the corresponding role.')
     .addFields(
       {
@@ -327,7 +325,6 @@ const createInactiveEmbed = () => {
  */
 const createNotificationRolesEmbed = () => {
   return new EmbedBuilder()
-    .setImage('https://media.discordapp.net/attachments/787807438119370752/895711409281843300/header_-_otherroles.png?ex=68e69341&is=68e541c1&hm=254c85259c5db33419f7ff013b31df2e4adffea2ad27d302d634622495ad9a6d&=&format=webp&quality=lossless')
     .setDescription('**These roles are completely optional and meant to help you stay informed about server activity that interests you.**\n\nClick the appropriate emoji to assign yourself the role!')
     .addFields(
       {
@@ -553,18 +550,21 @@ const getRoleInformation = (roleName) => {
  * @returns {Promise<Message>} - The posted message
  */
 const setupPronounsReactionRoles = async (channel) => {
+  // Post image first
+  await channel.send('https://media.discordapp.net/attachments/787807438119370752/895700602896670760/header_-_pronouns.png?ex=68e68931&is=68e537b1&hm=7cae44768fb69f5369408d58b4c91d4d6115d4551191c583ebe1a6fa6fbc9b1d&=&format=webp&quality=lossless');
+  
   const embed = createPronounsEmbed();
   const message = await channel.send({ embeds: [embed] });
   
-  // Add reactions (try custom emojis first, fallback to standard)
+  // Add reactions using custom emojis
   try {
-    await message.react('<a:potionpink:795050612496531486>');
-    await message.react('<a:potionblue:795050612198604822>');
-    await message.react('<a:potionpurple:795050612550402069>');
-    await message.react('<:discordpotionyellow:1086881430077984789>');
+    await message.react('795050612496531486'); // potionpink
+    await message.react('795050612198604822'); // potionblue
+    await message.react('795050612550402069'); // potionpurple
+    await message.react('1086881430077984789'); // discordpotionyellow
   } catch (error) {
+    console.log('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
     // Fallback to standard emojis if custom ones don't exist
-    console.log('[reactionRolesHandler.js]: Custom emojis not found, using standard emojis');
     await message.react('🩷');
     await message.react('💙');
     await message.react('💜');
@@ -580,17 +580,20 @@ const setupPronounsReactionRoles = async (channel) => {
  * @returns {Promise<Message>} - The posted message
  */
 const setupVillageReactionRoles = async (channel) => {
+  // Post image first
+  await channel.send('https://media.discordapp.net/attachments/787807438119370752/895702437669765130/header_-_village.png?ex=68e68ae6&is=68e53966&hm=21ae0a642607d9a7a50ca8bf974fc3d4dd9baeccccbc22f0986755b43044da3a&=&format=webp&quality=lossless');
+  
   const embed = createVillageEmbed();
   const message = await channel.send({ embeds: [embed] });
   
-  // Add reactions (try custom emojis first, fallback to standard)
+  // Add reactions using custom emojis
   try {
-    await message.react('<:rudania:899492917452890142>');
-    await message.react('<:inariko:899493009073274920>');
-    await message.react('<:vhintl:899492879205007450>');
+    await message.react('899492917452890142'); // rudania
+    await message.react('899493009073274920'); // inariko
+    await message.react('899492879205007450'); // vhintl
   } catch (error) {
+    console.log('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
     // Fallback to standard emojis if custom ones don't exist
-    console.log('[reactionRolesHandler.js]: Custom emojis not found, using standard emojis');
     await message.react('🔥');
     await message.react('💧');
     await message.react('🌿');
@@ -617,10 +620,13 @@ const setupInactiveRoleEmbed = async (channel) => {
  * @returns {Promise<Message>} - The posted message
  */
 const setupNotificationReactionRoles = async (channel) => {
+  // Post image first
+  await channel.send('https://media.discordapp.net/attachments/787807438119370752/895711409281843300/header_-_otherroles.png?ex=68e69341&is=68e541c1&hm=254c85259c5db33419f7ff013b31df2e4adffea2ad27d302d634622495ad9a6d&=&format=webp&quality=lossless');
+  
   const embed = createNotificationRolesEmbed();
   const message = await channel.send({ embeds: [embed] });
   
-  // Add reactions
+  // Add reactions (using standard emojis for notifications)
   await message.react('📜');
   await message.react('💬');
   await message.react('🆘');

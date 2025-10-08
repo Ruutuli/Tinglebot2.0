@@ -106,9 +106,6 @@ async function sendLevelUpNotification(message, newLevel, xpGained) {
       timestamp: new Date().toISOString()
     };
     
-    // Send to the original channel
-    await message.channel.send({ embeds: [embed] });
-    
     // Send to Sheikah Slate channel (641858948802150400)
     const sheikahSlateChannelId = '641858948802150400';
     try {
