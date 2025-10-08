@@ -39,7 +39,7 @@ const REACTION_ROLES = {
     '1300300616826200084': '961807270201659442', // scroll (custom emoji) -> RP Watch
     '📜': '961807270201659442', // scroll (fallback) -> RP Watch
     '💬': '1118238707078668348', // speech_balloon -> QOTD
-    '🆘': 'Call for Help', // sos -> Call for Help (need to find role ID)
+    '🆘': '1205321558671884328', // sos -> help
     '🎉': '1325998630032773140' // tada -> Member Event
   },
 
@@ -457,17 +457,17 @@ const getRoleInformation = (roleName) => {
       description: 'Get pinged for Questions of the Day!',
       benefits: '• Daily questions in headcanon channels\n• NSFW questions when available\n• Engage with community discussions\n• Share your thoughts and opinions'
     },
+    'help': {
+      category: 'Notifications',
+      description: 'Get notified when raids are happening!',
+      benefits: '• Raid notifications and alerts\n• Join ongoing raids\n• Help defend villages during raids\n• Participate in raid events'
+    },
     'Call for Help': {
       category: 'Notifications',
-      description: 'Get notified when backup is needed!',
-      benefits: '• High-tier monster encounter alerts\n• Village defense situation calls\n• Emergency response notifications\n• Help protect the community'
+      description: 'Get notified when raids are happening!',
+      benefits: '• Raid notifications and alerts\n• Join ongoing raids\n• Help defend villages during raids\n• Participate in raid events'
     },
     'Member Event': {
-      category: 'Notifications',
-      description: 'Get notified about community events!',
-      benefits: '• Member-run event announcements\n• Community activity notifications\n• Special event participation\n• Stay connected with server activities'
-    },
-    'Member Events': {
       category: 'Notifications',
       description: 'Get notified about community events!',
       benefits: '• Member-run event announcements\n• Community activity notifications\n• Special event participation\n• Stay connected with server activities'
@@ -498,12 +498,12 @@ const getRoleInformation = (roleName) => {
  */
 const setupPronounsReactionRoles = async (channel) => {
   // Post image first
-  await channel.send('https://media.discordapp.net/attachments/787807438119370752/895700602896670760/header_-_pronouns.png?ex=68e68931&is=68e537b1&hm=7cae44768fb69f5369408d58b4c91d4d6115d4551191c583ebe1a6fa6fbc9b1d&=&format=webp&quality=lossless');
+  await channel.send('https://storage.googleapis.com/tinglebot/Graphics/header_-_pronouns.png');
   
   const embed = createPronounsEmbed();
   const message = await channel.send({ embeds: [embed] });
   
-  // Add reactions using custom emojis
+  // Add reactions using ONLY custom emojis
   try {
     // Get emoji objects from the guild
     const potionpink = channel.guild.emojis.cache.get('795050612496531486');
@@ -511,17 +511,19 @@ const setupPronounsReactionRoles = async (channel) => {
     const potionpurple = channel.guild.emojis.cache.get('795050612550402069');
     const discordpotionyellow = channel.guild.emojis.cache.get('1086881430077984789');
     
+    // Log if any emojis are missing
+    if (!potionpink) console.error('[reactionRolesHandler.js]: potionpink emoji not found (ID: 795050612496531486)');
+    if (!potionblue) console.error('[reactionRolesHandler.js]: potionblue emoji not found (ID: 795050612198604822)');
+    if (!potionpurple) console.error('[reactionRolesHandler.js]: potionpurple emoji not found (ID: 795050612550402069)');
+    if (!discordpotionyellow) console.error('[reactionRolesHandler.js]: discordpotionyellow emoji not found (ID: 1086881430077984789)');
+    
+    // Only react with the custom emojis that were found
     if (potionpink) await message.react(potionpink);
     if (potionblue) await message.react(potionblue);
     if (potionpurple) await message.react(potionpurple);
     if (discordpotionyellow) await message.react(discordpotionyellow);
   } catch (error) {
-    console.log('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
-    // Fallback to standard emojis if custom ones don't exist
-    await message.react('🩷');
-    await message.react('💙');
-    await message.react('💜');
-    await message.react('💛');
+    console.error('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
   }
   
   return message;
@@ -534,27 +536,29 @@ const setupPronounsReactionRoles = async (channel) => {
  */
 const setupVillageReactionRoles = async (channel) => {
   // Post image first
-  await channel.send('https://media.discordapp.net/attachments/787807438119370752/895702437669765130/header_-_village.png?ex=68e68ae6&is=68e53966&hm=21ae0a642607d9a7a50ca8bf974fc3d4dd9baeccccbc22f0986755b43044da3a&=&format=webp&quality=lossless');
+  await channel.send('https://storage.googleapis.com/tinglebot/Graphics/header_-_village.png');
   
   const embed = createVillageEmbed();
   const message = await channel.send({ embeds: [embed] });
   
-  // Add reactions using custom emojis
+  // Add reactions using ONLY custom emojis
   try {
     // Get emoji objects from the guild
     const rudania = channel.guild.emojis.cache.get('899492917452890142');
     const inariko = channel.guild.emojis.cache.get('899493009073274920');
     const vhintl = channel.guild.emojis.cache.get('899492879205007450');
     
+    // Log if any emojis are missing
+    if (!rudania) console.error('[reactionRolesHandler.js]: rudania emoji not found (ID: 899492917452890142)');
+    if (!inariko) console.error('[reactionRolesHandler.js]: inariko emoji not found (ID: 899493009073274920)');
+    if (!vhintl) console.error('[reactionRolesHandler.js]: vhintl emoji not found (ID: 899492879205007450)');
+    
+    // Only react with the custom emojis that were found
     if (rudania) await message.react(rudania);
     if (inariko) await message.react(inariko);
     if (vhintl) await message.react(vhintl);
   } catch (error) {
-    console.log('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
-    // Fallback to standard emojis if custom ones don't exist
-    await message.react('🔥');
-    await message.react('💧');
-    await message.react('🌿');
+    console.error('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
   }
   
   return message;
@@ -579,29 +583,29 @@ const setupInactiveRoleEmbed = async (channel) => {
  */
 const setupNotificationReactionRoles = async (channel) => {
   // Post image first
-  await channel.send('https://media.discordapp.net/attachments/787807438119370752/895711409281843300/header_-_otherroles.png?ex=68e69341&is=68e541c1&hm=254c85259c5db33419f7ff013b31df2e4adffea2ad27d302d634622495ad9a6d&=&format=webp&quality=lossless');
+  await channel.send('https://storage.googleapis.com/tinglebot/Graphics/header_-_otherroles.png');
   
   const embed = createNotificationRolesEmbed();
   const message = await channel.send({ embeds: [embed] });
   
-  // Add reactions using custom scroll emoji and standard emojis
+  // Add reactions using custom scroll emoji and standard emojis for other notifications
   try {
     // Get custom scroll emoji from the guild
     const scroll = channel.guild.emojis.cache.get('1300300616826200084');
     
-    if (scroll) await message.react(scroll);
-    else await message.react('📜'); // Fallback to standard emoji
+    // Log if scroll emoji is missing
+    if (!scroll) {
+      console.error('[reactionRolesHandler.js]: scroll emoji not found (ID: 1300300616826200084)');
+    } else {
+      await message.react(scroll);
+    }
     
+    // Use standard emojis for the rest
     await message.react('💬');
     await message.react('🆘');
     await message.react('🎉');
   } catch (error) {
-    console.log('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
-    // Fallback to standard emojis if custom ones don't exist
-    await message.react('📜');
-    await message.react('💬');
-    await message.react('🆘');
-    await message.react('🎉');
+    console.error('[reactionRolesHandler.js]: Error adding emoji reactions:', error);
   }
   
   return message;
