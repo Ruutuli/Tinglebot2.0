@@ -51,7 +51,6 @@ const {
 // ------------------- Database Models -------------------
 const Character = require('../../models/CharacterModel');
 const Minigame = require('../../models/MinigameModel');
-const User = require('../../models/UserModel');
 
 // ------------------- Custom Modules -------------------
 const { monsterMapping } = require('../../models/MonsterModel');
