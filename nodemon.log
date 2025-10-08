@@ -1,5 +1,5 @@
 [deploy-commands.js]: Deploying commands...
-[deploy-commands.js]: Found 41 potential command files
+[deploy-commands.js]: Found 42 potential command files
 [deploy-commands.js]: Processing file: commands\character\character.js
 ✅ Loaded command: character from commands\character\character.js
 [deploy-commands.js]: Processing file: commands\character\modCharacter.js
@@ -48,11 +48,30 @@
 [deploy-commands.js]: Processing file: commands\jobs\vending.js
 ✅ Loaded command: vending from commands\jobs\vending.js
 [deploy-commands.js]: Processing file: commands\moderation\mod.js
-✅ Loaded command: mod from commands\moderation\mod.js
+❌ Error requiring command file commands\moderation\mod.js: {
+  message: "Identifier 'User' has already been declared",
+  stack: 'C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\commands\\moderation\\mod.js:145\n' +
+    "const User = require('../../models/UserModel');\n" +
+    '      ^\n' +
+    '\n' +
+    "SyntaxError: Identifier 'User' has already been declared\n" +
+    '    at wrapSafe (node:internal/modules/cjs/loader:1281:20)\n' +
+    '    at Module._compile (node:internal/modules/cjs/loader:1321:27)\n' +
+    '    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)\n' +
+    '    at Module.load (node:internal/modules/cjs/loader:1208:32)\n' +
+    '    at Module._load (node:internal/modules/cjs/loader:1024:12)\n' +
+    '    at Module.require (node:internal/modules/cjs/loader:1233:19)\n' +
+    '    at require (node:internal/modules/helpers:179:18)\n' +
+    '    at loadCommands (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\scripts\\deploy-commands.js:57:33)\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+    '    at async deployCommands (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\scripts\\deploy-commands.js:94:26)'
+}
 [deploy-commands.js]: Processing file: commands\specialweather.js
 ✅ Loaded command: specialweather from commands\specialweather.js
 [deploy-commands.js]: Processing file: commands\utility\cancelvoucher.js
 ✅ Loaded command: cancelvoucher from commands\utility\cancelvoucher.js
+[deploy-commands.js]: Processing file: commands\utility\levels.js
+✅ Loaded command: levels from commands\utility\levels.js
 [deploy-commands.js]: Processing file: commands\utility\lookup.js
 ✅ Loaded command: lookup from commands\utility\lookup.js
 [deploy-commands.js]: Processing file: commands\utility\minigame.js

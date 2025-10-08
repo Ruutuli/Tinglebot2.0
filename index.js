@@ -478,6 +478,26 @@ async function initializeClient() {
     });
 
     // --------------------------------------------------------------------------
+    // Leveling System - XP Tracking
+    // --------------------------------------------------------------------------
+    client.on("messageCreate", async (message) => {
+      if (message.author.bot) return;
+      if (!message.guild) return;
+      
+      try {
+        // Handle XP tracking for leveling system
+        const { handleXP } = require('./modules/levelingModule');
+        await handleXP(message);
+        
+        // Handle existing message tracking
+        const { trackLastMessage } = require('./utils/messageUtils');
+        await trackLastMessage(message);
+      } catch (error) {
+        console.error("[index.js]: Error handling XP tracking:", error);
+      }
+    });
+
+    // --------------------------------------------------------------------------
     // Raid Thread Slow Mode Management
     // --------------------------------------------------------------------------
     // Enable slow mode on raid threads when they're created
