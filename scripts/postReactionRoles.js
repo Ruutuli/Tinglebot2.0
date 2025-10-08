@@ -1,22 +1,23 @@
 // ============================================================================
-// POST REACTION ROLES TO CHANNEL
+// POST REACTION ROLES TO LIVE CHANNELS
 // ============================================================================
 
 const dotenv = require('dotenv');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { 
-  setupAllReactionRoles,
   setupPronounsReactionRoles,
   setupVillageReactionRoles,
   setupInactiveRoleEmbed,
-  setupNotificationReactionRoles
+  setupNotificationReactionRoles,
+  setupRulesAgreementEmbed
 } = require('../handlers/reactionRolesHandler');
 
 // Load environment variables
 dotenv.config();
 
-// Target channel ID
-const TARGET_CHANNEL_ID = '1391812848099004578';
+// Channel IDs
+const ROLES_CHANNEL_ID = '787807438119370752'; // 🔔》roles
+const RULES_CHANNEL_ID = '788106986327506994'; // 🔔》rules
 
 async function postReactionRoles() {
   const client = new Client({
@@ -28,7 +29,7 @@ async function postReactionRoles() {
   });
 
   try {
-    console.log('🚀 Starting reaction roles posting script...');
+    console.log('🚀 Starting reaction roles deployment...');
     
     // Login to Discord
     await client.login(process.env.DISCORD_TOKEN);
@@ -40,44 +41,56 @@ async function postReactionRoles() {
     });
     console.log('✅ Client is ready');
 
-    // Get the target channel
-    const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
-    if (!channel) {
-      throw new Error(`Channel ${TARGET_CHANNEL_ID} not found`);
+    // Get the roles channel
+    const rolesChannel = await client.channels.fetch(ROLES_CHANNEL_ID);
+    if (!rolesChannel) {
+      throw new Error(`Roles channel ${ROLES_CHANNEL_ID} not found`);
     }
-    console.log(`✅ Found target channel: ${channel.name}`);
+    console.log(`✅ Found roles channel: ${rolesChannel.name}`);
 
-    // Clear existing messages in the channel (optional)
-    console.log('🧹 Clearing existing messages...');
-    try {
-      const messages = await channel.messages.fetch({ limit: 50 });
-      if (messages.size > 0) {
-        await channel.bulkDelete(messages);
-        console.log(`✅ Deleted ${messages.size} existing messages`);
-      }
-    } catch (error) {
-      console.log('⚠️ Could not clear messages (may not have permission)');
+    // Get the rules channel
+    const rulesChannel = await client.channels.fetch(RULES_CHANNEL_ID);
+    if (!rulesChannel) {
+      throw new Error(`Rules channel ${RULES_CHANNEL_ID} not found`);
     }
+    console.log(`✅ Found rules channel: ${rulesChannel.name}`);
 
-    // Post a header message
-    await channel.send('🎭 **Reaction Roles Test** - Checking formatting and functionality...\n*This is a test of the reaction roles system.*\n');
+    // ========================================================================
+    // POST TO ROLES CHANNEL
+    // ========================================================================
+    console.log('\n📝 Posting to roles channel...');
 
-    // Set up all reaction roles
-    console.log('📝 Setting up all reaction roles...');
-    const messages = await setupAllReactionRoles(channel);
-    
-    console.log('✅ Successfully posted all reaction roles!');
-    console.log('\n📋 Posted Messages:');
-    console.log(`   📝 Pronouns: ${messages.pronouns.url}`);
-    console.log(`   🏘️ Villages: ${messages.villages.url}`);
-    console.log(`   ⏸️ Inactive: ${messages.inactive.url}`);
-    console.log(`   🔔 Notifications: ${messages.notifications.url}`);
+    console.log('📝 Posting Pronouns...');
+    const pronounsMessage = await setupPronounsReactionRoles(rolesChannel);
+    console.log(`✅ Pronouns posted: ${pronounsMessage.url}`);
 
-    // Post a footer message
-    await channel.send('\n🎉 **Reaction Roles Setup Complete!**\n*You can now test the reactions to see if roles are assigned correctly.*');
+    console.log('🏘️ Posting Village...');
+    const villageMessage = await setupVillageReactionRoles(rolesChannel);
+    console.log(`✅ Village posted: ${villageMessage.url}`);
 
-    console.log('\n🎉 All reaction roles have been posted successfully!');
-    console.log(`📺 Check channel: https://discord.com/channels/${channel.guildId}/${TARGET_CHANNEL_ID}`);
+    console.log('⏸️ Posting Inactive...');
+    const inactiveMessage = await setupInactiveRoleEmbed(rolesChannel);
+    console.log(`✅ Inactive posted: ${inactiveMessage.url}`);
+
+    console.log('🔔 Posting Notification Roles...');
+    const notificationMessage = await setupNotificationReactionRoles(rolesChannel);
+    console.log(`✅ Notification Roles posted: ${notificationMessage.url}`);
+
+    // ========================================================================
+    // POST TO RULES CHANNEL
+    // ========================================================================
+    console.log('\n⚠️ Posting to rules channel...');
+
+    console.log('⚠️ Posting Rules Agreement...');
+    const rulesMessage = await setupRulesAgreementEmbed(rulesChannel);
+    console.log(`✅ Rules Agreement posted: ${rulesMessage.url}`);
+
+    // ========================================================================
+    // SUMMARY
+    // ========================================================================
+    console.log('\n🎉 All reaction roles deployed successfully!');
+    console.log(`\n📺 Roles Channel: https://discord.com/channels/${rolesChannel.guildId}/${ROLES_CHANNEL_ID}`);
+    console.log(`📺 Rules Channel: https://discord.com/channels/${rulesChannel.guildId}/${RULES_CHANNEL_ID}`);
 
   } catch (error) {
     console.error('❌ Error posting reaction roles:', error);
@@ -85,7 +98,7 @@ async function postReactionRoles() {
   } finally {
     // Close the client
     client.destroy();
-    console.log('👋 Disconnected from Discord');
+    console.log('\n👋 Disconnected from Discord');
   }
 }
 
