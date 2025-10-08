@@ -237,7 +237,8 @@ userSchema.methods.exchangeLevelsForTokens = async function() {
     levelsExchanged: levelsToExchange,
     tokensReceived: tokensToReceive,
     currentLevel: currentLevel,
-    lastExchangedLevel: lastExchangedLevel
+    lastExchangedLevel: lastExchangedLevel,
+    totalMessages: this.leveling.totalMessages
   };
 };
 
