@@ -234,8 +234,9 @@ const getRoleId = (category, emoji, emojiId) => {
 const createPronounsEmbed = () => {
   return new EmbedBuilder()
     .setTitle('Pronouns')
-    .setDescription('<:bp2:1300264497823735828> First, choose your own pronouns!\n\n<a:potionpink:795050612496531486> @She / Her\n<a:potionblue:795050612198604822> @He / Him\n<a:potionpurple:795050612550402069> @They / Them\n<:discordpotionyellow:1086881430077984789> @Other / Ask')
+    .setDescription('<:bp2:809226748024979466> First, choose your own pronouns!\n\n<a:potionpink:795050612496531486> <@&606350506310369281>\n<a:potionblue:795050612198604822> <@&606350558605082637>\n<a:potionpurple:795050612550402069> <@&606350596559208463>\n<:discordpotionyellow:1086881430077984789> <@&1086880101855141978>')
     .setColor('#FF69B4')
+    .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/header_-_pronouns.png')
     .setTimestamp();
 };
 
@@ -246,8 +247,9 @@ const createPronounsEmbed = () => {
 const createVillageEmbed = () => {
   return new EmbedBuilder()
     .setTitle('Village')
-    .setDescription('<:blank:1284697992430067793> <:bp2:1300264497823735828> Only choose the village of your FIRST/MAIN character.\n\n<:rudania:899492917452890142> @Rudania | <:inariko:899493009073274920> @Inariko | <:vhintl:899492879205007450> @Vhintl')
+    .setDescription('<:blank:895697584390275162> <:bp2:809226748024979466> Only choose the village of your FIRST/MAIN character.\n\n<:rudania:899492917452890142> <@&630837341124034580> | <:inariko:899493009073274920> <@&631507660524486657> | <:vhintl:899492879205007450> <@&631507736508629002>')
     .setColor('#00CED1')
+    .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/header_-_village.png')
     .setTimestamp();
 };
 
@@ -258,11 +260,11 @@ const createVillageEmbed = () => {
 const createInactiveEmbed = () => {
   return new EmbedBuilder()
     .setTitle('Inactive')
-    .setDescription('<:bb0:1300264428894359643> Inactive Role <:bb5:1300264445885005874>\nIf you have the @INACTIVE role, this means you are currently marked as inactive. While you have this role, your access to server channels will be limited.\n\n<:bp:1300264484698980372> If you haven\'t participated in the server for 3 months, you will be marked as INACTIVE.\n<:bp2:1300264497823735828> If you know you\'ll be away or busy for a while, you can set yourself as inactive early by typing !inactive in 🔔》sheikah-slate.\n◈ If you miss 3 consecutive activity checks (held quarterly), you will be removed from the server to make room for new members. ◈')
+    .setDescription('<:bb0:854499720797618207> Inactive Role <:bb5:854499721182445568>\nIf you have the <@&788148064182730782> role, this means you are currently marked as inactive. While you have this role, your access to server channels will be limited.\n\n<:bp:807847444012204063> If you haven\'t participated in the server for 3 months, you will be marked as INACTIVE.\n<:bp2:809226748024979466> If you know you\'ll be away or busy for a while, you can set yourself as inactive early by typing `/inactive` in 🔔》sheikah-slate.\n◈ If you miss 3 consecutive activity checks (held quarterly), you will be removed from the server to make room for new members. ◈')
     .addFields(
       {
         name: 'Active',
-        value: '<:bb0:1300264428894359643> To Return to Active Status <:bb5:1300264445885005874>\n\n<:bp2:1300264497823735828> 1. When you\'re ready to return, carefully read through 🔔》rules to get updated on any rule changes. Then click the reaction at the bottom to confirm you agree.\n\n<:bp2:1300264497823735828> 2. Go to 🔔》sheikah-slate and type !active to mark yourself as active again.\n\n<:bp2:1300264497823735828> 3. Head over to 🔔》roles and re-select your roles to regain full access to the server.',
+        value: '<:bb0:854499720797618207> To Return to Active Status <:bb5:854499721182445568>\n\n<:bp2:809226748024979466> 1. When you\'re ready to return, carefully read through 🔔》rules to get updated on any rule changes. Then click the reaction at the bottom to confirm you agree.\n\n<:bp2:809226748024979466> 2. Go to 🔔》sheikah-slate and type `/active` to mark yourself as active again.\n\n<:bp2:809226748024979466> 3. Head over to 🔔》roles and re-select your roles to regain full access to the server.',
         inline: false
       }
     )
@@ -277,26 +279,26 @@ const createInactiveEmbed = () => {
 const createNotificationRolesEmbed = () => {
   return new EmbedBuilder()
     .setTitle('Opt-In Roles for Notifications')
-    .setDescription('<:bb0:1300264428894359643> Opt-In Roles for Notifications <:bb5:1300264445885005874>\n\nThese roles are completely optional and meant to help you stay informed about server activity that interests you. Click the appropriate emoji to assign yourself the role!\n\n────────────────────')
+    .setDescription('<:bb0:854499720797618207> Opt-In Roles for Notifications <:bb5:854499721182445568>\n\nThese roles are completely optional and meant to help you stay informed about server activity that interests you. Click the appropriate emoji to assign yourself the role!\n\n────────────────────')
     .addFields(
       {
-        name: '<:scroll:1300300616826200084> @RP Watch',
-        value: 'Want to be notified when a new Thread RP starts?\nClick the <:scroll:1300300616826200084> emoji below to receive the RP Watch role!\n\n<:bp2:1300264497823735828> Please use this tag once when starting a new thread RP (if you\'re comfortable)! It helps observers find and follow the thread.\n<:bp2:1300264497823735828> People can still join a thread manually, but this role makes it easier to stay in the loop!\n\n────────────────────',
+        name: '<:scroll:1300300616826200084> <@&961807270201659442>',
+        value: 'Want to be notified when a new Thread RP starts?\nClick the <:scroll:1300300616826200084> emoji below to receive the RP Watch role!\n\n<:bp2:809226748024979466> Please use this tag once when starting a new thread RP (if you\'re comfortable)! It helps observers find and follow the thread.\n<:bp2:809226748024979466> People can still join a thread manually, but this role makes it easier to stay in the loop!\n\n────────────────────',
         inline: false
       },
       {
-        name: '💬 @QOTD',
-        value: 'Want to be pinged when a new Question of the Day is asked in 💬》headcanons or 💬》nsfw-boinkcanons?\nClick the 💬 emoji below to opt-in!\n\n<:bp2:1300264497823735828> Anyone can use this tag! Please avoid spamming or it may be revoked.\n<:bp2:1300264497823735828> You\'re also welcome to start a thread with your question!\n\n────────────────────',
+        name: '💬 <@&1118238707078668348>',
+        value: 'Want to be pinged when a new Question of the Day is asked in 💬》headcanons or 💬》nsfw-boinkcanons?\nClick the 💬 emoji below to opt-in!\n\n<:bp2:809226748024979466> Anyone can use this tag! Please avoid spamming or it may be revoked.\n<:bp2:809226748024979466> You\'re also welcome to start a thread with your question!\n\n────────────────────',
         inline: false
       },
       {
-        name: '🆘 @Call for Help',
+        name: '🆘 <@&1205321558671884328>',
         value: 'Need backup? This role is used when a high-tier monster appears in a village and characters are needed to defend or respond.\nClick the 🆘 emoji below to be notified of these moments!\n\n────────────────────',
         inline: false
       },
       {
-        name: '🎉 @Member Events',
-        value: 'Want to know when member-run events are happening?\nClick the 🎉 emoji below to be notified about new or ongoing community events!\n\n<:bp2:1300264497823735828> This tag is for approved event runners only—please don\'t use it unless you\'re running a registered event!\n\n────────────────────',
+        name: '🎉 <@&1325998630032773140>',
+        value: 'Want to know when member-run events are happening?\nClick the 🎉 emoji below to be notified about new or ongoing community events!\n\n<:bp2:809226748024979466> This tag is for approved event runners only—please don\'t use it unless you\'re running a registered event!\n\n────────────────────',
         inline: false
       }
     )
@@ -321,19 +323,9 @@ const createRoleAddedEmbed = (role, user) => {
     .setThumbnail(user.displayAvatarURL({ dynamic: true }))
     .addFields(
       {
-        name: '🎭 Role Name',
-        value: role.name,
-        inline: true
-      },
-      {
         name: '📋 Category',
         value: roleInfo.category,
-        inline: true
-      },
-      {
-        name: '🆔 Role ID',
-        value: role.id,
-        inline: true
+        inline: false
       },
       {
         name: '📝 Description',
@@ -371,19 +363,9 @@ const createRoleRemovedEmbed = (role, user) => {
     .setThumbnail(user.displayAvatarURL({ dynamic: true }))
     .addFields(
       {
-        name: '🎭 Role Name',
-        value: role.name,
-        inline: true
-      },
-      {
         name: '📋 Category',
         value: roleInfo.category,
-        inline: true
-      },
-      {
-        name: '🆔 Role ID',
-        value: role.id,
-        inline: true
+        inline: false
       },
       {
         name: '📝 What You Lost',
@@ -570,6 +552,9 @@ const setupVillageReactionRoles = async (channel) => {
  * @returns {Promise<Message>} - The posted message
  */
 const setupInactiveRoleEmbed = async (channel) => {
+  // Post other roles image before the inactive embed
+  await channel.send('https://storage.googleapis.com/tinglebot/Graphics/header_-_otherroles.png');
+  
   const embed = createInactiveEmbed();
   const message = await channel.send({ embeds: [embed] });
   
@@ -582,9 +567,6 @@ const setupInactiveRoleEmbed = async (channel) => {
  * @returns {Promise<Message>} - The posted message
  */
 const setupNotificationReactionRoles = async (channel) => {
-  // Post image first
-  await channel.send('https://storage.googleapis.com/tinglebot/Graphics/header_-_otherroles.png');
-  
   const embed = createNotificationRolesEmbed();
   const message = await channel.send({ embeds: [embed] });
   
