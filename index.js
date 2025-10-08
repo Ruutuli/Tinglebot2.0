@@ -11,7 +11,7 @@ const port = process.env.PORT || 5001;
 const figlet = require("figlet");
 
 // ------------------- Discord.js Components -------------------
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, Partials } = require("discord.js");
 
 // ------------------- Database Connections -------------------
 const { connectToTinglebot, connectToInventories } = require("./database/db");
@@ -189,6 +189,11 @@ async function initializeClient() {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.Guilds,
+      ],
+      partials: [
+        Partials.Message,
+        Partials.Channel,
+        Partials.Reaction,
       ],
     });
 

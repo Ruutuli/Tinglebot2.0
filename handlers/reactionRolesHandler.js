@@ -62,32 +62,17 @@ const REACTION_ROLES = {
  * @param {Client} client - Discord client
  */
 const initializeReactionRolesHandler = (client) => {
-  console.log('[reactionRolesHandler.js]: 🎯 Initializing reaction roles handler...');
-  
   client.on('messageReactionAdd', async (reaction, user) => {
     try {
       if (user.bot) return;
       
       // Handle partial reactions
-      if (reaction.message.partial) {
-        console.log('[reactionRolesHandler.js]: 📥 Fetching partial message...');
-        await reaction.message.fetch();
-      }
-      if (reaction.partial) {
-        console.log('[reactionRolesHandler.js]: 📥 Fetching partial reaction...');
-        await reaction.fetch();
-      }
+      if (reaction.message.partial) await reaction.message.fetch();
+      if (reaction.partial) await reaction.fetch();
       
       await handleReactionRole(reaction, user, 'add');
     } catch (error) {
       console.error('[reactionRolesHandler.js]: Error handling reaction add:', error);
-      console.error('[reactionRolesHandler.js]: Error details:', {
-        emoji: reaction.emoji?.name,
-        emojiId: reaction.emoji?.id,
-        userId: user.id,
-        messageId: reaction.message?.id,
-        channelId: reaction.message?.channelId
-      });
     }
   });
 
@@ -96,29 +81,14 @@ const initializeReactionRolesHandler = (client) => {
       if (user.bot) return;
       
       // Handle partial reactions
-      if (reaction.message.partial) {
-        console.log('[reactionRolesHandler.js]: 📥 Fetching partial message...');
-        await reaction.message.fetch();
-      }
-      if (reaction.partial) {
-        console.log('[reactionRolesHandler.js]: 📥 Fetching partial reaction...');
-        await reaction.fetch();
-      }
+      if (reaction.message.partial) await reaction.message.fetch();
+      if (reaction.partial) await reaction.fetch();
       
       await handleReactionRole(reaction, user, 'remove');
     } catch (error) {
       console.error('[reactionRolesHandler.js]: Error handling reaction remove:', error);
-      console.error('[reactionRolesHandler.js]: Error details:', {
-        emoji: reaction.emoji?.name,
-        emojiId: reaction.emoji?.id,
-        userId: user.id,
-        messageId: reaction.message?.id,
-        channelId: reaction.message?.channelId
-      });
     }
   });
-  
-  console.log('[reactionRolesHandler.js]: ✅ Reaction roles handler initialized successfully');
 };
 
 /**
@@ -130,42 +100,24 @@ const initializeReactionRolesHandler = (client) => {
 const handleReactionRole = async (reaction, user, action) => {
   try {
     const guild = reaction.message.guild;
-    if (!guild) {
-      console.log('[reactionRolesHandler.js]: ❌ No guild found for reaction');
-      return;
-    }
+    if (!guild) return;
     
     const member = await guild.members.fetch(user.id);
-    if (!member) {
-      console.log('[reactionRolesHandler.js]: ❌ Member not found');
-      return;
-    }
+    if (!member) return;
     
     const emoji = reaction.emoji.name;
     const emojiId = reaction.emoji.id;
-    console.log(`[reactionRolesHandler.js]: 🔍 Reaction detected: emoji="${emoji}", emojiId="${emojiId}", user="${user.tag}", messageId="${reaction.message.id}"`);
     
     // Check if this is a reaction roles message
     const isReactionRolesMessage = await isReactionRolesEmbed(reaction.message);
-    if (!isReactionRolesMessage) {
-      console.log(`[reactionRolesHandler.js]: ⚠️ Message ${reaction.message.id} is not a reaction roles embed - ignoring reaction`);
-      return;
-    }
+    if (!isReactionRolesMessage) return;
     
     // Determine which category this reaction belongs to
     const category = getReactionCategory(emoji, emojiId);
-    if (!category) {
-      console.log(`[reactionRolesHandler.js]: ⚠️ No category found for emoji="${emoji}", emojiId="${emojiId}"`);
-      return;
-    }
-    console.log(`[reactionRolesHandler.js]: ✅ Category found: "${category}"`);
+    if (!category) return;
     
     const roleId = getRoleId(category, emoji, emojiId);
-    if (!roleId) {
-      console.log(`[reactionRolesHandler.js]: ❌ No role ID found for category="${category}", emoji="${emoji}", emojiId="${emojiId}"`);
-      return;
-    }
-    console.log(`[reactionRolesHandler.js]: ✅ Role ID found: "${roleId}"`);
+    if (!roleId) return;
     
     // Find the role by ID
     const role = guild.roles.cache.get(roleId);
@@ -214,16 +166,11 @@ const handleReactionRole = async (reaction, user, action) => {
  * @returns {boolean} - Whether this is a reaction roles message
  */
 const isReactionRolesEmbed = async (message) => {
-  if (!message.embeds || message.embeds.length === 0) {
-    console.log(`[reactionRolesHandler.js]: ⚠️ Message ${message.id} has no embeds`);
-    return false;
-  }
+  if (!message.embeds || message.embeds.length === 0) return false;
   
   const embed = message.embeds[0];
   const title = embed.title?.toLowerCase() || '';
   const description = embed.description?.toLowerCase() || '';
-  
-  console.log(`[reactionRolesHandler.js]: 🔍 Checking embed - messageId: ${message.id}, channelId: ${message.channelId}, title: "${embed.title}"`);
   
   // Check for reaction roles indicators
   const isReactionRoles = title.includes('pronouns') || 
@@ -240,25 +187,12 @@ const isReactionRolesEmbed = async (message) => {
          description.includes('inactive role') ||
          description.includes('return to active');
   
-  // Also check if message author is the bot and in the roles channel
+  // Also check if message is in the roles or rules channel
   const ROLES_CHANNEL_ID = '787807438119370752';
   const RULES_CHANNEL_ID = '788106986327506994';
   const isInRolesChannel = message.channelId === ROLES_CHANNEL_ID || message.channelId === RULES_CHANNEL_ID;
   
-  console.log(`[reactionRolesHandler.js]: 🔍 isReactionRoles: ${isReactionRoles}, isInRolesChannel: ${isInRolesChannel} (current: ${message.channelId})`);
-  
-  if (isReactionRoles && isInRolesChannel) {
-    console.log(`[reactionRolesHandler.js]: ✅ Detected reaction roles embed in message ${message.id}`);
-    return true;
-  } else {
-    if (!isReactionRoles) {
-      console.log(`[reactionRolesHandler.js]: ⚠️ Message ${message.id} does not match reaction roles patterns`);
-    }
-    if (!isInRolesChannel) {
-      console.log(`[reactionRolesHandler.js]: ⚠️ Message ${message.id} is not in roles/rules channel`);
-    }
-    return false;
-  }
+  return isReactionRoles && isInRolesChannel;
 };
 
 /**
@@ -270,38 +204,20 @@ const isReactionRolesEmbed = async (message) => {
 const getReactionCategory = (emoji, emojiId) => {
   // Check pronouns (try emoji ID first, then emoji name)
   const emojiKey = emojiId || emoji;
-  console.log(`[reactionRolesHandler.js]: 🔍 Looking up category for emojiKey="${emojiKey}"`);
-  
-  if (REACTION_ROLES.pronouns[emojiKey]) {
-    console.log(`[reactionRolesHandler.js]: ✅ Found in pronouns`);
-    return 'pronouns';
-  }
+  if (REACTION_ROLES.pronouns[emojiKey]) return 'pronouns';
   
   // Check villages (try emoji ID first, then emoji name)
-  if (REACTION_ROLES.villages[emojiKey]) {
-    console.log(`[reactionRolesHandler.js]: ✅ Found in villages`);
-    return 'villages';
-  }
+  if (REACTION_ROLES.villages[emojiKey]) return 'villages';
   
   // Check notifications (try emoji ID first, then emoji name)
-  if (REACTION_ROLES.notifications[emojiKey]) {
-    console.log(`[reactionRolesHandler.js]: ✅ Found in notifications`);
-    return 'notifications';
-  }
+  if (REACTION_ROLES.notifications[emojiKey]) return 'notifications';
   
   // Check inactive (try emoji ID first, then emoji name)
-  if (REACTION_ROLES.inactive[emojiKey]) {
-    console.log(`[reactionRolesHandler.js]: ✅ Found in inactive`);
-    return 'inactive';
-  }
+  if (REACTION_ROLES.inactive[emojiKey]) return 'inactive';
   
   // Check rules agreement (try emoji ID first, then emoji name)
-  if (REACTION_ROLES.rulesAgreement[emojiKey]) {
-    console.log(`[reactionRolesHandler.js]: ✅ Found in rulesAgreement`);
-    return 'rulesAgreement';
-  }
+  if (REACTION_ROLES.rulesAgreement[emojiKey]) return 'rulesAgreement';
   
-  console.log(`[reactionRolesHandler.js]: ❌ No category found. Available notification emojis:`, Object.keys(REACTION_ROLES.notifications));
   return null;
 };
 
