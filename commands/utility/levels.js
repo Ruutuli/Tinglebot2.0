@@ -124,8 +124,8 @@ async function handleRank(interaction) {
     const hasImportedFromMee6 = user?.leveling?.hasImportedFromMee6 || false;
     const importedMee6Level = user?.leveling?.importedMee6Level || null;
 
-    // Create progress bar
-    const progressBar = createProgressBar(levelInfo.progress.current, levelInfo.progress.needed, 20);
+    // Create progress bar (10 squares to fit on one line)
+    const progressBar = createProgressBar(levelInfo.progress.current, levelInfo.progress.needed, 10);
 
     // Build statistics display
     let statsValue = `**${levelInfo.xp.toLocaleString()} XP**`;

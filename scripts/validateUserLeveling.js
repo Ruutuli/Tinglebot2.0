@@ -6,35 +6,42 @@ const { connectToTinglebot } = require('../database/db');
 // ------------------- Helper Functions -------------------
 
 /**
- * Calculate the XP for a specific level using MEE6's direct formula
- * Formula: XP = 5 × (level²) + 50 × level + 100
+ * Calculate the cumulative XP required to reach a specific level
+ * MEE6 uses cumulative XP (sum of all level requirements)
  */
 function calculateTotalXPForLevel(targetLevel) {
-  if (targetLevel < 1) return 0;
-  return 5 * Math.pow(targetLevel, 2) + 50 * targetLevel + 100;
+  if (targetLevel <= 1) return 0;
+  
+  let totalXP = 0;
+  for (let level = 2; level <= targetLevel; level++) {
+    totalXP += 5 * Math.pow(level, 2) + 50 * level + 100;
+  }
+  
+  return totalXP;
 }
 
 /**
- * Calculate what level a user should be based on their XP (MEE6 direct formula)
- * Solve: xp = 5 × level² + 50 × level + 100
+ * Calculate what level a user should be based on their cumulative XP
  */
 function calculateLevelFromXP(xp) {
   if (xp <= 0) return 1;
   
-  // Quadratic formula: 5*level² + 50*level + (100 - xp) = 0
-  // level = (-50 + sqrt(50² - 4*5*(100-xp))) / (2*5)
-  const a = 5;
-  const b = 50;
-  const c = 100 - xp;
+  let level = 1;
+  let totalXpRequired = 0;
   
-  const discriminant = b * b - 4 * a * c;
-  
-  if (discriminant < 0) {
-    return 1; // Not enough XP for level 1
+  while (true) {
+    const nextLevel = level + 1;
+    const xpForNextLevel = 5 * Math.pow(nextLevel, 2) + 50 * nextLevel + 100;
+    totalXpRequired += xpForNextLevel;
+    
+    if (xp < totalXpRequired) {
+      break;
+    }
+    
+    level++;
   }
   
-  const level = (-b + Math.sqrt(discriminant)) / (2 * a);
-  return Math.max(1, Math.floor(level));
+  return level;
 }
 
 /**
