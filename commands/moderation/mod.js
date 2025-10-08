@@ -406,7 +406,7 @@ function createSubmissionEmbed(type, options = {}) {
         { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
         { name: '🎨 Title', value: title, inline: true },
         { name: '💰 Tokens Awarded', value: `**${tokenAmount}** tokens`, inline: true },
-        { name: '🤝 Collaboration', value: collab ? `Yes - split with ${collab}` : 'No', inline: true }
+        { name: '🤝 Collaboration', value: (collab && typeof collab === 'string' && collab.trim() && collab !== 'N/A') || (Array.isArray(collab) && collab.length > 0) ? `Yes - split with ${Array.isArray(collab) ? collab.join(', ') : collab}` : 'No', inline: true }
       ]
     },
     modDenial: {
@@ -468,7 +468,7 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
   const userTrackerLink = userTokenTracker !== 'No token tracker set up' ? `[View Token Tracker](${userTokenTracker})` : 'No token tracker set up';
   
   // Check if collaboration exists (handle both array and legacy string format)
-  const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab !== 'N/A'));
+  const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab.trim() && collab !== 'N/A'));
   
   // Add token tracker links for collaboration
   if (hasCollaborators) {
@@ -1775,7 +1775,7 @@ async function handleApprove(interaction) {
         let tokenErrors = [];
         
         // Check if collaboration exists (handle both array and legacy string format)
-        const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab !== 'N/A'));
+        const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab.trim() && collab !== 'N/A'));
         
         if (hasCollaborators) {
           // Handle both array and legacy string format

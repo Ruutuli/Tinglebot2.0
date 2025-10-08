@@ -131,33 +131,34 @@ userSchema.methods.addXP = async function(amount, source = 'message') {
 };
 
 userSchema.methods.calculateLevel = function() {
-  // MEE6-style exponential level calculation
-  // Formula: XP required for level N = 5 × (N²) + 50 × N + 100
-  // Level 1: 0 XP
-  // Level 2: 120 XP  
+  // MEE6-style exponential level calculation (DIRECT FORMULA)
+  // Formula: XP = 5 × (level²) + 50 × level + 100
+  // We solve for level using the quadratic formula
+  // Level 1: 155 XP
   // Level 5: 475 XP
   // Level 10: 1,100 XP
   // Level 20: 3,100 XP
   // Level 50: 15,100 XP
-  if (!this.leveling) return 1;
+  // Level 91: 46,055 XP
+  if (!this.leveling || this.leveling.xp <= 0) return 1;
   
-  let level = 1;
-  let totalXpRequired = 0;
+  const xp = this.leveling.xp;
   
-  // Calculate level based on total XP
-  while (true) {
-    const nextLevel = level + 1;
-    const xpForNextLevel = this.getXPRequiredForLevel(nextLevel);
-    totalXpRequired += xpForNextLevel;
-    
-    if (this.leveling.xp < totalXpRequired) {
-      break;
-    }
-    
-    level++;
+  // Solve quadratic equation: 5*level² + 50*level + 100 = xp
+  // Rearranged: 5*level² + 50*level + (100 - xp) = 0
+  // Using quadratic formula: level = (-b + sqrt(b² - 4ac)) / 2a
+  const a = 5;
+  const b = 50;
+  const c = 100 - xp;
+  
+  const discriminant = b * b - 4 * a * c;
+  
+  if (discriminant < 0) {
+    return 1; // Not enough XP for level 1
   }
   
-  return level;
+  const level = (-b + Math.sqrt(discriminant)) / (2 * a);
+  return Math.max(1, Math.floor(level));
 };
 
 userSchema.methods.getXPRequiredForLevel = function(targetLevel) {
@@ -168,15 +169,11 @@ userSchema.methods.getXPRequiredForLevel = function(targetLevel) {
 };
 
 userSchema.methods.getXPForNextLevel = function() {
-  // Get total cumulative XP required to reach the next level
+  // Get total XP required to reach the next level (MEE6 direct formula)
   if (!this.leveling) return this.getXPRequiredForLevel(2); // Default to level 2 requirement
   
-  let totalXp = 0;
-  for (let i = 2; i <= this.leveling.level + 1; i++) {
-    totalXp += this.getXPRequiredForLevel(i);
-  }
-  
-  return totalXp;
+  const nextLevel = this.leveling.level + 1;
+  return this.getXPRequiredForLevel(nextLevel);
 };
 
 userSchema.methods.getProgressToNextLevel = function() {
@@ -185,17 +182,14 @@ userSchema.methods.getProgressToNextLevel = function() {
     return { current: 0, needed: xpNeeded, percentage: 0 };
   }
   
-  // Calculate total XP required to reach current level
-  let currentLevelTotalXP = 0;
-  for (let i = 2; i <= this.leveling.level; i++) {
-    currentLevelTotalXP += this.getXPRequiredForLevel(i);
-  }
+  // MEE6 direct formula - XP represents the current level's XP
+  const currentLevelXP = this.getXPRequiredForLevel(this.leveling.level);
+  const nextLevelXP = this.getXPRequiredForLevel(this.leveling.level + 1);
   
-  // Calculate XP needed for next level
-  const xpNeededForNextLevel = this.getXPRequiredForLevel(this.leveling.level + 1);
+  // Calculate progress: how much XP past current level threshold
+  const progressXP = Math.max(0, this.leveling.xp - currentLevelXP);
+  const xpNeededForNextLevel = nextLevelXP - currentLevelXP;
   
-  // Calculate progress within current level
-  const progressXP = this.leveling.xp - currentLevelTotalXP;
   const percentage = Math.min(100, Math.max(0, Math.round((progressXP / xpNeededForNextLevel) * 100)));
   
   return {
@@ -325,6 +319,12 @@ userSchema.methods.getExchangeableLevels = function() {
   };
 };
 
+userSchema.methods.getTotalXPForLevel = function(targetLevel) {
+  // Calculate XP for a specific level using MEE6's direct formula
+  // Formula: XP = 5 × (level²) + 50 × level + 100
+  return this.getXPRequiredForLevel(targetLevel);
+};
+
 userSchema.methods.importMee6Levels = async function(mee6Level, lastExchangedLevel = 0) {
   // Check if user has already imported from MEE6
   if (this.leveling?.hasImportedFromMee6) {
@@ -369,9 +369,9 @@ userSchema.methods.importMee6Levels = async function(mee6Level, lastExchangedLev
     };
   }
   
-  // Calculate XP required for the MEE6 level using our leveling formula
-  // Level calculation: XP required = level * 100 + (level - 1) * 50
-  const xpRequired = mee6Level * 100 + (mee6Level - 1) * 50;
+  // Calculate XP for the MEE6 level using direct formula
+  // MEE6 uses: XP = 5 × (level²) + 50 × level + 100 (direct, not cumulative)
+  const xpRequired = this.getTotalXPForLevel(mee6Level);
   
   // Set the level and XP
   this.leveling.level = mee6Level;
