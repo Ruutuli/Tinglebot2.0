@@ -49,20 +49,16 @@
 ✅ Loaded command: vending from commands\jobs\vending.js
 [deploy-commands.js]: Processing file: commands\moderation\mod.js
 ❌ Error requiring command file commands\moderation\mod.js: {
-  message: "Identifier 'User' has already been declared",
-  stack: 'C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\commands\\moderation\\mod.js:145\n' +
-    "const User = require('../../models/UserModel');\n" +
-    '      ^\n' +
-    '\n' +
-    "SyntaxError: Identifier 'User' has already been declared\n" +
-    '    at wrapSafe (node:internal/modules/cjs/loader:1281:20)\n' +
-    '    at Module._compile (node:internal/modules/cjs/loader:1321:27)\n' +
-    '    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)\n' +
-    '    at Module.load (node:internal/modules/cjs/loader:1208:32)\n' +
-    '    at Module._load (node:internal/modules/cjs/loader:1024:12)\n' +
-    '    at Module.require (node:internal/modules/cjs/loader:1233:19)\n' +
-    '    at require (node:internal/modules/helpers:179:18)\n' +
-    '    at loadCommands (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\scripts\\deploy-commands.js:57:33)\n' +
+  message: 'Invalid Array length',
+  stack: 'Error: Invalid Array length\n' +
+    '    at Object.run (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@sapphire\\shapeshift\\dist\\cjs\\index.cjs:1045:79)\n' +
+    '    at C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@sapphire\\shapeshift\\dist\\cjs\\index.cjs:972:67\n' +
+    '    at Array.reduce (<anonymous>)\n' +
+    '    at _ArrayValidator.parse (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@sapphire\\shapeshift\\dist\\cjs\\index.cjs:972:29)\n' +
+    '    at validateMaxOptionsLength (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@discordjs\\builders\\dist\\index.js:1614:27)\n' +
+    '    at validateRequiredParameters (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@discordjs\\builders\\dist\\index.js:1620:3)\n' +
+    '    at MixedClass.toJSON (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\node_modules\\@discordjs\\builders\\dist\\index.js:1888:5)\n' +
+    '    at loadCommands (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\scripts\\deploy-commands.js:60:54)\n' +
     '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
     '    at async deployCommands (C:\\Users\\Ruu\\Desktop\\Tinglebot 2.0\\scripts\\deploy-commands.js:94:26)'
 }
