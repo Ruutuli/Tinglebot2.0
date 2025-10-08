@@ -1895,31 +1895,38 @@ async function handleApprove(interaction) {
             const { checkAndCompleteQuestFromSubmission } = require('../../modules/helpWantedModule');
             await checkAndCompleteQuestFromSubmission(submission, interaction.client);
             
-            // Also try main Quest system completion for Art and Writing quests
-            if (submission.category === 'art') {
-              const { processArtQuestCompletionFromSubmission } = require('../../modules/questRewardModule');
-              const questResult = await processArtQuestCompletionFromSubmission(submission, userId);
-              
-              if (questResult.success) {
-                console.log(`[mod.js]: ✅ Art quest completion processed for user ${userId}`);
-                if (questResult.questCompleted) {
-                  console.log(`[mod.js]: 🎉 Quest ${submission.questEvent} was fully completed!`);
+            // Check if this is an HWQ (starts with "X") - if so, skip main Quest system processing
+            const isHWQ = submission.questEvent.startsWith('X');
+            
+            if (!isHWQ) {
+              // Also try main Quest system completion for Art and Writing quests (non-HWQs only)
+              if (submission.category === 'art') {
+                const { processArtQuestCompletionFromSubmission } = require('../../modules/questRewardModule');
+                const questResult = await processArtQuestCompletionFromSubmission(submission, userId);
+                
+                if (questResult.success) {
+                  console.log(`[mod.js]: ✅ Art quest completion processed for user ${userId}`);
+                  if (questResult.questCompleted) {
+                    console.log(`[mod.js]: 🎉 Quest ${submission.questEvent} was fully completed!`);
+                  }
+                } else {
+                  console.log(`[mod.js]: ℹ️ No main quest completion needed: ${questResult.reason || questResult.error}`);
                 }
-              } else {
-                console.log(`[mod.js]: ℹ️ No main quest completion needed: ${questResult.reason || questResult.error}`);
-              }
-            } else if (submission.category === 'writing') {
-              const { processWritingQuestCompletionFromSubmission } = require('../../modules/questRewardModule');
-              const questResult = await processWritingQuestCompletionFromSubmission(submission, userId);
-              
-              if (questResult.success) {
-                console.log(`[mod.js]: ✅ Writing quest completion processed for user ${userId}`);
-                if (questResult.questCompleted) {
-                  console.log(`[mod.js]: 🎉 Quest ${submission.questEvent} was fully completed!`);
+              } else if (submission.category === 'writing') {
+                const { processWritingQuestCompletionFromSubmission } = require('../../modules/questRewardModule');
+                const questResult = await processWritingQuestCompletionFromSubmission(submission, userId);
+                
+                if (questResult.success) {
+                  console.log(`[mod.js]: ✅ Writing quest completion processed for user ${userId}`);
+                  if (questResult.questCompleted) {
+                    console.log(`[mod.js]: 🎉 Quest ${submission.questEvent} was fully completed!`);
+                  }
+                } else {
+                  console.log(`[mod.js]: ℹ️ No main quest completion needed: ${questResult.reason || questResult.error}`);
                 }
-              } else {
-                console.log(`[mod.js]: ℹ️ No main quest completion needed: ${questResult.reason || questResult.error}`);
               }
+            } else {
+              console.log(`[mod.js]: ℹ️ Skipping main quest processing for HWQ ${submission.questEvent}`);
             }
           } catch (questError) {
             console.error(`[mod.js]: ❌ Error processing quest completion for submission ${submissionId}:`, questError);

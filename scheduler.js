@@ -6,6 +6,7 @@
 const dotenv = require("dotenv");
 const path = require("path");
 const cron = require("node-cron");
+const { v4: uuidv4 } = require("uuid");
 
 // Discord.js
 const { EmbedBuilder } = require("discord.js");
@@ -16,11 +17,15 @@ const Pet = require("./models/PetModel");
 const Raid = require("./models/RaidModel");
 const RuuGame = require("./models/RuuGameModel");
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+const ItemModel = require('./models/ItemModel');
 
 // Database functions
 const {
  generateVendingStockList,
  resetPetRollsForAllCharacters,
+ connectToInventories,
+ getCharacterInventoryCollection,
+ fetchItemByName,
 } = require("./database/db");
 
 // Handlers
@@ -47,6 +52,9 @@ const { recoverDailyStamina } = require("./modules/characterStatsModule");
 const { bloodmoonDates, convertToHyruleanDate } = require("./modules/calendarModule");
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest, regenerateArtWritingQuest } = require('./modules/helpWantedModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
+
+// Utilities
+const { safeAppendDataToSheet, extractSpreadsheetId } = require('./utils/googleSheetsUtils');
 
 // Services
 const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("./services/weatherService");
@@ -949,6 +957,113 @@ async function executeBirthdayAnnouncements(client) {
     const randomMessage =
      birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
 
+    // Give character a random birthday gift (1% chance for Spirit Orb, 99% chance for cake)
+    const isLuckyRoll = Math.random() < 0.01; // 1% chance
+    let giftItemName = '';
+    let giftGiven = null;
+    let isRareGift = false;
+
+    if (isLuckyRoll) {
+      giftItemName = 'Spirit Orb';
+      isRareGift = true;
+    } else {
+      const cakeOptions = ['Carrot Cake', 'Monster Cake', 'Nut Cake', 'Fruit Cake'];
+      giftItemName = cakeOptions[Math.floor(Math.random() * cakeOptions.length)];
+    }
+
+    try {
+      // Connect to inventories database
+      await connectToInventories();
+      const inventoryCollection = await getCharacterInventoryCollection(character.name);
+      
+      // Check if the gift item exists in the ItemModel
+      const giftItem = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${giftItemName}$`, 'i') } });
+      
+      if (giftItem) {
+        const currentDate = new Date();
+        const itemLocation = character.currentVillage || character.homeVillage || "Unknown";
+        
+        // Check if character already has this item in inventory
+        const existingItem = await inventoryCollection.findOne({
+          characterId: character._id,
+          itemName: { $regex: new RegExp(`^${giftItemName}$`, 'i') }
+        });
+
+        if (existingItem) {
+          // Increment quantity
+          await inventoryCollection.updateOne(
+            { _id: existingItem._id },
+            { $inc: { quantity: 1 } }
+          );
+        } else {
+          // Insert new gift item with metadata from database
+          await inventoryCollection.insertOne({
+            characterId: character._id,
+            itemName: giftItem.itemName,
+            itemId: giftItem._id,
+            quantity: 1,
+            category: Array.isArray(giftItem.category) ? giftItem.category.join(", ") : giftItem.category,
+            type: Array.isArray(giftItem.type) ? giftItem.type.join(", ") : giftItem.type,
+            subtype: Array.isArray(giftItem.subtype) ? giftItem.subtype.join(", ") : giftItem.subtype,
+            location: itemLocation,
+            date: currentDate,
+            obtain: "Gift",
+            synced: ""
+          });
+        }
+        
+        giftGiven = giftItem.itemName;
+        
+        if (isRareGift) {
+          console.log(`[scheduler.js]: ✨🎁 RARE! ${character.name} got a ${giftItem.itemName} for their birthday! (1% chance)`);
+        } else {
+          console.log(`[scheduler.js]: 🎂 Gave ${character.name} a ${giftItem.itemName} for their birthday`);
+        }
+
+        // Log to Google Sheets if character has inventory URL
+        if (character.inventory) {
+          try {
+            const spreadsheetId = extractSpreadsheetId(character.inventory);
+            if (spreadsheetId) {
+              const sheetRow = [
+                character.name,
+                giftItem.itemName,
+                1, // quantity
+                Array.isArray(giftItem.category) ? giftItem.category.join(", ") : giftItem.category,
+                Array.isArray(giftItem.type) ? giftItem.type.join(", ") : giftItem.type,
+                Array.isArray(giftItem.subtype) ? giftItem.subtype.join(", ") : giftItem.subtype,
+                "Gift", // obtain
+                "", // job
+                "", // perk
+                itemLocation,
+                isRareGift ? "Birthday Gift (RARE - 1%!)" : "Birthday Gift", // link/description
+                currentDate.toISOString(),
+                uuidv4() // Confirmed Sync ID
+              ];
+
+              await safeAppendDataToSheet(
+                character.inventory,
+                character,
+                'loggedInventory!A:M',
+                [sheetRow],
+                null,
+                { skipValidation: true, context: { commandName: 'birthday', userTag: 'System', userId: character.userId } }
+              );
+              
+              console.log(`[scheduler.js]: 📝 Logged birthday gift to ${character.name}'s inventory sheet`);
+            }
+          } catch (sheetError) {
+            console.error(`[scheduler.js]: ⚠️ Failed to log gift to sheet for ${character.name}:`, sheetError.message);
+            // Don't throw - sheet logging is not critical
+          }
+        }
+      } else {
+        console.warn(`[scheduler.js]: ⚠️ Gift item "${giftItemName}" not found in database`);
+      }
+    } catch (giftError) {
+      console.error(`[scheduler.js]: ❌ Error giving birthday gift to ${character.name}:`, giftError.message);
+    }
+
     const embed = new EmbedBuilder()
      .setColor("#FF709B")
      .setTitle(`Happy Birthday, ${character.name}!`)
@@ -961,6 +1076,23 @@ async function executeBirthdayAnnouncements(client) {
      .setImage("https://storage.googleapis.com/tinglebot/Graphics/bday.png")
      .setFooter({ text: `${character.name} belongs to ${user.username}!` })
      .setTimestamp();
+
+    // Add gift field if gift was successfully given
+    if (giftGiven) {
+      if (isRareGift) {
+        embed.addFields({
+          name: "✨ **RARE BIRTHDAY GIFT!** ✨",
+          value: `> 🎊 **WOW!** ${character.name} received a **${giftGiven}**! (1% chance!) 🎊`,
+          inline: false
+        });
+      } else {
+        embed.addFields({
+          name: "🎁 Birthday Gift",
+          value: `> ${character.name} received a **${giftGiven}**!`,
+          inline: false
+        });
+      }
+    }
 
     await announcementChannel.send({ embeds: [embed] });
     announcedCount++;
