@@ -18,12 +18,8 @@ const client = new Client({
 async function extractServerData() {
     try {
         console.log('🔍 Extracting server data...');
+        console.log('🔗 Discord connection already established!');
         
-        // Wait for client to be ready
-        await new Promise((resolve) => {
-            client.once('ready', resolve);
-        });
-
         console.log(`✅ Bot logged in as ${client.user.tag}`);
 
         // Get the guild (server) - assuming single guild bot
@@ -200,23 +196,16 @@ async function extractServerData() {
         }
 
         // Save to JSON file
-        console.log('💾 Saving data to files...');
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `server-data-${timestamp}.json`;
+        console.log('💾 Saving data to file...');
+        const filename = 'server-data.json';
         const filepath = path.join(outputDir, filename);
         
-        console.log(`   📝 Writing timestamped file: ${filename}`);
+        console.log(`   📝 Writing file: ${filename}`);
         fs.writeFileSync(filepath, JSON.stringify(serverData, null, 2));
-        console.log(`   ✅ Timestamped file saved`);
-        
-        // Also save a latest version without timestamp
-        console.log(`   📝 Writing latest file: server-data-latest.json`);
-        const latestFilepath = path.join(outputDir, 'server-data-latest.json');
-        fs.writeFileSync(latestFilepath, JSON.stringify(serverData, null, 2));
-        console.log(`   ✅ Latest file saved`);
+        console.log(`   ✅ File saved`);
         
         console.log(`✅ Server data extracted successfully!`);
-        console.log(`📁 Files saved to: ${outputDir}`);
+        console.log(`📁 File saved to: ${filepath}`);
         console.log(`📊 Statistics:`);
         console.log(`   - Emojis: ${serverData.statistics.totalEmojis}`);
         console.log(`   - Roles: ${serverData.statistics.totalRoles}`);
@@ -242,12 +231,91 @@ process.on('unhandledRejection', error => {
     process.exit(1);
 });
 
-// Start the extraction
-console.log('🚀 Starting server data extraction...');
-client.login(process.env.DISCORD_TOKEN).catch(error => {
-    console.error('❌ Failed to login:', error);
+// Add connection event listeners for better feedback
+client.on('connecting', () => {
+    console.log('🔄 Connecting to Discord...');
+});
+
+client.on('connected', () => {
+    console.log('🔗 Connected to Discord gateway!');
+});
+
+client.on('ready', () => {
+    console.log('🎉 Ready event fired! Bot is fully connected.');
+});
+
+client.on('resumed', () => {
+    console.log('🔄 Session resumed');
+});
+
+client.on('disconnected', (event) => {
+    console.log('⚠️ Disconnected from Discord:', event.code, event.reason);
+});
+
+client.on('error', (error) => {
+    console.error('❌ Discord client error:', error);
+});
+
+client.on('warn', (warning) => {
+    console.warn('⚠️ Discord client warning:', warning);
+});
+
+client.on('debug', (info) => {
+    if (info.includes('WebSocket') || info.includes('Gateway')) {
+        console.log('🔍 Debug:', info);
+    }
+});
+
+// Check if token exists
+if (!process.env.DISCORD_TOKEN) {
+    console.error('❌ DISCORD_TOKEN not found in environment variables!');
+    console.log('💡 Make sure you have a .env file with DISCORD_TOKEN=your_bot_token');
+    process.exit(1);
+}
+
+console.log('🔍 Token found, length:', process.env.DISCORD_TOKEN.length);
+
+// Add timeout to prevent hanging
+const connectionTimeout = setTimeout(() => {
+    console.error('❌ Connection timeout after 30 seconds');
+    console.log('💡 This might be due to:');
+    console.log('   - Invalid bot token');
+    console.log('   - Network connectivity issues');
+    console.log('   - Discord API being down');
+    process.exit(1);
+}, 30000);
+
+// Test Discord API connectivity first
+console.log('🌐 Testing Discord API connectivity...');
+const https = require('https');
+const apiTest = https.get('https://discord.com/api/v10/gateway', (res) => {
+    console.log('✅ Discord API is reachable (status:', res.statusCode + ')');
+    startExtraction();
+}).on('error', (err) => {
+    console.error('❌ Cannot reach Discord API:', err.message);
+    console.log('💡 Check your internet connection');
     process.exit(1);
 });
 
-// Run extraction when ready
-client.once('ready', extractServerData);
+function startExtraction() {
+    // Start the extraction
+    console.log('🚀 Starting server data extraction...');
+    console.log('🔑 Attempting to login with bot token...');
+
+    client.login(process.env.DISCORD_TOKEN).catch(error => {
+        clearTimeout(connectionTimeout);
+        console.error('❌ Failed to login:', error);
+        if (error.code === 4004) {
+            console.log('💡 This usually means the bot token is invalid');
+        } else if (error.code === 50013) {
+            console.log('💡 This usually means the bot lacks proper permissions');
+        }
+        process.exit(1);
+    });
+
+    // Run extraction when ready
+    client.once('ready', () => {
+        clearTimeout(connectionTimeout);
+        extractServerData();
+    });
+}
