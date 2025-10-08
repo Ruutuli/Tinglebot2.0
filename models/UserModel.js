@@ -522,14 +522,7 @@ userSchema.methods.getBirthdayDiscountAmount = function() {
 };
 
 // ------------------- Boost Reward Methods -------------------
-userSchema.methods.giveBoostRewards = async function(boostCount) {
-  if (!boostCount || boostCount <= 0) {
-    return {
-      success: false,
-      message: 'No boosts detected'
-    };
-  }
-  
+userSchema.methods.giveBoostRewards = async function() {
   // Initialize boostRewards object if it doesn't exist
   if (!this.boostRewards) {
     this.boostRewards = {
@@ -551,8 +544,8 @@ userSchema.methods.giveBoostRewards = async function(boostCount) {
     };
   }
   
-  // Calculate tokens (500 per boost)
-  const tokensToReceive = boostCount * 500;
+  // Flat reward: 1000 tokens for boosting
+  const tokensToReceive = 1000;
   
   // Add tokens
   this.tokens = (this.tokens || 0) + tokensToReceive;
@@ -564,7 +557,7 @@ userSchema.methods.giveBoostRewards = async function(boostCount) {
   // Add to reward history
   this.boostRewards.rewardHistory.push({
     month: currentMonth,
-    boostCount: boostCount,
+    boostCount: 1, // Track as 1 entry for history purposes
     tokensReceived: tokensToReceive,
     timestamp: now
   });
@@ -578,8 +571,7 @@ userSchema.methods.giveBoostRewards = async function(boostCount) {
   
   return {
     success: true,
-    message: `Received ${tokensToReceive} tokens for ${boostCount} boost(s)!`,
-    boostCount: boostCount,
+    message: `Received ${tokensToReceive} tokens for boosting the server!`,
     tokensReceived: tokensToReceive,
     newTokenBalance: this.tokens,
     month: currentMonth

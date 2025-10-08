@@ -497,17 +497,10 @@ async function distributeMonthlyBoostRewards(client) {
         // Get or create user record
         const user = await User.getOrCreateUser(memberId);
         
-        // Discord API limitation: premiumSince only tells us IF they're boosting, not HOW MANY boosts
-        // Users can boost up to 2 times, but we can't detect this through the API
-        // We'll count each active booster as having 1 boost
-        // Note: If you want to track multiple boosts per user, you'll need to manually track this
-        // or ask users to report it (like the old system)
-        const boostCount = 1;
+        console.log(`[scheduler.js]: Processing ${member.user.tag} - Checking boost status...`);
         
-        console.log(`[scheduler.js]: Processing ${member.user.tag} - Boost count: ${boostCount}`);
-        
-        // Give boost rewards
-        const result = await user.giveBoostRewards(boostCount);
+        // Give boost rewards (flat 1000 tokens for anyone boosting)
+        const result = await user.giveBoostRewards();
         
         if (result.success) {
           rewardedCount++;
@@ -515,16 +508,15 @@ async function distributeMonthlyBoostRewards(client) {
           rewardDetails.push({
             userId: memberId,
             username: member.user.tag,
-            boostCount: result.boostCount,
             tokensReceived: result.tokensReceived
           });
           
-          console.log(`[scheduler.js]: ✅ Rewarded ${member.user.tag} with ${result.tokensReceived} tokens (${result.boostCount} boost)`);
+          console.log(`[scheduler.js]: ✅ Rewarded ${member.user.tag} with ${result.tokensReceived} tokens for boosting`);
           
           // Send DM notification
           try {
             await member.send({
-              content: `🎉 **Monthly Nitro Boost Reward!**\n\nThank you for boosting **Roots Of The Wild**!\n\n💎 You've received **${result.tokensReceived} tokens** for your ${result.boostCount} boost this month.\n\n**New Balance:** ${result.newTokenBalance} tokens\n**Month:** ${currentMonth}\n\nYour support helps keep our server amazing! ✨`
+              content: `🎉 **Monthly Nitro Boost Reward!**\n\nThank you for boosting **Roots Of The Wild**!\n\n💎 You've received **${result.tokensReceived} tokens** for boosting the server this month.\n\n**New Balance:** ${result.newTokenBalance} tokens\n**Month:** ${currentMonth}\n\nYour support helps keep our server amazing! ✨`
             });
           } catch (dmError) {
             console.log(`[scheduler.js]: ⚠️ Could not send DM to ${member.user.tag} - user may have blocked DMs`);
@@ -541,12 +533,13 @@ async function distributeMonthlyBoostRewards(client) {
                 .setTitle('💎 Nitro Boost Reward!')
                 .setDescription(`Thank you for boosting **Roots Of The Wild**!`)
                 .addFields(
-                  { name: '🎉 Booster', value: `<@${memberId}>`, inline: true },
-                  { name: '💰 Tokens Earned', value: `${result.tokensReceived} tokens`, inline: true },
-                  { name: '📅 Month', value: currentMonth, inline: true }
+                  { name: '🎉 Booster', value: `<@${memberId}>`, inline: false },
+                  { name: '💰 Tokens Earned', value: `${result.tokensReceived} tokens`, inline: false },
+                  { name: '📅 Month', value: currentMonth, inline: false }
                 )
                 .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-                .setFooter({ text: 'Boost the server to earn 500 tokens per boost every month!' })
+                .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                .setFooter({ text: 'Boost the server to earn 1000 tokens every month!' })
                 .setTimestamp();
               
               await announcementChannel.send({
@@ -596,7 +589,7 @@ async function distributeMonthlyBoostRewards(client) {
           
           if (rewardDetails.length > 0) {
             const detailsText = rewardDetails
-              .map(d => `• **${d.username}**: ${d.tokensReceived} tokens (${d.boostCount} boost)`)
+              .map(d => `• **${d.username}**: ${d.tokensReceived} tokens`)
               .join('\n');
             
             // Discord has a 1024 character limit per field, so split if needed
