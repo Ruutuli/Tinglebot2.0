@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const User = require('../models/UserModel');
+const { EmbedBuilder } = require('discord.js');
 const { handleError } = require('../utils/globalErrorHandler');
 
 // ------------------- Leveling System Configuration -------------------
@@ -80,31 +81,29 @@ async function handleXP(message) {
  */
 async function sendLevelUpNotification(message, newLevel, xpGained) {
   try {
-    const embed = {
-      color: 0x00ff00,
-      title: '🎉 Level Up!',
-      description: `${message.author} has reached **Level ${newLevel}**!`,
-      fields: [
+    const embed = new EmbedBuilder()
+      .setColor(0xFFD700) // Gold color for level ups
+      .setTitle('🎉 Level Up!')
+      .setDescription(`${message.author} has reached **Level ${newLevel}**!`)
+      .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+      .addFields(
         {
-          name: 'XP Gained',
-          value: `+${xpGained} XP`,
+          name: '⭐ XP Gained',
+          value: `\`+${xpGained} XP\``,
           inline: true
         },
         {
-          name: 'New Level',
-          value: `${newLevel}`,
+          name: '📈 New Level',
+          value: `\`Level ${newLevel}\``,
           inline: true
         }
-      ],
-      thumbnail: {
-        url: message.author.displayAvatarURL({ dynamic: true })
-      },
-      footer: {
+      )
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setFooter({
         text: 'Keep chatting to level up more!',
-        icon_url: message.client.user.displayAvatarURL()
-      },
-      timestamp: new Date().toISOString()
-    };
+        iconURL: message.client.user.displayAvatarURL()
+      })
+      .setTimestamp();
     
     // Send to Sheikah Slate channel (641858948802150400)
     const sheikahSlateChannelId = '641858948802150400';
