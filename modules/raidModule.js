@@ -57,6 +57,9 @@ const VILLAGE_VISITING_ROLES = {
   'Vhintl': '1379850161794056303'
 };
 
+// Universal raid role for all villages (replaces resident + visiting during raids)
+const UNIVERSAL_RAID_ROLE = '1205321558671884328';
+
 // ============================================================================
 // ---- Raid Battle Processing ----
 // ============================================================================
@@ -641,16 +644,8 @@ async function createRaidThread(interaction, raid) {
       })
     );
 
-    // Create the initial thread message
-    const residentRoleId = VILLAGE_RESIDENT_ROLES[raid.village];
-    const visitingRoleId = VILLAGE_VISITING_ROLES[raid.village];
-    
-    let roleMention = `@${villageName} residents`;
-    if (residentRoleId && visitingRoleId) {
-      roleMention = `<@&${residentRoleId}> <@&${visitingRoleId}>`;
-    } else if (residentRoleId) {
-      roleMention = `<@&${residentRoleId}>`;
-    }
+    // Create the initial thread message - use universal raid role for all villages
+    const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
     
     // Calculate total duration for this tier
     const totalDuration = calculateRaidDuration(raid.monster.tier);
@@ -877,16 +872,8 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         console.log(`[raidModule.js]: ✅ Thread created successfully on raid message`);
       }
       
-      // Send initial thread message with raid ID
-      const residentRoleId = VILLAGE_RESIDENT_ROLES[villageId];
-      const visitingRoleId = VILLAGE_VISITING_ROLES[villageId];
-      
-      let roleMention = `@${villageId} residents`;
-      if (residentRoleId && visitingRoleId) {
-        roleMention = `<@&${residentRoleId}> <@&${visitingRoleId}>`;
-      } else if (residentRoleId) {
-        roleMention = `<@&${residentRoleId}>`;
-      }
+      // Send initial thread message with raid ID - use universal raid role for all villages
+      const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
       
       // Calculate total duration for this tier
       const totalDuration = calculateRaidDuration(monster.tier);
@@ -914,16 +901,8 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       console.warn(`[raidModule.js]: ⚠️ This may be because the channel doesn't support threads (DM, etc.)`);
       console.warn(`[raidModule.js]: ⚠️ Raid will continue without a thread - participants can use the raid ID directly`);
       
-      // Send the raid information as a follow-up message instead
-      const residentRoleId = VILLAGE_RESIDENT_ROLES[villageId];
-      const visitingRoleId = VILLAGE_VISITING_ROLES[villageId];
-      
-      let roleMention = `@${villageId} residents`;
-      if (residentRoleId && visitingRoleId) {
-        roleMention = `<@&${residentRoleId}> <@&${visitingRoleId}>`;
-      } else if (residentRoleId) {
-        roleMention = `<@&${residentRoleId}>`;
-      }
+      // Send the raid information as a follow-up message instead - use universal raid role for all villages
+      const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
       
       // Calculate total duration for this tier
       const totalDuration = calculateRaidDuration(monster.tier);

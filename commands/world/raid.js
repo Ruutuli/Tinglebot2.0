@@ -50,6 +50,9 @@ const VILLAGE_VISITING_ROLES = {
   'Vhintl': '1379850161794056303'
 };
 
+// Universal raid role for all villages (replaces resident + visiting during raids)
+const UNIVERSAL_RAID_ROLE = '1205321558671884328';
+
 // ============================================================================
 // ---- Command Definition ----
 // ============================================================================
@@ -318,18 +321,10 @@ function calculateDamageFromRoll(roll, monsterTier) {
 }
 
 // ---- Function: getVillageRoleMention ----
-// Gets the proper role mention for a village (both resident and visiting)
+// Gets the proper role mention for raids - uses universal raid role for all villages
 function getVillageRoleMention(village) {
-  const residentRoleId = VILLAGE_RESIDENT_ROLES[village];
-  const visitingRoleId = VILLAGE_VISITING_ROLES[village];
-  
-  if (residentRoleId && visitingRoleId) {
-    return `<@&${residentRoleId}> <@&${visitingRoleId}>`;
-  } else if (residentRoleId) {
-    return `<@&${residentRoleId}>`;
-  } else {
-    return `@${village} residents`;
-  }
+  // Use universal raid role for all village raids
+  return `<@&${UNIVERSAL_RAID_ROLE}>`;
 }
 
 // ---- Function: createRaidTurnEmbed ----
