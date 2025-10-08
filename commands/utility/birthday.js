@@ -128,7 +128,7 @@ async function handleSetBirthday(interaction) {
       .setTitle('🎂 Birthday Set!')
       .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setDescription(`**${result.message}**`)
+      .setDescription(`**${result.message}**\n\n🎉 **Your birthday will be celebrated with special announcements and rewards!**`)
       .addFields(
         {
           name: '📅 Birthday',
@@ -144,6 +144,11 @@ async function handleSetBirthday(interaction) {
           name: '🎲 Reward Type',
           value: '**Randomly chosen**',
           inline: true
+        },
+        {
+          name: '🌟 Special Features',
+          value: '• **Birthday role** assigned on your special day\n• **@everyone announcement** in the server\n• **Mods get special role** instead of regular birthday role',
+          inline: false
         }
       )
       .setFooter({

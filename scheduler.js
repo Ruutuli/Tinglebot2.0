@@ -365,6 +365,243 @@ async function runDailyCleanupTasks(client) {
 // ------------------- Birthday Functions -------------------
 // ============================================================================
 
+// Birthday role IDs
+const BIRTHDAY_ROLE_ID = '658152196642308111';
+const MOD_BIRTHDAY_ROLE_ID = '1095909468941864990';
+const BIRTHDAY_ANNOUNCEMENT_CHANNEL_ID = '606004354419392513';
+
+async function handleBirthdayRoleAssignment(client) {
+  console.log(`[scheduler.js]: 🎂 Starting birthday role assignment check...`);
+  
+  try {
+    const now = new Date();
+    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const today = estNow.toISOString().slice(5, 10); // MM-DD format
+    const month = estNow.getMonth() + 1;
+    const day = estNow.getDate();
+    
+    console.log(`[scheduler.js]: 📅 Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
+    
+    // Get all users with birthdays today
+    const User = require('./models/UserModel');
+    const usersWithBirthdays = await User.find({
+      'birthday.month': month,
+      'birthday.day': day
+    });
+    
+    if (usersWithBirthdays.length === 0) {
+      console.log(`[scheduler.js]: ℹ️ No users have birthdays today`);
+      return;
+    }
+    
+    console.log(`[scheduler.js]: 🎂 Found ${usersWithBirthdays.length} users with birthdays today`);
+    
+    const guild = client.guilds.cache.get(process.env.GUILD_ID);
+    if (!guild) {
+      console.error(`[scheduler.js]: ❌ Guild not found`);
+      return;
+    }
+    
+    // Get the birthday roles
+    const birthdayRole = guild.roles.cache.get(BIRTHDAY_ROLE_ID);
+    const modBirthdayRole = guild.roles.cache.get(MOD_BIRTHDAY_ROLE_ID);
+    
+    if (!birthdayRole && !modBirthdayRole) {
+      console.error(`[scheduler.js]: ❌ Birthday roles not found`);
+      return;
+    }
+    
+    let assignedCount = 0;
+    const birthdayUsers = [];
+    
+    for (const user of usersWithBirthdays) {
+      try {
+        const member = await guild.members.fetch(user.discordId);
+        if (!member) {
+          console.log(`[scheduler.js]: ⚠️ Member ${user.discordId} not found in guild`);
+          continue;
+        }
+        
+        // Check if user is a mod (has mod permissions or specific mod roles)
+        const isMod = member.permissions.has('ManageMessages') || 
+                      member.permissions.has('Administrator') ||
+                      member.roles.cache.some(role => role.name.toLowerCase().includes('mod') || role.name.toLowerCase().includes('admin'));
+        
+        const roleToAssign = isMod ? modBirthdayRole : birthdayRole;
+        
+        if (!roleToAssign) {
+          console.log(`[scheduler.js]: ⚠️ Role not found for ${isMod ? 'mod' : 'regular'} user ${member.user.tag}`);
+          continue;
+        }
+        
+        // Remove any existing birthday roles first
+        if (member.roles.cache.has(BIRTHDAY_ROLE_ID)) {
+          await member.roles.remove(BIRTHDAY_ROLE_ID);
+        }
+        if (member.roles.cache.has(MOD_BIRTHDAY_ROLE_ID)) {
+          await member.roles.remove(MOD_BIRTHDAY_ROLE_ID);
+        }
+        
+        // Assign the appropriate role
+        await member.roles.add(roleToAssign);
+        assignedCount++;
+        birthdayUsers.push({
+          user: member.user,
+          isMod: isMod,
+          roleName: roleToAssign.name
+        });
+        
+        console.log(`[scheduler.js]: ✅ Assigned ${roleToAssign.name} to ${member.user.tag} (${isMod ? 'mod' : 'regular'})`);
+        
+      } catch (error) {
+        console.error(`[scheduler.js]: ❌ Error assigning birthday role to user ${user.discordId}:`, error);
+      }
+    }
+    
+    // Send birthday announcements if there are birthday users
+    if (birthdayUsers.length > 0) {
+      await sendBirthdayAnnouncements(client, birthdayUsers);
+    }
+    
+    console.log(`[scheduler.js]: 🎂 Birthday role assignment completed - ${assignedCount} roles assigned`);
+    
+  } catch (error) {
+    console.error(`[scheduler.js]: ❌ Error in birthday role assignment:`, error);
+    handleError(error, "scheduler.js", {
+      commandName: 'handleBirthdayRoleAssignment'
+    });
+  }
+}
+
+async function sendBirthdayAnnouncements(client, birthdayUsers) {
+  try {
+    const announcementChannel = client.channels.cache.get(BIRTHDAY_ANNOUNCEMENT_CHANNEL_ID);
+    if (!announcementChannel) {
+      console.error(`[scheduler.js]: ❌ Birthday announcement channel not found`);
+      return;
+    }
+    
+    const now = new Date();
+    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const realWorldDate = estNow.toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+    });
+    const hyruleanDate = convertToHyruleanDate(estNow);
+    
+    // Create birthday messages
+    const birthdayMessages = [
+      "May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way!",
+      "On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding!",
+      "As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace!",
+    ];
+    
+    for (const birthdayUser of birthdayUsers) {
+      try {
+        const randomMessage = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
+        
+        const embed = new EmbedBuilder()
+          .setColor("#FF709B")
+          .setTitle(`🎉 Happy Birthday, ${birthdayUser.user.displayName}! 🎉`)
+          .setDescription(`${randomMessage}\n\n🎂 **It's ${birthdayUser.user.displayName}'s birthday today!** 🎂`)
+          .addFields(
+            { 
+              name: "📅 Real-World Date", 
+              value: realWorldDate, 
+              inline: true 
+            },
+            { 
+              name: "🗓️ Hyrulean Date", 
+              value: hyruleanDate, 
+              inline: true 
+            },
+            {
+              name: "🎁 Special Birthday Features",
+              value: `• **Birthday role** assigned: ${birthdayUser.roleName}\n• **Birthday rewards** available with \`/birthday claim\`\n• **1500 tokens OR 75% shop discount**`,
+              inline: false
+            }
+          )
+          .setThumbnail(birthdayUser.user.displayAvatarURL({ dynamic: true }))
+          .setImage("https://storage.googleapis.com/tinglebot/Graphics/bday.png")
+          .setFooter({ 
+            text: `Happy Birthday, ${birthdayUser.user.displayName}! 🎂`,
+            icon_url: client.user.displayAvatarURL()
+          })
+          .setTimestamp();
+        
+        // Send @everyone announcement
+        await announcementChannel.send({
+          content: `@everyone 🎉 **It's ${birthdayUser.user.displayName}'s birthday today!** 🎉`,
+          embeds: [embed]
+        });
+        
+        console.log(`[scheduler.js]: 🎂 Sent birthday announcement for ${birthdayUser.user.displayName}`);
+        
+      } catch (error) {
+        console.error(`[scheduler.js]: ❌ Error sending birthday announcement for ${birthdayUser.user.displayName}:`, error);
+      }
+    }
+    
+  } catch (error) {
+    console.error(`[scheduler.js]: ❌ Error in birthday announcements:`, error);
+    handleError(error, "scheduler.js", {
+      commandName: 'sendBirthdayAnnouncements'
+    });
+  }
+}
+
+async function handleBirthdayRoleRemoval(client) {
+  console.log(`[scheduler.js]: 🧹 Starting birthday role cleanup...`);
+  
+  try {
+    const guild = client.guilds.cache.get(process.env.GUILD_ID);
+    if (!guild) {
+      console.error(`[scheduler.js]: ❌ Guild not found`);
+      return;
+    }
+    
+    // Get all members with birthday roles
+    const birthdayRole = guild.roles.cache.get(BIRTHDAY_ROLE_ID);
+    const modBirthdayRole = guild.roles.cache.get(MOD_BIRTHDAY_ROLE_ID);
+    
+    let removedCount = 0;
+    
+    if (birthdayRole) {
+      const membersWithBirthdayRole = birthdayRole.members;
+      for (const [memberId, member] of membersWithBirthdayRole) {
+        try {
+          await member.roles.remove(birthdayRole);
+          removedCount++;
+          console.log(`[scheduler.js]: 🧹 Removed birthday role from ${member.user.tag}`);
+        } catch (error) {
+          console.error(`[scheduler.js]: ❌ Error removing birthday role from ${member.user.tag}:`, error);
+        }
+      }
+    }
+    
+    if (modBirthdayRole) {
+      const membersWithModBirthdayRole = modBirthdayRole.members;
+      for (const [memberId, member] of membersWithModBirthdayRole) {
+        try {
+          await member.roles.remove(modBirthdayRole);
+          removedCount++;
+          console.log(`[scheduler.js]: 🧹 Removed mod birthday role from ${member.user.tag}`);
+        } catch (error) {
+          console.error(`[scheduler.js]: ❌ Error removing mod birthday role from ${member.user.tag}:`, error);
+        }
+      }
+    }
+    
+    console.log(`[scheduler.js]: 🧹 Birthday role cleanup completed - ${removedCount} roles removed`);
+    
+  } catch (error) {
+    console.error(`[scheduler.js]: ❌ Error in birthday role cleanup:`, error);
+    handleError(error, "scheduler.js", {
+      commandName: 'handleBirthdayRoleRemoval'
+    });
+  }
+}
+
 async function executeBirthdayAnnouncements(client) {
  console.log(`[scheduler.js]: 🎂 Starting birthday announcement check...`);
  
@@ -1431,10 +1668,14 @@ function setupDailyTasks(client) {
  // Daily tasks at midnight
  createCronJob("0 0 * * *", "jail release check", () => handleJailRelease(client));
  createCronJob("0 0 * * *", "reset pet last roll dates", () => resetPetLastRollDates(client));
+ createCronJob("0 0 * * *", "birthday role assignment", () => handleBirthdayRoleAssignment(client));
  createCronJob("0 0 * * *", "birthday announcements", () => executeBirthdayAnnouncements(client));
  createCronJob("0 0 * * *", "midnight quest generation", () => generateDailyQuestsAtMidnight());
  createCronJob("0 0 * * *", "quest expiration check", () => handleQuestExpirationAtMidnight(client));
  createCronJob("0 0 * * *", "request expiration and cleanup", () => runDailyCleanupTasks(client));
+ 
+ // Daily tasks at 1 AM - remove birthday roles from previous day
+ createCronJob("0 1 * * *", "birthday role cleanup", () => handleBirthdayRoleRemoval(client));
 
  // Daily tasks at 8 AM
  createCronJob("0 8 * * *", "reset daily rolls", () => resetDailyRolls(client));
@@ -1581,6 +1822,9 @@ module.exports = {
  checkAndPostWeatherIfNeeded,
  checkAndPostWeatherOnRestart,
  executeBirthdayAnnouncements,
+ handleBirthdayRoleAssignment,
+ handleBirthdayRoleRemoval,
+ sendBirthdayAnnouncements,
  handleJailRelease,
  handleDebuffExpiry,
  handleBuffExpiry,
