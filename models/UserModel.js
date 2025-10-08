@@ -162,9 +162,10 @@ userSchema.methods.calculateLevel = function() {
 };
 
 userSchema.methods.getXPRequiredForLevel = function(targetLevel) {
-  // Calculate XP required to go from (targetLevel - 1) to targetLevel
-  // Using MEE6-style formula: 5 × (level²) + 50 × level + 100
-  if (targetLevel <= 1) return 0;
+  // Calculate XP for a specific level using MEE6's direct formula
+  // Formula: XP = 5 × (level²) + 50 × level + 100
+  // Level 1 = 155 XP, Level 2 = 220 XP, Level 91 = 46,055 XP
+  if (targetLevel < 1) return 0;
   return 5 * Math.pow(targetLevel, 2) + 50 * targetLevel + 100;
 };
 
