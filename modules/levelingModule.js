@@ -73,7 +73,7 @@ async function handleXP(message) {
 }
 
 /**
- * Send level up notification to the channel
+ * Send level up notification to the channel and Sheikah Slate
  * @param {Message} message - Original message that triggered level up
  * @param {number} newLevel - The new level reached
  * @param {number} xpGained - XP gained from the message
@@ -106,7 +106,23 @@ async function sendLevelUpNotification(message, newLevel, xpGained) {
       timestamp: new Date().toISOString()
     };
     
+    // Send to the original channel
     await message.channel.send({ embeds: [embed] });
+    
+    // Send to Sheikah Slate channel (641858948802150400)
+    const sheikahSlateChannelId = '641858948802150400';
+    try {
+      const sheikahSlateChannel = await message.client.channels.fetch(sheikahSlateChannelId);
+      if (sheikahSlateChannel) {
+        await sheikahSlateChannel.send({ embeds: [embed] });
+        console.log(`[levelingModule]: Level up announcement sent to Sheikah Slate channel for ${message.author.tag}`);
+      } else {
+        console.warn(`[levelingModule]: Sheikah Slate channel not found: ${sheikahSlateChannelId}`);
+      }
+    } catch (channelError) {
+      console.error(`[levelingModule]: Error sending to Sheikah Slate channel:`, channelError);
+    }
+    
   } catch (error) {
     console.error(`[levelingModule]: Error sending level up notification:`, error);
   }
