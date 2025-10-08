@@ -23,6 +23,7 @@ const { handleAutocomplete } = require("./handlers/autocompleteHandler");
 const { handleComponentInteraction } = require("./handlers/componentHandler");
 const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
 const { handleInteraction, initializeReactionHandler } = require('./handlers/interactionHandler');
+const { initializeReactionRolesHandler } = require('./handlers/reactionRolesHandler');
 // const { handleMessage } = require('./handlers/messageHandler');
 const { startExpirationChecks } = require('./utils/expirationHandler');
 
@@ -234,6 +235,7 @@ async function initializeClient() {
           try {
             // Initialize core systems
             initializeReactionHandler(client);
+            initializeReactionRolesHandler(client);
             logBloodMoonStatus();
             initializeScheduler(client);
             startExpirationChecks(client);
@@ -494,6 +496,60 @@ async function initializeClient() {
         await trackLastMessage(message);
       } catch (error) {
         console.error("[index.js]: Error handling XP tracking:", error);
+      }
+    });
+
+    // --------------------------------------------------------------------------
+    // Welcome Message System
+    // --------------------------------------------------------------------------
+    client.on("guildMemberAdd", async (member) => {
+      try {
+        // Create welcome embed
+        const { EmbedBuilder } = require('discord.js');
+        
+        const welcomeEmbed = new EmbedBuilder()
+          .setColor(0x00ff88)
+          .setTitle(`🌱 Welcome to ${member.guild.name}, ${member.user.username}!`)
+          .setDescription(`We're glad to have you here! Roots of the Wild is a Zelda-inspired RP where your OCs help shape the world.`)
+          .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .addFields(
+            {
+              name: '🗺️ **Start Here**',
+              value: '• Please check the **rules** channel to unlock the server\n• Post your intro in the **intro** channel\n• Come hang out in **gossip-stone** chat\n• Questions? DM Roots.Admin#9069 or post in **faq-and-suggestions**',
+              inline: false
+            },
+            {
+              name: '⏳ **Two Week Timer**',
+              value: 'You have **2 weeks** to submit a character application. After that, you\'ll be removed to make space for others. Apps don\'t need to be perfect—just started!',
+              inline: false
+            },
+            {
+              name: '📜 **Quick Rules**',
+              value: '• 18+ server only\n• NSFW belongs in designated channels\n• No godmodding or metagaming\n• Respect pronouns & fellow members\n• Avoid heavy real-world topics (check trigger list)\n• Use "Windfish says No" to end upsetting convos\n• No AI art in apps or official submissions',
+              inline: false
+            },
+            {
+              name: '🔗 **Full Rules + Site**',
+              value: 'https://www.rootsofthewild.com/',
+              inline: false
+            }
+          )
+          .setFooter({
+            text: 'Take Courage. • Be Wise. • Nurture Power. • 🌿 Welcome to Roots!',
+            icon_url: client.user.displayAvatarURL()
+          })
+          .setTimestamp();
+
+        // Send welcome message as DM
+        await member.send({ embeds: [welcomeEmbed] });
+        
+        console.log(`[index.js]: 🌱 Welcome message sent to ${member.user.tag} (${member.id})`);
+        
+      } catch (error) {
+        console.error(`[index.js]: ❌ Error sending welcome message to ${member.user.tag}:`, error);
+        // If DM fails, we could send to a welcome channel instead
+        // For now, just log the error
       }
     });
 
