@@ -46,6 +46,11 @@ const REACTION_ROLES = {
   // Inactive role - for inactive status management
   inactive: {
     '⚠️': '788148064182730782' // warning -> INACTIVE
+  },
+
+  // Rules agreement - for Traveler role
+  rulesAgreement: {
+    '629100065264369677': '788137818135330837' // triforce -> Traveler
   }
 };
 
@@ -172,9 +177,11 @@ const isReactionRolesEmbed = async (message) => {
   return title.includes('pronouns') || 
          title.includes('village') || 
          title.includes('role') ||
+         title.includes('rules') ||
          description.includes('choose your own pronouns') ||
          description.includes('choose the village') ||
-         description.includes('opt-in roles');
+         description.includes('opt-in roles') ||
+         description.includes('fully read');
 };
 
 /**
@@ -197,6 +204,9 @@ const getReactionCategory = (emoji, emojiId) => {
   // Check inactive (try emoji ID first, then emoji name)
   if (REACTION_ROLES.inactive[emojiKey]) return 'inactive';
   
+  // Check rules agreement (try emoji ID first, then emoji name)
+  if (REACTION_ROLES.rulesAgreement[emojiKey]) return 'rulesAgreement';
+  
   return null;
 };
 
@@ -218,6 +228,8 @@ const getRoleId = (category, emoji, emojiId) => {
       return REACTION_ROLES.notifications[emojiKey];
     case 'inactive':
       return REACTION_ROLES.inactive[emojiKey];
+    case 'rulesAgreement':
+      return REACTION_ROLES.rulesAgreement[emojiKey];
     default:
       return null;
   }
@@ -304,6 +316,18 @@ const createNotificationRolesEmbed = () => {
     )
     .setFooter({ text: 'React below to get any of the roles above and stay connected to what matters most to you! ✨' })
     .setColor('#32CD32')
+    .setTimestamp();
+};
+
+/**
+ * Create rules agreement embed
+ * @returns {EmbedBuilder} - The rules agreement embed
+ */
+const createRulesAgreementEmbed = () => {
+  return new EmbedBuilder()
+    .setTitle('⚠️ Have you FULLY READ and agree to follow ALL of the rules? ⚠️')
+    .setDescription('⬆ [**BACK TO TOP**](https://discord.com/channels/603960955839447050/788106986327506994/953021328733118576) ⬆\n🔸 [GROUP RULES](https://discord.com/channels/603960955839447050/788106986327506994/953021447419351130)\n🔸 [SENSITIVE TOPICS](https://discord.com/channels/603960955839447050/788106986327506994/953021653305131019)\n🔸 [TRIGGERS](https://discord.com/channels/603960955839447050/788106986327506994/953021752500424774) ➽ [# 1](https://discord.com/channels/603960955839447050/788106986327506994/953021813196218438) ● [# 2](https://discord.com/channels/603960955839447050/788106986327506994/953021846045991012) ● [# 3](https://discord.com/channels/603960955839447050/788106986327506994/953021896750927916) ● [# 4](https://discord.com/channels/603960955839447050/788106986327506994/953021924945051658) ● [# 5](https://discord.com/channels/603960955839447050/788106986327506994/953021957941628928)\n🔸 [GREY LIST](https://discord.com/channels/603960955839447050/788106986327506994/953022049402638336)\n🔸 [INFRACTIONS](https://discord.com/channels/603960955839447050/788106986327506994/953022159402438686)')
+    .setColor('#FFD700')
     .setTimestamp();
 };
 
@@ -444,11 +468,6 @@ const getRoleInformation = (roleName) => {
       description: 'Get notified when raids are happening!',
       benefits: '• Raid notifications and alerts\n• Join ongoing raids\n• Help defend villages during raids\n• Participate in raid events'
     },
-    'Call for Help': {
-      category: 'Notifications',
-      description: 'Get notified when raids are happening!',
-      benefits: '• Raid notifications and alerts\n• Join ongoing raids\n• Help defend villages during raids\n• Participate in raid events'
-    },
     'Member Event': {
       category: 'Notifications',
       description: 'Get notified about community events!',
@@ -458,6 +477,11 @@ const getRoleInformation = (roleName) => {
       category: 'Status',
       description: 'You are currently marked as inactive.',
       benefits: '• Limited server access\n• Automatic removal after extended inactivity\n• Can be reactivated by following the return process'
+    },
+    'Traveler': {
+      category: 'Access',
+      description: 'You have agreed to follow all server rules.',
+      benefits: '• Full access to server channels\n• Ability to participate in roleplay\n• Access to character creation\n• Join the community and explore Hyrule!'
     }
   };
 
@@ -594,6 +618,32 @@ const setupNotificationReactionRoles = async (channel) => {
 };
 
 /**
+ * Set up rules agreement embed
+ * @param {TextChannel} channel - The channel to post in
+ * @returns {Promise<Message>} - The posted message
+ */
+const setupRulesAgreementEmbed = async (channel) => {
+  const embed = createRulesAgreementEmbed();
+  const message = await channel.send({ embeds: [embed] });
+  
+  // Add triforce reaction for agreement
+  try {
+    // Get triforce emoji from the guild
+    const triforce = channel.guild.emojis.cache.get('629100065264369677');
+    
+    if (!triforce) {
+      console.error('[reactionRolesHandler.js]: triforce emoji not found (ID: 629100065264369677)');
+    } else {
+      await message.react(triforce);
+    }
+  } catch (error) {
+    console.error('[reactionRolesHandler.js]: Error adding reaction to rules agreement:', error);
+  }
+  
+  return message;
+};
+
+/**
  * Set up all reaction roles in a channel
  * @param {TextChannel} channel - The channel to post in
  * @returns {Promise<Object>} - Object containing all posted messages
@@ -633,10 +683,12 @@ module.exports = {
   setupVillageReactionRoles,
   setupInactiveRoleEmbed,
   setupNotificationReactionRoles,
+  setupRulesAgreementEmbed,
   setupAllReactionRoles,
   createPronounsEmbed,
   createVillageEmbed,
   createInactiveEmbed,
   createNotificationRolesEmbed,
+  createRulesAgreementEmbed,
   REACTION_ROLES
 };
