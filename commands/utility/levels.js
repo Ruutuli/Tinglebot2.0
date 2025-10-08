@@ -123,50 +123,51 @@ async function handleRank(interaction) {
     // Create progress bar
     const progressBar = createProgressBar(levelInfo.progress.current, levelInfo.progress.needed, 20);
 
-    // Create embed
+    // Create embed with better styling
     const embed = new EmbedBuilder()
-      .setColor(0x0099FF)
+      .setColor(0x00ff88)
       .setTitle('📈 Level Information')
       .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .addFields(
         {
           name: '👤 User',
-          value: `${targetUser.tag}`,
+          value: `**${targetUser.tag}**`,
           inline: true
         },
         {
-          name: '🎯 Level',
-          value: `${levelInfo.level}`,
+          name: '🎯 Current Level',
+          value: `**Level ${levelInfo.level}**`,
           inline: true
         },
         {
-          name: '🏆 Rank',
-          value: levelInfo.rank ? `#${levelInfo.rank}` : 'Unranked',
+          name: '🏆 Server Rank',
+          value: levelInfo.rank ? `**#${levelInfo.rank}**` : '**Unranked**',
           inline: true
         },
         {
           name: '⭐ Total XP',
-          value: `${levelInfo.xp.toLocaleString()}`,
+          value: `**${levelInfo.xp.toLocaleString()} XP**`,
           inline: true
         },
         {
-          name: '💬 Messages',
-          value: `${levelInfo.totalMessages.toLocaleString()}`,
+          name: '💬 Messages Sent',
+          value: `**${levelInfo.totalMessages.toLocaleString()}**`,
           inline: true
         },
         {
           name: '💎 Exchangeable Levels',
-          value: `${exchangeInfo.exchangeableLevels}`,
+          value: `**${exchangeInfo.exchangeableLevels}**`,
           inline: true
         },
         {
           name: '🪙 Potential Tokens',
-          value: `${exchangeInfo.potentialTokens.toLocaleString()}`,
+          value: `**${exchangeInfo.potentialTokens.toLocaleString()}**`,
           inline: true
         },
         {
           name: '📊 Progress to Level ' + (levelInfo.level + 1),
-          value: `\`${progressBar}\` ${levelInfo.progress.percentage}%\n${levelInfo.progress.current}/${levelInfo.progress.needed} XP`,
+          value: `\`${progressBar}\` **${levelInfo.progress.percentage}%**\n**${levelInfo.progress.current.toLocaleString()}** / **${levelInfo.progress.needed.toLocaleString()}** XP`,
           inline: false
         }
       )
@@ -205,35 +206,36 @@ async function handleExchange(interaction) {
         .setColor(0x0099FF)
         .setTitle('💱 Level Exchange Status')
         .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .addFields(
           {
             name: '📊 Current Level',
-            value: `${exchangeInfo.currentLevel}`,
+            value: `**Level ${exchangeInfo.currentLevel}**`,
             inline: true
           },
           {
             name: '🔄 Last Exchanged Level',
-            value: `${exchangeInfo.lastExchangedLevel}`,
+            value: `**Level ${exchangeInfo.lastExchangedLevel}**`,
             inline: true
           },
           {
             name: '💎 Exchangeable Levels',
-            value: `${exchangeInfo.exchangeableLevels}`,
+            value: `**${exchangeInfo.exchangeableLevels}**`,
             inline: true
           },
           {
             name: '🪙 Potential Tokens',
-            value: `${exchangeInfo.potentialTokens.toLocaleString()}`,
+            value: `**${exchangeInfo.potentialTokens.toLocaleString()}**`,
             inline: true
           },
           {
             name: '📈 Total Levels Exchanged',
-            value: `${user.leveling?.totalLevelsExchanged || 0}`,
+            value: `**${user.leveling?.totalLevelsExchanged || 0}**`,
             inline: true
           },
           {
-            name: '💰 Current Tokens',
-            value: `${user.tokens.toLocaleString()}`,
+            name: '💰 Current Token Balance',
+            value: `**${user.tokens.toLocaleString()}**`,
             inline: true
           }
         )
@@ -267,11 +269,12 @@ async function handleExchange(interaction) {
         const embed = new EmbedBuilder()
           .setColor(0xff6b6b)
           .setTitle('❌ Exchange Failed')
-          .setDescription(exchangeResult.message)
+          .setDescription(`**${exchangeResult.message}**`)
           .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .addFields({
             name: '💡 Tip',
-            value: 'Level up more by chatting in the server to gain new levels to exchange!',
+            value: '**Level up more by chatting in the server to gain new levels to exchange!**',
             inline: false
           })
           .setFooter({
@@ -295,35 +298,41 @@ async function handleExchange(interaction) {
         .setColor(0x00ff88)
         .setTitle('🎉 Exchange Successful!')
         .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .addFields(
           {
             name: '📊 Levels Exchanged',
-            value: `${exchangeResult.levelsExchanged}`,
+            value: `**${exchangeResult.levelsExchanged}**`,
             inline: true
           },
           {
             name: '🪙 Tokens Received',
-            value: `${exchangeResult.tokensReceived.toLocaleString()}`,
+            value: `**+${exchangeResult.tokensReceived.toLocaleString()}**`,
             inline: true
           },
           {
             name: '💰 New Token Balance',
-            value: `${newTokenBalance.toLocaleString()}`,
+            value: `**${newTokenBalance.toLocaleString()}**`,
             inline: true
           },
           {
             name: '📈 Current Level',
-            value: `${exchangeResult.currentLevel}`,
+            value: `**Level ${exchangeResult.currentLevel}**`,
             inline: true
           },
           {
             name: '🔄 Last Exchanged Level',
-            value: `${exchangeResult.lastExchangedLevel}`,
+            value: `**Level ${exchangeResult.lastExchangedLevel}**`,
+            inline: true
+          },
+          {
+            name: '💬 Total Messages',
+            value: `**${exchangeResult.totalMessages.toLocaleString()}**`,
             inline: true
           },
           {
             name: '📝 Exchange Rate',
-            value: '1 Level = 100 Tokens',
+            value: '**1 Level = 100 Tokens**',
             inline: true
           }
         )
@@ -363,23 +372,28 @@ async function handleLeaderboard(interaction) {
       });
     }
 
-    // Create leaderboard description
+    // Create leaderboard description with better formatting
     let leaderboardText = '';
     const medals = ['🥇', '🥈', '🥉'];
     
     topUsers.forEach((user, index) => {
-      const medal = index < 3 ? medals[index] : `${index + 1}.`;
+      const medal = index < 3 ? medals[index] : `**${index + 1}.**`;
       const level = user.leveling?.level || 1;
       const xp = user.leveling?.xp || 0;
       
-      leaderboardText += `${medal} <@${user.discordId}> - Level ${level} (${xp.toLocaleString()} XP)\n`;
+      // Better formatting with proper spacing and alignment
+      const rankSpacing = index < 9 ? ' ' : ''; // Extra space for single digits
+      leaderboardText += `${medal}${rankSpacing} <@${user.discordId}>\n`;
+      leaderboardText += `    📊 **Level ${level}** • ⭐ **${xp.toLocaleString()} XP**\n\n`;
     });
 
-    // Create embed
+    // Create embed with border image and better styling
     const embed = new EmbedBuilder()
       .setColor(0xFFD700)
-      .setTitle('🏆 Server Leaderboard')
-      .setDescription(leaderboardText || 'No users found')
+      .setTitle('🏆 Server Level Leaderboard')
+      .setDescription(`**Top ${limit} Leveled Users**\n\n${leaderboardText || 'No users found'}`)
+      .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({
         text: `Showing top ${limit} users • Use /levels rank to check your level`,
         icon_url: interaction.client.user.displayAvatarURL()
@@ -424,8 +438,9 @@ async function handleImport(interaction) {
       const embed = new EmbedBuilder()
         .setColor(0xff6b6b)
         .setTitle('❌ Import Failed')
-        .setDescription(importResult.message)
+        .setDescription(`**${importResult.message}**`)
         .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setFooter({
           text: importResult.hasImported ? 'You can only import once from MEE6' : 'Please check your input values',
           icon_url: interaction.client.user.displayAvatarURL()
@@ -440,25 +455,26 @@ async function handleImport(interaction) {
       .setColor(0x00ff88)
       .setTitle('🎉 MEE6 Import Successful!')
       .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .addFields(
         {
           name: '📊 Imported Level',
-          value: `${importResult.importedLevel}`,
+          value: `**Level ${importResult.importedLevel}**`,
           inline: true
         },
         {
           name: '🔄 Last Exchanged Level',
-          value: `${importResult.lastExchangedLevel}`,
+          value: `**Level ${importResult.lastExchangedLevel}**`,
           inline: true
         },
         {
           name: '💎 Exchangeable Levels',
-          value: `${importResult.exchangeableLevels}`,
+          value: `**${importResult.exchangeableLevels}**`,
           inline: true
         },
         {
           name: '🪙 Potential Tokens',
-          value: `${importResult.potentialTokens.toLocaleString()}`,
+          value: `**${importResult.potentialTokens.toLocaleString()}**`,
           inline: true
         },
         {
@@ -468,11 +484,11 @@ async function handleImport(interaction) {
         },
         {
           name: '⚠️ Important',
-          value: 'This import can only be done once!',
+          value: '**This import can only be done once!**',
           inline: true
         }
       )
-      .setDescription('Your MEE6 levels have been successfully imported into our new leveling system!')
+      .setDescription('**Your MEE6 levels have been successfully imported into our new leveling system!**')
       .setFooter({
         text: 'Use /levels exchange to convert levels to tokens',
         icon_url: interaction.client.user.displayAvatarURL()

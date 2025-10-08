@@ -17,11 +17,12 @@ const XP_CONFIG = {
 
 /**
  * Handle XP gain for a user message
+ * Works in all channels including threads, voice channels, and text channels
  * @param {Message} message - Discord.js Message object
  */
 async function handleXP(message) {
   try {
-    // Skip bot messages and DMs
+    // Skip bot messages and DMs (but includes threads and all other channel types)
     if (message.author.bot || !message.guild) return;
     
     // Skip messages that are too short (spam prevention)
