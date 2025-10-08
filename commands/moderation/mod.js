@@ -1676,16 +1676,43 @@ async function handleApprove(interaction) {
         return interaction.editReply({ content: `⚠️ Submission with ID \`${submissionId}\` not found.`, ephemeral: true });
       }
   
-      const { userId, collab, category = 'art', finalTokenAmount: tokenAmount, title, messageUrl } = submission;
+    const { userId, collab, category = 'art', finalTokenAmount: tokenAmount, title, messageUrl } = submission;
   
-      if (!messageUrl) {
-        throw new Error('Message URL is missing or invalid.');
-      }
-  
-      const channelId = messageUrl.split('/')[5];
-      const messageId = messageUrl.split('/')[6];
-      const channel = await interaction.client.channels.fetch(channelId);
-      const message = await channel.messages.fetch(messageId);
+    if (!messageUrl) {
+      return interaction.editReply({ 
+        content: `❌ This submission is missing a message URL and cannot be approved/denied. Submission ID: \`${submissionId}\`\n\nThis may be a corrupted or incomplete submission. Please contact the bot developer if this issue persists.`, 
+        ephemeral: true 
+      });
+    }
+
+    // Validate and parse message URL
+    const urlParts = messageUrl.split('/');
+    const channelId = urlParts[5];
+    const messageId = urlParts[6];
+    
+    if (!channelId || !messageId) {
+      return interaction.editReply({ 
+        content: `❌ The message URL for this submission is invalid. Submission ID: \`${submissionId}\`\n\nMessage URL: \`${messageUrl}\`\n\nThis may be a corrupted or incomplete submission. Please contact the bot developer if this issue persists.`, 
+        ephemeral: true 
+      });
+    }
+
+    // Fetch the channel and message
+    const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+    if (!channel) {
+      return interaction.editReply({ 
+        content: `❌ Could not find the channel for this submission. The channel may have been deleted. Submission ID: \`${submissionId}\``, 
+        ephemeral: true 
+      });
+    }
+
+    const message = await channel.messages.fetch(messageId).catch(() => null);
+    if (!message) {
+      return interaction.editReply({ 
+        content: `❌ Could not find the message for this submission. The message may have been deleted. Submission ID: \`${submissionId}\``, 
+        ephemeral: true 
+      });
+    }
   
             if (action === 'approve') {
         const user = await getOrCreateToken(userId);
