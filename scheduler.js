@@ -456,6 +456,192 @@ async function runDailyCleanupTasks(client) {
 }
 
 // ============================================================================
+// ------------------- Nitro Boost Rewards Functions -------------------
+// ============================================================================
+
+async function distributeMonthlyBoostRewards(client) {
+  console.log('[scheduler.js]: 💎 Starting monthly Nitro boost reward distribution...');
+  
+  try {
+    const guild = client.guilds.cache.get(process.env.GUILD_ID);
+    if (!guild) {
+      console.error('[scheduler.js]: ❌ Guild not found');
+      return { success: false, error: 'Guild not found' };
+    }
+
+    // Fetch all members to ensure we have premium data
+    await guild.members.fetch();
+    
+    // Get all members who are currently boosting
+    const boosters = guild.members.cache.filter(member => member.premiumSince !== null);
+    
+    if (boosters.size === 0) {
+      console.log('[scheduler.js]: ℹ️ No active boosters found');
+      return { success: true, rewardedCount: 0, totalTokens: 0 };
+    }
+    
+    console.log(`[scheduler.js]: 💎 Found ${boosters.size} active booster(s)`);
+    
+    const User = require('./models/UserModel');
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    let rewardedCount = 0;
+    let totalTokensDistributed = 0;
+    let alreadyRewardedCount = 0;
+    let errorCount = 0;
+    const rewardDetails = [];
+    
+    for (const [memberId, member] of boosters) {
+      try {
+        // Get or create user record
+        const user = await User.getOrCreateUser(memberId);
+        
+        // Discord API limitation: premiumSince only tells us IF they're boosting, not HOW MANY boosts
+        // Users can boost up to 2 times, but we can't detect this through the API
+        // We'll count each active booster as having 1 boost
+        // Note: If you want to track multiple boosts per user, you'll need to manually track this
+        // or ask users to report it (like the old system)
+        const boostCount = 1;
+        
+        console.log(`[scheduler.js]: Processing ${member.user.tag} - Boost count: ${boostCount}`);
+        
+        // Give boost rewards
+        const result = await user.giveBoostRewards(boostCount);
+        
+        if (result.success) {
+          rewardedCount++;
+          totalTokensDistributed += result.tokensReceived;
+          rewardDetails.push({
+            userId: memberId,
+            username: member.user.tag,
+            boostCount: result.boostCount,
+            tokensReceived: result.tokensReceived
+          });
+          
+          console.log(`[scheduler.js]: ✅ Rewarded ${member.user.tag} with ${result.tokensReceived} tokens (${result.boostCount} boost)`);
+          
+          // Send DM notification
+          try {
+            await member.send({
+              content: `🎉 **Monthly Nitro Boost Reward!**\n\nThank you for boosting **Roots Of The Wild**!\n\n💎 You've received **${result.tokensReceived} tokens** for your ${result.boostCount} boost this month.\n\n**New Balance:** ${result.newTokenBalance} tokens\n**Month:** ${currentMonth}\n\nYour support helps keep our server amazing! ✨`
+            });
+          } catch (dmError) {
+            console.log(`[scheduler.js]: ⚠️ Could not send DM to ${member.user.tag} - user may have blocked DMs`);
+          }
+          
+          // Send public announcement in boost rewards channel
+          const boostAnnouncementChannelId = process.env.BOOST_ANNOUNCEMENT_CHANNEL || '651614266046152705';
+          try {
+            const announcementChannel = await client.channels.fetch(boostAnnouncementChannelId);
+            if (announcementChannel) {
+              const { EmbedBuilder } = require('discord.js');
+              const announcementEmbed = new EmbedBuilder()
+                .setColor('#ff73fa')
+                .setTitle('💎 Nitro Boost Reward!')
+                .setDescription(`Thank you for boosting **Roots Of The Wild**!`)
+                .addFields(
+                  { name: '🎉 Booster', value: `<@${memberId}>`, inline: true },
+                  { name: '💰 Tokens Earned', value: `${result.tokensReceived} tokens`, inline: true },
+                  { name: '📅 Month', value: currentMonth, inline: true }
+                )
+                .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                .setFooter({ text: 'Boost the server to earn 500 tokens per boost every month!' })
+                .setTimestamp();
+              
+              await announcementChannel.send({
+                content: `<@${memberId}>`,
+                embeds: [announcementEmbed]
+              });
+              
+              console.log(`[scheduler.js]: 📢 Posted boost reward announcement for ${member.user.tag} in channel ${boostAnnouncementChannelId}`);
+            }
+          } catch (announcementError) {
+            console.error(`[scheduler.js]: ❌ Error posting boost reward announcement for ${member.user.tag}:`, announcementError);
+          }
+        } else if (result.alreadyRewarded) {
+          alreadyRewardedCount++;
+          console.log(`[scheduler.js]: ℹ️ ${member.user.tag} already received boost rewards this month`);
+        } else {
+          errorCount++;
+          console.error(`[scheduler.js]: ❌ Failed to reward ${member.user.tag}: ${result.message}`);
+        }
+        
+      } catch (error) {
+        errorCount++;
+        console.error(`[scheduler.js]: ❌ Error processing boost reward for ${member.user.tag}:`, error);
+      }
+    }
+    
+    // Send summary to a log channel if configured
+    const logChannelId = process.env.BOOST_LOG_CHANNEL || process.env.MOD_LOG_CHANNEL;
+    if (logChannelId) {
+      try {
+        const logChannel = await client.channels.fetch(logChannelId);
+        if (logChannel) {
+          const { EmbedBuilder } = require('discord.js');
+          const summaryEmbed = new EmbedBuilder()
+            .setColor('#ff73fa')
+            .setTitle('💎 Monthly Nitro Boost Rewards Distributed')
+            .setDescription(`Automatic boost reward distribution completed for ${currentMonth}`)
+            .addFields(
+              { name: '✅ Rewarded', value: `${rewardedCount} booster(s)`, inline: true },
+              { name: '💰 Total Tokens', value: `${totalTokensDistributed} tokens`, inline: true },
+              { name: 'ℹ️ Already Rewarded', value: `${alreadyRewardedCount}`, inline: true },
+              { name: '❌ Errors', value: `${errorCount}`, inline: true },
+              { name: '📊 Total Boosters', value: `${boosters.size}`, inline: true },
+              { name: '📅 Month', value: currentMonth, inline: true }
+            )
+            .setTimestamp();
+          
+          if (rewardDetails.length > 0) {
+            const detailsText = rewardDetails
+              .map(d => `• **${d.username}**: ${d.tokensReceived} tokens (${d.boostCount} boost)`)
+              .join('\n');
+            
+            // Discord has a 1024 character limit per field, so split if needed
+            if (detailsText.length <= 1024) {
+              summaryEmbed.addFields({ name: '📋 Rewards Given', value: detailsText, inline: false });
+            } else {
+              summaryEmbed.addFields({ 
+                name: '📋 Rewards Given', 
+                value: `${rewardDetails.length} users rewarded (too many to list)`, 
+                inline: false 
+              });
+            }
+          }
+          
+          await logChannel.send({ embeds: [summaryEmbed] });
+        }
+      } catch (logError) {
+        console.error('[scheduler.js]: ❌ Error sending boost reward summary to log channel:', logError);
+      }
+    }
+    
+    console.log(`[scheduler.js]: ✅ Boost reward distribution completed - Rewarded: ${rewardedCount}, Already Rewarded: ${alreadyRewardedCount}, Errors: ${errorCount}, Total Tokens: ${totalTokensDistributed}`);
+    
+    return {
+      success: true,
+      rewardedCount,
+      alreadyRewardedCount,
+      errorCount,
+      totalTokens: totalTokensDistributed,
+      totalBoosters: boosters.size
+    };
+    
+  } catch (error) {
+    console.error('[scheduler.js]: ❌ Error during boost reward distribution:', error);
+    handleError(error, 'scheduler.js', {
+      commandName: 'distributeMonthlyBoostRewards'
+    });
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// ============================================================================
 // ------------------- Birthday Functions -------------------
 // ============================================================================
 
@@ -1723,6 +1909,49 @@ async function sendBloodMoonEndAnnouncementsToChannels(client) {
 
 // ------------------- Startup Functions ------------------
 
+async function checkAndDistributeMonthlyBoostRewards(client) {
+  try {
+    console.log('[scheduler.js]: 💎 Checking if monthly boost rewards need to be distributed...');
+    
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentDay = now.getDate();
+    
+    // Only auto-distribute if we're past the 1st of the month
+    if (currentDay === 1) {
+      console.log('[scheduler.js]: ℹ️ Today is the 1st - scheduled job will handle distribution');
+      return;
+    }
+    
+    // Check if any users have already received rewards this month
+    const User = require('./models/UserModel');
+    const sampleUsers = await User.find({ 
+      'boostRewards.lastRewardMonth': currentMonth 
+    }).limit(1);
+    
+    if (sampleUsers.length > 0) {
+      console.log(`[scheduler.js]: ℹ️ Boost rewards already distributed for ${currentMonth}`);
+      return;
+    }
+    
+    // No rewards distributed yet this month - run distribution
+    console.log(`[scheduler.js]: 💎 No rewards found for ${currentMonth} - running distribution now...`);
+    const result = await distributeMonthlyBoostRewards(client);
+    
+    if (result.success) {
+      console.log(`[scheduler.js]: ✅ Startup boost reward distribution completed - Rewarded: ${result.rewardedCount}, Total Tokens: ${result.totalTokens}`);
+    } else {
+      console.error(`[scheduler.js]: ❌ Startup boost reward distribution failed:`, result.error);
+    }
+    
+  } catch (error) {
+    console.error('[scheduler.js]: ❌ Error checking/distributing monthly boost rewards:', error);
+    handleError(error, 'scheduler.js', {
+      commandName: 'checkAndDistributeMonthlyBoostRewards'
+    });
+  }
+}
+
 async function runStartupChecks(client) {
  try {
   console.log(`[scheduler.js]: 🚀 Running startup checks...`);
@@ -1743,6 +1972,9 @@ async function runStartupChecks(client) {
   } else {
    await revertChannelNames(client);
   }
+
+  // Check and distribute monthly boost rewards if not done yet this month
+  await checkAndDistributeMonthlyBoostRewards(client);
 
   // Character and quest startup tasks
   await Promise.all([
@@ -1798,6 +2030,16 @@ function setupDailyTasks(client) {
 
  // Monthly tasks
  createCronJob("0 0 1 * *", "monthly vending stock generation", () => generateVendingStockList(client));
+ createCronJob("0 0 1 * *", "monthly nitro boost rewards", async () => {
+  try {
+   console.log('[scheduler.js]: 💎 Starting monthly Nitro boost reward distribution (1st of month)...');
+   const result = await distributeMonthlyBoostRewards(client);
+   console.log(`[scheduler.js]: ✅ Nitro boost rewards distributed - Rewarded: ${result.rewardedCount}, Already Rewarded: ${result.alreadyRewardedCount}, Errors: ${result.errorCount}, Total Tokens: ${result.totalTokens}`);
+  } catch (error) {
+   handleError(error, 'scheduler.js');
+   console.error('[scheduler.js]: ❌ Monthly Nitro boost reward distribution failed:', error.message);
+  }
+ });
  // Monthly quest reward distribution - runs at 11:59 PM daily, but only processes on last day of month
  createCronJob("59 23 * * *", "monthly quest reward distribution", async () => {
   try {
@@ -1946,4 +2188,6 @@ module.exports = {
  checkAndPostMissedQuests,
  cleanupOldRuuGameSessions,
  cleanupExpiredRaids,
+ distributeMonthlyBoostRewards,
+ checkAndDistributeMonthlyBoostRewards,
 };

@@ -1258,7 +1258,13 @@ async function handleShopBuy(interaction) {
       });
     }
 
-    const totalPrice = itemDetails.buyPrice * quantity;
+    // Check for birthday discount
+    const hasBirthdayDiscount = user.hasBirthdayDiscount();
+    const discountPercentage = hasBirthdayDiscount ? user.getBirthdayDiscountAmount() : 0;
+    const originalPrice = itemDetails.buyPrice * quantity;
+    const discountMultiplier = hasBirthdayDiscount ? (100 - discountPercentage) / 100 : 1;
+    const totalPrice = Math.floor(originalPrice * discountMultiplier);
+    const savedAmount = originalPrice - totalPrice;
     const currentTokens = user.tokens;
 
     if (currentTokens < totalPrice) {
@@ -1298,6 +1304,11 @@ async function handleShopBuy(interaction) {
     // ------------------- Process Purchase -------------------
     console.log(`[shops]: 💰 Token balance for ${interaction.user.tag}:`);
     console.log(`[shops]: 📊 Previous balance: 🪙 ${currentTokens}`);
+    if (hasBirthdayDiscount) {
+      console.log(`[shops]: 🎂 Birthday discount applied: ${discountPercentage}%`);
+      console.log(`[shops]: 💰 Original price: 🪙 ${originalPrice}`);
+      console.log(`[shops]: 💰 Discount savings: 🪙 ${savedAmount}`);
+    }
     console.log(`[shops]: ➖ Spent: 🪙 ${totalPrice}`);
     console.log(`[shops]: 📊 New balance: 🪙 ${currentTokens - totalPrice}`);
 
@@ -1347,8 +1358,11 @@ async function handleShopBuy(interaction) {
 
     // Log to token tracker
     if (user.tokenTracker) {
+      const purchaseDescription = hasBirthdayDiscount 
+        ? `${characterName} - ${itemName} x${quantity} - Shop Purchase (🎂 ${discountPercentage}% Birthday Discount - Saved ${savedAmount} tokens)`
+        : `${characterName} - ${itemName} x${quantity} - Shop Purchase`;
       const tokenRow = [
-        `${characterName} - ${itemName} x${quantity} - Shop Purchase`,
+        purchaseDescription,
         interactionUrl,
         "purchase",
         "spent",
@@ -1387,6 +1401,16 @@ async function handleShopBuy(interaction) {
         }
       )
       .setFooter({ text: `The village bazaars thank you for your purchase!` });
+
+    // Add birthday discount field if applicable
+    if (hasBirthdayDiscount) {
+      purchaseEmbed.addFields({
+        name: "🎂 Birthday Discount Applied!",
+        value: `**${discountPercentage}% OFF** - You saved 🪙 ${savedAmount} tokens!\nOriginal Price: ~~🪙 ${originalPrice}~~ → Final Price: 🪙 ${totalPrice}`,
+        inline: false
+      });
+      purchaseEmbed.setFooter({ text: `Happy Birthday! The village celebrates with you! 🎉` });
+    }
 
     await interaction.editReply({ embeds: [purchaseEmbed] });
   } catch (error) {

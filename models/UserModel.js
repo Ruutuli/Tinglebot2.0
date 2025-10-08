@@ -64,10 +64,23 @@ const userSchema = new mongoose.Schema({
     month: { type: Number, min: 1, max: 12, default: null }, // Birthday month (1-12)
     day: { type: Number, min: 1, max: 31, default: null }, // Birthday day (1-31)
     lastBirthdayReward: { type: String, default: null }, // Last year they received birthday rewards (YYYY format)
+    birthdayDiscountExpiresAt: { type: Date, default: null }, // When the birthday discount expires
     birthdayRewards: [{ // Track birthday rewards given
       year: { type: String }, // YYYY format
       rewardType: { type: String }, // 'tokens' or 'discount'
       amount: { type: Number }, // tokens received or discount percentage
+      timestamp: { type: Date, default: Date.now }
+    }]
+  },
+
+  // ------------------- Nitro Boost Rewards System -------------------
+  boostRewards: {
+    lastRewardMonth: { type: String, default: null }, // Last month rewards were given (YYYY-MM format)
+    totalRewards: { type: Number, default: 0 }, // Total boost rewards received
+    rewardHistory: [{ // Track boost reward history
+      month: { type: String }, // YYYY-MM format
+      boostCount: { type: Number }, // Number of boosts during that month
+      tokensReceived: { type: Number }, // Tokens received (boostCount × 500)
       timestamp: { type: Date, default: Date.now }
     }]
   }
@@ -458,7 +471,12 @@ userSchema.methods.giveBirthdayRewards = async function(rewardType = 'random') {
     rewardDescription = `1500 tokens`;
   } else if (finalRewardType === 'discount') {
     rewardAmount = 75;
-    rewardDescription = `75% discount in village shops`;
+    rewardDescription = `75% discount in village shops (active until end of your birthday)`;
+    
+    // Set discount to expire at end of birthday (11:59:59 PM)
+    const now = new Date();
+    const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    this.birthday.birthdayDiscountExpiresAt = expirationDate;
   }
   
   // Update birthday tracking
@@ -484,6 +502,87 @@ userSchema.methods.giveBirthdayRewards = async function(rewardType = 'random') {
     rewardAmount: rewardAmount,
     rewardDescription: rewardDescription,
     newTokenBalance: this.tokens
+  };
+};
+
+userSchema.methods.hasBirthdayDiscount = function() {
+  if (!this.birthday || !this.birthday.birthdayDiscountExpiresAt) {
+    return false;
+  }
+  
+  const now = new Date();
+  return now < this.birthday.birthdayDiscountExpiresAt;
+};
+
+userSchema.methods.getBirthdayDiscountAmount = function() {
+  if (this.hasBirthdayDiscount()) {
+    return 75; // 75% discount
+  }
+  return 0;
+};
+
+// ------------------- Boost Reward Methods -------------------
+userSchema.methods.giveBoostRewards = async function(boostCount) {
+  if (!boostCount || boostCount <= 0) {
+    return {
+      success: false,
+      message: 'No boosts detected'
+    };
+  }
+  
+  // Initialize boostRewards object if it doesn't exist
+  if (!this.boostRewards) {
+    this.boostRewards = {
+      lastRewardMonth: null,
+      totalRewards: 0,
+      rewardHistory: []
+    };
+  }
+  
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  
+  // Check if already received rewards this month
+  if (this.boostRewards.lastRewardMonth === currentMonth) {
+    return {
+      success: false,
+      message: 'Boost rewards already given this month',
+      alreadyRewarded: true
+    };
+  }
+  
+  // Calculate tokens (500 per boost)
+  const tokensToReceive = boostCount * 500;
+  
+  // Add tokens
+  this.tokens = (this.tokens || 0) + tokensToReceive;
+  
+  // Update boost reward tracking
+  this.boostRewards.lastRewardMonth = currentMonth;
+  this.boostRewards.totalRewards += tokensToReceive;
+  
+  // Add to reward history
+  this.boostRewards.rewardHistory.push({
+    month: currentMonth,
+    boostCount: boostCount,
+    tokensReceived: tokensToReceive,
+    timestamp: now
+  });
+  
+  // Keep only last 12 months of history
+  if (this.boostRewards.rewardHistory.length > 12) {
+    this.boostRewards.rewardHistory = this.boostRewards.rewardHistory.slice(-12);
+  }
+  
+  await this.save();
+  
+  return {
+    success: true,
+    message: `Received ${tokensToReceive} tokens for ${boostCount} boost(s)!`,
+    boostCount: boostCount,
+    tokensReceived: tokensToReceive,
+    newTokenBalance: this.tokens,
+    month: currentMonth
   };
 };
 
