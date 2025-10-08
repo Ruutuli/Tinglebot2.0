@@ -131,43 +131,77 @@ userSchema.methods.addXP = async function(amount, source = 'message') {
 };
 
 userSchema.methods.calculateLevel = function() {
-  // Level calculation: XP required = level * 100 + (level - 1) * 50
-  // Level 1: 0 XP, Level 2: 150 XP, Level 3: 350 XP, Level 4: 600 XP, etc.
+  // MEE6-style exponential level calculation
+  // Formula: XP required for level N = 5 × (N²) + 50 × N + 100
+  // Level 1: 0 XP
+  // Level 2: 120 XP  
+  // Level 5: 475 XP
+  // Level 10: 1,100 XP
+  // Level 20: 3,100 XP
+  // Level 50: 15,100 XP
   if (!this.leveling) return 1;
   
   let level = 1;
-  let xpRequired = 0;
+  let totalXpRequired = 0;
   
-  while (this.leveling.xp >= xpRequired) {
+  // Calculate level based on total XP
+  while (true) {
+    const nextLevel = level + 1;
+    const xpForNextLevel = this.getXPRequiredForLevel(nextLevel);
+    totalXpRequired += xpForNextLevel;
+    
+    if (this.leveling.xp < totalXpRequired) {
+      break;
+    }
+    
     level++;
-    xpRequired = level * 100 + (level - 1) * 50;
   }
   
-  return level - 1;
+  return level;
+};
+
+userSchema.methods.getXPRequiredForLevel = function(targetLevel) {
+  // Calculate XP required to go from (targetLevel - 1) to targetLevel
+  // Using MEE6-style formula: 5 × (level²) + 50 × level + 100
+  if (targetLevel <= 1) return 0;
+  return 5 * Math.pow(targetLevel, 2) + 50 * targetLevel + 100;
 };
 
 userSchema.methods.getXPForNextLevel = function() {
-  if (!this.leveling) return 150; // Default to level 2 requirement
+  // Get total cumulative XP required to reach the next level
+  if (!this.leveling) return this.getXPRequiredForLevel(2); // Default to level 2 requirement
   
-  const nextLevel = this.leveling.level + 1;
-  const xpRequired = nextLevel * 100 + (nextLevel - 1) * 50;
-  return xpRequired;
+  let totalXp = 0;
+  for (let i = 2; i <= this.leveling.level + 1; i++) {
+    totalXp += this.getXPRequiredForLevel(i);
+  }
+  
+  return totalXp;
 };
 
 userSchema.methods.getProgressToNextLevel = function() {
   if (!this.leveling) {
-    return { current: 0, needed: 150, percentage: 0 };
+    const xpNeeded = this.getXPRequiredForLevel(2);
+    return { current: 0, needed: xpNeeded, percentage: 0 };
   }
   
-  const currentLevelXP = this.leveling.level * 100 + (this.leveling.level - 1) * 50;
-  const nextLevelXP = this.getXPForNextLevel();
-  const progressXP = this.leveling.xp - currentLevelXP;
-  const totalXPNeeded = nextLevelXP - currentLevelXP;
+  // Calculate total XP required to reach current level
+  let currentLevelTotalXP = 0;
+  for (let i = 2; i <= this.leveling.level; i++) {
+    currentLevelTotalXP += this.getXPRequiredForLevel(i);
+  }
+  
+  // Calculate XP needed for next level
+  const xpNeededForNextLevel = this.getXPRequiredForLevel(this.leveling.level + 1);
+  
+  // Calculate progress within current level
+  const progressXP = this.leveling.xp - currentLevelTotalXP;
+  const percentage = Math.min(100, Math.max(0, Math.round((progressXP / xpNeededForNextLevel) * 100)));
   
   return {
     current: progressXP,
-    needed: totalXPNeeded,
-    percentage: Math.round((progressXP / totalXPNeeded) * 100)
+    needed: xpNeededForNextLevel,
+    percentage: percentage
   };
 };
 
