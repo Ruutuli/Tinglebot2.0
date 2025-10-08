@@ -119,9 +119,19 @@ async function handleRank(interaction) {
       potentialTokens: 0,
       totalLevelsExchanged: 0
     };
+    
+    // Check if user imported from MEE6
+    const hasImportedFromMee6 = user?.leveling?.hasImportedFromMee6 || false;
+    const importedMee6Level = user?.leveling?.importedMee6Level || null;
 
     // Create progress bar
     const progressBar = createProgressBar(levelInfo.progress.current, levelInfo.progress.needed, 20);
+
+    // Build statistics display
+    let statsValue = `**${levelInfo.xp.toLocaleString()} XP**`;
+    if (hasImportedFromMee6 && importedMee6Level) {
+      statsValue += `\n📥 Imported from MEE6 (Level ${importedMee6Level})`;
+    }
 
     // Create embed with better styling
     const embed = new EmbedBuilder()
@@ -133,7 +143,7 @@ async function handleRank(interaction) {
       .addFields(
         {
           name: '📊 Statistics',
-          value: `**${levelInfo.xp.toLocaleString()} XP** • **${levelInfo.totalMessages.toLocaleString()} messages**`,
+          value: statsValue,
           inline: false
         },
         {

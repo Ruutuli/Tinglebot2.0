@@ -188,7 +188,7 @@ async function getLeaderboard(limit = 10) {
 }
 
 /**
- * Create XP progress bar
+ * Create XP progress bar with prettier styling
  * @param {number} current - Current XP progress
  * @param {number} needed - XP needed for next level
  * @param {number} length - Length of progress bar (default 20)
@@ -199,7 +199,21 @@ function createProgressBar(current, needed, length = 20) {
   const filled = Math.round(percentage * length);
   const empty = length - filled;
   
-  return '█'.repeat(filled) + '░'.repeat(empty);
+  // Use prettier Unicode characters for the progress bar
+  let bar = '';
+  
+  if (filled === 0) {
+    // Empty bar
+    bar = '⬜'.repeat(length);
+  } else if (filled === length) {
+    // Full bar
+    bar = '🟦'.repeat(length);
+  } else {
+    // Partial bar with gradient effect
+    bar = '🟦'.repeat(filled) + '⬜'.repeat(empty);
+  }
+  
+  return bar;
 }
 
 // ------------------- Export functions -------------------
