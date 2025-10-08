@@ -191,10 +191,10 @@ async function getLeaderboard(limit = 10) {
  * Create XP progress bar with prettier styling
  * @param {number} current - Current XP progress
  * @param {number} needed - XP needed for next level
- * @param {number} length - Length of progress bar (default 20)
+ * @param {number} length - Length of progress bar (default 10)
  * @returns {string} Progress bar string
  */
-function createProgressBar(current, needed, length = 20) {
+function createProgressBar(current, needed, length = 10) {
   const percentage = current / needed;
   const filled = Math.round(percentage * length);
   const empty = length - filled;
