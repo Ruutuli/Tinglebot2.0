@@ -558,10 +558,16 @@ const setupPronounsReactionRoles = async (channel) => {
   
   // Add reactions using custom emojis
   try {
-    await message.react('795050612496531486'); // potionpink
-    await message.react('795050612198604822'); // potionblue
-    await message.react('795050612550402069'); // potionpurple
-    await message.react('1086881430077984789'); // discordpotionyellow
+    // Get emoji objects from the guild
+    const potionpink = channel.guild.emojis.cache.get('795050612496531486');
+    const potionblue = channel.guild.emojis.cache.get('795050612198604822');
+    const potionpurple = channel.guild.emojis.cache.get('795050612550402069');
+    const discordpotionyellow = channel.guild.emojis.cache.get('1086881430077984789');
+    
+    if (potionpink) await message.react(potionpink);
+    if (potionblue) await message.react(potionblue);
+    if (potionpurple) await message.react(potionpurple);
+    if (discordpotionyellow) await message.react(discordpotionyellow);
   } catch (error) {
     console.log('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
     // Fallback to standard emojis if custom ones don't exist
@@ -588,9 +594,14 @@ const setupVillageReactionRoles = async (channel) => {
   
   // Add reactions using custom emojis
   try {
-    await message.react('899492917452890142'); // rudania
-    await message.react('899493009073274920'); // inariko
-    await message.react('899492879205007450'); // vhintl
+    // Get emoji objects from the guild
+    const rudania = channel.guild.emojis.cache.get('899492917452890142');
+    const inariko = channel.guild.emojis.cache.get('899493009073274920');
+    const vhintl = channel.guild.emojis.cache.get('899492879205007450');
+    
+    if (rudania) await message.react(rudania);
+    if (inariko) await message.react(inariko);
+    if (vhintl) await message.react(vhintl);
   } catch (error) {
     console.log('[reactionRolesHandler.js]: Error adding custom emoji reactions:', error);
     // Fallback to standard emojis if custom ones don't exist

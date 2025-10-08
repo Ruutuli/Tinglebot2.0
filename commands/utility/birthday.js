@@ -60,6 +60,15 @@ module.exports = {
       subcommand
         .setName('claim')
         .setDescription('Claim your birthday rewards (if it\'s your birthday)')
+        .addStringOption(option =>
+          option.setName('reward')
+            .setDescription('Choose your birthday reward')
+            .setRequired(true)
+            .addChoices(
+              { name: '💰 1500 Tokens', value: 'tokens' },
+              { name: '🛍️ 75% Shop Discount', value: 'discount' }
+            )
+        )
     )
     
     // ------------------- Subcommand: list -------------------
@@ -133,17 +142,17 @@ async function handleSetBirthday(interaction) {
         {
           name: '📅 Birthday',
           value: `**${result.birthday}**`,
-          inline: true
+          inline: false
         },
         {
           name: '🎁 Rewards',
-          value: '**1500 tokens OR 75% shop discount**',
-          inline: true
+          value: '**Choose one:** 1500 tokens OR 75% shop discount',
+          inline: false
         },
         {
-          name: '🎲 Reward Type',
-          value: '**Randomly chosen**',
-          inline: true
+          name: '🎲 Reward Selection',
+          value: '**You choose!** Pick your reward when you claim',
+          inline: false
         },
         {
           name: '🌟 Special Features',
@@ -152,7 +161,7 @@ async function handleSetBirthday(interaction) {
         }
       )
       .setFooter({
-        text: 'Use /birthday claim on your birthday to get rewards!',
+        text: 'Use /birthday claim on your birthday to choose and get your rewards!',
         icon_url: interaction.client.user.displayAvatarURL()
       })
       .setTimestamp();
@@ -200,22 +209,22 @@ async function handleViewBirthday(interaction) {
         {
           name: '📅 Birthday',
           value: `**${birthday}**`,
-          inline: true
+          inline: false
         },
         {
           name: '📊 Status',
           value: isToday ? '**🎉 Today!**' : '**Not today**',
-          inline: true
+          inline: false
         },
         {
           name: '🎁 Rewards',
-          value: '**1500 tokens OR 75% shop discount**',
-          inline: true
+          value: '**Choose one:** 1500 tokens OR 75% shop discount',
+          inline: false
         }
       )
       .setFooter({
         text: isToday && !hasClaimedThisYear && isOwnBirthday 
-          ? 'Use /birthday claim to get your rewards!' 
+          ? 'Use /birthday claim to choose and get your rewards!' 
           : 'Birthday information',
         icon_url: interaction.client.user.displayAvatarURL()
       })
@@ -224,7 +233,7 @@ async function handleViewBirthday(interaction) {
     if (isToday && !hasClaimedThisYear && isOwnBirthday) {
       embed.addFields({
         name: '🎁 Rewards Available!',
-        value: '**Claim your birthday rewards now!**',
+        value: '**Claim your birthday rewards now! You can choose which reward you want.**',
         inline: false
       });
     }
@@ -244,6 +253,7 @@ async function handleViewBirthday(interaction) {
 async function handleClaimRewards(interaction) {
   try {
     const user = await User.findOne({ discordId: interaction.user.id });
+    const rewardChoice = interaction.options.getString('reward');
     
     if (!user || !user.birthday || !user.birthday.month || !user.birthday.day) {
       return await interaction.reply({
@@ -259,8 +269,8 @@ async function handleClaimRewards(interaction) {
       });
     }
     
-    // Give birthday rewards
-    const result = await user.giveBirthdayRewards();
+    // Give birthday rewards with user's choice
+    const result = await user.giveBirthdayRewards(rewardChoice);
     
     if (!result.success) {
       return await interaction.reply({
@@ -280,17 +290,17 @@ async function handleClaimRewards(interaction) {
         {
           name: '🎁 Birthday Reward',
           value: `**${result.rewardDescription}**`,
-          inline: true
+          inline: false
         },
         {
-          name: '🎲 Reward Type',
+          name: '🎲 Reward Choice',
           value: `**${result.rewardType.toUpperCase()}**`,
-          inline: true
+          inline: false
         },
         {
           name: '💰 Token Balance',
           value: `**${result.newTokenBalance.toLocaleString()} tokens**`,
-          inline: true
+          inline: false
         }
       )
       .setFooter({
