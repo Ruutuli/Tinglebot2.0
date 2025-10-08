@@ -126,48 +126,24 @@ async function handleRank(interaction) {
     // Create embed with better styling
     const embed = new EmbedBuilder()
       .setColor(0x00ff88)
-      .setTitle('📈 Level Information')
+      .setTitle(`📈 ${targetUser.displayName}'s Level Information`)
       .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setDescription(`**Level ${levelInfo.level}** • ${levelInfo.rank ? `**#${levelInfo.rank}** on server` : '**Unranked**'}`)
       .addFields(
         {
-          name: '👤 User',
-          value: `**${targetUser.tag}**`,
-          inline: true
+          name: '📊 Statistics',
+          value: `**${levelInfo.xp.toLocaleString()} XP** • **${levelInfo.totalMessages.toLocaleString()} messages**`,
+          inline: false
         },
         {
-          name: '🎯 Current Level',
-          value: `**Level ${levelInfo.level}**`,
-          inline: true
+          name: '💎 Exchange Information',
+          value: `**${exchangeInfo.exchangeableLevels} levels** available • **${exchangeInfo.potentialTokens.toLocaleString()} tokens** potential`,
+          inline: false
         },
         {
-          name: '🏆 Server Rank',
-          value: levelInfo.rank ? `**#${levelInfo.rank}**` : '**Unranked**',
-          inline: true
-        },
-        {
-          name: '⭐ Total XP',
-          value: `**${levelInfo.xp.toLocaleString()} XP**`,
-          inline: true
-        },
-        {
-          name: '💬 Messages Sent',
-          value: `**${levelInfo.totalMessages.toLocaleString()}**`,
-          inline: true
-        },
-        {
-          name: '💎 Exchangeable Levels',
-          value: `**${exchangeInfo.exchangeableLevels}**`,
-          inline: true
-        },
-        {
-          name: '🪙 Potential Tokens',
-          value: `**${exchangeInfo.potentialTokens.toLocaleString()}**`,
-          inline: true
-        },
-        {
-          name: '📊 Progress to Level ' + (levelInfo.level + 1),
-          value: `\`${progressBar}\` **${levelInfo.progress.percentage}%**\n**${levelInfo.progress.current.toLocaleString()}** / **${levelInfo.progress.needed.toLocaleString()}** XP`,
+          name: `📈 Progress to Level ${levelInfo.level + 1}`,
+          value: `\`${progressBar}\`\n**${levelInfo.progress.percentage}%** • **${levelInfo.progress.current.toLocaleString()}** / **${levelInfo.progress.needed.toLocaleString()}** XP`,
           inline: false
         }
       )
@@ -392,7 +368,6 @@ async function handleLeaderboard(interaction) {
       .setColor(0xFFD700)
       .setTitle('🏆 Server Level Leaderboard')
       .setDescription(`**Top ${limit} Leveled Users**\n\n${leaderboardText || 'No users found'}`)
-      .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({
         text: `Showing top ${limit} users • Use /levels rank to check your level`,
