@@ -10,36 +10,36 @@ const { EmbedBuilder } = require('discord.js');
 
 // Role mappings for different reaction role categories
 const REACTION_ROLES = {
-  // Pronouns
+  // Pronouns - using actual emoji IDs and role IDs from server
   pronouns: {
-    'potionpink': 'She / Her',
-    'potionblue': 'He / Him', 
-    'potionpurple': 'They / Them',
-    'discordpotionyellow': 'Other / Ask',
+    '795050612496531486': '606350506310369281', // potionpink -> She / Her
+    '795050612198604822': '606350558605082637', // potionblue -> He / Him
+    '795050612550402069': '606350596559208463', // potionpurple -> They / Them
+    '1086881430077984789': '1086880101855141978', // discordpotionyellow -> Other / Ask
     // Standard emoji fallbacks for testing
-    '🩷': 'She / Her',
-    '💙': 'He / Him',
-    '💜': 'They / Them',
-    '💛': 'Other / Ask'
+    '🩷': '606350506310369281', // She / Her
+    '💙': '606350558605082637', // He / Him
+    '💜': '606350596559208463', // They / Them
+    '💛': '1086880101855141978' // Other / Ask
   },
   
-  // Villages
+  // Villages - using actual emoji IDs and role IDs from server
   villages: {
-    'rudania': 'Rudania',
-    'inariko': 'Inariko',
-    'vhintl': 'Vhintl',
+    '899492917452890142': '630837341124034580', // rudania -> Rudania
+    '899493009073274920': '631507660524486657', // inariko -> Inariko
+    '899492879205007450': '631507736508629002', // vhintl -> Vhintl
     // Standard emoji fallbacks for testing
-    '🔥': 'Rudania',
-    '💧': 'Inariko',
-    '🌿': 'Vhintl'
+    '🔥': '630837341124034580', // Rudania
+    '💧': '631507660524486657', // Inariko
+    '🌿': '631507736508629002' // Vhintl
   },
   
-  // Notification roles
+  // Notification roles - using actual emoji IDs and role IDs from server
   notifications: {
-    'scroll': 'RP Watch',
-    '💬': 'QOTD',
-    '🆘': 'Call for Help',
-    '🎉': 'Member Events'
+    '📜': '961807270201659442', // scroll -> RP Watch
+    '💬': '1118238707078668348', // qotd role ID
+    '🆘': 'Call for Help', // Need to find Call for Help role ID
+    '🎉': '1325998630032773140' // Member Event role ID
   }
 };
 
@@ -106,13 +106,13 @@ const handleReactionRole = async (reaction, user, action) => {
     const category = getReactionCategory(emoji, emojiId);
     if (!category) return;
     
-    const roleName = getRoleName(category, emoji, emojiId);
-    if (!roleName) return;
+    const roleId = getRoleId(category, emoji, emojiId);
+    if (!roleId) return;
     
-    // Find the role
-    const role = guild.roles.cache.find(r => r.name === roleName);
+    // Find the role by ID
+    const role = guild.roles.cache.get(roleId);
     if (!role) {
-      console.log(`[reactionRolesHandler.js]: Role "${roleName}" not found in guild`);
+      console.log(`[reactionRolesHandler.js]: Role with ID "${roleId}" not found in guild`);
       return;
     }
     
@@ -120,12 +120,12 @@ const handleReactionRole = async (reaction, user, action) => {
     if (action === 'add') {
       if (!member.roles.cache.has(role.id)) {
         await member.roles.add(role);
-        console.log(`[reactionRolesHandler.js]: Added role "${roleName}" to ${user.tag}`);
+        console.log(`[reactionRolesHandler.js]: Added role "${role.name}" to ${user.tag}`);
       }
     } else if (action === 'remove') {
       if (member.roles.cache.has(role.id)) {
         await member.roles.remove(role);
-        console.log(`[reactionRolesHandler.js]: Removed role "${roleName}" from ${user.tag}`);
+        console.log(`[reactionRolesHandler.js]: Removed role "${role.name}" from ${user.tag}`);
       }
     }
     
@@ -162,33 +162,35 @@ const isReactionRolesEmbed = async (message) => {
  * @returns {string|null} - The category or null
  */
 const getReactionCategory = (emoji, emojiId) => {
-  // Check pronouns
-  if (REACTION_ROLES.pronouns[emoji]) return 'pronouns';
+  // Check pronouns (try emoji ID first, then emoji name)
+  const emojiKey = emojiId || emoji;
+  if (REACTION_ROLES.pronouns[emojiKey]) return 'pronouns';
   
-  // Check villages
-  if (REACTION_ROLES.villages[emoji]) return 'villages';
+  // Check villages (try emoji ID first, then emoji name)
+  if (REACTION_ROLES.villages[emojiKey]) return 'villages';
   
-  // Check notifications
-  if (REACTION_ROLES.notifications[emoji]) return 'notifications';
+  // Check notifications (try emoji ID first, then emoji name)
+  if (REACTION_ROLES.notifications[emojiKey]) return 'notifications';
   
   return null;
 };
 
 /**
- * Get the role name for a reaction
+ * Get the role ID for a reaction
  * @param {string} category - The category
  * @param {string} emoji - The emoji name
  * @param {string} emojiId - The emoji ID
- * @returns {string|null} - The role name or null
+ * @returns {string|null} - The role ID or null
  */
-const getRoleName = (category, emoji, emojiId) => {
+const getRoleId = (category, emoji, emojiId) => {
+  const emojiKey = emojiId || emoji;
   switch (category) {
     case 'pronouns':
-      return REACTION_ROLES.pronouns[emoji];
+      return REACTION_ROLES.pronouns[emojiKey];
     case 'villages':
-      return REACTION_ROLES.villages[emoji];
+      return REACTION_ROLES.villages[emojiKey];
     case 'notifications':
-      return REACTION_ROLES.notifications[emoji];
+      return REACTION_ROLES.notifications[emojiKey];
     default:
       return null;
   }
@@ -208,22 +210,22 @@ const createPronounsEmbed = () => {
     .setDescription('**First, choose your own pronouns!**\n\nReact with the emoji that matches your pronouns to get the corresponding role.')
     .addFields(
       {
-        name: '🩷 She / Her',
+        name: '<a:potionpink:795050612496531486> She / Her',
         value: 'For those who use she/her pronouns',
         inline: false
       },
       {
-        name: '💙 He / Him', 
+        name: '<a:potionblue:795050612198604822> He / Him', 
         value: 'For those who use he/him pronouns',
         inline: false
       },
       {
-        name: '💜 They / Them',
+        name: '<a:potionpurple:795050612550402069> They / Them',
         value: 'For those who use they/them pronouns',
         inline: false
       },
       {
-        name: '💛 Other / Ask',
+        name: '<:discordpotionyellow:1086881430077984789> Other / Ask',
         value: 'For those who use other pronouns or prefer to be asked',
         inline: false
       }
@@ -243,17 +245,17 @@ const createVillageEmbed = () => {
     .setDescription('**Only choose the village of your FIRST/MAIN character.**\n\nSelect your character\'s home village to get the corresponding role.')
     .addFields(
       {
-        name: '🔥 Rudania',
+        name: '<:rudania:899492917452890142> Rudania',
         value: 'Click the reaction to get the Rudania role',
         inline: false
       },
       {
-        name: '💧 Inariko',
+        name: '<:inariko:899493009073274920> Inariko',
         value: 'Click the reaction to get the Inariko role',
         inline: false
       },
       {
-        name: '🌿 Vhintl',
+        name: '<:vhintl:899492879205007450> Vhintl',
         value: 'Click the reaction to get the Vhintl role',
         inline: false
       }
@@ -270,7 +272,7 @@ const createVillageEmbed = () => {
 const createInactiveEmbed = () => {
   return new EmbedBuilder()
     .setTitle('⏸️ Inactive Role Information')
-    .setDescription('**If you have the @INACTIVE role, this means you are currently marked as inactive.**\n\nWhile you have this role, your access to server channels will be limited.')
+    .setDescription(`**If you have the <@&788148064182730782> role, this means you are currently marked as inactive.**\n\nWhile you have this role, your access to server channels will be limited.`)
     .addFields(
       {
         name: '📋 Inactivity Rules',
@@ -308,7 +310,7 @@ const createNotificationRolesEmbed = () => {
         inline: false
       },
       {
-        name: '💬 QOTD',
+        name: '💬 qotd',
         value: '**Get pinged for Questions of the Day!**\n• Notifications from 🔔》headcanons\n• Notifications from 🔔》nsfw-boinkcanons\n• Anyone can use this tag!',
         inline: false
       },
@@ -318,7 +320,7 @@ const createNotificationRolesEmbed = () => {
         inline: false
       },
       {
-        name: '🎉 Member Events',
+        name: '🎉 Member Event',
         value: '**Get notified about community events!**\n• Member-run events\n• Community activities\n• **For approved event runners only**',
         inline: false
       },
@@ -348,10 +350,10 @@ const setupPronounsReactionRoles = async (channel) => {
   
   // Add reactions (try custom emojis first, fallback to standard)
   try {
-    await message.react('potionpink');
-    await message.react('potionblue');
-    await message.react('potionpurple');
-    await message.react('discordpotionyellow');
+    await message.react('<a:potionpink:795050612496531486>');
+    await message.react('<a:potionblue:795050612198604822>');
+    await message.react('<a:potionpurple:795050612550402069>');
+    await message.react('<:discordpotionyellow:1086881430077984789>');
   } catch (error) {
     // Fallback to standard emojis if custom ones don't exist
     console.log('[reactionRolesHandler.js]: Custom emojis not found, using standard emojis');
@@ -375,9 +377,9 @@ const setupVillageReactionRoles = async (channel) => {
   
   // Add reactions (try custom emojis first, fallback to standard)
   try {
-    await message.react('rudania');
-    await message.react('inariko');
-    await message.react('vhintl');
+    await message.react('<:rudania:899492917452890142>');
+    await message.react('<:inariko:899493009073274920>');
+    await message.react('<:vhintl:899492879205007450>');
   } catch (error) {
     // Fallback to standard emojis if custom ones don't exist
     console.log('[reactionRolesHandler.js]: Custom emojis not found, using standard emojis');

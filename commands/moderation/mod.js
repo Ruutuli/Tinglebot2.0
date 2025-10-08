@@ -806,55 +806,6 @@ const modCommand = new SlashCommandBuilder()
 )
 
 
-
-// ------------------- Subcommand: blightpause -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('blightpause')
-    .setDescription('⏸️ Pause blight progression for a character')
-    .addStringOption(opt =>
-      opt
-        .setName('character')
-        .setDescription('Name of the character to pause')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName('reason')
-        .setDescription('Reason for pausing blight progression')
-        .setRequired(false)
-    )
-)
-
-// ------------------- Subcommand: blightunpause -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('blightunpause')
-    .setDescription('▶️ Unpause blight progression for a character')
-    .addStringOption(opt =>
-      opt
-        .setName('character')
-        .setDescription('Name of the character to unpause')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-)
-
-// ------------------- Subcommand: blightstatus -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('blightstatus')
-    .setDescription('📊 View detailed blight status for a character')
-    .addStringOption(opt =>
-      opt
-        .setName('character')
-        .setDescription('Name of the character to check')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-)
-
 // ------------------- Subcommand: tokens -------------------
 .addSubcommand(sub =>
   sub
@@ -1081,48 +1032,6 @@ const modCommand = new SlashCommandBuilder()
         .setAutocomplete(true)
     )
 )
-
-// ------------------- Subcommand: blightoverride -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('blightoverride')
-    .setDescription('🚨 Admin override for blight healing in emergencies')
-    .addStringOption(option =>
-      option
-        .setName('action')
-        .setDescription('The emergency action to perform')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Wipe All Blight', value: 'wipe_all' },
-          { name: 'Wipe Village Blight', value: 'wipe_village' },
-          { name: 'Wipe Character Blight', value: 'wipe_character' },
-          { name: 'Set All Blight Level', value: 'set_all_level' },
-          { name: 'Set Village Blight Level', value: 'set_village_level' },
-          { name: 'Set Character Blight Level', value: 'set_character_level' }
-        )
-    )
-    .addStringOption(option =>
-      option
-        .setName('target')
-        .setDescription('Target for the action (village name, character name, or "all")')
-        .setRequired(false)
-    )
-    .addIntegerOption(option =>
-      option
-        .setName('level')
-        .setDescription('Blight level to set (0-5, only for set actions)')
-        .setRequired(false)
-        .setMinValue(0)
-        .setMaxValue(5)
-    )
-    .addStringOption(option =>
-      option
-        .setName('reason')
-        .setDescription('Reason for the emergency override')
-        .setRequired(false)
-    )
-)
-
 // ------------------- Subcommand: blight -------------------
 .addSubcommand(sub =>
   sub
@@ -1326,12 +1235,6 @@ async function execute(interaction) {
     } else if (subcommand === 'inactivityreport') {
         return await handleInactivityReport(interaction);      
       
-    } else if (subcommand === 'blightpause') {
-        return await handleBlightPause(interaction);
-    } else if (subcommand === 'blightunpause') {
-        return await handleBlightUnpause(interaction);
-    } else if (subcommand === 'blightstatus') {
-        return await handleBlightStatus(interaction);
     } else if (subcommand === 'kick_travelers') {
         return await handleKickTravelers(interaction);      
     } else if (subcommand === 'tokens') {
@@ -1397,8 +1300,6 @@ async function execute(interaction) {
         return await handleShopAdd(interaction);
     } else if (subcommand === 'trigger-raid') {
         return await handleTriggerRaid(interaction);
-    } else if (subcommand === 'blightoverride') {
-        return await handleBlightOverride(interaction);
     } else if (subcommand === 'blight') {
         return await handleBlight(interaction);
     } else if (subcommand === 'debuff') {
