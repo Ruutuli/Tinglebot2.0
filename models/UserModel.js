@@ -57,6 +57,19 @@ const userSchema = new mongoose.Schema({
     hasImportedFromMee6: { type: Boolean, default: false }, // Track if user has imported from MEE6
     mee6ImportDate: { type: Date, default: null }, // When the import was performed
     importedMee6Level: { type: Number, default: null } // What level was imported from MEE6
+  },
+
+  // ------------------- Birthday System -------------------
+  birthday: {
+    month: { type: Number, min: 1, max: 12, default: null }, // Birthday month (1-12)
+    day: { type: Number, min: 1, max: 31, default: null }, // Birthday day (1-31)
+    lastBirthdayReward: { type: String, default: null }, // Last year they received birthday rewards (YYYY format)
+    birthdayRewards: [{ // Track birthday rewards given
+      year: { type: String }, // YYYY format
+      rewardType: { type: String }, // 'tokens' or 'discount'
+      amount: { type: Number }, // tokens received or discount percentage
+      timestamp: { type: Date, default: Date.now }
+    }]
   }
 });
 
@@ -339,6 +352,138 @@ userSchema.methods.importMee6Levels = async function(mee6Level, lastExchangedLev
     exchangeableLevels: exchangeableLevels,
     potentialTokens: potentialTokens,
     hasImported: true
+  };
+};
+
+// ------------------- Birthday Methods -------------------
+userSchema.methods.setBirthday = async function(month, day) {
+  // Initialize birthday object if it doesn't exist
+  if (!this.birthday) {
+    this.birthday = {
+      month: null,
+      day: null,
+      lastBirthdayReward: null,
+      birthdayRewards: []
+    };
+  }
+  
+  // Validate date
+  if (!this.isValidBirthday(month, day)) {
+    return {
+      success: false,
+      message: 'Invalid birthday date. Please check the month and day.'
+    };
+  }
+  
+  this.birthday.month = month;
+  this.birthday.day = day;
+  
+  await this.save();
+  
+  return {
+    success: true,
+    message: `Birthday set to ${this.formatBirthday()}!`,
+    birthday: this.formatBirthday()
+  };
+};
+
+userSchema.methods.isValidBirthday = function(month, day) {
+  if (!month || !day || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  
+  // Check if day is valid for the month
+  const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (day > daysInMonth[month - 1]) {
+    return false;
+  }
+  
+  // Allow February 29th (they'll get rewards on Feb 28 in non-leap years)
+  return true;
+};
+
+userSchema.methods.formatBirthday = function() {
+  if (!this.birthday || !this.birthday.month || !this.birthday.day) {
+    return null;
+  }
+  
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  const monthName = months[this.birthday.month - 1];
+  const day = this.birthday.day;
+  
+  return `${monthName} ${day}`;
+};
+
+userSchema.methods.isBirthdayToday = function() {
+  if (!this.birthday || !this.birthday.month || !this.birthday.day) {
+    return false;
+  }
+  
+  const today = new Date();
+  return today.getMonth() + 1 === this.birthday.month && today.getDate() === this.birthday.day;
+};
+
+userSchema.methods.giveBirthdayRewards = async function(rewardType = 'random') {
+  if (!this.birthday || !this.birthday.month || !this.birthday.day) {
+    return {
+      success: false,
+      message: 'No birthday set'
+    };
+  }
+  
+  const currentYear = new Date().getFullYear().toString();
+  
+  // Check if already received rewards this year
+  if (this.birthday.lastBirthdayReward === currentYear) {
+    return {
+      success: false,
+      message: 'Birthday rewards already given this year'
+    };
+  }
+  
+  // Determine reward type
+  let finalRewardType = rewardType;
+  if (rewardType === 'random') {
+    finalRewardType = Math.random() < 0.5 ? 'tokens' : 'discount';
+  }
+  
+  let rewardAmount = 0;
+  let rewardDescription = '';
+  
+  if (finalRewardType === 'tokens') {
+    rewardAmount = 1500;
+    this.tokens = (this.tokens || 0) + rewardAmount;
+    rewardDescription = `1500 tokens`;
+  } else if (finalRewardType === 'discount') {
+    rewardAmount = 75;
+    rewardDescription = `75% discount in village shops`;
+  }
+  
+  // Update birthday tracking
+  this.birthday.lastBirthdayReward = currentYear;
+  this.birthday.birthdayRewards.push({
+    year: currentYear,
+    rewardType: finalRewardType,
+    amount: rewardAmount,
+    timestamp: new Date()
+  });
+  
+  // Keep only last 10 birthday reward records
+  if (this.birthday.birthdayRewards.length > 10) {
+    this.birthday.birthdayRewards = this.birthday.birthdayRewards.slice(-10);
+  }
+  
+  await this.save();
+  
+  return {
+    success: true,
+    message: 'Birthday rewards given!',
+    rewardType: finalRewardType,
+    rewardAmount: rewardAmount,
+    rewardDescription: rewardDescription,
+    newTokenBalance: this.tokens
   };
 };
 
