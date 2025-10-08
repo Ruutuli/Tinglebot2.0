@@ -51,6 +51,7 @@ const {
 // ------------------- Database Models -------------------
 const Character = require('../../models/CharacterModel');
 const Minigame = require('../../models/MinigameModel');
+const User = require('../../models/UserModel');
 
 // ------------------- Custom Modules -------------------
 const { monsterMapping } = require('../../models/MonsterModel');
@@ -1239,6 +1240,44 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: level -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('level')
+    .setDescription('📈 Give XP or set level for a user')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User to modify level/XP for')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('action')
+        .setDescription('Action to perform')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Add XP', value: 'add_xp' },
+          { name: 'Set XP', value: 'set_xp' },
+          { name: 'Set Level', value: 'set_level' },
+          { name: 'Reset Level', value: 'reset_level' }
+        )
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('amount')
+        .setDescription('Amount of XP to add/set or level to set')
+        .setRequired(true)
+        .setMinValue(1)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason for the level/XP modification')
+        .setRequired(false)
+    )
+)
+
 // ------------------- Subcommand: villagecheck -------------------
 .addSubcommand(sub =>
   sub
@@ -1371,6 +1410,8 @@ async function execute(interaction) {
         return await handleRPPosts(interaction);
     } else if (subcommand === 'minigame') {
         return await handleMinigame(interaction);
+    } else if (subcommand === 'level') {
+        return await handleLevel(interaction);
     } else if (subcommand === 'villagecheck') {
         return await handleVillageCheck(interaction);
     } else {
@@ -5270,6 +5311,147 @@ async function handleVillageCheck(interaction) {
   } catch (error) {
     console.error('[mod.js]: Error in handleVillageCheck:', error);
     return await safeReply(interaction, '❌ An error occurred while checking village locations. Please try again later.');
+  }
+}
+
+// ------------------- Function: handleLevel -------------------
+// Handles level and XP modifications for users
+async function handleLevel(interaction) {
+  try {
+    const targetUser = interaction.options.getUser('user');
+    const action = interaction.options.getString('action');
+    const amount = interaction.options.getInteger('amount');
+    const reason = interaction.options.getString('reason') || 'No reason provided';
+    
+    // Connect to database
+    await connectToTinglebot();
+    
+    // Get or create user
+    const user = await User.getOrCreateUser(targetUser.id);
+    
+    // Initialize leveling if it doesn't exist
+    if (!user.leveling) {
+      user.leveling = {
+        xp: 0,
+        level: 1,
+        lastMessageTime: null,
+        totalMessages: 0,
+        xpHistory: []
+      };
+    }
+    
+    let oldLevel = user.leveling.level;
+    let oldXP = user.leveling.xp;
+    let newLevel = user.leveling.level;
+    let newXP = user.leveling.xp;
+    let leveledUp = false;
+    
+    switch (action) {
+      case 'add_xp':
+        const addResult = await user.addXP(amount, 'moderator_gift');
+        newLevel = addResult.newLevel;
+        leveledUp = addResult.leveledUp;
+        newXP = user.leveling.xp;
+        break;
+        
+      case 'set_xp':
+        user.leveling.xp = amount;
+        newLevel = user.calculateLevel();
+        leveledUp = newLevel > user.leveling.level;
+        user.leveling.level = newLevel;
+        newXP = amount;
+        await user.save();
+        break;
+        
+      case 'set_level':
+        // Calculate XP required for the target level
+        const targetLevel = amount;
+        const xpRequired = targetLevel * 100 + (targetLevel - 1) * 50;
+        user.leveling.xp = xpRequired;
+        user.leveling.level = targetLevel;
+        newLevel = targetLevel;
+        newXP = xpRequired;
+        await user.save();
+        break;
+        
+      case 'reset_level':
+        user.leveling.xp = 0;
+        user.leveling.level = 1;
+        user.leveling.totalMessages = 0;
+        user.leveling.xpHistory = [];
+        newLevel = 1;
+        newXP = 0;
+        await user.save();
+        break;
+        
+      default:
+        return await interaction.editReply({
+          content: '❌ Invalid action specified.',
+          flags: [4096]
+        });
+    }
+    
+    // Create embed
+    const embed = new EmbedBuilder()
+      .setColor(0x00ff00)
+      .setTitle('📈 Level Modification Complete')
+      .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+      .addFields(
+        {
+          name: '👤 User',
+          value: `${targetUser.tag} (${targetUser.id})`,
+          inline: true
+        },
+        {
+          name: '🔧 Action',
+          value: action.replace('_', ' ').toUpperCase(),
+          inline: true
+        },
+        {
+          name: '📊 Amount',
+          value: amount.toString(),
+          inline: true
+        },
+        {
+          name: '📈 Level Change',
+          value: `**${oldLevel}** → **${newLevel}**`,
+          inline: true
+        },
+        {
+          name: '⭐ XP Change',
+          value: `**${oldXP.toLocaleString()}** → **${newXP.toLocaleString()}**`,
+          inline: true
+        },
+        {
+          name: '📝 Reason',
+          value: reason,
+          inline: false
+        }
+      )
+      .setFooter({
+        text: `Modified by ${interaction.user.tag}`,
+        icon_url: interaction.user.displayAvatarURL()
+      })
+      .setTimestamp();
+    
+    if (leveledUp) {
+      embed.addFields({
+        name: '🎉 Level Up!',
+        value: `${targetUser} has reached **Level ${newLevel}**!`,
+        inline: false
+      });
+    }
+    
+    await interaction.editReply({
+      embeds: [embed],
+      flags: [4096] // Ephemeral
+    });
+    
+  } catch (error) {
+    await handleInteractionError(error, interaction, {
+      source: 'mod.js',
+      subcommand: 'level'
+    });
   }
 }
 
