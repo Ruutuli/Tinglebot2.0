@@ -5,10 +5,10 @@
 const dotenv = require('dotenv');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { 
-  createPronounsEmbed,
-  createVillageEmbed,
-  createInactiveEmbed,
-  createNotificationRolesEmbed
+  setupPronounsReactionRoles,
+  setupVillageReactionRoles,
+  setupInactiveRoleEmbed,
+  setupNotificationReactionRoles
 } = require('../handlers/reactionRolesHandler');
 
 // Load environment variables
@@ -49,36 +49,21 @@ async function testReactionRolesFormatting() {
     // Post header
     await channel.send('🧪 **Reaction Roles Formatting Test**\n*Testing individual embed formatting...*\n');
 
-    // Test each embed individually
+    // Test each embed individually using the setup functions
     console.log('📝 Testing Pronouns embed...');
-    const pronounsEmbed = createPronounsEmbed();
-    const pronounsMessage = await channel.send({ embeds: [pronounsEmbed] });
-    await pronounsMessage.react('🩷'); // Pink heart for She/Her
-    await pronounsMessage.react('💙'); // Blue heart for He/Him
-    await pronounsMessage.react('💜'); // Purple heart for They/Them
-    await pronounsMessage.react('💛'); // Yellow heart for Other/Ask
+    const pronounsMessage = await setupPronounsReactionRoles(channel);
     console.log(`✅ Pronouns embed posted: ${pronounsMessage.url}`);
 
     console.log('🏘️ Testing Village embed...');
-    const villageEmbed = createVillageEmbed();
-    const villageMessage = await channel.send({ embeds: [villageEmbed] });
-    await villageMessage.react('🔥'); // Fire for Rudania
-    await villageMessage.react('💧'); // Water for Inariko
-    await villageMessage.react('🌿'); // Leaf for Vhintl
+    const villageMessage = await setupVillageReactionRoles(channel);
     console.log(`✅ Village embed posted: ${villageMessage.url}`);
 
     console.log('⏸️ Testing Inactive embed...');
-    const inactiveEmbed = createInactiveEmbed();
-    const inactiveMessage = await channel.send({ embeds: [inactiveEmbed] });
+    const inactiveMessage = await setupInactiveRoleEmbed(channel);
     console.log(`✅ Inactive embed posted: ${inactiveMessage.url}`);
 
     console.log('🔔 Testing Notification Roles embed...');
-    const notificationEmbed = createNotificationRolesEmbed();
-    const notificationMessage = await channel.send({ embeds: [notificationEmbed] });
-    await notificationMessage.react('📜');
-    await notificationMessage.react('💬');
-    await notificationMessage.react('🆘');
-    await notificationMessage.react('🎉');
+    const notificationMessage = await setupNotificationReactionRoles(channel);
     console.log(`✅ Notification embed posted: ${notificationMessage.url}`);
 
     // Post footer
