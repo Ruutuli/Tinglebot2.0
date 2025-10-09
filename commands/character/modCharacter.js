@@ -448,7 +448,8 @@ module.exports = {
               { name: "Village", value: "homeVillage" },
               { name: "Icon", value: "icon" },
               { name: "App Link", value: "appLink" },
-              { name: "Mod Type", value: "modType" }
+              { name: "Mod Type", value: "modType" },
+              { name: "Birthday", value: "birthday" }
             )
         )
         .addStringOption((option) =>
@@ -943,6 +944,9 @@ async function handleEditModCharacter(interaction) {
       case 'modType':
         previousValue = modCharacter.modType;
         break;
+      case 'birthday':
+        previousValue = modCharacter.birthday || 'Not set';
+        break;
       default:
         previousValue = modCharacter[category];
     }
@@ -1016,6 +1020,81 @@ async function handleEditModCharacter(interaction) {
       }
     }
 
+    if (category === "birthday") {
+      // Validate format first
+      if (!/^\d{2}-\d{2}$/.test(updatedInfo)) {
+        await interaction.editReply({
+          content: "❌ Invalid date format. Please provide the birthday in **MM-DD** format (e.g., 01-15 for January 15th).",
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+
+      // Parse the date components
+      const [month, day] = updatedInfo.split('-').map(Number);
+      
+      // Validate month (1-12)
+      if (month < 1 || month > 12) {
+        const monthNames = [
+          "January", "February", "March", "April", "May", "June",
+          "July", "August", "September", "October", "November", "December"
+        ];
+        await interaction.editReply({
+          content: `❌ Invalid month: ${month}. Month must be between 01 and 12.\n\nValid months are:\n${monthNames.map((name, i) => `${String(i + 1).padStart(2, '0')} - ${name}`).join('\n')}`,
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+
+      // Get month name for better error messages
+      const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      const monthName = monthNames[month - 1];
+
+      // Validate day based on month and handle leap years
+      const isLeapYear = (year) => {
+        return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+      };
+
+      // Get days in month, accounting for leap years
+      const getDaysInMonth = (month, year) => {
+        const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        if (month === 2 && isLeapYear(year)) {
+          return 29;
+        }
+        return daysInMonth[month - 1];
+      };
+
+      // Use current year for leap year calculation
+      const currentYear = new Date().getFullYear();
+      const daysInMonth = getDaysInMonth(month, currentYear);
+
+      if (day < 1 || day > daysInMonth) {
+        let errorMessage = `❌ Invalid day: ${day}. ${monthName} has ${daysInMonth} days`;
+        
+        // Add special message for February
+        if (month === 2) {
+          errorMessage += isLeapYear(currentYear) 
+            ? " (including February 29th this year)" 
+            : " (not a leap year)";
+        }
+        
+        // Add helpful examples
+        errorMessage += `\n\nValid days for ${monthName} are: 01-${String(daysInMonth).padStart(2, '0')}`;
+        
+        await interaction.editReply({
+          content: errorMessage,
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+
+      // Format the birthday with leading zeros
+      finalUpdatedValue = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
     // Handle special cases
     if (category === 'icon') {
       if (!newIcon) {
@@ -1048,7 +1127,8 @@ async function handleEditModCharacter(interaction) {
         });
         return;
       }
-    } else {
+    } else if (category !== 'birthday') {
+      // Birthday already has its formatted value set during validation
       finalUpdatedValue = updatedInfo;
     }
 
@@ -1167,6 +1247,28 @@ async function handleEditModCharacterAutocomplete(interaction, focusedOption) {
           .filter(pronoun => pronoun.toLowerCase().includes(focusedOption.value.toLowerCase()))
           .slice(0, 25)
           .map(pronoun => ({ name: pronoun, value: pronoun }));
+        break;
+
+      case 'birthday':
+        const exampleBirthdays = [
+          { name: '01-01 (January 1st)', value: '01-01' },
+          { name: '01-15 (January 15th)', value: '01-15' },
+          { name: '02-14 (February 14th)', value: '02-14' },
+          { name: '03-17 (March 17th)', value: '03-17' },
+          { name: '04-01 (April 1st)', value: '04-01' },
+          { name: '05-05 (May 5th)', value: '05-05' },
+          { name: '06-21 (June 21st)', value: '06-21' },
+          { name: '07-04 (July 4th)', value: '07-04' },
+          { name: '08-08 (August 8th)', value: '08-08' },
+          { name: '09-22 (September 22nd)', value: '09-22' },
+          { name: '10-31 (October 31st)', value: '10-31' },
+          { name: '11-11 (November 11th)', value: '11-11' },
+          { name: '12-25 (December 25th)', value: '12-25' },
+          { name: 'Format: MM-DD (e.g., 03-21)', value: focusedOption.value }
+        ];
+        suggestions = exampleBirthdays
+          .filter(birthday => birthday.value.includes(focusedOption.value) || birthday.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
+          .slice(0, 25);
         break;
 
       default:

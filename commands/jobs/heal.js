@@ -347,11 +347,19 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
     let sentMessage;
     
     if (healerName) {
-      // Specific healer request - single message with user ping
+      // Specific healer request - send embed and user ping separately
+      // Send embed via interaction.followUp() and user ping via channel.send()
+      // This approach works because channel.send() properly handles user mentions
       sentMessage = await interaction.followUp({
-        content: `🔔 <@${healerCharacter.userId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`,
         embeds: [embed],
       });
+      
+      const channel = interaction.channel;
+      if (channel) {
+        await channel.send({ 
+          content: `🔔 <@${healerCharacter.userId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!` 
+        });
+      }
     } else {
       // General healing request - ping the healing role
       const finalRoleId = healingRoleId || '1083191610478698547';
