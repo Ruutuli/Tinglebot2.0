@@ -48,8 +48,9 @@ const VillageShopItemSchema = new Schema({
   stock: { type: Number, required: true },
 }, { collection: 'villageShops', timestamps: true, strict: true }); // strict:true ensures only defined fields are saved
 
-// ------------------- Pre-save hook to fix data type issues -------------------
-VillageShopItemSchema.pre('save', function(next) {
+// ------------------- Pre-validate hook to fix data type issues -------------------
+// This runs BEFORE validation, allowing us to fix data type issues before Mongoose validates
+VillageShopItemSchema.pre('validate', function(next) {
   try {
     // Fix craftingMaterial if it contains stringified arrays
     if (this.craftingMaterial && Array.isArray(this.craftingMaterial)) {
@@ -97,7 +98,7 @@ VillageShopItemSchema.pre('save', function(next) {
     
     next();
   } catch (error) {
-    console.error(`[VillageShopsModel]: Error in pre-save hook:`, error);
+    console.error(`[VillageShopsModel]: Error in pre-validate hook:`, error);
     next(error);
   }
 });
