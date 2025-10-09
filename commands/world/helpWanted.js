@@ -123,7 +123,20 @@ async function validateUserCooldowns(userId) {
  * @returns {{canProceed: boolean, message?: string, embed?: EmbedBuilder}}
  */
 function validateCharacterEligibility(character) {
-  // Mod characters are immune to negative effects and can always participate
+  // Check if character is blighted - NO characters (including mod characters) can do HWQs while blighted
+  if (character.blighted) {
+    return { 
+      canProceed: false, 
+      embed: createBlightRejectionEmbed(character)
+    };
+  }
+  
+  // Check blight effects that prevent monster fighting
+  if (character.blightEffects?.noMonsters) {
+    return { canProceed: false, message: `❌ ${character.name} cannot fight monsters due to blight.` };
+  }
+
+  // Mod characters are immune to other negative effects and can participate
   if (character.isModCharacter) {
     return { canProceed: true };
   }
@@ -141,19 +154,6 @@ function validateCharacterEligibility(character) {
   // Check if character is in jail
   if (character.inJail) {
     return { canProceed: false, message: `⛔ ${character.name} is in jail and cannot participate.` };
-  }
-  
-  // Check if character is blighted
-  if (character.blighted) {
-    return { 
-      canProceed: false, 
-      embed: createBlightRejectionEmbed(character)
-    };
-  }
-  
-  // Check blight effects that prevent monster fighting
-  if (character.blightEffects?.noMonsters) {
-    return { canProceed: false, message: `❌ ${character.name} cannot fight monsters due to blight.` };
   }
   
   return { canProceed: true };

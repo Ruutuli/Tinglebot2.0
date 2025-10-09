@@ -940,6 +940,11 @@ async function executeBirthdayAnnouncements(client) {
   const characters = await Character.find({ birthday: today });
   console.log(`[scheduler.js]: 👥 Found ${characters.length} characters with birthday on ${today}`);
   
+  // Also check for mod characters with birthdays
+  const ModCharacter = require('./models/ModCharacterModel');
+  const modCharacters = await ModCharacter.find({ birthday: today });
+  console.log(`[scheduler.js]: 👑 Found ${modCharacters.length} mod characters with birthday on ${today}`);
+  
   if (characters.length > 0) {
    console.log(`[scheduler.js]: 🎂 Characters with birthdays today:`, characters.map(c => `${c.name} (${c.birthday})`));
   } else {
@@ -949,6 +954,10 @@ async function executeBirthdayAnnouncements(client) {
    if (allCharactersWithBirthdays.length > 0) {
     console.log(`[scheduler.js]: 📅 Sample birthday formats:`, allCharactersWithBirthdays.slice(0, 5).map(c => `${c.name}: ${c.birthday}`));
    }
+  }
+  
+  if (modCharacters.length > 0) {
+   console.log(`[scheduler.js]: 🎂 Mod characters with birthdays today:`, modCharacters.map(c => `${c.name} (${c.birthday})`));
   }
 
   for (const character of characters) {
@@ -1100,6 +1109,38 @@ async function executeBirthdayAnnouncements(client) {
     handleError(error, "scheduler.js");
     console.error(
      `[scheduler.js]: Failed to announce birthday for ${character.name}: ${error.message}`
+    );
+   }
+  }
+
+  // Process mod character birthdays
+  for (const modCharacter of modCharacters) {
+   try {
+    const user = await client.users.fetch(modCharacter.userId);
+    const randomMessage =
+     birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
+
+    const embed = new EmbedBuilder()
+     .setColor("#FF709B")
+     .setTitle(`Happy Birthday, ${modCharacter.name}!`)
+     .setDescription(`${randomMessage}\n\n✨ **${modCharacter.modTitle} of ${modCharacter.modType}** ✨`)
+     .addFields(
+      { name: "Real-World Date", value: realWorldDate, inline: true },
+      { name: "Hyrulean Date", value: hyruleanDate, inline: true },
+      { name: "👑 Mod Character", value: `> **${modCharacter.modTitle} of ${modCharacter.modType}**`, inline: false }
+     )
+     .setThumbnail(modCharacter.icon)
+     .setImage("https://storage.googleapis.com/tinglebot/Graphics/bday.png")
+     .setFooter({ text: `${modCharacter.name} belongs to ${user.username}!` })
+     .setTimestamp();
+
+    await announcementChannel.send({ embeds: [embed] });
+    announcedCount++;
+    console.log(`[scheduler.js]: 🎂👑 Announced birthday for mod character ${modCharacter.name}`);
+   } catch (error) {
+    handleError(error, "scheduler.js");
+    console.error(
+     `[scheduler.js]: Failed to announce birthday for mod character ${modCharacter.name}: ${error.message}`
     );
    }
   }
