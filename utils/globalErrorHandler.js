@@ -5,6 +5,7 @@
 
 const { EmbedBuilder } = require('discord.js');
 const dbConfig = require('../config/database');
+const logger = require('./logger');
 
 // ============================================================================
 // ------------------- Configuration & Constants -------------------
@@ -92,13 +93,13 @@ function isDiscordAPIError(error) {
 function initializeErrorHandler(trelloLoggerFunction, discordClient) {
   trelloLogger = trelloLoggerFunction;
   client = discordClient;
-  console.log("[globalErrorHandler.js]: ✅ Error handling system initialized");
+  logger.success('SYSTEM', 'Error handling system initialized');
 }
 
 function initializeErrorTracking(discordClient) {
   // Error tracking is already initialized through initializeErrorHandler
   // This function exists for backward compatibility
-  console.log("[globalErrorHandler.js]: ✅ Error tracking system initialized");
+  logger.success('SYSTEM', 'Error tracking system initialized');
 }
 
 // ============================================================================
@@ -132,7 +133,7 @@ async function trackDatabaseError(error, source = "Unknown") {
 function resetErrorCounter() {
   consecutiveDatabaseErrors = 0;
   lastErrorTime = null;
-  console.log("[globalErrorHandler.js]: ✅ Error counter reset");
+  logger.success('SYSTEM', 'Error counter reset');
 }
 
 // ============================================================================

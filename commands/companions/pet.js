@@ -51,6 +51,7 @@ const { checkInventorySync } = require("../../utils/characterUtils");
 const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const { enforceJail } = require('../../utils/jailCheck');
 const { characterExistsNotOwned } = require('../../utils/validation');
+const logger = require('../../utils/logger');
 
 
 // ------------------- Database Models -------------------
@@ -1034,10 +1035,7 @@ module.exports = {
      // Debug pet image URL processing for roll command
      const encodedPetUrlRoll = encodePetImageUrl(pet.imageUrl);
      const finalPetUrlRoll = sanitizeUrl(encodedPetUrlRoll || pet.imageUrl);
-     console.log(`[pet.js]: Pet roll image URL processing for ${pet.name}:`);
-     console.log(`[pet.js]: Original URL: ${pet.imageUrl}`);
-     console.log(`[pet.js]: Encoded URL: ${encodedPetUrlRoll}`);
-     console.log(`[pet.js]: Final URL: ${finalPetUrlRoll}`);
+     logger.debug('SYSTEM', `Pet roll image URL processing for ${pet.name}: Original=${pet.imageUrl}, Encoded=${encodedPetUrlRoll}, Final=${finalPetUrlRoll}`);
 
      const rollEmbed = new EmbedBuilder()
       .setAuthor({ name: `${pet.name} the ${pet.species}`, iconURL: finalPetUrlRoll })
@@ -1316,10 +1314,7 @@ module.exports = {
         // Debug pet image URL processing
         const encodedPetUrl = encodePetImageUrl(pet.imageUrl);
         const finalPetUrl = sanitizeUrl(encodedPetUrl || pet.imageUrl);
-        console.log(`[pet.js]: Pet image URL processing for ${pet.name}:`);
-        console.log(`[pet.js]: Original URL: ${pet.imageUrl}`);
-        console.log(`[pet.js]: Encoded URL: ${encodedPetUrl}`);
-        console.log(`[pet.js]: Final URL: ${finalPetUrl}`);
+        logger.debug('SYSTEM', `Pet image URL processing for ${pet.name}: Original=${pet.imageUrl}, Encoded=${encodedPetUrl}, Final=${finalPetUrl}`);
 
         const viewEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })

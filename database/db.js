@@ -16,6 +16,7 @@ const {
  safeAppendDataToSheet,
 } = require("../utils/googleSheetsUtils");
 const dbConfig = require('../config/database');
+const logger = require('../utils/logger');
 
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
 const inventoryUtils = require("../utils/inventoryUtils");
@@ -90,7 +91,7 @@ async function connectToTinglebot() {
     minPoolSize: 1
    });
    
-   console.log("[db.js]: ✅ Tinglebot database connected");
+   logger.success('DATABASE', 'Tinglebot database connected');
    
    // Reset error counter on successful connection
    resetErrorCounter();
@@ -124,7 +125,7 @@ async function connectToInventories() {
    // Set the database name
    inventoriesDbConnection.useDb('inventories');
    
-   console.log("[db.js]: ✅ Inventories database connected");
+   logger.success('DATABASE', 'Inventories database connected');
   }
   return inventoriesDbConnection;
  } catch (error) {
@@ -168,7 +169,7 @@ const connectToInventoriesNative = async () => {
     
     await client.connect();
     inventoriesDbNativeConnection = client.db('inventories');
-    console.log("[db.js]: ✅ Native inventories database connected");
+    logger.success('DATABASE', 'Native inventories database connected');
   }
   
   return inventoriesDbNativeConnection;
@@ -2234,7 +2235,7 @@ const connectToInventoriesForItems = async (context = {}) => {
             
             await inventoriesClient.connect();
             inventoriesDb = inventoriesClient.db('tinglebot');
-            console.log("[db.js]: ✅ Items database connected");
+            logger.success('DATABASE', 'Items database connected');
             
             // Reset error counter on successful connection
             resetErrorCounter();
