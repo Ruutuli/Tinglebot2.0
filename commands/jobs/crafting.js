@@ -23,7 +23,7 @@ const { checkAndUseStamina } = require('../../modules/characterStatsModule');
 const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords, formatDateTime } = require('../../modules/formattingModule');
-const { applyCraftingBoost, applyCraftingStaminaBoost, applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
+const { applyCraftingBoost, applyCraftingStaminaBoost, applyCraftingMaterialBoost, applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../../utils/inventoryUtils');
@@ -288,8 +288,12 @@ module.exports = {
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       const inventory = await inventoryCollection.find().toArray();
 
+      // ------------------- Apply Scholar Material Reduction Boost -------------------
+      // Apply Scholar boost to reduce material costs by 20%
+      let adjustedCraftingMaterials = await applyCraftingMaterialBoost(freshCharacter.name, item.craftingMaterial);
+
       const missingMaterials = [];
-      for (const material of item.craftingMaterial) {
+      for (const material of adjustedCraftingMaterials) {
         const requiredQty = material.quantity * quantity;
         let ownedQty = 0;
 
@@ -318,7 +322,12 @@ module.exports = {
       }
 
       // ------------------- Process Materials -------------------
-      const materialsUsed = await processMaterials(interaction, character, inventory, item, quantity);
+      // Create a modified item object with adjusted materials for Scholar boost
+      const itemWithAdjustedMaterials = {
+        ...item,
+        craftingMaterial: adjustedCraftingMaterials
+      };
+      const materialsUsed = await processMaterials(interaction, character, inventory, itemWithAdjustedMaterials, quantity);
       if (materialsUsed === 'canceled') {
         return interaction.editReply({ content: '❌ **Crafting canceled.**', flags: [MessageFlags.Ephemeral] });
       }

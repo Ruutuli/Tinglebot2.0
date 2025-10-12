@@ -849,19 +849,19 @@ module.exports = {
           boosterCharacter = await fetchCharacterByName(character.boostedBy);
           
                      // Handle Scholar boost (cross-region gathering) before filtering items
-           if (boosterCharacter && boosterCharacter.job === 'Scholar') {
+           if (boosterCharacter && boosterCharacter.job?.toLowerCase() === 'scholar') {
              // Get the boost data to find the target village
              const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
              const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
              
-             // Debug info removed to reduce log bloat
+             console.log(`[gather.js]: 📖 Scholar Boost Detection - boostData:`, JSON.stringify(boostData, null, 2));
              
              if (boostData && boostData.targetVillage) {
                scholarTargetVillage = boostData.targetVillage;
                gatheringRegion = scholarTargetVillage;
-
+               console.log(`[gather.js]: ✅ Scholar target village set to: ${scholarTargetVillage}`);
              } else {
-               // Debug info removed to reduce log bloat
+               console.log(`[gather.js]: ⚠️ Scholar boost detected but no targetVillage found in boostData`);
              }
            }
         }
@@ -890,6 +890,11 @@ module.exports = {
           
           return isJobMatch && isRegionMatch;
         });
+        
+        // Debug logging for Scholar boost
+        if (scholarTargetVillage) {
+          console.log(`[gather.js]: 🔮 Scholar Boost Active - Gathering from ${scholarTargetVillage} table (${availableItems.length} items available)`);
+        }
         
         if (availableItems.length === 0) {
           await safeReply({
@@ -993,6 +998,15 @@ module.exports = {
         
         const isFortuneTellerBoost = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller';
         console.log(`[gather.js]: 🎯 ${isFortuneTellerBoost ? 'Fortune Teller' : 'Normal'} Weighted Selection - Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
+        
+        // Log Scholar boost item source confirmation
+        if (scholarTargetVillage) {
+          const itemVillages = [];
+          if (randomItem.inariko || randomItem.Inariko) itemVillages.push('Inariko');
+          if (randomItem.rudania || randomItem.Rudania) itemVillages.push('Rudania');
+          if (randomItem.vhintl || randomItem.Vhintl) itemVillages.push('Vhintl');
+          console.log(`[gather.js]: ✅ Item "${randomItem.itemName}" from ${scholarTargetVillage} - Available in: [${itemVillages.join(', ')}]`);
+        }
         
         const quantity = 1;
         

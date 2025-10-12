@@ -1263,8 +1263,23 @@ async function handleShopBuy(interaction) {
     const discountPercentage = hasBirthdayDiscount ? user.getBirthdayDiscountAmount() : 0;
     const originalPrice = itemDetails.buyPrice * quantity;
     const discountMultiplier = hasBirthdayDiscount ? (100 - discountPercentage) / 100 : 1;
-    const totalPrice = Math.floor(originalPrice * discountMultiplier);
+    let totalPrice = Math.floor(originalPrice * discountMultiplier);
     const savedAmount = originalPrice - totalPrice;
+    
+    // ============================================================================
+    // ------------------- Apply Priest Boost for Buying -------------------
+    // ============================================================================
+    if (character.boostedBy) {
+      const { fetchCharacterByName } = require('../../database/db');
+      const boosterChar = await fetchCharacterByName(character.boostedBy);
+      
+      if (boosterChar && boosterChar.job === 'Priest') {
+        const beforeBoost = totalPrice;
+        totalPrice = Math.ceil(totalPrice * 0.9); // 10% discount
+        console.log(`[shops]: ✨ Priest boost - Blessed Economy (10% buying discount: ${beforeBoost} → ${totalPrice})`);
+      }
+    }
+    
     const currentTokens = user.tokens;
 
     if (currentTokens < totalPrice) {
@@ -1702,7 +1717,31 @@ if (quantity <= 0) {
     );
   }
 
-  const totalPrice = sellPrice * quantity;
+  let totalPrice = sellPrice * quantity;
+  
+  // ============================================================================
+  // ------------------- Apply Token Boosts for Selling -------------------
+  // ============================================================================
+  if (character.boostedBy) {
+    const { fetchCharacterByName } = require('../../database/db');
+    const boosterChar = await fetchCharacterByName(character.boostedBy);
+    
+    if (boosterChar) {
+      const originalPrice = totalPrice;
+      
+      // Fortune Teller: Fortunate Exchange (+10% when selling)
+      if (boosterChar.job === 'Fortune Teller') {
+        totalPrice = Math.floor(totalPrice * 1.1);
+        console.log(`[shops]: 🔮 Fortune Teller boost - Fortunate Exchange (+10% tokens: ${originalPrice} → ${totalPrice})`);
+      }
+      
+      // Priest: Blessed Economy (+10% when selling)
+      if (boosterChar.job === 'Priest') {
+        totalPrice = Math.floor(totalPrice * 1.1);
+        console.log(`[shops]: ✨ Priest boost - Blessed Economy (+10% tokens: ${originalPrice} → ${totalPrice})`);
+      }
+    }
+  }
 
   await updateTokenBalance(interaction.user.id, totalPrice);
 

@@ -1326,9 +1326,24 @@ async function sendToJail(character) {
     }
     
     // Calculate release time: 3 days from now at midnight EST
+    let jailDays = 3;
+    
+    // ============================================================================
+    // ------------------- Apply Priest Boost (Merciful Sentence) -------------------
+    // ============================================================================
+    if (character.boostedBy) {
+        const { fetchCharacterByName } = require('../../database/db');
+        const boosterChar = await fetchCharacterByName(character.boostedBy);
+        
+        if (boosterChar && boosterChar.job === 'Priest') {
+            jailDays = Math.ceil(jailDays / 2); // Halve jail time (3 → 2 days, rounded up)
+            console.log(`[steal.js]: ✨ Priest boost - Merciful Sentence (jail time reduced to ${jailDays} days)`);
+        }
+    }
+    
     const now = new Date();
     const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const releaseDateEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + 3, 0, 0, 0, 0);
+    const releaseDateEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + jailDays, 0, 0, 0, 0);
     
     // Store the EST midnight time directly
     character.inJail = true;
@@ -1481,7 +1496,22 @@ async function handleFailedAttempts(thiefCharacter, embed) {
     thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
     await thiefCharacter.save();
     
-    const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
+    // ============================================================================
+    // ------------------- Apply Teacher Boost (Tactical Risk) -------------------
+    // ============================================================================
+    let maxAttempts = 3; // Base: 3 failed attempts before jail
+    
+    if (thiefCharacter.boostedBy) {
+        const { fetchCharacterByName } = require('../../database/db');
+        const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
+        
+        if (boosterChar && boosterChar.job === 'Teacher') {
+            maxAttempts = 4; // Teacher grants +1 extra attempt
+            console.log(`[steal.js]: 📖 Teacher boost - Tactical Risk (+1 extra attempt before jail)`);
+        }
+    }
+    
+    const attemptsLeft = maxAttempts - thiefCharacter.failedStealAttempts;
     let warningMessage = '';
     let attemptsText = '';
     
@@ -1491,7 +1521,8 @@ async function handleFailedAttempts(thiefCharacter, embed) {
     } else if (attemptsLeft <= 0) {
         // Send to jail using centralized function
         const jailResult = await sendToJail(thiefCharacter);
-        warningMessage = '⛔ **You have been sent to jail for 3 days!**';
+        const jailDays = jailResult.success ? Math.ceil((jailResult.timeLeft / (24 * 60 * 60 * 1000))) : 3;
+        warningMessage = `⛔ **You have been sent to jail for ${jailDays} day${jailDays !== 1 ? 's' : ''}!**`;
         attemptsText = 'Too many failed attempts!';
     } else {
         attemptsText = `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`;
@@ -1613,9 +1644,27 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         // Continue with success logic even if protection setting fails
     }
     
+    let finalQuantity = quantity;
+    
+    // ============================================================================
+    // ------------------- Apply Job-Specific Stealing Boosts -------------------
+    // ============================================================================
+    if (thiefCharacter.boostedBy) {
+        const { fetchCharacterByName } = require('../../database/db');
+        const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
+        
+        if (boosterChar) {
+            // Scholar: Calculated Grab (+1 extra item)
+            if (boosterChar.job === 'Scholar') {
+                finalQuantity += 1;
+                console.log(`[steal.js]: 📚 Scholar boost - Calculated Grab (+1 extra item)`);
+            }
+        }
+    }
+    
     const stolenItem = {
         itemName: selectedItem.itemName,
-        quantity: quantity,
+        quantity: finalQuantity,
         obtain: isNPC ? `Stolen from NPC ${targetCharacter}` : `Stolen from ${targetCharacter.name}`,
         date: new Date()
     };
@@ -1802,8 +1851,19 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
 async function generateStealRoll(character = null) {
     let roll = Math.floor(Math.random() * 99) + 1;
     
-    // Apply Stealing boosts to the roll
-    roll = await applyStealingBoost(character.name, roll);
+    // ============================================================================
+    // ------------------- Apply Fortune Teller Boost (Predicted Opportunity) -------------------
+    // ============================================================================
+    if (character && character.boostedBy) {
+        const { fetchCharacterByName } = require('../../database/db');
+        const boosterChar = await fetchCharacterByName(character.boostedBy);
+        
+        if (boosterChar && boosterChar.job === 'Fortune Teller') {
+            // Fortune Teller adds +20 to the roll (effectively +20% success rate)
+            roll = Math.min(roll + 20, 99);
+            console.log(`[steal.js]: 🔮 Fortune Teller boost - Predicted Opportunity (+20 to roll, capped at 99)`);
+        }
+    }
     
     // Apply elixir stealth buff if active
     if (character) {
@@ -3070,7 +3130,27 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
                 }
             }
 
-        const selectedItem = getRandomItemByWeight(items);
+        // ============================================================================
+        // ------------------- Apply Entertainer Boost (Elegy of Emptiness) -------------------
+        // ============================================================================
+        let modifiedItems = items;
+        if (thiefCharacter.boostedBy) {
+            const { fetchCharacterByName } = require('../../database/db');
+            const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
+            
+            if (boosterChar && boosterChar.job === 'Entertainer') {
+                // Increase weight for rare items (tier 3+)
+                modifiedItems = items.map(item => {
+                    if (item.tier >= 3) {
+                        return { ...item, weight: (item.weight || RARITY_WEIGHTS[item.itemRarity] || 1) * 2 };
+                    }
+                    return item;
+                });
+                console.log(`[steal.js]: 🎵 Entertainer boost - Elegy of Emptiness (rare items 2x weight)`);
+            }
+        }
+
+        const selectedItem = getRandomItemByWeight(modifiedItems);
         const roll = await generateStealRoll(thiefCharacter);
         const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, targetName);
         const isSuccess = roll > failureThreshold;

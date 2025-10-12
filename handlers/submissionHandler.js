@@ -137,8 +137,29 @@ async function handleSubmissionCompletion(interaction) {
     console.log(`[submissionHandler.js]: 💰 Calculated tokens: ${totalTokens}`);
     console.log(`[submissionHandler.js]: 📊 Token breakdown:`, breakdown);
 
+    let finalTokenAmount = totalTokens;
+    
+    // ============================================================================
+    // ------------------- Apply Teacher Boost for Art (Critique & Composition +50%) -------------------
+    // ============================================================================
+    if (submissionData.characterName && submissionData.category === 'art') {
+      const { fetchCharacterByNameAndUserId } = require('../database/db');
+      const character = await fetchCharacterByNameAndUserId(submissionData.characterName, submissionData.userId);
+      
+      if (character && character.boostedBy) {
+        const { fetchCharacterByName } = require('../database/db');
+        const boosterChar = await fetchCharacterByName(character.boostedBy);
+        
+        if (boosterChar && boosterChar.job === 'Teacher') {
+          const originalTokens = finalTokenAmount;
+          finalTokenAmount = Math.floor(finalTokenAmount * 1.5);
+          console.log(`[submissionHandler.js]: 📖 Teacher boost - Critique & Composition (+50% tokens: ${originalTokens} → ${finalTokenAmount})`);
+        }
+      }
+    }
+
     // Update submission data with final calculations
-    submissionData.finalTokenAmount = totalTokens;
+    submissionData.finalTokenAmount = finalTokenAmount;
     submissionData.tokenCalculation = breakdown;
     submissionData.updatedAt = new Date();
 

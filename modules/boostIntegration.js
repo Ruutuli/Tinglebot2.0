@@ -96,8 +96,8 @@ async function applyLootingBoost(characterName, lootRoll) {
   return await applyBoostToAction(characterName, 'Looting', lootRoll);
 }
 
-async function applyLootingDamageBoost(characterName, damageTaken) {
-  return await applyBoostToAction(characterName, 'Looting', damageTaken);
+async function applyLootingDamageBoost(characterName, damageTaken, monsterTier = 1) {
+  return await applyBoostToAction(characterName, 'Looting', damageTaken, monsterTier);
 }
 
 async function applyLootingQuantityBoost(characterName, lootedItem) {

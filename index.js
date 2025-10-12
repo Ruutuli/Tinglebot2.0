@@ -583,6 +583,206 @@ async function initializeClient() {
     });
 
     // --------------------------------------------------------------------------
+    // User Data Cleanup on Server Leave
+    // --------------------------------------------------------------------------
+    // Delete all user data when they leave the server
+    client.on("guildMemberRemove", async (member) => {
+      try {
+        const discordId = member.user.id;
+        const username = member.user.tag;
+        
+        console.log(`[index.js]: 🗑️ User ${username} (${discordId}) left the server. Starting data cleanup...`);
+        
+        // Import necessary models
+        const User = require('./models/UserModel');
+        const Character = require('./models/CharacterModel');
+        const ModCharacter = require('./models/ModCharacterModel');
+        const Pet = require('./models/PetModel');
+        const Mount = require('./models/MountModel');
+        const initializeInventoryModel = require('./models/InventoryModel');
+        const initializeVendingModel = require('./models/VendingModel');
+        const Quest = require('./models/QuestModel');
+        const Party = require('./models/PartyModel');
+        const MinigameModel = require('./models/MinigameModel');
+        const RuuGame = require('./models/RuuGameModel');
+        const StealStats = require('./models/StealStatsModel');
+        const BlightRollHistory = require('./models/BlightRollHistoryModel');
+        const ApprovedSubmission = require('./models/ApprovedSubmissionModel');
+        const Raid = require('./models/RaidModel');
+        
+        // Initialize inventory and vending models
+        const { model: Inventory } = await initializeInventoryModel();
+        const { model: VendingInventory } = await initializeVendingModel();
+        
+        // Get all characters for this user (needed for cascading deletes)
+        const characters = await Character.find({ userId: discordId });
+        const characterIds = characters.map(char => char._id);
+        const characterNames = characters.map(char => char.name);
+        
+        // Get all mod characters for this user
+        const modCharacters = await ModCharacter.find({ userId: discordId });
+        const modCharacterIds = modCharacters.map(char => char._id);
+        const modCharacterNames = modCharacters.map(char => char.name);
+        
+        // Combine all character IDs and names
+        const allCharacterIds = [...characterIds, ...modCharacterIds];
+        const allCharacterNames = [...characterNames, ...modCharacterNames];
+        
+        // Delete data from all collections
+        const deletionResults = {};
+        
+        // 1. Delete user data
+        const userResult = await User.deleteMany({ discordId: discordId });
+        deletionResults.users = userResult.deletedCount;
+        
+        // 2. Delete characters
+        const characterResult = await Character.deleteMany({ userId: discordId });
+        deletionResults.characters = characterResult.deletedCount;
+        
+        // 3. Delete mod characters
+        const modCharacterResult = await ModCharacter.deleteMany({ userId: discordId });
+        deletionResults.modCharacters = modCharacterResult.deletedCount;
+        
+        // 4. Delete inventories (for all characters)
+        if (allCharacterIds.length > 0) {
+          const inventoryResult = await Inventory.deleteMany({ 
+            characterId: { $in: allCharacterIds } 
+          });
+          deletionResults.inventoryItems = inventoryResult.deletedCount;
+        } else {
+          deletionResults.inventoryItems = 0;
+        }
+        
+        // 5. Delete vending inventories (by character names)
+        if (allCharacterNames.length > 0) {
+          const vendingResult = await VendingInventory.deleteMany({ 
+            characterName: { $in: allCharacterNames } 
+          });
+          deletionResults.vendingItems = vendingResult.deletedCount;
+        } else {
+          deletionResults.vendingItems = 0;
+        }
+        
+        // 6. Delete pets
+        const petResult = await Pet.deleteMany({ discordId: discordId });
+        deletionResults.pets = petResult.deletedCount;
+        
+        // 7. Delete mounts
+        const mountResult = await Mount.deleteMany({ discordId: discordId });
+        deletionResults.mounts = mountResult.deletedCount;
+        
+        // 8. Remove user from active quests
+        const questUpdateResult = await Quest.updateMany(
+          { 'party.userId': discordId },
+          { $pull: { party: { userId: discordId } } }
+        );
+        deletionResults.questsUpdated = questUpdateResult.modifiedCount;
+        
+        // 9. Remove user from parties or delete if they're the leader
+        // First, delete parties where user is the leader
+        const partyDeleteResult = await Party.deleteMany({ leaderId: discordId });
+        deletionResults.partiesDeleted = partyDeleteResult.deletedCount;
+        
+        // Then remove user from other parties
+        const partyUpdateResult = await Party.updateMany(
+          { 'characters.userId': discordId },
+          { $pull: { characters: { userId: discordId } } }
+        );
+        deletionResults.partiesUpdated = partyUpdateResult.modifiedCount;
+        
+        // Finally, delete parties that have no characters left
+        const emptyPartyDeleteResult = await Party.deleteMany({ 
+          characters: { $size: 0 } 
+        });
+        deletionResults.emptyPartiesDeleted = emptyPartyDeleteResult.deletedCount;
+        
+        // 10. Delete minigame data
+        const minigameResult = await MinigameModel.updateMany(
+          {},
+          { $pull: { leaderboard: { discordId: discordId } } }
+        );
+        deletionResults.minigameEntriesRemoved = minigameResult.modifiedCount;
+        
+        // 11. Delete Ruu Game data
+        const ruuGameResult = await RuuGame.updateMany(
+          {},
+          { $pull: { leaderboard: { discordId: discordId } } }
+        );
+        deletionResults.ruuGameEntriesRemoved = ruuGameResult.modifiedCount;
+        
+        // 12. Delete steal stats (by characterId)
+        let stealStatsResult = { deletedCount: 0 };
+        if (allCharacterIds.length > 0) {
+          stealStatsResult = await StealStats.deleteMany({ 
+            characterId: { $in: allCharacterIds }
+          });
+        }
+        deletionResults.stealStats = stealStatsResult.deletedCount;
+        
+        // 13. Delete blight roll history
+        const blightRollResult = await BlightRollHistory.deleteMany({ userId: discordId });
+        deletionResults.blightRolls = blightRollResult.deletedCount;
+        
+        // 14. Delete temporary data associated with this user
+        const tempDataResult = await TempData.deleteMany({
+          $or: [
+            { 'data.userId': discordId },
+            { 'data.discordId': discordId },
+            { 'data.participants.userId': discordId }
+          ]
+        });
+        deletionResults.tempData = tempDataResult.deletedCount;
+        
+        // 15. Delete approved submissions by this user
+        const approvedSubmissionResult = await ApprovedSubmission.deleteMany({ userId: discordId });
+        deletionResults.approvedSubmissions = approvedSubmissionResult.deletedCount;
+        
+        // 16. Remove user from active raids or delete raids they're in
+        const raidUpdateResult = await Raid.updateMany(
+          { 'participants.userId': discordId },
+          { $pull: { participants: { userId: discordId } } }
+        );
+        deletionResults.raidsUpdated = raidUpdateResult.modifiedCount;
+        
+        // Delete raids that have no participants left
+        const emptyRaidDeleteResult = await Raid.deleteMany({ 
+          participants: { $size: 0 } 
+        });
+        deletionResults.emptyRaidsDeleted = emptyRaidDeleteResult.deletedCount;
+        
+        // Log summary of deletions
+        console.log(`[index.js]: ✅ Data cleanup completed for ${username} (${discordId}):`);
+        console.log(`[index.js]:    - Users: ${deletionResults.users}`);
+        console.log(`[index.js]:    - Characters: ${deletionResults.characters}`);
+        console.log(`[index.js]:    - Mod Characters: ${deletionResults.modCharacters}`);
+        console.log(`[index.js]:    - Inventory Items: ${deletionResults.inventoryItems}`);
+        console.log(`[index.js]:    - Vending Items: ${deletionResults.vendingItems}`);
+        console.log(`[index.js]:    - Pets: ${deletionResults.pets}`);
+        console.log(`[index.js]:    - Mounts: ${deletionResults.mounts}`);
+        console.log(`[index.js]:    - Quests Updated: ${deletionResults.questsUpdated}`);
+        console.log(`[index.js]:    - Parties Deleted (as leader): ${deletionResults.partiesDeleted}`);
+        console.log(`[index.js]:    - Parties Updated (removed from): ${deletionResults.partiesUpdated}`);
+        console.log(`[index.js]:    - Empty Parties Cleaned Up: ${deletionResults.emptyPartiesDeleted}`);
+        console.log(`[index.js]:    - Minigame Entries: ${deletionResults.minigameEntriesRemoved}`);
+        console.log(`[index.js]:    - Ruu Game Entries: ${deletionResults.ruuGameEntriesRemoved}`);
+        console.log(`[index.js]:    - Steal Stats: ${deletionResults.stealStats}`);
+        console.log(`[index.js]:    - Blight Rolls: ${deletionResults.blightRolls}`);
+        console.log(`[index.js]:    - Temp Data: ${deletionResults.tempData}`);
+        console.log(`[index.js]:    - Approved Submissions: ${deletionResults.approvedSubmissions}`);
+        console.log(`[index.js]:    - Raids Updated (removed from): ${deletionResults.raidsUpdated}`);
+        console.log(`[index.js]:    - Empty Raids Cleaned Up: ${deletionResults.emptyRaidsDeleted}`);
+        
+      } catch (error) {
+        console.error(`[index.js]: ❌ Error during user data cleanup for ${member.user.tag}:`, error);
+        handleError(error, 'index.js', {
+          operation: 'guildMemberRemove',
+          userId: member.user.id,
+          username: member.user.tag
+        });
+      }
+    });
+
+    // --------------------------------------------------------------------------
     // Start the Bot
     // --------------------------------------------------------------------------
     try {
