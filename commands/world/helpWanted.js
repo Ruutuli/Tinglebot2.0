@@ -33,15 +33,15 @@ const QUEST_TYPE_EMOJIS = {
 /**
  * Creates an embed for blight rejection with NPC icon and message
  * @param {Object} character - Character object
+ * @param {Object} quest - Quest object (required for proper NPC matching)
  * @returns {EmbedBuilder}
  */
-function createBlightRejectionEmbed(character) {
+function createBlightRejectionEmbed(character, quest) {
   const { EmbedBuilder } = require('discord.js');
-  const { getRandomNPCName } = require('../../modules/helpWantedModule');
   const NPCs = require('../../modules/NPCsModule').NPCs;
   
-  // Get a random NPC name for the rejection message
-  const npcName = getRandomNPCName();
+  // Always use the quest giver NPC - no fallback to random
+  const npcName = quest?.npcName || 'Unknown NPC';
   const npcData = NPCs[npcName];
   
   const embed = new EmbedBuilder()
@@ -120,14 +120,15 @@ async function validateUserCooldowns(userId) {
 /**
  * Validates character eligibility for quest participation
  * @param {Object} character - Character object
+ * @param {Object} quest - Quest object (required for blight rejection context)
  * @returns {{canProceed: boolean, message?: string, embed?: EmbedBuilder}}
  */
-function validateCharacterEligibility(character) {
+function validateCharacterEligibility(character, quest) {
   // Check if character is blighted - NO characters (including mod characters) can do HWQs while blighted
   if (character.blighted) {
     return { 
       canProceed: false, 
-      embed: createBlightRejectionEmbed(character)
+      embed: createBlightRejectionEmbed(character, quest)
     };
   }
   
@@ -1007,7 +1008,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   }
   
   // Validate character eligibility
-  const eligibilityCheck = validateCharacterEligibility(character);
+  const eligibilityCheck = validateCharacterEligibility(character, quest);
   if (!eligibilityCheck.canProceed) {
     if (eligibilityCheck.embed) {
       return await interaction.editReply({ embeds: [eligibilityCheck.embed] });
@@ -1502,7 +1503,7 @@ module.exports = {
         }
         
         // Validate character eligibility
-        const eligibilityCheck = validateCharacterEligibility(character);
+        const eligibilityCheck = validateCharacterEligibility(character, quest);
         if (!eligibilityCheck.canProceed) {
           if (eligibilityCheck.embed) {
             return await interaction.editReply({ embeds: [eligibilityCheck.embed] });
