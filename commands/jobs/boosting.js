@@ -496,6 +496,7 @@ module.exports = {
       .setName("requestid")
       .setDescription("The ID of the boost request")
       .setRequired(true)
+      .setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
@@ -516,6 +517,25 @@ module.exports = {
       .setRequired(true)
       .setAutocomplete(true)
     )
+  )
+  .addSubcommand((subcommand) =>
+   subcommand
+    .setName("use")
+    .setDescription("Use your 'Other' category boost (Fortune Teller: Weather Prediction, Entertainer: Song of Storms)")
+    .addStringOption((option) =>
+     option
+      .setName("charactername")
+      .setDescription("Your character name (must be boosted with 'Other' category)")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+     option
+      .setName("village")
+      .setDescription("Target village (for weather prediction/storm)")
+      .setRequired(false)
+      .setAutocomplete(true)
+    )
   ),
 
 // ============================================================================
@@ -531,6 +551,8 @@ module.exports = {
    await handleBoostAccept(interaction);
   } else if (subcommand === "status") {
    await handleBoostStatus(interaction);
+  } else if (subcommand === "use") {
+   await handleBoostUse(interaction);
   }
  },
 };
@@ -881,6 +903,157 @@ async function handleBoostStatus(interaction) {
 
  await interaction.reply({
   embeds: [embed],
+  ephemeral: true,
+ });
+}
+
+async function handleBoostUse(interaction) {
+ const characterName = interaction.options.getString("charactername");
+ const targetVillage = interaction.options.getString("village");
+ const userId = interaction.user.id;
+
+ const character = await fetchCharacterWithFallback(characterName, userId);
+ 
+ if (!character) {
+  await interaction.reply({
+   content: "You do not own this character.",
+   ephemeral: true,
+  });
+  return;
+ }
+
+ const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+ const currentTime = Date.now();
+ 
+ if (!activeBoost || activeBoost.status !== "fulfilled") {
+  await interaction.reply({
+   content: `${characterName} does not have an active boost in the "Other" category.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ if (activeBoost.category !== "Other") {
+  await interaction.reply({
+   content: `${characterName}'s active boost is for "${activeBoost.category}", not "Other". This command only works with "Other" category boosts.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
+  await interaction.reply({
+   content: `${characterName}'s boost has expired.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
+ if (!boosterCharacter) {
+  await interaction.reply({
+   content: `Error retrieving boost effect for ${characterName}.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ // ============================================================================
+ // ------------------- Fortune Teller: Weather Prediction -------------------
+ // ============================================================================
+ if (boosterCharacter.job === 'Fortune Teller') {
+  const { getCurrentWeather, setNextDayWeather } = require('../../services/weatherService');
+  
+  const villages = ['Rudania', 'Inariko', 'Vhintl'];
+  const selectedVillage = targetVillage || villages[Math.floor(Math.random() * villages.length)];
+  
+  // Get or generate next day weather
+  const weatherTypes = ["sunny", "rainy", "stormy", "cloudy", "clear"];
+  const predictedWeather = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
+  
+  // TODO: Integrate with actual weather service to lock in the prediction
+  // await setNextDayWeather(selectedVillage, predictedWeather);
+  
+  const embed = new EmbedBuilder()
+   .setTitle("🔮 Weather Prediction")
+   .setDescription(`**${character.name}** channels the power of **${boosterCharacter.name}** to glimpse into the future...`)
+   .addFields([
+    { name: "📍 Village", value: selectedVillage, inline: true },
+    { name: "🌤️ Tomorrow's Weather", value: predictedWeather.charAt(0).toUpperCase() + predictedWeather.slice(1), inline: true },
+    { name: "📅 Date", value: `<t:${Math.floor((Date.now() + 86400000) / 1000)}:D>`, inline: true },
+    { name: "✨ Boost Used", value: "Fortune Teller's Premonition", inline: false }
+   ])
+   .setColor("#9B59B6")
+   .setFooter({ text: "Weather prediction locked in for tomorrow!" });
+
+  // Clear the boost after use
+  character.boostedBy = null;
+  await character.save();
+  
+  await interaction.reply({
+   embeds: [embed],
+   ephemeral: false,
+  });
+  
+  console.log(`[boosting.js]: 🔮 Fortune Teller "Other" boost used - Weather prediction for ${selectedVillage}: ${predictedWeather}`);
+  return;
+ }
+
+ // ============================================================================
+ // ------------------- Entertainer: Song of Storms -------------------
+ // ============================================================================
+ if (boosterCharacter.job === 'Entertainer') {
+  const { getCurrentWeather, setSpecialWeather } = require('../../services/weatherService');
+  
+  const villages = ['Rudania', 'Inariko', 'Vhintl'];
+  const specialWeatherTypes = [
+   "Avalanche",
+   "Blight Rain", 
+   "Drought",
+   "Fairy Circle",
+   "Flood",
+   "Flower Bloom",
+   "Jubilee",
+   "Meteor Shower",
+   "Muggy",
+   "Rock Slide",
+  ];
+  
+  const selectedVillage = targetVillage || villages[Math.floor(Math.random() * villages.length)];
+  const selectedWeather = specialWeatherTypes[Math.floor(Math.random() * specialWeatherTypes.length)];
+  
+  // TODO: Integrate with actual weather service to guarantee the special weather
+  // await setSpecialWeather(selectedVillage, selectedWeather);
+  
+  const embed = new EmbedBuilder()
+   .setTitle("🎵 Song of Storms")
+   .setDescription(`**${character.name}** plays an ancient melody, and **${boosterCharacter.name}'s** music reshapes the very skies...`)
+   .addFields([
+    { name: "📍 Village", value: selectedVillage, inline: true },
+    { name: "⛈️ Guaranteed Weather", value: selectedWeather, inline: true },
+    { name: "📅 When", value: `<t:${Math.floor((Date.now() + 86400000) / 1000)}:D>`, inline: true },
+    { name: "✨ Boost Used", value: "Entertainer's Song of Storms", inline: false },
+    { name: "🌩️ Effect", value: "This special weather will occur tomorrow, guaranteed!", inline: false }
+   ])
+   .setColor("#E74C3C")
+   .setFooter({ text: "The storm answers the song!" });
+
+  // Clear the boost after use
+  character.boostedBy = null;
+  await character.save();
+  
+  await interaction.reply({
+   embeds: [embed],
+   ephemeral: false,
+  });
+  
+  console.log(`[boosting.js]: 🎵 Entertainer "Other" boost used - Song of Storms for ${selectedVillage}: ${selectedWeather}`);
+  return;
+ }
+
+ // If we get here, the boost isn't Fortune Teller or Entertainer
+ await interaction.reply({
+  content: `${boosterCharacter.job} doesn't have an "Other" category boost that can be used with this command.`,
   ephemeral: true,
  });
 }

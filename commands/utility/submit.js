@@ -54,6 +54,13 @@ module.exports = {
         )
         .addStringOption(option =>
           option
+            .setName('charactername')
+            .setDescription('Character submitting (for Teacher boost: Critique & Composition)')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+          option
             .setName('questid')
             .setDescription('Quest ID if this is for a quest')
             .setRequired(false)
@@ -98,6 +105,13 @@ module.exports = {
             .setName('description')
             .setDescription('Brief description of your writing')
             .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('charactername')
+            .setDescription('Character submitting (for Scholar boost: Research Stipend)')
+            .setRequired(false)
+            .setAutocomplete(true)
         )
         .addStringOption(option =>
           option
@@ -159,6 +173,7 @@ module.exports = {
         const user = interaction.user;
         const attachedFile = interaction.options.getAttachment('file');
         const title = interaction.options.getString('title')?.trim() || attachedFile.name; // Use user-input title or default to file name
+        const characterName = interaction.options.getString('charactername');
         const questId = interaction.options.getString('questid') || 'N/A';
         const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
@@ -229,6 +244,7 @@ module.exports = {
           username: user.username,
           userAvatar: user.displayAvatarURL({ dynamic: true }),
           category: 'art',
+          characterName: characterName || null,
           questEvent: questId,
           questBonus: 'N/A',
           collab: collab.length > 0 ? collab : [],
@@ -276,6 +292,7 @@ module.exports = {
           return;
         }
         const description = interaction.options.getString('description') || 'No description provided.';
+        const characterName = interaction.options.getString('charactername');
         const questId = interaction.options.getString('questid') || 'N/A';
         const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
@@ -332,7 +349,26 @@ module.exports = {
 
         // Calculate tokens for the writing submission with collaboration splitting
         const tokenCalculation = calculateWritingTokensWithCollab(wordCount, collab, questBonus);
-        const finalTokenAmount = tokenCalculation.totalTokens;
+        let finalTokenAmount = tokenCalculation.totalTokens;
+        
+        // ============================================================================
+        // ------------------- Apply Scholar Boost (Research Stipend +50%) -------------------
+        // ============================================================================
+        if (characterName) {
+          const { fetchCharacterByNameAndUserId } = require('../../database/db');
+          const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+          
+          if (character && character.boostedBy) {
+            const { fetchCharacterByName } = require('../../database/db');
+            const boosterChar = await fetchCharacterByName(character.boostedBy);
+            
+            if (boosterChar && boosterChar.job === 'Scholar') {
+              const originalTokens = finalTokenAmount;
+              finalTokenAmount = Math.floor(finalTokenAmount * 1.5);
+              console.log(`[submit.js]: 📚 Scholar boost - Research Stipend (+50% tokens: ${originalTokens} → ${finalTokenAmount})`);
+            }
+          }
+        }
     
         // Create a unique submission ID and save to database
         const submissionId = generateUniqueId('W');
@@ -342,6 +378,7 @@ module.exports = {
           username: user.username,
           userAvatar: user.displayAvatarURL({ dynamic: true }),
           category: 'writing',
+          characterName: characterName || null,
           title,
           wordCount,
           finalTokenAmount,

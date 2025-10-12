@@ -520,8 +520,10 @@ const generateGatherFlavorText = (itemType) => {
   // Use the provided type, or fall back to the default if the type is unknown
   const flavorOptions = typeToFlavorText[itemType] || typeToFlavorText["default"];
 
-  // Get base flavor text
-  return getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
+  // Get base flavor text (Scholar boost flavor is handled separately in the boost effect section)
+  const baseFlavorText = getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
+  
+  return baseFlavorText;
 };
 
 const generateCraftingFlavorText = (job) => {
@@ -971,6 +973,16 @@ const BOOST_FLAVOR_MESSAGES = {
       "🎪 Performance skills improve your luck, revealing additional valuable items.",
       "🎨 Creative spirit guides your hands to bonus treasures.",
       "🎪 The Entertainer's magic ensures you find extra resources with flair."
+    ],
+    Looting: [
+      "🎭 Your performance dazzles monsters, reducing the damage they inflict.",
+      "🎪 The Entertainer's flair confuses enemies, softening their blows.",
+      "🎨 Theatrical presence distracts monsters, making their attacks less effective.",
+      "🎭 Showmanship mesmerizes foes, weakening their assault.",
+      "🎪 Performance magic shields you from the worst of enemy attacks.",
+      "🎨 Your artistic flair leaves monsters bewildered, reducing their impact.",
+      "🎭 The Entertainer's charm deflects some of the monster's fury.",
+      "🎪 Captivating performance reduces the monster's effectiveness in battle."
     ],
     default: [
       "🎭 The Entertainer's charm enhances your abilities with extra flair.",

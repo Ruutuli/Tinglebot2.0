@@ -163,7 +163,7 @@ const boostingEffects = {
   },
   Looting: {
    name: "Requiem of Spirit",
-   description: "Monsters are dazzled by flair. Reduce any damage taken from an encounter by 1 heart (min 0).",
+   description: "Monsters are dazzled by flair. Reduce damage taken by 1 heart per 2 tiers (T1-2: -1♥, T3-4: -2♥, T5-6: -3♥, etc). Works in raids!",
   },
   Mounts: {
    name: "Epona's Song",
@@ -456,6 +456,27 @@ function applyFortuneTellerOtherBoost(villageWeatherData) {
  return villageWeatherData;
 }
 
+function applyFortuneTellerLootingBoost(lootResult) {
+ console.log(`[boostingModule.js]: 🔮 Fortune Teller Looting Boost - Fated Reroll`);
+ 
+ // Check if damage was taken - if so, trigger reroll
+ if (lootResult && lootResult.damageValue && lootResult.damageValue > 0) {
+  console.log(`[boostingModule.js]: 🔮 Damage detected (${lootResult.damageValue}) - triggering Fated Reroll`);
+  
+  // Mark that reroll was triggered
+  return {
+   ...lootResult,
+   shouldReroll: true,
+   rerollTriggered: true,
+   originalDamage: lootResult.damageValue,
+   message: "🔮 Fated Reroll activated! Rolling again for a potentially better outcome..."
+  };
+ }
+ 
+ console.log(`[boostingModule.js]: 🔮 No damage taken - Fated Reroll not needed`);
+ return lootResult;
+}
+
 function applyFortuneTellerGatheringBoost(gatherTable) {
  console.log(`[boostingModule.js]: 🔮 Fortune Teller Gathering Boost - Input: ${gatherTable.length} items`);
  
@@ -516,6 +537,10 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
 // ============================================================================
 
 function applyTeacherCraftingBoost(craftedItem) {
+ // Handle both number input (quantity) and object input (item with quantity)
+ if (typeof craftedItem === 'number') {
+  return craftedItem + 1;
+ }
  if (craftedItem && craftedItem.quantity) {
   craftedItem.quantity += 1;
  }
@@ -523,6 +548,10 @@ function applyTeacherCraftingBoost(craftedItem) {
 }
 
 function applyTeacherExploringBoost(exploredItem) {
+ // Handle both number input (quantity) and object input (item with quantity)
+ if (typeof exploredItem === 'number') {
+  return exploredItem + 1;
+ }
  if (exploredItem && exploredItem.quantity && !exploredItem.isCombat) {
   exploredItem.quantity += 1;
  }
@@ -733,8 +762,15 @@ function applyEntertainerHealingBoost(baseHealing, wasKO) {
  return wasKO ? baseHealing + 1 : baseHealing;
 }
 
-function applyEntertainerLootingBoost(damageTaken) {
- return Math.max(0, damageTaken - 1);
+function applyEntertainerLootingBoost(damageTaken, monsterTier = 1) {
+ // Scale damage reduction based on monster tier
+ // Tier 1-2: -1 heart
+ // Tier 3-4: -2 hearts
+ // Tier 5-6: -3 hearts
+ // Tier 7-8: -4 hearts
+ // Tier 9-10: -5 hearts
+ const damageReduction = Math.ceil(monsterTier / 2);
+ return Math.max(0, damageTaken - damageReduction);
 }
 
 function applyEntertainerTokensBoost(participants) {
@@ -892,7 +928,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
    case "Exploring": return applyFortuneTellerExploringBoost(data);
    case "Gathering": return applyFortuneTellerGatheringBoost(data);
    case "Healers": return applyFortuneTellerHealingBoost(data);
-   case "Looting": return data;
+   case "Looting": return applyFortuneTellerLootingBoost(data);
    case "Mounts": return applyFortuneTellerMountsBoost(data);
    case "Stealing": return applyFortuneTellerStealingBoost(data);
    case "Tokens": return applyFortuneTellerTokensBoost(data);
@@ -944,7 +980,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
    case "Exploring": return applyEntertainerExploringBoost(data);
    case "Gathering": return await applyEntertainerGatheringBoost(data);
    case "Healers": return applyEntertainerHealingBoost(data, additionalData);
-   case "Looting": return applyEntertainerLootingBoost(data);
+   case "Looting": return applyEntertainerLootingBoost(data, additionalData);
    case "Mounts": return applyEntertainerMountsBoost(data);
    case "Stealing": return applyEntertainerStealingBoost(data);
    case "Tokens": return applyEntertainerTokensBoost(data);
@@ -988,6 +1024,7 @@ module.exports = {
  applyFortuneTellerExploringBoost,
  applyFortuneTellerGatheringBoost,
  applyFortuneTellerHealingBoost,
+ applyFortuneTellerLootingBoost,
  applyFortuneTellerMountsBoost,
  applyFortuneTellerStealingBoost,
  applyFortuneTellerTokensBoost,

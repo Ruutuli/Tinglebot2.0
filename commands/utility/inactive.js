@@ -3,7 +3,7 @@
 // ============================================================================
 // Sets a user as inactive by removing all their roles and giving them the INACTIVE role
 
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
 
 // Inactive role ID from server-data.json
 const INACTIVE_ROLE_ID = '788148064182730782';
@@ -28,7 +28,7 @@ module.exports = {
   async execute(interaction) {
     try {
       // Defer reply since this might take a moment
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const targetUser = interaction.options.getUser('user') || interaction.user;
       const targetMember = await interaction.guild.members.fetch(targetUser.id);
@@ -39,8 +39,7 @@ module.exports = {
 
       if (!isAdmin && !isSelf) {
         return await interaction.editReply({
-          content: '❌ You do not have permission to mark other users as inactive. You can only mark yourself as inactive.',
-          ephemeral: true
+          content: '❌ You do not have permission to mark other users as inactive. You can only mark yourself as inactive.'
         });
       }
 
@@ -48,16 +47,24 @@ module.exports = {
       const inactiveRole = await interaction.guild.roles.fetch(INACTIVE_ROLE_ID);
       if (!inactiveRole) {
         return await interaction.editReply({
-          content: '❌ Could not find the INACTIVE role. Please contact an administrator.',
-          ephemeral: true
+          content: '❌ Could not find the INACTIVE role. Please contact an administrator.'
         });
       }
 
       // Check if user is already inactive
       if (targetMember.roles.cache.has(INACTIVE_ROLE_ID)) {
         return await interaction.editReply({
-          content: `⚠️ ${targetUser.username} is already marked as inactive.`,
-          ephemeral: true
+          content: `⚠️ ${targetUser.username} is already marked as inactive.`
+        });
+      }
+
+      // Check bot permissions BEFORE attempting role changes
+      const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
+      
+      // Check if bot has ManageRoles permission
+      if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+        return await interaction.editReply({
+          content: '❌ **Bot Missing Permissions**: I need the `Manage Roles` permission to mark users as inactive.\n\n*Please contact a server administrator to grant me this permission.*'
         });
       }
 
@@ -68,6 +75,32 @@ module.exports = {
                role.id !== INACTIVE_ROLE_ID; // Not the inactive role itself
       });
 
+      // Check if bot's highest role is high enough
+      const botHighestRole = botMember.roles.highest;
+      const targetHighestRole = targetMember.roles.highest;
+      
+      if (botHighestRole.position <= targetHighestRole.position) {
+        return await interaction.editReply({
+          content: `❌ **Role Hierarchy Issue**: My highest role (${botHighestRole.name}) is not high enough to modify ${targetUser.username}'s roles.\n\n*Please ask a server administrator to move my role higher in the role list.*`
+        });
+      }
+
+      // Check if there are any roles that the bot can't remove due to hierarchy
+      const unremovableRoles = rolesToRemove.filter(role => role.position >= botHighestRole.position);
+      if (unremovableRoles.size > 0) {
+        const roleNames = unremovableRoles.map(r => r.name).join(', ');
+        return await interaction.editReply({
+          content: `❌ **Role Hierarchy Issue**: I cannot remove the following role(s) because they are higher than or equal to my highest role:\n\n**Roles:** ${roleNames}\n\n*Please ask a server administrator to move my role higher in the role list.*`
+        });
+      }
+
+      // Check if inactive role can be added (hierarchy check)
+      if (inactiveRole.position >= botHighestRole.position) {
+        return await interaction.editReply({
+          content: `❌ **Role Hierarchy Issue**: The INACTIVE role is higher than or equal to my highest role. I cannot assign it.\n\n*Please ask a server administrator to move my role above the INACTIVE role.*`
+        });
+      }
+
       // Store removed roles for the confirmation message
       const removedRoleNames = rolesToRemove.map(role => role.name);
 
@@ -76,10 +109,25 @@ module.exports = {
         await targetMember.roles.remove(rolesToRemove);
       } catch (error) {
         console.error('[inactive.js]: Error removing roles:', error);
-        return await interaction.editReply({
-          content: '❌ Failed to remove roles. The bot may not have sufficient permissions.',
-          ephemeral: true
-        });
+        
+        // Provide more detailed error message
+        let errorMsg = '❌ **Failed to Remove Roles**\n\n';
+        if (error.code === 50013) {
+          errorMsg += 'The bot lacks the necessary permissions. This could be due to:\n';
+          errorMsg += '• Missing `Manage Roles` permission\n';
+          errorMsg += '• Role hierarchy issues (some roles may be higher than my highest role)\n';
+          errorMsg += '• Server-specific permission restrictions\n\n';
+          errorMsg += '*Please contact a server administrator to resolve this issue.*';
+        } else if (error.code === 10011) {
+          errorMsg += 'One or more roles no longer exist on this server.\n\n';
+          errorMsg += '*The target user may have already had their roles modified.*';
+        } else {
+          errorMsg += `An unexpected error occurred: \`${error.message}\`\n\n`;
+          errorMsg += `Error Code: ${error.code || 'Unknown'}\n\n`;
+          errorMsg += '*Please try again or contact a server administrator.*';
+        }
+        
+        return await interaction.editReply({ content: errorMsg });
       }
 
       // Add the inactive role
@@ -87,10 +135,25 @@ module.exports = {
         await targetMember.roles.add(inactiveRole);
       } catch (error) {
         console.error('[inactive.js]: Error adding inactive role:', error);
-        return await interaction.editReply({
-          content: '❌ Failed to add the INACTIVE role. The bot may not have sufficient permissions.',
-          ephemeral: true
-        });
+        
+        // Provide more detailed error message
+        let errorMsg = '❌ **Failed to Add INACTIVE Role**\n\n';
+        if (error.code === 50013) {
+          errorMsg += 'The bot lacks the necessary permissions. This could be due to:\n';
+          errorMsg += '• Missing `Manage Roles` permission\n';
+          errorMsg += '• The INACTIVE role is higher than my highest role\n';
+          errorMsg += '• Server-specific permission restrictions\n\n';
+          errorMsg += '*Please contact a server administrator to resolve this issue.*';
+        } else if (error.code === 10011) {
+          errorMsg += 'The INACTIVE role no longer exists on this server.\n\n';
+          errorMsg += '*Please contact a server administrator to recreate the INACTIVE role.*';
+        } else {
+          errorMsg += `An unexpected error occurred: \`${error.message}\`\n\n`;
+          errorMsg += `Error Code: ${error.code || 'Unknown'}\n\n`;
+          errorMsg += '*Please try again or contact a server administrator.*';
+        }
+        
+        return await interaction.editReply({ content: errorMsg });
       }
 
       // Create success embed
@@ -121,7 +184,7 @@ module.exports = {
         .setFooter({ text: `Action performed by ${interaction.user.username}` });
 
       // Send confirmation to command user
-      await interaction.editReply({ embeds: [embed], ephemeral: true });
+      await interaction.editReply({ embeds: [embed] });
 
       // Try to DM the target user (if not the same as command user)
       if (targetUser.id !== interaction.user.id) {
@@ -157,14 +220,13 @@ module.exports = {
       console.error('[inactive.js]: Error in inactive command:', error);
       
       const errorMessage = {
-        content: '❌ An error occurred while marking the user as inactive. Please try again or contact an administrator.',
-        ephemeral: true
+        content: '❌ **Unexpected Error**\n\nAn error occurred while marking the user as inactive.\n\n*Please try again or contact an administrator if the issue persists.*'
       };
 
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply(errorMessage);
       } else {
-        await interaction.reply(errorMessage);
+        await interaction.reply({ ...errorMessage, flags: MessageFlags.Ephemeral });
       }
     }
   }

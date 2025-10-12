@@ -37,7 +37,8 @@ const {
 const {
  getGeneralJobsPage,
  getJobPerk,
- getVillageExclusiveJobs
+ getVillageExclusiveJobs,
+ jobPerks
 } = require("../modules/jobsModule");
 const { getAllVillages } = require("../modules/locationsModule");
 const {
@@ -60,6 +61,7 @@ const Pet = require("../models/PetModel");
 const Quest = require("../models/QuestModel");
 const ShopStock = require("../models/VillageShopsModel");
 const TableRoll = require("../models/TableRollModel");
+const TempData = require("../models/TempDataModel");
 const { Village } = require("../models/VillageModel");
 const generalCategories = require("../models/GeneralItemCategories");
 
@@ -638,6 +640,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               } else if (boostingSubcommand === "accept") {
                 if (focusedOption.name === "character") {
                   await handleBoostingAcceptCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "requestid") {
+                  await handleBoostingRequestIdAutocomplete(interaction, focusedOption);
                 }
               } else if (boostingSubcommand === "status") {
                 if (focusedOption.name === "charactername") {
@@ -1142,9 +1146,6 @@ async function handleBoostingRequestBoosterAutocomplete(interaction, focusedOpti
  try {
   const characters = await fetchAllCharacters();
 
-  // Import jobPerks from jobsModule to get jobs with BOOST perk
-  const { jobPerks } = require('../modules/jobsModule.js');
-  
   // Get all jobs that have the BOOST perk
   const boostJobs = jobPerks
    .filter(job => job.perk === 'BOOST')
@@ -1174,25 +1175,37 @@ async function handleBoostingRequestBoosterAutocomplete(interaction, focusedOpti
 async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
+  const requestId = interaction.options.getString('requestid');
+  console.log(`[handleBoostingAcceptCharacterAutocomplete]: Called for userId: ${userId}, requestId: ${requestId}`);
   const characters = await fetchCharactersByUserId(userId);
   const modCharacters = await fetchModCharactersByUserId(userId);
   
   // Combine regular characters and mod characters
   const allCharacters = [...characters, ...modCharacters];
 
-  // Import jobPerks from jobsModule to get jobs with BOOST perk
-  const { jobPerks } = require('../modules/jobsModule.js');
+  let filteredCharacters = allCharacters;
   
-  // Get all jobs that have the BOOST perk
-  const boostJobs = jobPerks
-   .filter(job => job.perk === 'BOOST')
-   .map(job => job.job);
+  // If a request ID is provided, filter to only show the specific character for that request
+  if (requestId) {
+    const requestData = await TempData.findByTypeAndKey('boosting', requestId);
+    
+    if (requestData && requestData.data && requestData.data.boostingCharacter) {
+      filteredCharacters = allCharacters.filter(char => 
+        char.name.toLowerCase() === requestData.data.boostingCharacter.toLowerCase()
+      );
+    }
+  } else {
+    // No request ID selected, show all characters with BOOST perk that have pending requests
+    const boostJobs = jobPerks
+      .filter(job => job.perk === 'BOOST')
+      .map(job => job.job);
 
-  const filteredCharacters = allCharacters.filter((character) =>
-   boostJobs.some(boostJob => 
-     boostJob.toLowerCase() === character.job.toLowerCase()
-   )
-  );
+    filteredCharacters = allCharacters.filter((character) =>
+      boostJobs.some(boostJob => 
+        boostJob.toLowerCase() === character.job.toLowerCase()
+      )
+    );
+  }
 
   const choices = filteredCharacters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
@@ -1228,6 +1241,58 @@ async function handleBoostingStatusCharacterAutocomplete(interaction, focusedOpt
   handleError(error, "autocompleteHandler.js");
 
   console.error("[handleBoostingStatusCharacterAutocomplete]: Error:", error);
+  await safeRespondWithError(interaction);
+ }
+}
+
+// ------------------- Boosting Request ID Autocomplete -------------------
+async function handleBoostingRequestIdAutocomplete(interaction, focusedOption) {
+ try {
+  const userId = interaction.user.id;
+  console.log(`[handleBoostingRequestIdAutocomplete]: Called for userId: ${userId}`);
+  
+  // Get all boosting requests from TempData
+  const allBoostingData = await TempData.findAllByType('boosting');
+  console.log(`[handleBoostingRequestIdAutocomplete]: Found ${allBoostingData.length} total boosting requests`);
+  
+  // Get user's characters to check ownership of boosting characters
+  const characters = await fetchCharactersByUserId(userId);
+  const modCharacters = await fetchModCharactersByUserId(userId);
+  const allCharacters = [...characters, ...modCharacters];
+  const userCharacterNames = allCharacters.map(char => char.name.toLowerCase());
+  console.log(`[handleBoostingRequestIdAutocomplete]: User owns characters:`, userCharacterNames);
+  
+  // Filter for pending requests where the user owns the boosting character
+  const validRequests = allBoostingData
+    .filter(tempData => {
+      const requestData = tempData.data;
+      const isPending = requestData.status === 'pending';
+      const hasBooster = !!requestData.boostingCharacter;
+      const ownsBooster = userCharacterNames.includes(requestData.boostingCharacter?.toLowerCase());
+      console.log(`[handleBoostingRequestIdAutocomplete]: Request ${requestData.boostRequestId} - status:${requestData.status}, booster:${requestData.boostingCharacter}, owns:${ownsBooster}`);
+      return isPending && hasBooster && ownsBooster;
+    })
+    .map(tempData => tempData.data)
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // Most recent first
+  
+  console.log(`[handleBoostingRequestIdAutocomplete]: Found ${validRequests.length} valid requests for user`);
+  
+  // Create autocomplete choices
+  const choices = validRequests.map(request => {
+    const timeAgo = request.timestamp 
+      ? Math.floor((Date.now() - request.timestamp) / (1000 * 60)) + 'm ago'
+      : '';
+    return {
+      name: `${request.boostRequestId} | ${request.targetCharacter} ← ${request.boostingCharacter} | ${request.category} ${timeAgo}`,
+      value: request.boostRequestId
+    };
+  });
+  
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  
+  console.error("[handleBoostingRequestIdAutocomplete]: Error:", error);
   await safeRespondWithError(interaction);
  }
 }
@@ -4971,6 +5036,7 @@ module.exports = {
   handleBoostingRequestBoosterAutocomplete,
   handleBoostingVillageAutocomplete,
   handleBoostingAcceptCharacterAutocomplete,
+  handleBoostingRequestIdAutocomplete,
   handleBoostingStatusCharacterAutocomplete,
 
  // ------------------- Change Job Functions -------------------

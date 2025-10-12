@@ -1104,11 +1104,6 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
  const isTeacherBoost = character.boostedBy && boosterCharacter && 
    (boosterCharacter.job === 'Teacher' || boosterCharacter.job?.toLowerCase() === 'teacher');
  
- // Check if this is a Scholar boost for cross-region gathering
- const isScholarBoost = character.boostedBy && boosterCharacter && 
-   (boosterCharacter.job === 'Scholar' || boosterCharacter.job?.toLowerCase() === 'scholar');
- const targetRegion = scholarTargetVillage;
- 
  // Use divine flavor text if this is a divine item gathered with Priest boost
  let flavorText;
  if (isDivineItemWithPriestBoost) {
@@ -1117,18 +1112,27 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
    if (isTeacherBoost) {
       flavorText = generateTeacherGatheringFlavorText();
    } else {
-     flavorText = generateGatherFlavorText(randomItem.type[0], isScholarBoost, targetRegion);
+     flavorText = generateGatherFlavorText(randomItem.type[0]);
    }
  }
 
-  // Get boost information for non-special cases, including Entertainer bonus item name
+  // Get boost information for non-special cases, including Entertainer bonus item name and Scholar target village
   let boostInfo = !isDivineItemWithPriestBoost && !isTeacherBoost ? await getBoostInfo(character, 'Gathering') : null;
-  if (boostInfo && boostInfo.boosterJob === 'Entertainer' && bonusItem?.itemName) {
+  if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'entertainer' && bonusItem?.itemName) {
     // Regenerate the boost flavor text to include the bonus item name
     boostInfo = {
       ...boostInfo,
       boostFlavorText: generateBoostFlavorText('Entertainer', 'Gathering', { bonusItemName: bonusItem.itemName })
     };
+  }
+  // For Scholar boosts, regenerate flavor text with target village
+  if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'scholar' && scholarTargetVillage) {
+    console.log(`[embeds.js]: 📖 Regenerating Scholar boost flavor with target village: ${scholarTargetVillage}`);
+    boostInfo = {
+      ...boostInfo,
+      boostFlavorText: generateBoostFlavorText('Scholar', 'Gathering', { targetRegion: scholarTargetVillage })
+    };
+    console.log(`[embeds.js]: ✅ New Scholar boost flavor text: ${boostInfo.boostFlavorText}`);
   }
   let description = addBoostFlavorText(flavorText, boostInfo);
  
@@ -1142,15 +1146,6 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
    
    if (isEntertainerBoost) {
      description += `\n\n🎭 **Entertainer's Gift:** ${character.name} also found ${bonusArticle} ${bonusEmoji}${bonusItem.itemName}!`;
-   }
- }
- 
- // Add Scholar cross-region information if needed
- if (character.boostedBy && character.boostedBy.toLowerCase().includes('scholar')) {
-   if (scholarTargetVillage) {
-     description += `\n\n📚 **Scholar's Insight:** ${character.name} used their knowledge to gather from ${scholarTargetVillage} while staying in ${character.currentVillage}!`;
-   } else {
-     description += `\n\n📚 **Scholar's Insight:** ${character.name} used their knowledge to gather from afar!`;
    }
  }
 
@@ -1351,7 +1346,9 @@ const createMonsterEncounterEmbed = async (
  boostCategoryOverride = null,
  elixirBuffInfo = null,
  originalRoll = null,
- blightRainMessage = null
+ blightRainMessage = null,
+ entertainerBoostUnused = false,
+ entertainerDamageReduction = 0
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1366,7 +1363,42 @@ const createMonsterEncounterEmbed = async (
 
  // Get boost information (allow override when encounter happens during other activities like Gathering)
  const boostCategory = boostCategoryOverride || 'Looting';
- const boostInfo = await getBoostInfo(character, boostCategory);
+ let boostInfo = await getBoostInfo(character, boostCategory);
+ 
+ // Debug logging for boost info
+ if (boostInfo) {
+   console.log(`[embeds.js]: 🎯 createMonsterEncounterEmbed - Boost info retrieved: ${boostInfo.boosterJob} ${boostInfo.boosterName} - ${boostInfo.boostName} for ${boostInfo.category}`);
+ } else {
+   console.log(`[embeds.js]: ⚠️ createMonsterEncounterEmbed - No boost info found for character ${character.name}`);
+ }
+
+ // Modify boost flavor text for Entertainer based on damage taken
+ if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'entertainer' && boostInfo.category === 'Looting') {
+   if (entertainerBoostUnused) {
+     // No damage taken - boost preserved
+     boostInfo = {
+       ...boostInfo,
+       boostFlavorText: "🎭 Your Entertainer boost was active, but you didn't need it! You took no damage, so the boost is preserved for next time."
+     };
+     console.log(`[embeds.js]: 🎭 Entertainer boost - unused (no damage), preserved`);
+   } else if (heartsRemaining !== undefined && heartsRemaining === character.maxHearts) {
+     // Damage was fully negated by boost
+     boostInfo = {
+       ...boostInfo,
+       boostFlavorText: "🎭✨ The monster attacked, but your Entertainer's performance dazzled them completely! The attack was negated and you took no damage thanks to the boost!"
+     };
+     console.log(`[embeds.js]: 🎭 Entertainer boost - damage fully negated`);
+   } else if (entertainerDamageReduction > 0) {
+     // Damage was partially reduced
+     const heartsWord = entertainerDamageReduction === 1 ? 'heart' : 'hearts';
+     boostInfo = {
+       ...boostInfo,
+       boostFlavorText: `🎭✨ The Entertainer's performance reduced the damage by ${entertainerDamageReduction} ${heartsWord}! Without the boost, you would have taken more damage.`
+     };
+     console.log(`[embeds.js]: 🎭 Entertainer boost - damage reduced by ${entertainerDamageReduction} hearts`);
+   }
+   // Otherwise use the default looting flavor text (no boost active or no reduction)
+ }
 
  // Add progress indicator if provided
  const progressField = currentMonster && totalMonsters ? {

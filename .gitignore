@@ -15,3 +15,4 @@ testingCode/
 .tmp.drivedownload/
 .dashboard/.env
 cursor-rules.mdc
+BOOST_SESSION_SUMMARY.md

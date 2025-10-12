@@ -137,6 +137,41 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       throw new Error('Failed to calculate raid battle outcome');
     }
 
+    // ------------------- Apply Entertainer Boost (Damage Reduction) -------------------
+    // Check if character has Entertainer boost for looting and apply damage reduction
+    if (character.boostedBy) {
+      const { fetchCharacterByName } = require('../database/db');
+      const { recoverHearts } = require('./characterStatsModule');
+      const boosterChar = await fetchCharacterByName(character.boostedBy);
+      
+      if (boosterChar && boosterChar.job?.toLowerCase() === 'entertainer') {
+        // For high-tier monsters (5-10), damage is in outcome.playerHearts
+        const characterDamage = characterHeartsBefore - (outcome.playerHearts?.current || character.currentHearts);
+        
+        if (characterDamage > 0) {
+          const monsterTier = monster.tier || 5;
+          const { applyEntertainerLootingBoost } = require('./boostingModule');
+          const reducedDamage = applyEntertainerLootingBoost(characterDamage, monsterTier);
+          const damageReduction = characterDamage - reducedDamage;
+          
+          if (damageReduction > 0) {
+            console.log(`[raidModule.js]: 🎭 Entertainer boost - Requiem of Spirit (Tier ${monsterTier}) reduces raid damage from ${characterDamage} to ${reducedDamage} (-${damageReduction} hearts)`);
+            
+            // Restore the excess hearts that were taken
+            await recoverHearts(character._id, damageReduction);
+            
+            // Update outcome to reflect the reduced damage
+            if (outcome.playerHearts) {
+              outcome.playerHearts.current = characterHeartsBefore - reducedDamage;
+            }
+            
+            // Refresh character to get updated hearts
+            character.currentHearts = characterHeartsBefore - reducedDamage;
+          }
+        }
+      }
+    }
+
     // ------------------- Elixir Consumption Logic -------------------
     // Check if elixirs should be consumed based on the raid encounter
     try {

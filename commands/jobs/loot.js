@@ -113,13 +113,15 @@ async function handleLootError(interaction, error, context = '') {
 }
 
 // Unified character update
-async function updateCharacterLootTimestamp(character) {
+async function updateCharacterLootTimestamp(character, shouldClearBoost = true) {
   character.lastLootedAt = new Date().toISOString();
   
   // ------------------- Clear Boost After Use -------------------
-  if (character.boostedBy) {
+  if (character.boostedBy && shouldClearBoost) {
     console.log(`[loot.js] Clearing boost for ${character.name} after use`);
     character.boostedBy = null;
+  } else if (character.boostedBy && !shouldClearBoost) {
+    console.log(`[loot.js] Boost preserved for ${character.name} - not used (no damage taken)`);
   }
   
   await character.save();
@@ -1177,8 +1179,49 @@ async function processLootingLogic(
 
   // ------------------- Apply Other Damage Reduction Boosts -------------------
   // Check if character is boosted and apply damage reduction (Entertainer boost)
-  if (outcome.hearts) {
-    outcome.hearts = await applyLootingDamageBoost(character.name, outcome.hearts);
+  let entertainerDamageReduction = 0;
+  let entertainerBoostUnused = false;
+  let damageWasTaken = outcome.hearts > 0; // Track if any damage was taken before boost
+  
+  // Check if Entertainer boost is active
+  if (character.boostedBy) {
+    const { fetchCharacterByName, updateCharacterById } = require('../../database/db');
+    const { recoverHearts } = require('../../modules/characterStatsModule');
+    const boosterChar = await fetchCharacterByName(character.boostedBy);
+    
+    if (boosterChar && boosterChar.job?.toLowerCase() === 'entertainer') {
+      if (outcome.hearts && outcome.hearts > 0) {
+        // Apply damage reduction with monster tier scaling
+        const originalHeartDamage = outcome.hearts;
+        const monsterTier = encounteredMonster.tier || 1;
+        const reducedDamage = await applyLootingDamageBoost(character.name, outcome.hearts, monsterTier);
+        entertainerDamageReduction = originalHeartDamage - reducedDamage;
+        
+        if (entertainerDamageReduction > 0) {
+          console.log(`[loot.js]: 🎭 Entertainer boost - Requiem of Spirit (Tier ${monsterTier}) reduces damage from ${originalHeartDamage} to ${reducedDamage} (-${entertainerDamageReduction} hearts)`);
+          
+          // Hearts were already removed by getEncounterOutcome - restore them and reapply correct amount
+          // Step 1: Restore the hearts that were taken
+          await recoverHearts(character._id, originalHeartDamage);
+          console.log(`[loot.js]: 🔄 Restored ${originalHeartDamage} hearts to reapply with boost`);
+          
+          // Step 2: Apply the boosted (reduced) damage
+          if (reducedDamage > 0) {
+            const { useHearts } = require('../../modules/characterStatsModule');
+            await useHearts(character._id, reducedDamage);
+            console.log(`[loot.js]: 💔 Applied boosted damage: ${reducedDamage} hearts`);
+          }
+          
+          // Update outcome to reflect the reduced damage
+          outcome.hearts = reducedDamage;
+        }
+      } else if (!outcome.hearts || outcome.hearts === 0) {
+        // Boost was active but not needed (no damage taken)
+        entertainerBoostUnused = true;
+        damageWasTaken = false; // Ensure boost is not cleared
+        console.log(`[loot.js]: 🎭 Entertainer boost was active but not needed (no damage taken)`);
+      }
+    }
   }
 
   // Step 2: Handle KO Logic
@@ -1225,8 +1268,14 @@ async function processLootingLogic(
      null, // boostCategoryOverride
      elixirBuffInfo, // Pass elixirBuffInfo to the embed
      originalRoll, // Pass originalRoll to the embed
-     blightRainMessage // Pass blight rain message to the embed
+     blightRainMessage, // Pass blight rain message to the embed
+     entertainerBoostUnused, // Pass flag indicating boost was active but unused
+     entertainerDamageReduction // Pass amount of damage reduced by Entertainer boost
     );
+    
+    // Update timestamp and clear boost only if damage was taken
+    await updateCharacterLootTimestamp(character, damageWasTaken);
+    
     await interaction.editReply({
      content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
      embeds: [embed],
@@ -1237,9 +1286,7 @@ async function processLootingLogic(
    await handleInventoryUpdate(interaction, character, lootedItem, encounteredMonster, bloodMoonActive);
   }
 
-  // Update character timestamp
-  await updateCharacterLootTimestamp(character);
-
+  // Create embed BEFORE clearing boost so boost info can be retrieved
   const embed = await createMonsterEncounterEmbed(
    character,
    encounteredMonster,
@@ -1254,8 +1301,15 @@ async function processLootingLogic(
    null, // boostCategoryOverride
    elixirBuffInfo, // Pass elixirBuffInfo to the embed
    originalRoll, // Pass originalRoll to the embed
-   blightRainMessage // Pass blight rain message to the embed
+   blightRainMessage, // Pass blight rain message to the embed
+   entertainerBoostUnused, // Pass flag indicating boost was active but unused
+   entertainerDamageReduction // Pass amount of damage reduced by Entertainer boost
    );
+  
+  // Update character timestamp and clear boost AFTER embed is created
+  // Only clear boost if damage was actually taken (boost was used)
+  await updateCharacterLootTimestamp(character, damageWasTaken);
+  
   await interaction.editReply({ embeds: [embed] });
 
   // ------------------- Deactivate Job Voucher if needed -------------------
