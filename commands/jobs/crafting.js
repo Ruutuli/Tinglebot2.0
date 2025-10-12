@@ -188,6 +188,10 @@ module.exports = {
       
       // Check if character's job matches item's crafting requirements using boolean fields
       const jobLower = job.toLowerCase();
+      
+      // Special handling for mod characters with ALL perks (Oracle, Sage, Dragon)
+      const hasAllPerks = jobPerk && jobPerk.perks.includes('ALL');
+      
       const jobFieldMap = {
         'cook': 'cook',
         'blacksmith': 'blacksmith',
@@ -199,9 +203,9 @@ module.exports = {
         'witch': 'witch'
       };
       const jobField = jobFieldMap[jobLower];
-      const canCraftItem = jobField && item[jobField] === true;
+      const canCraftItem = hasAllPerks || (jobField && item[jobField] === true);
       
-      if (!jobPerk || !jobPerk.perks.includes('CRAFTING') || !canCraftItem) {
+      if (!jobPerk || (!jobPerk.perks.includes('CRAFTING') && !hasAllPerks) || !canCraftItem) {
         console.error(`[crafting.js]: ❌ Invalid job "${job}" for ${character.name} - missing crafting skills`);
         const errorResponse = getJobVoucherErrorMessage('MISSING_SKILLS', {
           characterName: character.name,

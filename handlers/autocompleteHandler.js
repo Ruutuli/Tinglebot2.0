@@ -1448,13 +1448,18 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
         }
       }
 
-      if (!jobPerk || !jobPerk.perks.includes("CRAFTING")) {
+      if (!jobPerk || (!jobPerk.perks.includes("CRAFTING") && !jobPerk.perks.includes("ALL"))) {
         return await safeAutocompleteResponse(interaction, []);
       }
 
       // Filter items by job first using boolean fields
       const jobFilteredItems = allCraftableItems.filter(item => {
         const jobLower = job.toLowerCase();
+        
+        // Special handling for mod characters with ALL perks (Oracle, Sage, Dragon)
+        if (jobPerk.perks.includes("ALL")) {
+          return true; // Can craft anything
+        }
         
         // Map job names to their corresponding boolean fields
         const jobFieldMap = {
@@ -1464,7 +1469,8 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
           'mask maker': 'maskMaker',
           'researcher': 'researcher',
           'weaver': 'weaver',
-          'artist': 'artist'
+          'artist': 'artist',
+          'witch': 'witch'
         };
         
         const jobField = jobFieldMap[jobLower];
