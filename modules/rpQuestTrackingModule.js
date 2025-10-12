@@ -9,6 +9,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const { QUEST_TYPES, BORDER_IMAGE, DEFAULT_POST_REQUIREMENT } = require('./questRewardModule');
 const questModule = require('../commands/world/quest');
 const questRewardModule = require('./questRewardModule');
+const logger = require('../utils/logger');
 
 // Helper function to get Discord client
 function getDiscordClient() {
@@ -16,7 +17,7 @@ function getDiscordClient() {
         const { client } = require('../index.js');
         return client;
     } catch (error) {
-        console.error(`[rpQuestTrackingModule.js] ❌ Error getting Discord client:`, error);
+        logger.error('QUEST', 'Error getting Discord client');
         return null;
     }
 }
@@ -65,29 +66,29 @@ async function handleRPPostTracking(message) {
     try {
         if (!isRPQuestThread(message.channel)) return;
 
-        console.log(`[rpQuestTrackingModule.js] 📝 Tracking post in ${message.channel.name}`);
+        logger.debug('QUEST', `Tracking post in ${message.channel.name}`);
 
         const quest = await findQuestByThreadId(message.channel.id);
         if (!quest || !isValidRPQuest(quest)) {
-            console.log(`[rpQuestTrackingModule.js] ❌ No valid RP quest found for thread ${message.channel.id}`);
+            logger.debug('QUEST', `No valid RP quest found for thread`);
             return;
         }
 
         const participant = quest.getParticipant(message.author.id);
         if (!participant) {
-            console.log(`[rpQuestTrackingModule.js] ❌ User not participant in quest ${quest.questID}`);
+            logger.debug('QUEST', `User not participant in ${quest.questID}`);
             return;
         }
 
         const validationResult = validateRPPostWithReason(message);
         if (!validationResult.valid) {
-            console.log(`[rpQuestTrackingModule.js] ❌ Invalid post from ${message.author.id} - ${validationResult.reason}`);
+            logger.debug('QUEST', `Invalid post: ${validationResult.reason}`);
             return;
         }
 
         const villageCheck = await quest.checkParticipantVillage(participant.userId);
         if (!villageCheck.valid) {
-            console.log(`[rpQuestTrackingModule.js] ❌ Participant ${participant.characterName} disqualified: ${villageCheck.reason}`);
+            logger.warn('QUEST', `${participant.characterName} disqualified: ${villageCheck.reason}`);
             quest.disqualifyParticipant(participant.userId, villageCheck.reason);
             await quest.save();
             return;
@@ -96,7 +97,7 @@ async function handleRPPostTracking(message) {
         await processValidRPPost(quest, participant, message.channel.id);
 
     } catch (error) {
-        console.error(`[rpQuestTrackingModule.js] ❌ Error tracking RP post:`, error);
+        logger.error('QUEST', 'Error tracking RP post');
         handleError(error, 'rpQuestTrackingModule.js');
     }
 }
@@ -134,7 +135,7 @@ async function processValidRPPost(quest, participant, channelId) {
         participant.lastCompletionCheck = new Date();
         
         await sendRequirementMetNotification(quest, participant, channelId);
-        console.log(`[rpQuestTrackingModule.js] ✅ ${participant.characterName} has met the RP requirements (${participant.rpPostCount}/${postRequirement} posts)!`);
+        logger.quest.completed(quest.questID, 1);
     }
 
     await quest.save();
@@ -144,16 +145,16 @@ async function processValidRPPost(quest, participant, channelId) {
         if (client) {
             await questModule.updateQuestEmbed(null, quest, client, 'rpQuestTracking');
         } else {
-            console.log(`[rpQuestTrackingModule.js] ⚠️ Discord client not available for embed update`);
+            logger.warn('QUEST', 'Discord client not available for embed update');
         }
     } catch (error) {
-        console.error(`[rpQuestTrackingModule.js] ❌ Error updating quest embed:`, error);
+        logger.error('QUEST', 'Error updating quest embed');
     }
 
     const completionResult = await quest.checkAutoCompletion();
     
     if (completionResult.completed && completionResult.needsRewardProcessing) {
-        console.log(`[rpQuestTrackingModule.js] ✅ Quest ${quest.questID} completed: ${completionResult.reason}`);
+        logger.success('QUEST', `${quest.questID} completed: ${completionResult.reason}`);
         
         if (completionResult.reason === 'all_participants_completed' || completionResult.reason.includes('participants completed')) {
             await questRewardModule.processQuestCompletion(quest.questID);

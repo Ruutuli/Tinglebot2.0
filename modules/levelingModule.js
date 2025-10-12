@@ -2,6 +2,7 @@
 const User = require('../models/UserModel');
 const { EmbedBuilder } = require('discord.js');
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 
 // ------------------- Leveling System Configuration -------------------
 const XP_CONFIG = {
@@ -60,7 +61,7 @@ async function handleXP(message) {
     await user.updateMessageTime();
     
     // Log XP gain
-    console.log(`[levelingModule]: ${message.author.tag} gained ${finalXP} XP (Level ${result.newLevel})`);
+    logger.leveling.xp(message.author.tag, finalXP, result.newLevel);
     
     // Send level up notification if user leveled up
     if (result.leveledUp) {
@@ -69,7 +70,7 @@ async function handleXP(message) {
     
   } catch (error) {
     handleError(error, 'levelingModule.js');
-    console.error(`[levelingModule]: Error handling XP for ${message.author.id}:`, error);
+    logger.error('LEVEL', `Error handling XP for ${message.author.id}`);
   }
 }
 
@@ -111,16 +112,16 @@ async function sendLevelUpNotification(message, newLevel, xpGained) {
       const sheikahSlateChannel = await message.client.channels.fetch(sheikahSlateChannelId);
       if (sheikahSlateChannel) {
         await sheikahSlateChannel.send({ embeds: [embed] });
-        console.log(`[levelingModule]: Level up announcement sent to Sheikah Slate channel for ${message.author.tag}`);
+        logger.debug('LEVEL', `Level up announcement sent for ${message.author.tag}`);
       } else {
-        console.warn(`[levelingModule]: Sheikah Slate channel not found: ${sheikahSlateChannelId}`);
+        logger.warn('LEVEL', `Sheikah Slate channel not found`);
       }
     } catch (channelError) {
-      console.error(`[levelingModule]: Error sending to Sheikah Slate channel:`, channelError);
+      logger.error('LEVEL', 'Error sending to Sheikah Slate channel');
     }
     
   } catch (error) {
-    console.error(`[levelingModule]: Error sending level up notification:`, error);
+    logger.error('LEVEL', 'Error sending level up notification');
   }
 }
 

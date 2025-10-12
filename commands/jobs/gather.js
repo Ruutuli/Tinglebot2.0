@@ -28,6 +28,7 @@ const { getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobs
 const { getVillageRegionByName } = require('../../modules/locationsModule.js');
 const { useHearts, handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
 const { capitalizeWords } = require('../../modules/formattingModule.js');
+const logger = require('../../utils/logger.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { applyGatheringBoost } = require('../../modules/boostIntegration');
 
@@ -128,7 +129,7 @@ async function updateDailyRoll(character, activity) {
     character.dailyRoll.set(activity, now);
     await character.save();
   } catch (error) {
-    console.error(`[gather.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
+    logger.error('GATHER', `Failed to update daily roll for ${character.name}`);
     throw error;
   }
 }
@@ -171,7 +172,7 @@ module.exports = {
       try {
         // Check if interaction is still valid
         if (!interaction.isRepliable()) {
-          console.error('[gather.js]: Cannot reply to interaction - interaction is not repliable');
+          logger.warn('GATHER', 'Interaction not repliable');
           return;
         }
         
@@ -187,7 +188,7 @@ module.exports = {
           try {
             await interaction.followUp(content);
           } catch (followUpError) {
-            console.error('[gather.js]: Failed to send followUp message:', followUpError);
+            logger.error('GATHER', 'Failed to send followUp message');
           }
         } else {
           throw error;
@@ -198,7 +199,7 @@ module.exports = {
     try {
       // Check if interaction is still valid before proceeding
       if (!interaction.isRepliable()) {
-        console.error('[gather.js]: Cannot reply to interaction - interaction is not repliable');
+        logger.warn('GATHER', 'Interaction not repliable');
         return;
       }
       
@@ -503,7 +504,7 @@ module.exports = {
         try {
           await updateDailyRoll(character, 'gather');
         } catch (error) {
-          console.error(`[Gather Command]: ❌ Failed to update daily roll:`, error);
+          logger.error('GATHER', 'Failed to update daily roll');
           await safeReply({
             content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
             flags: 64,
@@ -623,7 +624,7 @@ module.exports = {
               lootedItem.emoji = jellyItem.emoji;
             }
           } catch (error) {
-            console.error(`[gather.js]: Error fetching emoji for ${jellyType}:`, error);
+            logger.error('GATHER', `Error fetching emoji for ${jellyType}`);
             // Keep the original emoji if there's an error
           }
         } else {
@@ -854,14 +855,14 @@ module.exports = {
              const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
              const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
              
-             console.log(`[gather.js]: 📖 Scholar Boost Detection - boostData:`, JSON.stringify(boostData, null, 2));
+             logger.debug('BOOST', `Scholar boost detected for ${character.name}`);
              
              if (boostData && boostData.targetVillage) {
                scholarTargetVillage = boostData.targetVillage;
                gatheringRegion = scholarTargetVillage;
-               console.log(`[gather.js]: ✅ Scholar target village set to: ${scholarTargetVillage}`);
+               logger.debug('BOOST', `Target village: ${scholarTargetVillage}`);
              } else {
-               console.log(`[gather.js]: ⚠️ Scholar boost detected but no targetVillage found in boostData`);
+               logger.warn('BOOST', 'No targetVillage in boostData');
              }
            }
         }
@@ -893,7 +894,7 @@ module.exports = {
         
         // Debug logging for Scholar boost
         if (scholarTargetVillage) {
-          console.log(`[gather.js]: 🔮 Scholar Boost Active - Gathering from ${scholarTargetVillage} table (${availableItems.length} items available)`);
+          logger.debug('GATHER', `Scholar boost: ${scholarTargetVillage} (${availableItems.length} items)`);
         }
         
         if (availableItems.length === 0) {
@@ -927,15 +928,15 @@ module.exports = {
         }
         
         let weightedItems;
-        console.log(`[gather.js]: 🔍 Boost Check - character.boostedBy: "${character.boostedBy}", boosterCharacter: ${boosterCharacter?.name || 'null'}, boosterJob: "${boosterCharacter?.job || 'null'}"`);
+        logger.debug('BOOST', `Boost check: boostedBy="${character.boostedBy}", booster=${boosterCharacter?.name || 'null'}`);
         
         if (character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller') {
           // Fortune Teller boost already creates properly weighted items - use them directly
-          console.log(`[gather.js]: 🔮 Using Fortune Teller boosted items directly (${boostedAvailableItems.length} items)`);
+          logger.debug('BOOST', `Fortune Teller boost: ${boostedAvailableItems.length} items`);
           weightedItems = boostedAvailableItems;
         } else {
           // Normal weighting for other boosts or no boost
-          console.log(`[gather.js]: ⚙️ Using createWeightedItemList for ${boostedAvailableItems.length} items`);
+          logger.debug('GATHER', `Creating weighted list: ${boostedAvailableItems.length} items`);
           weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
         }
         

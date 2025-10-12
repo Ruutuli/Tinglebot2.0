@@ -7,6 +7,7 @@
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const Jimp = require('jimp');
 const { AttachmentBuilder } = require('discord.js');
+const logger = require('../utils/logger');
 
 // ============================================================================
 // ------------------- Game Configuration -------------------
@@ -273,7 +274,7 @@ function spawnAliens(gameData, playerCount, currentRound) {
   
   gameData.aliens.push(...newAliens);
   
-  console.log(`[MINIGAME] Actually spawned ${newAliens.length} aliens: ${newAliens.map(a => a.id).join(', ')}`);
+  logger.minigame.spawn(newAliens.length, newAliens.map(a => a.id));
   
   // Create spawn location messages
   const spawnMessages = newAliens.map(alien => {
@@ -332,13 +333,13 @@ function createAlienDefenseGame(channelId, guildId, createdBy, village = 'rudani
 // ------------------- Function: processAlienDefenseRoll -------------------
 // Processes a player's roll against an alien
 function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, roll) {
-  console.log(`[MINIGAME] Processing roll: ${playerName} vs ${targetAlienId} (Roll: ${roll})`);
+  logger.debug('MINIGAME', `Processing: ${playerName} vs ${targetAlienId} (Roll: ${roll})`);
   
   // Check if it's the player's turn (if turn order is active)
   if (gameData.turnOrder.length > 0) {
     const currentPlayer = gameData.turnOrder[gameData.currentTurnIndex];
     if (currentPlayer.discordId !== playerId) {
-      console.log(`[MINIGAME] Turn check failed - Expected: ${currentPlayer.username}, Got: ${playerName}`);
+      logger.warn('MINIGAME', `Turn check failed: Expected ${currentPlayer.username}, got ${playerName}`);
       return {
         success: false,
         message: `❌ It's not your turn! Current turn: **${currentPlayer.username}**`,
@@ -354,19 +355,16 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     const match = targetAlienId.match(/👾\s*([A-Z0-9]+)/);
     if (match) {
       cleanAlienId = match[1];
-      console.log(`[MINIGAME] Extracted alien ID: ${cleanAlienId} from formatted string: ${targetAlienId}`);
+      logger.debug('MINIGAME', `Extracted ID: ${cleanAlienId} from ${targetAlienId}`);
     } else {
-      console.log(`[MINIGAME] Failed to extract alien ID from: ${targetAlienId}`);
+      logger.warn('MINIGAME', `Failed to extract ID from: ${targetAlienId}`);
     }
   }
-  
-  console.log(`[MINIGAME] Looking for alien ${cleanAlienId} in aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
   
   const alien = gameData.aliens.find(a => a.id === cleanAlienId && !a.defeated);
   
   if (!alien) {
-    console.log(`[MINIGAME] Alien not found: ${cleanAlienId} (original: ${targetAlienId})`);
-    console.log(`[MINIGAME] Available aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+    logger.warn('MINIGAME', `Alien not found: ${cleanAlienId}`);
     return {
       success: false,
       message: '❌ Target alien not found or already defeated!',
@@ -376,11 +374,10 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
 
   const ring = GAME_CONFIGS.theycame.rings[alien.ring - 1];
   const requiredRoll = ring.difficulty;
-  console.log(`[MINIGAME] Alien ${cleanAlienId} in ${ring.name} - Required: ${requiredRoll}+`);
   
   if (roll >= requiredRoll) {
     // Alien defeated!
-    console.log(`[MINIGAME] SUCCESS! ${playerName} defeated ${alien.id} (${roll} >= ${requiredRoll})`);
+    logger.minigame.roll(playerName, alien.id, roll, requiredRoll);
     alien.defeated = true;
     alien.defeatedBy = playerId;
     alien.defeatedAt = new Date();
@@ -388,7 +385,7 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     // Check if game should end immediately after defeating this alien
     const gameEndCheck = checkAlienDefenseGameEnd(gameData);
     if (gameEndCheck.gameEnded) {
-      console.log(`[MINIGAME] Game ended after defeating ${alien.id} - ${gameEndCheck.message}`);
+      logger.success('MINIGAME', `Game ended: ${gameEndCheck.message}`);
       return {
         success: true,
         message: `🎯 **${playerName}** defeated alien ${alien.id} with a ${roll}! (Required: ${requiredRoll}+)\n\n${gameEndCheck.message}`,
@@ -402,13 +399,10 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     // Advance to next player's turn
     if (gameData.turnOrder.length > 0) {
       gameData.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.turnOrder.length;
-      console.log(`[MINIGAME] Turn advanced to index ${gameData.currentTurnIndex}`);
-      
     }
     
     // Check if all players have taken their turn (completed a full cycle)
     const shouldAdvanceRound = gameData.turnOrder.length > 0 && gameData.currentTurnIndex === 0;
-    console.log(`[MINIGAME] Should advance round: ${shouldAdvanceRound} (turnOrder.length: ${gameData.turnOrder.length}, currentTurnIndex: ${gameData.currentTurnIndex})`);
     
     return {
       success: true,
@@ -418,16 +412,13 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     };
   } else {
     // Advance to next player's turn even on miss
-    console.log(`[MINIGAME] FAILED! ${playerName} missed ${alien.id} (${roll} < ${requiredRoll})`);
+    logger.minigame.roll(playerName, alien.id, roll, requiredRoll);
     if (gameData.turnOrder.length > 0) {
       gameData.currentTurnIndex = (gameData.currentTurnIndex + 1) % gameData.turnOrder.length;
-      console.log(`[MINIGAME] Turn advanced to index ${gameData.currentTurnIndex}`);
-      
     }
     
     // Check if all players have taken their turn (completed a full cycle)
     const shouldAdvanceRound = gameData.turnOrder.length > 0 && gameData.currentTurnIndex === 0;
-    console.log(`[MINIGAME] Should advance round: ${shouldAdvanceRound} (turnOrder.length: ${gameData.turnOrder.length}, currentTurnIndex: ${gameData.currentTurnIndex})`);
     
     return {
       success: false,
@@ -441,12 +432,12 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
 // ------------------- Function: advanceAlienDefenseRound -------------------
 // Advances the game to the next round, moving undefeated aliens inward
 function advanceAlienDefenseRound(gameData) {
-  console.log(`[MINIGAME] === ADVANCING ROUND ${gameData.currentRound} ===`);
+  logger.info('MINIGAME', `Advancing Round ${gameData.currentRound}`);
   
   
   // Check if we've reached the maximum rounds (8) - end the game
   if (gameData.currentRound >= 8) {
-    console.log(`[MINIGAME] Max rounds reached (8), ending game`);
+    logger.info('MINIGAME', 'Max rounds reached, ending game');
     
     // Any remaining aliens steal animals at the end of round 8
     const activeAliens = gameData.aliens.filter(a => !a.defeated);
@@ -477,7 +468,7 @@ function advanceAlienDefenseRound(gameData) {
       endMessage = `🏁 **Game Over!** Village saved ${animalsSaved}/${totalAnimals} animals (${percentage}%)!`;
     }
     
-    console.log(`[MINIGAME] Game ended - Animals saved: ${animalsSaved}, Animals lost: ${finalAnimalsLost}`);
+    logger.info('MINIGAME', `Game ended | Saved: ${animalsSaved} Lost: ${finalAnimalsLost}`);
     
     return {
       success: true,
@@ -492,7 +483,7 @@ function advanceAlienDefenseRound(gameData) {
   
   // First, advance to the next round
   gameData.currentRound++;
-  console.log(`[MINIGAME] Round advanced to ${gameData.currentRound}`);
+  logger.minigame.round(gameData.currentRound);
   
   // Move undefeated aliens inward at the START of the new round
   const undefeatedAliens = gameData.aliens.filter(a => !a.defeated);
@@ -504,8 +495,6 @@ function advanceAlienDefenseRound(gameData) {
     'Middle→Inner': [],
     'Inner→Barn': []
   };
-  
-  console.log(`[MINIGAME] Before movement - Aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
   
   undefeatedAliens.forEach(alien => {
     if (alien.ring < 3) {
@@ -519,7 +508,7 @@ function advanceAlienDefenseRound(gameData) {
         const oldRing = alien.ring;
         alien.ring++;
         alien.id = `${alien.ring}${alien.segment}`;
-        console.log(`[MINIGAME] ${oldId} moved to ${alien.id} (Ring ${alien.ring})`);
+        logger.debug('MINIGAME', `${oldId} → ${alien.id}`);
         
         // Track movement for grouped message
         const ringNames = ['Outer', 'Middle', 'Inner'];
@@ -529,11 +518,11 @@ function advanceAlienDefenseRound(gameData) {
         movementGroups[movementKey] = movementGroups[movementKey] || [];
         movementGroups[movementKey].push(oldId);
       } else {
-        console.log(`[MINIGAME] ${alien.id} blocked from moving to ring ${alien.ring + 1}`);
+        logger.debug('MINIGAME', `${alien.id} blocked`);
       }
     } else {
       // Alien reached the barn - steal an animal!
-      console.log(`[MINIGAME] ${alien.id} reached the barn and stole an animal!`);
+      logger.warn('MINIGAME', `${alien.id} reached barn! Animal stolen`);
       gameData.villageAnimals = Math.max(0, gameData.villageAnimals - 1);
       animalsLost++;
       barnAliens.push(alien.id); // Track which alien reached the barn
@@ -543,23 +532,16 @@ function advanceAlienDefenseRound(gameData) {
       alien.defeatedAt = new Date();
     }
   });
-
-  console.log(`[MINIGAME] After movement - Aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
   
   // Spawn new aliens for the NEW round (only during rounds 1-6, skip rounds 7-8)
   let spawnResult = null;
   if (gameData.currentRound <= 6) {
     const playerCount = gameData.turnOrder.length || 1; // Use turn order count or default to 1
-    console.log(`[MINIGAME] Spawning aliens for round ${gameData.currentRound} (${playerCount} players)`);
     spawnResult = spawnAliens(gameData, playerCount, gameData.currentRound - 1); // Pass previous round number for logic
-    console.log(`[MINIGAME] Spawned ${spawnResult.spawnCount} aliens: ${spawnResult.spawnLocations.join(', ')}`);
+    logger.debug('MINIGAME', `Spawned ${spawnResult.spawnCount} aliens`);
   } else if (gameData.currentRound <= gameData.maxRounds) {
-    console.log(`[MINIGAME] Cleanup round ${gameData.currentRound} - no new aliens spawned`);
-  } else {
-    console.log(`[MINIGAME] Max rounds reached (${gameData.maxRounds}), no new aliens spawned`);
+    logger.debug('MINIGAME', `Cleanup round ${gameData.currentRound}`);
   }
-  
-  console.log(`[MINIGAME] After spawn - Aliens:`, gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
   
   // Record round history
   gameData.roundHistory.push({

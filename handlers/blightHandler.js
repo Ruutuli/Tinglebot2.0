@@ -29,6 +29,9 @@ const {
 // ------------------- Database Models -------------------
 // Character model representing a user's character document
 const Character = require('../models/CharacterModel');
+
+// ------------------- Utilities -------------------
+const logger = require('../utils/logger');
 const TempData = require('../models/TempDataModel');
 const Pet = require('../models/PetModel');
 const Mount = require('../models/MountModel');
@@ -109,7 +112,7 @@ async function connectToInventories() {
         uri: dbConfig.inventories ? '[REDACTED]' : 'undefined'
       }
     });
-    console.error('[blightHandler]: ❌ Error connecting to inventories database:', error);
+    logger.error('BLIGHT', 'Error connecting to inventories database');
     throw error;
   }
 }
@@ -135,7 +138,7 @@ async function loadBlightSubmissions() {
         type: 'blight'
       }
     });
-    console.error('[blightHandler]: Error loading blight submissions', error);
+    logger.error('BLIGHT', 'Error loading submissions');
     return {};
   }
 }
@@ -166,7 +169,7 @@ async function saveBlightSubmissions(data) {
         type: 'blight'
       }
     });
-    console.error('[blightHandler]: Error saving blight submissions', error);
+    logger.error('BLIGHT', 'Error saving submissions');
   }
 }
 
@@ -272,8 +275,7 @@ async function healBlight(interaction, characterName, healerName) {
         );
         
         // Log the lore text for administrators
-        console.log(`[blightHandler]: 📜 Blight submission cancelled for ${character.name} (healer no longer eligible):`);
-        console.log(`[blightHandler]: ${loreText}`);
+        logger.info('BLIGHT', `Submission cancelled for ${character.name} (healer ineligible)`);
         
         // Expire/cancel the old request
         await deleteBlightRequestFromStorage(existingSubmission.key);
@@ -348,7 +350,7 @@ async function healBlight(interaction, characterName, healerName) {
             userId: interaction.user.id,
             characterName: character.name
           });
-          console.error(`[blightHandler.js]: ❌ Failed to send DM to user ${interaction.user.id} about pending blight healing request: ${dmError.message}`);
+          logger.error('BLIGHT', `Failed to send DM to user ${interaction.user.id}`);
         }
         return;
       }
@@ -487,7 +489,7 @@ async function healBlight(interaction, characterName, healerName) {
         userTag: interaction.user.tag,
         userId: interaction.user.id
       });
-      console.error(`[blightHandler]: Failed to send DM to user ${interaction.user.id}`, dmError);
+      logger.error('BLIGHT', `Failed to send DM to user ${interaction.user.id}`);
     }
   } catch (error) {
     handleError(error, 'blightHandler.js', {
@@ -498,7 +500,7 @@ async function healBlight(interaction, characterName, healerName) {
       characterName,
       healerName
     });
-    console.error('[blightHandler]: Error healing blight:', error);
+    logger.error('BLIGHT', 'Error healing blight');
     
     // Create detailed error message
     let errorMessage = '❌ **Blight Healing Error**\n\n';
@@ -637,7 +639,7 @@ async function validateCharacterOwnership(interaction, characterName) {
       userId: interaction.user.id,
       characterName
     });
-    console.error('[blightHandler]: Error validating character ownership:', error);
+    logger.error('BLIGHT', 'Error validating character ownership');
     
     const errorEmbed = new EmbedBuilder()
       .setColor('#FF0000')
@@ -724,9 +726,9 @@ async function completeBlightHealing(character, interaction = null) {
         try {
           const member = await interaction.guild.members.fetch(character.userId);
           await member.roles.remove('798387447967907910');
-          console.log(`[blightHandler.js]: ✅ Removed blighted role from user ${character.userId} - no other blighted characters`);
+          logger.success('BLIGHT', `Removed blighted role from user ${character.userId}`);
         } catch (roleError) {
-          console.warn(`[blightHandler.js]: ⚠️ Could not remove blighted role from user ${character.userId}:`, roleError);
+          logger.warn('BLIGHT', `Could not remove blighted role from user ${character.userId}`);
         }
       } else {
         console.log(`[blightHandler.js]: ✅ User ${character.userId} has no other blighted characters - blighted role should be removed (no interaction context)`);

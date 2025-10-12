@@ -26,6 +26,7 @@ const { handleInteraction, initializeReactionHandler } = require('./handlers/int
 const { initializeReactionRolesHandler } = require('./handlers/reactionRolesHandler');
 // const { handleMessage } = require('./handlers/messageHandler');
 const { startExpirationChecks } = require('./utils/expirationHandler');
+const logger = require('./utils/logger');
 
 // ------------------- Scripts -------------------
 const {
@@ -61,7 +62,7 @@ process.on('warning', (warning) => {
   if (warning.name === 'DeprecationWarning' || warning.name === 'ExperimentalWarning') {
     return;
   }
-  console.warn(warning);
+  logger.warn('SYSTEM', `${warning.name}: ${warning.message}`);
 });
 
 // ----------------------------------------------------------------------------
@@ -69,11 +70,11 @@ process.on('warning', (warning) => {
 // ----------------------------------------------------------------------------
 async function initializeDatabases() {
   try {
-    console.log("[index.js]: Connecting to databases...");
+    logger.info('DATABASE', 'Connecting to databases...');
     
     // Add timeout to database connections (increased to 60 seconds)
     const connectionTimeout = setTimeout(() => {
-      console.error("[index.js]: Database connection timeout after 60 seconds");
+      logger.error('DATABASE', 'Connection timeout after 60 seconds');
       process.exit(1);
     }, 60000);
 
@@ -87,8 +88,8 @@ async function initializeDatabases() {
       TempData.cleanup(),
       TempData.deleteMany({ expiresAt: { $exists: false } })
     ]);
-    console.log(`[index.js]: 🧹 Cleaned up ${expiredResult.deletedCount} expired temp data entries`);
-    console.log(`[index.js]: 🧹 Cleaned up ${noExpirationResult.deletedCount} entries without expiration dates`);
+    logger.success('CLEANUP', `${expiredResult.deletedCount} expired temp data`);
+    logger.success('CLEANUP', `${noExpirationResult.deletedCount} entries without expiration`);
     
     // Clean up expired and fulfilled boosting data
     const boostingCleanupResult = await TempData.deleteMany({
@@ -99,16 +100,12 @@ async function initializeDatabases() {
         { 'data.status': 'fulfilled', 'data.boostExpiresAt': { $lt: Date.now() } }
       ]
     });
-    console.log(`[index.js]: 🧹 Cleaned up ${boostingCleanupResult.deletedCount} expired/fulfilled boosting entries`);
+    logger.success('CLEANUP', `${boostingCleanupResult.deletedCount} expired boosting entries`);
     
-    console.log("[index.js]: ✅ Databases connected successfully");
+    logger.success('DATABASE', 'Connected successfully');
   } catch (err) {
-    console.error("[index.js]: ❌ Database initialization error:", err);
-    console.error("[index.js]: ❌ Error details:", {
-      name: err.name,
-      message: err.message,
-      stack: err.stack
-    });
+    logger.error('DATABASE', `Initialization error: ${err.message}`);
+    logger.error('DATABASE', `Details: ${err.name}`);
     process.exit(1);
   }
 }
@@ -117,42 +114,42 @@ async function initializeDatabases() {
 
 // Add process error handlers
 process.on('uncaughtException', (error) => {
-  console.error('[index.js]: ❌ Uncaught Exception:', error);
+  logger.error('SYSTEM', `Uncaught Exception: ${error.message}`);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('[index.js]: ❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('SYSTEM', `Unhandled Rejection: ${reason}`);
   process.exit(1);
 });
 
 // Add graceful shutdown handler
 process.on('SIGTERM', async () => {
-  console.log('[index.js]: Received SIGTERM. Performing graceful shutdown...');
+  logger.info('SYSTEM', 'Received SIGTERM. Performing graceful shutdown...');
   try {
     if (client) {
-      console.log('[index.js]: Destroying Discord client...');
+      logger.info('SYSTEM', 'Destroying Discord client...');
       await client.destroy();
     }
     
     // Close database connections gracefully
-    console.log('[index.js]: Closing database connections...');
+    logger.info('SYSTEM', 'Closing database connections...');
     const mongoose = require('mongoose');
     if (mongoose.connection.readyState !== 0) {
       await mongoose.disconnect();
     }
     
-    console.log('[index.js]: Graceful shutdown complete');
+    logger.success('SYSTEM', 'Graceful shutdown complete');
     process.exit(0);
   } catch (error) {
-    console.error('[index.js]: Error during graceful shutdown:', error.message);
+    logger.error('SYSTEM', `Error during graceful shutdown: ${error.message}`);
     process.exit(1);
   }
 });
 
 // Also handle SIGINT (Ctrl+C) gracefully
 process.on('SIGINT', async () => {
-  console.log('[index.js]: Received SIGINT. Performing graceful shutdown...');
+  logger.info('SYSTEM', 'Received SIGINT. Performing graceful shutdown...');
   try {
     if (client) {
       console.log('[index.js]: Destroying Discord client...');
