@@ -2282,7 +2282,7 @@ function setupGoogleSheetsRetry() {
      console.error(`[scheduler.js]: ❌ Retry failed: ${result.error}`);
     }
    } else {
-    console.log(`[scheduler.js]: ✅ No pending Google Sheets operations to retry`);
+    logger.info('SCHEDULER', 'No pending Google Sheets operations to retry');
    }
   } catch (error) {
    handleError(error, "scheduler.js");
