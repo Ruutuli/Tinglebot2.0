@@ -70,6 +70,12 @@ process.on('warning', (warning) => {
 // ----------------------------------------------------------------------------
 async function initializeDatabases() {
   try {
+    console.log('\n');
+    logger.separator('═', 60);
+    logger.section('💾 DATABASE INITIALIZATION');
+    logger.separator('═', 60);
+    console.log('\n');
+    
     logger.info('DATABASE', 'Connecting to databases...');
     
     // Add timeout to database connections (increased to 60 seconds)
@@ -82,6 +88,12 @@ async function initializeDatabases() {
     await connectToInventories();
     
     clearTimeout(connectionTimeout);
+    
+    console.log('\n');
+    logger.separator('─', 60);
+    logger.info('CLEANUP', 'Running database cleanup...');
+    logger.separator('─', 60);
+    console.log('\n');
     
     // Clean up expired temp data and entries without expiration dates
     const [expiredResult, noExpirationResult] = await Promise.all([
@@ -102,7 +114,11 @@ async function initializeDatabases() {
     });
     logger.success('CLEANUP', `${boostingCleanupResult.deletedCount} expired boosting entries`);
     
-    logger.success('DATABASE', 'Connected successfully');
+    console.log('\n');
+    logger.separator('═', 60);
+    logger.success('DATABASE', '✨ Database initialization complete');
+    logger.separator('═', 60);
+    console.log('\n');
   } catch (err) {
     logger.error('DATABASE', `Initialization error: ${err.message}`);
     logger.error('DATABASE', `Details: ${err.name}`);
@@ -220,6 +236,7 @@ async function initializeClient() {
     client.once("ready", async () => {
       console.clear();
 
+      // Display ASCII art banner
       figlet.text(
         "Tinglebot 2.0",
         {
@@ -230,9 +247,18 @@ async function initializeClient() {
         async (err, data) => {
           if (err) return;
 
+          // Display banner
+          console.log('\n');
+          console.log('╔══════════════════════════════════════════════════════════════╗');
           console.log(data);
-          console.log("==========================================================");
-          logger.success('SYSTEM', 'Bot is online');
+          console.log('╚══════════════════════════════════════════════════════════════╝');
+          console.log('\n');
+          
+          logger.separator('─', 60);
+          logger.section('🚀 INITIALIZATION COMPLETE');
+          logger.success('SYSTEM', 'Bot is online and ready');
+          logger.separator('─', 60);
+          console.log('\n');
 
           try {
             // Initialize core systems
@@ -245,6 +271,12 @@ async function initializeClient() {
             // Initialize random encounters system
             const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
             initializeRandomEncounterBot(client);
+            
+            console.log('\n');
+            logger.separator('═', 60);
+            logger.success('SYSTEM', '✨ All systems operational - Ready to serve!');
+            logger.separator('═', 60);
+            console.log('\n');
           } catch (error) {
             handleError(error, "index.js", {
               operation: 'initialization',

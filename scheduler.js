@@ -2118,10 +2118,13 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
 
 async function runStartupChecks(client) {
  try {
-  logger.info('SCHEDULER', 'Running startup checks...');
+  console.log('\n');
+  logger.separator('═', 60);
+  logger.section('🗓️ SCHEDULER STARTUP');
+  logger.separator('═', 60);
+  console.log('\n');
   
   // Raid expiration check (critical - do this first in case bot restarted during a raid)
-  logger.info('SCHEDULER', 'Checking for expired raids...');
   await cleanupExpiredRaids(client);
   
   // Blood Moon startup check
@@ -2132,7 +2135,7 @@ async function runStartupChecks(client) {
     client, 
     "The Blood Moon is upon us! Beware!"
    );
-   console.log(`[scheduler.js]: 🌕 Blood Moon startup announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
+   logger.info('BLOODMOON', `Startup announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
   } else {
    await revertChannelNames(client);
   }
@@ -2149,7 +2152,11 @@ async function runStartupChecks(client) {
    handleQuestExpirationAtMidnight(client)
   ]);
 
-  logger.success('SCHEDULER', 'Startup completed');
+  console.log('\n');
+  logger.separator('═', 60);
+  logger.success('SCHEDULER', '✨ Startup checks complete');
+  logger.separator('═', 60);
+  console.log('\n');
  } catch (error) {
   handleError(error, "scheduler.js");
   console.error(`[scheduler.js]: ❌ Startup checks failed: ${error.message}`);
@@ -2314,6 +2321,8 @@ function initializeScheduler(client) {
  setupWeatherScheduler(client);
  setupHelpWantedFixedScheduler(client);
  
+ logger.success('SCHEDULER', 'All scheduled tasks initialized');
+ 
  // Check and post weather on restart if needed
  (async () => {
    try {
@@ -2326,8 +2335,6 @@ function initializeScheduler(client) {
      });
    }
  })();
-
- logger.success('SCHEDULER', 'All scheduled tasks initialized');
 }
 
 module.exports = {
