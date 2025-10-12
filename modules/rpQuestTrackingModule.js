@@ -224,20 +224,20 @@ async function findQuestByThreadId(threadId) {
         });
 
         if (quest) {
-            console.log(`[rpQuestTrackingModule.js] ✅ Found quest ${quest.questID} by parent channel`);
+            logger.debug('QUEST', `Found quest ${quest.questID} by parent channel`);
             return quest;
         }
 
         const fallbackQuest = await findQuestByParticipantThreadId(threadId);
         if (fallbackQuest) {
-            console.log(`[rpQuestTrackingModule.js] ✅ Found quest ${fallbackQuest.questID} by participant thread`);
+            logger.debug('QUEST', `Found quest ${fallbackQuest.questID} by participant thread`);
             return fallbackQuest;
         }
 
-        console.log(`[rpQuestTrackingModule.js] ❌ No quest found for thread ${threadId}`);
+        logger.debug('QUEST', `No quest found for thread ${threadId}`);
         return null;
     } catch (error) {
-        console.error(`[rpQuestTrackingModule.js] ❌ Error finding quest by thread ID:`, error);
+        logger.error('QUEST', 'Error finding quest by thread ID');
         return null;
     }
 }
@@ -287,7 +287,7 @@ function validateRPPostWithReason(message) {
         if (!result.valid) return result;
     }
 
-    console.log(`[rpQuestTrackingModule.js] ✅ Valid RP post`);
+    logger.debug('QUEST', 'Valid RP post');
     return { valid: true, reason: null };
 }
 
@@ -410,12 +410,12 @@ async function updateRPPostCount(questID, userId, newCount) {
         }
 
         await quest.save();
-        console.log(`[rpQuestTrackingModule.js] 📊 Manually updated RP post count for user ${userId} in quest ${questID}: ${oldCount} → ${newCount}`);
+        logger.debug('QUEST', `Manually updated RP post count for user ${userId} in quest ${questID}: ${oldCount} → ${newCount}`);
 
         return { success: true, oldCount, newCount, meetsRequirements };
 
     } catch (error) {
-        console.error(`[rpQuestTrackingModule.js] ❌ Error updating RP post count:`, error);
+        logger.error('QUEST', 'Error updating RP post count');
         return { success: false, error: error.message };
     }
 }
@@ -448,11 +448,11 @@ async function getRPQuestStatus(questID) {
             }))
         };
 
-        console.log(`[rpQuestTrackingModule.js] 📊 Retrieved status for quest ${questID}`);
+        logger.debug('QUEST', `Retrieved status for quest ${questID}`);
         return status;
 
     } catch (error) {
-        console.error(`[rpQuestTrackingModule.js] ❌ Error getting RP quest status:`, error);
+        logger.error('QUEST', 'Error getting RP quest status');
         return { success: false, error: error.message };
     }
 }
