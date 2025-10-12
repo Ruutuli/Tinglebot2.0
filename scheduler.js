@@ -1522,7 +1522,7 @@ async function generateDailyQuestsAtMidnight() {
 
 async function handleQuestExpirationAtMidnight(client = null) {
   try {
-    console.log('[scheduler.js]: ⏰ Midnight quest expiration check starting...');
+    logger.info('SCHEDULER', 'Midnight quest expiration check starting...');
     
     const { updateQuestEmbed } = require('./modules/helpWantedModule');
     
@@ -1542,20 +1542,20 @@ async function handleQuestExpirationAtMidnight(client = null) {
       return;
     }
     
-    console.log(`[scheduler.js]: 📋 Found ${expiredQuests.length} quests to mark as expired`);
+    logger.info('SCHEDULER', `Found ${expiredQuests.length} quests to mark as expired`);
     
     let updatedCount = 0;
     for (const quest of expiredQuests) {
       try {
         await updateQuestEmbed(client, quest);
         updatedCount++;
-        console.log(`[scheduler.js]: ✅ Updated expired quest embed for ${quest.village} (${quest.questId})`);
+        logger.success('SCHEDULER', `Updated expired quest embed for ${quest.village} (${quest.questId})`);
       } catch (error) {
         console.error(`[scheduler.js]: ❌ Failed to update expired quest embed for ${quest.questId}:`, error);
       }
     }
     
-    console.log(`[scheduler.js]: ✅ Quest expiration completed - ${updatedCount}/${expiredQuests.length} quests updated`);
+    logger.success('SCHEDULER', `Quest expiration completed - ${updatedCount}/${expiredQuests.length} quests updated`);
     
   } catch (error) {
     handleError(error, 'scheduler.js', {
@@ -1922,7 +1922,7 @@ function setupHelpWantedFixedScheduler(client) {
     );
   });
   
-  console.log(`[scheduler.js]: ✅ Help Wanted scheduler configured with ${FIXED_CRON_TIMES.length} time slots (full 24-hour coverage with variable 3-6 hour buffer in quest generation)`);
+  logger.success('SCHEDULER', `Help Wanted scheduler configured with ${FIXED_CRON_TIMES.length} time slots (full 24-hour coverage with variable 3-6 hour buffer in quest generation)`);
 }
 
 // ============================================================================
@@ -2075,7 +2075,7 @@ async function sendBloodMoonEndAnnouncementsToChannels(client) {
 
 async function checkAndDistributeMonthlyBoostRewards(client) {
   try {
-    console.log('[scheduler.js]: 💎 Checking if monthly boost rewards need to be distributed...');
+    logger.info('SCHEDULER', 'Checking if monthly boost rewards need to be distributed...');
     
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -2094,7 +2094,7 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
     }).limit(1);
     
     if (sampleUsers.length > 0) {
-      console.log(`[scheduler.js]: ℹ️ Boost rewards already distributed for ${currentMonth}`);
+      logger.info('SCHEDULER', `Boost rewards already distributed for ${currentMonth}`);
       return;
     }
     
@@ -2118,10 +2118,10 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
 
 async function runStartupChecks(client) {
  try {
-  console.log(`[scheduler.js]: 🚀 Running startup checks...`);
+  logger.info('SCHEDULER', 'Running startup checks...');
   
   // Raid expiration check (critical - do this first in case bot restarted during a raid)
-  console.log(`[scheduler.js]: 🐉 Checking for expired raids...`);
+  logger.info('SCHEDULER', 'Checking for expired raids...');
   await cleanupExpiredRaids(client);
   
   // Blood Moon startup check
@@ -2149,7 +2149,7 @@ async function runStartupChecks(client) {
    handleQuestExpirationAtMidnight(client)
   ]);
 
-  console.log(`[scheduler.js]: ✅ Startup completed`);
+  logger.success('SCHEDULER', 'Startup completed');
  } catch (error) {
   handleError(error, "scheduler.js");
   console.error(`[scheduler.js]: ❌ Startup checks failed: ${error.message}`);
@@ -2327,7 +2327,7 @@ function initializeScheduler(client) {
    }
  })();
 
- console.log("[scheduler.js]: ✅ All scheduled tasks initialized");
+ logger.success('SCHEDULER', 'All scheduled tasks initialized');
 }
 
 module.exports = {
