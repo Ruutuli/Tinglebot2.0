@@ -783,7 +783,7 @@ async function initializeClient() {
     // Start the Bot
     // --------------------------------------------------------------------------
     try {
-      console.log("[index.js]: 🔄 Attempting to login to Discord...");
+      logger.info('SYSTEM', 'Attempting to login to Discord...');
       await client.login(process.env.DISCORD_TOKEN);
     } catch (error) {
       console.error('[index.js]: ❌ Failed to login to Discord:', error);
