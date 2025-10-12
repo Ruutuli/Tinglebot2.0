@@ -264,13 +264,14 @@ async function initializeClient() {
             // Initialize core systems
             initializeReactionHandler(client);
             initializeReactionRolesHandler(client);
+            
+            // Initialize random encounters system (before scheduler to avoid log mixing)
+            const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
+            initializeRandomEncounterBot(client);
+            
             logBloodMoonStatus();
             initializeScheduler(client);
             startExpirationChecks(client);
-            
-            // Initialize random encounters system
-            const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
-            initializeRandomEncounterBot(client);
             
             console.log('\n');
             logger.separator('═', 60);
