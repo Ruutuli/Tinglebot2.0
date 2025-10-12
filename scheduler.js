@@ -64,6 +64,7 @@ const { handleError } = require("./utils/globalErrorHandler");
 const { sendUserDM } = require("./utils/messageUtils");
 const { checkExpiredRequests } = require("./utils/expirationHandler");
 const { isValidImageUrl } = require("./utils/validation");
+const logger = require("./utils/logger");
 const {
  cleanupExpiredEntries,
  cleanupExpiredHealingRequests,
@@ -220,13 +221,12 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
   }
 
   if (postedCount > 0) {
-   const contextText = context ? ` ${context}` : '';
-   console.log(`[scheduler.js]: ✅ Weather posted to ${postedCount}/${villages.length} villages${contextText}`);
+   logger.success('WEATHER', `Posted to ${postedCount}/${villages.length} villages${context ? ` (${context})` : ''}`);
   }
 
   return postedCount;
  } catch (error) {
-  console.error(`[scheduler.js]: ❌ Weather process failed${context ? ` (${context})` : ''}:`, error.message);
+  logger.error('WEATHER', `Process failed${context ? ` (${context})` : ''}`);
   handleError(error, "scheduler.js", {
    commandName: 'processWeatherForAllVillages',
    context: context
@@ -252,13 +252,13 @@ async function checkAndPostWeatherOnRestart(client) {
   const currentHour = estTime.getHours();
   
   if (currentHour < 8) {
-   console.log(`[scheduler.js]: ⏰ Too early for weather generation (${currentHour}:00 AM)`);
+   logger.info('WEATHER', `Too early for generation (${currentHour}:00 AM)`);
    return 0;
   }
   
   return await processWeatherForAllVillages(client, true, 'restart check');
  } catch (error) {
-  console.error("[scheduler.js]: ❌ Restart weather check failed:", error.message);
+  logger.error('WEATHER', 'Restart check failed');
   handleError(error, "scheduler.js", {
    commandName: 'checkAndPostWeatherOnRestart'
   });
@@ -280,14 +280,14 @@ async function cleanupExpiredRaids(client = null) {
    return { expiredCount: 0 };
   }
   
-  console.log(`[scheduler.js]: 🧹 Found ${expiredRaids.length} expired raid(s) to clean up`);
+  logger.info('CLEANUP', `Found ${expiredRaids.length} expired raid(s)`);
   
   const { EmbedBuilder } = require('discord.js');
   let cleanedCount = 0;
   
   for (const raid of expiredRaids) {
    try {
-    console.log(`[scheduler.js]: ⏰ Processing expired raid ${raid.raidId} - ${raid.monster.name} in ${raid.village}`);
+    logger.debug('RAID', `Processing ${raid.raidId} - ${raid.monster.name}`);
     
     // Mark raid as failed and KO all participants
     await raid.failRaid();
@@ -330,11 +330,11 @@ async function cleanupExpiredRaids(client = null) {
          const thread = await client.channels.fetch(raid.threadId);
          if (thread) {
            await thread.send({ embeds: [failureEmbed] });
-           console.log(`[scheduler.js]: 💬 Failure message sent to raid thread ${raid.threadId}`);
+           logger.debug('RAID', `Failure message sent to thread`);
            sent = true;
          }
        } catch (threadError) {
-         console.error(`[scheduler.js]: ❌ Error sending failure message to thread:`, threadError);
+         logger.error('RAID', 'Error sending to thread');
        }
      }
      
@@ -343,24 +343,24 @@ async function cleanupExpiredRaids(client = null) {
          const channel = await client.channels.fetch(raid.channelId);
          if (channel) {
            await channel.send({ embeds: [failureEmbed] });
-           console.log(`[scheduler.js]: 💬 Failure message sent to raid channel ${raid.channelId}`);
+           logger.debug('RAID', `Failure message sent to channel`);
            sent = true;
          }
        } catch (channelError) {
-         console.error(`[scheduler.js]: ❌ Error sending failure message to channel:`, channelError);
+         logger.error('RAID', 'Error sending to channel');
        }
      }
      
      if (!sent) {
-       console.log(`[scheduler.js]: ⚠️ Could not send failure message for raid ${raid.raidId} - no valid channel found`);
+       logger.warn('RAID', `No valid channel found for ${raid.raidId}`);
      }
     }
     
     cleanedCount++;
-    console.log(`[scheduler.js]: ✅ Cleaned up expired raid ${raid.raidId}`);
+    logger.success('RAID', `Cleaned up ${raid.raidId}`);
     
    } catch (raidError) {
-    console.error(`[scheduler.js]: ❌ Error cleaning up raid ${raid.raidId}:`, raidError);
+    logger.error('RAID', `Error cleaning up ${raid.raidId}`);
     handleError(raidError, "scheduler.js", {
      raidId: raid.raidId,
      functionName: 'cleanupExpiredRaids'
@@ -369,12 +369,12 @@ async function cleanupExpiredRaids(client = null) {
   }
   
   if (cleanedCount > 0) {
-   console.log(`[scheduler.js]: 🧹 Cleaned up ${cleanedCount} expired raid(s)`);
+   logger.scheduler.complete('Raid cleanup', `${cleanedCount} expired`);
   }
   
   return { expiredCount: cleanedCount };
  } catch (error) {
-  console.error(`[scheduler.js]: ❌ Error cleaning up expired raids:`, error);
+  logger.error('CLEANUP', 'Error cleaning up expired raids');
   handleError(error, "scheduler.js");
   return { expiredCount: 0 };
  }
@@ -382,27 +382,26 @@ async function cleanupExpiredRaids(client = null) {
 
 async function cleanupOldRuuGameSessions() {
  try {
-  console.log(`[scheduler.js]: 🎲 Starting RuuGame session cleanup`);
+  logger.scheduler.job('RuuGame cleanup');
   
   const result = await RuuGame.cleanupOldSessions();
   
   if (result.deletedCount === 0) {
-   console.log(`[scheduler.js]: ✅ No old RuuGame sessions to clean up`);
    return result;
   }
   
-  console.log(`[scheduler.js]: ✅ RuuGame cleanup completed - deleted ${result.deletedCount} sessions`);
+  logger.scheduler.complete('RuuGame cleanup', `${result.deletedCount} deleted`);
   
   if (result.finishedCount > 0) {
-   console.log(`[scheduler.js]: 🏆 Cleaned up ${result.finishedCount} completed games`);
+   logger.info('CLEANUP', `${result.finishedCount} completed games`);
   }
   if (result.expiredCount > 0) {
-   console.log(`[scheduler.js]: ⏰ Cleaned up ${result.expiredCount} expired sessions`);
+   logger.info('CLEANUP', `${result.expiredCount} expired sessions`);
   }
   
   return result;
  } catch (error) {
-  console.error(`[scheduler.js]: ❌ Error cleaning up old RuuGame sessions:`, error);
+  logger.error('CLEANUP', 'Error cleaning up RuuGame sessions');
   handleError(error, "scheduler.js");
   return { deletedCount: 0, finishedCount: 0, expiredCount: 0 };
  }
@@ -410,25 +409,24 @@ async function cleanupOldRuuGameSessions() {
 
 async function cleanupFinishedMinigameSessions() {
  try {
-  console.log(`[scheduler.js]: 🎮 Starting Minigame session cleanup`);
+  logger.scheduler.job('Minigame cleanup');
   
   const Minigame = require('./models/MinigameModel');
   const result = await Minigame.cleanupOldSessions();
   
   if (result.deletedCount === 0) {
-   console.log(`[scheduler.js]: ✅ No finished Minigame sessions to clean up`);
    return result;
   }
   
-  console.log(`[scheduler.js]: ✅ Minigame cleanup completed - deleted ${result.deletedCount} sessions`);
+  logger.scheduler.complete('Minigame cleanup', `${result.deletedCount} deleted`);
   
   if (result.finishedCount > 0) {
-   console.log(`[scheduler.js]: 🏆 Cleaned up ${result.finishedCount} completed minigame sessions`);
+   logger.info('CLEANUP', `${result.finishedCount} completed games`);
   }
   
   return result;
  } catch (error) {
-  console.error(`[scheduler.js]: ❌ Error cleaning up finished Minigame sessions:`, error);
+  logger.error('CLEANUP', 'Error cleaning up Minigame sessions');
   handleError(error, "scheduler.js");
   return { deletedCount: 0, finishedCount: 0 };
  }

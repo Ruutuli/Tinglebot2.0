@@ -28,6 +28,9 @@ const {
  getVendingModel
 } = require("../database/db");
 
+// ------------------- Utilities -------------------
+const logger = require("../utils/logger");
+
 // ------------------- Custom Modules -------------------
 const {
  capitalize,
@@ -71,13 +74,13 @@ async function safeAutocompleteResponse(interaction, choices) {
   try {
     // Check if interaction is still valid
     if (!interaction.isAutocomplete()) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction is not an autocomplete interaction');
+      logger.warn('INTERACTION', 'Not an autocomplete interaction');
       return;
     }
 
     // Check if already responded
     if (interaction.responded) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
+      logger.warn('INTERACTION', 'Already responded');
       return;
     }
 
@@ -93,11 +96,11 @@ async function safeAutocompleteResponse(interaction, choices) {
     ]);
   } catch (error) {
     // Log the error
-    console.error('[autocompleteHandler.js]: ❌ Error in safeAutocompleteResponse:', error);
+    logger.error('INTERACTION', 'Autocomplete response error');
     
     // Handle specific error cases
     if (error.code === 10062 || error.message === 'Response timeout') {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction expired or timed out');
+      logger.debug('INTERACTION', 'Autocomplete expired/timeout');
       return;
     }
   }
@@ -127,13 +130,13 @@ async function safeRespondWithValidation(interaction, choices) {
     
     // Check if interaction is still valid
     if (!interaction.isAutocomplete()) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction is not an autocomplete interaction');
+      logger.warn('INTERACTION', 'Not an autocomplete interaction');
       return;
     }
 
     // Check if already responded
     if (interaction.responded) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
+      logger.warn('INTERACTION', 'Already responded');
       return;
     }
 
@@ -149,20 +152,16 @@ async function safeRespondWithValidation(interaction, choices) {
     ]);
   } catch (error) {
     // Log the error with context
-    console.error('[autocompleteHandler.js]: ❌ Error in safeRespondWithValidation:', error);
+    logger.error('INTERACTION', 'Validation error in autocomplete');
     
     // Log the choices that were being processed for debugging
     if (choices && choices.length > 0) {
-      console.error('[autocompleteHandler.js]: ❌ Problematic choices:', choices.map(c => ({
-        name: c.name,
-        nameLength: c.name?.length || 0,
-        value: c.value
-      })));
+      logger.debug('INTERACTION', `Problematic choices: ${choices.length} items`);
     }
     
     // Handle specific error cases
     if (error.code === 10062 || error.message === 'Response timeout') {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction expired or timed out');
+      logger.debug('INTERACTION', 'Autocomplete expired/timeout');
       return;
     }
     
@@ -172,7 +171,7 @@ async function safeRespondWithValidation(interaction, choices) {
         await interaction.respond([]).catch(() => {});
       }
     } catch (e) {
-      console.error('[autocompleteHandler.js]: ❌ Error sending fallback response:', e);
+      logger.error('INTERACTION', 'Fallback response failed');
     }
   }
 }

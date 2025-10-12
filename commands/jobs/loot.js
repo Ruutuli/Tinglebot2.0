@@ -28,6 +28,7 @@ const {
  isValidGoogleSheetsUrl,
 } = require("../../utils/validation.js");
 const { addItemInventoryDatabase } = require("../../utils/inventoryUtils.js");
+const logger = require("../../utils/logger.js");
 const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
@@ -118,10 +119,10 @@ async function updateCharacterLootTimestamp(character, shouldClearBoost = true) 
   
   // ------------------- Clear Boost After Use -------------------
   if (character.boostedBy && shouldClearBoost) {
-    console.log(`[loot.js] Clearing boost for ${character.name} after use`);
+    logger.debug('BOOST', `Clearing boost for ${character.name}`);
     character.boostedBy = null;
   } else if (character.boostedBy && !shouldClearBoost) {
-    console.log(`[loot.js] Boost preserved for ${character.name} - not used (no damage taken)`);
+    logger.debug('BOOST', `Boost preserved for ${character.name}`);
   }
   
   await character.save();
@@ -143,7 +144,7 @@ async function validateCharacterForLoot(interaction, characterName, userId) {
     character = await fetchModCharacterByNameAndUserId(characterName, userId);
     
     if (character && character.isModCharacter) {
-      console.log(`[loot.js]: 👑 Mod character ${character.name} detected in validateCharacterForLoot`);
+      logger.debug('CHARACTER', `Mod character ${character.name} detected`);
     } else if (!character) {
       await interaction.editReply({
         embeds: [{
@@ -169,7 +170,7 @@ async function validateCharacterForLoot(interaction, characterName, userId) {
 // Unified job validation
 async function validateJobForLoot(interaction, character, job) {
   if (!job || typeof job !== "string" || !job.trim() || !isValidJob(job)) {
-    console.error(`[loot.js]: ❌ Invalid job "${job}" for ${character.name}`);
+    logger.warn('LOOT', `Invalid job "${job}" for ${character.name}`);
     await interaction.editReply({
       content: getJobVoucherErrorMessage('MISSING_SKILLS', {
         characterName: character.name,
@@ -253,7 +254,7 @@ async function updateDailyRoll(character, activity) {
     character.dailyRoll.set(activity, now);
     await character.save();
   } catch (error) {
-    console.error(`[loot.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
+    logger.error('LOOT', `Failed to update daily roll for ${character.name}`);
     throw error;
   }
 }
@@ -276,7 +277,7 @@ module.exports = {
  // ------------------- Main Execution Logic -------------------
  async execute(interaction) {
   try {
-   console.log(`[loot.js]: 🚀 Starting loot command for user ${interaction.user.tag} (${interaction.user.id})`);
+   logger.info('LOOT', `Starting for ${interaction.user.tag}`);
    
    await interaction.deferReply();
 
@@ -304,7 +305,7 @@ module.exports = {
 
        // Determine job based on jobVoucher or default job
     let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
-    console.log(`[loot.js]: 🎯 ${character.name} using job: "${job}"${character.jobVoucher ? ' (voucher active)' : ''}`);
+    logger.debug('LOOT', `${character.name} using job: ${job}${character.jobVoucher ? ' (voucher)' : ''}`);
 
     // Validate job BEFORE any other checks
     if (!await validateJobForLoot(interaction, character, job)) {
@@ -374,12 +375,12 @@ module.exports = {
        blightRainMessage =
          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
          `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
-       console.log(`[loot.js]: 👑 Mod character ${character.name} is immune to blight rain`);
+       logger.debug('BLIGHT', `Mod character ${character.name} immune to blight`);
      } else if (character.blighted) {
        blightRainMessage =
          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
          `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-       console.log(`[loot.js]: 🧿 Character ${character.name} is already blighted`);
+       logger.debug('BLIGHT', `${character.name} already blighted`);
      } else {
        // Check for resistance buffs
        const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
