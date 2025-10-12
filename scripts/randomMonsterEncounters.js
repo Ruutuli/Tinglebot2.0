@@ -13,6 +13,7 @@
 const { ChannelType } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 // ============================================================================
 // Local Modules & Database Models
 // ------------------- Importing local services and models -------------------
@@ -305,7 +306,7 @@ async function triggerRandomEncounter(channel, selectedVillage) {
 // ------------------- Initialize Random Encounter Bot -------------------
 async function initializeRandomEncounterBot(client) {
   // Log role restriction status
-  console.log(`[randomMonsterEncounters.js]: 🚫 Role restriction active - Users with role ${RESTRICTED_ROLE_ID} cannot trigger raids`);
+  logger.info('SYSTEM', `Role restriction active - Users with role ${RESTRICTED_ROLE_ID} cannot trigger raids`);
 
   // Set up message tracking
   client.on('messageCreate', (message) => {

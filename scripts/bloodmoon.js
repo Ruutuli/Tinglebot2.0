@@ -12,6 +12,7 @@ const env = process.env.NODE_ENV || 'development';
 dotenv.config({ path: `.env.${env}` });
 
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -314,7 +315,7 @@ function isBloodMoonDay() {
   
   // If we're not in a Blood Moon period, return false
   if (!bloodMoonDate) {
-    console.log(`[bloodmoon.js]: 📅 Not in Blood Moon period`);
+    logger.debug('BLOODMOON', 'Not in Blood Moon period');
     return false;
   }
   
@@ -342,7 +343,7 @@ function isBloodMoonDay() {
     isActive = estHour < 8;
     console.log(`[bloodmoon.js]: 📅 Day after Blood Moon - Hour: ${estHour}, Active: ${isActive}`);
   } else {
-    console.log(`[bloodmoon.js]: 📅 Not in Blood Moon period`);
+    logger.debug('BLOODMOON', 'Not in Blood Moon period');
   }
   
   return isActive;
@@ -462,7 +463,7 @@ async function renameChannels(client) {
 // ------------------- revertChannelNames -------------------
 // Reverts channel names to their default state and sends end-of-event announcements.
 async function revertChannelNames(client) {
-  console.log(`[bloodmoon.js]: 🔄 Starting channel name reversion`);
+  logger.info('BLOODMOON', 'Starting channel name reversion');
   
   // First check if Blood Moon is currently active
   const isBloodMoonActive = isBloodMoonDay();
@@ -523,7 +524,7 @@ async function revertChannelNames(client) {
     }
   }
   
-  console.log(`[bloodmoon.js]: ✅ Channel reversion completed`);
+  logger.success('BLOODMOON', 'Channel reversion completed');
 }
 
 // ============================================================================

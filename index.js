@@ -232,7 +232,7 @@ async function initializeClient() {
 
           console.log(data);
           console.log("==========================================================");
-          console.log("[index.js]: 🤖 Bot is online");
+          logger.success('SYSTEM', 'Bot is online');
 
           try {
             // Initialize core systems
