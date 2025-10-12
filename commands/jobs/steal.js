@@ -27,6 +27,7 @@ const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJ
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { applyStealingBoost, applyStealingJailBoost, applyStealingLootBoost } = require('../../modules/boostIntegration');
 const { getActiveBuffEffects } = require('../../modules/elixirModule');
+const logger = require('../../utils/logger');
 
 // Add StealStats model
 const StealStats = require('../../models/StealStatsModel');
@@ -147,7 +148,7 @@ function preloadCommonNPCItems() {
             isNPC: true
         }));
         setCachedNPCItems(npcName, itemsWithRarity);
-                    console.log(`[steal.js]: 💾 Preloaded ${items.length} items for ${npcName}`);
+        logger.info('SYSTEM', `Preloaded ${items.length} items for ${npcName}`);
     }
 }
 
