@@ -14,6 +14,7 @@ const { EmbedBuilder } = require('discord.js');
 const { NPCs, getNPCQuestFlavor } = require('./NPCsModule');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const { getWeatherWithoutGeneration } = require('../services/weatherService');
+const logger = require('../utils/logger');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -570,14 +571,14 @@ async function getItemQuestPool() {
     ];
 
     // Search for items by name
-    console.log('[HelpWanted] Searching for items by name');
+    logger.debug('QUEST', 'Searching for items by name');
     
     let items = [];
     try {
       items = await Item.find({
         itemName: { $in: allowedItemNames }
       }, 'itemName');
-      console.log(`[HelpWanted] Found ${items.length} items by name out of ${allowedItemNames.length} requested items`);
+      logger.debug('QUEST', `Found ${items.length} items by name out of ${allowedItemNames.length} requested items`);
     } catch (error) {
       console.error('[HelpWanted] Error searching for items by name:', error);
       items = [];
@@ -587,7 +588,7 @@ async function getItemQuestPool() {
       throw new Error('No allowed items found for item quests by name');
     }
     
-    console.log(`[HelpWanted] Found ${items.length} items by name`);
+    logger.debug('QUEST', `Found ${items.length} items by name`);
     
     return items;
   } catch (error) {
@@ -1071,12 +1072,12 @@ async function generateDailyQuests() {
     const estHour = parseInt(now.toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}));
     const isAfterNoon = estHour >= 12;
     
-    console.log(`[helpWantedModule.js]: 🕐 Time check - Current EST hour: ${estHour}, isAfterNoon: ${isAfterNoon}`);
+    logger.info('QUEST', `Time check - Current EST hour: ${estHour}, isAfterNoon: ${isAfterNoon}`);
     
     if (isAfterNoon) {
-      console.log(`[helpWantedModule.js]: ⏰ After 12pm EST (${estHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
+      logger.info('QUEST', `After 12pm EST (${estHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
     } else {
-      console.log(`[helpWantedModule.js]: ✅ Before 12pm EST (${estHour}:00) - All quest types including art and writing are available`);
+      logger.info('QUEST', `Before 12pm EST (${estHour}:00) - All quest types including art and writing are available`);
     }
 
     // Clean up existing documents with null questId
@@ -1132,7 +1133,7 @@ async function generateDailyQuests() {
       // Assign a posting time with variable buffer from the selected times
       quest.scheduledPostTime = selectedTimes[i];
       const hour = cronToHour(quest.scheduledPostTime);
-      console.log(`[HelpWanted] Generated ${quest.type} quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
+      logger.info('QUEST', `Generated ${quest.type} quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
       quests.push(quest);
     }
 
@@ -1148,11 +1149,11 @@ async function generateDailyQuests() {
     }
     
     // Log the final schedule for the day
-    console.log(`[HelpWanted] Daily quest schedule for ${date}:`);
-    results.forEach(quest => {
+    const scheduleDetails = results.map(quest => {
       const hour = cronToHour(quest.scheduledPostTime);
-      console.log(`  ${quest.village}: ${quest.npcName} at ${formatHour(hour)} (${quest.scheduledPostTime})`);
-    });
+      return `${quest.village}: ${quest.npcName} at ${formatHour(hour)}`;
+    }).join(', ');
+    logger.info('QUEST', `Daily quest schedule for ${date}: ${scheduleDetails}`);
     
     return results;
   } catch (error) {
@@ -1219,7 +1220,7 @@ function selectTimesWithVariableBuffer(availableTimes, count) {
   
   // Log the selected times in a readable format
   const timeDisplay = selected.map(t => formatHour(t.hour)).join(', ');
-  console.log(`[HelpWanted] Selected times with variable buffer (3-6 hours): ${timeDisplay}`);
+  logger.info('QUEST', `Selected times with variable buffer (3-6 hours): ${timeDisplay}`);
   
   return selected.map(timeSlot => timeSlot.cron);
 }
