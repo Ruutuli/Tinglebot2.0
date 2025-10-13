@@ -5,6 +5,7 @@ const axios = require('axios');
 // ============================================================================
 // ------------------- Utilities -------------------
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 
 // ============================================================================
 // ------------------- Environment Variables -------------------
@@ -205,7 +206,7 @@ async function createTrelloCard({ threadName, username, content, images, created
       }
     }
 
-    console.log(`[trello.js]: Trello card created: ${response.data.shortUrl}`);
+    logger.debug('SYSTEM', `Trello card created: ${response.data.shortUrl}`);
     return response.data.shortUrl;
 
   } catch (error) {

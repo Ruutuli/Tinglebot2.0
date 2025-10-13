@@ -971,7 +971,7 @@ module.exports = {
             const probability = ((rarityWeights[r].totalWeight / totalWeightForLogging) * 100).toFixed(1);
             return `Rarity ${r}: ${rarityWeights[r].count} items, ${rarityWeights[r].totalWeight} weight (${probability}% chance)`;
           })
-          .join(', '));
+          .join(', ')}`);
         
         // Use weighted random selection for all cases
         let randomItem;
