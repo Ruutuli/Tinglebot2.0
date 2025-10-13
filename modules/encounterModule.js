@@ -158,7 +158,7 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
         }
 
         if (outcome.hearts > 0) {
-            logger.debug('LOOT', `${character.name} loses ${outcome.hearts} hearts`);
+            logger.info('LOOT', `${character.name} loses ${outcome.hearts} hearts`);
                     await useHearts(character._id, outcome.hearts, createEncounterContext(character, 'encounter_heart_loss'));
         }
 

@@ -287,7 +287,7 @@ async function cleanupExpiredRaids(client = null) {
   
   for (const raid of expiredRaids) {
    try {
-    logger.debug('RAID', `Processing ${raid.raidId} - ${raid.monster.name}`);
+    logger.info('RAID', `Processing ${raid.raidId} - ${raid.monster.name}`);
     
     // Mark raid as failed and KO all participants
     await raid.failRaid();
@@ -330,7 +330,7 @@ async function cleanupExpiredRaids(client = null) {
          const thread = await client.channels.fetch(raid.threadId);
          if (thread) {
            await thread.send({ embeds: [failureEmbed] });
-           logger.debug('RAID', `Failure message sent to thread`);
+           logger.info('RAID', `Failure message sent to thread`);
            sent = true;
          }
        } catch (threadError) {
@@ -343,7 +343,7 @@ async function cleanupExpiredRaids(client = null) {
          const channel = await client.channels.fetch(raid.channelId);
          if (channel) {
            await channel.send({ embeds: [failureEmbed] });
-           logger.debug('RAID', `Failure message sent to channel`);
+           logger.info('RAID', `Failure message sent to channel`);
            sent = true;
          }
        } catch (channelError) {
@@ -1378,9 +1378,9 @@ function setupBlightScheduler(client) {
   "Send Blight Reminders",
   async () => {
     try {
-      logger.debug('BLIGHT', 'Running comprehensive blight reminder check');
+      logger.info('BLIGHT', 'Running comprehensive blight reminder check');
       const result = await sendBlightReminders(client);
-      logger.debug('BLIGHT', `Reminder check complete - Death: ${result.deathWarnings}, Healing: ${result.healingWarnings}`);
+      logger.info('BLIGHT', `Reminder check complete - Death: ${result.deathWarnings}, Healing: ${result.healingWarnings}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
       console.error('[scheduler.js]: ❌ Error during blight reminder check:', error);
@@ -1453,7 +1453,7 @@ async function setupBoostingScheduler(client) {
  // Hourly cleanup for boosting data to ensure expired boosts are removed quickly
  createCronJob("0 * * * *", "Hourly Boost Cleanup", async () => {
   try {
-   logger.debug('CLEANUP', 'Starting hourly boost cleanup');
+   logger.info('CLEANUP', 'Starting hourly boost cleanup');
    const TempData = require('./models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
    if (result.deletedCount > 0) {
@@ -1629,7 +1629,7 @@ async function checkQuestCompletions(client) {
 // ============================================================================
 async function checkVillageTracking(client) {
   try {
-    logger.debug('SCHEDULER', 'Starting village tracking check...');
+    logger.info('SCHEDULER', 'Starting village tracking check...');
     
     const Quest = require('./models/QuestModel');
     
@@ -1641,7 +1641,7 @@ async function checkVillageTracking(client) {
     });
     
     if (activeRPQuests.length === 0) {
-      logger.debug('SCHEDULER', 'No active RP quests with village requirements to check');
+      logger.info('SCHEDULER', 'No active RP quests with village requirements to check');
       return;
     }
     
@@ -1768,7 +1768,7 @@ async function checkAndPostMissedQuests(client) {
     });
     
     if (!unpostedQuests.length) {
-      logger.debug('SCHEDULER', 'No missed quests to post during startup');
+      logger.info('SCHEDULER', 'No missed quests to post during startup');
       return 0;
     }
     
@@ -1792,7 +1792,7 @@ async function checkAndPostMissedQuests(client) {
     }
     
     if (!processedQuests.length) {
-      logger.debug('SCHEDULER', 'No missed quests to post during startup');
+      logger.info('SCHEDULER', 'No missed quests to post during startup');
       return 0;
     }
     
@@ -1849,7 +1849,7 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     });
     
     if (!questsToPost.length) {
-      logger.debug('SCHEDULER', `No quests scheduled for ${cronTime} on ${today}`);
+      logger.info('SCHEDULER', `No quests scheduled for ${cronTime} on ${today}`);
       return 0;
     }
     
@@ -1951,7 +1951,7 @@ async function sendBloodMoonAnnouncementsToChannels(client, message) {
 // ------------------- Main Blood Moon Functions ------------------
 
 async function handleBloodMoonStart(client) {
-  logger.debug('BLOODMOON', 'Starting Blood Moon start check at 8 PM EST');
+  logger.info('BLOODMOON', 'Starting Blood Moon start check at 8 PM EST');
 
   // Check if today is specifically the day BEFORE a Blood Moon (not the actual day or day after)
   const now = new Date();
@@ -1984,10 +1984,10 @@ async function handleBloodMoonStart(client) {
    
    logger.info('BLOODMOON', `Startup announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
   } else {
-   logger.debug('BLOODMOON', 'Not the day before Blood Moon - no announcement needed');
+   logger.info('BLOODMOON', 'Not the day before Blood Moon - no announcement needed');
   }
 
-  logger.debug('BLOODMOON', 'Blood Moon start check completed');
+  logger.info('BLOODMOON', 'Blood Moon start check completed');
 }
 
 async function handleBloodMoonEnd(client) {

@@ -315,7 +315,7 @@ function isBloodMoonDay() {
   
   // If we're not in a Blood Moon period, return false
   if (!bloodMoonDate) {
-    logger.debug('BLOODMOON', 'Not in Blood Moon period');
+    logger.info('BLOODMOON', 'Not in Blood Moon period');
     return false;
   }
   
@@ -343,7 +343,7 @@ function isBloodMoonDay() {
     isActive = estHour < 8;
     console.log(`[bloodmoon.js]: 📅 Day after Blood Moon - Hour: ${estHour}, Active: ${isActive}`);
   } else {
-    logger.debug('BLOODMOON', 'Not in Blood Moon period');
+    logger.info('BLOODMOON', 'Not in Blood Moon period');
   }
   
   return isActive;

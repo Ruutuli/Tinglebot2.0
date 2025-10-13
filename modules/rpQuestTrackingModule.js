@@ -66,23 +66,23 @@ async function handleRPPostTracking(message) {
     try {
         if (!isRPQuestThread(message.channel)) return;
 
-        logger.debug('QUEST', `Tracking post in ${message.channel.name}`);
+        logger.info('QUEST', `Tracking post in ${message.channel.name}`);
 
         const quest = await findQuestByThreadId(message.channel.id);
         if (!quest || !isValidRPQuest(quest)) {
-            logger.debug('QUEST', `No valid RP quest found for thread`);
+            logger.info('QUEST', `No valid RP quest found for thread`);
             return;
         }
 
         const participant = quest.getParticipant(message.author.id);
         if (!participant) {
-            logger.debug('QUEST', `User not participant in ${quest.questID}`);
+            logger.info('QUEST', `User not participant in ${quest.questID}`);
             return;
         }
 
         const validationResult = validateRPPostWithReason(message);
         if (!validationResult.valid) {
-            logger.debug('QUEST', `Invalid post: ${validationResult.reason}`);
+            logger.info('QUEST', `Invalid post: ${validationResult.reason}`);
             return;
         }
 
@@ -161,10 +161,10 @@ async function processValidRPPost(quest, participant, channelId) {
             await quest.markCompletionProcessed();
         }
     } else if (completionResult.reason.includes('participants completed')) {
-        logger.debug('QUEST', `${completionResult.reason} in quest ${quest.questID}`);
+        logger.info('QUEST', `${completionResult.reason} in quest ${quest.questID}`);
     }
 
-    logger.debug('QUEST', `Updated RP post count for ${participant.characterName}: ${participant.rpPostCount}/${postRequirement}`);
+    logger.info('QUEST', `Updated RP post count for ${participant.characterName}: ${participant.rpPostCount}/${postRequirement}`);
 }
 
 // ============================================================================
@@ -224,17 +224,17 @@ async function findQuestByThreadId(threadId) {
         });
 
         if (quest) {
-            logger.debug('QUEST', `Found quest ${quest.questID} by parent channel`);
+            logger.info('QUEST', `Found quest ${quest.questID} by parent channel`);
             return quest;
         }
 
         const fallbackQuest = await findQuestByParticipantThreadId(threadId);
         if (fallbackQuest) {
-            logger.debug('QUEST', `Found quest ${fallbackQuest.questID} by participant thread`);
+            logger.info('QUEST', `Found quest ${fallbackQuest.questID} by participant thread`);
             return fallbackQuest;
         }
 
-        logger.debug('QUEST', `No quest found for thread ${threadId}`);
+        logger.info('QUEST', `No quest found for thread ${threadId}`);
         return null;
     } catch (error) {
         logger.error('QUEST', 'Error finding quest by thread ID');
@@ -287,7 +287,7 @@ function validateRPPostWithReason(message) {
         if (!result.valid) return result;
     }
 
-    logger.debug('QUEST', 'Valid RP post');
+    logger.info('QUEST', 'Valid RP post');
     return { valid: true, reason: null };
 }
 
@@ -410,7 +410,7 @@ async function updateRPPostCount(questID, userId, newCount) {
         }
 
         await quest.save();
-        logger.debug('QUEST', `Manually updated RP post count for user ${userId} in quest ${questID}: ${oldCount} → ${newCount}`);
+        logger.info('QUEST', `Manually updated RP post count for user ${userId} in quest ${questID}: ${oldCount} → ${newCount}`);
 
         return { success: true, oldCount, newCount, meetsRequirements };
 
@@ -448,7 +448,7 @@ async function getRPQuestStatus(questID) {
             }))
         };
 
-        logger.debug('QUEST', `Retrieved status for quest ${questID}`);
+        logger.info('QUEST', `Retrieved status for quest ${questID}`);
         return status;
 
     } catch (error) {

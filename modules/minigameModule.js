@@ -333,7 +333,7 @@ function createAlienDefenseGame(channelId, guildId, createdBy, village = 'rudani
 // ------------------- Function: processAlienDefenseRoll -------------------
 // Processes a player's roll against an alien
 function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, roll) {
-  logger.debug('MINIGAME', `Processing: ${playerName} vs ${targetAlienId} (Roll: ${roll})`);
+  logger.info('MINIGAME', `Processing: ${playerName} vs ${targetAlienId} (Roll: ${roll})`);
   
   // Check if it's the player's turn (if turn order is active)
   if (gameData.turnOrder.length > 0) {
@@ -355,7 +355,7 @@ function processAlienDefenseRoll(gameData, playerId, playerName, targetAlienId, 
     const match = targetAlienId.match(/👾\s*([A-Z0-9]+)/);
     if (match) {
       cleanAlienId = match[1];
-      logger.debug('MINIGAME', `Extracted ID: ${cleanAlienId} from ${targetAlienId}`);
+      logger.info('MINIGAME', `Extracted ID: ${cleanAlienId} from ${targetAlienId}`);
     } else {
       logger.warn('MINIGAME', `Failed to extract ID from: ${targetAlienId}`);
     }
@@ -508,7 +508,7 @@ function advanceAlienDefenseRound(gameData) {
         const oldRing = alien.ring;
         alien.ring++;
         alien.id = `${alien.ring}${alien.segment}`;
-        logger.debug('MINIGAME', `${oldId} → ${alien.id}`);
+        logger.info('MINIGAME', `${oldId} → ${alien.id}`);
         
         // Track movement for grouped message
         const ringNames = ['Outer', 'Middle', 'Inner'];
@@ -518,7 +518,7 @@ function advanceAlienDefenseRound(gameData) {
         movementGroups[movementKey] = movementGroups[movementKey] || [];
         movementGroups[movementKey].push(oldId);
       } else {
-        logger.debug('MINIGAME', `${alien.id} blocked`);
+        logger.info('MINIGAME', `${alien.id} blocked`);
       }
     } else {
       // Alien reached the barn - steal an animal!
@@ -538,9 +538,9 @@ function advanceAlienDefenseRound(gameData) {
   if (gameData.currentRound <= 6) {
     const playerCount = gameData.turnOrder.length || 1; // Use turn order count or default to 1
     spawnResult = spawnAliens(gameData, playerCount, gameData.currentRound - 1); // Pass previous round number for logic
-    logger.debug('MINIGAME', `Spawned ${spawnResult.spawnCount} aliens`);
+    logger.info('MINIGAME', `Spawned ${spawnResult.spawnCount} aliens`);
   } else if (gameData.currentRound <= gameData.maxRounds) {
-    logger.debug('MINIGAME', `Cleanup round ${gameData.currentRound}`);
+    logger.info('MINIGAME', `Cleanup round ${gameData.currentRound}`);
   }
   
   // Record round history

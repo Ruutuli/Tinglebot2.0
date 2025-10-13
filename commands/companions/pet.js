@@ -1035,7 +1035,7 @@ module.exports = {
      // Debug pet image URL processing for roll command
      const encodedPetUrlRoll = encodePetImageUrl(pet.imageUrl);
      const finalPetUrlRoll = sanitizeUrl(encodedPetUrlRoll || pet.imageUrl);
-     logger.debug('SYSTEM', `Pet roll image URL processing for ${pet.name}: Original=${pet.imageUrl}, Encoded=${encodedPetUrlRoll}, Final=${finalPetUrlRoll}`);
+     logger.info('SYSTEM', `Pet roll image URL processing for ${pet.name}: Original=${pet.imageUrl}, Encoded=${encodedPetUrlRoll}, Final=${finalPetUrlRoll}`);
 
      const rollEmbed = new EmbedBuilder()
       .setAuthor({ name: `${pet.name} the ${pet.species}`, iconURL: finalPetUrlRoll })
@@ -1314,7 +1314,7 @@ module.exports = {
         // Debug pet image URL processing
         const encodedPetUrl = encodePetImageUrl(pet.imageUrl);
         const finalPetUrl = sanitizeUrl(encodedPetUrl || pet.imageUrl);
-        logger.debug('SYSTEM', `Pet image URL processing for ${pet.name}: Original=${pet.imageUrl}, Encoded=${encodedPetUrl}, Final=${finalPetUrl}`);
+        logger.info('SYSTEM', `Pet image URL processing for ${pet.name}: Original=${pet.imageUrl}, Encoded=${encodedPetUrl}, Final=${finalPetUrl}`);
 
         const viewEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })

@@ -1082,7 +1082,7 @@ async function handleShopBuy(interaction) {
       return;
     }
 
-    logger.debug('ECONOMY', `Initiating purchase for ${characterName}: ${itemName} x${quantity}`);
+    logger.info('ECONOMY', `Initiating purchase for ${characterName}: ${itemName} x${quantity}`);
 
     // ------------------- Character Ownership Validation -------------------
     const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
@@ -1235,7 +1235,7 @@ async function handleShopBuy(interaction) {
      return interaction.editReply("❌ Item details not found.");
     }
 
-    logger.debug('ECONOMY', `Item details - Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice}, Category: ${itemDetails.category}`);
+    logger.info('ECONOMY', `Item details - Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice}, Category: ${itemDetails.category}`);
 
     if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {
       console.error(`[shops]: ❌ Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
@@ -1315,9 +1315,9 @@ async function handleShopBuy(interaction) {
 
     // ------------------- Process Purchase -------------------
     if (hasBirthdayDiscount) {
-      logger.debug('ECONOMY', `${interaction.user.tag} purchase with ${discountPercentage}% birthday discount: ${originalPrice} → ${totalPrice} (saved ${savedAmount})`);
+      logger.info('ECONOMY', `${interaction.user.tag} purchase with ${discountPercentage}% birthday discount: ${originalPrice} → ${totalPrice} (saved ${savedAmount})`);
     }
-    logger.debug('ECONOMY', `${interaction.user.tag} tokens: ${currentTokens} - ${totalPrice} = ${currentTokens - totalPrice}`);
+    logger.info('ECONOMY', `${interaction.user.tag} tokens: ${currentTokens} - ${totalPrice} = ${currentTokens - totalPrice}`);
 
     // Update inventory
     await addItemInventoryDatabase(
@@ -1327,7 +1327,7 @@ async function handleShopBuy(interaction) {
       interaction,
       'Purchase from shop'
     );
-    logger.debug('ECONOMY', `Updated inventory for ${character.name}: ${itemName} +${quantity}`);
+    logger.success('ECONOMY', `Updated inventory for ${character.name}: ${itemName} +${quantity}`);
 
     // Update shop stock
     if (itemName.includes('+')) {

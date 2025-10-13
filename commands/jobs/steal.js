@@ -148,7 +148,7 @@ function preloadCommonNPCItems() {
             isNPC: true
         }));
         setCachedNPCItems(npcName, itemsWithRarity);
-        logger.debug('SYSTEM', `Preloaded ${items.length} items for ${npcName}`);
+        logger.info('SYSTEM', `Preloaded ${items.length} items for ${npcName}`);
     }
 }
 

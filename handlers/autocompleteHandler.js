@@ -100,7 +100,7 @@ async function safeAutocompleteResponse(interaction, choices) {
     
     // Handle specific error cases
     if (error.code === 10062 || error.message === 'Response timeout') {
-      logger.debug('INTERACTION', 'Autocomplete expired/timeout');
+      logger.info('INTERACTION', 'Autocomplete expired/timeout');
       return;
     }
   }
@@ -156,12 +156,12 @@ async function safeRespondWithValidation(interaction, choices) {
     
     // Log the choices that were being processed for debugging
     if (choices && choices.length > 0) {
-      logger.debug('INTERACTION', `Problematic choices: ${choices.length} items`);
+      logger.info('INTERACTION', `Problematic choices: ${choices.length} items`);
     }
     
     // Handle specific error cases
     if (error.code === 10062 || error.message === 'Response timeout') {
-      logger.debug('INTERACTION', 'Autocomplete expired/timeout');
+      logger.info('INTERACTION', 'Autocomplete expired/timeout');
       return;
     }
     

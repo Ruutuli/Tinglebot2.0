@@ -206,7 +206,7 @@ async function createTrelloCard({ threadName, username, content, images, created
       }
     }
 
-    logger.debug('SYSTEM', `Trello card created: ${response.data.shortUrl}`);
+    logger.success('SYSTEM', `Trello card created: ${response.data.shortUrl}`);
     return response.data.shortUrl;
 
   } catch (error) {
