@@ -17,6 +17,7 @@ const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHand
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
 const { applyHealingBoost, applyHealingStaminaBoost } = require('../../modules/boostIntegration');
+const logger = require('../../utils/logger');
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -211,7 +212,7 @@ async function handleInventorySync(characters, interaction) {
 // Standardizes error handling and response
 async function handleInteractionErrorResponse(error, interaction, context) {
   handleInteractionError(error, 'heal.js');
-  console.error(`[heal.js]: ❌ Error during ${context}: ${error.message}`);
+  logger.error('COMMAND', `Error during ${context}: ${error.message}`);
   await interaction.editReply(`❌ **Error:** An issue occurred while ${context}.`);
 }
 
@@ -341,7 +342,7 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
     // Send the embed and save the message ID
     const healingRoleId = process.env.JOB_PERK_HEALING;
     if (!healingRoleId) {
-      console.error('[heal.js]: ❌ JOB_PERK_HEALING environment variable not set');
+      logger.error('SYSTEM', 'JOB_PERK_HEALING environment variable not set');
     }
     
     let sentMessage;
@@ -389,9 +390,9 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
 
     try {
       await saveHealingRequestToStorage(healingRequestId, healingRequestData);
-      console.log(`[heal.js]: ✅ Healing request saved successfully with ID: ${healingRequestId}`);
+      logger.success('HEAL', `Healing request saved successfully with ID: ${healingRequestId}`);
     } catch (error) {
-      console.error(`[heal.js]: ❌ Failed to save healing request: ${error.message}`);
+      logger.error('HEAL', `Failed to save healing request: ${error.message}`);
       const errorEmbed = createErrorEmbed(
         'Save Failed',
         `> Failed to save your healing request. Please try again.`,
@@ -609,7 +610,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     }
     
     if (!healerCharacter) {
-      console.error(`[heal.js]: ❌ Invalid healer character "${healerName}"`);
+      logger.error('CHARACTER', `Invalid healer character "${healerName}"`);
       const errorEmbed = createErrorEmbed(
         'Healer Ownership Required',
         `> You do not own the healer character **${healerName}**.`,
@@ -739,7 +740,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
         // Entertainer: Song of Healing (+1 bonus heart when reviving from KO)
         if (boosterJob === 'Entertainer' && wasKO) {
           heartsToHeal += 1;
-          console.log(`[heal.js]: 🎵 Entertainer boost - Song of Healing (+1 bonus heart for KO revival)`);
+          logger.debug('BOOST', `Entertainer boost - Song of Healing (+1 bonus heart for KO revival)`);
         }
       }
     }
@@ -759,7 +760,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
           refreshedPatient.debuff.active = false;
           refreshedPatient.debuff.endDate = null;
           await refreshedPatient.save();
-          console.log(`[heal.js]: ✨ Priest boost - Spiritual Cleanse (debuff removed from ${refreshedPatient.name})`);
+          logger.debug('BOOST', `Priest boost - Spiritual Cleanse (debuff removed from ${refreshedPatient.name})`);
         }
       }
       
@@ -772,27 +773,27 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
         if (refreshedHealer && refreshedHealer.currentStamina < refreshedHealer.maxStamina) {
           refreshedHealer.currentStamina = Math.min(refreshedHealer.currentStamina + 1, refreshedHealer.maxStamina);
           await refreshedHealer.save();
-          console.log(`[heal.js]: 📚 Scholar boost - Efficient Recovery (+1 stamina to healer ${refreshedHealer.name})`);
+          logger.debug('BOOST', `Scholar boost - Efficient Recovery (+1 stamina to healer ${refreshedHealer.name})`);
         }
         
         if (refreshedPatient && refreshedPatient.currentStamina < refreshedPatient.maxStamina) {
           refreshedPatient.currentStamina = Math.min(refreshedPatient.currentStamina + 1, refreshedPatient.maxStamina);
           await refreshedPatient.save();
-          console.log(`[heal.js]: 📚 Scholar boost - Efficient Recovery (+1 stamina to patient ${refreshedPatient.name})`);
+          logger.debug('BOOST', `Scholar boost - Efficient Recovery (+1 stamina to patient ${refreshedPatient.name})`);
         }
       }
       
       // Teacher: Temporary Fortitude (+2 temp hearts)
       if (boosterJob === 'Teacher') {
         // TODO: Requires temp hearts system implementation in CharacterModel
-        console.log(`[heal.js]: ⚠️ Teacher boost - Temporary Fortitude requires temp hearts system (not yet implemented)`);
+        logger.warn('BOOST', 'Teacher boost - Temporary Fortitude requires temp hearts system (not yet implemented)');
         // When implemented, add: characterToHeal.tempHearts = (characterToHeal.tempHearts || 0) + 2;
       }
     }
     
     // ------------------- Clear Boost After Use -------------------
     if (healerCharacter.boostedBy) {
-      console.log(`[heal.js] Clearing boost for ${healerCharacter.name} after use`);
+      logger.debug('BOOST', `Clearing boost for ${healerCharacter.name} after use`);
       healerCharacter.boostedBy = null;
       await healerCharacter.save();
     }
@@ -801,7 +802,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     if (healerCharacter.jobVoucher && !voucherResult.skipVoucher) {
       const deactivationResult = await deactivateJobVoucher(healerCharacter._id);
       if (!deactivationResult.success) {
-        console.error(`[heal.js]: ❌ Failed to deactivate job voucher for ${healerCharacter.name}`);
+        logger.error('JOB', `Failed to deactivate job voucher for ${healerCharacter.name}`);
       }
     }
 
@@ -809,7 +810,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     healingRequest.status = 'fulfilled';
     await saveHealingRequestToStorage(requestId, healingRequest);
     await deleteHealingRequestFromStorage(requestId);
-    console.log(`[heal.js]: ✅ Deleted fulfilled healing request ${requestId}`);
+    logger.success('HEAL', `Deleted fulfilled healing request ${requestId}`);
 
     // Update original request message
     const channel = interaction.channel;
@@ -830,7 +831,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       }
     } catch (error) {
       // Log the error but don't fail the entire operation
-      console.log(`[heal.js]: ⚠️ Could not update original message ${healingRequest.messageId}: ${error.message}`);
+      logger.warn('INTERACTION', `Could not update original message ${healingRequest.messageId}: ${error.message}`);
     }
 
     // Notify requester

@@ -46,37 +46,75 @@ const CATEGORIES = {
   SYSTEM: { emoji: '⚙️', color: color.blue, label: 'SYS' },
   DATABASE: { emoji: '💾', color: color.cyan, label: 'DB' },
   API: { emoji: '🌐', color: color.magenta, label: 'API' },
+  STORAGE: { emoji: '📦', color: color.cyan, label: 'STOR' },
+  VALIDATION: { emoji: '✔️', color: color.green, label: 'VALD' },
+  SYNC: { emoji: '🔄', color: color.blue, label: 'SYNC' },
   
-  // Game Features
+  // Game Features - Combat & Encounters
   MINIGAME: { emoji: '🎮', color: color.yellow, label: 'GAME' },
-  QUEST: { emoji: '📜', color: color.green, label: 'QUEST' },
+  QUEST: { emoji: '📜', color: color.green, label: 'QUST' },
   RAID: { emoji: '⚔️', color: color.red, label: 'RAID' },
+  PVP: { emoji: '⚔️', color: color.red, label: 'PVP' },
+  COMBAT: { emoji: '💥', color: color.red, label: 'CMBT' },
+  ENCOUNTER: { emoji: '👹', color: color.red, label: 'ENCTR' },
+  MONSTER: { emoji: '👾', color: color.magenta, label: 'MNSTR' },
+  
+  // Game Features - Special Systems
   BLIGHT: { emoji: '🦠', color: color.magenta, label: 'BLGHT' },
+  RELIC: { emoji: '💠', color: color.cyan, label: 'RELC' },
+  SUBMISSION: { emoji: '📋', color: color.blue, label: 'SUBM' },
   
   // Jobs & Economy
+  JOB: { emoji: '💼', color: color.cyan, label: 'JOB' },
+  HEAL: { emoji: '💚', color: color.green, label: 'HEAL' },
   LOOT: { emoji: '💎', color: color.yellow, label: 'LOOT' },
   GATHER: { emoji: '🌿', color: color.green, label: 'GTHR' },
   CRAFT: { emoji: '🔨', color: color.yellow, label: 'CRFT' },
   ECONOMY: { emoji: '💰', color: color.yellow, label: 'ECON' },
+  TRADE: { emoji: '🤝', color: color.yellow, label: 'TRDE' },
+  VENDING: { emoji: '🏪', color: color.yellow, label: 'VEND' },
   
   // Character & Progression
   CHARACTER: { emoji: '👤', color: color.cyan, label: 'CHAR' },
   LEVEL: { emoji: '⭐', color: color.yellow, label: 'LVL' },
   BOOST: { emoji: '🚀', color: color.magenta, label: 'BOST' },
+  GEAR: { emoji: '🛡️', color: color.blue, label: 'GEAR' },
+  INVENTORY: { emoji: '🎒', color: color.cyan, label: 'INVT' },
+  BUFF: { emoji: '✨', color: color.green, label: 'BUFF' },
+  ELIXIR: { emoji: '🧪', color: color.magenta, label: 'ELXR' },
+  
+  // Companions & NPCs
+  MOUNT: { emoji: '🐴', color: color.yellow, label: 'MNT' },
+  PET: { emoji: '🐾', color: color.yellow, label: 'PET' },
+  NPC: { emoji: '🧙', color: color.blue, label: 'NPC' },
+  PARTY: { emoji: '👥', color: color.cyan, label: 'PRTY' },
   
   // World & Environment
   VILLAGE: { emoji: '🏘️', color: color.green, label: 'VLGE' },
   WEATHER: { emoji: '🌤️', color: color.cyan, label: 'WTHR' },
   TRAVEL: { emoji: '🗺️', color: color.blue, label: 'TRVL' },
+  MAP: { emoji: '🗾', color: color.blue, label: 'MAP' },
+  EXPLORE: { emoji: '🧭', color: color.green, label: 'EXPL' },
   BLOODMOON: { emoji: '🌕', color: color.red, label: 'MOON' },
+  SEASON: { emoji: '🍂', color: color.yellow, label: 'SESN' },
   
-  // Automation
+  // Automation & Maintenance
   SCHEDULER: { emoji: '⏰', color: color.blue, label: 'SCHD' },
   CLEANUP: { emoji: '🧹', color: color.gray, label: 'CLEN' },
+  MIGRATION: { emoji: '🔀', color: color.blue, label: 'MIGR' },
   
   // User Interaction
   COMMAND: { emoji: '📝', color: color.white, label: 'CMD' },
   INTERACTION: { emoji: '🔄', color: color.white, label: 'INTR' },
+  AUTOCOMPLETE: { emoji: '💬', color: color.magenta, label: 'AUTO' },
+  BUTTON: { emoji: '🔘', color: color.white, label: 'BTN' },
+  MODAL: { emoji: '📄', color: color.white, label: 'MODL' },
+  MENU: { emoji: '📋', color: color.white, label: 'MENU' },
+  
+  // Moderation & Security
+  MODERATION: { emoji: '🛡️', color: color.red, label: 'MOD' },
+  SECURITY: { emoji: '🔒', color: color.red, label: 'SEC' },
+  PERMISSION: { emoji: '🔑', color: color.yellow, label: 'PERM' },
   
   // Debugging & Errors
   DEBUG: { emoji: '🔍', color: color.gray, label: 'DEBG' },

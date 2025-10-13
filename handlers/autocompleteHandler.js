@@ -2996,7 +2996,7 @@ async function handleGearAutocomplete(interaction, focusedOption) {
    value: item.itemName,
   }));
 
-  console.log(`[handleGearAutocomplete]: Generated items:`, items.map(item => ({ name: item.name, value: item.value })));
+  logger.debug('AUTOCOMPLETE', `Generated items: ${JSON.stringify(items.map(item => ({ name: item.name, value: item.value })))}`);
   
   // Debug: Log specific items with + character
   const plusItems = items.filter(item => item.value.includes('+'));

@@ -47,37 +47,75 @@ Choose the category that best fits your log context:
 - **`SYSTEM`** - General system operations, startup, shutdown
 - **`DATABASE`** - Database connections, queries, transactions
 - **`API`** - External API calls and responses
+- **`STORAGE`** - File storage, GCS operations, temp data storage
+- **`VALIDATION`** - Input validation, data validation
+- **`SYNC`** - Synchronization operations, inventory sync
 
-### Game Features
+### Combat & Encounters
 - **`MINIGAME`** - Minigame sessions (They Came for the Cows, etc.)
 - **`QUEST`** - Quest creation, tracking, completion
-- **`RAID`** - Raid battles, monster encounters
+- **`RAID`** - Raid battles, boss encounters
+- **`PVP`** - Player vs Player combat
+- **`COMBAT`** - Combat mechanics, damage calculation
+- **`ENCOUNTER`** - Random encounters, monster spawning
+- **`MONSTER`** - Monster behavior, stats, drops
+
+### Special Systems
 - **`BLIGHT`** - Blight infection, healing, submissions
+- **`RELIC`** - Relic discovery, tracking
+- **`SUBMISSION`** - Art/RP submissions, approval workflows
 
 ### Jobs & Economy
+- **`JOB`** - Job-related activities, job vouchers
+- **`HEAL`** - Healing requests, healing operations
 - **`LOOT`** - Looting operations, monster drops
 - **`GATHER`** - Gathering resources, foraging
 - **`CRAFT`** - Crafting items, recipes
 - **`ECONOMY`** - Token transactions, shop purchases
+- **`TRADE`** - Trading between players
+- **`VENDING`** - Vending machine operations
 
 ### Character & Progression
 - **`CHARACTER`** - Character creation, updates, validation
 - **`LEVEL`** - XP gains, level ups
 - **`BOOST`** - Boost activation, tracking, expiration
+- **`GEAR`** - Gear/equipment management, equipping/unequipping
+- **`INVENTORY`** - Inventory operations, item management
+- **`BUFF`** - Buff/debuff application, tracking
+- **`ELIXIR`** - Elixir consumption, effects
+
+### Companions & NPCs
+- **`MOUNT`** - Mount taming, riding, management
+- **`PET`** - Pet acquisition, care, interactions
+- **`NPC`** - NPC interactions, dialogue
+- **`PARTY`** - Party formation, management
 
 ### World & Environment
 - **`VILLAGE`** - Village operations, tracking
 - **`WEATHER`** - Weather generation, changes
 - **`TRAVEL`** - Travel system, movement
+- **`MAP`** - Map generation, updates
+- **`EXPLORE`** - Exploration mechanics
 - **`BLOODMOON`** - Blood Moon events
+- **`SEASON`** - Seasonal changes, effects
 
-### Automation
+### Automation & Maintenance
 - **`SCHEDULER`** - Scheduled jobs, cron tasks
 - **`CLEANUP`** - Data cleanup, maintenance
+- **`MIGRATION`** - Data migrations, schema updates
 
 ### User Interaction
 - **`COMMAND`** - Command execution
-- **`INTERACTION`** - Discord interactions, autocomplete
+- **`INTERACTION`** - General Discord interactions
+- **`AUTOCOMPLETE`** - Autocomplete operations
+- **`BUTTON`** - Button interactions
+- **`MODAL`** - Modal/form submissions
+- **`MENU`** - Select menu interactions
+
+### Moderation & Security
+- **`MODERATION`** - Moderation actions, warnings
+- **`SECURITY`** - Security checks, fraud detection
+- **`PERMISSION`** - Permission checks, role validation
 
 ### Debugging
 - **`DEBUG`** - Debug information (only shows in dev mode)

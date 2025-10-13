@@ -2586,7 +2586,7 @@ async function sendBlightReminders(client) {
       expiresAt: { $lt: warningThreshold, $gt: new Date() }
     });
     
-    console.log(`[blightHandler]: Found ${expiringSubmissions.length} submissions expiring within 24 hours`);
+    logger.info('BLIGHT', `Found ${expiringSubmissions.length} submissions expiring within 24 hours`);
     
     for (const submission of expiringSubmissions) {
       try {
@@ -2720,7 +2720,7 @@ async function checkExpiringBlightRequests(client) {
       expiresAt: { $lt: warningThreshold, $gt: new Date() }
     });
     
-    console.log(`[blightHandler]: Found ${expiringSubmissions.length} submissions expiring within 24 hours`);
+    logger.info('BLIGHT', `Found ${expiringSubmissions.length} submissions expiring within 24 hours`);
     
     let warnedUsers = 0;
     
@@ -2800,7 +2800,7 @@ async function checkExpiringBlightRequests(client) {
       }
     }
     
-    console.log(`[blightHandler]: Expiration warning check complete - Warned: ${warnedUsers}`);
+    logger.success('BLIGHT', `Expiration warning check complete - Warned: ${warnedUsers}`);
     return { warnedUsers };
   } catch (error) {
     handleError(error, 'blightHandler.js', {
