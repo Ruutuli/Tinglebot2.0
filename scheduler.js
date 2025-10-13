@@ -1441,7 +1441,9 @@ async function setupBoostingScheduler(client) {
    logger.info('CLEANUP', 'Starting TempData boost cleanup');
    const TempData = require('./models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
-   console.log(`[scheduler.js]: ✅ TempData boost cleanup complete - Deleted: ${result.deletedCount || 0}`);
+   if (result.deletedCount > 0) {
+     logger.success('CLEANUP', `TempData boost cleanup complete - Deleted: ${result.deletedCount}`);
+   }
   } catch (error) {
    handleError(error, "scheduler.js");
    console.error("[scheduler.js]: ❌ Error during TempData boost cleanup:", error);
@@ -1581,7 +1583,9 @@ async function checkQuestCompletions(client) {
       return;
     }
     
-    console.log(`[scheduler.js]: 📋 Found ${activeQuests.length} active quests to check`);
+    if (activeQuests.length > 0) {
+      logger.info('SCHEDULER', `Found ${activeQuests.length} active quests to check`);
+    }
     
     let completedCount = 0;
     let processedCount = 0;
@@ -1611,7 +1615,9 @@ async function checkQuestCompletions(client) {
       }
     }
     
-    console.log(`[scheduler.js]: ✅ Quest completion check finished - ${completedCount} completed, ${processedCount} processed`);
+    if (completedCount > 0 || processedCount > 0) {
+      logger.success('SCHEDULER', `Quest completion check finished - ${completedCount} completed, ${processedCount} processed`);
+    }
     
   } catch (error) {
     handleError(error, 'scheduler.js', {
