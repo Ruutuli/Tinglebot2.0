@@ -13,6 +13,7 @@
 // ============================================================================
 // Local Modules & Database Models
 // ============================================================================
+const logger = require('../utils/logger');
 const { handleKO, useHearts } = require('./characterStatsModule');
 
 // ------------------- Helper Function for Context -------------------
@@ -157,7 +158,7 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
         }
 
         if (outcome.hearts > 0) {
-            console.log(`[encounterModule.js]: 💔 ${character.name} loses ${outcome.hearts} hearts`);
+            logger.debug('LOOT', `${character.name} loses ${outcome.hearts} hearts`);
                     await useHearts(character._id, outcome.hearts, createEncounterContext(character, 'encounter_heart_loss'));
         }
 

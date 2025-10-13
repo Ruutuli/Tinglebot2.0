@@ -883,7 +883,7 @@ async function handleBloodMoonRerolls(
 
 // ------------------- Normal Encounter Logic -------------------
 async function handleNormalEncounter(interaction, currentVillage, job, character, bloodMoonActive) {
-  console.log(`[loot.js]: 🌅 handleNormalEncounter called for ${character.name} in ${currentVillage} with job ${job}`);
+  logger.debug('LOOT', `handleNormalEncounter called for ${character.name} in ${currentVillage} with job ${job}`);
   
   // Check for blight stage 3 effect (no monsters)
   if (character.blightEffects?.noMonsters) {
@@ -895,7 +895,7 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
   }
 
   const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
-  console.log(`[loot.js]: 🌅 Found ${monstersByCriteria.length} monsters for ${currentVillage} with job ${job}`);
+  logger.debug('LOOT', `Found ${monstersByCriteria.length} monsters for ${currentVillage} with job ${job}`);
   
   if (monstersByCriteria.length === 0) {
     console.log(`[loot.js]: 🌅 No monsters found for criteria - sending no encounter embed`);
@@ -906,7 +906,7 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
   }
 
   const encounterResult = await getMonsterEncounterFromList(monstersByCriteria);
-  console.log(`[loot.js]: 🌅 Encounter result: ${encounterResult.encounter}`);
+  logger.debug('LOOT', `Encounter result: ${encounterResult.encounter}`);
   
   if (encounterResult.encounter === "No Encounter") {
     console.log(`[loot.js]: 🌅 Encounter roll resulted in no encounter - sending no encounter embed`);
@@ -921,7 +921,7 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
       Math.floor(Math.random() * encounterResult.monsters.length)
     ];
   
-  console.log(`[loot.js]: 🌅 Selected monster from encounter: ${encounteredMonster.name}`);
+  logger.debug('LOOT', `Selected monster from encounter: ${encounteredMonster.name}`);
 
   // Return the final encountered monster
   return encounteredMonster;
@@ -966,7 +966,7 @@ async function processLootingLogic(
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
   const rollDisplay = originalRoll && blightAdjustedRoll > originalRoll ? `${originalRoll} → ${blightAdjustedRoll}` : `${originalRoll}`;
-  console.log(`[loot.js]: ⚔️ ${character.name} vs ${encounteredMonster.name} | Roll: ${rollDisplay}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
+  logger.debug('LOOT', `${character.name} vs ${encounteredMonster.name} | Roll: ${rollDisplay}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
 
   const outcome = await getEncounterOutcome(
    character,

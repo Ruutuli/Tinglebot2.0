@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("@discordjs/builders");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require("discord.js");
 const { handleInteractionError } = require("../../utils/globalErrorHandler");
+const logger = require("../../utils/logger");
 const Quest = require("../../models/QuestModel");
 const Character = require("../../models/CharacterModel");
 const { 
@@ -341,7 +342,7 @@ module.exports = {
  // ============================================================================
  async performEmbedUpdate(quest, client, updateSource) {
   try {
-   console.log(`[quest.js]🔄 Updating embed for quest ${quest.questID || quest.questId} from ${updateSource}`);
+   logger.debug('QUEST', `Updating embed for quest ${quest.questID || quest.questId} from ${updateSource}`);
 
    // Validate client is available
    if (!client) {
@@ -377,7 +378,7 @@ module.exports = {
    // Update the message
    await questMessage.edit({ embeds: [updatedEmbed] });
 
-   console.log(`[quest.js]✅ Successfully updated quest embed for ${quest.questID || quest.questId}`);
+   logger.debug('QUEST', `Successfully updated quest embed for ${quest.questID || quest.questId}`);
    return { success: true, reason: 'Updated successfully' };
 
   } catch (error) {

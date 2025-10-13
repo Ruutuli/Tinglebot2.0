@@ -7,6 +7,7 @@ const { EmbedBuilder } = require("discord.js");
 
 // ------------------- Utility Module Imports ------------------
 const { handleError } = require("../utils/globalErrorHandler");
+const logger = require("../utils/logger");
 const { getLastDebugValues } = require("../modules/buffModule");
 const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
 const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
@@ -1369,7 +1370,7 @@ const createMonsterEncounterEmbed = async (
  if (boostInfo) {
    console.log(`[embeds.js]: 🎯 createMonsterEncounterEmbed - Boost info retrieved: ${boostInfo.boosterJob} ${boostInfo.boosterName} - ${boostInfo.boostName} for ${boostInfo.category}`);
  } else {
-   console.log(`[embeds.js]: ⚠️ createMonsterEncounterEmbed - No boost info found for character ${character.name}`);
+   logger.debug('LOOT', `No boost info found for character ${character.name}`);
  }
 
  // Modify boost flavor text for Entertainer based on damage taken

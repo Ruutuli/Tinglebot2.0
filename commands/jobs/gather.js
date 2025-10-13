@@ -947,7 +947,7 @@ module.exports = {
           ? weightedItems.length  // Fortune Teller: each item in the array represents its weight
           : weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0); // Normal: sum of weight properties
         
-        console.log(`[gather.js]: 🎲 Item Selection - Total items: ${weightedItems.length}, Total weight: ${totalWeightForLogging}`);
+        logger.debug('GATHER', `Item Selection - Total items: ${weightedItems.length}, Total weight: ${totalWeightForLogging}`);
         
         // Log weight distribution by rarity for debugging
         const rarityWeights = {};
@@ -965,7 +965,7 @@ module.exports = {
           rarityWeights[rarity].totalWeight += itemWeight;
         });
         
-        console.log(`[gather.js]: 📊 Weight distribution by rarity:`, Object.keys(rarityWeights)
+        logger.debug('GATHER', `Weight distribution by rarity: ${Object.keys(rarityWeights)
           .sort((a, b) => b - a)
           .map(r => {
             const probability = ((rarityWeights[r].totalWeight / totalWeightForLogging) * 100).toFixed(1);
@@ -998,7 +998,7 @@ module.exports = {
         }
         
         const isFortuneTellerBoost = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller';
-        console.log(`[gather.js]: 🎯 ${isFortuneTellerBoost ? 'Fortune Teller' : 'Normal'} Weighted Selection - Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
+        logger.debug('GATHER', `${isFortuneTellerBoost ? 'Fortune Teller' : 'Normal'} Weighted Selection - Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
         
         // Log Scholar boost item source confirmation
         if (scholarTargetVillage) {
