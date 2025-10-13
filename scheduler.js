@@ -1768,7 +1768,7 @@ async function checkAndPostMissedQuests(client) {
     });
     
     if (!unpostedQuests.length) {
-      console.log(`[scheduler.js]: ℹ️ No missed quests to post during startup`);
+      logger.debug('SCHEDULER', 'No missed quests to post during startup');
       return 0;
     }
     
@@ -1792,7 +1792,7 @@ async function checkAndPostMissedQuests(client) {
     }
     
     if (!processedQuests.length) {
-      console.log(`[scheduler.js]: ℹ️ No missed quests to post during startup`);
+      logger.debug('SCHEDULER', 'No missed quests to post during startup');
       return 0;
     }
     
