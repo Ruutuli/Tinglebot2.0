@@ -12,6 +12,7 @@ const Character = require('../models/CharacterModel');
 const ModCharacter = require('../models/ModCharacterModel');
 
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -236,7 +237,7 @@ const useHearts = async (characterId, hearts, context = {}) => {
     await updateCurrentHearts(characterId, newHearts);
 
     if (newHearts === 0) {
-      console.log(`[characterStatsModule.js]: 💀 Triggering KO for ${character.name}`);
+      logger.info('CHARACTER', `Triggering KO for ${character.name}`);
       await handleKO(characterId, context);
     }
 
@@ -294,7 +295,7 @@ const useStamina = async (characterId, stamina, context = {}) => {
 // Handles a KO state by setting the character's KO flag and current hearts to 0.
 const handleKO = async (characterId, context = {}) => {
   try {
-    console.log(`[characterStatsModule.js]: 💀 Handling KO for Character ID ${characterId}`);
+    logger.info('CHARACTER', `Handling KO for Character ID ${characterId}`);
     
     // First check if this is a mod character
     const modCharacter = await ModCharacter.findById(characterId);
@@ -317,7 +318,7 @@ const handleKO = async (characterId, context = {}) => {
     }
     
     await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
-    console.log(`[characterStatsModule.js]: ✅ Character ID ${characterId} is KO'd.`);
+    logger.success('CHARACTER', `Character ID ${characterId} is KO'd`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', context);
     console.error(`[characterStatsModule.js]: ❌ Error in handleKO: ${error.message}`);
