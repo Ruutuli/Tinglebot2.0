@@ -10,6 +10,7 @@ const { handleInteractionError } = require("../../utils/globalErrorHandler.js");
 const { trackDatabaseError, isDatabaseError } = require("../../utils/globalErrorHandler.js");
 const { handleTokenError } = require('../../utils/tokenUtils.js');
 const { enforceJail } = require('../../utils/jailCheck');
+const logger = require('../../utils/logger');
 const { v4: uuidv4 } = require("uuid");
 const {
  fetchCharacterByNameAndUserId,
@@ -1081,9 +1082,7 @@ async function handleShopBuy(interaction) {
       return;
     }
 
-    console.log(
-      `[shops]: 🔄 Initiating purchase for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`
-    );
+    logger.debug('ECONOMY', `Initiating purchase for ${characterName}: ${itemName} x${quantity}`);
 
     // ------------------- Character Ownership Validation -------------------
     const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
@@ -1236,9 +1235,7 @@ async function handleShopBuy(interaction) {
      return interaction.editReply("❌ Item details not found.");
     }
 
-    console.log(
-     `[shops]: Item details found. Buy price: ${itemDetails.buyPrice}, Sell price: ${itemDetails.sellPrice}, Category: ${itemDetails.category}, Crafting jobs: ${itemDetails.craftingJobs}`
-    );
+    logger.debug('ECONOMY', `Item details - Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice}, Category: ${itemDetails.category}`);
 
     if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {
       console.error(`[shops]: ❌ Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
@@ -1317,15 +1314,10 @@ async function handleShopBuy(interaction) {
     }
 
     // ------------------- Process Purchase -------------------
-    console.log(`[shops]: 💰 Token balance for ${interaction.user.tag}:`);
-    console.log(`[shops]: 📊 Previous balance: 🪙 ${currentTokens}`);
     if (hasBirthdayDiscount) {
-      console.log(`[shops]: 🎂 Birthday discount applied: ${discountPercentage}%`);
-      console.log(`[shops]: 💰 Original price: 🪙 ${originalPrice}`);
-      console.log(`[shops]: 💰 Discount savings: 🪙 ${savedAmount}`);
+      logger.debug('ECONOMY', `${interaction.user.tag} purchase with ${discountPercentage}% birthday discount: ${originalPrice} → ${totalPrice} (saved ${savedAmount})`);
     }
-    console.log(`[shops]: ➖ Spent: 🪙 ${totalPrice}`);
-    console.log(`[shops]: 📊 New balance: 🪙 ${currentTokens - totalPrice}`);
+    logger.debug('ECONOMY', `${interaction.user.tag} tokens: ${currentTokens} - ${totalPrice} = ${currentTokens - totalPrice}`);
 
     // Update inventory
     await addItemInventoryDatabase(
@@ -1335,7 +1327,7 @@ async function handleShopBuy(interaction) {
       interaction,
       'Purchase from shop'
     );
-    console.log(`[economy.js]: 📦 Updated inventory for characterId: ${character._id}, item: ${itemName}, quantity: +${quantity}`);
+    logger.debug('ECONOMY', `Updated inventory for ${character.name}: ${itemName} +${quantity}`);
 
     // Update shop stock
     if (itemName.includes('+')) {
