@@ -3056,8 +3056,6 @@ async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
           value: quest.questId // Still use just the quest ID as the value
       }));
       
-      console.log(`[autocompleteHandler.js]: Generated choices:`, choices.map(c => ({ name: c.name, value: c.value })));
-      
       // Respond with filtered quest choices
       await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
