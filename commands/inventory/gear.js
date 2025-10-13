@@ -28,6 +28,7 @@ const { createCharacterGearEmbed } = require('../../embeds/embeds.js');
 // Import character stats modules for updating defense and attack.
 const { updateCharacterDefense, updateCharacterAttack } = require('../../modules/characterStatsModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils.js');
+const logger = require('../../utils/logger');
 
 
 // ------------------- Command Definition -------------------
@@ -79,20 +80,20 @@ module.exports = {
       const status = interaction.options.getString('status');
 
       // Debug: Log what we received from Discord
-      console.log(`[gear.js]: Raw interaction data - itemNameRaw: "${itemNameRaw}"`);
-      console.log(`[gear.js]: itemNameRaw type: ${typeof itemNameRaw}`);
-      console.log(`[gear.js]: itemNameRaw length: ${itemNameRaw ? itemNameRaw.length : 0}`);
-      console.log(`[gear.js]: itemNameRaw char codes: ${itemNameRaw ? Array.from(itemNameRaw).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
+      logger.debug('GEAR', `Raw interaction data - itemNameRaw: "${itemNameRaw}"`);
+      logger.debug('GEAR', `itemNameRaw type: ${typeof itemNameRaw}`);
+      logger.debug('GEAR', `itemNameRaw length: ${itemNameRaw ? itemNameRaw.length : 0}`);
+      logger.debug('GEAR', `itemNameRaw char codes: ${itemNameRaw ? Array.from(itemNameRaw).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
 
       // ------------------- Clean Item Name from Copy-Paste -------------------
       // Remove quantity information from item names if users copy-paste autocomplete text
       const itemName = itemNameRaw ? itemNameRaw.replace(/\s*\(Qty:\s*\d+\)/i, '').trim() : null;
 
-      console.log(`[gear.js]: After processing - itemName: "${itemName}"`);
-      console.log(`[gear.js]: itemName type: ${typeof itemName}`);
-      console.log(`[gear.js]: itemName length: ${itemName ? itemName.length : 0}`);
-      console.log(`[gear.js]: itemName char codes: ${itemName ? Array.from(itemName).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
-      console.log(`[gear.js]: itemName includes '+': ${itemName ? itemName.includes('+') : 'null'}`);
+      logger.debug('GEAR', `After processing - itemName: "${itemName}"`);
+      logger.debug('GEAR', `itemName type: ${typeof itemName}`);
+      logger.debug('GEAR', `itemName length: ${itemName ? itemName.length : 0}`);
+      logger.debug('GEAR', `itemName char codes: ${itemName ? Array.from(itemName).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
+      logger.debug('GEAR', `itemName includes '+': ${itemName ? itemName.includes('+') : 'null'}`);
 
       // Validate status
       if (status && status !== 'equip' && status !== 'unequip') {
@@ -253,23 +254,23 @@ module.exports = {
 
       // ------------------- Validate Item in Inventory -------------------
       // Debug: Log the itemName at this point
-      console.log(`[gear.js]: About to validate inventory - itemName: "${itemName}"`);
-      console.log(`[gear.js]: itemName includes '+': ${itemName ? itemName.includes('+') : 'null'}`);
-      console.log(`[gear.js]: itemName type: ${typeof itemName}`);
-      console.log(`[gear.js]: itemName length: ${itemName ? itemName.length : 0}`);
-      console.log(`[gear.js]: itemName char codes: ${itemName ? Array.from(itemName).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
+      logger.debug('GEAR', `About to validate inventory - itemName: "${itemName}"`);
+      logger.debug('GEAR', `itemName includes '+': ${itemName ? itemName.includes('+') : 'null'}`);
+      logger.debug('GEAR', `itemName type: ${typeof itemName}`);
+      logger.debug('GEAR', `itemName length: ${itemName ? itemName.length : 0}`);
+      logger.debug('GEAR', `itemName char codes: ${itemName ? Array.from(itemName).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
       
       // Retrieve character inventory and ensure the item exists.
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       let inventoryItems;
       if (itemName.includes('+')) {
-        console.log(`[gear.js]: Using exact match for itemName with +: "${itemName}"`);
+        logger.debug('INVENTORY', `Using exact match for itemName with +: "${itemName}"`);
         inventoryItems = await inventoryCollection.find({ 
           characterId: character._id, 
           itemName: itemName
         }).toArray();
       } else {
-        console.log(`[gear.js]: Using regex match for itemName without +: "${itemName}"`);
+        logger.debug('INVENTORY', `Using regex match for itemName without +: "${itemName}"`);
         inventoryItems = await inventoryCollection.find({ 
           characterId: character._id, 
           itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
@@ -310,20 +311,20 @@ module.exports = {
 
       // ------------------- Validate Equipment Type and Slot -------------------
       // Check if the item can be equipped in the selected slot.
-      console.log(`[gear.js]: Validating item - ${itemName}, Category: ${JSON.stringify(itemDetail.category)}, Type: ${JSON.stringify(itemDetail.type)}, Slot: ${type}`);
+      logger.debug('VALIDATION', `Validating item - ${itemName}, Category: ${JSON.stringify(itemDetail.category)}, Type: ${JSON.stringify(itemDetail.type)}, Slot: ${type}`);
 
       const categories = Array.isArray(itemDetail.category) ? itemDetail.category.map(c => c.toLowerCase()) : [];
       const types = Array.isArray(itemDetail.type) ? itemDetail.type.map(t => t.toLowerCase()) : [];
 
       if (['head', 'chest', 'legs'].includes(type)) {
         if (!categories.includes('armor') || !types.includes(type)) {
-          console.log(`[gear.js]: Item mismatch - Expected Armor with ${type}, got: Category: ${categories}, Type: ${types}`);
+          logger.debug('VALIDATION', `Item mismatch - Expected Armor with ${type}, got: Category: ${categories}, Type: ${types}`);
           await interaction.editReply({ content: `❌ **${itemName} is an ${types.join(', ') || 'unknown'} item and cannot be equipped to the ${type} slot!**`, flags: [MessageFlags.Ephemeral] });
           return;
         }
       } else if (type === 'weapon') {
         if (!categories.includes('weapon')) {
-          console.log(`[gear.js]: Item mismatch - Expected Weapon, got: ${categories}`);
+          logger.debug('VALIDATION', `Item mismatch - Expected Weapon, got: ${categories}`);
           await interaction.editReply({ content: `❌ **${itemName} is not a weapon and cannot be equipped to the weapon slot.**`, flags: [MessageFlags.Ephemeral] });
           return;
         }
@@ -333,12 +334,12 @@ module.exports = {
         const isShield = categories.includes('shield') || subtypes.includes('shield');
       
         if (!isShield) {
-          console.log(`[gear.js]: Item mismatch - Expected Shield, got Category: ${categories}, Subtype: ${subtypes}`);
+          logger.debug('VALIDATION', `Item mismatch - Expected Shield, got Category: ${categories}, Subtype: ${subtypes}`);
           await interaction.editReply({ content: `❌ **${itemName} is not recognized as a shield and cannot be equipped to the shield slot.**`, flags: [MessageFlags.Ephemeral] });
           return;
         }      
       } else {
-        console.log(`[gear.js]: Invalid slot type detected - ${type}`);
+        logger.debug('VALIDATION', `Invalid slot type detected - ${type}`);
         await interaction.editReply({ content: `❌ **Invalid slot type selected for equipping ${itemName}.**`, flags: [MessageFlags.Ephemeral] });
         return;
       }
@@ -373,21 +374,21 @@ module.exports = {
       if (['head', 'chest', 'legs'].includes(type)) {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
         const updatedGearArmor = { ...character.gearArmor, [type]: { name: itemName, stats: { modifierHearts } } };
-        console.log(`[gear.js]: Updating gearArmor - Slot: ${type}, Item: ${itemName}`);
+        logger.debug('CHARACTER', `Updating gearArmor - Slot: ${type}, Item: ${itemName}`);
         await updateCharacterById(character._id, { gearArmor: updatedGearArmor });
       } else if (type === 'weapon') {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        console.log(`[gear.js]: Updating gearWeapon - Item: ${itemName}`);
+        logger.debug('CHARACTER', `Updating gearWeapon - Item: ${itemName}`);
         await updateCharacterById(character._id, { gearWeapon: { name: itemName, stats: { modifierHearts }, type: itemDetail.type } });
       } else if (type === 'shield') {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        console.log(`[gear.js]: Updating gearShield - Item: ${itemName}`);
+        logger.debug('CHARACTER', `Updating gearShield - Item: ${itemName}`);
         await updateCharacterById(character._id, { gearShield: { name: itemName, stats: { modifierHearts }, subtype: itemDetail.subtype } });
       }
 
       // ------------------- Recalculate Character Stats -------------------
       // Update defense and attack values after equipping the gear.
-      console.log(`[gear.js]: Recalculating stats for character: ${character.name}`);
+      logger.debug('CHARACTER', `Recalculating stats for character: ${character.name}`);
       await updateCharacterDefense(character._id);
       await updateCharacterAttack(character._id);
 
@@ -425,7 +426,7 @@ module.exports = {
       };
 
       // ------------------- Create and Send Gear Embed -------------------
-      console.log(`[gear.js]: Generating gear embed for ${character.name}`);
+      logger.debug('CHARACTER', `Generating gear embed for ${character.name}`);
       const gearEmbed = createCharacterGearEmbed(updatedCharacter, updatedGearMap, type);
       await interaction.editReply({ content: `✅ **${itemName} has been equipped to the ${type} slot for ${characterName}.** ${unequippedMessage}`, embeds: [gearEmbed], flags: [MessageFlags.Ephemeral] });
     } catch (error) {
