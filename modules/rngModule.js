@@ -11,6 +11,7 @@
 const Monster = require('../models/MonsterModel');
 
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 // ============================================================================
 // Modules
 // ------------------- Importing custom modules -------------------
@@ -147,7 +148,7 @@ function createWeightedItemList(items, fv, job) {
 
   // Logging for honey boost (reduced verbosity)
   if (job && job.replace(/\s+/g, '').toLowerCase() === 'beekeeper' && honeyBoostLog.length > 0) {
-    console.log(`[rngModule.js]: 🍯 Beekeeper honey boost applied - ${honeyBoostLog.length} items boosted`);
+    logger.info('GATHER', `Beekeeper honey boost applied - ${honeyBoostLog.length} items boosted`);
   }
 
   return weightedList;

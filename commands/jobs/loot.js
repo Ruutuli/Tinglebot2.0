@@ -119,10 +119,10 @@ async function updateCharacterLootTimestamp(character, shouldClearBoost = true) 
   
   // ------------------- Clear Boost After Use -------------------
   if (character.boostedBy && shouldClearBoost) {
-    logger.debug('BOOST', `Clearing boost for ${character.name}`);
+    logger.info('BOOST', `Clearing boost for ${character.name}`);
     character.boostedBy = null;
   } else if (character.boostedBy && !shouldClearBoost) {
-    logger.debug('BOOST', `Boost preserved for ${character.name}`);
+    logger.info('BOOST', `Boost preserved for ${character.name}`);
   }
   
   await character.save();
@@ -144,7 +144,7 @@ async function validateCharacterForLoot(interaction, characterName, userId) {
     character = await fetchModCharacterByNameAndUserId(characterName, userId);
     
     if (character && character.isModCharacter) {
-      logger.debug('CHARACTER', `Mod character ${character.name} detected`);
+      logger.info('CHARACTER', `Mod character ${character.name} detected`);
     } else if (!character) {
       await interaction.editReply({
         embeds: [{
@@ -305,7 +305,7 @@ module.exports = {
 
        // Determine job based on jobVoucher or default job
     let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
-    logger.debug('LOOT', `${character.name} using job: ${job}${character.jobVoucher ? ' (voucher)' : ''}`);
+    logger.info('LOOT', `${character.name} using job: ${job}${character.jobVoucher ? ' (voucher)' : ''}`);
 
     // Validate job BEFORE any other checks
     if (!await validateJobForLoot(interaction, character, job)) {
@@ -375,12 +375,12 @@ module.exports = {
        blightRainMessage =
          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
          `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
-       logger.debug('BLIGHT', `Mod character ${character.name} immune to blight`);
+       logger.info('BLIGHT', `Mod character ${character.name} immune to blight`);
      } else if (character.blighted) {
        blightRainMessage =
          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
          `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-       logger.debug('BLIGHT', `${character.name} already blighted`);
+       logger.info('BLIGHT', `${character.name} already blighted`);
      } else {
        // Check for resistance buffs
        const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
@@ -883,7 +883,7 @@ async function handleBloodMoonRerolls(
 
 // ------------------- Normal Encounter Logic -------------------
 async function handleNormalEncounter(interaction, currentVillage, job, character, bloodMoonActive) {
-  logger.debug('LOOT', `handleNormalEncounter called for ${character.name} in ${currentVillage} with job ${job}`);
+  logger.info('LOOT', `handleNormalEncounter called for ${character.name} in ${currentVillage} with job ${job}`);
   
   // Check for blight stage 3 effect (no monsters)
   if (character.blightEffects?.noMonsters) {
@@ -895,7 +895,7 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
   }
 
   const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
-  logger.debug('LOOT', `Found ${monstersByCriteria.length} monsters for ${currentVillage} with job ${job}`);
+  logger.info('LOOT', `Found ${monstersByCriteria.length} monsters for ${currentVillage} with job ${job}`);
   
   if (monstersByCriteria.length === 0) {
     console.log(`[loot.js]: 🌅 No monsters found for criteria - sending no encounter embed`);
@@ -906,7 +906,7 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
   }
 
   const encounterResult = await getMonsterEncounterFromList(monstersByCriteria);
-  logger.debug('LOOT', `Encounter result: ${encounterResult.encounter}`);
+  logger.info('LOOT', `Encounter result: ${encounterResult.encounter}`);
   
   if (encounterResult.encounter === "No Encounter") {
     console.log(`[loot.js]: 🌅 Encounter roll resulted in no encounter - sending no encounter embed`);
@@ -921,7 +921,7 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
       Math.floor(Math.random() * encounterResult.monsters.length)
     ];
   
-  logger.debug('LOOT', `Selected monster from encounter: ${encounteredMonster.name}`);
+  logger.info('LOOT', `Selected monster from encounter: ${encounteredMonster.name}`);
 
   // Return the final encountered monster
   return encounteredMonster;
@@ -966,7 +966,7 @@ async function processLootingLogic(
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
   const rollDisplay = originalRoll && blightAdjustedRoll > originalRoll ? `${originalRoll} → ${blightAdjustedRoll}` : `${originalRoll}`;
-  logger.debug('LOOT', `${character.name} vs ${encounteredMonster.name} | Roll: ${rollDisplay}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
+  logger.info('LOOT', `${character.name} vs ${encounteredMonster.name} | Roll: ${rollDisplay}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
 
   const outcome = await getEncounterOutcome(
    character,

@@ -1946,7 +1946,7 @@ async function rollForBlightProgression(interaction, characterName) {
     character.lastRollDate = new Date(); // Use UTC time consistently
     
     // Debug logging
-    logger.debug('BLIGHT', `${characterName} rolling for blight - Current time: ${now.toISOString()}, Roll boundary: ${rollBoundary.toISOString()}, Next blight call: ${nextCallStart.toISOString()}`);
+    logger.info('BLIGHT', `${characterName} rolling for blight - Current time: ${now.toISOString()}, Roll boundary: ${rollBoundary.toISOString()}, Next blight call: ${nextCallStart.toISOString()}`);
     
     const roll = Math.floor(Math.random() * 1000) + 1;
     let stage;
@@ -2005,7 +2005,7 @@ async function rollForBlightProgression(interaction, characterName) {
         });
       }
       
-      logger.debug('BLIGHT', `Creating blight roll history for ${character.name} - Roll: ${roll}, Previous Stage: ${previousStage}, New Stage: ${stage}`);
+      logger.info('BLIGHT', `Creating blight roll history for ${character.name} - Roll: ${roll}, Previous Stage: ${previousStage}, New Stage: ${stage}`);
       const historyEntry = await BlightRollHistory.create({
         characterId: character._id,
         characterName: character.name,
@@ -2016,7 +2016,7 @@ async function rollForBlightProgression(interaction, characterName) {
         timestamp: new Date(),
         notes: ''
       });
-      logger.debug('BLIGHT', `Successfully created blight roll history entry: ${historyEntry._id}`);
+      logger.success('BLIGHT', `Successfully created blight roll history entry: ${historyEntry._id}`);
     } catch (error) {
       handleError(error, 'blightHandler.js', {
         operation: 'createBlightRollHistory',
@@ -2444,7 +2444,7 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
 // Sends comprehensive reminders for death deadlines and expiring healing tasks.
 async function sendBlightReminders(client) {
   try {
-    logger.debug('BLIGHT', 'Starting comprehensive blight reminder check...');
+    logger.info('BLIGHT', 'Starting comprehensive blight reminder check...');
     
     const now = new Date();
     let deathWarnings = 0;
@@ -2458,7 +2458,7 @@ async function sendBlightReminders(client) {
       deathDeadline: { $exists: true, $ne: null }
     });
     
-    logger.debug('BLIGHT', `Found ${stage5Characters.length} Stage 5 characters with death deadlines`);
+    logger.info('BLIGHT', `Found ${stage5Characters.length} Stage 5 characters with death deadlines`);
     
     for (const character of stage5Characters) {
       try {
@@ -2690,7 +2690,7 @@ async function sendBlightReminders(client) {
       }
     }
     
-    logger.debug('BLIGHT', `Reminder check complete - Death: ${deathWarnings}, Healing: ${submissionWarnings}`);
+    logger.info('BLIGHT', `Reminder check complete - Death: ${deathWarnings}, Healing: ${submissionWarnings}`);
     return { 
       deathWarnings, 
       healingWarnings: submissionWarnings 
@@ -2968,7 +2968,7 @@ async function cleanupExpiredBlightRequests(client) {
 
 async function checkMissedRolls(client) {
   try {
-    logger.debug('BLIGHT', 'Starting checkMissedRolls...');
+    logger.info('BLIGHT', 'Starting checkMissedRolls...');
     
     // ------------------- Validate Discord Client -------------------
     if (!client || !client.channels || !client.token) {
@@ -2990,7 +2990,7 @@ async function checkMissedRolls(client) {
 
     // ------------------- Fetch All Blighted Characters -------------------
     const blightedCharacters = await Character.find({ blighted: true });
-    logger.debug('BLIGHT', `Found ${blightedCharacters.length} blighted characters to check`);
+    logger.info('BLIGHT', `Found ${blightedCharacters.length} blighted characters to check`);
 
     const blightEmoji = '<:blight_eye:805576955725611058>';
     const stageDescriptions = {
@@ -3015,7 +3015,7 @@ async function checkMissedRolls(client) {
     // Check for expired submissions
     const blightSubmissions = await loadBlightSubmissions();
     const now = new Date();
-    logger.debug('BLIGHT', `Checking ${Object.keys(blightSubmissions).length} blight submissions for expiration`);
+    logger.info('BLIGHT', `Checking ${Object.keys(blightSubmissions).length} blight submissions for expiration`);
     
     for (const [id, submission] of Object.entries(blightSubmissions)) {
       if (submission.status === 'pending' && submission.timestamp && new Date(submission.timestamp) < now) {
@@ -3073,7 +3073,7 @@ async function checkMissedRolls(client) {
     for (const character of blightedCharacters) {
       const lastRollDate = character.lastRollDate || new Date(0);
       const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
-      logger.debug('BLIGHT', `Checking ${character.name} - Last roll: ${lastRollDate.toISOString()}, Time since: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
+      logger.info('BLIGHT', `Checking ${character.name} - Last roll: ${lastRollDate.toISOString()}, Time since: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
 
       // ---- SKIP missed roll progression if newly blighted today or after last blight call ----
       // Calculate current day's blight call (8:00 PM EST today) in UTC
@@ -3370,7 +3370,7 @@ async function checkMissedRolls(client) {
       }
     }
     
-    logger.debug('BLIGHT', 'Completed checkMissedRolls successfully');
+    logger.info('BLIGHT', 'Completed checkMissedRolls successfully');
   } catch (error) {
     handleError(error, 'blightHandler.js', {
       operation: 'checkMissedRolls',

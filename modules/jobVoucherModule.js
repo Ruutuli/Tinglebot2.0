@@ -2,6 +2,7 @@
 
 // Import necessary modules
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
 const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../utils/googleSheetsUtils');
@@ -328,7 +329,7 @@ async function deactivateJobVoucher(characterId) {
                 jobVoucherJob: null 
             });
         }
-        console.log(`[Job Voucher Module]: 🎫 Job voucher deactivated for ${character.name}`);
+        logger.success('ECONOMY', `Job voucher deactivated for ${character.name}`);
         return {
             success: true,
             message: `🎫 **Job voucher successfully deactivated.**`

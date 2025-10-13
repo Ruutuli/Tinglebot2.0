@@ -112,7 +112,7 @@ async function sendLevelUpNotification(message, newLevel, xpGained) {
       const sheikahSlateChannel = await message.client.channels.fetch(sheikahSlateChannelId);
       if (sheikahSlateChannel) {
         await sheikahSlateChannel.send({ embeds: [embed] });
-        logger.debug('LEVEL', `Level up announcement sent for ${message.author.tag}`);
+        logger.info('LEVEL', `Level up announcement sent for ${message.author.tag}`);
       } else {
         logger.warn('LEVEL', `Sheikah Slate channel not found`);
       }

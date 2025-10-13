@@ -1370,7 +1370,7 @@ const createMonsterEncounterEmbed = async (
  if (boostInfo) {
    console.log(`[embeds.js]: 🎯 createMonsterEncounterEmbed - Boost info retrieved: ${boostInfo.boosterJob} ${boostInfo.boosterName} - ${boostInfo.boostName} for ${boostInfo.category}`);
  } else {
-   logger.debug('LOOT', `No boost info found for character ${character.name}`);
+   logger.info('LOOT', `No boost info found for character ${character.name}`);
  }
 
  // Modify boost flavor text for Entertainer based on damage taken

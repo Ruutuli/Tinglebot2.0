@@ -855,12 +855,12 @@ module.exports = {
              const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
              const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
              
-             logger.debug('BOOST', `Scholar boost detected for ${character.name}`);
+             logger.info('BOOST', `Scholar boost detected for ${character.name}`);
              
              if (boostData && boostData.targetVillage) {
                scholarTargetVillage = boostData.targetVillage;
                gatheringRegion = scholarTargetVillage;
-               logger.debug('BOOST', `Target village: ${scholarTargetVillage}`);
+               logger.info('BOOST', `Target village: ${scholarTargetVillage}`);
              } else {
                logger.warn('BOOST', 'No targetVillage in boostData');
              }
@@ -894,7 +894,7 @@ module.exports = {
         
         // Debug logging for Scholar boost
         if (scholarTargetVillage) {
-          logger.debug('GATHER', `Scholar boost: ${scholarTargetVillage} (${availableItems.length} items)`);
+          logger.info('GATHER', `Scholar boost: ${scholarTargetVillage} (${availableItems.length} items)`);
         }
         
         if (availableItems.length === 0) {
@@ -928,15 +928,15 @@ module.exports = {
         }
         
         let weightedItems;
-        logger.debug('BOOST', `Boost check: boostedBy="${character.boostedBy}", booster=${boosterCharacter?.name || 'null'}`);
+        logger.info('BOOST', `Boost check: boostedBy="${character.boostedBy}", booster=${boosterCharacter?.name || 'null'}`);
         
         if (character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller') {
           // Fortune Teller boost already creates properly weighted items - use them directly
-          logger.debug('BOOST', `Fortune Teller boost: ${boostedAvailableItems.length} items`);
+          logger.info('BOOST', `Fortune Teller boost: ${boostedAvailableItems.length} items`);
           weightedItems = boostedAvailableItems;
         } else {
           // Normal weighting for other boosts or no boost
-          logger.debug('GATHER', `Creating weighted list: ${boostedAvailableItems.length} items`);
+          logger.info('GATHER', `Creating weighted list: ${boostedAvailableItems.length} items`);
           weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
         }
         
@@ -947,7 +947,7 @@ module.exports = {
           ? weightedItems.length  // Fortune Teller: each item in the array represents its weight
           : weightedItems.reduce((sum, item) => sum + (item.weight || 1), 0); // Normal: sum of weight properties
         
-        logger.debug('GATHER', `Item Selection - Total items: ${weightedItems.length}, Total weight: ${totalWeightForLogging}`);
+        logger.info('GATHER', `Item Selection - Total items: ${weightedItems.length}, Total weight: ${totalWeightForLogging}`);
         
         // Log weight distribution by rarity for debugging
         const rarityWeights = {};
@@ -965,7 +965,7 @@ module.exports = {
           rarityWeights[rarity].totalWeight += itemWeight;
         });
         
-        logger.debug('GATHER', `Weight distribution by rarity: ${Object.keys(rarityWeights)
+        logger.info('GATHER', `Weight distribution by rarity: ${Object.keys(rarityWeights)
           .sort((a, b) => b - a)
           .map(r => {
             const probability = ((rarityWeights[r].totalWeight / totalWeightForLogging) * 100).toFixed(1);
@@ -998,7 +998,7 @@ module.exports = {
         }
         
         const isFortuneTellerBoost = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller';
-        logger.debug('GATHER', `${isFortuneTellerBoost ? 'Fortune Teller' : 'Normal'} Weighted Selection - Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
+        logger.info('GATHER', `${isFortuneTellerBoost ? 'Fortune Teller' : 'Normal'} Weighted Selection - Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
         
         // Log Scholar boost item source confirmation
         if (scholarTargetVillage) {

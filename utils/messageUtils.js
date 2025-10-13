@@ -24,7 +24,7 @@ async function trackLastMessage(message) {
       { new: true, upsert: true }
     );
 
-    logger.debug('SYSTEM', `Updated last message for ${discordId}`);
+    logger.info('SYSTEM', `Updated last message for ${discordId}`);
   } catch (err) {
     handleError(err, 'messageUtils.js');
     logger.error('SYSTEM', `Error tracking message for ${message.author.id}`);
@@ -50,15 +50,15 @@ async function sendUserDM(userId, message, client) {
     // Handle specific Discord API errors
     if (error.code === 50007) {
       // Cannot send messages to this user (blocked, DMs disabled, etc.)
-      logger.debug('SYSTEM', `Cannot DM user ${userId}: blocked/disabled`);
+      logger.info('SYSTEM', `Cannot DM user ${userId}: blocked/disabled`);
       return false;
     } else if (error.code === 10013) {
       // Unknown user
-      logger.debug('SYSTEM', `Cannot DM user ${userId}: not found`);
+      logger.info('SYSTEM', `Cannot DM user ${userId}: not found`);
       return false;
     } else if (error.code === 50001) {
       // Missing access
-      logger.debug('SYSTEM', `Cannot DM user ${userId}: missing access`);
+      logger.info('SYSTEM', `Cannot DM user ${userId}: missing access`);
       return false;
     } else {
       // Other errors - log with handleError for monitoring

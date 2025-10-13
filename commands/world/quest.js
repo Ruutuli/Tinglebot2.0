@@ -342,7 +342,7 @@ module.exports = {
  // ============================================================================
  async performEmbedUpdate(quest, client, updateSource) {
   try {
-   logger.debug('QUEST', `Updating embed for quest ${quest.questID || quest.questId} from ${updateSource}`);
+   logger.info('QUEST', `Updating embed for quest ${quest.questID || quest.questId} from ${updateSource}`);
 
    // Validate client is available
    if (!client) {
@@ -378,7 +378,7 @@ module.exports = {
    // Update the message
    await questMessage.edit({ embeds: [updatedEmbed] });
 
-   logger.debug('QUEST', `Successfully updated quest embed for ${quest.questID || quest.questId}`);
+   logger.success('QUEST', `Successfully updated quest embed for ${quest.questID || quest.questId}`);
    return { success: true, reason: 'Updated successfully' };
 
   } catch (error) {
