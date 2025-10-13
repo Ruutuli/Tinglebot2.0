@@ -1,4 +1,5 @@
 const { handleError } = require("../utils/globalErrorHandler");
+const logger = require("../utils/logger");
 const TempData = require("../models/TempDataModel");
 const mongoose = require("mongoose");
 const fs = require("fs");
@@ -1035,9 +1036,7 @@ async function cleanupExpiredHealingRequests() {
    type: "healing",
    expiresAt: { $lt: new Date() },
   });
-  console.log(
-   `[storage.js]: Cleaned up ${result.deletedCount} expired healing requests`
-  );
+  logger.success('CLEANUP', `Cleaned up ${result.deletedCount} expired healing requests`);
  } catch (error) {
   handleError(error, "storage.js");
   console.error(

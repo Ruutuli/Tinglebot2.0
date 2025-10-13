@@ -650,7 +650,7 @@ const MOD_BIRTHDAY_ROLE_ID = '1095909468941864990';
 const BIRTHDAY_ANNOUNCEMENT_CHANNEL_ID = '606004354419392513';
 
 async function handleBirthdayRoleAssignment(client) {
-  console.log(`[scheduler.js]: 🎂 Starting birthday role assignment check...`);
+  logger.info('SCHEDULER', 'Starting birthday role assignment check...');
   
   try {
     const now = new Date();
@@ -659,7 +659,7 @@ async function handleBirthdayRoleAssignment(client) {
     const month = estNow.getMonth() + 1;
     const day = estNow.getDate();
     
-    console.log(`[scheduler.js]: 📅 Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
+    logger.info('SCHEDULER', `Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
     
     // Get all users with birthdays today
     const User = require('./models/UserModel');
@@ -669,7 +669,7 @@ async function handleBirthdayRoleAssignment(client) {
     });
     
     if (usersWithBirthdays.length === 0) {
-      console.log(`[scheduler.js]: ℹ️ No users have birthdays today`);
+      logger.info('SCHEDULER', 'No users have birthdays today');
       return;
     }
     
@@ -882,7 +882,7 @@ async function handleBirthdayRoleRemoval(client) {
 }
 
 async function executeBirthdayAnnouncements(client) {
- console.log(`[scheduler.js]: 🎂 Starting birthday announcement check...`);
+ logger.info('SCHEDULER', 'Starting birthday announcement check...');
  
  const now = new Date();
  const estNow = new Date(
@@ -891,7 +891,7 @@ async function executeBirthdayAnnouncements(client) {
  const today = estNow.toISOString().slice(5, 10);
  const guildIds = [process.env.GUILD_ID];
  
- console.log(`[scheduler.js]: 📅 Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
+ logger.info('SCHEDULER', `Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
 
  const guildChannelMap = {
   [process.env.GUILD_ID]:
@@ -914,7 +914,7 @@ async function executeBirthdayAnnouncements(client) {
 
  for (const guildId of guildIds) {
   const birthdayChannelId = guildChannelMap[guildId];
-  console.log(`[scheduler.js]: 🏰 Guild ID: ${guildId}, Birthday Channel ID: ${birthdayChannelId}`);
+  logger.info('SCHEDULER', `Guild ID: ${guildId}, Birthday Channel ID: ${birthdayChannelId}`);
   
   if (!birthdayChannelId) {
    console.log(`[scheduler.js]: ❌ No birthday channel ID found for guild ${guildId}`);
@@ -933,24 +933,24 @@ async function executeBirthdayAnnouncements(client) {
    continue;
   }
 
-  console.log(`[scheduler.js]: ✅ Found birthday channel: ${announcementChannel.name} (${birthdayChannelId})`);
+  logger.success('SCHEDULER', `Found birthday channel: ${announcementChannel.name} (${birthdayChannelId})`);
   
   const characters = await Character.find({ birthday: today });
-  console.log(`[scheduler.js]: 👥 Found ${characters.length} characters with birthday on ${today}`);
+  logger.info('SCHEDULER', `Found ${characters.length} characters with birthday on ${today}`);
   
   // Also check for mod characters with birthdays
   const ModCharacter = require('./models/ModCharacterModel');
   const modCharacters = await ModCharacter.find({ birthday: today });
-  console.log(`[scheduler.js]: 👑 Found ${modCharacters.length} mod characters with birthday on ${today}`);
+  logger.info('SCHEDULER', `Found ${modCharacters.length} mod characters with birthday on ${today}`);
   
   if (characters.length > 0) {
    console.log(`[scheduler.js]: 🎂 Characters with birthdays today:`, characters.map(c => `${c.name} (${c.birthday})`));
   } else {
    // Debug: Check if there are any characters with birthdays at all
    const allCharactersWithBirthdays = await Character.find({ birthday: { $exists: true, $ne: null } });
-   console.log(`[scheduler.js]: 🔍 Total characters with birthdays: ${allCharactersWithBirthdays.length}`);
+   logger.debug('SCHEDULER', `Total characters with birthdays: ${allCharactersWithBirthdays.length}`);
    if (allCharactersWithBirthdays.length > 0) {
-    console.log(`[scheduler.js]: 📅 Sample birthday formats:`, allCharactersWithBirthdays.slice(0, 5).map(c => `${c.name}: ${c.birthday}`));
+    logger.debug('SCHEDULER', `Sample birthday formats: ${allCharactersWithBirthdays.slice(0, 5).map(c => `${c.name}: ${c.birthday}`).join(', ')}`);
    }
   }
   
@@ -1313,9 +1313,7 @@ async function resetPetLastRollDates(client) {
    { $set: { lastRollDate: null } }
   );
   if (result.modifiedCount > 0) {
-   console.log(
-    `[scheduler.js]: 🐾 Reset lastRollDate for ${result.modifiedCount} pets`
-   );
+   logger.success('SCHEDULER', `Reset lastRollDate for ${result.modifiedCount} pets`);
   }
  } catch (error) {
   handleError(error, "scheduler.js");
@@ -1396,7 +1394,7 @@ function setupBlightScheduler(client) {
 async function setupBoostingScheduler(client) {
  createCronJob("0 0 * * *", "Boost Cleanup", async () => {
   try {
-   console.log("[scheduler.js]: 🧹 Starting boost cleanup");
+   logger.info('CLEANUP', 'Starting boost cleanup');
    
    // Clean up old file-based boosting requests
    const stats = cleanupExpiredBoostingRequests();
@@ -1430,7 +1428,7 @@ async function setupBoostingScheduler(client) {
  createCronJob("0 0 * * *", "Daily Boost Statistics", async () => {
   try {
    const stats = getBoostingStatistics();
-   console.log("[scheduler.js]: 📊 Daily boost statistics:", stats);
+   logger.info('CLEANUP', 'Daily boost statistics', stats);
   } catch (error) {
    handleError(error, "scheduler.js");
    console.error("[scheduler.js]: ❌ Error getting boost statistics:", error);
@@ -1440,7 +1438,7 @@ async function setupBoostingScheduler(client) {
  // Additional cleanup every 6 hours for TempData boosting requests
  createCronJob("0 */6 * * *", "TempData Boost Cleanup", async () => {
   try {
-   console.log("[scheduler.js]: 🧹 Starting TempData boost cleanup");
+   logger.info('CLEANUP', 'Starting TempData boost cleanup');
    const TempData = require('./models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
    console.log(`[scheduler.js]: ✅ TempData boost cleanup complete - Deleted: ${result.deletedCount || 0}`);
@@ -1509,9 +1507,9 @@ async function checkAndGenerateDailyQuests() {
 
 async function generateDailyQuestsAtMidnight() {
   try {
-    console.log('[scheduler.js]: 🌙 Midnight quest generation starting...');
+    logger.info('SCHEDULER', 'Midnight quest generation starting...');
     await generateDailyQuests();
-    console.log('[scheduler.js]: ✅ Midnight quest generation completed');
+    logger.success('SCHEDULER', 'Midnight quest generation completed');
   } catch (error) {
     handleError(error, 'scheduler.js', {
       commandName: 'generateDailyQuestsAtMidnight'
@@ -1538,7 +1536,7 @@ async function handleQuestExpirationAtMidnight(client = null) {
     });
     
     if (expiredQuests.length === 0) {
-      console.log('[scheduler.js]: ✅ No quests to expire from yesterday');
+      logger.info('SCHEDULER', 'No quests to expire from yesterday');
       return;
     }
     
@@ -2223,9 +2221,9 @@ function setupDailyTasks(client) {
    if (tomorrow.getDate() === 1) {
     console.log('[scheduler.js]: 🏆 Starting monthly quest reward distribution (last day of month)...');
     const result = await processMonthlyQuestRewards();
-    console.log(`[scheduler.js]: ✅ Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
+    logger.success('SCHEDULER', `Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
    } else {
-    console.log('[scheduler.js]: ℹ️ Not last day of month, skipping monthly quest reward distribution');
+    logger.info('SCHEDULER', 'Not last day of month, skipping monthly quest reward distribution');
    }
   } catch (error) {
    handleError(error, 'scheduler.js');

@@ -2826,7 +2826,7 @@ async function cleanupExpiredBlightRequests(client) {
       expiresAt: { $lt: new Date() }
     });
     
-    console.log(`[blightHandler]: 📋 Found ${expiredSubmissions.length} expired blight submissions`);
+    logger.info('BLIGHT', `Found ${expiredSubmissions.length} expired blight submissions`);
     
     let notifiedUsers = 0;
     let expiredCount = 0;
