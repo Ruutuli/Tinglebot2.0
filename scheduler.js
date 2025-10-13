@@ -1378,9 +1378,9 @@ function setupBlightScheduler(client) {
   "Send Blight Reminders",
   async () => {
     try {
-      console.log('[scheduler.js]: 📢 Running comprehensive blight reminder check');
+      logger.debug('BLIGHT', 'Running comprehensive blight reminder check');
       const result = await sendBlightReminders(client);
-      console.log(`[scheduler.js]: ✅ Blight reminder check complete - Death: ${result.deathWarnings}, Healing: ${result.healingWarnings}`);
+      logger.debug('BLIGHT', `Reminder check complete - Death: ${result.deathWarnings}, Healing: ${result.healingWarnings}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
       console.error('[scheduler.js]: ❌ Error during blight reminder check:', error);
@@ -1453,7 +1453,7 @@ async function setupBoostingScheduler(client) {
  // Hourly cleanup for boosting data to ensure expired boosts are removed quickly
  createCronJob("0 * * * *", "Hourly Boost Cleanup", async () => {
   try {
-   console.log("[scheduler.js]: 🧹 Starting hourly boost cleanup");
+   logger.debug('CLEANUP', 'Starting hourly boost cleanup');
    const TempData = require('./models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
    if (result.deletedCount > 0) {
@@ -1629,7 +1629,7 @@ async function checkQuestCompletions(client) {
 // ============================================================================
 async function checkVillageTracking(client) {
   try {
-    console.log('[scheduler.js]: 🏘️ Starting village tracking check...');
+    logger.debug('SCHEDULER', 'Starting village tracking check...');
     
     const Quest = require('./models/QuestModel');
     
@@ -1641,7 +1641,7 @@ async function checkVillageTracking(client) {
     });
     
     if (activeRPQuests.length === 0) {
-      console.log('[scheduler.js]: ✅ No active RP quests with village requirements to check');
+      logger.debug('SCHEDULER', 'No active RP quests with village requirements to check');
       return;
     }
     
@@ -1849,7 +1849,7 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     });
     
     if (!questsToPost.length) {
-      console.log(`[scheduler.js]: ℹ️ No quests scheduled for ${cronTime} on ${today}`);
+      logger.debug('SCHEDULER', `No quests scheduled for ${cronTime} on ${today}`);
       return 0;
     }
     
@@ -1951,7 +1951,7 @@ async function sendBloodMoonAnnouncementsToChannels(client, message) {
 // ------------------- Main Blood Moon Functions ------------------
 
 async function handleBloodMoonStart(client) {
-  console.log(`[scheduler.js]: 🌕 Starting Blood Moon start check at 8 PM EST`);
+  logger.debug('BLOODMOON', 'Starting Blood Moon start check at 8 PM EST');
 
   // Check if today is specifically the day BEFORE a Blood Moon (not the actual day or day after)
   const now = new Date();
@@ -1982,12 +1982,12 @@ async function handleBloodMoonStart(client) {
     "The Blood Moon rises at nightfall! Beware!"
    );
    
-   console.log(`[scheduler.js]: ✅ Blood Moon start announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
+   logger.info('BLOODMOON', `Startup announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
   } else {
-   console.log(`[scheduler.js]: 📅 Not the day before Blood Moon - no announcement needed`);
+   logger.debug('BLOODMOON', 'Not the day before Blood Moon - no announcement needed');
   }
 
-  console.log(`[scheduler.js]: ✅ Blood Moon start check completed`);
+  logger.debug('BLOODMOON', 'Blood Moon start check completed');
 }
 
 async function handleBloodMoonEnd(client) {

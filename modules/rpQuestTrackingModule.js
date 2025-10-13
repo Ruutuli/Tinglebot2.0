@@ -161,10 +161,10 @@ async function processValidRPPost(quest, participant, channelId) {
             await quest.markCompletionProcessed();
         }
     } else if (completionResult.reason.includes('participants completed')) {
-        console.log(`[rpQuestTrackingModule.js] 📊 ${completionResult.reason} in quest ${quest.questID}`);
+        logger.debug('QUEST', `${completionResult.reason} in quest ${quest.questID}`);
     }
 
-    console.log(`[rpQuestTrackingModule.js] 📊 Updated RP post count for ${participant.characterName}: ${participant.rpPostCount}/${postRequirement}`);
+    logger.debug('QUEST', `Updated RP post count for ${participant.characterName}: ${participant.rpPostCount}/${postRequirement}`);
 }
 
 // ============================================================================
