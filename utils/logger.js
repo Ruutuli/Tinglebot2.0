@@ -73,6 +73,7 @@ const CATEGORIES = {
   ECONOMY: { emoji: '💰', color: color.yellow, label: 'ECON' },
   TRADE: { emoji: '🤝', color: color.yellow, label: 'TRDE' },
   VENDING: { emoji: '🏪', color: color.yellow, label: 'VEND' },
+  TOKEN: { emoji: '🪙', color: color.yellow, label: 'TOKEN' },
   
   // Character & Progression
   CHARACTER: { emoji: '👤', color: color.cyan, label: 'CHAR' },

@@ -18,6 +18,7 @@ const { google } = require('googleapis');
 
 // Internal Models
 const Character = require('../models/CharacterModel');
+const logger = require('./logger');
 const TempData = require('../models/TempDataModel');
 
 // ============================================================================
@@ -421,19 +422,59 @@ async function getSheetIdByName(auth, spreadsheetId, sheetName) {
 // Gets a sheet ID by its title
 async function getSheetIdByTitle(auth, spreadsheetId, sheetTitle) {
     try {
+        console.log(`[getSheetIdByTitle] Looking for sheet: "${sheetTitle}" in spreadsheet: ${spreadsheetId}`);
         const response = await google.sheets({ version: 'v4', auth }).spreadsheets.get({
             spreadsheetId,
             includeGridData: false,
         });
-        const sheet = response.data.sheets.find(s => s.properties.title === sheetTitle);
-        return sheet ? sheet.properties.sheetId : null;
+        
+        const availableSheets = response.data.sheets.map(s => s.properties.title);
+        console.log(`[getSheetIdByTitle] Available sheets in spreadsheet:`, availableSheets);
+        
+        const sheet = response.data.sheets.find(s => s.properties.title.trim() === sheetTitle.trim());
+        if (sheet) {
+            console.log(`[getSheetIdByTitle] Found sheet "${sheetTitle}" with ID: ${sheet.properties.sheetId} (matched: "${sheet.properties.title}")`);
+            return sheet.properties.sheetId;
+        } else {
+            console.log(`[getSheetIdByTitle] Sheet "${sheetTitle}" not found. Available sheets:`, availableSheets);
+            return null;
+        }
     } catch (error) {
+        console.error(`[getSheetIdByTitle] Error occurred:`, error.message);
         if (error.message.includes('does not have permission')) {
             throw new Error(
                 'Permission denied. Please share your Google Sheet with Editor access to:\n' +
                 '📧 tinglebot@rotw-tinglebot.iam.gserviceaccount.com'
             );
         }
+        throw error;
+    }
+}
+
+// ------------------- Function: getActualSheetName -------------------
+// Gets the actual sheet name (with proper spacing) by searching for a trimmed title
+async function getActualSheetName(auth, spreadsheetId, sheetTitle) {
+    try {
+        const response = await google.sheets({ version: 'v4', auth }).spreadsheets.get({
+            spreadsheetId,
+            includeGridData: false,
+        });
+        
+        const sheet = response.data.sheets.find(s => s.properties.title.trim() === sheetTitle.trim());
+        if (!sheet) {
+            return null;
+        }
+        
+        const actualSheetName = sheet.properties.title.trim();
+        
+        // Check for spaces in the sheet name that could cause range parsing issues
+        if (actualSheetName !== actualSheetName.trim() || actualSheetName.includes('  ')) {
+            throw new Error(`Sheet name "${actualSheetName}" contains spaces that will cause range parsing errors. Please rename your sheet to remove any leading, trailing, or multiple spaces.`);
+        }
+        
+        return actualSheetName;
+    } catch (error) {
+        logger.error('TOKEN', `Error occurred:`, error.message);
         throw error;
     }
 }
@@ -750,15 +791,24 @@ async function validateTokenTrackerSheet(spreadsheetUrl) {
         const sheets = google.sheets({ version: 'v4', auth });
         const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
         
-        // Check if loggedTracker tab exists
-        const hasLoggedTrackerTab = spreadsheet.data.sheets.some(sheet => 
+        // Check if loggedTracker tab exists and validate its name
+        const loggedTrackerSheet = spreadsheet.data.sheets.find(sheet => 
             sheet.properties.title.toLowerCase() === 'loggedtracker'
         );
 
-        if (!hasLoggedTrackerTab) {
+        if (!loggedTrackerSheet) {
             return {
                 success: false,
                 message: "**Error:** Missing required tab.\n\n**Fix:** Please create a tab named exactly `loggedTracker` (case sensitive) in your sheet."
+            };
+        }
+
+        // Check for spaces in the sheet name that could cause range parsing issues
+        const actualSheetName = loggedTrackerSheet.properties.title;
+        if (actualSheetName !== actualSheetName.trim() || actualSheetName.includes('  ')) {
+            return {
+                success: false,
+                message: `**Error:** Sheet name contains spaces that will cause range parsing errors.\n\n**Fix:** Please rename your sheet tab from "${actualSheetName}" to exactly "loggedTracker" (no leading, trailing, or multiple spaces).\n\n**How to fix:**\n1. Right-click on the tab name\n2. Select "Rename"\n3. Change it to exactly "loggedTracker" (no spaces)\n4. Press Enter to save`
             };
         }
 
@@ -834,7 +884,7 @@ async function validateTokenTrackerSheet(spreadsheetUrl) {
                 message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared publicly (or with the bot)."
             };
         }
-        console.error(`[googleSheetsUtils.js]: ❌ Token tracker sheet error: ${error.message}`);
+        logger.error('TOKEN', `Token tracker sheet error: ${error.message}`);
         return {
             success: false,
             message: `Unknown error accessing token tracker sheet: ${error.message}`
@@ -1396,6 +1446,7 @@ module.exports = {
     getSheetsClient,
     getSheetIdByName,
     getSheetIdByTitle,
+    getActualSheetName,
     isValidGoogleSheetsUrl,
     extractSpreadsheetId,
     convertWixImageLinkForSheets,

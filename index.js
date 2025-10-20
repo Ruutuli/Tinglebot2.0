@@ -630,7 +630,6 @@ async function initializeClient() {
         const Pet = require('./models/PetModel');
         const Mount = require('./models/MountModel');
         const initializeInventoryModel = require('./models/InventoryModel');
-        const initializeVendingModel = require('./models/VendingModel');
         const Quest = require('./models/QuestModel');
         const Party = require('./models/PartyModel');
         const MinigameModel = require('./models/MinigameModel');
@@ -640,9 +639,12 @@ async function initializeClient() {
         const ApprovedSubmission = require('./models/ApprovedSubmissionModel');
         const Raid = require('./models/RaidModel');
         
-        // Initialize inventory and vending models
+        // Initialize inventory model
         const { model: Inventory } = await initializeInventoryModel();
-        const { model: VendingInventory } = await initializeVendingModel();
+        
+        // For vending cleanup, we'll use the vending connection directly
+        const { connectToVending } = require('./database/db');
+        const vendingConnection = await connectToVending();
         
         // Get all characters for this user (needed for cascading deletes)
         const characters = await Character.find({ userId: discordId });
@@ -684,11 +686,19 @@ async function initializeClient() {
         }
         
         // 5. Delete vending inventories (by character names)
+        let vendingItemsDeleted = 0;
         if (allCharacterNames.length > 0) {
-          const vendingResult = await VendingInventory.deleteMany({ 
-            characterName: { $in: allCharacterNames } 
-          });
-          deletionResults.vendingItems = vendingResult.deletedCount;
+          for (const characterName of allCharacterNames) {
+            try {
+              // Each character has their own vending collection
+              const vendingCollection = vendingConnection.collection(characterName.toLowerCase());
+              const vendingResult = await vendingCollection.deleteMany({});
+              vendingItemsDeleted += vendingResult.deletedCount;
+            } catch (vendingError) {
+              console.error(`[index.js]: ⚠️ Error deleting vending items for ${characterName}:`, vendingError.message);
+            }
+          }
+          deletionResults.vendingItems = vendingItemsDeleted;
         } else {
           deletionResults.vendingItems = 0;
         }

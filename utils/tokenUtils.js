@@ -374,7 +374,8 @@ function handleTokenError(error, interaction) {
         !error.message.includes('permission') && 
         !error.message.includes('404') && 
         !error.message.includes('headers') &&
-        !error.message.includes('Invalid sheet format')) {
+        !error.message.includes('Invalid sheet format') &&
+        !error.message.includes('contains spaces that will cause range parsing errors')) {
         console.error('[tokenUtils.js]: ❌ System error:', error);
     }
 
@@ -422,6 +423,14 @@ function handleTokenError(error, interaction) {
                 { name: '📝 Next Steps', value: '1. Add entries with type "earned" in column E to start tracking tokens:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```\n\n2. Your current token balance is set to 0\n3. Use `/tokens check` to view your balance\n4. Use `/tokens setup` again to sync when you add entries' }
             )
             .setColor(0x00FF00)
+            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
+    } else if (error.message.includes('contains spaces that will cause range parsing errors')) {
+        errorEmbed
+            .setTitle('❌ Sheet Name Contains Spaces')
+            .setDescription('Your sheet tab name has spaces that prevent the bot from reading it correctly.')
+            .addFields(
+                { name: '📝 How to Fix', value: '1. Right-click on your sheet tab name\n2. Select "Rename"\n3. Change it to exactly `loggedTracker` (no spaces)\n4. Press Enter to save\n\n**Important:** The tab name must be exactly `loggedTracker` with no leading, trailing, or multiple spaces.' }
+            )
             .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else if (error.message.includes('Unknown interaction')) {
         errorEmbed
