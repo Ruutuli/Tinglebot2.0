@@ -277,14 +277,26 @@ module.exports = {
 
       // Check if the character is debuffed.
       if (character.debuff?.active) {
-        const { createGatherDebuffEmbed } = require('../../embeds/embeds.js');
-        const debuffEmbed = createGatherDebuffEmbed(character);
+        const debuffEndDate = new Date(character.debuff.endDate);
+        const now = new Date();
         
-        await safeReply({
-          embeds: [debuffEmbed],
-          flags: 64,
-        });
-        return;
+        // Check if debuff has actually expired
+        if (debuffEndDate <= now) {
+          // Debuff has expired, clear it
+          character.debuff.active = false;
+          character.debuff.endDate = null;
+          await character.save();
+        } else {
+          // Debuff is still active
+          const { createGatherDebuffEmbed } = require('../../embeds/embeds.js');
+          const debuffEmbed = createGatherDebuffEmbed(character);
+          
+          await safeReply({
+            embeds: [debuffEmbed],
+            flags: 64,
+          });
+          return;
+        }
       }
 
       // ------------------- Step 3: Validate Job ------------------

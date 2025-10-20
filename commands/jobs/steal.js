@@ -2628,10 +2628,22 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
             
             // Check if target is debuffed
             if (targetCharacter.debuff && targetCharacter.debuff.active) {
-                return { 
-                    valid: false, 
-                    error: `❌ **You cannot steal from a character who is debuffed!**\n💊 ${targetCharacter.name} is currently under a debuff effect.` 
-                };
+                const debuffEndDate = new Date(targetCharacter.debuff.endDate);
+                const now = new Date();
+                
+                // Check if debuff has actually expired
+                if (debuffEndDate <= now) {
+                    // Debuff has expired, clear it
+                    targetCharacter.debuff.active = false;
+                    targetCharacter.debuff.endDate = null;
+                    await targetCharacter.save();
+                } else {
+                    // Debuff is still active
+                    return { 
+                        valid: false, 
+                        error: `❌ **You cannot steal from a character who is debuffed!**\n💊 ${targetCharacter.name} is currently under a debuff effect.` 
+                    };
+                }
             }
             
             // Check if target is KO'd
@@ -3334,11 +3346,23 @@ async function validateCharacterStatus(thiefCharacter, interaction) {
 
         // Check if thief is debuffed or KO'd
         if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
-            await interaction.editReply({ 
-                content: '❌ **You cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.', 
-                ephemeral: true 
-            });
-            return { valid: false, error: 'Character is debuffed' };
+            const debuffEndDate = new Date(thiefCharacter.debuff.endDate);
+            const now = new Date();
+            
+            // Check if debuff has actually expired
+            if (debuffEndDate <= now) {
+                // Debuff has expired, clear it
+                thiefCharacter.debuff.active = false;
+                thiefCharacter.debuff.endDate = null;
+                await thiefCharacter.save();
+            } else {
+                // Debuff is still active
+                await interaction.editReply({ 
+                    content: '❌ **You cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.', 
+                    ephemeral: true 
+                });
+                return { valid: false, error: 'Character is debuffed' };
+            }
         }
 
         if (thiefCharacter.ko) {
@@ -3392,13 +3416,25 @@ async function validateThiefCharacter(characterName, userId, interaction) {
 
         // Check if bandit character is debuffed
         if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
-            const errorMessage = '❌ **Bandit characters cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.';
-            await interaction.editReply({ 
-                content: errorMessage, 
-                ephemeral: true 
-            });
-            console.log(`[steal.js]: ⚠️ Steal blocked - debuffed bandit: ${thiefCharacter.name}`);
-            return { valid: false, error: errorMessage };
+            const debuffEndDate = new Date(thiefCharacter.debuff.endDate);
+            const now = new Date();
+            
+            // Check if debuff has actually expired
+            if (debuffEndDate <= now) {
+                // Debuff has expired, clear it
+                thiefCharacter.debuff.active = false;
+                thiefCharacter.debuff.endDate = null;
+                await thiefCharacter.save();
+            } else {
+                // Debuff is still active
+                const errorMessage = '❌ **Bandit characters cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.';
+                await interaction.editReply({ 
+                    content: errorMessage, 
+                    ephemeral: true 
+                });
+                console.log(`[steal.js]: ⚠️ Steal blocked - debuffed bandit: ${thiefCharacter.name}`);
+                return { valid: false, error: errorMessage };
+            }
         }
 
         // Check if bandit character is KO'd

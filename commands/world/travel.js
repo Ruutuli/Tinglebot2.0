@@ -485,10 +485,22 @@ module.exports = {
 
       // ------------------- Check for Debuff -------------------
       if (character.debuff?.active) {
-        const remainingDays = Math.ceil((new Date(character.debuff.endDate) - new Date()) / (1000 * 60 * 60 * 24));
-        return interaction.editReply({
-          content: `❌ **${character.name}** is recovering and cannot travel for ${remainingDays} more day(s).`
-        });
+        const debuffEndDate = new Date(character.debuff.endDate);
+        const now = new Date();
+        
+        // Check if debuff has actually expired
+        if (debuffEndDate <= now) {
+          // Debuff has expired, clear it
+          character.debuff.active = false;
+          character.debuff.endDate = null;
+          await character.save();
+        } else {
+          // Debuff is still active
+          const remainingDays = Math.ceil((debuffEndDate - now) / (1000 * 60 * 60 * 24));
+          return interaction.editReply({
+            content: `❌ **${character.name}** is recovering and cannot travel for ${remainingDays} more day(s).`
+          });
+        }
       }
 
       // ------------------- Check Inventory Sync -------------------

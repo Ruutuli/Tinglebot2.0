@@ -149,7 +149,19 @@ function validateCharacterEligibility(character, quest) {
   
   // Check if character is debuffed
   if (character.debuff?.active) {
-    return { canProceed: false, message: `❌ ${character.name} is debuffed and cannot participate.` };
+    const debuffEndDate = new Date(character.debuff.endDate);
+    const now = new Date();
+    
+    // Check if debuff has actually expired
+    if (debuffEndDate <= now) {
+      // Debuff has expired, clear it
+      character.debuff.active = false;
+      character.debuff.endDate = null;
+      await character.save();
+    } else {
+      // Debuff is still active
+      return { canProceed: false, message: `❌ ${character.name} is debuffed and cannot participate.` };
+    }
   }
   
   // Check if character is in jail

@@ -719,41 +719,31 @@ module.exports = {
       }
     }
 
-    // ------------------- Verify Pet Existence for Roll, Upgrade,  -------------------
-    // Find pet by identifier (ID or name)
-    const pet = await findPetByIdentifier(petName, character._id, 'active');
-
-    if (!pet) {
-      console.error(
-        `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
-      );
-      return interaction.editReply({
-        content: `❌ **Pet \`${petName}\` not found for character \`${characterName}\`. Please check the pet name and try again.**`,
-        ephemeral: true
-      });
-    }
-
-    // Verify pet ownership
-    if (pet.owner.toString() !== character._id.toString()) {
-      console.error(
-        `[pet.js]: logs - Pet "${petName}" exists but belongs to a different character`
-      );
-      return interaction.editReply({
-        content: `❌ **Pet \`${petName}\` belongs to a different character. Please check the pet name and try again.**`,
-        ephemeral: true
-      });
-    }
-
-    // Check if pet is stored
-    if (pet.status === 'stored') {
-      return interaction.editReply({
-        content: `❌ **Pet \`${petName}\` is currently stored and cannot perform actions.**`,
-        ephemeral: true
-      });
-    }
-
     // ------------------- Subcommand: Roll -------------------
     if (subcommand === "roll") {
+      // Find pet by identifier (ID or name) - only active pets for roll command
+      const pet = await findPetByIdentifier(petName, character._id, 'active');
+
+      if (!pet) {
+        console.error(
+          `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
+        );
+        return interaction.editReply({
+          content: `❌ **Pet \`${petName}\` not found for character \`${characterName}\`. Please check the pet name and try again.**`,
+          ephemeral: true
+        });
+      }
+
+      // Verify pet ownership
+      if (pet.owner.toString() !== character._id.toString()) {
+        console.error(
+          `[pet.js]: logs - Pet "${petName}" exists but belongs to a different character`
+        );
+        return interaction.editReply({
+          content: `❌ **Pet \`${petName}\` belongs to a different character. Please check the pet name and try again.**`,
+          ephemeral: true
+        });
+      }
      // ------------------- Check Pet Status -------------------
      if (pet.status === "stored") {
        return interaction.editReply(
@@ -1105,6 +1095,30 @@ module.exports = {
 
     // ------------------- Subcommand: Upgrade -------------------
     if (subcommand === "upgrade") {
+      // Find pet by identifier (ID or name) - only active pets for upgrade command
+      const pet = await findPetByIdentifier(petName, character._id, 'active');
+
+      if (!pet) {
+        console.error(
+          `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
+        );
+        return interaction.editReply({
+          content: `❌ **Pet \`${petName}\` not found for character \`${characterName}\`. Please check the pet name and try again.**`,
+          ephemeral: true
+        });
+      }
+
+      // Verify pet ownership
+      if (pet.owner.toString() !== character._id.toString()) {
+        console.error(
+          `[pet.js]: logs - Pet "${petName}" exists but belongs to a different character`
+        );
+        return interaction.editReply({
+          content: `❌ **Pet \`${petName}\` belongs to a different character. Please check the pet name and try again.**`,
+          ephemeral: true
+        });
+      }
+
      const targetLevel = interaction.options.getInteger("level");
 
      // only allow levels 1–3

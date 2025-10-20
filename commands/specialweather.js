@@ -21,6 +21,7 @@ const { getWeatherWithoutGeneration } = require('../services/weatherService');
 const WeatherService = require('../services/weatherService');
 const { enforceJail } = require('../utils/jailCheck.js');
 const { checkInventorySync } = require('../utils/characterUtils.js');
+const { createGatherDebuffEmbed } = require('../embeds/embeds.js');
 
 // ------------------- Constants -------------------
 const DEFAULT_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/Default-Footer.png';
@@ -421,14 +422,25 @@ module.exports = {
 
       // Check if character is debuffed
       if (character.debuff?.active) {
-        const { createGatherDebuffEmbed } = require('../../embeds/embeds.js');
-        const debuffEmbed = createGatherDebuffEmbed(character);
+        const debuffEndDate = new Date(character.debuff.endDate);
+        const now = new Date();
         
-        await interaction.editReply({
-          embeds: [debuffEmbed],
-          ephemeral: true,
-        });
-        return;
+        // Check if debuff has actually expired
+        if (debuffEndDate <= now) {
+          // Debuff has expired, clear it
+          character.debuff.active = false;
+          character.debuff.endDate = null;
+          await character.save();
+        } else {
+          // Debuff is still active
+          const debuffEmbed = createGatherDebuffEmbed(character);
+          
+          await interaction.editReply({
+            embeds: [debuffEmbed],
+            ephemeral: true,
+          });
+          return;
+        }
       }
 
       // Check if character has already gathered during special weather in this village today
