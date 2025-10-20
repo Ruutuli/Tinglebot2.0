@@ -11,6 +11,7 @@ const {
  authorizeSheets,
  appendSheetData,
  extractSpreadsheetId,
+ getActualSheetName,
  isValidGoogleSheetsUrl,
  readSheetData,
  safeAppendDataToSheet,
@@ -1591,56 +1592,117 @@ async function updateTokenBalance(userId, change) {
 // ------------------- syncTokenTracker -------------------
 async function syncTokenTracker(userId) {
  try {
+  logger.info('TOKEN', `Starting sync for user: ${userId}`);
+  
   const user = await getOrCreateToken(userId);
+  logger.debug('TOKEN', `Retrieved user record:`, {
+    hasTokenTracker: !!user.tokenTracker,
+    tokenTrackerUrl: user.tokenTracker,
+    currentTokens: user.tokens,
+    tokensSynced: user.tokensSynced
+  });
+  
   if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
+   logger.warn('TOKEN', `Invalid or missing token tracker URL`);
    throw new Error("Invalid URL");
   }
 
+  logger.debug('TOKEN', `Authorizing Google Sheets access...`);
   const auth = await authorizeSheets();
   const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-  const range = "loggedTracker!B7:F";
+  logger.debug('TOKEN', `Extracted spreadsheet ID: ${spreadsheetId}`);
+  
+  // Get the actual sheet name to handle any spacing issues
+  const actualSheetName = await getActualSheetName(auth, spreadsheetId, 'loggedTracker');
+  if (!actualSheetName) {
+    throw new Error("Sheet 'loggedTracker' not found. Please ensure you have a tab named exactly 'loggedTracker'.");
+  }
+  
+  const range = `${actualSheetName}!B7:F`;
+  logger.debug('TOKEN', `Reading sheet data from range: ${range}`);
   const sheetData = await readSheetData(auth, spreadsheetId, range);
+  logger.debug('TOKEN', `Raw sheet data retrieved:`, {
+    totalRows: sheetData.length,
+    firstRow: sheetData[0],
+    sampleData: sheetData.slice(0, 3)
+  });
 
   // Validate headers
   const headers = sheetData[0];
+  logger.debug('TOKEN', `Validating headers:`, headers);
   if (!headers || headers.length < 5) {
+    logger.warn('TOKEN', `Invalid headers - expected 5 columns, got:`, headers?.length || 0);
     throw new Error("Invalid sheet format. Please ensure your sheet has the correct headers in row 7.");
   }
 
   // Check if there are any earned entries
   const earnedRows = sheetData.slice(1).filter(row => row[3] === "earned");
+  const spentRows = sheetData.slice(1).filter(row => row[3] === "spent");
+  logger.debug('TOKEN', `Row analysis:`, {
+    totalDataRows: sheetData.length - 1,
+    earnedRows: earnedRows.length,
+    spentRows: spentRows.length,
+    earnedRowSamples: earnedRows.slice(0, 3),
+    spentRowSamples: spentRows.slice(0, 3)
+  });
+  
   if (!earnedRows.length) {
     // Allow setup even with no earned entries - set tokens to 0
+    logger.info('TOKEN', `No earned entries found, setting tokens to 0`);
     user.tokens = 0;
     user.tokensSynced = true;
     await user.save();
+    logger.success('TOKEN', `User record saved with 0 tokens`);
     return user;
   }
 
   let totalEarned = 0;
   let totalSpent = 0;
+  let skippedRows = 0;
 
+  logger.debug('TOKEN', `Processing rows for token calculation...`);
   sheetData.slice(1).forEach((row, idx) => {
     if (row.length < 5) {
+      skippedRows++;
+      logger.debug('TOKEN', `Skipping row ${idx + 8} (invalid length):`, row);
       return; // Skip invalid rows
     }
     const amount = parseInt(row[4]);
     if (isNaN(amount)) {
+      skippedRows++;
+      logger.debug('TOKEN', `Skipping row ${idx + 8} (invalid amount):`, row);
       return; // Skip rows with invalid amounts
     }
     if (row[3] === "earned") {
       totalEarned += amount;
+      logger.debug('TOKEN', `Earned ${amount} tokens from row ${idx + 8}:`, row);
     } else if (row[3] === "spent") {
       totalSpent += Math.abs(amount);
+      logger.debug('TOKEN', `Spent ${Math.abs(amount)} tokens from row ${idx + 8}:`, row);
     }
   });
 
-  user.tokens = totalEarned - totalSpent;
+  const finalTokens = totalEarned - totalSpent;
+  logger.info('TOKEN', `Token calculation summary:`, {
+    totalEarned,
+    totalSpent,
+    finalTokens,
+    skippedRows,
+    processedRows: sheetData.length - 1 - skippedRows
+  });
+
+  user.tokens = finalTokens;
   user.tokensSynced = true;
   await user.save();
+  logger.success('TOKEN', `User record saved with ${finalTokens} tokens`);
 
   return user;
  } catch (error) {
+  logger.error('TOKEN', `Error occurred:`, {
+    message: error.message,
+    userId: userId
+  });
+  
   // Only log non-validation errors
   if (!error.message.includes('Invalid sheet format') && 
       !error.message.includes('Invalid URL')) {
@@ -2202,59 +2264,78 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
 };
 
 const connectToInventoriesForItems = async (context = {}) => {
-    try {
-        // Always check if we have a valid connection first
-        if (inventoriesClient && inventoriesDb) {
-            // Test the connection to make sure it's still alive
-            try {
-                await inventoriesClient.db('admin').admin().ping();
-                return inventoriesDb;
-            } catch (pingError) {
-                console.log("[db.js]: Connection lost, reconnecting...");
-                // Connection is dead, reset and reconnect
-                inventoriesClient = null;
-                inventoriesDb = null;
+    const maxRetries = 3;
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+        try {
+            // Always check if we have a valid connection first
+            if (inventoriesClient && inventoriesDb) {
+                // Test the connection to make sure it's still alive
+                try {
+                    await inventoriesClient.db('tinglebot').admin().ping();
+                    return inventoriesDb;
+                } catch (pingError) {
+                    console.log("[db.js]: Connection lost, reconnecting...");
+                    // Connection is dead, reset and reconnect
+                    inventoriesClient = null;
+                    inventoriesDb = null;
+                }
             }
-        }
         
-        // If no client or connection failed, create a new one
-        if (!inventoriesClient) {
-            const uri = dbConfig.inventories || dbConfig.tinglebot;
-            
-            if (!uri) {
-                throw new Error('Missing MongoDB URI for items database');
+            // If no client or connection failed, create a new one
+            if (!inventoriesClient) {
+                const uri = dbConfig.inventories || dbConfig.tinglebot;
+                
+                if (!uri) {
+                    throw new Error('Missing MongoDB URI for items database');
+                }
+                
+                console.log(`[db.js]: Connecting to items database... (attempt ${retryCount + 1}/${maxRetries})`);
+                inventoriesClient = new MongoClient(uri, {
+                    serverSelectionTimeoutMS: 10000,  // 10 seconds
+                    connectTimeoutMS: 10000,          // 10 seconds
+                    socketTimeoutMS: 30000,           // 30 seconds
+                    maxPoolSize: 5,
+                    minPoolSize: 1
+                });
+                
+                await inventoriesClient.connect();
+                inventoriesDb = inventoriesClient.db('tinglebot');
+                logger.success('DATABASE', 'Items database connected');
+                
+                // Reset error counter on successful connection
+                resetErrorCounter();
             }
             
-            inventoriesClient = new MongoClient(uri, {
-                serverSelectionTimeoutMS: 10000,  // 10 seconds
-                connectTimeoutMS: 10000,          // 10 seconds
-                socketTimeoutMS: 30000,           // 30 seconds
-                maxPoolSize: 5,
-                minPoolSize: 1
-            });
+            // Double-check that we have a valid database connection
+            if (!inventoriesDb) {
+                throw new Error('Database connection failed - inventoriesDb is null');
+            }
             
-            await inventoriesClient.connect();
-            inventoriesDb = inventoriesClient.db('tinglebot');
-            logger.success('DATABASE', 'Items database connected');
+            return inventoriesDb;
             
-            // Reset error counter on successful connection
-            resetErrorCounter();
+        } catch (error) {
+            retryCount++;
+            console.error(`[db.js]: ❌ Error connecting to Items database (attempt ${retryCount}/${maxRetries}):`, error.message);
+            
+            // Reset the connection variables on error
+            inventoriesClient = null;
+            inventoriesDb = null;
+            
+            if (retryCount >= maxRetries) {
+                handleError(error, "db.js", context);
+                console.error("[db.js]: Error details:", {
+                    name: error.name,
+                    code: error.code,
+                    stack: error.stack
+                });
+                throw error;
+            }
+            
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
         }
-        
-        // Double-check that we have a valid database connection
-        if (!inventoriesDb) {
-            throw new Error('Database connection failed - inventoriesDb is null');
-        }
-        
-        return inventoriesDb;
-    } catch (error) {
-        handleError(error, "db.js", context);
-        console.error("[db.js]: ❌ Error connecting to Items database:", error.message);
-        
-        // Reset the connection variables on error
-        inventoriesClient = null;
-        inventoriesDb = null;
-        throw error;
     }
 };
 

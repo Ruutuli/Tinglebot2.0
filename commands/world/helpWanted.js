@@ -121,9 +121,9 @@ async function validateUserCooldowns(userId) {
  * Validates character eligibility for quest participation
  * @param {Object} character - Character object
  * @param {Object} quest - Quest object (required for blight rejection context)
- * @returns {{canProceed: boolean, message?: string, embed?: EmbedBuilder}}
+ * @returns {Promise<{canProceed: boolean, message?: string, embed?: EmbedBuilder}>}
  */
-function validateCharacterEligibility(character, quest) {
+async function validateCharacterEligibility(character, quest) {
   // Check if character is blighted - NO characters (including mod characters) can do HWQs while blighted
   if (character.blighted) {
     return { 
@@ -1020,7 +1020,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   }
   
   // Validate character eligibility
-  const eligibilityCheck = validateCharacterEligibility(character, quest);
+  const eligibilityCheck = await validateCharacterEligibility(character, quest);
   if (!eligibilityCheck.canProceed) {
     if (eligibilityCheck.embed) {
       return await interaction.editReply({ embeds: [eligibilityCheck.embed] });
@@ -1515,7 +1515,7 @@ module.exports = {
         }
         
         // Validate character eligibility
-        const eligibilityCheck = validateCharacterEligibility(character, quest);
+        const eligibilityCheck = await validateCharacterEligibility(character, quest);
         if (!eligibilityCheck.canProceed) {
           if (eligibilityCheck.embed) {
             return await interaction.editReply({ embeds: [eligibilityCheck.embed] });

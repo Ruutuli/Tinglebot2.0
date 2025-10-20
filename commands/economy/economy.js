@@ -906,6 +906,11 @@ async function handleShopView(interaction) {
          sellPrice: "N/A",
          emoji: "🛒"
        };
+       
+       // If it's a database connection error, log it specifically
+       if (error.message.includes('Database connection failed')) {
+         console.error(`[shops]: Database connection issue detected for ${item.itemName}`);
+       }
       }
       const buyPrice = itemDetails?.buyPrice || "N/A";
       const sellPrice = itemDetails?.sellPrice || "N/A";
