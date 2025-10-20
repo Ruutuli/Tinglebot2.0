@@ -106,7 +106,7 @@ try {
  const envPath = path.resolve(process.cwd(), `.env.${env}`);
  dotenv.config({ path: envPath });
 } catch (error) {
- console.error(`[scheduler.js]: Failed to load .env.${env}:`, error.message);
+ logger.error('SYSTEM', `Failed to load .env.${env}`, error.message);
  dotenv.config();
 }
 
@@ -127,7 +127,7 @@ function createCronJob(
     await jobFunction();
    } catch (error) {
     handleError(error, "scheduler.js");
-    console.error(`[scheduler.js]: ${jobName} failed:`, error.message);
+    logger.error('SCHEDULER', `${jobName} failed`, error.message);
    }
   },
   { timezone }
@@ -185,7 +185,7 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
 
   const weather = await getCurrentWeather(village);
   if (!weather) {
-   console.error(`[scheduler.js]: ❌ Failed to get weather for ${village}`);
+   logger.error('WEATHER', `Failed to get weather for ${village}`);
    return false;
   }
 
@@ -193,7 +193,7 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
   const channel = client.channels.cache.get(channelId);
 
   if (!channel) {
-   console.error(`[scheduler.js]: ❌ Channel not found: ${channelId}`);
+   logger.error('WEATHER', `Channel not found: ${channelId}`);
    return false;
   }
 
@@ -201,7 +201,7 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
   await channel.send({ embeds: [embed], files });
   return true;
  } catch (error) {
-  console.error(`[scheduler.js]: ❌ Error posting weather for ${village}:`, error.message);
+  logger.error('WEATHER', `Error posting weather for ${village}`, error.message);
   handleError(error, "scheduler.js", {
    commandName: 'postWeatherForVillage',
    village: village
@@ -436,7 +436,7 @@ async function cleanupFinishedMinigameSessions() {
 
 async function runDailyCleanupTasks(client) {
  try {
-  console.log('[scheduler.js]: 🧹 Running daily cleanup tasks...');
+  logger.info('CLEANUP', 'Running daily cleanup tasks...');
   
   const results = await Promise.all([
    cleanupExpiredEntries(),
@@ -450,12 +450,12 @@ async function runDailyCleanupTasks(client) {
   
   const blightResult = results[3];
   if (blightResult && typeof blightResult === 'object') {
-   console.log(`[scheduler.js]: ✅ Daily blight cleanup - Expired: ${blightResult.expiredCount}, Notified: ${blightResult.notifiedUsers}, Deleted: ${blightResult.deletedCount}`);
+   logger.success('CLEANUP', `Daily blight cleanup - Expired: ${blightResult.expiredCount}, Notified: ${blightResult.notifiedUsers}, Deleted: ${blightResult.deletedCount}`);
   }
   
   return results;
  } catch (error) {
-  console.error('[scheduler.js]: ❌ Error during daily cleanup:', error);
+  logger.error('CLEANUP', 'Error during daily cleanup', error);
   handleError(error, 'scheduler.js');
   return [];
  }
@@ -466,12 +466,12 @@ async function runDailyCleanupTasks(client) {
 // ============================================================================
 
 async function distributeMonthlyBoostRewards(client) {
-  console.log('[scheduler.js]: 💎 Starting monthly Nitro boost reward distribution...');
+  logger.info('BOOST', 'Starting monthly Nitro boost reward distribution...');
   
   try {
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) {
-      console.error('[scheduler.js]: ❌ Guild not found');
+      logger.error('BOOST', 'Guild not found');
       return { success: false, error: 'Guild not found' };
     }
 
@@ -482,11 +482,11 @@ async function distributeMonthlyBoostRewards(client) {
     const boosters = guild.members.cache.filter(member => member.premiumSince !== null);
     
     if (boosters.size === 0) {
-      console.log('[scheduler.js]: ℹ️ No active boosters found');
+      logger.info('BOOST', 'No active boosters found');
       return { success: true, rewardedCount: 0, totalTokens: 0 };
     }
     
-    console.log(`[scheduler.js]: 💎 Found ${boosters.size} active booster(s)`);
+    logger.info('BOOST', `Found ${boosters.size} active booster(s)`);
     
     const User = require('./models/UserModel');
     const now = new Date();
@@ -503,7 +503,7 @@ async function distributeMonthlyBoostRewards(client) {
         // Get or create user record
         const user = await User.getOrCreateUser(memberId);
         
-        console.log(`[scheduler.js]: Processing ${member.user.tag} - Checking boost status...`);
+        logger.info('BOOST', `Processing ${member.user.tag} - Checking boost status...`);
         
         // Give boost rewards (flat 1000 tokens for anyone boosting)
         const result = await user.giveBoostRewards();
@@ -517,7 +517,7 @@ async function distributeMonthlyBoostRewards(client) {
             tokensReceived: result.tokensReceived
           });
           
-          console.log(`[scheduler.js]: ✅ Rewarded ${member.user.tag} with ${result.tokensReceived} tokens for boosting`);
+          logger.success('BOOST', `Rewarded ${member.user.tag} with ${result.tokensReceived} tokens for boosting`);
           
           // Send DM notification
           try {
@@ -525,7 +525,7 @@ async function distributeMonthlyBoostRewards(client) {
               content: `🎉 **Monthly Nitro Boost Reward!**\n\nThank you for boosting **Roots Of The Wild**!\n\n💎 You've received **${result.tokensReceived} tokens** for boosting the server this month.\n\n**New Balance:** ${result.newTokenBalance} tokens\n**Month:** ${currentMonth}\n\nYour support helps keep our server amazing! ✨`
             });
           } catch (dmError) {
-            console.log(`[scheduler.js]: ⚠️ Could not send DM to ${member.user.tag} - user may have blocked DMs`);
+            logger.warn('BOOST', `Could not send DM to ${member.user.tag} - user may have blocked DMs`);
           }
           
           // Send public announcement in boost rewards channel
@@ -553,22 +553,22 @@ async function distributeMonthlyBoostRewards(client) {
                 embeds: [announcementEmbed]
               });
               
-              console.log(`[scheduler.js]: 📢 Posted boost reward announcement for ${member.user.tag} in channel ${boostAnnouncementChannelId}`);
+              logger.info('BOOST', `Posted boost reward announcement for ${member.user.tag} in channel ${boostAnnouncementChannelId}`);
             }
           } catch (announcementError) {
-            console.error(`[scheduler.js]: ❌ Error posting boost reward announcement for ${member.user.tag}:`, announcementError);
+            logger.error('BOOST', `Error posting boost reward announcement for ${member.user.tag}`, announcementError);
           }
         } else if (result.alreadyRewarded) {
           alreadyRewardedCount++;
-          console.log(`[scheduler.js]: ℹ️ ${member.user.tag} already received boost rewards this month`);
+          logger.info('BOOST', `${member.user.tag} already received boost rewards this month`);
         } else {
           errorCount++;
-          console.error(`[scheduler.js]: ❌ Failed to reward ${member.user.tag}: ${result.message}`);
+          logger.error('BOOST', `Failed to reward ${member.user.tag}: ${result.message}`);
         }
         
       } catch (error) {
         errorCount++;
-        console.error(`[scheduler.js]: ❌ Error processing boost reward for ${member.user.tag}:`, error);
+        logger.error('BOOST', `Error processing boost reward for ${member.user.tag}`, error);
       }
     }
     
@@ -613,11 +613,11 @@ async function distributeMonthlyBoostRewards(client) {
           await logChannel.send({ embeds: [summaryEmbed] });
         }
       } catch (logError) {
-        console.error('[scheduler.js]: ❌ Error sending boost reward summary to log channel:', logError);
+        logger.error('BOOST', 'Error sending boost reward summary to log channel', logError);
       }
     }
     
-    console.log(`[scheduler.js]: ✅ Boost reward distribution completed - Rewarded: ${rewardedCount}, Already Rewarded: ${alreadyRewardedCount}, Errors: ${errorCount}, Total Tokens: ${totalTokensDistributed}`);
+    logger.success('BOOST', `Boost reward distribution completed - Rewarded: ${rewardedCount}, Already Rewarded: ${alreadyRewardedCount}, Errors: ${errorCount}, Total Tokens: ${totalTokensDistributed}`);
     
     return {
       success: true,
@@ -629,7 +629,7 @@ async function distributeMonthlyBoostRewards(client) {
     };
     
   } catch (error) {
-    console.error('[scheduler.js]: ❌ Error during boost reward distribution:', error);
+    logger.error('BOOST', 'Error during boost reward distribution', error);
     handleError(error, 'scheduler.js', {
       commandName: 'distributeMonthlyBoostRewards'
     });
@@ -673,11 +673,11 @@ async function handleBirthdayRoleAssignment(client) {
       return;
     }
     
-    console.log(`[scheduler.js]: 🎂 Found ${usersWithBirthdays.length} users with birthdays today`);
+    logger.info('BIRTHDAY', `Found ${usersWithBirthdays.length} users with birthdays today`);
     
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) {
-      console.error(`[scheduler.js]: ❌ Guild not found`);
+      logger.error('BIRTHDAY', 'Guild not found');
       return;
     }
     
@@ -686,7 +686,7 @@ async function handleBirthdayRoleAssignment(client) {
     const modBirthdayRole = guild.roles.cache.get(MOD_BIRTHDAY_ROLE_ID);
     
     if (!birthdayRole && !modBirthdayRole) {
-      console.error(`[scheduler.js]: ❌ Birthday roles not found`);
+      logger.error('BIRTHDAY', 'Birthday roles not found');
       return;
     }
     
@@ -697,7 +697,7 @@ async function handleBirthdayRoleAssignment(client) {
       try {
         const member = await guild.members.fetch(user.discordId);
         if (!member) {
-          console.log(`[scheduler.js]: ⚠️ Member ${user.discordId} not found in guild`);
+          logger.warn('BIRTHDAY', `Member ${user.discordId} not found in guild`);
           continue;
         }
         
@@ -709,7 +709,7 @@ async function handleBirthdayRoleAssignment(client) {
         const roleToAssign = isMod ? modBirthdayRole : birthdayRole;
         
         if (!roleToAssign) {
-          console.log(`[scheduler.js]: ⚠️ Role not found for ${isMod ? 'mod' : 'regular'} user ${member.user.tag}`);
+          logger.warn('BIRTHDAY', `Role not found for ${isMod ? 'mod' : 'regular'} user ${member.user.tag}`);
           continue;
         }
         
@@ -730,10 +730,10 @@ async function handleBirthdayRoleAssignment(client) {
           roleName: roleToAssign.name
         });
         
-        console.log(`[scheduler.js]: ✅ Assigned ${roleToAssign.name} to ${member.user.tag} (${isMod ? 'mod' : 'regular'})`);
+        logger.success('BIRTHDAY', `Assigned ${roleToAssign.name} to ${member.user.tag} (${isMod ? 'mod' : 'regular'})`);
         
       } catch (error) {
-        console.error(`[scheduler.js]: ❌ Error assigning birthday role to user ${user.discordId}:`, error);
+        logger.error('BIRTHDAY', `Error assigning birthday role to user ${user.discordId}`, error);
       }
     }
     
@@ -742,10 +742,10 @@ async function handleBirthdayRoleAssignment(client) {
       await sendBirthdayAnnouncements(client, birthdayUsers);
     }
     
-    console.log(`[scheduler.js]: 🎂 Birthday role assignment completed - ${assignedCount} roles assigned`);
+    logger.success('BIRTHDAY', `Birthday role assignment completed - ${assignedCount} roles assigned`);
     
   } catch (error) {
-    console.error(`[scheduler.js]: ❌ Error in birthday role assignment:`, error);
+    logger.error('BIRTHDAY', 'Error in birthday role assignment', error);
     handleError(error, "scheduler.js", {
       commandName: 'handleBirthdayRoleAssignment'
     });
@@ -756,7 +756,7 @@ async function sendBirthdayAnnouncements(client, birthdayUsers) {
   try {
     const announcementChannel = client.channels.cache.get(BIRTHDAY_ANNOUNCEMENT_CHANNEL_ID);
     if (!announcementChannel) {
-      console.error(`[scheduler.js]: ❌ Birthday announcement channel not found`);
+      logger.error('BIRTHDAY', 'Birthday announcement channel not found');
       return;
     }
     
@@ -814,15 +814,15 @@ async function sendBirthdayAnnouncements(client, birthdayUsers) {
           embeds: [embed]
         });
         
-        console.log(`[scheduler.js]: 🎂 Sent birthday announcement for ${birthdayUser.user.displayName}`);
+        logger.info('BIRTHDAY', `Sent birthday announcement for ${birthdayUser.user.displayName}`);
         
       } catch (error) {
-        console.error(`[scheduler.js]: ❌ Error sending birthday announcement for ${birthdayUser.user.displayName}:`, error);
+        logger.error('BIRTHDAY', `Error sending birthday announcement for ${birthdayUser.user.displayName}`, error);
       }
     }
     
   } catch (error) {
-    console.error(`[scheduler.js]: ❌ Error in birthday announcements:`, error);
+    logger.error('BIRTHDAY', 'Error in birthday announcements', error);
     handleError(error, "scheduler.js", {
       commandName: 'sendBirthdayAnnouncements'
     });
@@ -830,12 +830,12 @@ async function sendBirthdayAnnouncements(client, birthdayUsers) {
 }
 
 async function handleBirthdayRoleRemoval(client) {
-  console.log(`[scheduler.js]: 🧹 Starting birthday role cleanup...`);
+  logger.info('CLEANUP', 'Starting birthday role cleanup...');
   
   try {
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) {
-      console.error(`[scheduler.js]: ❌ Guild not found`);
+      logger.error('CLEANUP', 'Guild not found');
       return;
     }
     
@@ -851,9 +851,9 @@ async function handleBirthdayRoleRemoval(client) {
         try {
           await member.roles.remove(birthdayRole);
           removedCount++;
-          console.log(`[scheduler.js]: 🧹 Removed birthday role from ${member.user.tag}`);
+          logger.info('CLEANUP', `Removed birthday role from ${member.user.tag}`);
         } catch (error) {
-          console.error(`[scheduler.js]: ❌ Error removing birthday role from ${member.user.tag}:`, error);
+          logger.error('CLEANUP', `Error removing birthday role from ${member.user.tag}`, error);
         }
       }
     }
@@ -864,17 +864,17 @@ async function handleBirthdayRoleRemoval(client) {
         try {
           await member.roles.remove(modBirthdayRole);
           removedCount++;
-          console.log(`[scheduler.js]: 🧹 Removed mod birthday role from ${member.user.tag}`);
+          logger.info('CLEANUP', `Removed mod birthday role from ${member.user.tag}`);
         } catch (error) {
-          console.error(`[scheduler.js]: ❌ Error removing mod birthday role from ${member.user.tag}:`, error);
+          logger.error('CLEANUP', `Error removing mod birthday role from ${member.user.tag}`, error);
         }
       }
     }
     
-    console.log(`[scheduler.js]: 🧹 Birthday role cleanup completed - ${removedCount} roles removed`);
+    logger.success('CLEANUP', `Birthday role cleanup completed - ${removedCount} roles removed`);
     
   } catch (error) {
-    console.error(`[scheduler.js]: ❌ Error in birthday role cleanup:`, error);
+    logger.error('CLEANUP', 'Error in birthday role cleanup', error);
     handleError(error, "scheduler.js", {
       commandName: 'handleBirthdayRoleRemoval'
     });
@@ -917,19 +917,19 @@ async function executeBirthdayAnnouncements(client) {
   logger.info('SCHEDULER', `Guild ID: ${guildId}, Birthday Channel ID: ${birthdayChannelId}`);
   
   if (!birthdayChannelId) {
-   console.log(`[scheduler.js]: ❌ No birthday channel ID found for guild ${guildId}`);
+   logger.error('BIRTHDAY', `No birthday channel ID found for guild ${guildId}`);
    continue;
   }
 
   const guild = client.guilds.cache.get(guildId);
   if (!guild) {
-   console.log(`[scheduler.js]: ❌ Guild ${guildId} not found in cache`);
+   logger.error('BIRTHDAY', `Guild ${guildId} not found in cache`);
    continue;
   }
 
   const announcementChannel = guild.channels.cache.get(birthdayChannelId);
   if (!announcementChannel) {
-   console.log(`[scheduler.js]: ❌ Birthday channel ${birthdayChannelId} not found in guild ${guildId}`);
+   logger.error('BIRTHDAY', `Birthday channel ${birthdayChannelId} not found in guild ${guildId}`);
    continue;
   }
 
@@ -944,7 +944,7 @@ async function executeBirthdayAnnouncements(client) {
   logger.info('SCHEDULER', `Found ${modCharacters.length} mod characters with birthday on ${today}`);
   
   if (characters.length > 0) {
-   console.log(`[scheduler.js]: 🎂 Characters with birthdays today:`, characters.map(c => `${c.name} (${c.birthday})`));
+   logger.info('BIRTHDAY', `Characters with birthdays today: ${characters.map(c => `${c.name} (${c.birthday})`).join(', ')}`);
   } else {
    // Debug: Check if there are any characters with birthdays at all
    const allCharactersWithBirthdays = await Character.find({ birthday: { $exists: true, $ne: null } });
@@ -955,7 +955,7 @@ async function executeBirthdayAnnouncements(client) {
   }
   
   if (modCharacters.length > 0) {
-   console.log(`[scheduler.js]: 🎂 Mod characters with birthdays today:`, modCharacters.map(c => `${c.name} (${c.birthday})`));
+   logger.info('BIRTHDAY', `Mod characters with birthdays today: ${modCharacters.map(c => `${c.name} (${c.birthday})`).join(', ')}`);
   }
 
   for (const character of characters) {
@@ -1022,9 +1022,9 @@ async function executeBirthdayAnnouncements(client) {
         giftGiven = giftItem.itemName;
         
         if (isRareGift) {
-          console.log(`[scheduler.js]: ✨🎁 RARE! ${character.name} got a ${giftItem.itemName} for their birthday! (1% chance)`);
+          logger.info('BIRTHDAY', `✨🎁 RARE! ${character.name} got a ${giftItem.itemName} for their birthday! (1% chance)`);
         } else {
-          console.log(`[scheduler.js]: 🎂 Gave ${character.name} a ${giftItem.itemName} for their birthday`);
+          logger.info('BIRTHDAY', `🎂 Gave ${character.name} a ${giftItem.itemName} for their birthday`);
         }
 
         // Log to Google Sheets if character has inventory URL
@@ -1057,18 +1057,18 @@ async function executeBirthdayAnnouncements(client) {
                 { skipValidation: true, context: { commandName: 'birthday', userTag: 'System', userId: character.userId } }
               );
               
-              console.log(`[scheduler.js]: 📝 Logged birthday gift to ${character.name}'s inventory sheet`);
+              logger.info('BIRTHDAY', `📝 Logged birthday gift to ${character.name}'s inventory sheet`);
             }
           } catch (sheetError) {
-            console.error(`[scheduler.js]: ⚠️ Failed to log gift to sheet for ${character.name}:`, sheetError.message);
+            logger.warn('BIRTHDAY', `Failed to log gift to sheet for ${character.name}`, sheetError.message);
             // Don't throw - sheet logging is not critical
           }
         }
       } else {
-        console.warn(`[scheduler.js]: ⚠️ Gift item "${giftItemName}" not found in database`);
+        logger.warn('BIRTHDAY', `Gift item "${giftItemName}" not found in database`);
       }
     } catch (giftError) {
-      console.error(`[scheduler.js]: ❌ Error giving birthday gift to ${character.name}:`, giftError.message);
+      logger.error('BIRTHDAY', `Error giving birthday gift to ${character.name}`, giftError.message);
     }
 
     const embed = new EmbedBuilder()
@@ -1105,9 +1105,7 @@ async function executeBirthdayAnnouncements(client) {
     announcedCount++;
    } catch (error) {
     handleError(error, "scheduler.js");
-    console.error(
-     `[scheduler.js]: Failed to announce birthday for ${character.name}: ${error.message}`
-    );
+    logger.error('BIRTHDAY', `Failed to announce birthday for ${character.name}`, error.message);
    }
   }
 
@@ -1134,18 +1132,16 @@ async function executeBirthdayAnnouncements(client) {
 
     await announcementChannel.send({ embeds: [embed] });
     announcedCount++;
-    console.log(`[scheduler.js]: 🎂👑 Announced birthday for mod character ${modCharacter.name}`);
+    logger.info('BIRTHDAY', `🎂👑 Announced birthday for mod character ${modCharacter.name}`);
    } catch (error) {
     handleError(error, "scheduler.js");
-    console.error(
-     `[scheduler.js]: Failed to announce birthday for mod character ${modCharacter.name}: ${error.message}`
-    );
+    logger.error('BIRTHDAY', `Failed to announce birthday for mod character ${modCharacter.name}`, error.message);
    }
   }
  }
 
  if (announcedCount > 0) {
-  console.log(`[scheduler.js]: 🎂 Announced ${announcedCount} birthdays`);
+  logger.success('BIRTHDAY', `Announced ${announcedCount} birthdays`);
  }
 }
 
@@ -1191,12 +1187,12 @@ async function handleJailRelease(client) {
      embeds: [releaseEmbed],
     });
     releasedCount++;
-    console.log(`[scheduler.js]: 🔓 Posted jail release for ${character.name} in ${character.currentVillage} town hall`);
+    logger.info('JOB', `Posted jail release for ${character.name} in ${character.currentVillage} town hall`);
    } else {
-    console.error(`[scheduler.js]: ❌ Could not find town hall channel for ${character.currentVillage} (ID: ${villageChannelId})`);
+    logger.error('JOB', `Could not find town hall channel for ${character.currentVillage} (ID: ${villageChannelId})`);
    }
   } catch (error) {
-   console.error(`[scheduler.js]: ❌ Error posting jail release for ${character.name} in ${character.currentVillage}:`, error.message);
+   logger.error('JOB', `Error posting jail release for ${character.name} in ${character.currentVillage}`, error.message);
   }
 
   const dmSent = await sendUserDM(
@@ -1206,12 +1202,12 @@ async function handleJailRelease(client) {
   );
   
   if (!dmSent) {
-    console.log(`[scheduler.js]: ℹ️ Could not send jail release DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
+    logger.info('JOB', `Could not send jail release DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
   }
  }
 
  if (releasedCount > 0) {
-  console.log(`[scheduler.js]: 🔓 Released ${releasedCount} characters from jail`);
+  logger.success('JOB', `Released ${releasedCount} characters from jail`);
  }
 }
 
@@ -1224,7 +1220,7 @@ async function handleDebuffExpiry(client) {
   });
 
   if (charactersWithActiveDebuffs.length > 0) {
-    console.log(`[scheduler.js]: 🧹 Expiring debuffs for ${charactersWithActiveDebuffs.length} characters`);
+    logger.info('CLEANUP', `Expiring debuffs for ${charactersWithActiveDebuffs.length} characters`);
     
     for (const character of charactersWithActiveDebuffs) {
       character.debuff.active = false;
@@ -1238,7 +1234,7 @@ async function handleDebuffExpiry(client) {
       );
       
       if (!dmSent) {
-        console.log(`[scheduler.js]: ℹ️ Could not send debuff expiry DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
+        logger.info('CLEANUP', `Could not send debuff expiry DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
       }
     }
   }
@@ -1257,7 +1253,7 @@ async function handleBuffExpiry(client) {
   });
 
   if (charactersWithActiveBuffs.length > 0) {
-    console.log(`[scheduler.js]: 🧹 Expiring buffs for ${charactersWithActiveBuffs.length} characters`);
+    logger.info('CLEANUP', `Expiring buffs for ${charactersWithActiveBuffs.length} characters`);
     
     for (const character of charactersWithActiveBuffs) {
       character.buff.active = false;
@@ -1271,7 +1267,7 @@ async function handleBuffExpiry(client) {
       );
       
       if (!dmSent) {
-        console.log(`[scheduler.js]: ℹ️ Could not send buff expiry DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
+        logger.info('CLEANUP', `Could not send buff expiry DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
       }
     }
   }
@@ -1292,13 +1288,11 @@ async function resetDailyRolls(client) {
   }
 
   if (resetCount > 0) {
-   console.log(`[scheduler.js]: 🔄 Reset daily rolls for ${resetCount} characters`);
+   logger.success('CLEANUP', `Reset daily rolls for ${resetCount} characters`);
   }
  } catch (error) {
   handleError(error, "scheduler.js");
-  console.error(
-   `[scheduler.js]: Failed to reset daily rolls: ${error.message}`
-  );
+  logger.error('CLEANUP', 'Failed to reset daily rolls', error.message);
  }
 }
 
@@ -1313,9 +1307,7 @@ async function resetPetLastRollDates(client) {
   }
  } catch (error) {
   handleError(error, "scheduler.js");
-  console.error(
-   `[scheduler.js]: Failed to reset pet lastRollDates: ${error.message}`
-  );
+  logger.error('CLEANUP', 'Failed to reset pet lastRollDates', error.message);
  }
 }
 
@@ -1329,7 +1321,7 @@ function setupBlightScheduler(client) {
    await postBlightRollCall(client);
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: Blight roll call failed:", error.message);
+   logger.error('BLIGHT', 'Blight roll call failed', error.message);
   }
  });
 
@@ -1342,12 +1334,12 @@ function setupBlightScheduler(client) {
   "Cleanup Expired Blight Requests",
   async () => {
     try {
-      console.log('[scheduler.js]: 🧹 Starting blight request cleanup');
+      logger.info('BLIGHT', 'Starting blight request cleanup');
       const result = await cleanupExpiredBlightRequests(client);
-      console.log(`[scheduler.js]: ✅ Blight cleanup complete - Expired: ${result.expiredCount}, Notified: ${result.notifiedUsers}, Deleted: ${result.deletedCount}`);
+      logger.success('BLIGHT', `Blight cleanup complete - Expired: ${result.expiredCount}, Notified: ${result.notifiedUsers}, Deleted: ${result.deletedCount}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error('[scheduler.js]: ❌ Error during blight cleanup:', error);
+      logger.error('BLIGHT', 'Error during blight cleanup', error);
     }
   }
  );
@@ -1357,12 +1349,12 @@ function setupBlightScheduler(client) {
   "Check Expiring Blight Requests",
   async () => {
     try {
-      console.log('[scheduler.js]: ⚠️ Running blight expiration warning check');
+      logger.info('BLIGHT', 'Running blight expiration warning check');
       const result = await checkExpiringBlightRequests(client);
-      console.log(`[scheduler.js]: ✅ Blight warning check complete - Warned: ${result.warnedUsers}`);
+      logger.success('BLIGHT', `Blight warning check complete - Warned: ${result.warnedUsers}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error('[scheduler.js]: ❌ Error during blight warning check:', error);
+      logger.error('BLIGHT', 'Error during blight warning check', error);
     }
   }
  );
@@ -1377,7 +1369,7 @@ function setupBlightScheduler(client) {
       logger.info('BLIGHT', `Reminder check complete - Death: ${result.deathWarnings}, Healing: ${result.healingWarnings}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error('[scheduler.js]: ❌ Error during blight reminder check:', error);
+      logger.error('BLIGHT', 'Error during blight reminder check', error);
     }
   }
  );
@@ -1399,25 +1391,21 @@ async function setupBoostingScheduler(client) {
    const TempData = require('./models/TempDataModel');
    const tempDataResult = await TempData.cleanupByType('boosting');
    
-   console.log(
-    `[scheduler.js]: ✅ Boost cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}, TempData boosting deleted: ${tempDataResult.deletedCount || 0}`
-   );
+   logger.success('CLEANUP', `Boost cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}, TempData boosting deleted: ${tempDataResult.deletedCount || 0}`);
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: ❌ Error during boost cleanup:", error);
+   logger.error('CLEANUP', 'Error during boost cleanup', error);
   }
  });
 
  createCronJob("0 2 * * 0", "Weekly Boost Archive", async () => {
   try {
-   console.log("[scheduler.js]: 📦 Running weekly boost archive");
+   logger.info('CLEANUP', 'Running weekly boost archive');
    const stats = archiveOldBoostingRequests(30);
-   console.log(
-    `[scheduler.js]: ✅ Archive complete - Archived: ${stats.archived}, Remaining: ${stats.remaining}`
-   );
+   logger.success('CLEANUP', `Archive complete - Archived: ${stats.archived}, Remaining: ${stats.remaining}`);
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: ❌ Error during weekly archive:", error);
+   logger.error('CLEANUP', 'Error during weekly archive', error);
   }
  });
 
@@ -1427,7 +1415,7 @@ async function setupBoostingScheduler(client) {
    logger.info('CLEANUP', 'Daily boost statistics', stats);
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: ❌ Error getting boost statistics:", error);
+   logger.error('CLEANUP', 'Error getting boost statistics', error);
   }
  });
 
@@ -1442,7 +1430,7 @@ async function setupBoostingScheduler(client) {
    }
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: ❌ Error during TempData boost cleanup:", error);
+   logger.error('CLEANUP', 'Error during TempData boost cleanup', error);
   }
  });
 
@@ -1453,11 +1441,11 @@ async function setupBoostingScheduler(client) {
    const TempData = require('./models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
    if (result.deletedCount > 0) {
-     console.log(`[scheduler.js]: ✅ Hourly boost cleanup complete - Deleted: ${result.deletedCount}`);
+     logger.success('CLEANUP', `Hourly boost cleanup complete - Deleted: ${result.deletedCount}`);
    }
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: ❌ Error during hourly boost cleanup:", error);
+   logger.error('CLEANUP', 'Error during hourly boost cleanup', error);
   }
  });
 }
@@ -1491,15 +1479,15 @@ async function checkAndGenerateDailyQuests() {
     const todaysQuests = await require('./modules/helpWantedModule').getTodaysQuests();
     
     if (todaysQuests.length === 0) {
-      console.log('[scheduler.js]: 📝 Generating new daily quests...');
+      logger.info('QUEST', 'Generating new daily quests...');
       await generateDailyQuests();
-      console.log('[scheduler.js]: ✅ Daily quests generated');
+      logger.success('QUEST', 'Daily quests generated');
     }
   } catch (error) {
     handleError(error, 'scheduler.js', {
       commandName: 'checkAndGenerateDailyQuests'
     });
-    console.error('[scheduler.js]: ❌ Error checking/generating daily quests:', error);
+    logger.error('QUEST', 'Error checking/generating daily quests', error);
   }
 }
 
@@ -1512,7 +1500,7 @@ async function generateDailyQuestsAtMidnight() {
     handleError(error, 'scheduler.js', {
       commandName: 'generateDailyQuestsAtMidnight'
     });
-    console.error('[scheduler.js]: ❌ Error during midnight quest generation:', error);
+    logger.error('QUEST', 'Error during midnight quest generation', error);
   }
 }
 
@@ -1547,7 +1535,7 @@ async function handleQuestExpirationAtMidnight(client = null) {
         updatedCount++;
         logger.success('SCHEDULER', `Updated expired quest embed for ${quest.village} (${quest.questId})`);
       } catch (error) {
-        console.error(`[scheduler.js]: ❌ Failed to update expired quest embed for ${quest.questId}:`, error);
+        logger.error('QUEST', `Failed to update expired quest embed for ${quest.questId}`, error);
       }
     }
     
@@ -1557,7 +1545,7 @@ async function handleQuestExpirationAtMidnight(client = null) {
     handleError(error, 'scheduler.js', {
       commandName: 'handleQuestExpirationAtMidnight'
     });
-    console.error('[scheduler.js]: ❌ Error during quest expiration check:', error);
+    logger.error('QUEST', 'Error during quest expiration check', error);
   }
 }
 
@@ -1567,7 +1555,7 @@ async function handleQuestExpirationAtMidnight(client = null) {
 // ============================================================================
 async function checkQuestCompletions(client) {
   try {
-    console.log('[scheduler.js]: 🔍 Checking quest completions...');
+    logger.info('QUEST', 'Checking quest completions...');
     
     const Quest = require('./models/QuestModel');
     const questRewardModule = require('./modules/questRewardModule');
@@ -1575,7 +1563,7 @@ async function checkQuestCompletions(client) {
     const activeQuests = await Quest.find({ status: 'active' });
     
     if (activeQuests.length === 0) {
-      console.log('[scheduler.js]: ✅ No active quests to check');
+      logger.info('QUEST', 'No active quests to check');
       return;
     }
     
@@ -1592,7 +1580,7 @@ async function checkQuestCompletions(client) {
         
         if (completionResult.completed && completionResult.needsRewardProcessing) {
           completedCount++;
-          console.log(`[scheduler.js]: ✅ Quest "${quest.title}" completed: ${completionResult.reason}`);
+          logger.success('QUEST', `Quest "${quest.title}" completed: ${completionResult.reason}`);
           
           // Distribute rewards if quest was completed
           if (completionResult.reason === 'all_participants_completed' || completionResult.reason === 'time_expired') {
@@ -1602,12 +1590,12 @@ async function checkQuestCompletions(client) {
             await quest.markCompletionProcessed();
           }
         } else if (completionResult.completed) {
-          console.log(`[scheduler.js]: ℹ️ Quest "${quest.title}" already processed: ${completionResult.reason}`);
+          logger.info('QUEST', `Quest "${quest.title}" already processed: ${completionResult.reason}`);
         }
         
         processedCount++;
       } catch (error) {
-        console.error(`[scheduler.js]: ❌ Error checking quest ${quest.questID}:`, error);
+        logger.error('QUEST', `Error checking quest ${quest.questID}`, error);
       }
     }
     
@@ -1619,7 +1607,7 @@ async function checkQuestCompletions(client) {
     handleError(error, 'scheduler.js', {
       commandName: 'checkQuestCompletions'
     });
-    console.error('[scheduler.js]: ❌ Error during quest completion check:', error);
+    logger.error('QUEST', 'Error during quest completion check', error);
   }
 }
 
@@ -1645,26 +1633,26 @@ async function checkVillageTracking(client) {
       return;
     }
     
-    console.log(`[scheduler.js]: 📋 Found ${activeRPQuests.length} active RP quests with village requirements`);
+    logger.info('QUEST', `Found ${activeRPQuests.length} active RP quests with village requirements`);
     
     let totalChecked = 0;
     let totalDisqualified = 0;
     
     for (const quest of activeRPQuests) {
       try {
-        console.log(`[scheduler.js]: 🏘️ Checking village locations for quest "${quest.title}" (${quest.questID})`);
+        logger.info('QUEST', `Checking village locations for quest "${quest.title}" (${quest.questID})`);
         
         const villageCheckResult = await quest.checkAllParticipantsVillages();
         totalChecked += villageCheckResult.checked;
         totalDisqualified += villageCheckResult.disqualified;
         
         if (villageCheckResult.disqualified > 0) {
-          console.log(`[scheduler.js]: ⚠️ Disqualified ${villageCheckResult.disqualified} participants from quest "${quest.title}" for village violations`);
+          logger.warn('QUEST', `Disqualified ${villageCheckResult.disqualified} participants from quest "${quest.title}" for village violations`);
           
           // Check if quest should be completed after disqualifications
           const completionResult = await quest.checkAutoCompletion(true);
           if (completionResult.completed && completionResult.needsRewardProcessing) {
-            console.log(`[scheduler.js]: ✅ Quest "${quest.title}" completed after village disqualifications: ${completionResult.reason}`);
+            logger.success('QUEST', `Quest "${quest.title}" completed after village disqualifications: ${completionResult.reason}`);
             
             // Distribute rewards if quest was completed
             const questRewardModule = require('./modules/questRewardModule');
@@ -1677,17 +1665,17 @@ async function checkVillageTracking(client) {
         await quest.save();
         
       } catch (error) {
-        console.error(`[scheduler.js]: ❌ Error checking village locations for quest ${quest.questID}:`, error);
+        logger.error('QUEST', `Error checking village locations for quest ${quest.questID}`, error);
       }
     }
     
-    console.log(`[scheduler.js]: ✅ Village tracking check completed - ${totalChecked} participants checked, ${totalDisqualified} disqualified`);
+    logger.success('QUEST', `Village tracking check completed - ${totalChecked} participants checked, ${totalDisqualified} disqualified`);
     
   } catch (error) {
     handleError(error, 'scheduler.js', {
       commandName: 'checkVillageTracking'
     });
-    console.error('[scheduler.js]: ❌ Error during village tracking check:', error);
+    logger.error('QUEST', 'Error during village tracking check', error);
   }
 }
 
@@ -1697,13 +1685,13 @@ async function handleEscortQuestWeather(quest) {
   if (quest.type === 'escort') {
     const travelBlocked = await isTravelBlockedByWeather(quest.village);
     if (travelBlocked) {
-      console.log(`[scheduler.js]: 🌤️ Regenerating escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
+      logger.info('QUEST', `Regenerating escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
       try {
         await regenerateEscortQuest(quest);
-        console.log(`[scheduler.js]: ✅ Successfully regenerated quest ${quest.questId} as ${quest.type} quest`);
+        logger.success('QUEST', `Successfully regenerated quest ${quest.questId} as ${quest.type} quest`);
         return true;
       } catch (error) {
-        console.error(`[scheduler.js]: ❌ Failed to regenerate escort quest ${quest.questId}:`, error);
+        logger.error('QUEST', `Failed to regenerate escort quest ${quest.questId}`, error);
         return false;
       }
     }
@@ -1722,7 +1710,7 @@ async function postQuestToChannel(client, quest, context = '') {
     const channel = await client.channels.fetch(villageChannelId);
     
     if (!channel) {
-      console.log(`[scheduler.js]: ❌ Could not fetch channel for ${quest.village} (ID: ${villageChannelId})`);
+      logger.error('QUEST', `Could not fetch channel for ${quest.village} (ID: ${villageChannelId})`);
       return false;
     }
     
@@ -1737,14 +1725,14 @@ async function postQuestToChannel(client, quest, context = '') {
     );
     
     if (updatedQuest) {
-      console.log(`[scheduler.js]: ✅ Posted quest ${quest.questId} for ${quest.village}${context}`);
+      logger.success('QUEST', `Posted quest ${quest.questId} for ${quest.village}${context}`);
       return true;
     } else {
-      console.log(`[scheduler.js]: ℹ️ Quest ${quest.questId} was already posted by another process, skipping`);
+      logger.info('QUEST', `Quest ${quest.questId} was already posted by another process, skipping`);
       return false;
     }
   } catch (error) {
-    console.error(`[scheduler.js]: ❌ Error posting quest ${quest.questId}:`, error);
+    logger.error('QUEST', `Error posting quest ${quest.questId}`, error);
     return false;
   }
 }
@@ -1777,15 +1765,15 @@ async function checkAndPostMissedQuests(client) {
     if (isAfterNoon) {
       const artWritingQuests = unpostedQuests.filter(quest => quest.type === 'art' || quest.type === 'writing');
       if (artWritingQuests.length > 0) {
-        console.log(`[scheduler.js]: ⏰ After 12pm EST (${currentHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
+        logger.info('QUEST', `After 12pm EST (${currentHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
         
         // Regenerate each art/writing quest
         for (const quest of artWritingQuests) {
           try {
             await regenerateArtWritingQuest(quest);
-            console.log(`[scheduler.js]: ✅ Regenerated ${quest.type} quest ${quest.questId} for ${quest.village}`);
+            logger.success('QUEST', `Regenerated ${quest.type} quest ${quest.questId} for ${quest.village}`);
           } catch (error) {
-            console.error(`[scheduler.js]: ❌ Failed to regenerate quest ${quest.questId}:`, error);
+            logger.error('QUEST', `Failed to regenerate quest ${quest.questId}`, error);
           }
         }
       }
@@ -1822,13 +1810,13 @@ async function checkAndPostMissedQuests(client) {
     }
     
     if (posted > 0) {
-      console.log(`[scheduler.js]: 📤 Posted ${posted} missed quests during startup`);
+      logger.success('QUEST', `Posted ${posted} missed quests during startup`);
     }
     
     return posted;
   } catch (error) {
     handleError(error, 'scheduler.js', { commandName: 'checkAndPostMissedQuests' });
-    console.error('[scheduler.js]: ❌ Error checking for missed quests:', error);
+    logger.error('QUEST', 'Error checking for missed quests', error);
     return 0;
   }
 }
@@ -1858,22 +1846,22 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     if (isAfterNoon) {
       const artWritingQuests = questsToPost.filter(quest => quest.type === 'art' || quest.type === 'writing');
       if (artWritingQuests.length > 0) {
-        console.log(`[scheduler.js]: ⏰ After 12pm EST (${estHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
+        logger.info('QUEST', `After 12pm EST (${estHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
         
         // Regenerate each art/writing quest
         for (const quest of artWritingQuests) {
           try {
             await regenerateArtWritingQuest(quest);
-            console.log(`[scheduler.js]: ✅ Regenerated ${quest.type} quest ${quest.questId} for ${quest.village}`);
+            logger.success('QUEST', `Regenerated ${quest.type} quest ${quest.questId} for ${quest.village}`);
           } catch (error) {
-            console.error(`[scheduler.js]: ❌ Failed to regenerate quest ${quest.questId}:`, error);
+            logger.error('QUEST', `Failed to regenerate quest ${quest.questId}`, error);
           }
         }
       }
     }
     
     if (!processedQuests.length) {
-      console.log(`[scheduler.js]: ℹ️ No quests to post for ${cronTime} on ${today}`);
+      logger.info('QUEST', `No quests to post for ${cronTime} on ${today}`);
       return 0;
     }
     
@@ -1894,7 +1882,7 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     }
     
     if (posted > 0) {
-      console.log(`[scheduler.js]: 📤 Posted ${posted} scheduled quests for ${cronTime}`);
+      logger.success('QUEST', `Posted ${posted} scheduled quests for ${cronTime}`);
     }
     
     return posted;
@@ -1903,7 +1891,7 @@ async function checkAndPostScheduledQuests(client, cronTime) {
       commandName: 'checkAndPostScheduledQuests',
       scheduledTime: cronTime
     });
-    console.error('[scheduler.js]: ❌ Error checking and posting scheduled quests:', error);
+    logger.error('QUEST', 'Error checking and posting scheduled quests', error);
     return 0;
   }
 }
@@ -1941,7 +1929,7 @@ async function sendBloodMoonAnnouncementsToChannels(client, message) {
    successCount++;
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error(`[scheduler.js]: ❌ Blood Moon announcement failed for channel ${channelId}: ${error.message}`);
+   logger.error('BLOODMOON', `Blood Moon announcement failed for channel ${channelId}`, error.message);
   }
  }
 
@@ -1968,13 +1956,13 @@ async function handleBloodMoonStart(client) {
     
     if (today.getTime() === dayBefore.getTime()) {
       isDayBeforeBloodMoon = true;
-      console.log(`[scheduler.js]: 📅 Today is the day before Blood Moon (${bloodMoonDate.toDateString()})`);
+      logger.info('BLOODMOON', `Today is the day before Blood Moon (${bloodMoonDate.toDateString()})`);
       break;
     }
   }
   
   if (isDayBeforeBloodMoon) {
-   console.log(`[scheduler.js]: 🌕 Sending Blood Moon rising announcement - processing channels`);
+   logger.info('BLOODMOON', 'Sending Blood Moon rising announcement - processing channels');
    await renameChannels(client);
 
    const successCount = await sendBloodMoonAnnouncementsToChannels(
@@ -1991,21 +1979,21 @@ async function handleBloodMoonStart(client) {
 }
 
 async function handleBloodMoonEnd(client) {
-  console.log(`[scheduler.js]: 🌙 Starting Blood Moon end check at 8 AM EST`);
+  logger.info('BLOODMOON', 'Starting Blood Moon end check at 8 AM EST');
 
   const wasBloodMoonYesterday = checkBloodMoonTransition();
   
   if (wasBloodMoonYesterday && !isBloodMoonDay()) {
-   console.log(`[scheduler.js]: 🌙 Blood Moon has ended - transitioning from Blood Moon period`);
+   logger.info('BLOODMOON', 'Blood Moon has ended - transitioning from Blood Moon period');
    await revertChannelNames(client);
 
    const successCount = await sendBloodMoonEndAnnouncementsToChannels(client);
-   console.log(`[scheduler.js]: ✅ Blood Moon end announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
+   logger.success('BLOODMOON', `Blood Moon end announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
   } else {
-   console.log(`[scheduler.js]: 📅 No Blood Moon transition detected - no end announcement needed`);
+   logger.info('BLOODMOON', 'No Blood Moon transition detected - no end announcement needed');
   }
 
-  console.log(`[scheduler.js]: ✅ Blood Moon end check completed`);
+  logger.success('BLOODMOON', 'Blood Moon end check completed');
 }
 
 // ------------------- Blood Moon Transition Helper ------------------
@@ -2060,7 +2048,7 @@ async function sendBloodMoonEndAnnouncementsToChannels(client) {
     successCount++;
    } catch (error) {
     handleError(error, "scheduler.js");
-    console.error(`[scheduler.js]: ❌ Blood Moon end announcement failed for channel ${channelId}: ${error.message}`);
+    logger.error('BLOODMOON', `Blood Moon end announcement failed for channel ${channelId}`, error.message);
    }
   }
 
@@ -2083,7 +2071,7 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
     
     // Only auto-distribute if we're past the 1st of the month
     if (currentDay === 1) {
-      console.log('[scheduler.js]: ℹ️ Today is the 1st - scheduled job will handle distribution');
+      logger.info('BOOST', 'Today is the 1st - scheduled job will handle distribution');
       return;
     }
     
@@ -2099,17 +2087,17 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
     }
     
     // No rewards distributed yet this month - run distribution
-    console.log(`[scheduler.js]: 💎 No rewards found for ${currentMonth} - running distribution now...`);
+    logger.info('BOOST', `No rewards found for ${currentMonth} - running distribution now...`);
     const result = await distributeMonthlyBoostRewards(client);
     
     if (result.success) {
-      console.log(`[scheduler.js]: ✅ Startup boost reward distribution completed - Rewarded: ${result.rewardedCount}, Total Tokens: ${result.totalTokens}`);
+      logger.success('BOOST', `Startup boost reward distribution completed - Rewarded: ${result.rewardedCount}, Total Tokens: ${result.totalTokens}`);
     } else {
-      console.error(`[scheduler.js]: ❌ Startup boost reward distribution failed:`, result.error);
+      logger.error('BOOST', 'Startup boost reward distribution failed', result.error);
     }
     
   } catch (error) {
-    console.error('[scheduler.js]: ❌ Error checking/distributing monthly boost rewards:', error);
+    logger.error('BOOST', 'Error checking/distributing monthly boost rewards', error);
     handleError(error, 'scheduler.js', {
       commandName: 'checkAndDistributeMonthlyBoostRewards'
     });
@@ -2118,11 +2106,9 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
 
 async function runStartupChecks(client) {
  try {
-  console.log('\n');
   logger.separator('═', 60);
   logger.section('🗓️ SCHEDULER STARTUP');
   logger.separator('═', 60);
-  console.log('\n');
   
   // Raid expiration check (critical - do this first in case bot restarted during a raid)
   await cleanupExpiredRaids(client);
@@ -2152,14 +2138,12 @@ async function runStartupChecks(client) {
    handleQuestExpirationAtMidnight(client)
   ]);
 
-  console.log('\n');
   logger.separator('═', 60);
   logger.success('SCHEDULER', '✨ Startup checks complete');
   logger.separator('═', 60);
-  console.log('\n');
  } catch (error) {
   handleError(error, "scheduler.js");
-  console.error(`[scheduler.js]: ❌ Startup checks failed: ${error.message}`);
+  logger.error('SCHEDULER', 'Startup checks failed', error.message);
  }
 }
 
@@ -2186,13 +2170,13 @@ function setupDailyTasks(client) {
  createCronJob("0 5 * * *", "debuff expiry check", () => handleDebuffExpiry(client));
  createCronJob("0 5 * * *", "buff expiry check", () => handleBuffExpiry(client));
  createCronJob("0 5 * * *", "reset global steal protections", () => {
-  console.log(`[scheduler.js]: 🛡️ Starting global steal protection reset`);
+  logger.info('CLEANUP', 'Starting global steal protection reset');
   try {
    const { resetAllStealProtections } = require('./commands/jobs/steal.js');
    resetAllStealProtections();
-   console.log(`[scheduler.js]: ✅ Global steal protections reset completed`);
+   logger.success('CLEANUP', 'Global steal protections reset completed');
   } catch (error) {
-   console.error(`[scheduler.js]: ❌ Error resetting global steal protections:`, error);
+   logger.error('CLEANUP', 'Error resetting global steal protections', error);
   }
  }, "America/New_York");
 
@@ -2203,12 +2187,12 @@ function setupDailyTasks(client) {
  createCronJob("0 0 1 * *", "monthly vending stock generation", () => generateVendingStockList(client));
  createCronJob("0 0 1 * *", "monthly nitro boost rewards", async () => {
   try {
-   console.log('[scheduler.js]: 💎 Starting monthly Nitro boost reward distribution (1st of month)...');
+   logger.info('BOOST', 'Starting monthly Nitro boost reward distribution (1st of month)...');
    const result = await distributeMonthlyBoostRewards(client);
-   console.log(`[scheduler.js]: ✅ Nitro boost rewards distributed - Rewarded: ${result.rewardedCount}, Already Rewarded: ${result.alreadyRewardedCount}, Errors: ${result.errorCount}, Total Tokens: ${result.totalTokens}`);
+   logger.success('BOOST', `Nitro boost rewards distributed - Rewarded: ${result.rewardedCount}, Already Rewarded: ${result.alreadyRewardedCount}, Errors: ${result.errorCount}, Total Tokens: ${result.totalTokens}`);
   } catch (error) {
    handleError(error, 'scheduler.js');
-   console.error('[scheduler.js]: ❌ Monthly Nitro boost reward distribution failed:', error.message);
+   logger.error('BOOST', 'Monthly Nitro boost reward distribution failed', error.message);
   }
  });
  // Monthly quest reward distribution - runs at 11:59 PM daily, but only processes on last day of month
@@ -2221,7 +2205,7 @@ function setupDailyTasks(client) {
    
    // If tomorrow is the 1st, then today is the last day of the month
    if (tomorrow.getDate() === 1) {
-    console.log('[scheduler.js]: 🏆 Starting monthly quest reward distribution (last day of month)...');
+    logger.info('QUEST', 'Starting monthly quest reward distribution (last day of month)...');
     const result = await processMonthlyQuestRewards();
     logger.success('SCHEDULER', `Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
    } else {
@@ -2229,7 +2213,7 @@ function setupDailyTasks(client) {
    }
   } catch (error) {
    handleError(error, 'scheduler.js');
-   console.error('[scheduler.js]: ❌ Monthly quest reward distribution failed:', error.message);
+   logger.error('QUEST', 'Monthly quest reward distribution failed', error.message);
   }
  });
 
@@ -2238,11 +2222,11 @@ function setupDailyTasks(client) {
   try {
    const result = await cleanupExpiredRaids(client);
    if (result.expiredCount > 0) {
-    console.log(`[scheduler.js]: ⏰ Periodic raid check - ${result.expiredCount} raid(s) expired`);
+    logger.info('RAID', `Periodic raid check - ${result.expiredCount} raid(s) expired`);
    }
   } catch (error) {
    handleError(error, 'scheduler.js');
-   console.error('[scheduler.js]: ❌ Periodic raid expiration check failed:', error);
+   logger.error('RAID', 'Periodic raid expiration check failed', error);
   }
  });
 
@@ -2250,9 +2234,9 @@ function setupDailyTasks(client) {
  createCronJob("0 */6 * * *", "quest completion check", () => checkQuestCompletions(client));
  createCronJob("0 */2 * * *", "village tracking check", () => checkVillageTracking(client)); // Every 2 hours
  createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
-  console.log(`[scheduler.js]: 🧹 Starting Blood Moon tracking cleanup`);
+  logger.info('CLEANUP', 'Starting Blood Moon tracking cleanup');
   cleanupOldTrackingData();
-  console.log(`[scheduler.js]: ✅ Blood Moon tracking cleanup completed`);
+  logger.success('CLEANUP', 'Blood Moon tracking cleanup completed');
  });
 }
 
@@ -2266,7 +2250,7 @@ function setupQuestPosting(client) {
    await postQuests(client);
   } catch (error) {
    handleError(error, 'scheduler.js');
-   console.error('[scheduler.js]: ❌ Quest posting check failed:', error.message);
+   logger.error('QUEST', 'Quest posting check failed', error.message);
   }
  }, "America/New_York");
 }
@@ -2281,19 +2265,19 @@ function setupGoogleSheetsRetry() {
   try {
    const pendingCount = await getPendingSheetOperationsCount();
    if (pendingCount > 0) {
-    console.log(`[scheduler.js]: 🔄 Retrying ${pendingCount} pending Google Sheets operations`);
+    logger.info('SYNC', `Retrying ${pendingCount} pending Google Sheets operations`);
     const result = await retryPendingSheetOperations();
     if (result.success) {
-     console.log(`[scheduler.js]: ✅ Retry completed: ${result.retried} successful, ${result.failed} failed`);
+     logger.success('SYNC', `Retry completed: ${result.retried} successful, ${result.failed} failed`);
     } else {
-     console.error(`[scheduler.js]: ❌ Retry failed: ${result.error}`);
+     logger.error('SYNC', 'Retry failed', result.error);
     }
    } else {
     logger.info('SCHEDULER', 'No pending Google Sheets operations to retry');
    }
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error(`[scheduler.js]: ❌ Google Sheets retry task failed: ${error.message}`);
+   logger.error('SYNC', 'Google Sheets retry task failed', error.message);
   }
  }, "America/New_York");
 }
@@ -2302,7 +2286,7 @@ function setupGoogleSheetsRetry() {
 
 function initializeScheduler(client) {
  if (!client || !client.isReady()) {
-  console.error("[scheduler.js]: ❌ Invalid or unready Discord client provided to scheduler");
+  logger.error('SCHEDULER', 'Invalid or unready Discord client provided to scheduler');
   return;
  }
 
@@ -2328,7 +2312,7 @@ function initializeScheduler(client) {
    try {
      await checkAndPostWeatherOnRestart(client);
    } catch (error) {
-     console.error(`[scheduler.js]: ❌ Restart weather check failed:`, error.message);
+     logger.error('WEATHER', 'Restart weather check failed', error.message);
      handleError(error, "scheduler.js", {
        commandName: 'initializeScheduler',
        operation: 'restartWeatherCheck'
