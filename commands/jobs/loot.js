@@ -506,15 +506,24 @@ module.exports = {
 
    if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
+    const now = new Date();
     
-    // Use the original endDate timestamp directly for Discord display
-    const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
-    
-    await interaction.editReply({
-     content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
-     ephemeral: true,
-    });
-    return;
+    // Check if debuff has actually expired
+    if (debuffEndDate <= now) {
+      // Debuff has expired, clear it
+      character.debuff.active = false;
+      character.debuff.endDate = null;
+      await character.save();
+    } else {
+      // Debuff is still active
+      const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+      
+      await interaction.editReply({
+       content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+       ephemeral: true,
+      });
+      return;
+    }
    }
 
    // Check for blight stage 4 effect (no gathering)

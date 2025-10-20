@@ -1217,14 +1217,10 @@ async function handleJailRelease(client) {
 
 async function handleDebuffExpiry(client) {
   const now = new Date();
-  // Get current time in EST
-  const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  // Create midnight EST in UTC (5 AM UTC = midnight EST)
-  const midnightEST = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 5, 0, 0, 0));
   
   const charactersWithActiveDebuffs = await Character.find({
     "debuff.active": true,
-    "debuff.endDate": { $lte: midnightEST },
+    "debuff.endDate": { $lte: now },
   });
 
   if (charactersWithActiveDebuffs.length > 0) {

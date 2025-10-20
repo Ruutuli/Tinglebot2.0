@@ -3437,5 +3437,6 @@ module.exports = {
   sendBlightReminders,
   validateCharacterOwnership,
   checkMissedRolls,
-  getCharacterBlightHistory
+  getCharacterBlightHistory,
+  completeBlightHealing
 };

@@ -1113,8 +1113,20 @@ module.exports = {
       // ------------------- Debuff and Inventory Sync Checks -------------------
       // Prevent item use if character is debuffed or inventory isn't synced.
       if (character.debuff?.active) {
-        const debuffEmbed = createDebuffEmbed(character);
-        return void await interaction.editReply({ embeds: [debuffEmbed] });
+        const debuffEndDate = new Date(character.debuff.endDate);
+        const now = new Date();
+        
+        // Check if debuff has actually expired
+        if (debuffEndDate <= now) {
+          // Debuff has expired, clear it
+          character.debuff.active = false;
+          character.debuff.endDate = null;
+          await character.save();
+        } else {
+          // Debuff is still active
+          const debuffEmbed = createDebuffEmbed(character);
+          return void await interaction.editReply({ embeds: [debuffEmbed] });
+        }
       }
 
       // Check inventory sync before proceeding

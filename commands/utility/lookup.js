@@ -144,9 +144,15 @@ async function handleItemLookup(interaction, itemName) {
   const isMaterial = Array.isArray(item.category)
     ? item.category.includes('Material')
     : item.category === 'Material';
+  
+  // Show stamina cost for all items that have it, including materials
+  if (item.staminaToCraft !== null && item.staminaToCraft !== undefined) {
+    staminaToCraftLine = `**__🟩 Stamina to Craft:__** ${String(item.staminaToCraft)}\n`;
+  }
+  
+  // Only show modifier hearts and stamina recovered for non-materials
   if (!isMaterial) {
     modifierHeartsLine = `**__❤️ Modifier/Hearts:__** ${String(item.modifierHearts || 'N/A')}\n`;
-    staminaToCraftLine = `**__🟩 Stamina to Craft:__** ${String(item.staminaToCraft || 'N/A')}\n`;
     staminaRecoveredLine = `**__💚 Stamina Recovered:__** ${String(item.staminaRecovered || 'N/A')}`;
   }
 

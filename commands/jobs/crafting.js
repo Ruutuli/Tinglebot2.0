@@ -107,11 +107,20 @@ module.exports = {
       // ------------------- Validate Character Status -------------------
       if (character.debuff?.active) {
         const debuffEndDate = new Date(character.debuff.endDate);
+        const now = new Date();
         
-        // Use the original endDate timestamp directly for Discord display
-        const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
-        
-        return interaction.editReply({ content: `❌ **${character.name} is currently debuffed and cannot craft.**\n🕒 Debuff Ends: <t:${unixTimestamp}:F>`, flags: [MessageFlags.Ephemeral] });
+        // Check if debuff has actually expired
+        if (debuffEndDate <= now) {
+          // Debuff has expired, clear it
+          character.debuff.active = false;
+          character.debuff.endDate = null;
+          await character.save();
+        } else {
+          // Debuff is still active
+          const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+          
+          return interaction.editReply({ content: `❌ **${character.name} is currently debuffed and cannot craft.**\n🕒 Debuff Ends: <t:${unixTimestamp}:F>`, flags: [MessageFlags.Ephemeral] });
+        }
       }
 
       // ------------------- Check Inventory Sync -------------------

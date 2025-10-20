@@ -86,6 +86,16 @@ function validateHealingJob(character) {
 async function checkDebuff(character) {
   if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
+    const now = new Date();
+    
+    // Check if debuff has actually expired
+    if (debuffEndDate <= now) {
+      // Debuff has expired, clear it
+      character.debuff.active = false;
+      character.debuff.endDate = null;
+      await character.save();
+      return { hasDebuff: false };
+    }
     
     // Use the original endDate timestamp directly for Discord display
     const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
