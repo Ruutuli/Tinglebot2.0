@@ -905,6 +905,12 @@ const createWritingSubmissionEmbed = (submissionData) => {
    const collabDisplay = collaborators.join(', ');
    fields.push({ name: "Collaboration", value: `Collaborating with ${collabDisplay}`, inline: true });
  }
+
+ // Add tagged characters field if present
+ if (submissionData.taggedCharacters && submissionData.taggedCharacters.length > 0) {
+   const taggedDisplay = submissionData.taggedCharacters.join(', ');
+   fields.push({ name: "Tagged Characters", value: taggedDisplay, inline: true });
+ }
  
    // Calculate token display based on collaboration and quest bonus
   let tokenDisplay = `${submissionData.finalTokenAmount} Tokens`;
@@ -1056,6 +1062,12 @@ const createArtSubmissionEmbed = (submissionData) => {
     const collaborators = Array.isArray(collab) ? collab : [collab];
     const collabDisplay = collaborators.join(', ');
     fields.push({ name: 'Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+  }
+
+  // Add tagged characters field if present
+  if (submissionData.taggedCharacters && submissionData.taggedCharacters.length > 0) {
+    const taggedDisplay = submissionData.taggedCharacters.join(', ');
+    fields.push({ name: 'Tagged Characters', value: taggedDisplay, inline: true });
   }
   
   // Calculate token display based on collaboration

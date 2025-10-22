@@ -77,6 +77,13 @@ module.exports = {
             .setDescription('Blight healing request ID (optional)')
             .setRequired(false)
         )
+        .addStringOption(option =>
+          option
+            .setName('tagged_characters')
+            .setDescription('Characters to tag in this submission (comma-separated character names)')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
     )
     .addSubcommand(subcommand =>
       subcommand
@@ -131,6 +138,13 @@ module.exports = {
             .setDescription('Blight healing request ID (optional)')
             .setRequired(false)
         )
+        .addStringOption(option =>
+          option
+            .setName('tagged_characters')
+            .setDescription('Characters to tag in this submission (comma-separated character names)')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
     ),
 
   // ------------------- Command Execution -------------------
@@ -177,6 +191,7 @@ module.exports = {
         const questId = interaction.options.getString('questid') || 'N/A';
         const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
+        const taggedCharactersInput = interaction.options.getString('tagged_characters');
 
         // Parse and validate collaborators
         let collab = [];
@@ -211,6 +226,35 @@ module.exports = {
             });
             return;
           }
+        }
+
+        // Parse and validate tagged characters
+        let taggedCharacters = [];
+        if (taggedCharactersInput) {
+          // Split by comma and trim whitespace
+          const characterNames = taggedCharactersInput.split(',').map(name => name.trim()).filter(name => name.length > 0);
+          
+          if (characterNames.length === 0) {
+            await interaction.editReply({ 
+              content: '❌ **Invalid tagged characters format.** Please provide character names separated by commas.' 
+            });
+            return;
+          }
+
+          // Validate that all characters exist and belong to the user
+          const { fetchCharactersByUserId } = require('../../database/db');
+          const userCharacters = await fetchCharactersByUserId(user.id);
+          const characterNamesSet = new Set(userCharacters.map(char => char.name.toLowerCase()));
+          
+          const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
+          if (invalidCharacters.length > 0) {
+            await interaction.editReply({ 
+              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct and belong to you.` 
+            });
+            return;
+          }
+
+          taggedCharacters = characterNames;
         }
 
         // Check if a file is attached
@@ -249,6 +293,7 @@ module.exports = {
           questBonus: 'N/A',
           collab: collab.length > 0 ? collab : [],
           blightId: blightId,
+          taggedCharacters: taggedCharacters.length > 0 ? taggedCharacters : [],
           tokenTracker: userData.tokenTracker || null,
         };
 
@@ -296,6 +341,7 @@ module.exports = {
         const questId = interaction.options.getString('questid') || 'N/A';
         const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
+        const taggedCharactersInput = interaction.options.getString('tagged_characters');
 
         // Parse and validate collaborators
         let collab = [];
@@ -330,6 +376,35 @@ module.exports = {
             });
             return;
           }
+        }
+
+        // Parse and validate tagged characters
+        let taggedCharacters = [];
+        if (taggedCharactersInput) {
+          // Split by comma and trim whitespace
+          const characterNames = taggedCharactersInput.split(',').map(name => name.trim()).filter(name => name.length > 0);
+          
+          if (characterNames.length === 0) {
+            await interaction.editReply({ 
+              content: '❌ **Invalid tagged characters format.** Please provide character names separated by commas.' 
+            });
+            return;
+          }
+
+          // Validate that all characters exist and belong to the user
+          const { fetchCharactersByUserId } = require('../../database/db');
+          const userCharacters = await fetchCharactersByUserId(user.id);
+          const characterNamesSet = new Set(userCharacters.map(char => char.name.toLowerCase()));
+          
+          const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
+          if (invalidCharacters.length > 0) {
+            await interaction.editReply({ 
+              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct and belong to you.` 
+            });
+            return;
+          }
+
+          taggedCharacters = characterNames;
         }
     
         // Fetch user data from the database
@@ -389,6 +464,7 @@ module.exports = {
           questBonus: questBonus,
           collab: collab.length > 0 ? collab : [],
           blightId: blightId,
+          taggedCharacters: taggedCharacters.length > 0 ? taggedCharacters : [],
           tokenTracker: userData.tokenTracker || null,
         };
     
@@ -464,6 +540,16 @@ module.exports = {
               notificationFields.push({ 
                 name: '🩸 Blight Healing ID', 
                 value: `\`${blightId}\``, 
+                inline: true 
+              });
+            }
+
+            // Add tagged characters if present
+            if (taggedCharacters && taggedCharacters.length > 0) {
+              const taggedDisplay = taggedCharacters.join(', ');
+              notificationFields.push({ 
+                name: '🏷️ Tagged Characters', 
+                value: taggedDisplay, 
                 inline: true 
               });
             }
