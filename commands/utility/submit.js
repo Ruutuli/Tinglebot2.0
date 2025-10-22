@@ -24,7 +24,7 @@ const {
   updateSubmissionData 
 } = require('../../utils/storage.js');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils.js');
-const { createWritingSubmissionEmbed } = require('../../embeds/embeds.js');
+const { createWritingSubmissionEmbed, createArtSubmissionEmbed } = require('../../embeds/embeds.js');
 const User = require('../../models/UserModel.js'); 
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
 
