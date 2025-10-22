@@ -4926,9 +4926,9 @@ async function handleTaggedCharactersAutocomplete(interaction, focusedOption) {
     
     console.log(`[handleTaggedCharactersAutocomplete]: Filtered to ${filteredCharacters.length} characters`);
     
-    // Map characters to choices
+    // Map characters to choices (just character names)
     const choices = filteredCharacters.map(character => ({
-      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+      name: character.name,
       value: character.name
     }));
     
