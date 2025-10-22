@@ -241,15 +241,15 @@ module.exports = {
             return;
           }
 
-          // Validate that all characters exist and belong to the user
-          const { fetchCharactersByUserId } = require('../../database/db');
-          const userCharacters = await fetchCharactersByUserId(user.id);
-          const characterNamesSet = new Set(userCharacters.map(char => char.name.toLowerCase()));
+          // Validate that all characters exist in the database
+          const { fetchAllCharacters } = require('../../database/db');
+          const allCharacters = await fetchAllCharacters();
+          const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
           
           const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
           if (invalidCharacters.length > 0) {
             await interaction.editReply({ 
-              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct and belong to you.` 
+              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct.` 
             });
             return;
           }
@@ -391,15 +391,15 @@ module.exports = {
             return;
           }
 
-          // Validate that all characters exist and belong to the user
-          const { fetchCharactersByUserId } = require('../../database/db');
-          const userCharacters = await fetchCharactersByUserId(user.id);
-          const characterNamesSet = new Set(userCharacters.map(char => char.name.toLowerCase()));
+          // Validate that all characters exist in the database
+          const { fetchAllCharacters } = require('../../database/db');
+          const allCharacters = await fetchAllCharacters();
+          const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
           
           const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
           if (invalidCharacters.length > 0) {
             await interaction.editReply({ 
-              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct and belong to you.` 
+              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct.` 
             });
             return;
           }

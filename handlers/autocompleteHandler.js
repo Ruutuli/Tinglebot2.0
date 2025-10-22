@@ -656,8 +656,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             if (focusedOption.name === "collab") {
               await handleSubmitCollabAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "tagged_characters") {
-              console.log(`[autocompleteHandler.js]: Calling handleCharacterBasedCommandsAutocomplete for tagged_characters`);
-              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "submit");
+              console.log(`[autocompleteHandler.js]: Calling handleTaggedCharactersAutocomplete for tagged_characters`);
+              await handleTaggedCharactersAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -4901,6 +4901,42 @@ async function handleSubmitCollabAutocomplete(interaction, focusedOption) {
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleSubmitCollabAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleTaggedCharactersAutocomplete -------------------
+// Provides autocomplete suggestions for ALL characters when tagging in submissions
+async function handleTaggedCharactersAutocomplete(interaction, focusedOption) {
+  try {
+    const searchQuery = focusedOption.value?.toLowerCase() || '';
+    console.log(`[handleTaggedCharactersAutocomplete]: Called with search query: "${searchQuery}"`);
+    
+    // Fetch ALL characters from the database (not just user-owned)
+    const characters = await fetchAllCharacters();
+    console.log(`[handleTaggedCharactersAutocomplete]: Found ${characters.length} total characters`);
+    
+    // Filter characters based on search query
+    const filteredCharacters = characters
+      .filter(character => {
+        const characterName = character.name.toLowerCase();
+        return characterName.includes(searchQuery);
+      })
+      .slice(0, 25); // Discord limit
+    
+    console.log(`[handleTaggedCharactersAutocomplete]: Filtered to ${filteredCharacters.length} characters`);
+    
+    // Map characters to choices
+    const choices = filteredCharacters.map(character => ({
+      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+      value: character.name
+    }));
+    
+    console.log(`[handleTaggedCharactersAutocomplete]: Generated ${choices.length} choices`);
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleTaggedCharactersAutocomplete]: Error:", error);
     await safeRespondWithError(interaction);
   }
 }
