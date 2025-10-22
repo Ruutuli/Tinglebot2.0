@@ -695,7 +695,35 @@ module.exports = {
         // Upload the image to Google Drive or cloud storage
         const googleImageUrl = await uploadSubmissionImage(discordImageUrl, fileName);
 
-        // Create submission data for auto-approval
+        // Post the embed publicly in the submissions channel first
+        const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
+        const embed = createArtSubmissionEmbed({
+          submissionId: generateUniqueId('A'),
+          title,
+          fileName,
+          category: 'art',
+          userId: user.id,
+          username: user.username,
+          userAvatar: user.displayAvatarURL({ dynamic: true }),
+          fileUrl: googleImageUrl,
+          finalTokenAmount: 0,
+          tokenCalculation: 'No tokens - Display only',
+          baseSelections: [],
+          baseCounts: new Map(),
+          typeMultiplierSelections: [],
+          typeMultiplierCounts: new Map(),
+          productMultiplierValue: null,
+          addOnsApplied: [],
+          specialWorksApplied: [],
+          collab: [],
+          blightId: null,
+          taggedCharacters: taggedCharacters,
+          questEvent: 'N/A',
+          questBonus: 'N/A'
+        });
+        const sentMessage = await submissionsChannel.send({ embeds: [embed] });
+
+        // Create submission data for auto-approval with message URL
         const submissionId = generateUniqueId('A');
         const submissionData = {
           submissionId,
@@ -706,7 +734,7 @@ module.exports = {
           username: user.username,
           userAvatar: user.displayAvatarURL({ dynamic: true }),
           fileUrl: googleImageUrl,
-          messageUrl: null, // Will be set after posting
+          messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}`,
           finalTokenAmount: 0, // No tokens
           tokenCalculation: 'No tokens - Display only',
           baseSelections: [],
@@ -732,16 +760,6 @@ module.exports = {
         const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
         const approvedSubmission = new ApprovedSubmission(submissionData);
         await approvedSubmission.save();
-
-        // Post the embed publicly in the submissions channel
-        const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
-        const embed = createArtSubmissionEmbed(submissionData);
-        const sentMessage = await submissionsChannel.send({ embeds: [embed] });
-        
-        // Update with message URL
-        await approvedSubmission.updateOne({ 
-          messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}` 
-        });
 
         await interaction.editReply({
           content: '🎨 **Your art submission has been posted for display (no tokens).**',
@@ -794,7 +812,30 @@ module.exports = {
           taggedCharacters = characterNames;
         }
 
-        // Create submission data for auto-approval
+        // Post the embed publicly in the submissions channel first
+        const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
+        const embed = createWritingSubmissionEmbed({
+          submissionId: generateUniqueId('W'),
+          title,
+          category: 'writing',
+          userId: user.id,
+          username: user.username,
+          userAvatar: user.displayAvatarURL({ dynamic: true }),
+          fileUrl: null,
+          finalTokenAmount: 0,
+          tokenCalculation: 'No tokens - Display only',
+          wordCount: null,
+          link,
+          description,
+          collab: [],
+          blightId: null,
+          taggedCharacters: taggedCharacters,
+          questEvent: 'N/A',
+          questBonus: 'N/A'
+        });
+        const sentMessage = await submissionsChannel.send({ embeds: [embed] });
+
+        // Create submission data for auto-approval with message URL
         const submissionId = generateUniqueId('W');
         const submissionData = {
           submissionId,
@@ -804,7 +845,7 @@ module.exports = {
           username: user.username,
           userAvatar: user.displayAvatarURL({ dynamic: true }),
           fileUrl: null,
-          messageUrl: null, // Will be set after posting
+          messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}`,
           finalTokenAmount: 0, // No tokens
           tokenCalculation: 'No tokens - Display only',
           wordCount: null,
@@ -826,16 +867,6 @@ module.exports = {
         const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
         const approvedSubmission = new ApprovedSubmission(submissionData);
         await approvedSubmission.save();
-
-        // Post the embed publicly in the submissions channel
-        const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
-        const embed = createWritingSubmissionEmbed(submissionData);
-        const sentMessage = await submissionsChannel.send({ embeds: [embed] });
-        
-        // Update with message URL
-        await approvedSubmission.updateOne({ 
-          messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}` 
-        });
 
         await interaction.editReply({
           content: '📚 **Your writing submission has been posted for display (no tokens).**',
