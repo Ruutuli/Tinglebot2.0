@@ -80,7 +80,7 @@ module.exports = {
         .addStringOption(option =>
           option
             .setName('tagged_characters')
-            .setDescription('Characters to tag in this submission (comma-separated character names)')
+            .setDescription('Characters to tag in this submission (comma-separated character names, e.g., "Alice, Bob, Charlie")')
             .setRequired(false)
             .setAutocomplete(true)
         )
@@ -141,7 +141,7 @@ module.exports = {
         .addStringOption(option =>
           option
             .setName('tagged_characters')
-            .setDescription('Characters to tag in this submission (comma-separated character names)')
+            .setDescription('Characters to tag in this submission (comma-separated character names, e.g., "Alice, Bob, Charlie")')
             .setRequired(false)
             .setAutocomplete(true)
         )
