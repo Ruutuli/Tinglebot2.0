@@ -652,9 +652,11 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
 
           // ------------------- Submit Command -------------------
           case "submit":
+            console.log(`[autocompleteHandler.js]: Submit command autocomplete - focusedOption.name: ${focusedOption.name}`);
             if (focusedOption.name === "collab") {
               await handleSubmitCollabAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "tagged_characters") {
+              console.log(`[autocompleteHandler.js]: Calling handleCharacterBasedCommandsAutocomplete for tagged_characters`);
               await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "submit");
             }
             break;
@@ -807,10 +809,13 @@ async function handleCharacterBasedCommandsAutocomplete(
 ) {
  try {
                 const userId = interaction.user.id;
+                console.log(`[handleCharacterBasedCommandsAutocomplete]: Called for command: ${commandName}, userId: ${userId}`);
 
   // Fetch all characters owned by the user (both regular and mod characters)
                 const characters = await fetchCharactersByUserId(userId);
                 const modCharacters = await fetchModCharactersByUserId(userId);
+                
+                console.log(`[handleCharacterBasedCommandsAutocomplete]: Found ${characters.length} regular characters and ${modCharacters.length} mod characters`);
                 
                 // Combine regular characters and mod characters
                 const allCharacters = [...characters, ...modCharacters];
@@ -821,6 +826,7 @@ async function handleCharacterBasedCommandsAutocomplete(
    value: character.name,
                 }));
                 
+                console.log(`[handleCharacterBasedCommandsAutocomplete]: Generated ${choices.length} choices`);
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
