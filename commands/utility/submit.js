@@ -145,6 +145,60 @@ module.exports = {
             .setRequired(false)
             .setAutocomplete(true)
         )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('art-notokens')
+        .setDescription('Submit art for display (no tokens)')
+        .addAttachmentOption(option =>
+          option
+            .setName('file')
+            .setDescription('The art file to submit')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('title')
+            .setDescription('Title for your submission')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('tagged_characters')
+            .setDescription('Characters to tag in this submission (comma-separated character names, e.g., "Alice, Bob, Charlie")')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('writing-notokens')
+        .setDescription('Submit writing for display (no tokens)')
+        .addStringOption(option =>
+          option
+            .setName('title')
+            .setDescription('Title for your writing submission')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('link')
+            .setDescription('Link to your writing (Google Docs, etc.)')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('description')
+            .setDescription('Brief description of your writing')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('tagged_characters')
+            .setDescription('Characters to tag in this submission (comma-separated character names, e.g., "Alice, Bob, Charlie")')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
     ),
 
   // ------------------- Command Execution -------------------
@@ -588,6 +642,210 @@ module.exports = {
           content: '❌ **Error processing your submission. Please try again later.**',
           ephemeral: true, // Ensure error messages are ephemeral
         });
+      }
+    }
+
+    // ------------------- Handle Art No-Tokens Submission -------------------
+    if (subcommand === 'art-notokens') {
+      try {
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+        const user = interaction.user;
+        const attachedFile = interaction.options.getAttachment('file');
+        const title = interaction.options.getString('title')?.trim() || attachedFile.name;
+        const taggedCharactersInput = interaction.options.getString('tagged_characters');
+
+        // Parse and validate tagged characters
+        let taggedCharacters = [];
+        if (taggedCharactersInput) {
+          const characterNames = taggedCharactersInput.split(',').map(name => name.trim()).filter(name => name.length > 0);
+          
+          if (characterNames.length === 0) {
+            await interaction.editReply({ 
+              content: '❌ **Invalid tagged characters format.** Please provide character names separated by commas.' 
+            });
+            return;
+          }
+
+          // Validate that all characters exist in the database
+          const { fetchAllCharacters } = require('../../database/db');
+          const allCharacters = await fetchAllCharacters();
+          const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
+          
+          const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
+          if (invalidCharacters.length > 0) {
+            await interaction.editReply({ 
+              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct.` 
+            });
+            return;
+          }
+
+          taggedCharacters = characterNames;
+        }
+
+        // Check if a file is attached
+        if (!attachedFile) {
+          await interaction.editReply({ content: '❌ **No file attached. Please try again.**' });
+          return;
+        }
+
+        const fileName = path.basename(attachedFile.name);
+        const discordImageUrl = attachedFile.url;
+
+        // Upload the image to Google Drive or cloud storage
+        const googleImageUrl = await uploadSubmissionImage(discordImageUrl, fileName);
+
+        // Create submission data for auto-approval
+        const submissionId = generateUniqueId('A');
+        const submissionData = {
+          submissionId,
+          title,
+          fileName,
+          category: 'art',
+          userId: user.id,
+          username: user.username,
+          userAvatar: user.displayAvatarURL({ dynamic: true }),
+          fileUrl: googleImageUrl,
+          messageUrl: null, // Will be set after posting
+          finalTokenAmount: 0, // No tokens
+          tokenCalculation: 'No tokens - Display only',
+          baseSelections: [],
+          baseCounts: new Map(),
+          typeMultiplierSelections: [],
+          typeMultiplierCounts: new Map(),
+          productMultiplierValue: null,
+          addOnsApplied: [],
+          specialWorksApplied: [],
+          collab: [],
+          blightId: null,
+          taggedCharacters: taggedCharacters,
+          questEvent: 'N/A',
+          questBonus: 'N/A',
+          approvedBy: 'System (No-Tokens)',
+          approvedAt: new Date(),
+          approvalMessageId: null,
+          pendingNotificationMessageId: null,
+          submittedAt: new Date()
+        };
+
+        // Save directly to approved submissions database
+        const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
+        const approvedSubmission = new ApprovedSubmission(submissionData);
+        await approvedSubmission.save();
+
+        // Post the embed publicly in the submissions channel
+        const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
+        const embed = createArtSubmissionEmbed(submissionData);
+        const sentMessage = await submissionsChannel.send({ embeds: [embed] });
+        
+        // Update with message URL
+        await approvedSubmission.updateOne({ 
+          messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}` 
+        });
+
+        await interaction.editReply({
+          content: '🎨 **Your art submission has been posted for display (no tokens).**',
+          ephemeral: true,
+        });
+
+      } catch (error) {
+        handleInteractionError(error, 'submit.js');
+        console.error('Error handling art notokens submission:', error);
+        await interaction.editReply({ content: '❌ **Error processing your submission. Please try again later.**' });
+      }
+    }
+
+    // ------------------- Handle Writing No-Tokens Submission -------------------
+    if (subcommand === 'writing-notokens') {
+      try {
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+        const user = interaction.user;
+        const title = interaction.options.getString('title')?.trim();
+        const link = interaction.options.getString('link');
+        const description = interaction.options.getString('description') || 'No description provided.';
+        const taggedCharactersInput = interaction.options.getString('tagged_characters');
+
+        // Parse and validate tagged characters
+        let taggedCharacters = [];
+        if (taggedCharactersInput) {
+          const characterNames = taggedCharactersInput.split(',').map(name => name.trim()).filter(name => name.length > 0);
+          
+          if (characterNames.length === 0) {
+            await interaction.editReply({ 
+              content: '❌ **Invalid tagged characters format.** Please provide character names separated by commas.' 
+            });
+            return;
+          }
+
+          // Validate that all characters exist in the database
+          const { fetchAllCharacters } = require('../../database/db');
+          const allCharacters = await fetchAllCharacters();
+          const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
+          
+          const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
+          if (invalidCharacters.length > 0) {
+            await interaction.editReply({ 
+              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct.` 
+            });
+            return;
+          }
+
+          taggedCharacters = characterNames;
+        }
+
+        // Create submission data for auto-approval
+        const submissionId = generateUniqueId('W');
+        const submissionData = {
+          submissionId,
+          title,
+          category: 'writing',
+          userId: user.id,
+          username: user.username,
+          userAvatar: user.displayAvatarURL({ dynamic: true }),
+          fileUrl: null,
+          messageUrl: null, // Will be set after posting
+          finalTokenAmount: 0, // No tokens
+          tokenCalculation: 'No tokens - Display only',
+          wordCount: null,
+          link,
+          description,
+          collab: [],
+          blightId: null,
+          taggedCharacters: taggedCharacters,
+          questEvent: 'N/A',
+          questBonus: 'N/A',
+          approvedBy: 'System (No-Tokens)',
+          approvedAt: new Date(),
+          approvalMessageId: null,
+          pendingNotificationMessageId: null,
+          submittedAt: new Date()
+        };
+
+        // Save directly to approved submissions database
+        const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
+        const approvedSubmission = new ApprovedSubmission(submissionData);
+        await approvedSubmission.save();
+
+        // Post the embed publicly in the submissions channel
+        const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
+        const embed = createWritingSubmissionEmbed(submissionData);
+        const sentMessage = await submissionsChannel.send({ embeds: [embed] });
+        
+        // Update with message URL
+        await approvedSubmission.updateOne({ 
+          messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}` 
+        });
+
+        await interaction.editReply({
+          content: '📚 **Your writing submission has been posted for display (no tokens).**',
+          ephemeral: true,
+        });
+
+      } catch (error) {
+        handleInteractionError(error, 'submit.js');
+        console.error('Error handling writing notokens submission:', error);
+        await interaction.editReply({ content: '❌ **Error processing your submission. Please try again later.**' });
       }
     }
     
