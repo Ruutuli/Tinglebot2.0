@@ -947,7 +947,7 @@ const createWritingSubmissionEmbed = (submissionData) => {
  });
  fields.push({ name: "Description", value: submissionData.description, inline: false });
 
- return new EmbedBuilder()
+ const embed = new EmbedBuilder()
   .setColor("#AA926A")
   .setTitle(`📚 ${submissionData.title}`)
   .setAuthor({
@@ -956,8 +956,16 @@ const createWritingSubmissionEmbed = (submissionData) => {
   })
   .addFields(fields)
   .setImage(DEFAULT_IMAGE_URL)
-  .setTimestamp()
-  .setFooter({ text: "⏳ Please wait for a mod to approve your submission!" });
+  .setTimestamp();
+
+ // Set different footer based on submission type
+ if (submissionData.tokenCalculation === 'No tokens - Display only') {
+   embed.setFooter({ text: "✅ Auto-approved - Display only" });
+ } else {
+   embed.setFooter({ text: "⏳ Please wait for a mod to approve your submission!" });
+ }
+
+ return embed;
 };
 
 // ------------------- Function: createArtSubmissionEmbed -------------------
@@ -1080,16 +1088,27 @@ const createArtSubmissionEmbed = (submissionData) => {
   }
   
   fields.push({ name: 'Token Total', value: tokenDisplay, inline: true });
-  fields.push({ name: 'Token Calculation', value: `\n${breakdown}\n`, inline: false });
+  
+  // Only show token calculation if it's not a no-tokens submission
+  if (tokenCalculation !== 'No tokens - Display only') {
+    fields.push({ name: 'Token Calculation', value: `\n${breakdown}\n`, inline: false });
+  }
 
   // Build the embed
   const embed = new EmbedBuilder()
     .setColor(0x2ecc71)
     .setAuthor({ name: `Submitted by: ${username || 'Unknown User'}`, iconURL: userAvatar || undefined })
     .setTitle(`🎨 ${artTitle}`)
-    .addFields(fields)
-    .setFooter({ text: '⏳ Please wait for a mod to approve your submission!', iconURL: undefined })
-    .setTimestamp(updatedAt || new Date());
+    .addFields(fields);
+
+  // Set different footer and timestamp based on submission type
+  if (tokenCalculation === 'No tokens - Display only') {
+    embed.setFooter({ text: '✅ Auto-approved - Display only', iconURL: undefined })
+         .setTimestamp(updatedAt || new Date());
+  } else {
+    embed.setFooter({ text: '⏳ Please wait for a mod to approve your submission!', iconURL: undefined })
+         .setTimestamp(updatedAt || new Date());
+  }
 
   if (fileUrl) {
     embed.setImage(fileUrl);
