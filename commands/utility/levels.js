@@ -49,26 +49,6 @@ module.exports = {
             .setMinValue(5)
             .setMaxValue(25)
         )
-    )
-    
-    // ------------------- Subcommand: import -------------------
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('import')
-        .setDescription('📥 Import your levels from MEE6 (one-time only)')
-        .addIntegerOption(option =>
-          option.setName('mee6_level')
-            .setDescription('Your current MEE6 level')
-            .setRequired(true)
-            .setMinValue(1)
-            .setMaxValue(1000)
-        )
-        .addIntegerOption(option =>
-          option.setName('last_exchanged_level')
-            .setDescription('Last level you exchanged for tokens in MEE6 (0 if never exchanged)')
-            .setRequired(true)
-            .setMinValue(0)
-        )
     ),
 
   async execute(interaction) {
@@ -81,8 +61,6 @@ module.exports = {
         await handleExchange(interaction);
       } else if (subcommand === 'leaderboard') {
         await handleLeaderboard(interaction);
-      } else if (subcommand === 'import') {
-        await handleImport(interaction);
       }
       
     } catch (error) {
@@ -396,114 +374,3 @@ async function handleLeaderboard(interaction) {
   }
 }
 
-// ------------------- Function: handleImport -------------------
-async function handleImport(interaction) {
-  try {
-    // Connect to database
-    await connectToTinglebot();
-    
-    // Get or create user
-    const user = await User.getOrCreateUser(interaction.user.id);
-    
-    const mee6Level = interaction.options.getInteger('mee6_level');
-    const lastExchangedLevel = interaction.options.getInteger('last_exchanged_level');
-    
-    // Validate that last_exchanged_level is less than mee6_level
-    if (lastExchangedLevel >= mee6Level) {
-      return await interaction.reply({
-        content: `❌ Invalid input! Your last exchanged level (${lastExchangedLevel}) cannot be greater than or equal to your current MEE6 level (${mee6Level}).`,
-        ephemeral: true
-      });
-    }
-    
-    // Perform the import
-    const importResult = await user.importMee6Levels(mee6Level, lastExchangedLevel);
-    
-    if (!importResult.success) {
-      const embed = new EmbedBuilder()
-        .setColor(0xff6b6b)
-        .setTitle('❌ Import Failed')
-        .setDescription(`**${importResult.message}**`)
-        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-        .setFooter({
-          text: importResult.hasImported ? 'You can only import once from MEE6' : 'Please check your input values',
-          icon_url: interaction.client.user.displayAvatarURL()
-        })
-        .setTimestamp();
-      
-      return await interaction.reply({ embeds: [embed] });
-    }
-    
-    // Create success embed
-    const embed = new EmbedBuilder()
-      .setColor(0x00ff88)
-      .setTitle('🎉 MEE6 Import Successful!')
-      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .addFields(
-        {
-          name: '📊 Imported Level',
-          value: `**Level ${importResult.importedLevel}**`,
-          inline: true
-        },
-        {
-          name: '🔄 Last Exchanged Level',
-          value: `**Level ${importResult.lastExchangedLevel}**`,
-          inline: true
-        },
-        {
-          name: '💎 Exchangeable Levels',
-          value: `**${importResult.exchangeableLevels}**`,
-          inline: true
-        },
-        {
-          name: '🪙 Potential Tokens',
-          value: `**${importResult.potentialTokens.toLocaleString()}**`,
-          inline: true
-        },
-        {
-          name: '📅 Import Date',
-          value: `<t:${Math.floor(Date.now() / 1000)}:F>`,
-          inline: true
-        },
-        {
-          name: '⚠️ Important',
-          value: '**This import can only be done once!**',
-          inline: true
-        }
-      )
-      .setDescription('**Your MEE6 levels have been successfully imported into our new leveling system!**')
-      .setFooter({
-        text: 'Use /levels exchange to convert levels to tokens',
-        icon_url: interaction.client.user.displayAvatarURL()
-      })
-      .setTimestamp();
-    
-    if (importResult.exchangeableLevels > 0) {
-      embed.addFields({
-        name: '✨ Ready to Exchange!',
-        value: `You can immediately exchange **${importResult.exchangeableLevels} levels** for **${importResult.potentialTokens.toLocaleString()} tokens**!`,
-        inline: false
-      });
-    } else {
-      embed.addFields({
-        name: '📝 Note',
-        value: 'You have no exchangeable levels because your last exchanged level matches your current level.',
-        inline: false
-      });
-    }
-    
-    await interaction.reply({ embeds: [embed] });
-    
-    // Log the import
-    console.log(`[levels.js]: ${interaction.user.tag} imported Level ${importResult.importedLevel} from MEE6 (last exchanged: ${importResult.lastExchangedLevel})`);
-    
-  } catch (error) {
-    console.error('[levels.js]: Error in handleImport:', error);
-    await interaction.reply({
-      content: '❌ There was an error processing your MEE6 import. Please try again later.',
-      ephemeral: true
-    });
-  }
-}

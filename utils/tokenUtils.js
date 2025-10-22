@@ -532,6 +532,14 @@ async function getQuestBonus(questId) {
             return questBonus;
         }
 
+        // Check for per_unit format - use per_unit amount as quest bonus
+        const perUnitMatch = tokenReward.match(/per_unit:(\d+)/);
+        if (perUnitMatch) {
+            questBonus = parseInt(perUnitMatch[1], 10);
+            console.log(`[tokenUtils.js]: 🎯 Found per_unit format, using per_unit amount as quest bonus: ${questBonus} for quest ${questId}`);
+            return questBonus;
+        }
+
         // If no quest bonus found, return 0
         console.log(`[tokenUtils.js]: ⚠️ No quest bonus found in token reward for quest ${questId}`);
         return 0;
