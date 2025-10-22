@@ -654,6 +654,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
           case "submit":
             if (focusedOption.name === "collab") {
               await handleSubmitCollabAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "tagged_characters") {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "submit");
             }
             break;
 

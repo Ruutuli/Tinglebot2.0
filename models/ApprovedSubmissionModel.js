@@ -160,6 +160,12 @@ const approvedSubmissionSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  
+  // ------------------- Tagged Characters -------------------
+  taggedCharacters: {
+    type: [String], // Array of character names
+    default: []
   }
 }, {
   timestamps: true

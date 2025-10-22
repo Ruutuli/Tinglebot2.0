@@ -1753,6 +1753,7 @@ async function handleApprove(interaction) {
           description: submission.description,
           collab: submission.collab,
           blightId: submission.blightId || null,
+          taggedCharacters: submission.taggedCharacters || [],
           questEvent: submission.questEvent || 'N/A',
           questBonus: submission.questBonus || 'N/A',
           approvedBy: interaction.user.tag,
