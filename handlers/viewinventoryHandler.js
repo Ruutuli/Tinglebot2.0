@@ -76,23 +76,34 @@ module.exports = {
         return;
       }
 
-      // ------------------- Combine and Alphabetize Inventory Items -------------------
-      // Merge duplicate items by summing their quantities, filter out zero quantities, then sort items alphabetically.
-      const combinedItems = inventoryItems.reduce((acc, item) => {
-        const existingItem = acc.find(i => i.name === item.name);
-        if (existingItem) {
-          existingItem.quantity += item.quantity;
-        } else {
-          acc.push({ name: item.name, quantity: item.quantity, type: item.type });
-        }
-        return acc;
-      }, [])
-      .filter(item => item.quantity > 0) // Remove items with zero quantity
-      .sort((a, b) => a.name.localeCompare(b.name));
+      // ------------------- Process Inventory Items with Crafting Status -------------------
+      // Keep crafted and non-crafted items separate, filter out zero quantities, then sort items alphabetically.
+      const processedItems = inventoryItems
+        .filter(item => item.quantity > 0) // Remove items with zero quantity
+        .map(item => {
+          // Determine if item is crafted
+          const obtainMethod = (item.obtain || '').toString().toLowerCase();
+          const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
+          
+          return {
+            name: item.itemName,
+            quantity: item.quantity,
+            type: item.type,
+            isCrafted: isCrafted,
+            obtain: item.obtain || 'Unknown',
+            craftedAt: item.craftedAt
+          };
+        })
+        .sort((a, b) => {
+          // Sort by name first, then by crafting status (non-crafted first)
+          const nameCompare = a.name.localeCompare(b.name);
+          if (nameCompare !== 0) return nameCompare;
+          return a.isCrafted ? 1 : -1;
+        });
 
       // ------------------- Group Items by Type -------------------
-      // Group combined items by their type for organized display.
-      const itemsByType = combinedItems.reduce((acc, item) => {
+      // Group processed items by their type for organized display.
+      const itemsByType = processedItems.reduce((acc, item) => {
         if (!acc[item.type]) {
           acc[item.type] = [];
         }
@@ -120,10 +131,18 @@ module.exports = {
       // Generates an embed object containing inventory details for the given type and page.
       const generateEmbed = (type, page) => {
         const items = getInventoryPage(type, page);
+        const itemDescriptions = items.map(item => {
+          const craftingStatus = item.isCrafted ? '🔨' : '📦';
+          const craftedDate = item.craftedAt ? ` (${new Date(item.craftedAt).toLocaleDateString()})` : '';
+          return `${craftingStatus} **${item.name}**: ${item.quantity}${craftedDate}`;
+        });
+        
         return {
           title: `${characterName}'s Inventory - ${type}`,
-          description: items.map(item => `${item.name}: ${item.quantity}`).join('\n'),
-          footer: { text: `Page ${page} of ${Math.ceil(itemsByType[type].length / ITEMS_PER_PAGE)}` }
+          description: itemDescriptions.join('\n'),
+          footer: { 
+            text: `Page ${page} of ${Math.ceil(itemsByType[type].length / ITEMS_PER_PAGE)} | 🔨 = Crafted, 📦 = Found/Other` 
+          }
         };
       };
 

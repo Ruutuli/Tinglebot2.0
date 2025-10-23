@@ -1459,8 +1459,12 @@ async function handleShopSell(interaction) {
   const quantity = interaction.options.getInteger("quantity");
 
   // ------------------- Clean Item Name from Copy-Paste -------------------
-  // Remove quantity information from item names if users copy-paste autocomplete text
-  const itemName = itemNameRaw.replace(/\s*\(Qty:\s*\d+\)/i, '').trim();
+  // Remove quantity information and crafting icons from item names if users copy-paste autocomplete text
+  const itemName = itemNameRaw
+    .replace(/^[🔨📦]\s*/, '') // Remove crafting icons
+    .replace(/\s*\(Qty:\s*\d+\)/i, '') // Remove quantity info
+    .replace(/\s*-\s*Sell:\s*[\d,]+/i, '') // Remove sell price info
+    .trim();
 
   const user = await User.findOne({ discordId: interaction.user.id });
   if (!user || !user.tokensSynced) {
@@ -1556,7 +1560,19 @@ if (quantity <= 0) {
   const inventoryCollection = await getCharacterInventoryCollectionWithModSupport(
    character
   );
-  const inventoryItem = await inventoryCollection.findOne({ itemName });
+  
+  // Get all inventory items to aggregate quantities from multiple stacks
+  const inventoryItems = await inventoryCollection.find().toArray();
+  
+  // Sum up all quantities of the same item (case-insensitive)
+  const totalQuantity = inventoryItems
+    .filter(invItem => invItem.itemName?.toLowerCase() === itemName.toLowerCase())
+    .reduce((sum, invItem) => sum + (invItem.quantity || 0), 0);
+  
+  // Find the first item entry for display purposes and crafting status
+  const inventoryItem = inventoryItems.find(invItem =>
+    invItem.itemName?.toLowerCase() === itemName.toLowerCase()
+  );
 
   // Get equipped items to check if we're trying to sell more than available non-equipped items
   const equippedItems = [
@@ -1579,13 +1595,10 @@ if (quantity <= 0) {
     return;
   }
 
-  if (!inventoryItem || parseInt(inventoryItem.quantity, 10) < quantity) {
+  if (!inventoryItem || totalQuantity < quantity) {
    console.error(
-    `[shops]: Insufficient inventory for item: ${itemName}. Available: ${
-     inventoryItem?.quantity || 0
-    }`
+    `[shops]: Insufficient inventory for item: ${itemName}. Available: ${totalQuantity}`
    );
-   const availableQuantity = inventoryItem?.quantity || 0;
    return interaction.editReply({
     embeds: [{
       color: 0xFF0000, // Red color
@@ -1599,12 +1612,12 @@ if (quantity <= 0) {
         },
         {
           name: 'Available',
-          value: `${availableQuantity}`,
+          value: `${totalQuantity}`,
           inline: true
         },
         {
           name: 'Shortage',
-          value: `${quantity - availableQuantity}`,
+          value: `${quantity - totalQuantity}`,
           inline: true
         }
       ],
@@ -1619,7 +1632,7 @@ if (quantity <= 0) {
    });
   }
 
-  console.log(`[shops]: Inventory validated: ${itemName} x${inventoryItem.quantity} available`);
+  console.log(`[shops]: Inventory validated: ${itemName} x${totalQuantity} available`);
 
   // Safely handle obtain field - ensure it's a string
   const obtainMethod = (inventoryItem.obtain || '').toString().toLowerCase();

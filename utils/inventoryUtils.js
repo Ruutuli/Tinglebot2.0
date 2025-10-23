@@ -384,9 +384,8 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     }
 
     if (inventoryItem) {
-      // If we're adding crafted items and the existing item wasn't crafted, create a new entry
-      if (obtain === 'Crafting' && !inventoryItem.obtain?.toLowerCase().includes('crafting')) {
-        // Create a new entry for the crafted items
+      // For crafted items, always create a new entry to maintain separation
+      if (obtain === 'Crafting') {
         const newCraftedItem = {
           characterId,
           itemName: item.itemName,
@@ -404,7 +403,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         }
         await inventoryCollection.insertOne(newCraftedItem);
       } else {
-        // Update existing item by incrementing quantity (for same obtain method)
+        // For non-crafted items, update existing item by incrementing quantity
         await inventoryCollection.updateOne(
           { characterId, itemName: inventoryItem.itemName },
           { $inc: { quantity: quantity } }
@@ -546,13 +545,8 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
 
     // Calculate total available quantity
     const totalQuantity = inventoryItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-    
-    // Find the item with the most quantity to remove from
-    const inventoryItem = inventoryItems.reduce((max, item) => 
-      (item.quantity || 0) > (max.quantity || 0) ? item : max
-    );
 
-    if (!inventoryItem || inventoryItems.length === 0) {
+    if (inventoryItems.length === 0) {
       return false;
     }
 
@@ -571,21 +565,64 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error(`Not enough ${itemName} in inventory`);
     }
 
-    const newQuantity = inventoryItem.quantity - quantity;
+    // Sort items to prioritize removal order (non-crafted first, then crafted)
+    // This ensures we remove from the "less valuable" stacks first
+    const sortedItems = inventoryItems.sort((a, b) => {
+      const aObtain = (a.obtain || '').toString().toLowerCase();
+      const bObtain = (b.obtain || '').toString().toLowerCase();
+      const aIsCrafted = aObtain.includes("crafting") || aObtain.includes("crafted");
+      const bIsCrafted = bObtain.includes("crafting") || bObtain.includes("crafted");
+      
+      // Non-crafted items first, then crafted items
+      if (aIsCrafted && !bIsCrafted) return 1;
+      if (!aIsCrafted && bIsCrafted) return -1;
+      
+      // If both are same type, sort by quantity (smaller stacks first)
+      return (a.quantity || 0) - (b.quantity || 0);
+    });
 
-    if (newQuantity === 0) {
-      const deleteResult = await inventoryCollection.deleteOne({
-        _id: inventoryItem._id
+    let remainingToRemove = quantity;
+    const itemsToUpdate = [];
+    const itemsToDelete = [];
+
+    // Distribute removal across multiple stacks
+    for (const item of sortedItems) {
+      if (remainingToRemove <= 0) break;
+      
+      const itemQuantity = item.quantity || 0;
+      const toRemoveFromThisStack = Math.min(remainingToRemove, itemQuantity);
+      
+      if (toRemoveFromThisStack === itemQuantity) {
+        // Remove entire stack
+        itemsToDelete.push(item._id);
+      } else {
+        // Partial removal
+        itemsToUpdate.push({
+          _id: item._id,
+          newQuantity: itemQuantity - toRemoveFromThisStack
+        });
+      }
+      
+      remainingToRemove -= toRemoveFromThisStack;
+    }
+
+    // Execute deletions
+    if (itemsToDelete.length > 0) {
+      const deleteResult = await inventoryCollection.deleteMany({
+        _id: { $in: itemsToDelete }
       });
       
-      if (deleteResult.deletedCount === 0) {
-        console.error(`[inventoryUtils.js]: ❌ Failed to delete item ${itemName} from inventory`);
+      if (deleteResult.deletedCount !== itemsToDelete.length) {
+        console.error(`[inventoryUtils.js]: ❌ Failed to delete some items ${itemName} from inventory`);
         return false;
       }
-    } else {
+    }
+
+    // Execute updates
+    for (const update of itemsToUpdate) {
       const updateResult = await inventoryCollection.updateOne(
-        { _id: inventoryItem._id },
-        { $inc: { quantity: -quantity } }
+        { _id: update._id },
+        { $set: { quantity: update.newQuantity } }
       );
       
       if (updateResult.modifiedCount === 0) {
