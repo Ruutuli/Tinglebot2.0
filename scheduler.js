@@ -52,6 +52,7 @@ const { recoverDailyStamina } = require("./modules/characterStatsModule");
 const { bloodmoonDates, convertToHyruleanDate } = require("./modules/calendarModule");
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest, regenerateArtWritingQuest } = require('./modules/helpWantedModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
+const { updateAllRoleCountChannels } = require('./modules/roleCountChannelsModule');
 
 // Utilities
 const { safeAppendDataToSheet, extractSpreadsheetId } = require('./utils/googleSheetsUtils');
@@ -2158,6 +2159,17 @@ function setupDailyTasks(client) {
  createCronJob("0 0 * * *", "midnight quest generation", () => generateDailyQuestsAtMidnight());
  createCronJob("0 0 * * *", "quest expiration check", () => handleQuestExpirationAtMidnight(client));
  createCronJob("0 0 * * *", "request expiration and cleanup", () => runDailyCleanupTasks(client));
+ createCronJob("0 0 * * *", "update role count channels", async () => {
+   try {
+     const guild = client.guilds.cache.first();
+     if (guild) {
+       await updateAllRoleCountChannels(guild);
+       logger.success('ROLE_COUNT', 'Daily role count channels update completed');
+     }
+   } catch (error) {
+     logger.error('ROLE_COUNT', 'Error updating role count channels', error.message);
+   }
+ });
  
  // Daily tasks at 1 AM - remove birthday roles from previous day
  createCronJob("0 1 * * *", "birthday role cleanup", () => handleBirthdayRoleRemoval(client));

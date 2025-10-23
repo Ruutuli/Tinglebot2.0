@@ -265,6 +265,10 @@ async function initializeClient() {
             initializeReactionHandler(client);
             initializeReactionRolesHandler(client);
             
+            // Initialize role count channels system
+            const { initializeRoleCountChannels } = require('./modules/roleCountChannelsModule');
+            initializeRoleCountChannels(client);
+            
             // Initialize random encounters system (before scheduler to avoid log mixing)
             const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
             initializeRandomEncounterBot(client);
