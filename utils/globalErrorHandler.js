@@ -108,7 +108,7 @@ function initializeErrorTracking(discordClient) {
 
 async function trackDatabaseError(error, source = "Unknown") {
   if (isShuttingDown) {
-    console.log("[globalErrorHandler.js]: ⚠️ Skipping error tracking - shutdown in progress");
+    logger.warn('SYSTEM', 'Skipping error tracking - shutdown in progress');
     return;
   }
   

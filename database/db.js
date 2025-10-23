@@ -100,7 +100,7 @@ async function connectToTinglebot() {
   return tinglebotDbConnection;
   } catch (error) {
     handleError(error, "db.js");
-    console.error("[db.js]: ❌ Failed to connect to tinglebot database:", error.message);
+    logger.error('DATABASE', 'Failed to connect to tinglebot database');
     throw error;
   }
 }

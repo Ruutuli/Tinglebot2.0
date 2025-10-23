@@ -2,6 +2,7 @@
 // ---- Standard Libraries ----
 // ============================================================================
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const { calculateFinalValue, calculateRaidFinalValue } = require('./rngModule');
 const { EmbedBuilder } = require('discord.js');
@@ -75,7 +76,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     // ------------------- Mod Character 1-Hit KO Logic -------------------
     // Dragons and other special mod characters (like Aemu) have the ability to 1-hit KO all monsters
     if (character.modTitle === 'Dragon' || character.name === 'Aemu') {
-      console.log(`[raidModule.js]: 👑 Mod character ${character.name} (${character.modTitle || 'Oracle'}) uses 1-hit KO ability on ${monster.name}!`);
+      logger.info('RAID', `Mod character ${character.name} (${character.modTitle || 'Oracle'}) uses 1-hit KO ability on ${monster.name}!`);
       
       // Import flavor text module for mod character victory messages
       const { generateModCharacterVictoryMessage } = require('./flavorTextModule');

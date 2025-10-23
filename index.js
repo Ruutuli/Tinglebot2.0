@@ -168,21 +168,21 @@ process.on('SIGINT', async () => {
   logger.info('SYSTEM', 'Received SIGINT. Performing graceful shutdown...');
   try {
     if (client) {
-      console.log('[index.js]: Destroying Discord client...');
+      logger.info('SYSTEM', 'Destroying Discord client...');
       await client.destroy();
     }
     
     // Close database connections gracefully
-    console.log('[index.js]: Closing database connections...');
+    logger.info('DATABASE', 'Closing database connections...');
     const mongoose = require('mongoose');
     if (mongoose.connection.readyState !== 0) {
       await mongoose.disconnect();
     }
     
-    console.log('[index.js]: Graceful shutdown complete');
+    logger.success('SYSTEM', 'Graceful shutdown complete');
     process.exit(0);
   } catch (error) {
-    console.error('[index.js]: Error during graceful shutdown:', error.message);
+    logger.error('SYSTEM', `Error during graceful shutdown: ${error.message}`);
     process.exit(1);
   }
 });
@@ -212,13 +212,13 @@ async function initializeClient() {
 
     // Add error handler for Discord client
     client.on('error', error => {
-      console.error('[index.js]: Discord client error:', error);
+      logger.error('SYSTEM', 'Discord client error');
       process.exit(1);
     });
 
     // Add error handler for Discord connection
     client.on('disconnect', () => {
-      console.log('[index.js]: Discord client disconnected');
+      logger.warn('SYSTEM', 'Discord client disconnected');
       process.exit(1);
     });
 
@@ -310,15 +310,15 @@ async function initializeClient() {
               userId: interaction.user?.id,
               options: interaction.options?.data
             });
-            console.error(`[index.js]: Command execution error:`, error);
+            logger.error('COMMAND', 'Command execution error');
             
             // Check if it's a webhook token error
             if (error.code === 50027) {
-              console.warn('[index.js]: Webhook token expired, sending error as regular message');
+              logger.warn('COMMAND', 'Webhook token expired, sending error as regular message');
               try {
                 await interaction.channel.send('❌ The command took too long to complete. Please try again.');
               } catch (sendError) {
-                console.error('[index.js]: Failed to send fallback error message:', sendError);
+                logger.error('COMMAND', 'Failed to send fallback error message');
               }
               return;
             }
@@ -336,7 +336,7 @@ async function initializeClient() {
               try {
                 await interaction.channel.send('❌ There was an error while executing this command!');
               } catch (sendError) {
-                console.error('[index.js]: Failed to send fallback error message:', sendError);
+                logger.error('COMMAND', 'Failed to send fallback error message');
               }
             }
           }
@@ -387,7 +387,7 @@ async function initializeClient() {
           userId: interaction?.user?.id || 'Unknown',
           interactionType: interaction?.type || 'Unknown'
         });
-        console.error("[index.js]: ❌ Interaction error:", error);
+        logger.error('INTERACTION', 'Interaction error');
       }
     });
 
@@ -625,7 +625,7 @@ async function initializeClient() {
         const discordId = member.user.id;
         const username = member.user.tag;
         
-        console.log(`[index.js]: 🗑️ User ${username} (${discordId}) left the server. Starting data cleanup...`);
+        logger.info('CLEANUP', `User ${username} (${discordId}) left the server. Starting data cleanup...`);
         
         // Import necessary models
         const User = require('./models/UserModel');
@@ -795,29 +795,10 @@ async function initializeClient() {
         deletionResults.emptyRaidsDeleted = emptyRaidDeleteResult.deletedCount;
         
         // Log summary of deletions
-        console.log(`[index.js]: ✅ Data cleanup completed for ${username} (${discordId}):`);
-        console.log(`[index.js]:    - Users: ${deletionResults.users}`);
-        console.log(`[index.js]:    - Characters: ${deletionResults.characters}`);
-        console.log(`[index.js]:    - Mod Characters: ${deletionResults.modCharacters}`);
-        console.log(`[index.js]:    - Inventory Items: ${deletionResults.inventoryItems}`);
-        console.log(`[index.js]:    - Vending Items: ${deletionResults.vendingItems}`);
-        console.log(`[index.js]:    - Pets: ${deletionResults.pets}`);
-        console.log(`[index.js]:    - Mounts: ${deletionResults.mounts}`);
-        console.log(`[index.js]:    - Quests Updated: ${deletionResults.questsUpdated}`);
-        console.log(`[index.js]:    - Parties Deleted (as leader): ${deletionResults.partiesDeleted}`);
-        console.log(`[index.js]:    - Parties Updated (removed from): ${deletionResults.partiesUpdated}`);
-        console.log(`[index.js]:    - Empty Parties Cleaned Up: ${deletionResults.emptyPartiesDeleted}`);
-        console.log(`[index.js]:    - Minigame Entries: ${deletionResults.minigameEntriesRemoved}`);
-        console.log(`[index.js]:    - Ruu Game Entries: ${deletionResults.ruuGameEntriesRemoved}`);
-        console.log(`[index.js]:    - Steal Stats: ${deletionResults.stealStats}`);
-        console.log(`[index.js]:    - Blight Rolls: ${deletionResults.blightRolls}`);
-        console.log(`[index.js]:    - Temp Data: ${deletionResults.tempData}`);
-        console.log(`[index.js]:    - Approved Submissions: ${deletionResults.approvedSubmissions}`);
-        console.log(`[index.js]:    - Raids Updated (removed from): ${deletionResults.raidsUpdated}`);
-        console.log(`[index.js]:    - Empty Raids Cleaned Up: ${deletionResults.emptyRaidsDeleted}`);
+        logger.success('CLEANUP', `Data cleanup completed for ${username} (${discordId}): Users: ${deletionResults.users}, Characters: ${deletionResults.characters}, Inventory: ${deletionResults.inventoryItems}, Pets: ${deletionResults.pets}, Mounts: ${deletionResults.mounts}`);
         
       } catch (error) {
-        console.error(`[index.js]: ❌ Error during user data cleanup for ${member.user.tag}:`, error);
+        logger.error('CLEANUP', `Error during user data cleanup for ${member.user.tag}`);
         handleError(error, 'index.js', {
           operation: 'guildMemberRemove',
           userId: member.user.id,
@@ -833,14 +814,14 @@ async function initializeClient() {
       logger.info('SYSTEM', 'Attempting to login to Discord...');
       await client.login(process.env.DISCORD_TOKEN);
     } catch (error) {
-      console.error('[index.js]: ❌ Failed to login to Discord:', error);
+      logger.error('SYSTEM', 'Failed to login to Discord');
       if (error.code === 'TokenInvalid') {
-        console.error('[index.js]: ❌ Invalid Discord token. Please check your DISCORD_TOKEN environment variable.');
+        logger.error('SYSTEM', 'Invalid Discord token. Please check your DISCORD_TOKEN environment variable.');
       }
       process.exit(1);
     }
   } catch (error) {
-    console.error('[index.js]: ❌ Fatal error during initialization:', error);
+    logger.error('SYSTEM', 'Fatal error during initialization');
     process.exit(1);
   }
 }

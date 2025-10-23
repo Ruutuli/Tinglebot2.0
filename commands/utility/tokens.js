@@ -281,7 +281,7 @@ module.exports = {
                 content: '⏰ Token sync timed out. You can sync later using `/tokens setup` again.',
                 embeds: [],
                 components: []
-              }).catch(console.error);
+              }).catch(error => logger.error('INTERACTION', 'Error updating message'));
             } else {
               logger.debug('TOKEN', `Button collector ended for user ${userId} - collected ${collected.size} interactions`);
             }

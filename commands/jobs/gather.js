@@ -1018,7 +1018,7 @@ module.exports = {
           if (randomItem.inariko || randomItem.Inariko) itemVillages.push('Inariko');
           if (randomItem.rudania || randomItem.Rudania) itemVillages.push('Rudania');
           if (randomItem.vhintl || randomItem.Vhintl) itemVillages.push('Vhintl');
-          console.log(`[gather.js]: ✅ Item "${randomItem.itemName}" from ${scholarTargetVillage} - Available in: [${itemVillages.join(', ')}]`);
+          logger.info('GATHER', `Item "${randomItem.itemName}" from ${scholarTargetVillage} - Available in: [${itemVillages.join(', ')}]`);
         }
         
         const quantity = 1;
@@ -1107,7 +1107,7 @@ module.exports = {
     } catch (error) {
       // Handle interaction expiration specifically
       if (error.code === 10062) {
-        console.error('[gather.js]: Interaction expired during gathering process');
+        logger.warn('INTERACTION', 'Interaction expired during gathering process');
         return; // Can't respond to expired interaction
       }
       

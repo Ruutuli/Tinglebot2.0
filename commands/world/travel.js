@@ -18,6 +18,7 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Services -------------------
+const logger = require('../../utils/logger');
 const {
   fetchCharacterByNameAndUserId,
   fetchCharactersByUserId,
@@ -135,7 +136,7 @@ const CommandData = new SlashCommandBuilder()
 function calculateTravelDuration(currentVillage, destination, mode, character) {
   // Safety check: ensure character object is valid
   if (!character || typeof character !== 'object') {
-    console.error('[travel.js]: ❌ Invalid character object passed to calculateTravelDuration');
+    logger.error('CHARACTER', 'Invalid character object passed to calculateTravelDuration');
     return -1;
   }
 
