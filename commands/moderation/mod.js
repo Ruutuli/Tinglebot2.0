@@ -16,6 +16,7 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Connections -------------------
+const logger = require('../../utils/logger');
 const {
   connectToInventories,
   connectToTinglebot
@@ -195,11 +196,11 @@ function validateAndSanitizeUrl(url, fallbackUrl = "https://i.imgur.com/placehol
     if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
       return encodedUrl;
     } else {
-      console.warn(`[mod.js]: ⚠️ Invalid protocol for URL: ${url}`);
+      logger.warn('SYSTEM', `Invalid protocol for URL: ${url}`);
       return fallbackUrl;
     }
   } catch (error) {
-    console.error(`[mod.js]: ❌ Error processing URL: ${url}`, error.message);
+    logger.error('SYSTEM', `Error processing URL: ${url}`);
     return fallbackUrl;
   }
 }

@@ -3,6 +3,7 @@
 // ============================================================================
 
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
+const logger = require('../utils/logger');
 
 // ============================================================================
 // ------------------- Configuration -------------------
@@ -51,7 +52,7 @@ async function getRoleMemberCount(guild, roleId) {
   try {
     const role = guild.roles.cache.get(roleId);
     if (!role) {
-      console.warn(`[roleCountChannelsModule.js]: Role ${roleId} not found in guild`);
+      logger.warn('SYSTEM', `Role ${roleId} not found in guild`);
       return 0;
     }
     
@@ -61,7 +62,7 @@ async function getRoleMemberCount(guild, roleId) {
     
     return count;
   } catch (error) {
-    console.error(`[roleCountChannelsModule.js]: Error getting member count for role ${roleId}:`, error);
+    logger.error('SYSTEM', `Error getting member count for role ${roleId}`);
     return 0;
   }
 }
@@ -85,7 +86,7 @@ async function findRoleCountChannel(guild, roleId) {
     
     return channels.first() || null;
   } catch (error) {
-    console.error(`[roleCountChannelsModule.js]: Error finding role count channel for ${roleId}:`, error);
+    logger.error('SYSTEM', `Error finding role count channel for ${roleId}`);
     return null;
   }
 }
@@ -119,10 +120,10 @@ async function createRoleCountChannel(guild, roleId, count) {
       ]
     });
     
-    console.log(`[roleCountChannelsModule.js]: ✅ Created role count channel: ${channelName}`);
+    logger.success('SYSTEM', `Created role count channel: ${channelName}`);
     return channel;
   } catch (error) {
-    console.error(`[roleCountChannelsModule.js]: Error creating role count channel for ${roleId}:`, error);
+    logger.error('SYSTEM', `Error creating role count channel for ${roleId}`);
     throw error;
   }
 }
@@ -140,7 +141,7 @@ async function updateRoleCountChannel(channel, count) {
     );
     
     if (!config) {
-      console.warn(`[roleCountChannelsModule.js]: No config found for channel ${channel.name}`);
+      logger.warn('SYSTEM', `No config found for channel ${channel.name}`);
       return false;
     }
     
@@ -148,12 +149,12 @@ async function updateRoleCountChannel(channel, count) {
     
     if (channel.name !== newName) {
       await channel.setName(newName);
-      console.log(`[roleCountChannelsModule.js]: ✅ Updated channel name: ${newName}`);
+      logger.success('SYSTEM', `Updated channel name: ${newName}`);
     }
     
     return true;
   } catch (error) {
-    console.error(`[roleCountChannelsModule.js]: Error updating role count channel:`, error);
+    logger.error('SYSTEM', 'Error updating role count channel');
     return false;
   }
 }
@@ -172,7 +173,7 @@ async function updateAllRoleCountChannels(guild) {
   };
   
   try {
-    console.log(`[roleCountChannelsModule.js]: 🔄 Updating role count channels for guild ${guild.name}`);
+    logger.info('SYSTEM', `Updating role count channels for guild ${guild.name}`);
     
     for (const [roleId, config] of Object.entries(ROLE_COUNT_CONFIG)) {
       try {
@@ -199,16 +200,16 @@ async function updateAllRoleCountChannels(guild) {
           results.details.push(`✅ Created ${config.name}: ${count} members`);
         }
       } catch (error) {
-        console.error(`[roleCountChannelsModule.js]: Error processing role ${roleId}:`, error);
+        logger.error('SYSTEM', `Error processing role ${roleId}`);
         results.errors++;
         results.details.push(`❌ Error with ${config.name}: ${error.message}`);
       }
     }
     
-    console.log(`[roleCountChannelsModule.js]: ✅ Role count update complete: ${results.updated} updated, ${results.created} created, ${results.errors} errors`);
+    logger.success('SYSTEM', `Role count update complete: ${results.updated} updated, ${results.created} created, ${results.errors} errors`);
     
   } catch (error) {
-    console.error(`[roleCountChannelsModule.js]: Error updating role count channels:`, error);
+    logger.error('SYSTEM', 'Error updating role count channels');
     results.errors++;
   }
   
@@ -220,7 +221,7 @@ async function updateAllRoleCountChannels(guild) {
  * @param {Client} client - The Discord client
  */
 function initializeRoleCountChannels(client) {
-  console.log('[roleCountChannelsModule.js]: 🚀 Initializing role count channels system');
+  logger.info('SYSTEM', 'Initializing role count channels system');
   
   // Update channels when bot starts
   client.once('ready', async () => {
@@ -230,7 +231,7 @@ function initializeRoleCountChannels(client) {
         await updateAllRoleCountChannels(guild);
       }
     } catch (error) {
-      console.error('[roleCountChannelsModule.js]: Error during initial role count update:', error);
+      logger.error('SYSTEM', 'Error during initial role count update');
     }
   });
   
@@ -239,7 +240,7 @@ function initializeRoleCountChannels(client) {
     try {
       await updateAllRoleCountChannels(member.guild);
     } catch (error) {
-      console.error('[roleCountChannelsModule.js]: Error updating role counts on member add:', error);
+      logger.error('SYSTEM', 'Error updating role counts on member add');
     }
   });
   
@@ -247,7 +248,7 @@ function initializeRoleCountChannels(client) {
     try {
       await updateAllRoleCountChannels(member.guild);
     } catch (error) {
-      console.error('[roleCountChannelsModule.js]: Error updating role counts on member remove:', error);
+      logger.error('SYSTEM', 'Error updating role counts on member remove');
     }
   });
   
@@ -264,7 +265,7 @@ function initializeRoleCountChannels(client) {
         await updateAllRoleCountChannels(newMember.guild);
       }
     } catch (error) {
-      console.error('[roleCountChannelsModule.js]: Error updating role counts on member update:', error);
+      logger.error('SYSTEM', 'Error updating role counts on member update');
     }
   });
 }

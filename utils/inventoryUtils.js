@@ -5,6 +5,7 @@
 
 const { handleError } = require("../utils/globalErrorHandler");
 const { promptUserForSpecificItems } = require('../utils/itemUtils');
+const logger = require('./logger');
 const {
   appendSheetData,
   authorizeSheets,
@@ -303,12 +304,12 @@ async function syncToInventoryDatabase(character, item, interaction) {
         );
       }
     } catch (sheetError) {
-      console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
+      logger.error('STORAGE', `Sheet sync error for ${character.name}: ${sheetError.message}`);
     }
   } catch (error) {
     if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
       handleError(error, "inventoryUtils.js");
-      console.error(`[inventoryUtils.js]: ❌ Sync failed for ${character?.name || 'Unknown'} | ${item?.itemName || 'Unknown'}`);
+      logger.error('STORAGE', `Sync failed for ${character?.name || 'Unknown'} | ${item?.itemName || 'Unknown'}`);
     }
     throw error;
   }
@@ -465,11 +466,11 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         );
         
       } catch (sheetError) {
-        console.error(`[inventoryUtils.js]: ⚠️ Failed to log item addition to Google Sheets: ${sheetError.message}`);
+        logger.error('STORAGE', `Failed to log item addition to Google Sheets: ${sheetError.message}`);
         
         // If this is a retryable error, the operation should have been stored for retry
         if (sheetError.message.includes('stored for retry') || sheetError.storedForRetry) {
-          console.log(`[inventoryUtils.js]: 📦 Operation stored for retry`);
+          logger.info('STORAGE', 'Operation stored for retry');
         }
         
         // Don't fail the addition if sheet logging fails
@@ -479,7 +480,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
-    console.error(`[inventoryUtils.js]: ❌ Error adding item to inventory:`, error.message);
+    logger.error('INVENTORY', `Error adding item to inventory: ${error.message}`);
     throw error;
   }
 }
@@ -613,7 +614,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       });
       
       if (deleteResult.deletedCount !== itemsToDelete.length) {
-        console.error(`[inventoryUtils.js]: ❌ Failed to delete some items ${itemName} from inventory`);
+        logger.error('INVENTORY', `Failed to delete some items ${itemName} from inventory`);
         return false;
       }
     }
@@ -626,7 +627,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       );
       
       if (updateResult.modifiedCount === 0) {
-        console.error(`[inventoryUtils.js]: ❌ Failed to update quantity for item ${itemName}`);
+        logger.error('INVENTORY', `Failed to update quantity for item ${itemName}`);
         return false;
       }
     }
@@ -668,7 +669,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         );
         
       } catch (sheetError) {
-        console.error(`[inventoryUtils.js]: ⚠️ Failed to log item removal to Google Sheets: ${sheetError.message}`);
+        logger.error('STORAGE', `Failed to log item removal to Google Sheets: ${sheetError.message}`);
         // Don't fail the removal if sheet logging fails
       }
     }
@@ -676,7 +677,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
-    console.error("[inventoryUtils.js]: ❌ Error removing item from inventory database:", error);
+    logger.error('INVENTORY', 'Error removing item from inventory database');
     throw error;
   }
 }
@@ -793,7 +794,7 @@ const addItemsToDatabase = async (character, items, interaction) => {
     }
   } catch (error) {
     handleError(error, "inventoryUtils.js");
-    console.error("[inventoryUtils.js]: ❌ Error adding multiple items to database:", error);
+    logger.error('INVENTORY', 'Error adding multiple items to database');
     throw error;
   }
 };
@@ -885,7 +886,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
     await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues);
   } catch (error) {
     handleError(error, 'inventoryUtils.js');
-    console.error(`[inventoryUtils.js]: Error logging materials to Google Sheets: ${error.message}`);
+    logger.error('STORAGE', `Error logging materials to Google Sheets: ${error.message}`);
   }
 }
 
@@ -983,7 +984,7 @@ const processMaterials = async (interaction, character, inventory, craftableItem
       );
     } catch (error) {
       handleError(error, 'inventoryUtils.js');
-      console.error(`[inventoryUtils.js]: Error logging materials to sheet: ${error.message}`);
+      logger.error('STORAGE', `Error logging materials to sheet: ${error.message}`);
     }
   }
 
@@ -1044,7 +1045,7 @@ async function removeInitialItemIfSynced(characterId) {
     }
   } catch (error) {
     handleError(error, "inventoryUtils.js");
-    console.error(`[inventoryUtils.js]: ❌ Error removing Initial Item: ${error.message}`);
+    logger.error('INVENTORY', `Error removing Initial Item: ${error.message}`);
     throw error;
   }
 }
@@ -1120,7 +1121,7 @@ async function refundJobVoucher(character, interaction) {
         return true;
     } catch (error) {
         handleError(error, "inventoryUtils.js");
-        console.error(`[inventoryUtils.js]: ❌ Error refunding job voucher:`, error.message);
+        logger.error('INVENTORY', `Error refunding job voucher: ${error.message}`);
         throw error;
     }
 }
@@ -1179,7 +1180,7 @@ const syncSheetDataToDatabase = async (character, sheetData) => {
         return true;
     } catch (error) {
         handleError(error, "inventoryUtils.js");
-        console.error(`[inventoryUtils.js]: ❌ Error syncing sheet data to database:`, error.message);
+        logger.error('STORAGE', `Error syncing sheet data to database: ${error.message}`);
         throw error;
     }
 };

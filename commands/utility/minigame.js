@@ -15,6 +15,7 @@ const {
 // ------------------- Import database models and utilities -------------------
 // Models for game sessions and character management
 // ============================================================================
+const logger = require('../../utils/logger');
 const Minigame = require('../../models/MinigameModel');
 const Character = require('../../models/CharacterModel');
 const User = require('../../models/UserModel');
@@ -566,19 +567,19 @@ module.exports = {
     // Generate random roll (1-6)
     const roll = Math.floor(Math.random() * 6) + 1;
     
-    console.log(`[MINIGAME] ${username} rolling against ${target} - Roll: ${roll}`);
+    logger.info('MINIGAME', `${username} rolling against ${target} - Roll: ${roll}`);
     
     // Character is already validated from session lookup above
     
     // Process the roll
     const result = processAlienDefenseRoll(session.gameData, userId, username, target, roll);
     
-    console.log(`[MINIGAME] Roll result: ${result.success ? 'SUCCESS' : 'FAILED'} - ${result.message}`);
-    console.log(`[MINIGAME] Aliens before save:`, session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+    logger.info('MINIGAME', `Roll result: ${result.success ? 'SUCCESS' : 'FAILED'} - ${result.message}`);
+    logger.debug('MINIGAME', `Aliens before save: ${session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`).join(', ')}`);
     
     // Check if game ended immediately from this roll
     if (result.gameEnded) {
-      console.log(`[MINIGAME] Game ended immediately from roll - ${result.gameEndResult.message}`);
+      logger.info('MINIGAME', `Game ended immediately from roll - ${result.gameEndResult.message}`);
       
       // Save the session data
       session.markModified('gameData');
@@ -611,7 +612,7 @@ module.exports = {
       
       try {
         await session.save();
-        console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+        logger.success('MINIGAME', `Game completion saved to database - Session ${session.sessionId} marked as finished`);
       } catch (error) {
         console.error(`[MINIGAME] Failed to save game completion to database:`, error);
       }
@@ -634,7 +635,7 @@ module.exports = {
         }
       }, 2000); // 2 second delay to let the quick stats message show first
       
-      console.log(`[MINIGAME] Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
+      logger.info('MINIGAME', `Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
       return;
     }
     
@@ -646,7 +647,7 @@ module.exports = {
     session.markModified('gameData.currentTurnIndex');
     await session.save();
     
-    console.log(`[MINIGAME] Aliens after save:`, session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+    logger.debug('MINIGAME', `Aliens after save: ${session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`).join(', ')}`);
     
     if (result.success) {
       // Create embed for successful roll AFTER saving session to show correct turn order
@@ -672,9 +673,9 @@ module.exports = {
       let advanceResult = null;
       let shouldDelayTurnNotification = false;
       if (result.shouldAdvanceRound) {
-        console.log(`[MINIGAME] Advancing round - Current round: ${session.gameData.currentRound}`);
+        logger.info('MINIGAME', `Advancing round - Current round: ${session.gameData.currentRound}`);
         advanceResult = advanceAlienDefenseRound(session.gameData);
-        console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
+        logger.info('MINIGAME', `Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
         
         // Save the session after round advancement
         session.markModified('gameData');
@@ -682,7 +683,7 @@ module.exports = {
         
         // Check if the round advancement ended the game
         if (advanceResult.gameEnded) {
-          console.log(`[MINIGAME] Game ended from round advancement - ${advanceResult.message}`);
+          logger.info('MINIGAME', `Game ended from round advancement - ${advanceResult.message}`);
           
           // Calculate quick stats for immediate display
           const animalsSaved = session.gameData.villageAnimals;
@@ -710,7 +711,7 @@ module.exports = {
           
           try {
             await session.save();
-            console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+            logger.success('MINIGAME', `Game completion saved to database - Session ${session.sessionId} marked as finished`);
           } catch (error) {
             console.error(`[MINIGAME] Failed to save game completion to database:`, error);
           }
@@ -736,7 +737,7 @@ module.exports = {
             }
           }, 2000); // 2 second delay to let the quick stats message show first
           
-          console.log(`[MINIGAME] Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
+          logger.info('MINIGAME', `Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
           return;
         }
         
@@ -745,7 +746,7 @@ module.exports = {
           // Check if turn order has reset to the first player (turn index 0)
           if (session.gameData.currentTurnIndex === 0) {
             shouldDelayTurnNotification = true;
-            console.log(`[MINIGAME] Turn order reset to first player - will delay turn notification until after round embed`);
+            logger.debug('MINIGAME', 'Turn order reset to first player - will delay turn notification until after round embed');
           }
         }
       }
@@ -779,7 +780,7 @@ module.exports = {
         
         try {
           await session.save();
-          console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+          logger.success('MINIGAME', `Game completion saved to database - Session ${session.sessionId} marked as finished`);
           
         } catch (error) {
           console.error(`[MINIGAME] Failed to save game completion to database:`, error);
@@ -818,7 +819,7 @@ module.exports = {
         
         // Wait 5-8 seconds before posting the new round embed
         const delay = 4; // Fixed delay of 4 seconds
-        console.log(`[MINIGAME] Waiting ${delay} seconds before posting new round embed...`);
+        logger.debug('MINIGAME', `Waiting ${delay} seconds before posting new round embed...`);
         
         setTimeout(async () => {
           try {
@@ -853,7 +854,7 @@ module.exports = {
             
             // Send delayed turn notification if we delayed it for new round
             if (shouldDelayTurnNotification) {
-              console.log(`[MINIGAME] Sending delayed turn notification after round embed for session ${session.sessionId}`);
+              logger.debug('MINIGAME', `Sending delayed turn notification after round embed for session ${session.sessionId}`);
               await this.sendTurnNotification(interaction, session);
             }
           } catch (error) {
@@ -898,9 +899,9 @@ module.exports = {
       let advanceResult = null;
       let shouldDelayTurnNotification = false;
       if (result.shouldAdvanceRound) {
-        console.log(`[MINIGAME] Advancing round - Current round: ${session.gameData.currentRound}`);
+        logger.info('MINIGAME', `Advancing round - Current round: ${session.gameData.currentRound}`);
         advanceResult = advanceAlienDefenseRound(session.gameData);
-        console.log(`[MINIGAME] Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
+        logger.info('MINIGAME', `Round advanced - New round: ${session.gameData.currentRound} - ${advanceResult.message}`);
         
         // Save the session after round advancement
         session.markModified('gameData');
@@ -908,7 +909,7 @@ module.exports = {
         
         // Check if the round advancement ended the game
         if (advanceResult.gameEnded) {
-          console.log(`[MINIGAME] Game ended from round advancement - ${advanceResult.message}`);
+          logger.info('MINIGAME', `Game ended from round advancement - ${advanceResult.message}`);
           
           // Calculate quick stats for immediate display
           const animalsSaved = session.gameData.villageAnimals;
@@ -936,7 +937,7 @@ module.exports = {
           
           try {
             await session.save();
-            console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+            logger.success('MINIGAME', `Game completion saved to database - Session ${session.sessionId} marked as finished`);
           } catch (error) {
             console.error(`[MINIGAME] Failed to save game completion to database:`, error);
           }
@@ -962,7 +963,7 @@ module.exports = {
             }
           }, 2000); // 2 second delay to let the quick stats message show first
           
-          console.log(`[MINIGAME] Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
+          logger.info('MINIGAME', `Game ended - Animals saved: ${animalsSaved}, Animals lost: ${animalsLost}`);
           return;
         }
         
@@ -971,7 +972,7 @@ module.exports = {
           // Check if turn order has reset to the first player (turn index 0)
           if (session.gameData.currentTurnIndex === 0) {
             shouldDelayTurnNotification = true;
-            console.log(`[MINIGAME] Turn order reset to first player - will delay turn notification until after round embed`);
+            logger.debug('MINIGAME', 'Turn order reset to first player - will delay turn notification until after round embed');
           }
         }
       }
@@ -1005,7 +1006,7 @@ module.exports = {
         
         try {
           await session.save();
-          console.log(`[MINIGAME] Game completion saved to database - Session ${session.sessionId} marked as finished`);
+          logger.success('MINIGAME', `Game completion saved to database - Session ${session.sessionId} marked as finished`);
           
         } catch (error) {
           console.error(`[MINIGAME] Failed to save game completion to database:`, error);
@@ -1044,7 +1045,7 @@ module.exports = {
         
         // Wait 5-8 seconds before posting the new round embed
         const delay = 4; // Fixed delay of 4 seconds
-        console.log(`[MINIGAME] Waiting ${delay} seconds before posting new round embed...`);
+        logger.debug('MINIGAME', `Waiting ${delay} seconds before posting new round embed...`);
         
         setTimeout(async () => {
           try {
@@ -1079,7 +1080,7 @@ module.exports = {
             
             // Send delayed turn notification if we delayed it for new round
             if (shouldDelayTurnNotification) {
-              console.log(`[MINIGAME] Sending delayed turn notification after round embed for session ${session.sessionId}`);
+              logger.debug('MINIGAME', `Sending delayed turn notification after round embed for session ${session.sessionId}`);
               await this.sendTurnNotification(interaction, session);
             }
           } catch (error) {
@@ -1107,12 +1108,12 @@ module.exports = {
       // Get character name from session.players array for consistency
       const playerCharacter = session.players.find(p => p.discordId === currentPlayer.discordId);
       const characterName = playerCharacter ? playerCharacter.characterName : currentPlayer.username;
-      console.log(`[MINIGAME] Turn notification check - Session: ${session.sessionId}, Current Player: ${characterName} (${currentPlayer.discordId}), Interaction User: ${interaction.user.username} (${currentUserId}), Turn Index: ${session.gameData.currentTurnIndex}`);
+      logger.debug('MINIGAME', `Turn notification check - Session: ${session.sessionId}, Current Player: ${characterName} (${currentPlayer.discordId}), Interaction User: ${interaction.user.username} (${currentUserId}), Turn Index: ${session.gameData.currentTurnIndex}`);
       
       // Only send notification if it's someone else's turn
       if (currentPlayer.discordId !== currentUserId) {
         try {
-          console.log(`[MINIGAME] Sending turn notification to ${characterName} (${currentPlayer.discordId}) for session ${session.sessionId}`);
+          logger.info('MINIGAME', `Sending turn notification to ${characterName} (${currentPlayer.discordId}) for session ${session.sessionId}`);
           
           // Add timeout to prevent hanging on connection issues
           const notificationPromise = interaction.followUp({
@@ -1128,13 +1129,13 @@ module.exports = {
           
           await Promise.race([notificationPromise, timeoutPromise]);
           
-          console.log(`[MINIGAME] Successfully sent turn notification to ${characterName} for session ${session.sessionId}`);
+          logger.success('MINIGAME', `Successfully sent turn notification to ${characterName} for session ${session.sessionId}`);
         } catch (error) {
-          console.error(`[MINIGAME] Error sending turn notification to ${characterName} for session ${session.sessionId}:`, error);
+          logger.error('MINIGAME', `Error sending turn notification to ${characterName} for session ${session.sessionId}`);
           
           // Fallback: Try to send a simpler notification without mentions
           try {
-            console.log(`[MINIGAME] Attempting fallback notification for ${characterName} in session ${session.sessionId}`);
+            logger.warn('MINIGAME', `Attempting fallback notification for ${characterName} in session ${session.sessionId}`);
             
             const fallbackPromise = interaction.followUp({
               content: `🎯 **${characterName}**, it's your turn! Use \`/minigame theycame-roll\` to attack aliens!`,
@@ -1147,19 +1148,19 @@ module.exports = {
             
             await Promise.race([fallbackPromise, fallbackTimeoutPromise]);
             
-            console.log(`[MINIGAME] Fallback notification sent successfully to ${characterName} for session ${session.sessionId}`);
+            logger.success('MINIGAME', `Fallback notification sent successfully to ${characterName} for session ${session.sessionId}`);
           } catch (fallbackError) {
-            console.error(`[MINIGAME] Fallback notification also failed for ${characterName} in session ${session.sessionId}:`, fallbackError);
+            logger.error('MINIGAME', `Fallback notification also failed for ${characterName} in session ${session.sessionId}`);
             
             // Final fallback: Just log the information for debugging
-            console.log(`[MINIGAME] NOTIFICATION FAILED - ${characterName} should take their turn in session ${session.sessionId}. Current turn index: ${session.gameData.currentTurnIndex}`);
+            logger.error('MINIGAME', `NOTIFICATION FAILED - ${characterName} should take their turn in session ${session.sessionId}. Current turn index: ${session.gameData.currentTurnIndex}`);
           }
         }
       } else {
-        console.log(`[MINIGAME] Skipping turn notification - same player (${characterName}) is taking the turn`);
+        logger.debug('MINIGAME', `Skipping turn notification - same player (${characterName}) is taking the turn`);
       }
     } else {
-      console.log(`[MINIGAME] No turn order available for session ${session.sessionId} - skipping turn notification`);
+      logger.warn('MINIGAME', `No turn order available for session ${session.sessionId} - skipping turn notification`);
     }
   },
   

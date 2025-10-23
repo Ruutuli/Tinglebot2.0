@@ -191,9 +191,9 @@ async function safeRespondWithError(interaction, error) {
   } catch (respondError) {
     // Log the specific error for debugging
     if (respondError.code === 10062) {
-      console.log('[autocompleteHandler.js]: Interaction expired, ignoring response attempt');
+      logger.warn('INTERACTION', 'Interaction expired, ignoring response attempt');
     } else {
-      console.error('[autocompleteHandler.js]: Error in safeRespondWithError:', respondError.message);
+      logger.error('INTERACTION', 'Error in safeRespondWithError');
     }
   }
 }
@@ -809,13 +809,13 @@ async function handleCharacterBasedCommandsAutocomplete(
 ) {
  try {
                 const userId = interaction.user.id;
-                console.log(`[handleCharacterBasedCommandsAutocomplete]: Called for command: ${commandName}, userId: ${userId}`);
+                logger.debug('AUTOCOMPLETE', `Called for command: ${commandName}, userId: ${userId}`);
 
   // Fetch all characters owned by the user (both regular and mod characters)
                 const characters = await fetchCharactersByUserId(userId);
                 const modCharacters = await fetchModCharactersByUserId(userId);
                 
-                console.log(`[handleCharacterBasedCommandsAutocomplete]: Found ${characters.length} regular characters and ${modCharacters.length} mod characters`);
+                logger.debug('AUTOCOMPLETE', `Found ${characters.length} regular characters and ${modCharacters.length} mod characters`);
                 
                 // Combine regular characters and mod characters
                 const allCharacters = [...characters, ...modCharacters];
@@ -826,7 +826,7 @@ async function handleCharacterBasedCommandsAutocomplete(
    value: character.name,
                 }));
                 
-                console.log(`[handleCharacterBasedCommandsAutocomplete]: Generated ${choices.length} choices`);
+                logger.debug('AUTOCOMPLETE', `Generated ${choices.length} choices`);
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
@@ -3635,7 +3635,7 @@ async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
     });
     
     if (!session || !session.gameData || !session.gameData.aliens) {
-      console.log(`[handleMinigameTargetAutocomplete]: No session found for ${sessionId}`);
+      logger.warn('AUTOCOMPLETE', `No session found for ${sessionId}`);
       await interaction.respond([]);
       return;
     }
@@ -3643,9 +3643,9 @@ async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
     // Get active aliens (not defeated)
     const activeAliens = session.gameData.aliens.filter(alien => !alien.defeated);
     
-    console.log(`[handleMinigameTargetAutocomplete]: Found ${activeAliens.length} active aliens for session ${sessionId}`);
-    console.log(`[handleMinigameTargetAutocomplete]: All aliens in session:`, session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`));
-    console.log(`[handleMinigameTargetAutocomplete]: Active aliens:`, activeAliens.map(a => `${a.id}(${a.ring}${a.segment})`));
+    logger.debug('AUTOCOMPLETE', `Found ${activeAliens.length} active aliens for session ${sessionId}`);
+    logger.debug('AUTOCOMPLETE', `All aliens in session: ${session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`).join(', ')}`);
+    logger.debug('AUTOCOMPLETE', `Active aliens: ${activeAliens.map(a => `${a.id}(${a.ring}${a.segment})`).join(', ')}`);
     
     let choices = activeAliens
       .filter((alien) => {

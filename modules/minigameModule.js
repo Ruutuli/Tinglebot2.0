@@ -571,8 +571,8 @@ function advanceAlienDefenseRound(gameData) {
     }
   });
 
-  console.log(`[MINIGAME] Round ${gameData.currentRound - 1} complete - Animals: ${gameData.villageAnimals}/25, Lost: ${animalsLost}, Barn Aliens: [${barnAliens.join(', ')}]`);
-  console.log(`[MINIGAME] === END ROUND ${gameData.currentRound - 1} ===\n`);
+  logger.info('MINIGAME', `Round ${gameData.currentRound - 1} complete - Animals: ${gameData.villageAnimals}/25, Lost: ${animalsLost}, Barn Aliens: [${barnAliens.join(', ')}]`);
+  logger.info('MINIGAME', `=== END ROUND ${gameData.currentRound - 1} ===`);
 
   return {
     success: true,

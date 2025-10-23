@@ -45,7 +45,7 @@ limiter.on('failed', async (error, jobInfo) => {
     const retryCount = jobInfo.retryCount || 0;
     if (retryCount < 3) {
         const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-        console.error(`[googleSheetsUtils.js]: ⚠️ Rate limit hit, retrying in ${delay}ms (attempt ${retryCount + 1})`);
+        logger.warn('API', `Rate limit hit, retrying in ${delay}ms (attempt ${retryCount + 1})`);
         return delay;
     }
     throw error;

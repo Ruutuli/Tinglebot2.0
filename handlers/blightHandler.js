@@ -556,7 +556,7 @@ async function healBlight(interaction, characterName, healerName) {
     try {
       await interaction.editReply({ content: errorMessage, flags: [4096] });
     } catch (replyError) {
-      console.error('[blightHandler]: Failed to send detailed error reply:', replyError);
+      logger.error('INTERACTION', 'Failed to send detailed error reply');
       // Fallback to simple error message
       try {
         await interaction.followUp({ 
@@ -1660,7 +1660,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     try {
       await interaction.editReply({ content: errorMessage, flags: [4096] });
     } catch (replyError) {
-      console.error('[blightHandler]: Failed to send detailed error reply:', replyError);
+      logger.error('INTERACTION', 'Failed to send detailed error reply');
       // Fallback to simple error message
       try {
         await interaction.followUp({ 

@@ -510,7 +510,7 @@ for (const { name } of cleanedItems) {
   const allPossibleRecipients = [...allCharacters, ...allModCharacters];
   
   if (allPossibleRecipients.length === 0) {
-    console.log('[handleGift]: No characters found in fetchAllCharactersExceptUser or fetchAllModCharacters. Possible DB connection issue.');
+    logger.warn('DATABASE', 'No characters found in fetchAllCharactersExceptUser or fetchAllModCharacters. Possible DB connection issue.');
   }
   // Extract actual name from input (before '|'), trim, and compare case-insensitively
   const toCharacterActualName = toCharacterName.split('|')[0].trim().toLowerCase();
@@ -779,7 +779,7 @@ for (const { name } of cleanedItems) {
      const itemIcon = itemDetails?.emoji || "🎁";
      formattedItems.push({ itemName: name, quantity, itemIcon });
    } catch (error) {
-     console.error(`[economy.js]: Failed to fetch item details for ${name}:`, error.message);
+     logger.error('ECONOMY', `Failed to fetch item details for ${name}: ${error.message}`);
      formattedItems.push({ itemName: name, quantity, itemIcon: "🎁" });
    }
   }
@@ -806,7 +806,7 @@ for (const { name } of cleanedItems) {
   
  } catch (error) {
   handleInteractionError(error, interaction, { source: "gift.js" });
-  console.error("❌ Error during gift execution:", error);
+  logger.error('ECONOMY', 'Error during gift execution');
   await interaction.editReply({
     embeds: [{
       color: 0xFF0000, // Red color
@@ -861,7 +861,7 @@ async function handleShopView(interaction) {
   try {
     items = await ShopStock.find().sort({ itemName: 1 }).lean();
   } catch (dbError) {
-    console.error("[shops]: Database connection error:", dbError);
+    logger.error('DATABASE', 'Database connection error');
     return interaction.editReply({ 
       content: "❌ Unable to connect to the shop database. Please try again later.",
       flags: [MessageFlags.Ephemeral]
@@ -899,7 +899,7 @@ async function handleShopView(interaction) {
       try {
        itemDetails = await fetchItemByName(item.itemName, context);
       } catch (error) {
-       console.error(`[shops]: Error fetching item details for ${item.itemName}:`, error);
+       logger.error('ECONOMY', `Error fetching item details for ${item.itemName}`);
        // Use fallback values if item details can't be fetched
        itemDetails = {
          buyPrice: "N/A",
@@ -907,10 +907,10 @@ async function handleShopView(interaction) {
          emoji: "🛒"
        };
        
-       // If it's a database connection error, log it specifically
-       if (error.message.includes('Database connection failed')) {
-         console.error(`[shops]: Database connection issue detected for ${item.itemName}`);
-       }
+      // If it's a database connection error, log it specifically
+      if (error.message.includes('Database connection failed')) {
+        logger.error('DATABASE', `Database connection issue detected for ${item.itemName}`);
+      }
       }
       const buyPrice = itemDetails?.buyPrice || "N/A";
       const sellPrice = itemDetails?.sellPrice || "N/A";
@@ -943,7 +943,7 @@ async function handleShopView(interaction) {
       Array.from({ length: pages }, (_, i) => generateEmbed(i, interaction))
     );
   } catch (error) {
-    console.error("[shops]: Error generating embeds:", error);
+    logger.error('ECONOMY', 'Error generating embeds');
     
     // Check if it's a database connection error
     if (error.message && error.message.includes('Database connection failed')) {
@@ -1001,21 +1001,21 @@ async function handleShopView(interaction) {
       components: [generateButtons(currentPage)],
      }).catch(error => {
        if (error.code === 10062) {
-         console.warn("[shops]: Interaction expired or already responded to");
+         logger.warn('INTERACTION', 'Interaction expired or already responded to');
          collector.stop();
        } else {
          throw error;
        }
      });
    } catch (error) {
-     console.error("[shops]: Error handling button interaction:", error);
+     logger.error('INTERACTION', 'Error handling button interaction');
      try {
        await i.followUp({
          content: "❌ An error occurred while processing your request.",
          ephemeral: true
        }).catch(() => {}); // Ignore if this fails too
      } catch (replyError) {
-       console.error("[shops]: Error sending error message:", replyError);
+       logger.error('INTERACTION', 'Error sending error message');
      }
    }
   });
@@ -1027,17 +1027,17 @@ async function handleShopView(interaction) {
        await lastMessage.edit({ components: [] }).catch(() => {});
      }
    } catch (error) {
-     console.error("[shops]: Error clearing buttons:", error);
+     logger.error('INTERACTION', 'Error clearing buttons');
    }
   });
  } catch (error) {
-  console.error("[shops]: Error viewing shop items:", error);
+  logger.error('ECONOMY', 'Error viewing shop items');
   try {
     await interaction.editReply(
      "❌ An error occurred while viewing the shop inventory."
     ).catch(() => {}); // Ignore if this fails too
   } catch (replyError) {
-    console.error("[shops]: Error sending error message:", replyError);
+    logger.error('ECONOMY', 'Error sending error message');
   }
  }
 }
@@ -1092,7 +1092,7 @@ async function handleShopBuy(interaction) {
     // ------------------- Character Ownership Validation -------------------
     const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
     if (!character) {
-      console.error(`[shops]: ❌ Character ${characterName} not found or does not belong to user ${interaction.user.id}`);
+      logger.error('CHARACTER', `Character ${characterName} not found or does not belong to user ${interaction.user.id}`);
       return interaction.editReply({
         embeds: [{
           color: 0xFF0000, // Red color
@@ -1172,7 +1172,7 @@ async function handleShopBuy(interaction) {
 
     const shopQuantity = parseInt(shopItem.stock, 10);
     if (isNaN(shopQuantity)) {
-      console.error(`[shops]: ❌ Invalid stock quantity for item ${itemName}: ${shopItem.stock}`);
+      logger.error('ECONOMY', `Invalid stock quantity for item ${itemName}: ${shopItem.stock}`);
       return interaction.editReply({
         embeds: [{
           color: 0xFF0000, // Red color
@@ -1222,7 +1222,7 @@ async function handleShopBuy(interaction) {
        .lean();
     }
     if (!itemDetails) {
-     console.error(`[shops]: Item details not found in database: ${itemName}`);
+     logger.error('ECONOMY', `Item details not found in database: ${itemName}`);
      
            // Try a partial search to see if there are similar items
       const similarItems = await ItemModel.find({ 
@@ -1230,11 +1230,7 @@ async function handleShopBuy(interaction) {
       }).select("itemName buyPrice sellPrice").limit(5).lean();
      
      if (similarItems.length > 0) {
-       console.log(`[shops]: 🔍 Similar items found:`, similarItems.map(item => ({
-         itemName: item.itemName,
-         buyPrice: item.buyPrice,
-         sellPrice: item.sellPrice
-       })));
+       logger.debug('ECONOMY', `Similar items found: ${similarItems.map(item => item.itemName).join(', ')}`);
      }
      
      return interaction.editReply("❌ Item details not found.");
@@ -1243,7 +1239,7 @@ async function handleShopBuy(interaction) {
     logger.info('ECONOMY', `Item details - Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice}, Category: ${itemDetails.category}`);
 
     if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {
-      console.error(`[shops]: ❌ Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
+      logger.error('ECONOMY', `Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
       return interaction.editReply({
         embeds: [{
           color: 0xFF0000, // Red color
@@ -1278,7 +1274,7 @@ async function handleShopBuy(interaction) {
       if (boosterChar && boosterChar.job === 'Priest') {
         const beforeBoost = totalPrice;
         totalPrice = Math.ceil(totalPrice * 0.9); // 10% discount
-        console.log(`[shops]: ✨ Priest boost - Blessed Economy (10% buying discount: ${beforeBoost} → ${totalPrice})`);
+        logger.info('BOOST', `Priest boost - Blessed Economy (10% buying discount: ${beforeBoost} → ${totalPrice})`);
       }
     }
     
@@ -1432,7 +1428,7 @@ async function handleShopBuy(interaction) {
       userId: interaction.user?.id,
       operation: 'shop_buy'
     });
-    console.error("[shops]: Error buying item:", error);
+    logger.error('ECONOMY', 'Error buying item');
     await interaction.editReply({
       embeds: [{
         color: 0xFF0000, // Red color
@@ -1485,11 +1481,11 @@ if (quantity <= 0) {
 }
 
 
-  console.log(`[shops]: Starting sale: ${characterName} selling ${itemName} x${quantity}`);
+  logger.info('ECONOMY', `Starting sale: ${characterName} selling ${itemName} x${quantity}`);
 
   const character = await fetchCharacterByName(characterName);
   if (!character) {
-   console.error(`[shops]: Character not found: ${characterName}`);
+   logger.error('CHARACTER', `Character not found: ${characterName}`);
    return interaction.editReply({
     embeds: [{
       color: 0xFF0000, // Red color
@@ -1508,7 +1504,7 @@ if (quantity <= 0) {
 
   // Add ownership check
   if (character.userId !== interaction.user.id) {
-    console.error(`[shops]: User ${interaction.user.id} attempted to sell items for character ${characterName} which belongs to ${character.userId}`);
+    logger.error('SECURITY', `User ${interaction.user.id} attempted to sell items for character ${characterName} which belongs to ${character.userId}`);
     return interaction.editReply({
       embeds: [{
         color: 0xFF0000, // Red color
@@ -1596,9 +1592,7 @@ if (quantity <= 0) {
   }
 
   if (!inventoryItem || totalQuantity < quantity) {
-   console.error(
-    `[shops]: Insufficient inventory for item: ${itemName}. Available: ${totalQuantity}`
-   );
+   logger.error('INVENTORY', `Insufficient inventory for item: ${itemName}. Available: ${totalQuantity}`);
    return interaction.editReply({
     embeds: [{
       color: 0xFF0000, // Red color
@@ -1632,7 +1626,7 @@ if (quantity <= 0) {
    });
   }
 
-  console.log(`[shops]: Inventory validated: ${itemName} x${totalQuantity} available`);
+  logger.debug('INVENTORY', `Inventory validated: ${itemName} x${totalQuantity} available`);
 
   // Safely handle obtain field - ensure it's a string
   const obtainMethod = (inventoryItem.obtain || '').toString().toLowerCase();
@@ -1650,11 +1644,11 @@ if (quantity <= 0) {
   }
   
   if (!itemDetails) {
-   console.error(`[shops]: Item not found in database: ${itemName}`);
+   logger.error('ECONOMY', `Item not found in database: ${itemName}`);
    return interaction.editReply("❌ Item details not found.");
   }
 
-  console.log(`[shops]: Item found: ${itemName} (Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice})`);
+  logger.debug('ECONOMY', `Item found: ${itemName} (Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice})`);
 
   // Determine the effective job for crafting (consider job vouchers)
   const effectiveJob = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
@@ -1669,7 +1663,7 @@ if (quantity <= 0) {
    normalizedCraftingJobs.includes(normalizedCharacterJob);
 
   const bonusApplied = isCrafted && characterMeetsRequirements;
-  console.log(`[shops]: Crafting evaluation - Crafted: ${isCrafted}, Bonus Applied: ${bonusApplied}`);
+  logger.debug('ECONOMY', `Crafting evaluation - Crafted: ${isCrafted}, Bonus Applied: ${bonusApplied}`);
 
   const sellPrice =
    isCrafted && characterMeetsRequirements
@@ -1677,7 +1671,7 @@ if (quantity <= 0) {
     : itemDetails.sellPrice || 0;
 
   if (sellPrice <= 0) {
-   console.error(`[shops]: Invalid sell price for ${itemName}`);
+   logger.error('ECONOMY', `Invalid sell price for ${itemName}`);
    return interaction.editReply("❌ This item cannot be sold to the shop.");
   }
 
@@ -1742,20 +1736,20 @@ if (quantity <= 0) {
       // Fortune Teller: Fortunate Exchange (+10% when selling)
       if (boosterChar.job === 'Fortune Teller') {
         totalPrice = Math.floor(totalPrice * 1.1);
-        console.log(`[shops]: 🔮 Fortune Teller boost - Fortunate Exchange (+10% tokens: ${originalPrice} → ${totalPrice})`);
+        logger.info('BOOST', `Fortune Teller boost - Fortunate Exchange (+10% tokens: ${originalPrice} → ${totalPrice})`);
       }
       
       // Priest: Blessed Economy (+10% when selling)
       if (boosterChar.job === 'Priest') {
         totalPrice = Math.floor(totalPrice * 1.1);
-        console.log(`[shops]: ✨ Priest boost - Blessed Economy (+10% tokens: ${originalPrice} → ${totalPrice})`);
+        logger.info('BOOST', `Priest boost - Blessed Economy (+10% tokens: ${originalPrice} → ${totalPrice})`);
       }
     }
   }
 
   await updateTokenBalance(interaction.user.id, totalPrice);
 
-  console.log(`[shops]: Token update for ${interaction.user.tag}: ${user.tokens} + ${totalPrice} = ${user.tokens + totalPrice}`);
+  logger.debug('ECONOMY', `Token update for ${interaction.user.tag}: ${user.tokens} + ${totalPrice} = ${user.tokens + totalPrice}`);
 
   // Log to token tracker
   let tokenTrackerLogged = false;
@@ -1780,11 +1774,11 @@ if (quantity <= 0) {
   if (tokenTrackerLogged) updates.push('token tracker');
   if (inventoryLogged) updates.push('inventory tracker');
   if (updates.length > 0) {
-    console.log(`[shops]: Updated sheets: ${updates.join(', ')}`);
+    logger.debug('ECONOMY', `Updated sheets: ${updates.join(', ')}`);
   }
 
   const priceType = bonusApplied ? "Crafter's Bonus" : "Standard";
-  console.log(`[shops]: ✅ Sale completed - ${characterName} sold ${itemName} x${quantity} for ${totalPrice} tokens (${priceType})`);
+  logger.success('ECONOMY', `Sale completed - ${characterName} sold ${itemName} x${quantity} for ${totalPrice} tokens (${priceType})`);
   
   const saleEmbed = new EmbedBuilder()
    .setTitle("✅ Sale Successful!")
@@ -1798,7 +1792,9 @@ if (quantity <= 0) {
    .addFields(
     {
      name: "💰 Price Details",
-     value: `${priceType} Price: 🪙 ${sellPrice} per item`,
+     value: bonusApplied 
+      ? `Base Price: 🪙 ${itemDetails.sellPrice} per item\nCrafter's Bonus Price: 🪙 ${sellPrice} per item`
+      : `Standard Price: 🪙 ${sellPrice} per item`,
      inline: false,
     },
     {
@@ -1822,7 +1818,7 @@ if (quantity <= 0) {
     }
   });
   
-  console.error(`[shops]: Sale error - ${error.message}`);
+  logger.error('ECONOMY', `Sale error - ${error.message}`);
   
   const isTokenError = error.message && (
     error.message.includes('Invalid URL') ||
@@ -1994,7 +1990,7 @@ for (const { name } of cleanedItems) {
       );
     }
     
-    console.log(`[TRANSFER LOG] Character ${fromCharacter.name} tried to transfer equipped item "${name}". Total quantity in inventory: ${totalQuantity}`);
+    logger.debug('INVENTORY', `Character ${fromCharacter.name} tried to transfer equipped item "${name}". Total quantity in inventory: ${totalQuantity}`);
     
     // Only block transfer if they have exactly 1 (unequipping would leave them with 0)
     if (totalQuantity <= 1) {
@@ -2268,7 +2264,7 @@ for (const { name } of cleanedItems) {
   });
  } catch (error) {
   handleInteractionError(error, interaction, { source: "transfer.js" });
-  console.error("❌ Error during transfer execution:", error);
+  logger.error('ECONOMY', 'Error during transfer execution');
   await interaction.editReply({
     embeds: [{
       color: 0xFF0000, // Red color
@@ -2294,7 +2290,7 @@ for (const { name } of cleanedItems) {
 // ------------------- Trade Session Management -------------------
 // Handles creation, updates, and execution of trade sessions
 async function createTradeSession(initiator, target, items) {
-  console.log(`[trade.js]: 🔄 Creating trade session with items:`, items);
+  logger.info('ECONOMY', `Creating trade session with items: ${items.map(item => `${item.name} x${item.quantity}`).join(', ')}`);
   const tradeId = generateUniqueId('T');
   const formattedInitiatorItems = await Promise.all(items.map(async item => {
 
@@ -2754,7 +2750,7 @@ async function handleTrade(interaction) {
       try {
         const trade = await TempData.findByTypeAndKey('trade', tradeId);
         if (!trade) {
-          console.error(`[trade.js]: ❌ Trade ${tradeId} not found`);
+          logger.error('ECONOMY', `Trade ${tradeId} not found`);
           await interaction.editReply({
             embeds: [{
               color: 0xFF0000, // Red color
@@ -2793,11 +2789,11 @@ async function handleTrade(interaction) {
         }
 
         const tradeData = trade.data;
-        console.log(`[trade.js]: 🔄 Processing trade ${tradeId} for user ${userId}`);
+        logger.info('ECONOMY', `Processing trade ${tradeId} for user ${userId}`);
 
         // Verify user is part of the trade
         if (tradeData.initiator.userId !== userId && tradeData.target.userId !== userId) {
-          console.error(`[trade.js]: ❌ User ${userId} not part of trade ${tradeId}`);
+          logger.error('SECURITY', `User ${userId} not part of trade ${tradeId}`);
           await interaction.editReply({
             embeds: [{
               color: 0xFF0000, // Red color
@@ -2832,7 +2828,7 @@ async function handleTrade(interaction) {
           (tradeData.initiator.userId === userId && tradeData.initiator.characterName !== characterName) ||
           (tradeData.target.userId === userId && tradeData.target.characterName !== characterName)
         ) {
-          console.error(`[trade.js]: ❌ Character name mismatch for user ${userId} in trade ${tradeId}`);
+          logger.error('SECURITY', `Character name mismatch for user ${userId} in trade ${tradeId}`);
           await interaction.editReply({
             embeds: [{
               color: 0xFF0000, // Red color
@@ -2853,7 +2849,7 @@ async function handleTrade(interaction) {
         // Check if user has already confirmed
         if ((tradeData.initiator.userId === userId && tradeData.initiatorConfirmed) || 
             (tradeData.target.userId === userId && tradeData.targetConfirmed)) {
-          console.error(`[trade.js]: ❌ User ${userId} already confirmed trade ${tradeId}`);
+          logger.error('ECONOMY', `User ${userId} already confirmed trade ${tradeId}`);
           await interaction.editReply({
             embeds: [{
               color: 0xFF0000, // Red color
@@ -2878,11 +2874,11 @@ async function handleTrade(interaction) {
 
         // Confirm trade for this user
         const updatedTradeData = await confirmTrade(tradeId, userId);
-        console.log(`[trade.js]: ✅ Trade confirmed by user ${userId}`);
+        logger.success('ECONOMY', `Trade confirmed by user ${userId}`);
 
         // If both users have confirmed, execute the trade
         if (updatedTradeData.initiatorConfirmed && updatedTradeData.targetConfirmed) {
-          console.log(`[trade.js]: 🔄 Executing trade ${tradeId}`);
+          logger.info('ECONOMY', `Executing trade ${tradeId}`);
           
           // Check if either character is in jail before executing trade
           const initiatorChar = await fetchCharacterByNameAndUserId(updatedTradeData.initiator.characterName, updatedTradeData.initiator.userId);
@@ -2905,7 +2901,7 @@ async function handleTrade(interaction) {
               const confirmMsg = await channel.messages.fetch(updatedTradeData.confirmMessageId);
               await confirmMsg.delete();
             } catch (error) {
-              console.error(`[trade.js]: ❌ Error deleting trade confirm message:`, error);
+              logger.error('ECONOMY', 'Error deleting trade confirm message');
             }
           }
 
@@ -2918,7 +2914,7 @@ async function handleTrade(interaction) {
               const message = await channel.messages.fetch(updatedTradeData.messageId);
               await updateTradeMessage(message, updatedTradeData, fromCharacter, toCharacter);
             } catch (error) {
-              console.error(`[trade.js]: ❌ Error updating final trade message:`, error);
+              logger.error('ECONOMY', 'Error updating final trade message');
             }
           }
           
@@ -2952,14 +2948,14 @@ async function handleTrade(interaction) {
               const message = await channel.messages.fetch(updatedTradeData.messageId);
               await updateTradeMessage(message, updatedTradeData, fromCharacter, toCharacter);
             } catch (error) {
-              console.error(`[trade.js]: ❌ Error updating trade status message:`, error);
+              logger.error('ECONOMY', 'Error updating trade status message');
             }
           }
           
           await interaction.deleteReply();
         }
       } catch (error) {
-        console.error(`[trade.js]: ❌ Error handling trade completion:`, error);
+        logger.error('ECONOMY', 'Error handling trade completion');
         await interaction.editReply({
           content: `❌ An error occurred while processing the trade.`,
           ephemeral: true,
@@ -3017,7 +3013,7 @@ async function handleTrade(interaction) {
           // Get initial trade data
           const initialTrade = await TempData.findByTypeAndKey('trade', tradeId);
           if (!initialTrade) {
-            console.error(`[trade.js]: ❌ Trade ${tradeId} not found during reaction setup`);
+            logger.error('ECONOMY', `Trade ${tradeId} not found during reaction setup`);
             return;
           }
           
@@ -3031,7 +3027,7 @@ async function handleTrade(interaction) {
             try {
               const latestTrade = await TempData.findByTypeAndKey('trade', tradeId);
               if (!latestTrade) {
-                console.error(`[trade.js]: ❌ Trade ${tradeId} not found during reaction`);
+                logger.error('ECONOMY', `Trade ${tradeId} not found during reaction`);
                 return;
               }
 
@@ -3040,12 +3036,12 @@ async function handleTrade(interaction) {
               // Check if user has already confirmed
               if ((fromCharacter.userId === user.id && tradeData.initiatorConfirmed) || 
                   (toCharacter.userId === user.id && tradeData.targetConfirmed)) {
-                console.log(`[trade.js]: ❌ User ${user.id} already confirmed trade ${tradeId}`);
+                logger.warn('ECONOMY', `User ${user.id} already confirmed trade ${tradeId}`);
                 return;
               }
 
               const updatedTradeData = await confirmTrade(tradeId, user.id);
-              console.log(`[trade.js]: ✅ ${user.tag} confirmed trade ${tradeId}`);
+              logger.success('ECONOMY', `${user.tag} confirmed trade ${tradeId}`);
 
               // Update trade message
               await updateTradeMessage(tradeMessage, updatedTradeData, fromCharacter, toCharacter);
@@ -3086,23 +3082,23 @@ async function handleTrade(interaction) {
                     const confirmMsg = await channel.messages.fetch(updatedTradeData.confirmMessageId);
                     await confirmMsg.delete();
                   } catch (error) {
-                    console.error(`[trade.js]: ❌ Error deleting trade confirm message:`, error);
+                    logger.error('ECONOMY', 'Error deleting trade confirm message');
                   }
                 }
               }
             } catch (error) {
-              console.error(`[trade.js]: ❌ Error processing reaction:`, error);
+              logger.error('ECONOMY', 'Error processing reaction');
             }
           });
         } catch (err) {
-          console.error(`[trade.js]: ❌ Error setting up reaction collector: ${err.message}`);
+          logger.error('ECONOMY', `Error setting up reaction collector: ${err.message}`);
         }
       } catch (error) {
         // Only log a simple message for insufficient items
         if (error.embed) {
-          console.log(`[trade.js]: Trade validation failed for ${characterName}`);
+          logger.warn('ECONOMY', `Trade validation failed for ${characterName}`);
         } else {
-          console.error(`[trade.js]: ❌ Error initiating trade:`, error);
+          logger.error('ECONOMY', 'Error initiating trade');
         }
         
         // If error has an embed, use it, otherwise create a generic error embed
@@ -3126,9 +3122,9 @@ async function handleTrade(interaction) {
     });
     // Only log a simple message for insufficient items
     if (error.embed) {
-      console.log(`[trade.js]: Trade validation failed for ${characterName}`);
+      logger.warn('ECONOMY', `Trade validation failed for ${characterName}`);
     } else {
-      console.error(`[trade.js]: ❌ Error executing trade command:`, error);
+      logger.error('ECONOMY', 'Error executing trade command');
     }
     
     // Create a generic error message with user mention
