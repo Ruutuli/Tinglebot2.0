@@ -2491,17 +2491,24 @@ async function handleItemAutocomplete(interaction, focusedOption) {
     if (focusedName === "itemname") {
       const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
 
-      // --- Aggregate item quantities by item name (case-insensitive) ---
-      const itemTotals = {};
-      for (const item of inventoryItems) {
-        const name = item.itemName?.toLowerCase();
-        if (!name) continue;
-        if (!itemTotals[name]) itemTotals[name] = 0;
-        itemTotals[name] += item.quantity;
-      }
+      // --- Process items with crafting status (keep crafted and non-crafted separate) ---
+      const processedItems = inventoryItems
+        .filter(item => item.quantity > 0)
+        .map(item => {
+          const obtainMethod = (item.obtain || '').toString().toLowerCase();
+          const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
+          
+          return {
+            name: item.itemName?.toLowerCase(),
+            quantity: item.quantity,
+            isCrafted: isCrafted,
+            obtain: item.obtain || 'Unknown'
+          };
+        })
+        .filter(item => item.name); // Remove items without names
 
       if (subcommand === "sell") {
-        const itemNames = Object.keys(itemTotals).map((n) => n);
+        const itemNames = processedItems.map(item => item.name);
         const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
           .select("itemName sellPrice")
           .lean();
@@ -2509,32 +2516,43 @@ async function handleItemAutocomplete(interaction, focusedOption) {
           itemsFromDB.map((item) => [item.itemName.toLowerCase(), item.sellPrice])
         );
 
-        choices = Object.entries(itemTotals)
-          .filter(
-            ([name, total]) =>
-              name.includes(searchQuery) &&
-              name !== "initial item" &&
-              total > 0 // Only show items with quantity > 0
+        choices = processedItems
+          .filter(item => 
+            item.name.includes(searchQuery) &&
+            item.name !== "initial item"
           )
-          .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([name, total]) => ({
-            name: `${capitalizeWords(name)} - Qty: ${total} - Sell: ${itemsMap.get(name) || "N/A"}`,
-            value: name,
-          }));
+          .sort((a, b) => {
+            const nameCompare = a.name.localeCompare(b.name);
+            if (nameCompare !== 0) return nameCompare;
+            return a.isCrafted ? 1 : -1; // Non-crafted first
+          })
+          .map(item => {
+            const craftingIcon = item.isCrafted ? '🔨' : '📦';
+            const sellPrice = itemsMap.get(item.name) || "N/A";
+            return {
+              name: `${craftingIcon} ${capitalizeWords(item.name)} (Qty: ${item.quantity}) - Sell: ${sellPrice}`,
+              value: item.name,
+            };
+          });
       } else {
         // For non-sell subcommands, show all items in inventory
-        choices = Object.entries(itemTotals)
-          .filter(
-            ([name, total]) =>
-              name.includes(searchQuery) &&
-              name !== "initial item" &&
-              total > 0 // Only show items with quantity > 0
+        choices = processedItems
+          .filter(item => 
+            item.name.includes(searchQuery) &&
+            item.name !== "initial item"
           )
-          .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([name, total]) => ({
-            name: `${capitalizeWords(name)} - Qty: ${total}`,
-            value: name,
-          }));
+          .sort((a, b) => {
+            const nameCompare = a.name.localeCompare(b.name);
+            if (nameCompare !== 0) return nameCompare;
+            return a.isCrafted ? 1 : -1; // Non-crafted first
+          })
+          .map(item => {
+            const craftingIcon = item.isCrafted ? '🔨' : '📦';
+            return {
+              name: `${craftingIcon} ${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
+              value: item.name,
+            };
+          });
       }
     } else {
       // If we're not focusing itemname, don't do anything fancy
