@@ -223,17 +223,32 @@ async function updateAllRoleCountChannels(guild) {
 function initializeRoleCountChannels(client) {
   logger.info('SYSTEM', 'Initializing role count channels system');
   
-  // Update channels when bot starts
-  client.once('ready', async () => {
-    try {
-      const guild = client.guilds.cache.first();
-      if (guild) {
-        await updateAllRoleCountChannels(guild);
+  // Update channels immediately if bot is already ready, or when it becomes ready
+  if (client.isReady()) {
+    // Bot is already ready, run immediately
+    (async () => {
+      try {
+        const guild = client.guilds.cache.first();
+        if (guild) {
+          await updateAllRoleCountChannels(guild);
+        }
+      } catch (error) {
+        logger.error('SYSTEM', 'Error during initial role count update');
       }
-    } catch (error) {
-      logger.error('SYSTEM', 'Error during initial role count update');
-    }
-  });
+    })();
+  } else {
+    // Bot not ready yet, wait for ready event
+    client.once('ready', async () => {
+      try {
+        const guild = client.guilds.cache.first();
+        if (guild) {
+          await updateAllRoleCountChannels(guild);
+        }
+      } catch (error) {
+        logger.error('SYSTEM', 'Error during initial role count update');
+      }
+    });
+  }
   
   // Update channels when members join/leave or roles change
   client.on('guildMemberAdd', async (member) => {
