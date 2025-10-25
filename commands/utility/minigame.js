@@ -272,9 +272,28 @@ module.exports = {
       const participant = quest.participants.get(userId);
       if (participant.characterName !== resolvedCharacterName) {
         console.log(`[MINIGAME JOIN] ${username} failed validation - character mismatch. Quest character: ${participant.characterName}, Provided: ${resolvedCharacterName}`);
-        return await interaction.editReply({
-          content: `❌ You are participating in this quest with character "${participant.characterName}", not "${resolvedCharacterName}".`
+        // Create quest participation error embed
+        const { createBaseEmbed, addQuestInfoFields } = require('../../modules/questRewardModule');
+        const errorEmbed = createBaseEmbed(
+          '❌ Character Mismatch',
+          `You are participating in this quest with character **"${participant.characterName}"**, not **"${resolvedCharacterName}"**.`,
+          0xff0000 // Error color
+        );
+        
+        // Add quest information fields
+        addQuestInfoFields(errorEmbed, quest, [
+          { name: 'Correct Character', value: `**${participant.characterName}**`, inline: true },
+          { name: 'Provided Character', value: `~~${resolvedCharacterName}~~`, inline: true }
+        ]);
+        
+        // Add helpful information
+        errorEmbed.addFields({
+          name: '💡 What to do next',
+          value: 'Make sure you are using the correct character name when joining quest activities.',
+          inline: false
         });
+        
+        return await interaction.editReply({ embeds: [errorEmbed] });
       }
     }
     console.log(`[MINIGAME JOIN] ${username} quest validation passed`);
