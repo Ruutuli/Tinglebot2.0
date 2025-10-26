@@ -691,7 +691,8 @@ module.exports = {
        job,
        currentVillage,
        true, // Blood Moon status
-       originalRoll // Pass originalRoll for blight boost display
+       originalRoll, // Pass originalRoll for blight boost display
+       blightRainMessage // Pass blight rain message
       );
       return; // Stop if reroll is needed and executed
      }
@@ -819,7 +820,8 @@ async function handleBloodMoonRerolls(
  job,
  currentVillage,
  bloodMoonActive,
- originalRoll = null
+ originalRoll = null,
+ blightRainMessage = null
 ) {
  let rerollCount = 0;
  const maxRerolls = 5; // Limit the number of rerolls to prevent infinite loops
