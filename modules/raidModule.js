@@ -395,6 +395,87 @@ async function joinRaid(character, raidId) {
       throw new Error(`Character ${character.name} cannot participate in raids at Blight Stage ${character.blightStage} - monsters no longer attack them`);
     }
 
+    // ------------------- Blight Rain Check -------------------
+    // Check for blight rain in the village and apply infection chance
+    const { getCurrentWeather } = require('../services/weatherService');
+    const weatherData = await getCurrentWeather(raid.village);
+    let blightRainMessage = null;
+    
+    if (weatherData?.special?.label === 'Blight Rain') {
+      // Mod characters are immune to blight infection
+      if (character.isModCharacter) {
+        blightRainMessage = 
+          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+          `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
+        console.log(`[raidModule.js]: 🛡️ Mod character ${character.name} is immune to blight infection`);
+      } else if (character.blighted) {
+        blightRainMessage = 
+          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+          `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
+        console.log(`[raidModule.js]: 💀 Character ${character.name} is already blighted`);
+      } else {
+        // Check for resistance buffs
+        const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../modules/elixirModule');
+        const buffEffects = getActiveBuffEffects(character);
+        let infectionChance = 0.75; // Base 75% chance
+        
+        // Apply resistance buffs
+        if (buffEffects && buffEffects.blightResistance > 0) {
+          infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
+          console.log(`[raidModule.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
+        }
+        if (buffEffects && buffEffects.fireResistance > 0) {
+          infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
+          console.log(`[raidModule.js]: 🧪 Fire resistance buff applied - Infection chance reduced by ${buffEffects.fireResistance * 0.05}`);
+        }
+        
+        // Consume elixirs after applying their effects
+        if (shouldConsumeElixir(character, 'raid', { blightRain: true })) {
+          consumeElixirBuff(character);
+          // Update character in database
+          const { updateCharacterById, updateModCharacterById } = require('../database/db.js');
+          const updateFunction = character.isModCharacter ? updateCharacterById : updateCharacterById;
+          await updateFunction(character._id, { buff: character.buff });
+        }
+        
+        // Ensure chance stays within reasonable bounds
+        infectionChance = Math.max(0.1, Math.min(0.95, infectionChance));
+        
+        const infectionRoll = Math.random();
+        
+        if (infectionRoll < infectionChance) {
+          blightRainMessage = 
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+            "🏥 **Healing Available:** You can be healed by **Oracles, Sages & Dragons**\n" +
+            "📋 **Blight Information:** [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n" +
+            "⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+            "🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today's blight roll if you were just infected.*";
+          
+          console.log(`[raidModule.js]: 💀 Character ${character.name} infected with blight during raid join`);
+          
+          // Update character in DB
+          character.blighted = true;
+          character.blightedAt = new Date();
+          character.blightStage = 1;
+          await character.save();
+          
+          // Assign blighted role
+          const { User } = require('../models');
+          const user = await User.findOne({ discordId: character.userId });
+          if (user) {
+            user.blightedcharacter = true;
+            await user.save();
+          }
+        } else {
+          blightRainMessage = 
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection! ◈`;
+          console.log(`[raidModule.js]: ☔ Character ${character.name} avoided blight infection during raid join`);
+        }
+      }
+    }
+
     // Create participant data
     const participant = {
       userId: character.userId,
@@ -467,7 +548,8 @@ async function joinRaid(character, raidId) {
     return {
       raidId,
       raidData: raid,
-      participant
+      participant,
+      blightRainMessage
     };
   } catch (error) {
     handleError(error, 'raidModule.js', {

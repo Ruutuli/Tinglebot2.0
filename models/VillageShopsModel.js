@@ -27,7 +27,18 @@ const VillageShopItemSchema = new Schema({
   looting: { type: Boolean, default: false },
   vending: { type: Boolean, default: false },
   traveling: { type: Boolean, default: false },
-  specialWeather: { type: Boolean, default: false },
+  specialWeather: { 
+    type: Boolean, 
+    default: false,
+    set: function(value) {
+      // Custom setter to handle object to boolean conversion
+      if (value && typeof value === 'object') {
+        console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean for item: ${this.itemName || 'unknown'}`);
+        return Object.values(value).some(v => v === true);
+      }
+      return value || false;
+    }
+  },
   petPerk: { type: Boolean, default: false },
   exploring: { type: Boolean, default: false },
   craftingJobs: { type: [String], default: [] },
@@ -88,13 +99,7 @@ VillageShopItemSchema.pre('validate', function(next) {
       }
     }
     
-    // Fix specialWeather field if it's an object instead of boolean
-    if (this.specialWeather && typeof this.specialWeather === 'object') {
-      console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean for item: ${this.itemName}`);
-      // Check if any weather condition is true in the object
-      const hasSpecialWeather = Object.values(this.specialWeather).some(value => value === true);
-      this.specialWeather = hasSpecialWeather;
-    }
+    // specialWeather conversion is now handled by the custom setter
     
     next();
   } catch (error) {

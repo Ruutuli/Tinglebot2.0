@@ -2994,7 +2994,9 @@ async function handleShopAdd(interaction) {
         looting: item.looting || false,
         vending: item.vending || false,
         traveling: item.traveling || false,
-        specialWeather: typeof item.specialWeather === 'object' ? false : (item.specialWeather || false),
+        specialWeather: typeof item.specialWeather === 'object' ? 
+          Object.values(item.specialWeather).some(value => value === true) : 
+          (item.specialWeather || false),
         petPerk: item.petPerk || false,
         exploring: item.exploring || false,
         craftingJobs: item.craftingJobs || [],
