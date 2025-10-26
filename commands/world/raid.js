@@ -210,10 +210,12 @@ module.exports = {
         p.characterId.toString() === character._id.toString()
       );
       
+      let blightRainMessage = null;
       if (!existingParticipant) {
         try {
           const joinResult = await joinRaid(character, raidId);
           updatedRaidData = joinResult.raidData;
+          blightRainMessage = joinResult.blightRainMessage;
         } catch (joinError) {
           console.error(`[raid.js]: ❌ Join raid error for ${character.name}:`, joinError);
           return interaction.editReply({
@@ -238,7 +240,11 @@ module.exports = {
       // Check if monster was defeated in this turn
       if (turnResult.raidData.monster.currentHearts <= 0 && turnResult.raidData.status === 'completed') {
         // Send the final turn embed first
-        await interaction.editReply({ embeds: [embed] });
+        const finalResponse = { embeds: [embed] };
+        if (blightRainMessage) {
+          finalResponse.content = blightRainMessage;
+        }
+        await interaction.editReply(finalResponse);
         
         // Send immediate victory embed before loot processing
         const { createRaidVictoryEmbed } = require('../../embeds/embeds.js');
@@ -258,9 +264,14 @@ module.exports = {
       }
       
       // Send the turn result embed without user mention
-      return interaction.editReply({ 
-        embeds: [embed] 
-      });
+      const response = { embeds: [embed] };
+      
+      // Add blight rain message if present
+      if (blightRainMessage) {
+        response.content = blightRainMessage;
+      }
+      
+      return interaction.editReply(response);
 
     } catch (error) {
       await handleInteractionError(error, interaction, {
