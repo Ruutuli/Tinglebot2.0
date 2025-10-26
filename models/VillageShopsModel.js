@@ -37,6 +37,13 @@ const VillageShopItemSchema = new Schema({
         return Object.values(value).some(v => v === true);
       }
       return value || false;
+    },
+    validate: {
+      validator: function(value) {
+        // Allow both boolean and object values during validation
+        return typeof value === 'boolean' || (typeof value === 'object' && value !== null);
+      },
+      message: 'specialWeather must be a boolean or object'
     }
   },
   petPerk: { type: Boolean, default: false },
@@ -99,7 +106,11 @@ VillageShopItemSchema.pre('validate', function(next) {
       }
     }
     
-    // specialWeather conversion is now handled by the custom setter
+    // Handle specialWeather conversion from object to boolean
+    if (this.specialWeather && typeof this.specialWeather === 'object') {
+      console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean in pre-validate hook for item: ${this.itemName || 'unknown'}`);
+      this.specialWeather = Object.values(this.specialWeather).some(v => v === true);
+    }
     
     next();
   } catch (error) {
