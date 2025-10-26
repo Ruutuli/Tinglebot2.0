@@ -343,14 +343,19 @@ async function healBlight(interaction, characterName, healerName) {
             embeds: dmEmbeds
           });
         } catch (dmError) {
-          handleError(dmError, 'blightHandler.js', {
-            operation: 'sendPendingHealingDM',
-            commandName: interaction.commandName || 'heal',
-            userTag: interaction.user.tag,
-            userId: interaction.user.id,
-            characterName: character.name
-          });
-          logger.error('BLIGHT', `Failed to send DM to user ${interaction.user.id}`);
+          // Don't log DM errors to console channel - they're expected when users have DMs disabled
+          if (dmError.code === 50007) {
+            logger.warn('BLIGHT', `User ${interaction.user.id} has DMs disabled - skipping pending healing DM notification`);
+          } else {
+            handleError(dmError, 'blightHandler.js', {
+              operation: 'sendPendingHealingDM',
+              commandName: interaction.commandName || 'heal',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              characterName: character.name
+            });
+            logger.error('BLIGHT', `Failed to send DM to user ${interaction.user.id}`);
+          }
         }
         return;
       }
@@ -483,13 +488,18 @@ async function healBlight(interaction, characterName, healerName) {
         embeds: dmEmbeds,
       });
     } catch (dmError) {
-      handleError(dmError, 'blightHandler.js', {
-        operation: 'sendDM',
-        commandName: interaction.commandName || 'heal',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id
-      });
-      logger.error('BLIGHT', `Failed to send DM to user ${interaction.user.id}`);
+      // Don't log DM errors to console channel - they're expected when users have DMs disabled
+      if (dmError.code === 50007) {
+        logger.warn('BLIGHT', `User ${interaction.user.id} has DMs disabled - skipping DM notification`);
+      } else {
+        handleError(dmError, 'blightHandler.js', {
+          operation: 'sendDM',
+          commandName: interaction.commandName || 'heal',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id
+        });
+        logger.error('BLIGHT', `Failed to send DM to user ${interaction.user.id}`);
+      }
     }
   } catch (error) {
     handleError(error, 'blightHandler.js', {
@@ -3141,26 +3151,31 @@ async function checkMissedRolls(client) {
               console.log(`[blightHandler]: Sent 24-hour warning DM to ${character.userId} (${character.name})`);
             }
           } catch (error) {
-            // Try to fetch the Discord user's tag for better error reporting
-            let userTag = 'System';
-            try {
-              const user = await client.users.fetch(character.userId);
-              if (user) {
-                userTag = user.tag;
+            // Don't log DM errors to console channel - they're expected when users have DMs disabled
+            if (error.code === 50007) {
+              console.log(`[blightHandler]: User ${character.userId} (${character.name}) has DMs disabled - skipping death warning DM`);
+            } else {
+              // Try to fetch the Discord user's tag for better error reporting
+              let userTag = 'System';
+              try {
+                const user = await client.users.fetch(character.userId);
+                if (user) {
+                  userTag = user.tag;
+                }
+              } catch (fetchError) {
+                console.log(`[blightHandler]: Could not fetch user tag for ${character.userId}, using 'System' as fallback`);
               }
-            } catch (fetchError) {
-              console.log(`[blightHandler]: Could not fetch user tag for ${character.userId}, using 'System' as fallback`);
+              
+              handleError(error, 'blightHandler.js', {
+                operation: 'sendDeathWarningDM',
+                commandName: 'system',
+                userTag: userTag,
+                userId: character.userId,
+                characterName: character.name,
+                characterUserId: character.userId
+              });
+              console.error(`[blightHandler]: Failed to send DM to ${character.userId} (${character.name})`, error);
             }
-            
-            handleError(error, 'blightHandler.js', {
-              operation: 'sendDeathWarningDM',
-              commandName: 'system',
-              userTag: userTag,
-              userId: character.userId,
-              characterName: character.name,
-              characterUserId: character.userId
-            });
-            console.error(`[blightHandler]: Failed to send DM to ${character.userId} (${character.name})`, error);
           }
         }
 
