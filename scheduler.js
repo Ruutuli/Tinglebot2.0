@@ -2115,16 +2115,16 @@ async function runStartupChecks(client) {
   await cleanupExpiredRaids(client);
   
   // Blood Moon startup check
+  // Only manage channel names - the scheduled 8 PM job handles announcements
   const isBloodMoonActive = isBloodMoonDay();
   if (isBloodMoonActive) {
-   await renameChannels(client);
-   const successCount = await sendBloodMoonAnnouncementsToChannels(
-    client, 
-    "The Blood Moon is upon us! Beware!"
-   );
-   logger.info('BLOODMOON', `Startup announcements sent to ${successCount}/${BLOOD_MOON_CHANNELS.length} channels`);
+    // Blood Moon is currently active, just rename channels if needed
+    logger.info('BLOODMOON', 'Startup: Blood Moon is active - renaming channels only');
+    await renameChannels(client);
   } else {
-   await revertChannelNames(client);
+    // No active Blood Moon, revert channel names
+    logger.info('BLOODMOON', 'Startup: No active Blood Moon - reverting channel names');
+    await revertChannelNames(client);
   }
 
   // Check and distribute monthly boost rewards if not done yet this month

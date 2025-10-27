@@ -1,6 +1,7 @@
 const generalCategories = require('../models/GeneralItemCategories');
 const ItemModel = require('../models/ItemModel');
 const { connectToTinglebot } = require('../database/db');
+const logger = require('../utils/logger');
 
 // ============================================================================
 // ---- State Management ----
@@ -382,7 +383,7 @@ const NPCs = {
 // ------------------- Helper function for random selection -------------------
 const getRandomElement = (arr) => {
   if (!Array.isArray(arr) || arr.length === 0) {
-    console.warn('[NPCsModule.js]: getRandomElement called with invalid array:', arr);
+    logger.warn('NPC', 'getRandomElement called with invalid array:', arr);
     return null;
   }
   return arr[Math.floor(Math.random() * arr.length)];
@@ -393,15 +394,15 @@ const getNPCItems = async (npcName) => {
   // Check cache first
   const cachedItems = getCachedNPCItems(npcName);
   if (cachedItems) {
-    console.log(`[NPCsModule.js]: 🚀 Using cached items for ${npcName}`);
+    logger.debug('NPC', `Using cached items for ${npcName}`);
     return cachedItems;
   }
   
-  console.log(`[NPCsModule.js]: 📥 Fetching items for ${npcName} from database`);
+  logger.debug('NPC', `Fetching items for ${npcName} from database`);
   
   const npc = NPCs[npcName];
   if (!npc) {
-    console.warn(`[NPCsModule.js]: NPC not found: ${npcName}`);
+    logger.warn('NPC', `NPC not found: ${npcName}`);
     return [];
   }
 
@@ -466,7 +467,7 @@ const getNPCItems = async (npcName) => {
               // Cache the results before returning
               if (availableItems.length > 0) {
                 setCachedNPCItems(npcName, availableItems);
-                console.log(`[NPCsModule.js]: 💾 Cached ${availableItems.length} items for ${npcName}`);
+                logger.debug('NPC', `Cached ${availableItems.length} items for ${npcName}`);
               }
               
               return availableItems;
