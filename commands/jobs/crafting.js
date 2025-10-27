@@ -24,6 +24,7 @@ const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule'
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords, formatDateTime } = require('../../modules/formattingModule');
 const { applyCraftingBoost, applyCraftingStaminaBoost, applyCraftingMaterialBoost, applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
+const { info, success, error } = require('../../utils/logger');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../../utils/inventoryUtils');
@@ -190,7 +191,7 @@ module.exports = {
 
       // ------------------- Validate Character Job and Voucher -------------------
       let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
-      console.log(`[crafting.js]: 🔄 Job determined for ${character.name}: "${job}"`);
+      info('CRFT', `Job determined for ${character.name}: "${job}"`);
 
       // ------------------- Validate Job Perks -------------------
       const jobPerk = getJobPerk(job);
@@ -215,7 +216,7 @@ module.exports = {
       const canCraftItem = hasAllPerks || (jobField && item[jobField] === true);
       
       if (!jobPerk || (!jobPerk.perks.includes('CRAFTING') && !hasAllPerks) || !canCraftItem) {
-        console.error(`[crafting.js]: ❌ Invalid job "${job}" for ${character.name} - missing crafting skills`);
+        error('CRFT', `Invalid job "${job}" for ${character.name} - missing crafting skills`);
         const errorResponse = getJobVoucherErrorMessage('MISSING_SKILLS', {
           characterName: character.name,
           jobName: job,
@@ -231,21 +232,21 @@ module.exports = {
       let voucherCheck;
       let jobVoucherItem;
       if (character.jobVoucher) {
-        console.log(`[crafting.js]: 🎫 Validating job voucher for ${character.name}`);
+        info('CRFT', `Validating job voucher for ${character.name}`);
         voucherCheck = await validateJobVoucher(character, job);
         if (voucherCheck.skipVoucher) {
-          console.log(`[crafting.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
+          success('CRFT', `${character.name} already has job "${job}" - skipping voucher`);
         } else if (!voucherCheck.success) {
           if (character.jobVoucherJob === null) {
-            console.log(`[crafting.js]: 🔄 Unrestricted job voucher - proceeding with "${job}"`);
+            info('CRFT', `Unrestricted job voucher - proceeding with "${job}"`);
           } else {
-            console.error(`[crafting.js]: ❌ Voucher validation failed`);
+            error('CRFT', `Voucher validation failed`);
             return interaction.editReply({ embeds: [voucherCheck.embed], flags: [MessageFlags.Ephemeral] });
           }
         } else {
           // Restrict crafting of items that require more than 5 stamina when using a job voucher
           if (item.staminaToCraft > 5) {
-            console.error(`[crafting.js]: ❌ Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit`);
+            error('CRFT', `Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit`);
             const staminaError = getJobVoucherErrorMessage('STAMINA_LIMIT', {
               characterName: character.name,
               itemName: itemName
@@ -259,7 +260,7 @@ module.exports = {
 
           const lockedVillage = isVillageExclusiveJob(job);
           if (lockedVillage && character.currentVillage.toLowerCase() !== lockedVillage.toLowerCase()) {
-            console.error(`[crafting.js]: ❌ ${character.name} must be in ${lockedVillage} to use ${job} voucher`);
+            error('CRFT', `${character.name} must be in ${lockedVillage} to use ${job} voucher`);
             const villageError = getJobVoucherErrorMessage('MISSING_SKILLS', {
               characterName: character.name,
               jobName: job,
@@ -293,7 +294,7 @@ module.exports = {
       staminaCost = await applyCraftingStaminaBoost(freshCharacter.name, staminaCost);
       
       if (freshCharacter.currentStamina < staminaCost) {
-        console.error(`[crafting.js]: ❌ Insufficient stamina for ${freshCharacter.name} - needed ${staminaCost}, has ${freshCharacter.currentStamina}`);
+        error('CRFT', `Insufficient stamina for ${freshCharacter.name} - needed ${staminaCost}, has ${freshCharacter.currentStamina}`);
         return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${freshCharacter.currentStamina}.**`, flags: [MessageFlags.Ephemeral] });
       }
 
@@ -349,9 +350,9 @@ module.exports = {
       let updatedStamina;
       try {
         updatedStamina = await checkAndUseStamina(freshCharacter, staminaCost);
-        console.log(`[crafting.js]: ✅ Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
+        success('CRFT', `Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
       } catch (error) {
-        console.error(`[crafting.js]: ❌ Failed to deduct stamina for ${freshCharacter.name}: ${error.message}`);
+        error('CRFT', `Failed to deduct stamina for ${freshCharacter.name}: ${error.message}`);
         handleInteractionError(error, 'crafting.js');
         // Refund materials if stamina deduction fails
         for (const mat of materialsUsed) {
@@ -394,7 +395,7 @@ module.exports = {
 
       // ------------------- Clear Boost After Use -------------------
       if (freshCharacter.boostedBy) {
-        console.log(`[crafting.js] Clearing boost for ${freshCharacter.name} after use`);
+        info('CRFT', `Clearing boost for ${freshCharacter.name} after use`);
         freshCharacter.boostedBy = null;
         await freshCharacter.save();
       }
@@ -406,13 +407,13 @@ module.exports = {
       if (character.jobVoucher && !voucherCheck?.skipVoucher && jobVoucherItem) {
         const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
         if (!activationResult.success) {
-          console.error(`[crafting.js]: ❌ Failed to activate job voucher for ${character.name}`);
+          error('CRFT', `Failed to activate job voucher for ${character.name}`);
         } else {
           const deactivationResult = await deactivateJobVoucher(character._id);
           if (!deactivationResult.success) {
-            console.error(`[crafting.js]: ❌ Failed to deactivate job voucher for ${character.name}`);
+            error('CRFT', `Failed to deactivate job voucher for ${character.name}`);
           } else {
-            console.log(`[crafting.js]: ✅ Job voucher activated and deactivated for ${character.name}`);
+            success('CRFT', `Job voucher activated and deactivated for ${character.name}`);
           }
         }
       }
