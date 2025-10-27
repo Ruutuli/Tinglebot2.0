@@ -3649,6 +3649,10 @@ async function handleBlight(interaction) {
                         stage === 2 ? '#FFD700' : '#FFFF00';
 
       // Send DM to user about the blight
+      let dmSent = false;
+      let dmError = null;
+      let fallbackSent = false;
+      
       try {
         const user = await interaction.client.users.fetch(character.userId);
         
@@ -3693,8 +3697,62 @@ async function handleBlight(interaction) {
           .setTimestamp();
 
         await user.send({ content: `<@${character.userId}>, your character has been afflicted with blight!`, embeds: [blightEmbed] });
-      } catch (dmError) {
-        console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
+        dmSent = true;
+        console.log(`[mod.js]: ✅ Successfully sent blight DM to user ${character.userId}`);
+      } catch (error) {
+        dmError = error;
+        console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, error);
+        
+        // Try to send notification to public channel as fallback
+        try {
+          const notificationChannel = interaction.guild.channels.cache.get(EDIT_NOTIFICATION_CHANNEL_ID);
+          if (notificationChannel) {
+            const fallbackEmbed = new EmbedBuilder()
+              .setColor(stageColor)
+              .setTitle(`${stageEmoji} Blight Notification ${stageEmoji}`)
+              .setDescription(`**${character.name}** has been afflicted with **blight stage ${stage}** by a moderator.\n\n⚠️ **Note:** Unable to send DM - user may have DMs disabled.`)
+              .addFields(
+                {
+                  name: '__👤 Character Owner__',
+                  value: `<@${character.userId}>`,
+                  inline: true
+                },
+                {
+                  name: '__🏰 Village__',
+                  value: `${villageEmoji} ${character.currentVillage}`,
+                  inline: true
+                },
+                {
+                  name: '__<:blight_eye:805576955725611058> Blight Stage__',
+                  value: `${stageEmoji} Stage ${stage}`,
+                  inline: true
+                },
+                {
+                  name: '__💀 The Corruption__',
+                  value: flavorText,
+                  inline: false
+                },
+                {
+                  name: '__⚠️ Critical Warning__',
+                  value: 'If blight reaches stage 5, your character will be permanently lost. Act quickly to prevent this fate.',
+                  inline: false
+                }
+              )
+              .setThumbnail(character.icon)
+              .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+              .setFooter({ text: 'Moderator Action • Blight System', iconURL: 'https://storage.googleapis.com/tinglebot/blight-icon.png' })
+              .setTimestamp();
+            
+            await notificationChannel.send({ 
+              content: `<@${character.userId}>, your character has been afflicted with blight!`, 
+              embeds: [fallbackEmbed] 
+            });
+            fallbackSent = true;
+            console.log(`[mod.js]: ✅ Sent blight notification to public channel as DM fallback for user ${character.userId}`);
+          }
+        } catch (fallbackError) {
+          console.warn(`[mod.js]: ⚠️ Could not send fallback notification to public channel:`, fallbackError);
+        }
       }
 
       // Create enhanced ephemeral reply for moderator
@@ -3725,7 +3783,9 @@ async function handleBlight(interaction) {
           },
           {
             name: '__⚠️ Status__',
-            value: 'Blight successfully applied',
+            value: dmSent ? '✅ Blight successfully applied & DM sent' : 
+                   fallbackSent ? '⚠️ Blight applied, DM failed but notification sent to public channel' : 
+                   '❌ Blight applied but all notifications failed - user may have DMs disabled',
             inline: false
           },
           {

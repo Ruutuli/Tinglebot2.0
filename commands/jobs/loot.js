@@ -1261,7 +1261,7 @@ async function processLootingLogic(
   let lootedItem = null;
   if (outcome.canLoot && weightedItems.length > 0) {
    lootedItem = await generateLootedItem(encounteredMonster, weightedItems, character);
-   console.log(`[loot.js]: 🎁 ${character.name} looted: ${lootedItem?.itemName} (x${lootedItem?.quantity})`);
+   logger.success('LOOT', `${character.name} looted: ${lootedItem?.itemName} (x${lootedItem?.quantity})`);
 
    const inventoryLink = character.inventory || character.inventoryLink;
    if (!isValidGoogleSheetsUrl(inventoryLink)) {

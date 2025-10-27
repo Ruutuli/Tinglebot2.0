@@ -2291,7 +2291,7 @@ const connectToInventoriesForItems = async (context = {}) => {
                     throw new Error('Missing MongoDB URI for items database');
                 }
                 
-                console.log(`[db.js]: Connecting to items database... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info('DATABASE', `Connecting to items database... (attempt ${retryCount + 1}/${maxRetries})`);
                 inventoriesClient = new MongoClient(uri, {
                     serverSelectionTimeoutMS: 10000,  // 10 seconds
                     connectTimeoutMS: 10000,          // 10 seconds

@@ -847,7 +847,7 @@ function logBloodMoonStatus() {
 
   // Only log if it's a blood moon day
   if (isBloodMoon) {
-    console.log(`[index.js]: 🌕 Blood Moon Active (${hyruleanDate})`);
+    logger.info('BLOODMOON', `Blood Moon Active (${hyruleanDate})`);
   }
 }
 

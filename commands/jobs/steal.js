@@ -2284,7 +2284,7 @@ module.exports = {
             }
 
             // Performance timing log
-            console.log(`[steal.js]: 🚀 Starting steal command - ${targetType}: ${targetName}, rarity: ${raritySelection || 'any'}`);
+            logger.info('COMMAND', `Starting steal command - ${targetType}: ${targetName}, rarity: ${raritySelection || 'any'}`);
 
             // ---- Target Type Validation ----
             if (targetType !== 'npc' && targetType !== 'player') {
