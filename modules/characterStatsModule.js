@@ -12,7 +12,7 @@ const Character = require('../models/CharacterModel');
 const ModCharacter = require('../models/ModCharacterModel');
 
 const { handleError } = require('../utils/globalErrorHandler');
-const logger = require('../utils/logger');
+const { info, success, debug } = require('../utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -397,8 +397,11 @@ const recoverDailyStamina = async () => {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    console.log(`[characterStatsModule.js]: 🔄 Starting daily stamina recovery for ${today}`);
+    info('SYNC', `Starting daily stamina recovery for ${today}`);
 
+    let recoveredCount = 0;
+    let skippedCount = 0;
+    
     for (const character of characters) {
       try {
         if (!character.lastStaminaUsage) {
@@ -406,7 +409,8 @@ const recoverDailyStamina = async () => {
           if (character.currentStamina < character.maxStamina) {
             const newStamina = Math.min(character.currentStamina + 1, character.maxStamina);
             await updateCurrentStamina(character._id, newStamina);
-            console.log(`[characterStatsModule.js]: ✅ Recovered stamina for ${character.name} (no previous usage)`);
+            recoveredCount++;
+            debug('SYNC', `Recovered stamina for ${character.name} (no previous usage)`);
           }
           continue;
         }
@@ -421,14 +425,17 @@ const recoverDailyStamina = async () => {
         if (lastUsageDate < yesterdayStr && character.currentStamina < character.maxStamina) {
           const newStamina = Math.min(character.currentStamina + 1, character.maxStamina);
           await updateCurrentStamina(character._id, newStamina);
-          console.log(`[characterStatsModule.js]: ✅ Recovered stamina for ${character.name} (last usage: ${lastUsageDate})`);
+          recoveredCount++;
+          debug('SYNC', `Recovered stamina for ${character.name} (last usage: ${lastUsageDate})`);
         } else {
-          console.log(`[characterStatsModule.js]: ⏭️ Skipped stamina recovery for ${character.name} (last usage: ${lastUsageDate}, current: ${character.currentStamina}/${character.maxStamina})`);
+          skippedCount++;
         }
       } catch (error) {
         console.error(`[characterStatsModule.js]: ❌ Error processing stamina recovery for ${character.name}:`, error.message);
       }
     }
+    
+    success('SYNC', `Stamina recovery complete: ${recoveredCount} recovered, ${skippedCount} skipped`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {
       operation: 'recover_daily_stamina',

@@ -27,7 +27,7 @@ const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJ
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { applyStealingBoost, applyStealingJailBoost, applyStealingLootBoost } = require('../../modules/boostIntegration');
 const { getActiveBuffEffects } = require('../../modules/elixirModule');
-const logger = require('../../utils/logger');
+const { info, success } = require('../../utils/logger');
 
 // Add StealStats model
 const StealStats = require('../../models/StealStatsModel');
@@ -1008,13 +1008,11 @@ function formatCooldownTime(timeLeft) {
 // Reset all protections (called by scheduler at midnight EST)
 async function resetAllStealProtections() {
   try {
-    console.log('[steal.js]: 🛡️ Starting steal protection reset...');
+    info('SYNC', 'Starting steal protection reset');
     
     // Reset NPC protections and personal lockouts
     const npcProtectionResult = await NPC.resetAllProtections();
     const npcLockoutResult = await NPC.resetAllPersonalLockouts();
-    console.log(`[steal.js]: ✅ Reset ${npcProtectionResult.modifiedCount} NPC protections`);
-    console.log(`[steal.js]: ✅ Reset ${npcLockoutResult.modifiedCount} NPC personal lockouts`);
     
     // Reset player character protections
     const characterResult = await Character.updateMany(
@@ -1026,9 +1024,9 @@ async function resetAllStealProtections() {
         }
       }
     );
-    console.log(`[steal.js]: ✅ Reset ${characterResult.modifiedCount} player protections`);
     
-    console.log('[steal.js]: 🛡️ All steal protection reset completed');
+    const totalNpcResets = npcProtectionResult.modifiedCount + npcLockoutResult.modifiedCount;
+    success('SYNC', `Steal protection reset complete: ${totalNpcResets} NPC protections, ${characterResult.modifiedCount} player protections`);
   } catch (error) {
     console.error('[steal.js]: ❌ Error resetting steal protections:', error);
     

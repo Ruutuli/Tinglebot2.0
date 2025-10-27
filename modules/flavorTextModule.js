@@ -1,6 +1,7 @@
 // flavorTextModule.js
 
 const { capitalizeVillageName } = require('../utils/stringUtils');
+const { debug } = require('../utils/logger');
 
 // ============================================================================
 // ------------------- Utility Functions -------------------
@@ -527,7 +528,7 @@ const generateGatherFlavorText = (itemType) => {
 };
 
 const generateCraftingFlavorText = (job) => {
-  console.log(`[generateCraftingFlavorText]: Job provided: ${job}`);
+  debug('CRFT', `Job provided: ${job}`);
 
   const jobToFlavorText = {
     researcher: [
