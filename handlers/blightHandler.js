@@ -3087,24 +3087,22 @@ async function checkMissedRolls(client) {
 
       // ---- SKIP missed roll progression if newly blighted today or after last blight call ----
       // Calculate current day's blight call (8:00 PM EST today) in UTC
-      const nowEST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
       const currentDayBlightCall = get8PMESTInUTC(new Date());
       
       // Calculate last blight call (8:00 PM EST previous day) in UTC
-      const lastBlightCall = get8PMESTInUTC(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      // This gets the 8 PM blight call from 24 hours before NOW
+      const now = Date.now();
+      const yesterdayDate = new Date(now - 24 * 60 * 60 * 1000);
+      const lastBlightCall = get8PMESTInUTC(yesterdayDate);
       
-      // Skip if character was blighted today (before current blight call) or after last blight call
+      // Skip if character was blighted after the last blight call (before the current blight call)
       // OR if character rolled after the last blight call
       if (character.blightedAt) {
-        // Convert blightedAt to EST for proper date comparison
-        const blightedAtEST = new Date(character.blightedAt.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-        const isBlightedToday = blightedAtEST.getDate() === nowEST.getDate() && 
-                               blightedAtEST.getMonth() === nowEST.getMonth() && 
-                               blightedAtEST.getFullYear() === nowEST.getFullYear();
-        const isBlightedAfterLastCall = character.blightedAt > lastBlightCall;
+        // Simply compare UTC timestamps directly - more reliable
+        const isBlightedAfterLastCall = character.blightedAt >= lastBlightCall;
         
-        if (isBlightedToday || isBlightedAfterLastCall) {
-          console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}) - infected today or after last blight call.`);
+        if (isBlightedAfterLastCall) {
+          console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}, lastBlightCall=${lastBlightCall.toISOString()}) - infected after last blight call.`);
           continue;
         }
       }
