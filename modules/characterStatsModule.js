@@ -318,7 +318,7 @@ const handleKO = async (characterId, context = {}) => {
     }
     
     await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
-    logger.success('CHARACTER', `Character ID ${characterId} is KO'd`);
+    success('CHARACTER', `Character ID ${characterId} is KO'd`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', context);
     console.error(`[characterStatsModule.js]: ❌ Error in handleKO: ${error.message}`);
