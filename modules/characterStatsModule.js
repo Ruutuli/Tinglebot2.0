@@ -237,7 +237,7 @@ const useHearts = async (characterId, hearts, context = {}) => {
     await updateCurrentHearts(characterId, newHearts);
 
     if (newHearts === 0) {
-      logger.info('CHARACTER', `Triggering KO for ${character.name}`);
+      info('CHARACTER', `Triggering KO for ${character.name}`);
       await handleKO(characterId, context);
     }
 
@@ -295,7 +295,7 @@ const useStamina = async (characterId, stamina, context = {}) => {
 // Handles a KO state by setting the character's KO flag and current hearts to 0.
 const handleKO = async (characterId, context = {}) => {
   try {
-    logger.info('CHARACTER', `Handling KO for Character ID ${characterId}`);
+    info('CHARACTER', `Handling KO for Character ID ${characterId}`);
     
     // First check if this is a mod character
     const modCharacter = await ModCharacter.findById(characterId);
