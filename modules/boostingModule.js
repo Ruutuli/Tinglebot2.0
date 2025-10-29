@@ -623,10 +623,13 @@ function applyTeacherGatheringBoost(gatherTable) {
 }
 
 function applyTeacherHealingBoost(healedCharacter) {
+ // Add +2 temporary hearts directly to currentHearts (can exceed maxHearts)
+ // Store tempHearts to track temporary hearts for display
  if (healedCharacter.tempHearts === undefined) {
   healedCharacter.tempHearts = 0;
  }
  healedCharacter.tempHearts += 2;
+ healedCharacter.currentHearts += 2; // Add directly to currentHearts (can exceed maxHearts)
  return healedCharacter;
 }
 

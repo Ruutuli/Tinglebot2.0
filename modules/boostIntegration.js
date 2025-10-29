@@ -102,18 +102,31 @@ async function applyHealingBoost(characterName, baseHealing, wasKO = false) {
 
 // Apply stamina cost boost (Fortune Teller: 50% less stamina)
 async function applyHealingStaminaBoost(characterName, baseStaminaCost) {
-  const hasBoost = await checkBoostActive(characterName, 'Healers');
-  if (!hasBoost) return baseStaminaCost;
+  const logger = require('../utils/logger');
   
+  const hasBoost = await checkBoostActive(characterName, 'Healers');
+  
+  if (!hasBoost) {
+    // No boost active - return original stamina cost
+    return baseStaminaCost;
+  }
+
   const booster = await getBoosterInfo(characterName);
-  if (!booster) return baseStaminaCost;
+  
+  if (!booster) {
+    // Boost check returned true but no booster info found - return original cost
+    logger.warn('BOOST', `[applyHealingStaminaBoost] ERROR: Boost check returned true for ${characterName} but getBoosterInfo returned null!`);
+    return baseStaminaCost;
+  }
   
   // Only Fortune Teller affects stamina cost (Predictive Healing)
   if (booster.job === 'Fortune Teller') {
     const boostedStamina = await applyBoostEffect('Fortune Teller', 'Healers', baseStaminaCost);
+    logger.info('BOOST', `[applyHealingStaminaBoost] Fortune Teller boost applied to ${characterName}: ${baseStaminaCost} -> ${boostedStamina} stamina`);
     return boostedStamina;
   }
   
+  // Boost active but not Fortune Teller - return original cost
   return baseStaminaCost;
 }
 
@@ -181,22 +194,33 @@ async function applyTeacherHealingBoost(patientName) {
 
 // Helper function to check if boost is active
 async function checkBoostActive(characterName, category) {
+  const logger = require('../utils/logger');
   try {
     const { isBoostActive } = require('../commands/jobs/boosting');
-    return await isBoostActive(characterName, category);
+    
+    const result = await isBoostActive(characterName, category);
+    return result;
   } catch (err) {
+    logger.error('BOOST', `[checkBoostActive] Error checking boost for ${characterName}: ${err.message}`);
     return false;
   }
 }
 
 // Helper function to get booster info
 async function getBoosterInfo(characterName) {
+  const logger = require('../utils/logger');
   try {
     const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
     const { fetchCharacterByName } = require('../database/db');
     
     const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
-    if (!activeBoost || activeBoost.status !== 'fulfilled') return null;
+    if (!activeBoost) {
+      return null;
+    }
+    
+    if (activeBoost.status !== 'fulfilled') {
+      return null;
+    }
     
     const currentTime = Date.now();
     if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
@@ -204,13 +228,19 @@ async function getBoosterInfo(characterName) {
     }
     
     const booster = await fetchCharacterByName(activeBoost.boostingCharacter);
-    if (!booster) return null;
+    if (!booster) {
+      logger.warn('BOOST', `[getBoosterInfo] ERROR: Could not find booster character "${activeBoost.boostingCharacter}" from database`);
+      return null;
+    }
+    
+    const boosterJob = booster.job || activeBoost.boosterJob;
     
     return {
       name: booster.name,
-      job: booster.job || activeBoost.boosterJob
+      job: boosterJob
     };
   } catch (err) {
+    logger.error('BOOST', `[getBoosterInfo] Error getting booster info for ${characterName}: ${err.message}`);
     return null;
   }
 }

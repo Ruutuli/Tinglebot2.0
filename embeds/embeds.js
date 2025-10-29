@@ -137,6 +137,29 @@ const formatMaterialsList = (materials) => {
 };
 
 // ------------------- Embed Styling Utilities ------------------
+// ------------------- Function: formatBoostCategoryName -------------------
+// Formats a boost category name for display, converting internal names to user-friendly names
+function formatBoostCategoryName(category) {
+ if (!category) return 'Unknown';
+ 
+ // Convert internal category names to display names
+ const categoryMap = {
+  'Healers': 'Healer',
+  'Looting': 'Looting',
+  'Gathering': 'Gathering',
+  'Crafting': 'Crafting',
+  'Stealing': 'Stealing',
+  'Vending': 'Vending',
+  'Tokens': 'Tokens',
+  'Exploring': 'Exploring',
+  'Traveling': 'Traveling',
+  'Mounts': 'Mounts',
+  'Other': 'Other'
+ };
+ 
+ return categoryMap[category] || capitalizeFirstLetter(category);
+}
+
 // ------------------- Function: setDefaultImage ------------------
 // Sets the default image on an embed
 const setDefaultImage = (embed) => {
@@ -187,16 +210,13 @@ const buildFooterText = (baseText, character, boostInfo = null) => {
    footerText += ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}`;
  }
  
- if (character.boostedBy) {
-    if (boostInfo?.boosterJob && boostInfo?.boosterName) {
-      if (boostInfo?.boostName && boostInfo?.category) {
-        footerText += ` | Boost by: ${boostInfo.boosterJob} ${boostInfo.boosterName} - ${boostInfo.boostName} for ${boostInfo.category}`;
-      } else {
-        footerText += ` | Boost by: ${boostInfo.boosterJob} ${boostInfo.boosterName}`;
-      }
-    } else {
-      footerText += ` | Boost by: ${character.boostedBy}`;
-    }
+ // Show boost info if boostInfo is provided (even if character.boostedBy is null, as it may have been cleared)
+ // Format: "Boosted by: Job Name: Character Name - Boost Name"
+ if (boostInfo && boostInfo.boosterJob && boostInfo.boosterName && boostInfo.boostName) {
+   footerText += ` | Boosted by: ${boostInfo.boosterJob}: ${boostInfo.boosterName} - ${boostInfo.boostName}`;
+ } else if (character.boostedBy) {
+   // Fallback if boostInfo not provided but character has boostedBy
+   footerText += ` | Boosted by: ${character.boostedBy}`;
  }
  
  return footerText;
@@ -1865,7 +1885,11 @@ const createHealEmbed = async (
  paymentOffered,
  healingRequestId,
  isFulfilled = false,
- status = undefined
+ status = undefined,
+ isDirectHealing = false,
+ originalHeartsRequested = null,
+ staminaCost = null,
+ capturedBoostInfo = null
 ) => {
  if (!characterToHeal) {
   throw new Error("Character to heal is required.");
@@ -1874,31 +1898,83 @@ const createHealEmbed = async (
  const healerName = healerCharacter?.name || "Any available healer";
  const healerIcon = healerCharacter?.icon || DEFAULT_IMAGE_URL;
 
- // Get boost information
- const boostInfo = await getBoostInfo(characterToHeal, 'Healers');
+ // Refresh healer character to get updated stamina after healing
+ let updatedHealer = healerCharacter;
+ if (isFulfilled && healerCharacter && healerCharacter._id) {
+  try {
+   const Character = require('../models/CharacterModel');
+   updatedHealer = await Character.findById(healerCharacter._id);
+  } catch (error) {
+   // Fallback to original character data if refresh fails
+   updatedHealer = healerCharacter;
+  }
+ }
+
+ // Get boost information from healer (boosts are on the healer, not the patient)
+ // Use captured boost info if provided (captured before boost was cleared)
+ // Otherwise try to get it from the character
+ let boostInfo = null;
+ if (capturedBoostInfo) {
+  // Use captured boost info and generate flavor text if needed
+  const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+  boostInfo = {
+   ...capturedBoostInfo,
+   boostFlavorText: capturedBoostInfo.boostFlavorText || generateBoostFlavorText(capturedBoostInfo.boosterJob, 'Healers')
+  };
+ } else {
+  // Fallback: try to get boost info from character (may not work if boost was already cleared)
+  boostInfo = updatedHealer ? await getBoostInfo(updatedHealer, 'Healers') : null;
+  
+  // Fallback: If boostInfo exists but lacks flavor text, generate it manually
+  if (boostInfo && !boostInfo.boostFlavorText && boostInfo.boosterJob) {
+   const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+   boostInfo.boostFlavorText = generateBoostFlavorText(boostInfo.boosterJob, 'Healers');
+  }
+  
+  // Also check if healer has boostedBy but getBoostInfo didn't work - try to get boost status directly
+  if (!boostInfo && updatedHealer && updatedHealer.boostedBy && isFulfilled) {
+   try {
+    const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+    const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+    const boostStatus = await getCharacterBoostStatus(updatedHealer.name);
+    if (boostStatus && boostStatus.category === 'Healers') {
+     boostInfo = {
+      boosterJob: boostStatus.boosterJob,
+      boosterName: boostStatus.boosterName,
+      boostName: boostStatus.boostName,
+      category: boostStatus.category,
+      boostFlavorText: generateBoostFlavorText(boostStatus.boosterJob, 'Healers')
+     };
+    }
+   } catch (error) {
+    // Silently fail - boost info is optional
+    console.error('[embeds.js] Error getting boost status for healing embed:', error);
+   }
+  }
+ }
 
  const settings = healerCharacter
   ? getCommonEmbedSettings(healerCharacter)
-  : { color: "#AA926A" }; // Default color if no healer
+  : { color: "#4CAF50" }; // Green color for healing theme
 
  // Handle cancelled state
  if (status === 'cancelled') {
   const embed = new EmbedBuilder()
-   .setColor('#888888')
-   .setAuthor({
-    name: `${characterToHeal.name} 🔗`,
-    iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
-    url: characterToHeal.inventory || "",
-   })
+   .setColor('#9E9E9E')
    .setTitle('❌ Healing Request Cancelled')
-   .setDescription(`This healing request was cancelled by the requester and can no longer be fulfilled.`)
+   .setDescription(`**${characterToHeal.name}**'s healing request has been cancelled and can no longer be fulfilled.`)
+   .setThumbnail(characterToHeal.icon || DEFAULT_IMAGE_URL)
    .addFields(
     {
-     name: "__📍 Village__",
+     name: "__📍 Location__",
      value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`,
-     inline: true,
+     inline: false,
     },
-    { name: "__❤️ Hearts to Heal__", value: `> ${heartsToHeal}`, inline: true },
+    { 
+     name: "__❤️ Requested Hearts__", 
+     value: `> ${heartsToHeal}`, 
+     inline: false 
+    },
     {
      name: "__💰 Payment Offered__",
      value: `> ${paymentOffered || "None"}`,
@@ -1907,114 +1983,271 @@ const createHealEmbed = async (
     {
      name: "__🆔 Request ID__",
      value: `> \`${healingRequestId}\``,
-     inline: false,
-    },
-    {
-     name: "__❌ Status__",
-     value: `> Cancelled by the requester. This request cannot be fulfilled.`,
      inline: false,
     }
    )
    .setFooter({
-    text: "This request was cancelled.",
-    iconURL: healerCharacter ? healerIcon : null,
-   });
+    text: "Request cancelled by requester",
+    iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
+   })
+   .setTimestamp();
+  setDefaultImage(embed);
   return embed;
  }
 
- // Pending or fulfilled state
- const embed = new EmbedBuilder()
-  .setColor("#AA926A")
-  .setAuthor({
-   name: `${characterToHeal.name} 🔗`,
-   iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
-   url: characterToHeal.inventory || "",
+ if (isFulfilled) {
+  // Build description showing boost bonus if applicable
+  let description;
+  const boostBonus = originalHeartsRequested !== null && heartsToHeal > originalHeartsRequested 
+    ? heartsToHeal - originalHeartsRequested 
+    : 0;
+  
+  if (boostBonus > 0) {
+   const originalText = originalHeartsRequested === 1 ? '1 heart' : `${originalHeartsRequested} hearts`;
+   const bonusText = boostBonus === 1 ? 'an extra heart' : `${boostBonus} extra hearts`;
+   description = `**${healerName}** successfully healed **${characterToHeal.name}**! ${originalText} ${originalHeartsRequested === 1 ? 'was' : 'were'} requested, but ${bonusText} ${boostBonus === 1 ? 'was' : 'were'} healed due to the boost!`;
+  } else {
+   description = `**${healerName}** successfully healed **${characterToHeal.name}** for ${heartsToHeal} heart${heartsToHeal === 1 ? '' : 's'}!`;
+  }
+
+  // Build fields array - all non-inline for better readability
+  // Note: Boost flavor text is shown as a separate field below, not in description
+  const fields = [];
+
+  // Hearts healed field
+  fields.push({
+   name: "__❤️ Hearts Healed__",
+   value: boostBonus > 0 
+     ? `> ${heartsToHeal} (${originalHeartsRequested} requested + ${boostBonus} boost bonus)`
+     : `> ${heartsToHeal}`,
+   inline: false,
   });
 
- if (isFulfilled) {
-  // Add boost flavor text to description if available
-  let description = `> ${healerName} has healed your character for ${heartsToHeal} hearts!`;
-  description = addBoostFlavorText(description, boostInfo);
+  // Add stamina cost with current/max if provided
+  if (staminaCost !== null && updatedHealer) {
+   const currentStamina = updatedHealer.currentStamina !== undefined ? updatedHealer.currentStamina : (healerCharacter?.currentStamina !== undefined ? healerCharacter.currentStamina : null);
+   const maxStamina = updatedHealer.maxStamina || healerCharacter?.maxStamina || 0;
+   if (currentStamina !== null) {
+    fields.push({
+     name: "__⚡ Stamina Cost__",
+     value: `> ${staminaCost} stamina used\n> ${currentStamina}/${maxStamina} remaining`,
+     inline: false,
+    });
+   } else {
+    fields.push({
+     name: "__⚡ Stamina Cost__",
+     value: `> ${staminaCost} stamina used`,
+     inline: false,
+    });
+   }
+  }
 
-  embed
-   .setTitle('✅ Healing Request Fulfilled')
-   .setDescription(description)
-   .addFields(
+  // Patient current status
+  try {
+   const Character = require('../models/CharacterModel');
+   const refreshedPatient = await Character.findById(characterToHeal._id);
+   if (refreshedPatient) {
+    // Check if patient has temporary hearts (exceeds maxHearts)
+    const tempHearts = refreshedPatient.tempHearts || 0;
+    const currentHearts = refreshedPatient.currentHearts;
+    const maxHearts = refreshedPatient.maxHearts;
+    let statusText = `> ${currentHearts}/${maxHearts} hearts`;
+    if (tempHearts > 0 || currentHearts > maxHearts) {
+      // Show temporary hearts if they exist or if current exceeds max
+      const tempDisplay = tempHearts > 0 ? tempHearts : (currentHearts - maxHearts);
+      statusText = `> ${currentHearts}/${maxHearts} hearts (+${tempDisplay} temporary)`;
+    }
+    fields.push({
+     name: "__💚 Patient Status__",
+     value: statusText,
+     inline: false,
+    });
+   }
+  } catch (error) {
+   // Fallback if refresh fails
+   const tempHearts = characterToHeal.tempHearts || 0;
+   const currentHearts = characterToHeal.currentHearts;
+   const maxHearts = characterToHeal.maxHearts;
+   let statusText = `> ${currentHearts}/${maxHearts} hearts`;
+   if (tempHearts > 0 || currentHearts > maxHearts) {
+     const tempDisplay = tempHearts > 0 ? tempHearts : (currentHearts - maxHearts);
+     statusText = `> ${currentHearts}/${maxHearts} hearts (+${tempDisplay} temporary)`;
+   }
+   fields.push({
+    name: "__💚 Patient Status__",
+    value: statusText,
+    inline: false,
+   });
+  }
+
+  // Add boost flavor text as a field if available
+  // Show boost effect if there's a boost bonus OR if boostInfo exists (even without bonus, like Fortune Teller stamina reduction)
+  if (boostBonus > 0 || boostInfo) {
+   let boostFlavorText = null;
+   
+   // Try to get flavor text from boostInfo
+   if (boostInfo && boostInfo.boostFlavorText) {
+    boostFlavorText = boostInfo.boostFlavorText;
+   } else if (boostInfo && boostInfo.boosterJob) {
+    // Generate flavor text if we have the job but not the text
+    const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+    boostFlavorText = generateBoostFlavorText(boostInfo.boosterJob, 'Healers');
+   } else if (boostBonus > 0) {
+    // If we have a boost bonus but no boostInfo, try to get it directly
+    try {
+     const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+     const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+     const boostStatus = await getCharacterBoostStatus(updatedHealer?.name || healerCharacter?.name);
+     if (boostStatus && boostStatus.category === 'Healers') {
+      boostFlavorText = generateBoostFlavorText(boostStatus.boosterJob, 'Healers');
+     }
+    } catch (error) {
+     // Silently fail
+    }
+   }
+   
+   // Add debuff removal info for Priest boost
+   if (boostInfo && boostInfo.debuffRemoved && boostInfo.boosterJob === 'Priest') {
+    boostFlavorText = boostFlavorText ? `${boostFlavorText}\n\n✨ The patient's debuff has been cleansed and removed.` : '✨ The patient\'s debuff has been cleansed and removed.';
+   }
+   
+   // Add temporary hearts info for Teacher boost
+   if (boostInfo && boostInfo.teacherTempHeartsInfo && boostInfo.boosterJob === 'Teacher') {
+    const { heartsBefore, heartsAfter, maxHearts, tempHearts } = boostInfo.teacherTempHeartsInfo;
+    const tempHeartsText = tempHearts > 0 ? ` (+${tempHearts} temporary)` : '';
+    const heartsText = `\n\n💚 **Temporary Hearts:**\n> **${characterToHeal.name}:** ${heartsBefore}/${maxHearts} → ${heartsAfter}/${maxHearts}${tempHeartsText}`;
+    
+    if (boostFlavorText) {
+     boostFlavorText = `${boostFlavorText}${heartsText}`;
+    } else {
+     boostFlavorText = `💚 Temporary Hearts:${heartsText}`;
+    }
+   }
+   
+   // Add stamina recovery info for Scholar boost
+   if (boostInfo && boostInfo.scholarStaminaInfo && boostInfo.boosterJob === 'Scholar') {
+    const { healerBefore, healerAfter, healerMax, recipientBefore, recipientAfter, recipientMax } = boostInfo.scholarStaminaInfo;
+    
+    // Scholar boost always grants +1 to both, so always show both
+    let staminaText = `\n\n⚡ **Stamina Recovery:**`;
+    
+    // Show healer stamina recovery
+    const healerChanged = healerAfter !== healerBefore;
+    if (healerChanged) {
+      staminaText += `\n> **${healerCharacter?.name || 'Healer'}:** ${healerBefore}/${healerMax} → ${healerAfter}/${healerMax}`;
+    } else if (healerAfter === healerMax) {
+      // At max, but still show to indicate boost was applied
+      staminaText += `\n> **${healerCharacter?.name || 'Healer'}:** ${healerAfter}/${healerMax} (already at max)`;
+    }
+    
+    // Show recipient stamina recovery
+    const recipientChanged = recipientAfter !== recipientBefore;
+    if (recipientChanged) {
+      staminaText += `\n> **${characterToHeal.name}:** ${recipientBefore}/${recipientMax} → ${recipientAfter}/${recipientMax}`;
+    } else if (recipientAfter === recipientMax) {
+      // At max, but still show to indicate boost was applied
+      staminaText += `\n> **${characterToHeal.name}:** ${recipientAfter}/${recipientMax} (already at max)`;
+    }
+    
+    if (staminaText) {
+     boostFlavorText = boostFlavorText ? `${boostFlavorText}${staminaText}` : `⚡ Stamina Recovery:${staminaText}`;
+    }
+   }
+   
+   // Only add field if we have flavor text
+   if (boostFlavorText) {
+    fields.push({
+     name: "__⚡ Boost Effect__",
+     value: `> ${boostFlavorText}`,
+     inline: false,
+    });
+   }
+  }
+
+  // Only add Payment and Request ID if not direct healing
+  if (!isDirectHealing) {
+   fields.push(
     {
-     name: "__❤️ Hearts to Heal__",
-     value: `> ${heartsToHeal}`,
-     inline: true,
-    },
-    {
-     name: "__💰 Payment Offered__",
-     value: `> ${paymentOffered || "None"}`,
+     name: "__💰 Payment__",
+     value: `> ${paymentOffered && paymentOffered !== "None" ? paymentOffered : "No payment specified"}`,
      inline: false,
     },
     {
      name: "__🆔 Request ID__",
-     value: `> \`${healingRequestId}\``,
-     inline: false,
-    },
-    {
-     name: "__✅ Status__",
-     value: `> Fulfilled`,
+     value: `> \`${healingRequestId || "N/A"}\``,
      inline: false,
     }
    );
+  }
 
-  // Build footer text
-  let footerText = "Healing process successfully completed.";
-  footerText = buildFooterText(footerText, characterToHeal, boostInfo);
+  // Build footer text - use healer character for boost info
+  let footerText = "✨ Healing complete";
+  footerText = buildFooterText(footerText, updatedHealer || healerCharacter || characterToHeal, boostInfo);
 
-  embed.setFooter({
-   text: footerText,
-   iconURL: healerCharacter ? healerIcon : null,
-  });
+  const embed = new EmbedBuilder()
+   .setColor("#4CAF50") // Green for successful healing
+   .setTitle('✨ Healing Complete')
+   .setDescription(description)
+   .setThumbnail(healerIcon)
+   .addFields(fields)
+   .setFooter({
+    text: footerText,
+    iconURL: healerIcon,
+   })
+   .setTimestamp();
   setDefaultImage(embed);
+  return embed;
  } else {
-  embed
-   .setTitle('📝 Healing Request Pending')
+  // Pending request state
+  const embed = new EmbedBuilder()
+   .setColor("#FFA500") // Orange for pending
+   .setTitle('📝 Healing Request')
    .setDescription(
-    `> ${healerName} has been requested to heal your character for ${heartsToHeal} hearts!`)
+    healerName !== "Any available healer" 
+     ? `**${characterToHeal.name}** is requesting healing from **${healerName}**`
+     : `**${characterToHeal.name}** is requesting healing from any available healer`
+   )
+   .setThumbnail(characterToHeal.icon || DEFAULT_IMAGE_URL)
    .addFields(
     {
-     name: "__❤️ Hearts to Heal__",
+     name: "__❤️ Hearts Requested__",
      value: `> ${heartsToHeal}`,
-     inline: true,
+     inline: false,
     },
     {
-     name: "__💖 Current Hearts__",
+     name: "__💚 Current Hearts__",
      value: `> ${characterToHeal.currentHearts}/${characterToHeal.maxHearts}`,
-     inline: true,
+     inline: false,
+    },
+    {
+     name: "__📍 Location__",
+     value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`,
+     inline: false,
     },
     {
      name: "__💰 Payment Offered__",
-     value: `> ${paymentOffered || "None"}`,
+     value: `> ${paymentOffered && paymentOffered !== "None" ? paymentOffered : "No payment specified"}`,
      inline: false,
     },
     {
      name: "__🆔 Request ID__",
      value: `> \`${healingRequestId}\``,
-     inline: false,
-    },
-    {
-     name: "__🕒 Status__",
-     value: `> Pending`,
      inline: false,
     }
    );
 
   // Build footer text for pending state
-  let pendingFooterText = "Waiting for a healer to fulfill this request.";
+  let pendingFooterText = "⏳ Waiting for healer to fulfill request";
   pendingFooterText = buildFooterText(pendingFooterText, characterToHeal, boostInfo);
 
   embed.setFooter({
    text: pendingFooterText,
-   iconURL: healerCharacter ? healerIcon : null,
-  });
+   iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
+  })
+  .setTimestamp();
   setDefaultImage(embed);
+  return embed;
  }
- return embed;
 };
 
 // ------------------- Travel and Movement Embeds ------------------
@@ -2267,7 +2500,7 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
   const requestedBy = capitalizeFirstLetter(requestData.requestedBy || 'Unknown');
   const booster = capitalizeFirstLetter(requestData.booster || 'Unknown');
   const boosterJob = capitalizeWords(requestData.boosterJob || 'Unknown');
-  const category = capitalizeFirstLetter(requestData.category || 'Unknown');
+  const category = formatBoostCategoryName(requestData.category || 'Unknown');
   const boostEffect = requestData.boostEffect || 'No effect specified';
   const village = capitalizeFirstLetter(requestData.village || 'Unknown');
   
@@ -2297,6 +2530,11 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
       statusColor = '#FF0000'; // Red
       statusEmoji = '❌';
       statusText = 'Expired';
+      break;
+    case 'cancelled':
+      statusColor = '#808080'; // Gray
+      statusEmoji = '🚫';
+      statusText = 'Cancelled';
       break;
     default:
       statusColor = '#FFA500';
@@ -2445,7 +2683,7 @@ const createBoostAppliedEmbed = (boostData) => {
   const boostedBy = capitalizeFirstLetter(boostData.boostedBy || 'Unknown');
   const boosterJob = capitalizeWords(boostData.boosterJob || 'Unknown');
   const target = capitalizeFirstLetter(boostData.target || 'Unknown');
-  const category = capitalizeFirstLetter(boostData.category || 'Unknown');
+  const category = formatBoostCategoryName(boostData.category || 'Unknown');
   const effect = boostData.effect || 'No effect specified';
   const village = capitalizeFirstLetter(boostData.village || 'Unknown');
   
