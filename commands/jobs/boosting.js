@@ -40,17 +40,17 @@ const EXEMPT_CATEGORIES = [
 ];
 
 const BOOST_CATEGORIES = [
- { name: "Looting", value: "Looting" },
- { name: "Gathering", value: "Gathering" },
- { name: "Crafting", value: "Crafting" },
- { name: "Healers", value: "Healers" },
- { name: "Stealing", value: "Stealing" },
- { name: "Vending", value: "Vending" },
- { name: "Tokens", value: "Tokens" },
- { name: "Exploring", value: "Exploring" },
- { name: "Traveling", value: "Traveling" },
- { name: "Mounts", value: "Mounts" },
- { name: "Other", value: "Other" }
+  { name: "Looting", value: "Looting" },
+  { name: "Gathering", value: "Gathering" },
+  { name: "Crafting", value: "Crafting" },
+  { name: "Healer", value: "Healers" },
+  { name: "Stealing", value: "Stealing" },
+  { name: "Vending", value: "Vending" },
+  { name: "Tokens", value: "Tokens" },
+  { name: "Exploring", value: "Exploring" },
+  { name: "Traveling", value: "Traveling" },
+  { name: "Mounts", value: "Mounts" },
+  { name: "Other", value: "Other" }
 ];
 
 // ============================================================================
@@ -147,9 +147,20 @@ async function fetchActiveBoost(characterName, category) {
 function validateBoostEffect(boosterJob, category) {
  const boost = getBoostEffect(boosterJob, category);
  if (!boost) {
+   // Special handling for Healer job - they don't provide boosts, they receive them
+   if (boosterJob && boosterJob.toLowerCase() === 'healer') {
+     return {
+       valid: false,
+       error: `❌ **Invalid Booster Job**\n\n**Healer** characters cannot provide boosts. Only **Fortune Teller**, **Teacher**, **Priest**, **Entertainer**, and **Scholar** can provide boosts.\n\n💡 **Tip:** Select a character with one of the boosting jobs to provide the boost.`
+     };
+   }
+   
+   // Display user-friendly category name
+   const categoryDisplayName = category === 'Healers' ? 'Healer' : category;
+   
    return {
      valid: false,
-     error: `No boost found for job "${boosterJob}" in category "${category}".`
+     error: `❌ **No Boost Available**\n\n**${boosterJob}** doesn't have a boost effect for the **${categoryDisplayName}** category.\n\n💡 **Tip:** Only certain jobs can provide boosts for specific categories. Check the boost descriptions to see which jobs can boost each category.`
    };
  }
  return { valid: true, boost };
@@ -180,31 +191,45 @@ function validateScholarVillageParameter(boosterJob, category, village) {
 }
 
 /**
- * Validates if a character already has an active boost
+ * Validates if a character already has a pending boost request
+ * Note: Characters can request new boosts even if they have an active fulfilled boost
  */
 async function validateActiveBoost(targetCharacter) {
- // Check if the character has a boostedBy value (meaning they have an active boost)
- if (targetCharacter.boostedBy) {
-   // Get the active boost details to show remaining time
-   const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(targetCharacter.name);
+ try {
+   // Check TempData directly for any pending boost requests
+   const allBoostingData = await TempData.findAllByType('boosting');
+   const currentTime = Date.now();
    
-   if (activeBoost && activeBoost.status === "fulfilled") {
-     const currentTime = Date.now();
-     if (activeBoost.boostExpiresAt && currentTime <= activeBoost.boostExpiresAt) {
-       const timeRemaining = activeBoost.boostExpiresAt - currentTime;
-       const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
-       const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+   for (const tempData of allBoostingData) {
+     const requestData = tempData.data;
+     
+     // Check if this is a boost request for the target character
+     if (requestData.targetCharacter === targetCharacter.name) {
+       // Skip cancelled and fulfilled requests - only block on pending
+       if (requestData.status === "cancelled" || requestData.status === "fulfilled") {
+         continue;
+       }
        
-       return {
-         valid: false,
-         error: `❌ **Active Boost Found**\n\n**${targetCharacter.name}** already has an active boost from **${targetCharacter.boostedBy}**.\n\n⏰ **Time remaining:** ${hoursRemaining}h ${minutesRemaining}m\n\n💡 **Tip:** You can only have one active boost at a time. Wait for the current boost to expire before requesting a new one.`
-       };
+       // Check for pending requests (not expired, not fulfilled, not expired status)
+       if (requestData.status === "pending") {
+         // Check if the request hasn't expired (if expiresAt is set)
+         if (!requestData.expiresAt || currentTime <= requestData.expiresAt) {
+           return {
+             valid: false,
+             error: `❌ **Pending Boost Request Found**\n\n**${targetCharacter.name}** already has a pending boost request from **${requestData.boostingCharacter}**.\n\n💡 **Tip:** You can only have one pending boost request at a time. Wait for the current request to be fulfilled, cancelled, or expire before requesting a new one.`
+           };
+         }
+       }
      }
    }
+   
+   // Allow requesting new boosts - don't block on active fulfilled boosts
+   return { valid: true };
+ } catch (error) {
+   logger.error('BOOST', `Error validating active boost for ${targetCharacter.name}:`, error);
+   // On error, allow the request to proceed (better to allow than block incorrectly)
+   return { valid: true };
  }
- 
- // Allow requesting new boosts if boostedBy is null (no active boost)
- return { valid: true };
 }
 
 /**
@@ -381,6 +406,15 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
       activeBoosts.sort((a, b) => b.timestamp - a.timestamp);
       const mostRecentBoost = activeBoosts[0].requestData;
       
+      // Self-repair: If TempData shows an active boost but character's boostedBy is null,
+      // restore it to ensure consistency
+      const targetCharacter = await fetchCharacterByName(characterName);
+      if (targetCharacter && !targetCharacter.boostedBy && mostRecentBoost.boostingCharacter) {
+        logger.info('BOOST', `Restoring boostedBy for ${characterName} (was null but TempData shows active boost from ${mostRecentBoost.boostingCharacter})`);
+        targetCharacter.boostedBy = mostRecentBoost.boostingCharacter;
+        await targetCharacter.save();
+      }
+      
       return mostRecentBoost;
     }
 
@@ -528,6 +562,18 @@ module.exports = {
       .setRequired(false)
       .setAutocomplete(true)
     )
+  )
+  .addSubcommand((subcommand) =>
+   subcommand
+    .setName("cancel")
+    .setDescription("Cancel a pending boost request")
+    .addStringOption((option) =>
+     option
+      .setName("requestid")
+      .setDescription("The ID of the boost request to cancel")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
   ),
 
 // ============================================================================
@@ -545,6 +591,8 @@ module.exports = {
    await handleBoostStatus(interaction);
   } else if (subcommand === "use") {
    await handleBoostUse(interaction);
+  } else if (subcommand === "cancel") {
+   await handleBoostCancel(interaction);
   }
  },
 };
@@ -855,10 +903,13 @@ async function handleBoostStatus(interaction) {
   return;
  }
 
+ // Format category for display
+ const categoryDisplayName = activeBoost.category === 'Healers' ? 'Healer' : activeBoost.category;
+ 
  // Create fields array for the embed
  const fields = [
   { name: "Boost Type", value: boostEffectValidation.boost.name, inline: true },
-  { name: "Category", value: activeBoost.category, inline: true },
+  { name: "Category", value: categoryDisplayName, inline: true },
   { name: "Boosted By", value: activeBoost.boostingCharacter, inline: true },
   { name: "Effect", value: boostEffectValidation.boost.description, inline: false },
   {
@@ -1041,6 +1092,67 @@ async function handleBoostUse(interaction) {
  // If we get here, the boost isn't Fortune Teller or Entertainer
  await interaction.reply({
   content: `${boosterCharacter.job} doesn't have an "Other" category boost that can be used with this command.`,
+  ephemeral: true,
+ });
+}
+
+async function handleBoostCancel(interaction) {
+ const requestId = interaction.options.getString("requestid");
+ const userId = interaction.user.id;
+
+ const requestData = await retrieveBoostingRequestFromTempData(requestId);
+ 
+ if (!requestData) {
+  await interaction.reply({
+   content: "❌ **Invalid Request ID**\n\nCould not find a boost request with that ID.",
+   ephemeral: true,
+  });
+  return;
+ }
+
+ // Check if the user owns the target character (the requester)
+ const targetCharacter = await fetchCharacterWithFallback(requestData.targetCharacter, userId);
+ 
+ if (!targetCharacter) {
+  await interaction.reply({
+   content: "❌ **Unauthorized**\n\nYou can only cancel boost requests for your own characters.",
+   ephemeral: true,
+  });
+  return;
+ }
+
+ // Check if the request is pending (can't cancel fulfilled or expired requests)
+ if (requestData.status !== "pending") {
+  await interaction.reply({
+   content: `❌ **Cannot Cancel**\n\nThis boost request has already been ${requestData.status === "fulfilled" ? "fulfilled" : requestData.status === "expired" ? "expired" : requestData.status}. Only pending requests can be cancelled.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ // Check if the request has expired
+ const currentTime = Date.now();
+ if (requestData.expiresAt && currentTime > requestData.expiresAt) {
+  // Auto-mark as expired
+  requestData.status = "expired";
+  await saveBoostingRequestToTempData(requestId, requestData);
+  
+  await interaction.reply({
+   content: "❌ **Request Expired**\n\nThis boost request has already expired and cannot be cancelled.",
+   ephemeral: true,
+  });
+  return;
+ }
+
+ // Cancel the request
+ requestData.status = "cancelled";
+ await saveBoostingRequestToTempData(requestId, requestData);
+
+ // Update the embed if it exists
+ await updateBoostRequestEmbed(interaction.client, requestData, 'cancelled');
+
+ await interaction.reply({
+  content: `✅ **Boost Request Cancelled**\n\nSuccessfully cancelled the boost request from **${requestData.boostingCharacter}** for **${requestData.targetCharacter}**.\n\n**Request ID:** ${requestData.boostRequestId}`,
   ephemeral: true,
  });
 }

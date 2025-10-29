@@ -855,6 +855,14 @@ const generateTeacherGatheringFlavorText = () => {
 const BOOST_FLAVOR_MESSAGES = {
   // Job-specific boost messages
   Scholar: {
+    Healers: [
+      "📚 Efficient Recovery techniques allow both healer and patient to regain stamina after healing.",
+      "🎓 Scholarly knowledge of energy management ensures the healing process itself restores vitality.",
+      "📖 The Scholar's methods optimize recovery, granting stamina to both parties after treatment.",
+      "🔍 Academic expertise in healing sciences enhances stamina recovery for all involved.",
+      "📚 Research-based techniques ensure efficient energy transfer during the healing process.",
+      "🎓 The Scholar's understanding of the body's energy flow benefits both healer and patient."
+    ],
     Gathering: (targetRegion) => [
       `📚 Thanks to your boost, you gathered this item that is normally found in ${targetRegion}!`,
       `🎓 Your scholarly insight revealed treasures from ${targetRegion}!`,
@@ -925,6 +933,14 @@ const BOOST_FLAVOR_MESSAGES = {
       "📖 Your teaching experience pays off as you create items with practical value.",
       "🔍 Practical knowledge ensures your crafted items serve real purposes."
     ],
+    Healers: [
+      "📚 Temporary Fortitude grants the patient +2 temporary hearts that persist until they take damage.",
+      "🎓 The Teacher's wisdom strengthens the patient's resilience, providing extra protection after healing.",
+      "📖 Educational guidance enhances recovery, granting temporary hearts that shield until next injury.",
+      "🔍 Practical knowledge ensures the patient gains additional temporary vitality that lasts until damaged.",
+      "📚 The Teacher's insight fortifies the patient with extra hearts that remain until they take harm.",
+      "🎓 Scholarly wisdom provides temporary fortification, adding +2 hearts that persist through the next damage."
+    ],
     default: [
       "🎓 The Teacher's wisdom enhances your abilities with practical knowledge.",
       "📚 Educational experience improves your technique in all endeavors.",
@@ -957,6 +973,14 @@ const BOOST_FLAVOR_MESSAGES = {
       "🌟 Sacred energy guides your hands as you craft with divine inspiration.",
       "💫 The Priest's blessing ensures your crafted items carry spiritual significance."
     ],
+    Healers: [
+      "✨ Spiritual Cleanse purifies the patient's body, removing all active debuffs during the healing process.",
+      "🙏 Divine intervention cleanses the soul, erasing harmful effects as health is restored.",
+      "🌟 Sacred energy washes away corruption, leaving the patient free of afflictions.",
+      "💫 The Priest's blessing purifies body and spirit, removing all debuffs while healing.",
+      "✨ Holy light dispels all negative effects, granting the patient a clean recovery.",
+      "🙏 Spiritual healing cleanses the patient completely, removing all active debuffs."
+    ],
     default: [
       "🙏 Divine blessing enhances your abilities with sacred power.",
       "✨ Holy favor improves your technique with spiritual guidance.",
@@ -985,6 +1009,14 @@ const BOOST_FLAVOR_MESSAGES = {
       "🎭 The Entertainer's charm deflects some of the monster's fury.",
       "🎪 Captivating performance reduces the monster's effectiveness in battle."
     ],
+    Healers: [
+      "🎵 The Song of Healing resonates through the patient's body, granting an extra heart of recovery when reviving from unconsciousness.",
+      "🎼 Musical vibrations enhance the healing process, ensuring the patient gains additional strength upon revival.",
+      "🎶 The Entertainer's melody soothes the wounded soul, providing bonus healing when bringing someone back from the brink.",
+      "🎵 Harmonious tones amplify the healer's efforts, granting an extra heart to those revived from critical condition.",
+      "🎼 The power of song strengthens the revival process, ensuring the patient recovers with additional vitality.",
+      "🎶 Melodic healing enhances the recovery, granting one extra heart when the patient returns from unconsciousness."
+    ],
     default: [
       "🎭 The Entertainer's charm enhances your abilities with extra flair.",
       "🎪 Performance magic improves your technique with artistic style.",
@@ -993,6 +1025,14 @@ const BOOST_FLAVOR_MESSAGES = {
     ]
   },
   FortuneTeller: {
+    Healers: [
+      "🔮 Predictive Healing allows the Fortune Teller to foresee the need, reducing the stamina cost for healing.",
+      "✨ Prophetic insight reveals the most efficient healing methods, conserving the healer's energy.",
+      "🌟 Fortunetelling knowledge predicts the optimal moment, making healing less taxing on stamina.",
+      "💫 The Fortune Teller's vision foresaw this healing, allowing it to cost significantly less stamina.",
+      "🔮 Premonition of the healing need ensures the process is more energy-efficient.",
+      "✨ Fortune's guidance optimizes the healing process, reducing the stamina required."
+    ],
     default: [
       "🔮 Mystical insight enhances your abilities with prophetic knowledge.",
       "✨ Fortune's favor improves your technique with magical guidance.",
@@ -1013,7 +1053,9 @@ const BOOST_FLAVOR_MESSAGES = {
 // ============================================================================
 
 const generateBoostFlavorText = (boosterJob, category = 'default', options = null) => {
-  const jobMessages = BOOST_FLAVOR_MESSAGES[boosterJob] || BOOST_FLAVOR_MESSAGES.default;
+  // Normalize job name: remove spaces (e.g., "Fortune Teller" -> "FortuneTeller")
+  const normalizedJob = boosterJob ? boosterJob.replace(/\s+/g, '') : null;
+  const jobMessages = BOOST_FLAVOR_MESSAGES[normalizedJob] || BOOST_FLAVOR_MESSAGES.default;
   let categoryMessages = jobMessages[category] || jobMessages.default || BOOST_FLAVOR_MESSAGES.default;
 
   // Scholar Gathering: categoryMessages is a function expecting targetRegion

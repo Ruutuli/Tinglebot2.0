@@ -62,6 +62,7 @@ const {
   isValidGoogleSheetsUrl
 } = require('../utils/validation');
 const { handleError } = require('../utils/globalErrorHandler');
+const { info, success, warn, error, debug } = require('../utils/logger');
 
 const Character = require('../models/CharacterModel');
 
@@ -121,9 +122,9 @@ async function updateDailyRoll(character, activity) {
     const now = new Date().toISOString();
     character.dailyRoll.set(activity, now);
     await character.save();
-  } catch (error) {
-    console.error(`[travelHandler.js]: ❌ Failed to update daily roll:`, error);
-    throw error;
+  } catch (err) {
+    error('TRAVEL', 'Failed to update daily roll', err);
+    throw err;
   }
 }
 
@@ -215,9 +216,9 @@ async function assignVillageVisitingRole(interaction, destination, character = n
           if (member.roles.cache.has(roleId)) {
             try {
               await member.roles.remove(roleId);
-              console.log(`[travelHandler.js]: ✅ Removed visiting role ${roleId} from ${interaction.user.tag}`);
+              success('TRAVEL', `Removed visiting role ${roleId} from ${interaction.user.tag}`);
             } catch (error) {
-              console.warn(`[travelHandler.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
+              warn('TRAVEL', `Failed to remove role ${roleId}`, error.message);
             }
           }
         }
@@ -227,24 +228,24 @@ async function assignVillageVisitingRole(interaction, destination, character = n
           if (!member.roles.cache.has(destinationRoleId)) {
             try {
               await member.roles.add(destinationRoleId);
-              console.log(`[travelHandler.js]: ✅ Added ${capitalizeFirstLetter(destination)} visiting role to ${interaction.user.tag}`);
+              success('TRAVEL', `Added ${capitalizeFirstLetter(destination)} visiting role to ${interaction.user.tag}`);
             } catch (error) {
-              console.warn(`[travelHandler.js]: ⚠️ Failed to add ${capitalizeFirstLetter(destination)} visiting role: ${error.message}`);
+              warn('TRAVEL', `Failed to add ${capitalizeFirstLetter(destination)} visiting role`, error.message);
             }
           } else {
-            console.log(`[travelHandler.js]: ℹ️ ${interaction.user.tag} already has ${capitalizeFirstLetter(destination)} visiting role`);
+            info('TRAVEL', `${interaction.user.tag} already has ${capitalizeFirstLetter(destination)} visiting role`);
           }
         } else {
-          console.log(`[travelHandler.js]: ℹ️ ${interaction.user.tag} returned to home village ${capitalizeFirstLetter(destination)} - no visiting role assigned`);
+          info('TRAVEL', `${interaction.user.tag} returned to home village ${capitalizeFirstLetter(destination)} - no visiting role assigned`);
         }
       } else {
-        console.warn('[travelHandler.js]: ⚠️ Bot lacks ManageRoles permission - skipping role management');
+        warn('PERMISSION', 'Bot lacks ManageRoles permission - skipping role management');
       }
     } else {
-      console.warn(`[travelHandler.js]: ⚠️ No role ID found for destination: ${capitalizeFirstLetter(destination)}`);
+      warn('TRAVEL', `No role ID found for destination: ${capitalizeFirstLetter(destination)}`);
     }
   } catch (error) {
-    console.warn(`[travelHandler.js]: ⚠️ Role management failed: ${error.message}`);
+    warn('TRAVEL', 'Role management failed', error.message);
     // Continue with travel completion even if role management fails
   }
 }
@@ -456,19 +457,19 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
     }
 
-    console.log(`[travelHandler.js]: 🎯 Starting combat for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
-    console.log(`[travelHandler.js]: ❤️ Initial hearts: ${character.currentHearts}/${character.maxHearts}`);
+    info('COMBAT', `Starting combat for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
+    debug('COMBAT', `Initial hearts: ${character.currentHearts}/${character.maxHearts}`);
 
     const diceRoll = Math.floor(Math.random() * 100) + 1;
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
-    console.log(`[travelHandler.js]: ⚔️ Combat results - Damage: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
+    debug('COMBAT', `Combat results - Damage: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
 
     const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
-    console.log(`[travelHandler.js]: 🎲 Combat outcome: ${outcome.result}, Hearts: ${outcome.hearts}`);
+    info('COMBAT', `Combat outcome: ${outcome.result}, Hearts: ${outcome.hearts}`);
 
     // ------------------- KO Branch -------------------
     if (outcome.result === 'KO') {
-      console.log(`[travelHandler.js]: 💀 Character KO'd - Previous hearts: ${character.currentHearts}`);
+      info('COMBAT', `Character KO'd - Previous hearts: ${character.currentHearts}`, { character: character.name });
       const koEmbed = createKOEmbed(character);
       await interaction.followUp({ embeds: [koEmbed] });
 
@@ -499,11 +500,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     // ------------------- Fallback Heart Damage -------------------
     if (outcome.result !== 'Win!/Loot' && outcome.result !== 'KO') {
       if (typeof outcome.hearts !== 'number' || isNaN(outcome.hearts)) {
-        console.warn(`[travelHandler.js]: ⚠️ Invalid hearts value for ${monster.name}, using fallback`);
+        warn('COMBAT', `Invalid hearts value for ${monster.name}, using fallback`);
         outcome.hearts = 1;
         outcome.result = `💥⚔️ The monster attacks! You lose ❤️ 1 heart!`;
       }
-      console.log(`[travelHandler.js]: 💔 Applying damage - Hearts: ${character.currentHearts} → ${character.currentHearts - outcome.hearts}`);
+      debug('COMBAT', `Applying damage - Hearts: ${character.currentHearts} → ${character.currentHearts - outcome.hearts}`);
     }
 
     // ------------------- Sync Hearts & Stamina -------------------
@@ -545,7 +546,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
               item.emoji = jellyItem.emoji;
             }
           } catch (error) {
-            console.error(`[travelHandler.js]: Error fetching emoji for ${jellyType}:`, error);
+            error('TRAVEL', `Error fetching emoji for ${jellyType}`, error);
             // Keep the original emoji if there's an error
           }
         } else if (item) {
@@ -756,13 +757,13 @@ async function handleTravelInteraction(
           await interaction.deferUpdate();
         } catch (err) {
           if (err.code === 10062) {
-            console.warn(`[travelHandler.js]: ⚠️ Interaction expired for user ${interaction.user?.id || 'unknown'}`);
+            warn('INTERACTION', `Interaction expired for user ${interaction.user?.id || 'unknown'}`);
             return '❌ This interaction has expired. Please try again or reissue the command.';
           } else if (err.code === 10008) {
-            console.warn(`[travelHandler.js]: ⚠️ Unknown interaction for user ${interaction.user?.id || 'unknown'}`);
+            warn('INTERACTION', `Unknown interaction for user ${interaction.user?.id || 'unknown'}`);
             return '❌ This interaction is no longer valid. Please try again or reissue the command.';
           } else {
-            console.error(`[travelHandler.js]: ❌ Unexpected interaction error:`, err);
+            error('INTERACTION', 'Unexpected interaction error', err);
             throw err;
           }
         }

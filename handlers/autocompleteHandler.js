@@ -646,6 +646,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "charactername") {
                   await handleBoostingStatusCharacterAutocomplete(interaction, focusedOption);
                 }
+              } else if (boostingSubcommand === "cancel") {
+                if (focusedOption.name === "requestid") {
+                  await handleBoostingCancelRequestIdAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
@@ -1289,6 +1293,54 @@ async function handleBoostingRequestIdAutocomplete(interaction, focusedOption) {
   handleError(error, "autocompleteHandler.js");
   
   logger.error('AUTOCOMPLETE', 'Error handling boosting request ID autocomplete', error);
+  await safeRespondWithError(interaction);
+ }
+}
+
+// ------------------- Boosting Cancel Request ID Autocomplete -------------------
+async function handleBoostingCancelRequestIdAutocomplete(interaction, focusedOption) {
+ try {
+  const userId = interaction.user.id;
+  
+  // Get all boosting requests from TempData
+  const allBoostingData = await TempData.findAllByType('boosting');
+  
+  // Get user's characters to check ownership of target characters (requesters)
+  const characters = await fetchCharactersByUserId(userId);
+  const modCharacters = await fetchModCharactersByUserId(userId);
+  const allCharacters = [...characters, ...modCharacters];
+  const userCharacterNames = allCharacters.map(char => char.name.toLowerCase());
+  const currentTime = Date.now();
+  
+  // Filter for pending requests where the user owns the target character (the requester)
+  const validRequests = allBoostingData
+    .filter(tempData => {
+      const requestData = tempData.data;
+      const isPending = requestData.status === 'pending';
+      const hasTarget = !!requestData.targetCharacter;
+      const ownsTarget = userCharacterNames.includes(requestData.targetCharacter?.toLowerCase());
+      const notExpired = !requestData.expiresAt || currentTime <= requestData.expiresAt;
+      return isPending && hasTarget && ownsTarget && notExpired;
+    })
+    .map(tempData => tempData.data)
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // Most recent first
+  
+  // Create autocomplete choices
+  const choices = validRequests.map(request => {
+    const timeAgo = request.timestamp 
+      ? Math.floor((Date.now() - request.timestamp) / (1000 * 60)) + 'm ago'
+      : '';
+    return {
+      name: `${request.boostRequestId} | ${request.targetCharacter} → ${request.boostingCharacter} | ${request.category} ${timeAgo}`,
+      value: request.boostRequestId
+    };
+  });
+  
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  
+  logger.error('AUTOCOMPLETE', 'Error handling boosting cancel request ID autocomplete', error);
   await safeRespondWithError(interaction);
  }
 }
@@ -3205,7 +3257,50 @@ async function handleHealAutocomplete(interaction, focusedOption) {
                 const userId = interaction.user.id;
   const subcommand = interaction.options.getSubcommand();
 
-  if (subcommand === 'request') {
+  if (subcommand === 'aid') {
+    if (focusedOption.name === "healername") {
+      // Autocomplete for user's own healers
+      const userCharacters = await fetchCharactersByUserId(userId);
+      const modCharacters = await fetchModCharactersByUserId(userId);
+      
+      // Combine regular characters and mod characters
+      const allCharacters = [...userCharacters, ...modCharacters];
+      
+      const healerCharacters = allCharacters.filter(
+        (character) =>
+          character.job.toLowerCase() === "healer" ||
+          (character.jobVoucher === true &&
+            character.jobVoucherJob.toLowerCase() === "healer")
+      );
+
+      const choices = healerCharacters.map((character) => ({
+        name: `${character.name} - ${character.currentStamina}/${character.maxStamina} 🟩`,
+        value: character.name,
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
+    } else if (focusedOption.name === "target") {
+      // Autocomplete for all characters (can heal any character)
+      const allCharacters = await fetchAllCharacters();
+      
+      const choices = allCharacters.map((character) => ({
+        name: `${character.name} - ${character.currentHearts}/${character.maxHearts} ❤️`,
+        value: character.name,
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
+    } else if (focusedOption.name === "hearts") {
+      // For hearts, we'll show common healing amounts
+      const choices = [
+        { name: "1 Heart", value: 1 },
+        { name: "2 Hearts", value: 2 },
+        { name: "3 Hearts", value: 3 },
+        { name: "4 Hearts", value: 4 },
+        { name: "5 Hearts", value: 5 }
+      ];
+      await interaction.respond(choices);
+    }
+  } else if (subcommand === 'request') {
     if (focusedOption.name === "charactername") {
       // Autocomplete for characters owned by the user
       const userCharacters = await fetchCharactersByUserId(userId);
