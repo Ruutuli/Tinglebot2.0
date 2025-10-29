@@ -77,8 +77,8 @@ module.exports = {
     const flavorText = interaction.options.getString('flavortext') || '';
 
     // ------------------- Clean Item Name from Copy-Paste -------------------
-    // Remove quantity information from item names if users copy-paste autocomplete text
-    const itemName = itemNameRaw.replace(/\s*\(Qty:\s*\d+\)/i, '').trim();
+    // Remove quantity information and stamina info from item names if users copy-paste autocomplete text
+    const itemName = itemNameRaw.replace(/\s*\(Qty:\s*\d+\)/i, '').replace(/\s*-\s*🟩\s*\d+\s*\|\s*Has:\s*\d+/i, '').trim();
 
     const villageChannels = {
       Rudania: process.env.RUDANIA_TOWNHALL,
@@ -289,6 +289,11 @@ module.exports = {
         return interaction.editReply({ content: `❌ **Character \"${characterName}\" not found or does not belong to you.**`, flags: [MessageFlags.Ephemeral] });
       }
       let staminaCost = item.staminaToCraft * quantity;
+      const originalStaminaCost = staminaCost; // Track original cost for display
+      
+      // ------------------- Apply Priest Stamina Reduction FIRST -------------------
+      // Apply Priest boost to reduce stamina cost by 20% (applies before Teacher calculation)
+      staminaCost = await applyCraftingStaminaBoost(freshCharacter.name, staminaCost);
       
       // ------------------- Check for Teacher Stamina Boost -------------------
       let teacherStaminaContribution = 0;
@@ -297,8 +302,8 @@ module.exports = {
         const { fetchCharacterByName } = require('../../database/db');
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
         if (boosterCharacter && boosterCharacter.job === 'Teacher') {
-          // Teacher can contribute up to 3 stamina (or half the cost if less than 6)
-          // Both characters split the stamina cost
+          // Teacher can contribute up to 3 stamina (or half the reduced cost if less than 6)
+          // Both characters split the stamina cost (after Priest reduction if active)
           const halfCost = Math.ceil(staminaCost / 2);
           teacherStaminaContribution = Math.min(halfCost, 3);
           crafterStaminaCost = staminaCost - teacherStaminaContribution;
@@ -311,13 +316,6 @@ module.exports = {
           
           info('CRFT', `Teacher boost active: ${teacherStaminaContribution} from ${boosterCharacter.name}, ${crafterStaminaCost} from ${freshCharacter.name}`);
         }
-      }
-      
-      // Apply other Crafting boosts to stamina cost (Priest reduction, etc.)
-      if (!teacherStaminaContribution) {
-        // Only apply stamina boost if not using Teacher boost (Teacher handles stamina differently)
-        staminaCost = await applyCraftingStaminaBoost(freshCharacter.name, staminaCost);
-        crafterStaminaCost = staminaCost;
       }
       
       if (freshCharacter.currentStamina < crafterStaminaCost) {
@@ -340,14 +338,35 @@ module.exports = {
       const inventory = await inventoryCollection.find().toArray();
 
       // ------------------- Apply Scholar Material Reduction Boost -------------------
-      // Apply Scholar boost to reduce material costs by 20%
+      // Apply Scholar boost to reduce material costs by 30% (only if total needed > 1)
       // Ensure item.craftingMaterial is an array before applying boost
       const originalCraftingMaterials = Array.isArray(item.craftingMaterial) ? item.craftingMaterial : [];
-      let adjustedCraftingMaterials = await applyCraftingMaterialBoost(freshCharacter.name, originalCraftingMaterials);
+      let adjustedCraftingMaterials = await applyCraftingMaterialBoost(freshCharacter.name, originalCraftingMaterials, quantity);
       
       // Ensure adjustedCraftingMaterials is always an array (fallback to original if boost returns invalid result)
       if (!Array.isArray(adjustedCraftingMaterials)) {
         adjustedCraftingMaterials = originalCraftingMaterials;
+      }
+      
+      // Calculate material savings from Scholar boost
+      const materialSavings = [];
+      if (adjustedCraftingMaterials.length > 0) {
+        for (let i = 0; i < originalCraftingMaterials.length && i < adjustedCraftingMaterials.length; i++) {
+          const original = originalCraftingMaterials[i];
+          const adjusted = adjustedCraftingMaterials[i];
+          const originalTotal = (original.quantity || 0) * quantity;
+          const adjustedTotal = (adjusted.quantity || 0) * quantity;
+          const savings = originalTotal - adjustedTotal;
+          if (savings > 0) {
+            materialSavings.push({
+              itemName: original.itemName,
+              saved: savings,
+              originalTotal: originalTotal,
+              adjustedTotal: adjustedTotal
+            });
+            info('CRFT', `Scholar material savings: ${original.itemName} - saved ${savings} (${originalTotal} → ${adjustedTotal})`);
+          }
+        }
       }
 
       const missingMaterials = [];
@@ -439,9 +458,31 @@ module.exports = {
         // Ensure job string is always valid for flavor text
         const jobForFlavorText = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job || '';
         // Use craftedQuantity (includes boosts) for display instead of original quantity
+        // Check if Priest boost reduced stamina cost (compare original to after-Priest cost)
+        const priestBoostActive = staminaCost < originalStaminaCost;
+        const staminaSavings = priestBoostActive ? originalStaminaCost - staminaCost : 0;
+        
+        // Use the actual cost paid by crafter (after Teacher contribution if applicable)
+        const displayStaminaCost = crafterStaminaCost;
+        
+        // Get Teacher boost info for display
+        let teacherBoostInfo = null;
+        if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+          const { fetchCharacterByName } = require('../../database/db');
+          const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+          if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+            teacherBoostInfo = {
+              teacherName: boosterCharacter.name,
+              teacherStaminaUsed: teacherStaminaContribution,
+              crafterStaminaUsed: crafterStaminaCost,
+              totalStaminaCost: staminaCost
+            };
+          }
+        }
+        
         embed = await createCraftingEmbed(
-          item, character, flavorText, materialsUsed, craftedQuantity, staminaCost, updatedStamina,
-          jobForFlavorText
+          item, character, flavorText, materialsUsed, craftedQuantity, displayStaminaCost, updatedStamina,
+          jobForFlavorText, originalStaminaCost, staminaSavings, materialSavings, teacherBoostInfo
         );
       } catch (embedError) {
         // ------------------- Failsafe: Refund on Embed Error -------------------

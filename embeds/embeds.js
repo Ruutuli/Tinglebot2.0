@@ -792,20 +792,49 @@ const createTokenTrackerSetupEmbed = (
 
 // ------------------- Function: createCraftingEmbed -------------------
 // Creates an embed for crafting activities with materials used and boost support
-const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina) => {
+const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina, jobForFlavorText = null, originalStaminaCost = null, staminaSavings = 0, materialSavings = [], teacherBoostInfo = null) => {
  const action = jobActions[character.job] || "crafted";
  const itemQuantityText = ` x${quantity}`;
  const locationPrefix = getLocationPrefix(character);
  const embedTitle = `${locationPrefix}: ${character.name} ${action} ${item.itemName}${itemQuantityText}`;
 
- const jobForFlavorText = character.jobVoucher ? character.jobVoucherJob : character.job;
- const craftingFlavorText = generateCraftingFlavorText(typeof jobForFlavorText === 'string' ? jobForFlavorText.trim() : '');
+ const jobForFlavorTextParam = jobForFlavorText || (character.jobVoucher ? character.jobVoucherJob : character.job);
+ const craftingFlavorText = generateCraftingFlavorText(typeof jobForFlavorTextParam === 'string' ? jobForFlavorTextParam.trim() : '');
 
  // Get boost information
  const boostInfo = await getBoostInfo(character, 'Crafting');
+ 
+ // Enhance boost effect text with material savings if Scholar boost was active
+ // Also add Teacher stamina split information if Teacher boost was active
+ let enhancedBoostInfo = boostInfo;
+ if (materialSavings && materialSavings.length > 0 && boostInfo) {
+  const savingsList = materialSavings.map(m => `• ${m.itemName}: saved ${m.saved}`).join('\n');
+  enhancedBoostInfo = {
+   ...boostInfo,
+   boostFlavorText: `${boostInfo.boostFlavorText || ''}\n\n💚 **Material Savings:**\n${savingsList}`
+  };
+ }
+ 
+ // Add Teacher stamina split information if Teacher boost was active
+ if (teacherBoostInfo) {
+  const teacherInfo = `⚡ **Stamina Split:** ${teacherBoostInfo.teacherName} used ${teacherBoostInfo.teacherStaminaUsed} stamina, ${character.name} used ${teacherBoostInfo.crafterStaminaUsed} stamina (Total: ${teacherBoostInfo.totalStaminaCost})`;
+  if (enhancedBoostInfo) {
+   // Combine with existing boost info
+   enhancedBoostInfo = {
+    ...enhancedBoostInfo,
+    boostFlavorText: `${enhancedBoostInfo.boostFlavorText || boostInfo?.boostFlavorText || ''}\n\n${teacherInfo}`
+   };
+  } else {
+   // Teacher boost active but no other boost info - create new boost info
+   enhancedBoostInfo = {
+    boostFlavorText: teacherInfo
+   };
+  }
+ }
+ 
  const combinedFlavorText = flavorText?.trim()
-  ? `${craftingFlavorText}\n\n${addBoostFlavorText('', boostInfo)}\n\n🌟 **Custom Flavor Text:** ${flavorText.trim()}`
-  : addBoostFlavorText(craftingFlavorText, boostInfo);
+  ? `${craftingFlavorText}\n\n${addBoostFlavorText('', enhancedBoostInfo)}\n\n🌟 **Custom Flavor Text:** ${flavorText.trim()}`
+  : addBoostFlavorText(craftingFlavorText, enhancedBoostInfo);
 
  const DEFAULT_EMOJI = ":small_blue_diamond:";
  let craftingMaterialText = "No materials used or invalid data format.";
@@ -839,6 +868,13 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
  const latestCharacter = await Character.findById(character._id);
  const updatedStamina = latestCharacter ? latestCharacter.currentStamina : remainingStamina;
 
+ // Build stamina cost field with savings info if Priest boost was active
+ let staminaCostValue = `> ${staminaCost}`;
+ if (staminaSavings > 0 && originalStaminaCost !== null) {
+  const reducedCost = originalStaminaCost - staminaSavings;
+  staminaCostValue = `> ${staminaCost}\n💫 *Would have used ${originalStaminaCost}, but thanks to Priest boost it was reduced to ${reducedCost} (saved ${staminaSavings})*`;
+ }
+
  const embed = new EmbedBuilder()
   .setColor("#AA926A")
   .setTitle(embedTitle)
@@ -856,14 +892,14 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
        inline: false,
       }))
     : [{ name: "📜 **__Materials Used__**", value: craftingMaterialText, inline: false }]),
-   { name: "⚡ **__Stamina Cost__**", value: `> ${staminaCost}`, inline: true },
+   { name: "⚡ **__Stamina Cost__**", value: staminaCostValue, inline: true },
    { name: "💚 **__Remaining Stamina__**", value: `> ${updatedStamina}`, inline: true }
   )
   .setThumbnail(item.image || 'https://via.placeholder.com/150')
   .setImage(DEFAULT_IMAGE_URL)
   .setFooter({ 
-    text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : 
-         buildFooterText('✨ Successfully crafted!', character, boostInfo)
+    text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorTextParam}` : 
+         buildFooterText('✨ Successfully crafted!', character, enhancedBoostInfo)
   });
 
  return embed;
