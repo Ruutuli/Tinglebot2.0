@@ -16,7 +16,13 @@ const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJ
 const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
-const { applyHealingBoost, applyHealingStaminaBoost } = require('../../modules/boostIntegration');
+const { 
+  applyHealingBoost, 
+  applyHealingStaminaBoost, 
+  applyPostHealingBoosts,
+  applyScholarHealingBoost
+} = require('../../modules/boostIntegration');
+const { applyBoostEffect } = require('../../modules/boostingModule');
 const logger = require('../../utils/logger');
 
 // ============================================================================
@@ -723,90 +729,82 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     const voucherResult = await handleJobVoucher(healerCharacter, interaction);
     if (!voucherResult.success) return;
 
-    // Process healing with boosting
+    // ============================================================================
+    // ------------------- Process Healing with Boosting -------------------
+    // ============================================================================
     let heartsToHeal = healingRequest.heartsToHeal;
     let staminaCost = healingRequest.heartsToHeal;
     
-    // Apply Healers boosts to healing amount and stamina cost
-        // Apply boost to healing amount
-    heartsToHeal = await applyHealingBoost(healerCharacter.name, heartsToHeal);
+    // Check if patient was KO'd before healing (needed for Entertainer boost)
+    const wasKO = characterToHeal.currentHearts === 0 || characterToHeal.ko;
     
-    // Apply boost to stamina cost (some boosts might reduce stamina cost)
+    // ============================================================================
+    // ------------------- Apply Pre-Healing Boosts -------------------
+    // ============================================================================
+    
+    // Fortune Teller: Predictive Healing (50% less stamina cost)
     staminaCost = await applyHealingStaminaBoost(healerCharacter.name, staminaCost);
+    logger.debug('BOOST', `Healing stamina cost after boost: ${staminaCost} (original: ${healingRequest.heartsToHeal})`);
     
-    // ============================================================================
-    // ------------------- Apply Job-Specific Healing Boosts -------------------
-    // ============================================================================
-    let wasKO = characterToHeal.currentHearts === 0;
-    
-    // Check for boost BEFORE applying healing
-    let boosterJob = null;
-    if (healerCharacter.boostedBy) {
-      const { fetchCharacterByName } = require('../../database/db');
-      const boosterChar = await fetchCharacterByName(healerCharacter.boostedBy);
-      if (boosterChar) {
-        boosterJob = boosterChar.job;
-        
-        // Entertainer: Song of Healing (+1 bonus heart when reviving from KO)
-        if (boosterJob === 'Entertainer' && wasKO) {
-          heartsToHeal += 1;
-          logger.debug('BOOST', `Entertainer boost - Song of Healing (+1 bonus heart for KO revival)`);
-        }
-      }
+    // Entertainer: Song of Healing (+1 bonus heart when reviving from KO)
+    heartsToHeal = await applyHealingBoost(healerCharacter.name, heartsToHeal, wasKO);
+    if (wasKO && heartsToHeal > healingRequest.heartsToHeal) {
+      logger.info('BOOST', `Entertainer boost - Song of Healing (+1 bonus heart for KO revival)`);
     }
     
+    // ============================================================================
+    // ------------------- Execute Healing -------------------
+    // ============================================================================
     await useStamina(healerCharacter._id, staminaCost);
     await recoverHearts(characterToHeal._id, heartsToHeal, healerCharacter._id);
     
-    // Apply post-healing boost effects
-    if (boosterJob) {
-      // Priest: Spiritual Cleanse (remove debuffs)
-      if (boosterJob === 'Priest') {
-        // Refresh the characterToHeal to get current state after healing
-        const { fetchCharacterByName } = require('../../database/db');
-        const refreshedPatient = await fetchCharacterByName(characterToHeal.name);
-        
-        if (refreshedPatient && refreshedPatient.debuff?.active) {
-          refreshedPatient.debuff.active = false;
-          refreshedPatient.debuff.endDate = null;
-          await refreshedPatient.save();
-          logger.debug('BOOST', `Priest boost - Spiritual Cleanse (debuff removed from ${refreshedPatient.name})`);
+    // ============================================================================
+    // ------------------- Apply Post-Healing Boosts -------------------
+    // ============================================================================
+    
+    // Priest: Spiritual Cleanse (remove active debuffs)
+    const priestResult = await applyPostHealingBoosts(healerCharacter.name, characterToHeal.name);
+    if (priestResult && priestResult.type === 'Priest') {
+      logger.info('BOOST', `Priest boost - Spiritual Cleanse (debuff removed from ${characterToHeal.name})`);
+    }
+    
+    // Scholar: Efficient Recovery (+1 stamina to both healer and recipient)
+    const scholarResult = await applyScholarHealingBoost(healerCharacter.name, characterToHeal.name);
+    if (scholarResult) {
+      logger.info('BOOST', `Scholar boost - Efficient Recovery (+1 stamina to both ${healerCharacter.name} and ${characterToHeal.name})`);
+    }
+    
+    // Teacher: Temporary Fortitude (+2 temporary hearts)
+    // Check if healer has Teacher boost
+    const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
+    const { fetchCharacterByName } = require('../../database/db');
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
+    
+    if (activeBoost && activeBoost.status === 'fulfilled') {
+      const currentTime = Date.now();
+      if (!activeBoost.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt) {
+        const boosterChar = await fetchCharacterByName(activeBoost.boostingCharacter);
+        if (boosterChar && boosterChar.job === 'Teacher') {
+          // Refresh patient to get current state after healing
+          const refreshedPatient = await fetchCharacterByName(characterToHeal.name);
+          if (refreshedPatient) {
+            const boostedPatient = await applyBoostEffect('Teacher', 'Healers', refreshedPatient);
+            if (boostedPatient && boostedPatient.tempHearts !== undefined) {
+              await boostedPatient.save();
+              logger.info('BOOST', `Teacher boost - Temporary Fortitude (+2 temp hearts to ${refreshedPatient.name})`);
+            } else {
+              logger.warn('BOOST', 'Teacher boost - Temporary Fortitude requires temp hearts system (not yet implemented)');
+            }
+          }
         }
-      }
-      
-      // Scholar: Efficient Recovery (+1 stamina to both healer and recipient)
-      if (boosterJob === 'Scholar') {
-        const { fetchCharacterByName } = require('../../database/db');
-        const refreshedHealer = await fetchCharacterByName(healerCharacter.name);
-        const refreshedPatient = await fetchCharacterByName(characterToHeal.name);
-        
-        if (refreshedHealer && refreshedHealer.currentStamina < refreshedHealer.maxStamina) {
-          refreshedHealer.currentStamina = Math.min(refreshedHealer.currentStamina + 1, refreshedHealer.maxStamina);
-          await refreshedHealer.save();
-          logger.debug('BOOST', `Scholar boost - Efficient Recovery (+1 stamina to healer ${refreshedHealer.name})`);
-        }
-        
-        if (refreshedPatient && refreshedPatient.currentStamina < refreshedPatient.maxStamina) {
-          refreshedPatient.currentStamina = Math.min(refreshedPatient.currentStamina + 1, refreshedPatient.maxStamina);
-          await refreshedPatient.save();
-          logger.debug('BOOST', `Scholar boost - Efficient Recovery (+1 stamina to patient ${refreshedPatient.name})`);
-        }
-      }
-      
-      // Teacher: Temporary Fortitude (+2 temp hearts)
-      if (boosterJob === 'Teacher') {
-        // TODO: Requires temp hearts system implementation in CharacterModel
-        logger.warn('BOOST', 'Teacher boost - Temporary Fortitude requires temp hearts system (not yet implemented)');
-        // When implemented, add: characterToHeal.tempHearts = (characterToHeal.tempHearts || 0) + 2;
       }
     }
     
+    // ============================================================================
     // ------------------- Clear Boost After Use -------------------
-    if (healerCharacter.boostedBy) {
-      logger.debug('BOOST', `Clearing boost for ${healerCharacter.name} after use`);
-      healerCharacter.boostedBy = null;
-      await healerCharacter.save();
-    }
+    // ============================================================================
+    // Note: Boost clearing is handled per-use for some boosts (like Fortune Teller stamina reduction)
+    // For other boosts, they persist for the duration. Check boosting.js for specific rules.
 
     // Deactivate job voucher if needed
     if (healerCharacter.jobVoucher && !voucherResult.skipVoucher) {

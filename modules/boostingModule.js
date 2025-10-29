@@ -104,7 +104,7 @@ const boostingEffects = {
  Priest: {
   Crafting: {
    name: "Spiritual Efficiency",
-   description: "Crafting while boosted by a Priest costs 20% less stamina.",
+   description: "Crafting while boosted by a Priest costs 30% less stamina, with a minimum savings of 1 stamina (doesn't apply to 1-stamina items).",
   },
   Exploring: {
    name: "Divine Protection",
@@ -194,7 +194,7 @@ const boostingEffects = {
  Scholar: {
   Crafting: {
    name: "Resource Optimization",
-   description: "When boosted by a Scholar, crafting consumes 20% fewer materials.",
+   description: "When boosted by a Scholar, crafting consumes 30% fewer materials. Only applies when total material needed is more than 1.",
   },
   Exploring: {
    name: "Historical Discovery",
@@ -249,13 +249,13 @@ const BOOST_MULTIPLIERS = {
  TEACHER_VENDING: 0.8,
  TEACHER_LOOT_BONUS: 2,
  TEACHER_STEAL_ATTEMPTS: 1,
- PRIEST_CRAFTING: 0.8,
+ PRIEST_CRAFTING: 0.7, // 30% reduction
  PRIEST_TOKENS_SELL: 1.1,
  PRIEST_TOKENS_BUY: 0.9,
  PRIEST_JAIL_TIME: 0.5,
  PRIEST_TRAVEL_HEALING: 2,
  PRIEST_VENDING_BONUS: 20,
- SCHOLAR_CRAFTING: 0.8,
+ SCHOLAR_CRAFTING: 0.7, // 30% reduction
  SCHOLAR_TOKENS: 1.5,
  SCHOLAR_TRAVEL_BONUS: 1,
 };
@@ -664,7 +664,19 @@ function applyTeacherVendingBoost(baseCost) {
 // ============================================================================
 
 function applyPriestCraftingBoost(baseStaminaCost) {
- return Math.ceil(baseStaminaCost * BOOST_MULTIPLIERS.PRIEST_CRAFTING);
+ // Special case: 1 stamina items get no reduction
+ if (baseStaminaCost === 1) {
+  return 1;
+ }
+ 
+ // Apply 30% reduction
+ const reducedCost = Math.ceil(baseStaminaCost * BOOST_MULTIPLIERS.PRIEST_CRAFTING);
+ 
+ // Ensure at least 1 stamina is saved (unless original cost is 1)
+ const minimumSavings = 1;
+ const maxAllowedCost = Math.max(1, baseStaminaCost - minimumSavings);
+ 
+ return Math.min(reducedCost, maxAllowedCost);
 }
 
 function applyPriestExploringBoost(blightExposure) {
@@ -812,11 +824,64 @@ function applyEntertainerOtherBoost(villageData) {
 // ------------------- Scholar Boost Functions -------------------
 // ============================================================================
 
-function applyScholarCraftingBoost(materialCosts) {
- return materialCosts.map((material) => ({
-  ...material,
-  quantity: Math.ceil(material.quantity * BOOST_MULTIPLIERS.SCHOLAR_CRAFTING),
- }));
+function applyScholarCraftingBoost(materialCosts, craftQuantity = 1) {
+ // Only process if materialCosts is an array (materials)
+ // If it's not an array (e.g., stamina cost or quantity), return unchanged
+ if (!Array.isArray(materialCosts)) {
+  return materialCosts;
+ }
+ 
+ const { info, success } = require('../utils/logger');
+ 
+ // Only apply reduction if total material needed (per-item quantity * craft quantity) is more than 1
+ const result = materialCosts.map((material) => {
+  const originalQuantity = material.quantity;
+  const totalNeeded = originalQuantity * craftQuantity;
+  
+  // If total needed is 1 or less, don't apply reduction
+  if (totalNeeded <= 1) {
+   info('BOOST', `Scholar boost: ${material.itemName} - total needed ${totalNeeded} (≤ 1), no reduction applied`);
+   return material;
+  }
+  
+  // Apply 30% reduction to the TOTAL needed
+  const reducedTotal = Math.floor(totalNeeded * BOOST_MULTIPLIERS.SCHOLAR_CRAFTING);
+  
+  // Ensure reduced total is at least 1 (but less than original if reduction applied)
+  const finalTotal = Math.max(1, reducedTotal);
+  
+  // Calculate per-item quantity from reduced total
+  // For multiple items, we distribute the reduced total evenly
+  // If reduced total would result in less than 1 per item, keep it at 1 per item
+  // This ensures all items have the material requirement, though full savings may not be realized
+  // in cases where reduced total < craft quantity
+  let finalQuantity;
+  if (craftQuantity === 1) {
+   // Single item crafting: use the reduced total directly
+   finalQuantity = finalTotal;
+  } else {
+   // Multiple items: calculate per-item requirement
+   // Round up to ensure proper distribution (may result in slight overshoot when reducedTotal < craftQuantity)
+   const perItemFraction = finalTotal / craftQuantity;
+   finalQuantity = Math.ceil(perItemFraction);
+   // But ensure it's at least 1 per item
+   finalQuantity = Math.max(1, finalQuantity);
+  }
+  
+  const savings = totalNeeded - (finalQuantity * craftQuantity);
+  if (savings > 0) {
+   success('BOOST', `Scholar boost: ${material.itemName} - saved ${savings} (from ${totalNeeded} to ${finalQuantity * craftQuantity})`);
+  }
+  
+  return {
+   ...material,
+   quantity: finalQuantity,
+   originalQuantity: originalQuantity, // Store original for savings calculation
+   savings: savings, // Store savings amount
+  };
+ });
+ 
+ return result;
 }
 
 function applyScholarExploringBoost(exploreResult) {
@@ -849,11 +914,11 @@ function applyScholarGatheringBoost(gatheringData, targetRegion) {
 function applyScholarHealingBoost(healingData) {
  const { healer, recipient } = healingData;
 
- if (healer && healer.stamina < healer.maxStamina) {
-  healer.stamina = Math.min(healer.stamina + 1, healer.maxStamina);
+ if (healer && healer.currentStamina < healer.maxStamina) {
+  healer.currentStamina = Math.min(healer.currentStamina + 1, healer.maxStamina);
  }
- if (recipient && recipient.stamina < recipient.maxStamina) {
-  recipient.stamina = Math.min(recipient.stamina + 1, recipient.maxStamina);
+ if (recipient && recipient.currentStamina < recipient.maxStamina) {
+  recipient.currentStamina = Math.min(recipient.currentStamina + 1, recipient.maxStamina);
  }
  return { healer, recipient };
 }
@@ -997,7 +1062,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
  // Scholar boosts
  if (normalizedJob === "Scholar") {
   switch (category) {
-   case "Crafting": return applyScholarCraftingBoost(data);
+   case "Crafting": return applyScholarCraftingBoost(data, additionalData);
    case "Exploring": return applyScholarExploringBoost(data);
    case "Gathering": return applyScholarGatheringBoost(data, additionalData);
    case "Healers": return applyScholarHealingBoost(data);

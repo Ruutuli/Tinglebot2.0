@@ -1413,14 +1413,16 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
     // Skip cache for crafting autocomplete since inventory changes frequently
     craftableItems = null;
     
+    // Fetch character first to get stamina
+    let character = await fetchCharacterByNameAndUserId(characterName, userId);
+    
     if (!craftableItems) {
-      // Fetch character, inventory, and check job perks in parallel
-      const [character, allCraftableItems, inventoryCollection] = await Promise.all([
-        fetchCharacterByNameAndUserId(characterName, userId),
+      // Fetch inventory and check job perks in parallel
+      const [allCraftableItems, inventoryCollection] = await Promise.all([
         Item.find({
           crafting: true
         })
-        .select('itemName craftingTags craftingMaterial cook blacksmith craftsman maskMaker researcher weaver artist')
+        .select('itemName craftingTags craftingMaterial cook blacksmith craftsman maskMaker researcher weaver artist staminaToCraft')
         .lean(),
         getCharacterInventoryCollection(characterName)
       ]);
@@ -1506,13 +1508,24 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
     }
 
     // Filter items by search query and limit to 25
+    // Get character's current stamina
+    const characterStamina = character ? (character.currentStamina || 0) : 0;
+
     const filteredItems = craftableItems
-      .filter(item => item.itemName.toLowerCase().includes(searchQuery))
+      .filter(item => {
+        // Filter by search query - check if it matches item name (without stamina info)
+        const itemNameLower = item.itemName.toLowerCase();
+        return itemNameLower.includes(searchQuery);
+      })
       .slice(0, 25)
-      .map(item => ({
-        name: item.itemName,
-        value: item.itemName
-      }));
+      .map(item => {
+        const staminaCost = item.staminaToCraft !== null && item.staminaToCraft !== undefined ? item.staminaToCraft : 0;
+        const nameWithStamina = `${item.itemName} - 🟩 ${staminaCost} | Has: ${characterStamina}`;
+        return {
+          name: nameWithStamina,
+          value: item.itemName  // Keep the original item name as the value
+        };
+      });
 
     await safeAutocompleteResponse(interaction, filteredItems);
   } catch (error) {

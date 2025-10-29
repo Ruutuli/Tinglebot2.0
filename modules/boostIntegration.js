@@ -60,8 +60,8 @@ async function applyCraftingStaminaBoost(characterName, staminaCost) {
   return await applyBoostToAction(characterName, 'Crafting', staminaCost);
 }
 
-async function applyCraftingMaterialBoost(characterName, materials) {
-  return await applyBoostToAction(characterName, 'Crafting', materials);
+async function applyCraftingMaterialBoost(characterName, materials, craftQuantity = 1) {
+  return await applyBoostToAction(characterName, 'Crafting', materials, craftQuantity);
 }
 
 async function applyCraftingQuantityBoost(characterName, craftedItem) {
@@ -83,12 +83,136 @@ async function applyExplorationBlightBoost(characterName, quadrantData) {
 }
 
 // For Healing Commands
-async function applyHealingBoost(characterName, healingData) {
-  return await applyBoostToAction(characterName, 'Healers', healingData);
+// Apply healing amount boost (Entertainer: +1 heart on KO revival)
+async function applyHealingBoost(characterName, baseHealing, wasKO = false) {
+  const hasBoost = await checkBoostActive(characterName, 'Healers');
+  if (!hasBoost) return baseHealing;
+  
+  const booster = await getBoosterInfo(characterName);
+  if (!booster) return baseHealing;
+  
+  // Only Entertainer affects healing amount (Song of Healing)
+  if (booster.job === 'Entertainer' && wasKO) {
+    const boostedHealing = await applyBoostEffect('Entertainer', 'Healers', baseHealing, wasKO);
+    return boostedHealing;
+  }
+  
+  return baseHealing;
 }
 
-async function applyHealingStaminaBoost(characterName, staminaCost) {
-  return await applyBoostToAction(characterName, 'Healers', staminaCost);
+// Apply stamina cost boost (Fortune Teller: 50% less stamina)
+async function applyHealingStaminaBoost(characterName, baseStaminaCost) {
+  const hasBoost = await checkBoostActive(characterName, 'Healers');
+  if (!hasBoost) return baseStaminaCost;
+  
+  const booster = await getBoosterInfo(characterName);
+  if (!booster) return baseStaminaCost;
+  
+  // Only Fortune Teller affects stamina cost (Predictive Healing)
+  if (booster.job === 'Fortune Teller') {
+    const boostedStamina = await applyBoostEffect('Fortune Teller', 'Healers', baseStaminaCost);
+    return boostedStamina;
+  }
+  
+  return baseStaminaCost;
+}
+
+// Apply post-healing effects (Priest, Scholar, Teacher)
+async function applyPostHealingBoosts(healerName, patientName) {
+  const hasBoost = await checkBoostActive(healerName, 'Healers');
+  if (!hasBoost) return null;
+  
+  const booster = await getBoosterInfo(healerName);
+  if (!booster) return null;
+  
+  const { fetchCharacterByName } = require('../database/db');
+  const patient = await fetchCharacterByName(patientName);
+  
+  if (!patient) return null;
+  
+  // Priest: Spiritual Cleanse (remove debuffs)
+  if (booster.job === 'Priest') {
+    const cleansedPatient = await applyBoostEffect('Priest', 'Healers', patient);
+    if (cleansedPatient && cleansedPatient._id) {
+      await cleansedPatient.save();
+      return { type: 'Priest', patient: cleansedPatient };
+    }
+  }
+  
+  return null;
+}
+
+// Apply Scholar stamina recovery boost (both healer and recipient get +1 stamina)
+async function applyScholarHealingBoost(healerName, recipientName) {
+  const hasBoost = await checkBoostActive(healerName, 'Healers');
+  if (!hasBoost) return null;
+  
+  const booster = await getBoosterInfo(healerName);
+  if (!booster || booster.job !== 'Scholar') return null;
+  
+  const { fetchCharacterByName } = require('../database/db');
+  const healer = await fetchCharacterByName(healerName);
+  const recipient = await fetchCharacterByName(recipientName);
+  
+  if (!healer || !recipient) return null;
+  
+  const healingData = { healer, recipient };
+  const boostedData = await applyBoostEffect('Scholar', 'Healers', healingData);
+  
+  if (boostedData && boostedData.healer && boostedData.recipient) {
+    await boostedData.healer.save();
+    await boostedData.recipient.save();
+    return boostedData;
+  }
+  
+  return null;
+}
+
+// Apply Teacher temp hearts boost
+async function applyTeacherHealingBoost(patientName) {
+  const { fetchCharacterByName } = require('../database/db');
+  const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
+  
+  // Find who is healing this patient (we need to check the healer's boost, not patient's)
+  // This is called from heal.js where we know the healer, so we pass healerName separately
+  // Actually, this function will be called with the healer context
+  return null; // Will be handled in heal.js directly
+}
+
+// Helper function to check if boost is active
+async function checkBoostActive(characterName, category) {
+  try {
+    const { isBoostActive } = require('../commands/jobs/boosting');
+    return await isBoostActive(characterName, category);
+  } catch (err) {
+    return false;
+  }
+}
+
+// Helper function to get booster info
+async function getBoosterInfo(characterName) {
+  try {
+    const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
+    const { fetchCharacterByName } = require('../database/db');
+    
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+    if (!activeBoost || activeBoost.status !== 'fulfilled') return null;
+    
+    const currentTime = Date.now();
+    if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
+      return null; // Boost expired
+    }
+    
+    const booster = await fetchCharacterByName(activeBoost.boostingCharacter);
+    if (!booster) return null;
+    
+    return {
+      name: booster.name,
+      job: booster.job || activeBoost.boosterJob
+    };
+  } catch (err) {
+    return null;
+  }
 }
 
 // For Looting Commands
@@ -244,6 +368,9 @@ module.exports = {
   applyExplorationBlightBoost,
   applyHealingBoost,
   applyHealingStaminaBoost,
+  applyPostHealingBoosts,
+  applyScholarHealingBoost,
+  applyTeacherHealingBoost,
   applyLootingBoost,
   applyLootingDamageBoost,
   applyLootingQuantityBoost,
