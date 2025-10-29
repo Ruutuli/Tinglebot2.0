@@ -1457,8 +1457,9 @@ async function handleShopSell(interaction) {
   // ------------------- Clean Item Name from Copy-Paste -------------------
   // Remove quantity information and crafting icons from item names if users copy-paste autocomplete text
   const itemName = itemNameRaw
-    .replace(/^[🔨📦]\s*/, '') // Remove crafting icons
+    .replace(/^[🔨📦🔮]\s*/g, '') // Remove crafting icons and fortune teller boost indicator
     .replace(/\s*\(Qty:\s*\d+\)/i, '') // Remove quantity info
+    .replace(/\s*-\s*Qty:\s*\d+/i, '') // Remove quantity info with dash format
     .replace(/\s*-\s*Sell:\s*[\d,]+/i, '') // Remove sell price info
     .trim();
 
@@ -1721,7 +1722,49 @@ if (quantity <= 0) {
     );
   }
 
-  let totalPrice = sellPrice * quantity;
+  // ============================================================================
+  // ------------------- Check for Fortune Teller Boost Tag on Items -------------------
+  // Items crafted with Fortune Teller boost are tagged and sell for 20% more
+  // We need to check which items will actually be sold (prioritize boosted items)
+  // ============================================================================
+  const allMatchingItems = inventoryItems
+    .filter(invItem => invItem.itemName?.toLowerCase() === itemName.toLowerCase())
+    .sort((a, b) => {
+      // Prioritize boosted items (they should be sold first to maximize value)
+      if (a.fortuneTellerBoost && !b.fortuneTellerBoost) return -1;
+      if (!a.fortuneTellerBoost && b.fortuneTellerBoost) return 1;
+      return 0;
+    });
+  
+  let remainingToSell = quantity;
+  let boostedQuantity = 0;
+  
+  // Calculate how many boosted items are being sold
+  for (const item of allMatchingItems) {
+    if (remainingToSell <= 0) break;
+    
+    if (item.fortuneTellerBoost === true) {
+      const itemsFromThisEntry = Math.min(item.quantity || 0, remainingToSell);
+      boostedQuantity += itemsFromThisEntry;
+      remainingToSell -= itemsFromThisEntry;
+    } else {
+      // Regular items - we don't need to track these separately, just reduce remaining
+      remainingToSell -= Math.min(item.quantity || 0, remainingToSell);
+    }
+  }
+  
+  const regularQuantity = quantity - boostedQuantity;
+  const boostedPrice = boostedQuantity > 0 ? Math.floor(sellPrice * boostedQuantity * 1.2) : 0;
+  const regularPrice = regularQuantity > 0 ? sellPrice * regularQuantity : 0;
+  
+  let totalPrice = boostedPrice + regularPrice;
+  
+  if (boostedQuantity > 0) {
+    logger.info('BOOST', `Fortune Teller crafted items detected: ${boostedQuantity} items selling for 20% bonus (${regularQuantity} regular items)`);
+    logger.info('BOOST', `Price breakdown: ${boostedQuantity} boosted @ ${Math.floor(sellPrice * 1.2)} = ${boostedPrice}, ${regularQuantity} regular @ ${sellPrice} = ${regularPrice}, Total: ${totalPrice}`);
+  } else {
+    totalPrice = sellPrice * quantity;
+  }
   
   // ============================================================================
   // ------------------- Apply Token Boosts for Selling -------------------
@@ -1780,11 +1823,44 @@ if (quantity <= 0) {
   const priceType = bonusApplied ? "Crafter's Bonus" : "Standard";
   logger.success('ECONOMY', `Sale completed - ${characterName} sold ${itemName} x${quantity} for ${totalPrice} tokens (${priceType})`);
   
+  // Build description with Fortune Teller boost flavor text if applicable
+  let description = `**${characterName}** sold **${itemName} x${quantity}** for 🪙 **${totalPrice}** tokens`;
+  
+  // Calculate boosted price per item if applicable
+  const boostedPricePerItem = boostedQuantity > 0 ? Math.floor(sellPrice * 1.2) : null;
+  
+  // Add Fortune Teller boost flavor text if boosted items were sold
+  if (boostedQuantity > 0) {
+    const fortuneTellerBoostText = `\n\n🔮 **Fortune Teller's Foresight:** These items were crafted with Fortune Teller's blessing and sold for 20% more! (🪙 ${sellPrice} → 🪙 ${boostedPricePerItem} per item)`;
+    description += fortuneTellerBoostText;
+  }
+  
+  // Build Price Details field
+  let priceDetailsValue = '';
+  if (boostedQuantity > 0 && boostedQuantity === quantity) {
+    // All items sold were Fortune Teller boosted
+    if (bonusApplied) {
+      priceDetailsValue = `Base Price: 🪙 ${itemDetails.sellPrice} per item\nCrafter's Bonus Price: 🪙 ${sellPrice} per item\n🔮 Fortune Teller Boosted Price: 🪙 ${boostedPricePerItem} per item`;
+    } else {
+      priceDetailsValue = `Standard Price: 🪙 ${sellPrice} per item\n🔮 Fortune Teller Boosted Price: 🪙 ${boostedPricePerItem} per item`;
+    }
+  } else if (boostedQuantity > 0 && boostedQuantity < quantity) {
+    // Mixed: some boosted, some regular
+    if (bonusApplied) {
+      priceDetailsValue = `Base Price: 🪙 ${itemDetails.sellPrice} per item\nCrafter's Bonus Price: 🪙 ${sellPrice} per item\n🔮 Fortune Teller Boosted (${boostedQuantity}x): 🪙 ${boostedPricePerItem} per item\nRegular (${regularQuantity}x): 🪙 ${sellPrice} per item`;
+    } else {
+      priceDetailsValue = `Standard Price: 🪙 ${sellPrice} per item\n🔮 Fortune Teller Boosted (${boostedQuantity}x): 🪙 ${boostedPricePerItem} per item\nRegular (${regularQuantity}x): 🪙 ${sellPrice} per item`;
+    }
+  } else {
+    // No boosted items
+    priceDetailsValue = bonusApplied 
+      ? `Base Price: 🪙 ${itemDetails.sellPrice} per item\nCrafter's Bonus Price: 🪙 ${sellPrice} per item`
+      : `Standard Price: 🪙 ${sellPrice} per item`;
+  }
+  
   const saleEmbed = new EmbedBuilder()
    .setTitle("✅ Sale Successful!")
-   .setDescription(
-    `**${characterName}** sold **${itemName} x${quantity}** for 🪙 **${totalPrice}** tokens`
-   )
+   .setDescription(description)
    .setThumbnail(itemDetails.image || "https://via.placeholder.com/150")
    .setAuthor({ name: characterName, iconURL: character.icon || "" })
    .setColor("#A48D68")
@@ -1792,9 +1868,7 @@ if (quantity <= 0) {
    .addFields(
     {
      name: "💰 Price Details",
-     value: bonusApplied 
-      ? `Base Price: 🪙 ${itemDetails.sellPrice} per item\nCrafter's Bonus Price: 🪙 ${sellPrice} per item`
-      : `Standard Price: 🪙 ${sellPrice} per item`,
+     value: priceDetailsValue,
      inline: false,
     },
     {

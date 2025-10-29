@@ -317,7 +317,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
 
 // ---- Function: addItemInventoryDatabase ----
 // Adds a single item to inventory database
-async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", craftedAt = null) {
+// boostTag: Optional string to tag items with boost (e.g., "Fortune Teller"). Tagged items are always created as separate entries.
+async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", craftedAt = null, boostTag = null) {
   try {
     if (!interaction && obtain !== 'Trade') {
       throw new Error("Interaction object is undefined.");
@@ -384,8 +385,31 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       });
     }
 
-    if (inventoryItem) {
-      // For crafted items, always create a new entry to maintain separation
+    // If item has a boost tag, always create a separate entry to preserve the tag
+    // This prevents tags from being overwritten when merging with existing items
+    if (boostTag) {
+      const boostedItem = {
+        characterId,
+        itemName: item.itemName,
+        itemId: item._id,
+        quantity,
+        category: Array.isArray(item.category) ? item.category.join(", ") : "Misc",
+        type: Array.isArray(item.type) ? item.type.join(", ") : "Unknown",
+        subtype: Array.isArray(item.subtype) ? item.subtype.join(", ") : "",
+        location: character.currentVillage || "Unknown",
+        date: new Date(),
+        obtain: obtain || "Crafting",
+      };
+      if (craftedAt) {
+        boostedItem.craftedAt = craftedAt;
+      }
+      // Set boost tag based on tag type
+      if (boostTag === 'Fortune Teller') {
+        boostedItem.fortuneTellerBoost = true;
+      }
+      await inventoryCollection.insertOne(boostedItem);
+    } else if (inventoryItem) {
+      // For crafted items without boost tag, always create a new entry to maintain separation
       if (obtain === 'Crafting') {
         const newCraftedItem = {
           characterId,
