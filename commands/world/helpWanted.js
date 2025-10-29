@@ -529,6 +529,13 @@ async function updateVillageShopsStock(itemName, amountUsed) {
     }
     
     if (shopItem && shopItem.stock > 0) {
+      // ------------------- Failsafe: Fix specialWeather before saving -------------------
+      if (shopItem.specialWeather && typeof shopItem.specialWeather === 'object') {
+        console.warn(`[helpWanted.js]: Failsafe conversion of specialWeather for ${itemName}:`, shopItem.specialWeather);
+        shopItem.specialWeather = Object.values(shopItem.specialWeather).some(v => v === true);
+        console.log(`[helpWanted.js]: Failsafe converted specialWeather to: ${shopItem.specialWeather}`);
+      }
+      
       const newStock = Math.max(0, shopItem.stock - amountUsed);
       shopItem.stock = newStock;
       await shopItem.save();
@@ -537,6 +544,30 @@ async function updateVillageShopsStock(itemName, amountUsed) {
     }
   } catch (error) {
     console.error(`[helpWanted.js]: ❌ Error updating VillageShops stock for ${itemName}:`, error);
+    
+    // ------------------- Additional debugging information -------------------
+    if (error.name === 'ValidationError' && error.errors?.specialWeather) {
+      console.error(`[helpWanted.js]: SpecialWeather validation error details:`, {
+        itemName,
+        specialWeatherValue: error.errors.specialWeather.value,
+        specialWeatherType: typeof error.errors.specialWeather.value,
+        errorMessage: error.errors.specialWeather.message
+      });
+      
+      // ------------------- Auto-fix corrupted data -------------------
+      try {
+        console.log(`[helpWanted.js]: Attempting to fix corrupted specialWeather data...`);
+        const VillageShopItem = require('../../models/VillageShopsModel');
+        const result = await VillageShopItem.fixSpecialWeatherData();
+        console.log(`[helpWanted.js]: Data cleanup completed:`, result);
+        
+        // Retry the operation after fixing the data
+        console.log(`[helpWanted.js]: Retrying stock update after data cleanup...`);
+        return await updateVillageShopsStock(itemName, amountUsed);
+      } catch (cleanupError) {
+        console.error(`[helpWanted.js]: Error during data cleanup:`, cleanupError);
+      }
+    }
     
     // Use global error handler for proper error tracking and user notification
     await handleInteractionError(error, null, {
