@@ -108,8 +108,9 @@ VillageShopItemSchema.pre('validate', function(next) {
     
     // Handle specialWeather conversion from object to boolean
     if (this.specialWeather && typeof this.specialWeather === 'object') {
-      console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean in pre-validate hook for item: ${this.itemName || 'unknown'}`);
+      console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean in pre-validate hook for item: ${this.itemName || 'unknown'}`, this.specialWeather);
       this.specialWeather = Object.values(this.specialWeather).some(v => v === true);
+      console.log(`[VillageShopsModel]: Converted specialWeather to: ${this.specialWeather}`);
     }
     
     next();
@@ -118,6 +119,61 @@ VillageShopItemSchema.pre('validate', function(next) {
     next(error);
   }
 });
+
+// ------------------- Pre-save hook to ensure data integrity -------------------
+VillageShopItemSchema.pre('save', function(next) {
+  try {
+    // Final safety check for specialWeather conversion
+    if (this.specialWeather && typeof this.specialWeather === 'object') {
+      console.warn(`[VillageShopsModel]: Final conversion of specialWeather from object to boolean in pre-save hook for item: ${this.itemName || 'unknown'}`, this.specialWeather);
+      this.specialWeather = Object.values(this.specialWeather).some(v => v === true);
+      console.log(`[VillageShopsModel]: Final converted specialWeather to: ${this.specialWeather}`);
+    }
+    
+    next();
+  } catch (error) {
+    console.error(`[VillageShopsModel]: Error in pre-save hook:`, error);
+    next(error);
+  }
+});
+
+// ------------------- Utility function to fix corrupted specialWeather data -------------------
+VillageShopItemSchema.statics.fixSpecialWeatherData = async function() {
+  try {
+    console.log('[VillageShopsModel]: Starting specialWeather data cleanup...');
+    
+    // Find all documents with object-type specialWeather
+    const corruptedItems = await this.find({
+      specialWeather: { $type: 'object' }
+    });
+    
+    console.log(`[VillageShopsModel]: Found ${corruptedItems.length} items with object-type specialWeather`);
+    
+    let fixedCount = 0;
+    for (const item of corruptedItems) {
+      try {
+        const oldValue = item.specialWeather;
+        const newValue = Object.values(oldValue).some(v => v === true);
+        
+        await this.updateOne(
+          { _id: item._id },
+          { $set: { specialWeather: newValue } }
+        );
+        
+        console.log(`[VillageShopsModel]: Fixed ${item.itemName}: ${JSON.stringify(oldValue)} → ${newValue}`);
+        fixedCount++;
+      } catch (error) {
+        console.error(`[VillageShopsModel]: Error fixing item ${item.itemName}:`, error);
+      }
+    }
+    
+    console.log(`[VillageShopsModel]: Fixed ${fixedCount} items with corrupted specialWeather data`);
+    return { totalFound: corruptedItems.length, fixed: fixedCount };
+  } catch (error) {
+    console.error('[VillageShopsModel]: Error in fixSpecialWeatherData:', error);
+    throw error;
+  }
+};
 
 // ------------------- Export the VillageShopItem model -------------------
 module.exports = mongoose.model('VillageShopItem', VillageShopItemSchema);
