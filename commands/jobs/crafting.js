@@ -10,7 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Connections -------------------
 const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, fetchItemByName } = require('../../database/db');
@@ -290,12 +290,49 @@ module.exports = {
       }
       let staminaCost = item.staminaToCraft * quantity;
       
-      // Apply Crafting boosts to stamina cost
-      staminaCost = await applyCraftingStaminaBoost(freshCharacter.name, staminaCost);
+      // ------------------- Check for Teacher Stamina Boost -------------------
+      let teacherStaminaContribution = 0;
+      let crafterStaminaCost = staminaCost;
+      if (freshCharacter.boostedBy) {
+        const { fetchCharacterByName } = require('../../database/db');
+        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+          // Teacher can contribute up to 3 stamina (or half the cost if less than 6)
+          // Both characters split the stamina cost
+          const halfCost = Math.ceil(staminaCost / 2);
+          teacherStaminaContribution = Math.min(halfCost, 3);
+          crafterStaminaCost = staminaCost - teacherStaminaContribution;
+          
+          // Validate Teacher has enough stamina
+          if (boosterCharacter.currentStamina < teacherStaminaContribution) {
+            error('CRFT', `Teacher ${boosterCharacter.name} has insufficient stamina - needed ${teacherStaminaContribution}, has ${boosterCharacter.currentStamina}`);
+            return interaction.editReply({ content: `❌ **${boosterCharacter.name} (Teacher) doesn't have enough stamina to help. Needed: ${teacherStaminaContribution}, Available: ${boosterCharacter.currentStamina}.**`, flags: [MessageFlags.Ephemeral] });
+          }
+          
+          info('CRFT', `Teacher boost active: ${teacherStaminaContribution} from ${boosterCharacter.name}, ${crafterStaminaCost} from ${freshCharacter.name}`);
+        }
+      }
       
-      if (freshCharacter.currentStamina < staminaCost) {
-        error('CRFT', `Insufficient stamina for ${freshCharacter.name} - needed ${staminaCost}, has ${freshCharacter.currentStamina}`);
-        return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${freshCharacter.currentStamina}.**`, flags: [MessageFlags.Ephemeral] });
+      // Apply other Crafting boosts to stamina cost (Priest reduction, etc.)
+      if (!teacherStaminaContribution) {
+        // Only apply stamina boost if not using Teacher boost (Teacher handles stamina differently)
+        staminaCost = await applyCraftingStaminaBoost(freshCharacter.name, staminaCost);
+        crafterStaminaCost = staminaCost;
+      }
+      
+      if (freshCharacter.currentStamina < crafterStaminaCost) {
+        error('CRFT', `Insufficient stamina for ${freshCharacter.name} - needed ${crafterStaminaCost}, has ${freshCharacter.currentStamina}`);
+        const staminaErrorEmbed = new EmbedBuilder()
+          .setTitle('❌ Not Enough Stamina')
+          .setDescription(`**${freshCharacter.name}** doesn't have enough stamina to craft this item.`)
+          .addFields([
+            { name: '💪 Needed', value: `${crafterStaminaCost}`, inline: true },
+            { name: '⚡ Available', value: `${freshCharacter.currentStamina}`, inline: true }
+          ])
+          .setColor('#FF0000')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setTimestamp();
+        return interaction.editReply({ embeds: [staminaErrorEmbed], flags: [MessageFlags.Ephemeral] });
       }
 
       // ------------------- Validate Required Materials -------------------
@@ -304,7 +341,14 @@ module.exports = {
 
       // ------------------- Apply Scholar Material Reduction Boost -------------------
       // Apply Scholar boost to reduce material costs by 20%
-      let adjustedCraftingMaterials = await applyCraftingMaterialBoost(freshCharacter.name, item.craftingMaterial);
+      // Ensure item.craftingMaterial is an array before applying boost
+      const originalCraftingMaterials = Array.isArray(item.craftingMaterial) ? item.craftingMaterial : [];
+      let adjustedCraftingMaterials = await applyCraftingMaterialBoost(freshCharacter.name, originalCraftingMaterials);
+      
+      // Ensure adjustedCraftingMaterials is always an array (fallback to original if boost returns invalid result)
+      if (!Array.isArray(adjustedCraftingMaterials)) {
+        adjustedCraftingMaterials = originalCraftingMaterials;
+      }
 
       const missingMaterials = [];
       for (const material of adjustedCraftingMaterials) {
@@ -348,11 +392,23 @@ module.exports = {
 
       // ------------------- Deduct Stamina -------------------
       let updatedStamina;
+      let teacherUpdatedStamina = null;
       try {
-        updatedStamina = await checkAndUseStamina(freshCharacter, staminaCost);
+        // Deduct stamina from crafter
+        updatedStamina = await checkAndUseStamina(freshCharacter, crafterStaminaCost);
         success('CRFT', `Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
+        
+        // Deduct stamina from Teacher if applicable
+        if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+          const { fetchCharacterByName } = require('../../database/db');
+          const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+          if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+            teacherUpdatedStamina = await checkAndUseStamina(boosterCharacter, teacherStaminaContribution);
+            success('CRFT', `Teacher stamina deducted for ${boosterCharacter.name} - remaining: ${teacherUpdatedStamina}`);
+          }
+        }
       } catch (error) {
-        error('CRFT', `Failed to deduct stamina for ${freshCharacter.name}: ${error.message}`);
+        error('CRFT', `Failed to deduct stamina: ${error.message}`);
         handleInteractionError(error, 'crafting.js');
         // Refund materials if stamina deduction fails
         for (const mat of materialsUsed) {
@@ -361,19 +417,43 @@ module.exports = {
         return interaction.followUp({ content: `⚠️ **Crafting failed due to insufficient stamina. Materials have been refunded.**`, flags: [MessageFlags.Ephemeral] });
       }
 
+      // ------------------- Calculate Final Crafted Quantity (Before Embed) -------------------
+      // Calculate the final quantity to be crafted (includes all boosts) for embed display
+      let craftedQuantity = quantity;
+      
+      // Apply Crafting boosts to crafted item quantity (Entertainer adds +1, other boosts may affect quantity)
+      craftedQuantity = await applyCraftingQuantityBoost(freshCharacter.name, craftedQuantity);
+      
+      // Log Entertainer boost if active (for debugging - boost is already applied by applyCraftingQuantityBoost)
+      if (freshCharacter.boostedBy) {
+        const { fetchCharacterByName } = require('../../database/db');
+        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        if (boosterCharacter && boosterCharacter.job === 'Entertainer') {
+          info('CRFT', `Entertainer boost active: Added 1 free ${itemName} for ${freshCharacter.name} (total: ${craftedQuantity})`);
+        }
+      }
+
       // ------------------- Send Crafting Embed -------------------
       let embed;
       try {
         // Ensure job string is always valid for flavor text
         const jobForFlavorText = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job || '';
+        // Use craftedQuantity (includes boosts) for display instead of original quantity
         embed = await createCraftingEmbed(
-          item, character, flavorText, materialsUsed, quantity, staminaCost, updatedStamina,
+          item, character, flavorText, materialsUsed, craftedQuantity, staminaCost, updatedStamina,
           jobForFlavorText
         );
       } catch (embedError) {
         // ------------------- Failsafe: Refund on Embed Error -------------------
         // Refund stamina
-        await checkAndUseStamina(freshCharacter, -staminaCost); // Negative to add back
+        await checkAndUseStamina(freshCharacter, -crafterStaminaCost); // Negative to add back
+        if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+          const { fetchCharacterByName } = require('../../database/db');
+          const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+          if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+            await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution);
+          }
+        }
         // Refund materials
         for (const mat of materialsUsed) {
           await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
@@ -383,13 +463,20 @@ module.exports = {
       }
 
       // ------------------- Add Crafted Item to Inventory -------------------
-      let craftedQuantity = quantity;
       
-      // Apply Crafting boosts to crafted item quantity
-      craftedQuantity = await applyCraftingQuantityBoost(freshCharacter.name, craftedQuantity);
+      // Check for Fortune Teller boost to tag items
+      let fortuneTellerBoostTag = null;
+      if (freshCharacter.boostedBy) {
+        const { fetchCharacterByName } = require('../../database/db');
+        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        if (boosterCharacter && boosterCharacter.job === 'Fortune Teller') {
+          fortuneTellerBoostTag = 'Fortune Teller';
+          info('CRFT', `Fortune Teller boost active: Tagging ${craftedQuantity} ${itemName} with fortuneTellerBoost tag`);
+        }
+      }
       
       const craftedAt = new Date();
-      await addItemInventoryDatabase(character._id, item.itemName, craftedQuantity, interaction, 'Crafting', craftedAt);
+      await addItemInventoryDatabase(character._id, item.itemName, craftedQuantity, interaction, 'Crafting', craftedAt, fortuneTellerBoostTag);
       
       // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
@@ -435,8 +522,20 @@ module.exports = {
             await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
           }
         }
-        if (typeof updatedStamina !== 'undefined') {
-          await checkAndUseStamina(freshCharacter, -staminaCost); // Refund stamina
+        // Refund stamina - check if we have the updated values
+        if (typeof updatedStamina !== 'undefined' && typeof crafterStaminaCost !== 'undefined') {
+          await checkAndUseStamina(freshCharacter, -crafterStaminaCost); // Refund crafter stamina
+          // Refund Teacher stamina if applicable
+          if (typeof teacherStaminaContribution !== 'undefined' && teacherStaminaContribution > 0 && freshCharacter?.boostedBy) {
+            const { fetchCharacterByName } = require('../../database/db');
+            const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+            if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+              await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution);
+            }
+          }
+        } else if (typeof updatedStamina !== 'undefined' && typeof staminaCost !== 'undefined') {
+          // Fallback: if crafterStaminaCost isn't available, use staminaCost (for cases where error occurred before Teacher boost calculation)
+          await checkAndUseStamina(freshCharacter, -staminaCost);
         }
       } catch (refundError) {
         console.error('[crafting.js]: Refund error:', refundError);

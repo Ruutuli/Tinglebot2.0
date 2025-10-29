@@ -60,8 +60,8 @@ const boostingEffects = {
 
  Teacher: {
   Crafting: {
-   name: "Crafting Duplication",
-   description: "When boosted by a Teacher, successfully crafted items are created in double.",
+   name: "Stamina Assistance",
+   description: "The Teacher can lend up to 3 stamina for crafting, with both characters splitting the stamina cost.",
   },
   Exploring: {
    name: "Study in Multiples",
@@ -147,7 +147,7 @@ const boostingEffects = {
  Entertainer: {
   Crafting: {
    name: "Song of Double Time",
-   description: "Boosted by an Entertainer, you can craft one extra job-voucher item.",
+   description: "Boosted by an Entertainer, you can craft one extra item at no material or stamina cost.",
   },
   Exploring: {
    name: "Song of Soaring",
@@ -537,13 +537,8 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
 // ============================================================================
 
 function applyTeacherCraftingBoost(craftedItem) {
- // Handle both number input (quantity) and object input (item with quantity)
- if (typeof craftedItem === 'number') {
-  return craftedItem + 1;
- }
- if (craftedItem && craftedItem.quantity) {
-  craftedItem.quantity += 1;
- }
+ // Teacher boost no longer doubles quantity - only provides stamina sharing
+ // Stamina sharing is handled directly in crafting.js
  return craftedItem;
 }
 
@@ -721,8 +716,16 @@ function applyPriestVendingBoost(basePoints) {
 // ------------------- Entertainer Boost Functions -------------------
 // ============================================================================
 
-function applyEntertainerCraftingBoost(voucherCraftCount) {
- return voucherCraftCount + 1;
+function applyEntertainerCraftingBoost(craftedItem) {
+ // Handle both number input (quantity) and object input (item with quantity)
+ // For crafting boost: add 1 extra item at no cost
+ if (typeof craftedItem === 'number') {
+  return craftedItem + 1;
+ }
+ if (craftedItem && craftedItem.quantity) {
+  craftedItem.quantity += 1;
+ }
+ return craftedItem;
 }
 
 function applyEntertainerExploringBoost(explorationResult) {

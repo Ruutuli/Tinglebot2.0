@@ -809,13 +809,10 @@ async function handleCharacterBasedCommandsAutocomplete(
 ) {
  try {
                 const userId = interaction.user.id;
-                logger.debug('AUTOCOMPLETE', `Called for command: ${commandName}, userId: ${userId}`);
 
   // Fetch all characters owned by the user (both regular and mod characters)
                 const characters = await fetchCharactersByUserId(userId);
                 const modCharacters = await fetchModCharactersByUserId(userId);
-                
-                logger.debug('AUTOCOMPLETE', `Found ${characters.length} regular characters and ${modCharacters.length} mod characters`);
                 
                 // Combine regular characters and mod characters
                 const allCharacters = [...characters, ...modCharacters];
@@ -826,7 +823,6 @@ async function handleCharacterBasedCommandsAutocomplete(
    value: character.name,
                 }));
                 
-                logger.debug('AUTOCOMPLETE', `Generated ${choices.length} choices`);
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
@@ -1183,7 +1179,6 @@ async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOpt
  try {
   const userId = interaction.user.id;
   const requestId = interaction.options.getString('requestid');
-  console.log(`[handleBoostingAcceptCharacterAutocomplete]: Called for userId: ${userId}, requestId: ${requestId}`);
   const characters = await fetchCharactersByUserId(userId);
   const modCharacters = await fetchModCharactersByUserId(userId);
   
@@ -1223,7 +1218,7 @@ async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOpt
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
-  console.error("[handleBoostingAcceptCharacterAutocomplete]: Error:", error);
+  logger.error('AUTOCOMPLETE', 'Error handling boosting accept character autocomplete', error);
   await safeRespondWithError(interaction);
  }
 }
@@ -1256,18 +1251,15 @@ async function handleBoostingStatusCharacterAutocomplete(interaction, focusedOpt
 async function handleBoostingRequestIdAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
-  console.log(`[handleBoostingRequestIdAutocomplete]: Called for userId: ${userId}`);
   
   // Get all boosting requests from TempData
   const allBoostingData = await TempData.findAllByType('boosting');
-  console.log(`[handleBoostingRequestIdAutocomplete]: Found ${allBoostingData.length} total boosting requests`);
   
   // Get user's characters to check ownership of boosting characters
   const characters = await fetchCharactersByUserId(userId);
   const modCharacters = await fetchModCharactersByUserId(userId);
   const allCharacters = [...characters, ...modCharacters];
   const userCharacterNames = allCharacters.map(char => char.name.toLowerCase());
-  console.log(`[handleBoostingRequestIdAutocomplete]: User owns characters:`, userCharacterNames);
   
   // Filter for pending requests where the user owns the boosting character
   const validRequests = allBoostingData
@@ -1276,13 +1268,10 @@ async function handleBoostingRequestIdAutocomplete(interaction, focusedOption) {
       const isPending = requestData.status === 'pending';
       const hasBooster = !!requestData.boostingCharacter;
       const ownsBooster = userCharacterNames.includes(requestData.boostingCharacter?.toLowerCase());
-      console.log(`[handleBoostingRequestIdAutocomplete]: Request ${requestData.boostRequestId} - status:${requestData.status}, booster:${requestData.boostingCharacter}, owns:${ownsBooster}`);
       return isPending && hasBooster && ownsBooster;
     })
     .map(tempData => tempData.data)
     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // Most recent first
-  
-  console.log(`[handleBoostingRequestIdAutocomplete]: Found ${validRequests.length} valid requests for user`);
   
   // Create autocomplete choices
   const choices = validRequests.map(request => {
@@ -1299,7 +1288,7 @@ async function handleBoostingRequestIdAutocomplete(interaction, focusedOption) {
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   
-  console.error("[handleBoostingRequestIdAutocomplete]: Error:", error);
+  logger.error('AUTOCOMPLETE', 'Error handling boosting request ID autocomplete', error);
   await safeRespondWithError(interaction);
  }
 }
@@ -2333,15 +2322,67 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
     const inventoryCollection = await getCharacterInventoryCollection(character);
     // Escape special regex characters in the search value
     const escapedValue = focusedValue.replace(/[.*+?^${}()|[\\]/g, '\\$&');
-    // Only include items with quantity > 0
-    const items = await inventoryCollection
-      .find({ itemName: { $regex: escapedValue, $options: 'i' }, quantity: { $gt: 0 } })
+    const searchQuery = focusedValue.toLowerCase();
+    
+    // Get all inventory items
+    const inventoryItems = await inventoryCollection
+      .find({ quantity: { $gt: 0 } })
       .toArray();
 
-    const choices = items.map(item => ({
-      name: `${item.itemName} (Qty: ${item.quantity})`,
-      value: item.itemName
-    }));
+    // Filter items matching search query and exclude 'Initial Item'
+    const filteredItems = inventoryItems.filter(
+      (item) => 
+        item.itemName && 
+        item.itemName.toLowerCase() !== 'initial item' &&
+        item.itemName.toLowerCase().includes(searchQuery) &&
+        (item.quantity || 0) > 0
+    );
+
+    // Aggregate items by name AND properties (crafted, Fortune Teller boost)
+    // Items with different properties should be kept separate
+    const itemMap = new Map();
+    for (const item of filteredItems) {
+      // Check if item is crafted (by date or by obtain field)
+      const obtainMethod = (item.obtain || '').toString().toLowerCase();
+      const isCrafted = !!item.craftedAt || obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
+      const hasFortuneTellerBoost = !!item.fortuneTellerBoost;
+      
+      // Create a unique key that includes name, crafting status, and boost status
+      // This ensures items with different properties are kept separate
+      const key = `${item.itemName.trim().toLowerCase()}-${isCrafted ? 'crafted' : 'regular'}-${hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
+      
+      if (!itemMap.has(key)) {
+        itemMap.set(key, {
+          name: item.itemName,
+          quantity: item.quantity || 0,
+          isCrafted: isCrafted,
+          hasFortuneTellerBoost: hasFortuneTellerBoost,
+        });
+      } else {
+        // Only aggregate if they have the same properties
+        const existing = itemMap.get(key);
+        existing.quantity += (item.quantity || 0);
+      }
+    }
+
+    // Convert to array and sort alphabetically
+    const aggregatedItems = Array.from(itemMap.values()).sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+
+    // Format choices with indicators
+    const choices = aggregatedItems.map((item) => {
+      let indicators = '';
+      if (item.isCrafted) indicators += '🔨 ';
+      if (item.hasFortuneTellerBoost) indicators += '🔮 ';
+      // If no special indicators, use box emoji for regular items
+      if (!indicators) indicators = '📦 ';
+      
+      return {
+        name: `${indicators}${item.name} - Qty: ${item.quantity}`,
+        value: item.name
+      };
+    });
     
     // Create a focusedOption object to match the expected parameter
     const focusedOption = {
@@ -2687,12 +2728,60 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
     );
     const inventoryItems = await inventoryCollection.find().toArray();
  
-    choices = inventoryItems
-     .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-     .map((item) => ({
-      name: `${item.itemName} - Qty: ${item.quantity}`,
-      value: item.itemName,
-     }));
+    // Filter items matching search query and exclude 'Initial Item'
+    const filteredItems = inventoryItems.filter(
+     (item) => 
+      item.itemName && 
+      item.itemName.toLowerCase() !== 'initial item' &&
+      item.itemName.toLowerCase().includes(searchQuery) &&
+      (item.quantity || 0) > 0
+    );
+ 
+    // Aggregate items by name AND properties (crafted, Fortune Teller boost)
+    // Items with different properties should be kept separate
+    const itemMap = new Map();
+    for (const item of filteredItems) {
+      // Check if item is crafted (by date or by obtain field)
+      const obtainMethod = (item.obtain || '').toString().toLowerCase();
+      const isCrafted = !!item.craftedAt || obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
+      const hasFortuneTellerBoost = !!item.fortuneTellerBoost;
+      
+      // Create a unique key that includes name, crafting status, and boost status
+      // This ensures items with different properties are kept separate
+      const key = `${item.itemName.trim().toLowerCase()}-${isCrafted ? 'crafted' : 'regular'}-${hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
+      
+      if (!itemMap.has(key)) {
+        itemMap.set(key, {
+          name: item.itemName,
+          quantity: item.quantity || 0,
+          isCrafted: isCrafted,
+          hasFortuneTellerBoost: hasFortuneTellerBoost,
+        });
+      } else {
+        // Only aggregate if they have the same properties
+        const existing = itemMap.get(key);
+        existing.quantity += (item.quantity || 0);
+      }
+    }
+
+    // Convert to array and sort alphabetically
+    const aggregatedItems = Array.from(itemMap.values()).sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+
+    // Format choices with indicators
+    choices = aggregatedItems.map((item) => {
+      let indicators = '';
+      if (item.isCrafted) indicators += '🔨 ';
+      if (item.hasFortuneTellerBoost) indicators += '🔮 ';
+      // If no special indicators, use box emoji for regular items
+      if (!indicators) indicators = '📦 ';
+      
+      return {
+        name: `${indicators}${item.name} - Qty: ${item.quantity}`,
+        value: item.name,
+      };
+    });
    }
  
    await interaction.respond(choices.slice(0, 25));
@@ -3021,8 +3110,6 @@ async function handleGearAutocomplete(interaction, focusedOption) {
    name: `${item.itemName} - QTY:${item.quantity}`,
    value: item.itemName,
   }));
-
-  logger.debug('AUTOCOMPLETE', `Generated items: ${JSON.stringify(items.map(item => ({ name: item.name, value: item.value })))}`);
   
   // Debug: Log specific items with + character
   const plusItems = items.filter(item => item.value.includes('+'));
@@ -3642,10 +3729,6 @@ async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
     
     // Get active aliens (not defeated)
     const activeAliens = session.gameData.aliens.filter(alien => !alien.defeated);
-    
-    logger.debug('AUTOCOMPLETE', `Found ${activeAliens.length} active aliens for session ${sessionId}`);
-    logger.debug('AUTOCOMPLETE', `All aliens in session: ${session.gameData.aliens.map(a => `${a.id}(${a.ring}${a.segment})`).join(', ')}`);
-    logger.debug('AUTOCOMPLETE', `Active aliens: ${activeAliens.map(a => `${a.id}(${a.ring}${a.segment})`).join(', ')}`);
     
     let choices = activeAliens
       .filter((alien) => {

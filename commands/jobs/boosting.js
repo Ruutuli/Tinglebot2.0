@@ -643,7 +643,7 @@ async function handleBoostRequest(interaction) {
  const boosterOwnerMention = `<@${boosterOwnerId}>`;
  
  const reply = await interaction.reply({
-  content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run </boosting accept:1394790096338817195> within 24 hours.`,
+  content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run </boosting accept:1429961744716927038> within 24 hours.`,
   embeds: [embed]
  }).then(response => response.fetch());
 

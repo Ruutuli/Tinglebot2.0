@@ -19,7 +19,8 @@ const inventorySchema = new Schema({
   craftedAt: { type: Date }, // Date the item was crafted (if applicable)
   gatheredAt: { type: Date }, // Date the item was gathered (if applicable)
   obtain: { type: String, default: '' },
-  synced: { type: String, unique: true } // Unique identifier for synced items
+  synced: { type: String, unique: true }, // Unique identifier for synced items
+  fortuneTellerBoost: { type: Boolean, default: false } // Tag for items crafted with Fortune Teller boost (sell for 20% more)
 });
 
 // ------------------- Initialize the inventory model -------------------

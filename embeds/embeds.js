@@ -2394,10 +2394,10 @@ const updateBoostRequestEmbed = async (client, requestData, newStatus = 'pending
       embeds: [updatedEmbed]
     });
 
-    console.log(`[embeds.js] Successfully updated boost request embed ${requestData.boostRequestId} to status: ${newStatus}`);
+    logger.success('BOOST', `Updated boost request embed ${requestData.boostRequestId} to status: ${newStatus}`);
     return true;
   } catch (error) {
-    console.error(`[embeds.js] Error updating boost request embed ${requestData.boostRequestId}:`, error);
+    logger.error('BOOST', `Error updating boost request embed ${requestData.boostRequestId}`, error);
     return false;
   }
 };
