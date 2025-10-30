@@ -981,6 +981,16 @@ const BOOST_FLAVOR_MESSAGES = {
       "✨ Holy light dispels all negative effects, granting the patient a clean recovery.",
       "🙏 Spiritual healing cleanses the patient completely, removing all active debuffs."
     ],
+    Looting: [
+      "🙏 Divine Blessing guides your hand to the most precious treasure the monster possessed.",
+      "✨ Sacred blessing ensures you receive the highest quality loot from your victory.",
+      "🌟 Holy intervention reveals the monster's most valuable treasure to you.",
+      "💫 The Priest's blessing guarantees you claim the finest prize from the encounter.",
+      "🙏 Divine guidance leads you to the monster's most treasured possession.",
+      "✨ Sacred blessing ensures you obtain the most valuable loot available.",
+      "🌟 Heavenly blessing reveals the monster's greatest treasure to you.",
+      "💫 The Priest's divine intervention secures the finest loot for you."
+    ],
     default: [
       "🙏 Divine blessing enhances your abilities with sacred power.",
       "✨ Holy favor improves your technique with spiritual guidance.",

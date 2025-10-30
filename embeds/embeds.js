@@ -1436,7 +1436,8 @@ const createMonsterEncounterEmbed = async (
  originalRoll = null,
  blightRainMessage = null,
  entertainerBoostUnused = false,
- entertainerDamageReduction = 0
+ entertainerDamageReduction = 0,
+ blightAdjustedRoll = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1497,7 +1498,17 @@ const createMonsterEncounterEmbed = async (
 
  // Add boost flavor text to outcome if available
  let outcomeWithBoost = outcomeMessage || 'No outcome specified.';
- outcomeWithBoost = addBoostFlavorText(outcomeWithBoost, boostInfo);
+ 
+ // Only show boost flavor text if character actually benefited from the boost
+ // Check if character won the encounter (no damage taken, or successful defense/attack)
+ const characterWon = !outcomeMessage.includes('💥') && !outcomeMessage.includes('lose') && !outcomeMessage.includes('damage');
+ 
+ if (boostInfo && characterWon) {
+   outcomeWithBoost = addBoostFlavorText(outcomeWithBoost, boostInfo);
+ } else if (boostInfo && !characterWon) {
+   // Character lost - show message that boost was active but didn't help
+   outcomeWithBoost += `\n\n⚡ **Boost Effect:** Your boost was in effect, but because you lost the fight, you did not benefit! Better luck next time!`;
+ }
 
  // Add elixir buff information if available
  if (elixirBuffInfo && elixirBuffInfo.helped) {
@@ -1524,17 +1535,18 @@ const createMonsterEncounterEmbed = async (
    outcomeWithBoost += elixirHelpText;
  }
 
- // Add blight boost information if available
- if (originalRoll && actualRoll && character.blighted && character.blightStage && actualRoll > originalRoll) {
+ // Add blight boost information if available (use blightAdjustedRoll if provided, otherwise fallback to actualRoll)
+ const blightRollValue = blightAdjustedRoll !== null ? blightAdjustedRoll : actualRoll;
+ if (originalRoll && blightRollValue && character.blighted && character.blightStage && blightRollValue > originalRoll) {
    try {
-     const blightBoostText = generateBlightRollBoostFlavorText(character.blightStage, originalRoll, actualRoll);
+     const blightBoostText = generateBlightRollBoostFlavorText(character.blightStage, originalRoll, blightRollValue);
      outcomeWithBoost += `\n\n${blightBoostText}`;
    } catch (error) {
      console.error(`[embeds.js]: Error generating blight boost text:`, error);
      // Fallback blight boost message
-     const improvement = actualRoll - originalRoll;
-     const multiplier = (actualRoll / originalRoll).toFixed(1);
-     outcomeWithBoost += `\n\n💀 **Blight Boost Applied:** Your roll was enhanced from ${originalRoll} to ${actualRoll} (${multiplier}x multiplier). The corruption within you amplified your combat abilities, making you ${improvement} points stronger than normal.`;
+     const improvement = blightRollValue - originalRoll;
+     const multiplier = (blightRollValue / originalRoll).toFixed(1);
+     outcomeWithBoost += `\n\n💀 **Blight Boost Applied:** Your roll was enhanced from ${originalRoll} to ${blightRollValue} (${multiplier}x multiplier). The corruption within you amplified your combat abilities, making you ${improvement} points stronger than normal.`;
    }
  }
 
@@ -2746,6 +2758,16 @@ const createBoostAppliedEmbed = (boostData) => {
           `> ${effect}\n\n` +
           `> Boost by: ${boosterJob} ${boostedBy} - ${boostData.boostName || 'Unknown Boost'} for ${category}`,
         inline: false
+      },
+      {
+        name: '📊 **Status**',
+        value: `> ${boostData.status || 'accepted'}`,
+        inline: true
+      },
+      {
+        name: '🆔 **Boost ID**',
+        value: `> \`${boostData.boostRequestId || 'Unknown'}\``,
+        inline: true
       }
     )
     .setFooter({ 

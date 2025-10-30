@@ -1304,23 +1304,29 @@ async function handleBoostingCancelRequestIdAutocomplete(interaction, focusedOpt
   
   // Get all boosting requests from TempData
   const allBoostingData = await TempData.findAllByType('boosting');
-  
   // Get user's characters to check ownership of target characters (requesters)
   const characters = await fetchCharactersByUserId(userId);
   const modCharacters = await fetchModCharactersByUserId(userId);
   const allCharacters = [...characters, ...modCharacters];
   const userCharacterNames = allCharacters.map(char => char.name.toLowerCase());
+  
   const currentTime = Date.now();
   
-  // Filter for pending requests where the user owns the target character (the requester)
+  // Filter for pending and accepted requests where the user owns the target character (the requester)
   const validRequests = allBoostingData
     .filter(tempData => {
       const requestData = tempData.data;
-      const isPending = requestData.status === 'pending';
+      const isPendingOrAccepted = requestData.status === 'pending' || requestData.status === 'accepted';
       const hasTarget = !!requestData.targetCharacter;
       const ownsTarget = userCharacterNames.includes(requestData.targetCharacter?.toLowerCase());
-      const notExpired = !requestData.expiresAt || currentTime <= requestData.expiresAt;
-      return isPending && hasTarget && ownsTarget && notExpired;
+      
+      // For pending requests, check if not expired
+      // For accepted requests, check if boost hasn't expired
+      const notExpired = requestData.status === 'pending' 
+        ? (!requestData.expiresAt || currentTime <= requestData.expiresAt)
+        : (!requestData.boostExpiresAt || currentTime <= requestData.boostExpiresAt);
+      
+      return isPendingOrAccepted && hasTarget && ownsTarget && notExpired;
     })
     .map(tempData => tempData.data)
     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // Most recent first
@@ -1330,8 +1336,9 @@ async function handleBoostingCancelRequestIdAutocomplete(interaction, focusedOpt
     const timeAgo = request.timestamp 
       ? Math.floor((Date.now() - request.timestamp) / (1000 * 60)) + 'm ago'
       : '';
+    const statusText = request.status === 'accepted' ? '[ACTIVE]' : '[PENDING]';
     return {
-      name: `${request.boostRequestId} | ${request.targetCharacter} → ${request.boostingCharacter} | ${request.category} ${timeAgo}`,
+      name: `${request.boostRequestId} | ${request.targetCharacter} → ${request.boostingCharacter} | ${request.category} ${statusText} ${timeAgo}`,
       value: request.boostRequestId
     };
   });
@@ -1340,7 +1347,7 @@ async function handleBoostingCancelRequestIdAutocomplete(interaction, focusedOpt
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   
-  logger.error('AUTOCOMPLETE', 'Error handling boosting cancel request ID autocomplete', error);
+  console.error('AUTOCOMPLETE', 'Error handling boosting cancel request ID autocomplete', error);
   await safeRespondWithError(interaction);
  }
 }

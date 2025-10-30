@@ -49,7 +49,7 @@ const {
 
 // ------------------- Boosting Module -------------------
 // Import boosting functionality for applying job-based boosts
-const { applyLootingBoost, applyLootingDamageBoost, applyLootingQuantityBoost } = require("../../modules/boostIntegration");
+const { applyLootingBoost, applyLootingDamageBoost, applyLootingQuantityBoost, getCharacterBoostStatus } = require("../../modules/boostIntegration");
 
 // Modules - RNG Logic
 const {
@@ -973,10 +973,28 @@ async function processLootingLogic(
 
   // ------------------- Apply Boosting Effects -------------------
   // Check if character is boosted and apply looting boosts
+  const rollBeforeBoost = adjustedRandomValue;
   adjustedRandomValue = await applyLootingBoost(character.name, adjustedRandomValue);
+  
+  // Log boost if applied
+  if (adjustedRandomValue > rollBeforeBoost) {
+    const improvement = adjustedRandomValue - rollBeforeBoost;
+    logger.info('LOOT', `📚 Boost applied to ${character.name} - Roll enhanced from ${rollBeforeBoost} to ${adjustedRandomValue} (+${improvement} points)`);
+  }
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
-  const rollDisplay = originalRoll && blightAdjustedRoll > originalRoll ? `${originalRoll} → ${blightAdjustedRoll}` : `${originalRoll}`;
+  
+  // Build roll display showing progression: original → blight → boost
+  let rollDisplay = `${originalRoll}`;
+  if (blightAdjustedRoll > originalRoll) {
+    rollDisplay += ` → ${blightAdjustedRoll}`;
+  }
+  if (adjustedRandomValue > blightAdjustedRoll) {
+    rollDisplay += ` → ${adjustedRandomValue}`;
+  } else if (adjustedRandomValue > originalRoll && blightAdjustedRoll === originalRoll) {
+    rollDisplay += ` → ${adjustedRandomValue}`;
+  }
+  
   logger.info('LOOT', `${character.name} vs ${encounteredMonster.name} | Roll: ${rollDisplay}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
 
   const outcome = await getEncounterOutcome(
@@ -1306,7 +1324,7 @@ async function processLootingLogic(
    updatedCharacter.currentHearts,
    outcome.canLoot && weightedItems.length > 0 ? lootedItem : null,
    bloodMoonActive,
-   blightAdjustedRoll, // Pass blightAdjustedRoll for blight boost detection
+   adjustedRandomValue, // Pass the final roll value (after boost) as actualRoll
    null, // currentMonster
    null, // totalMonsters
    null, // entertainerBonusItem
@@ -1315,12 +1333,14 @@ async function processLootingLogic(
    originalRoll, // Pass originalRoll to the embed
    blightRainMessage, // Pass blight rain message to the embed
    entertainerBoostUnused, // Pass flag indicating boost was active but unused
-   entertainerDamageReduction // Pass amount of damage reduced by Entertainer boost
+   entertainerDamageReduction, // Pass amount of damage reduced by Entertainer boost
+   blightAdjustedRoll // Pass blightAdjustedRoll for blight boost detection
    );
   
   // Update character timestamp and clear boost AFTER embed is created
-  // Only clear boost if damage was actually taken (boost was used)
-  await updateCharacterLootTimestamp(character, damageWasTaken);
+  // Clear boost after monster encounter (boost was used for loot selection)
+  // Note: This function is only called when a monster is encountered
+  await updateCharacterLootTimestamp(character, true);
   
   await interaction.editReply({ embeds: [embed] });
 
@@ -1455,8 +1475,37 @@ function generateOutcomeMessage(outcome, character = null) {
 
 // ------------------- Helper Function: Generate Looted Item -------------------
 async function generateLootedItem(encounteredMonster, weightedItems, character) {
- const randomIndex = Math.floor(Math.random() * weightedItems.length);
- const lootedItem = weightedItems[randomIndex];
+ let lootedItem;
+ 
+ // Check if character has Priest boost for guaranteed highest tier loot
+ if (character && character.boostedBy) {
+   const boostStatus = await getCharacterBoostStatus(character.name);
+   
+   if (boostStatus && boostStatus.boosterJob === 'Priest' && boostStatus.category === 'Looting') {
+     // Find the highest rarity item in the weighted items list
+     const maxRarity = Math.max(...weightedItems.map(item => item.itemRarity || 0));
+     const highestRarityItems = weightedItems.filter(item => (item.itemRarity || 0) === maxRarity);
+     
+     if (highestRarityItems.length > 0) {
+       // Randomly select from the highest rarity items
+       const randomIndex = Math.floor(Math.random() * highestRarityItems.length);
+       lootedItem = highestRarityItems[randomIndex];
+       logger.info('LOOT', `🙏 Priest Divine Favor: Selected highest rarity item (${maxRarity}) for ${character.name}`);
+     } else {
+       // Fallback to normal selection if no rarity found
+       const randomIndex = Math.floor(Math.random() * weightedItems.length);
+       lootedItem = weightedItems[randomIndex];
+     }
+   } else {
+     // Normal random selection for other boosts or no boost
+     const randomIndex = Math.floor(Math.random() * weightedItems.length);
+     lootedItem = weightedItems[randomIndex];
+   }
+ } else {
+   // Normal random selection if no boost
+   const randomIndex = Math.floor(Math.random() * weightedItems.length);
+   lootedItem = weightedItems[randomIndex];
+ }
 
  if (encounteredMonster.name.includes("Chuchu")) {
   let jellyType;

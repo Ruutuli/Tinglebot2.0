@@ -376,7 +376,7 @@ function retrieveBoostingRequestFromStorageByCharacter(characterName) {
   for (const [requestId, requestData] of Object.entries(allRequests)) {
    if (
     requestData.targetCharacter === characterName &&
-    requestData.status === "fulfilled"
+    requestData.status === "accepted"
    ) {
     if (
      requestData.boostExpiresAt &&
@@ -424,7 +424,7 @@ function getAllActiveBoosts() {
   const activeBoosts = [];
 
   for (const [requestId, requestData] of Object.entries(allRequests)) {
-   if (requestData.status === "fulfilled") {
+   if (requestData.status === "accepted") {
     if (
      requestData.boostExpiresAt &&
      currentTime <= requestData.boostExpiresAt
@@ -521,7 +521,7 @@ function cleanupExpiredBoostingRequests() {
    }
 
    if (
-    requestData.status === "fulfilled" &&
+    requestData.status === "accepted" &&
     requestData.boostExpiresAt &&
     currentTime > requestData.boostExpiresAt
    ) {
@@ -585,7 +585,7 @@ function getBoostingStatistics() {
     } else {
      stats.expired++;
     }
-   } else if (requestData.status === "fulfilled") {
+   } else if (requestData.status === "accepted") {
     stats.fulfilled++;
     if (
      requestData.boostExpiresAt &&
@@ -593,6 +593,8 @@ function getBoostingStatistics() {
     ) {
      stats.active++;
     }
+   } else if (requestData.status === "fulfilled") {
+    stats.fulfilled++;
    } else if (requestData.status === "expired") {
     stats.expired++;
    }
