@@ -2207,10 +2207,9 @@ module.exports = {
                     : 'No successful steals yet';
                 
                 // Check protection status
-                const isCharacterProtected = await isProtected(character._id);
-                const protectionTimeLeft = await getProtectionTimeLeft(character._id);
-                const protectionStatus = isCharacterProtected && protectionTimeLeft > 0
-                    ? `🛡️ Protected (${Math.ceil(protectionTimeLeft / (60 * 1000))}m remaining)`
+                const protectionStatusResult = await isProtected(character._id);
+                const protectionStatus = protectionStatusResult.protected && protectionStatusResult.timeLeft > 0
+                    ? `🛡️ Protected (${Math.ceil(protectionStatusResult.timeLeft / (60 * 1000))}m remaining)`
                     : '✅ Not protected';
                 
                 // Check jail status
