@@ -205,21 +205,38 @@ async function validateActiveBoost(targetCharacter) {
      
      // Check if this is a boost request for the target character
      if (requestData.targetCharacter === targetCharacter.name) {
-       // Skip cancelled and fulfilled requests - only block on pending
-      if (requestData.status === "cancelled" || requestData.status === "fulfilled" || requestData.status === "accepted") {
-         continue;
-       }
-       
-       // Check for pending requests (not expired, not fulfilled, not expired status)
-       if (requestData.status === "pending") {
-         // Check if the request hasn't expired (if expiresAt is set)
-         if (!requestData.expiresAt || currentTime <= requestData.expiresAt) {
-           return {
-             valid: false,
-             error: `❌ **Pending Boost Request Found**\n\n**${targetCharacter.name}** already has a pending boost request from **${requestData.boostingCharacter}**.\n\n💡 **Tip:** You can only have one pending boost request at a time. Wait for the current request to be fulfilled, cancelled, or expire before requesting a new one.`
-           };
-         }
-       }
+        // Skip cancelled and fulfilled requests
+        if (requestData.status === "cancelled" || requestData.status === "fulfilled") {
+          continue;
+        }
+
+        // Block if there is a pending request that hasn't expired
+        if (requestData.status === "pending") {
+          if (!requestData.expiresAt || currentTime <= requestData.expiresAt) {
+            return {
+              valid: false,
+              error: `❌ **Pending Boost Request Found**\n\n**${targetCharacter.name}** already has a pending boost request from **${requestData.boostingCharacter}**.\n\n💡 **Tip:** You can only have one boost request at a time. Wait for the current request to be fulfilled, cancelled, or expire before requesting a new one.`
+            };
+          }
+        }
+
+        // Block if there is an accepted boost that has not expired
+        if (requestData.status === "accepted") {
+          // If boostExpiresAt exists and is in the future, block
+          if (requestData.boostExpiresAt && currentTime <= requestData.boostExpiresAt) {
+            return {
+              valid: false,
+              error: `❌ **Active Boost Found**\n\n**${targetCharacter.name}** is already boosted by **${requestData.boostingCharacter}** for **${requestData.category}**.\n\n💡 **Tip:** You can request a new boost after the current one is fulfilled, cancelled, or expires.`
+            };
+          }
+          // If accepted but missing expiresAt, conservatively block
+          if (!requestData.boostExpiresAt) {
+            return {
+              valid: false,
+              error: `❌ **Active Boost Found**\n\n**${targetCharacter.name}** currently has an accepted boost from **${requestData.boostingCharacter}**.\n\n💡 **Tip:** Finish using the current boost or cancel it before requesting a new one.`
+            };
+          }
+        }
      }
    }
    
@@ -457,7 +474,7 @@ async function getActiveBoostEffect(characterName, category) {
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
  const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
  if (!boosterCharacter) {
-  console.error(`[boosting.js]: Error - Could not find booster character "${activeBoost.boostingCharacter}"`);
+  logger.error('BOOST', `Could not find booster character "${activeBoost.boostingCharacter}"`);
   return null;
  }
  return getBoostEffect(boosterCharacter.job, category);
@@ -614,7 +631,7 @@ async function handleBoostRequest(interaction) {
  const boosterCharacter = await fetchCharacterByNameWithFallback(boosterName);
 
  if (!targetCharacter || !boosterCharacter) {
-  console.error(
+  logger.error('BOOST',
    `[boosting.js]: Error - One or both characters could not be found. Inputs: character="${characterName}", booster="${boosterName}"`
   );
   await interaction.reply({
@@ -627,9 +644,42 @@ async function handleBoostRequest(interaction) {
  // Validate active boost
  const activeBoostValidation = await validateActiveBoost(targetCharacter);
  if (!activeBoostValidation.valid) {
-  console.error(`[boosting.js]: Error - ${activeBoostValidation.error}`);
+  logger.error('BOOST', activeBoostValidation.error);
+  // Build a helpful embed with options to cancel, use, or wait for expiry
+  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(targetCharacter.name);
+  const boosterName = activeBoost?.boostingCharacter || boosterCharacter?.name || "their booster";
+  const boostCategory = activeBoost?.category || category;
+  const expiresAt = activeBoost?.boostExpiresAt ? Math.floor(activeBoost.boostExpiresAt / 1000) : null;
+  const requestId = activeBoost?.boostRequestId;
+
+  const descriptionLines = [
+    `**${targetCharacter.name}** is already boosted by **${boosterName}** for **${boostCategory}**.`,
+    "",
+    "💡 **Tip:** You can cancel the current boost, use it now, or wait for it to expire."
+  ];
+
+  const fields = [];
+  if (requestId) {
+    fields.push({ name: "Cancel the Boost", value: `Run </boosting cancel:1429961744716927038> with **Request ID:** \
+\`${requestId}\``, inline: false });
+  } else {
+    fields.push({ name: "Cancel the Boost", value: "Run </boosting cancel:1429961744716927038> using your boost request ID.", inline: false });
+  }
+  fields.push({ name: "Use Your Boost", value: "Finish the action it applies to. For 'Other' boosts, use </boosting use:1429961744716927038>.", inline: false });
+  if (expiresAt) {
+    fields.push({ name: "Wait for Expiry", value: `Boost expires <t:${expiresAt}:R>.`, inline: false });
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle('❌ Active Boost Found')
+    .setDescription(descriptionLines.join("\n"))
+    .addFields(fields)
+    .setColor('#E74C3C')
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+    .setFooter({ text: 'You can request a new boost after it is fulfilled, cancelled, or expires.' });
+
   await interaction.reply({
-   content: activeBoostValidation.error,
+   embeds: [embed],
    ephemeral: true,
   });
   return;
@@ -639,7 +689,7 @@ async function handleBoostRequest(interaction) {
  const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID;
  const villageValidation = validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel);
  if (!villageValidation.valid) {
-  console.error(`[boosting.js]: Error - ${villageValidation.error}`);
+  logger.error('BOOST', villageValidation.error);
   await interaction.reply({
    content: villageValidation.error,
    ephemeral: true,
@@ -650,7 +700,7 @@ async function handleBoostRequest(interaction) {
  // Validate boost request - target character can request any boost category
  const boostRequestValidation = validateBoostRequest(targetCharacter, category);
  if (!boostRequestValidation.valid) {
-  console.error(`[boosting.js]: Error - ${boostRequestValidation.error}`);
+  logger.error('BOOST', boostRequestValidation.error);
   await interaction.reply({
    content: boostRequestValidation.error,
    ephemeral: true,
@@ -690,11 +740,14 @@ async function handleBoostRequest(interaction) {
  // Get the owner of the booster character and send reply
  const boosterOwnerId = boosterCharacter.userId;
  const boosterOwnerMention = `<@${boosterOwnerId}>`;
- 
- const reply = await interaction.reply({
-  content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run </boosting accept:1429961744716927038> within 24 hours.`,
-  embeds: [embed]
- }).then(response => response.fetch());
+
+ // HARDCODE the slash command mention so it's always clickable
+const commandMention = '</boosting accept:1433351189185171456>';
+
+const reply = await interaction.reply({
+ content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run ${commandMention} within 24 hours.`,
+ embeds: [embed]
+}).then(response => response.fetch());
 
  // Save the message ID to TempData for later updates
  requestData.messageId = reply.id;
@@ -710,7 +763,7 @@ async function handleBoostAccept(interaction) {
  const requestData = await retrieveBoostingRequestFromTempData(requestId);
  
  if (!requestData) {
-  console.error(`[boosting.js]: Error - Invalid boost request ID "${requestId}".`);
+  logger.error('BOOST', `Invalid boost request ID "${requestId}"`);
   await interaction.reply({
    content: "Invalid request ID.",
    ephemeral: true,
@@ -720,7 +773,7 @@ async function handleBoostAccept(interaction) {
 
  const currentTime = Date.now();
  if (requestData.expiresAt && currentTime > requestData.expiresAt) {
-  console.error(`[boosting.js]: Request "${requestId}" has expired.`);
+  logger.warn('BOOST', `Request "${requestId}" has expired`);
   await interaction.reply({
    content: "This boost request has expired. Boost requests are only valid for 24 hours.",
    ephemeral: true,
@@ -729,7 +782,7 @@ async function handleBoostAccept(interaction) {
  }
 
  if (requestData.status !== "pending") {
-  console.error(`[boosting.js]: Error - Boost request "${requestId}" is not pending (status: ${requestData.status}).`);
+  logger.error('BOOST', `Boost request "${requestId}" is not pending (status: ${requestData.status})`);
   await interaction.reply({
    content: "This request has already been fulfilled or expired.",
    ephemeral: true,
@@ -740,7 +793,7 @@ async function handleBoostAccept(interaction) {
  const booster = await fetchCharacterWithFallback(boosterName, userId);
  
  if (!booster) {
-  console.error(`[boosting.js]: Error - User does not own boosting character "${boosterName}".`);
+  logger.error('BOOST', `User does not own boosting character "${boosterName}"`);
   await interaction.reply({
    content: `You do not own the boosting character "${boosterName}".`,
    ephemeral: true,
@@ -749,7 +802,7 @@ async function handleBoostAccept(interaction) {
  }
 
  if (booster.name !== requestData.boostingCharacter) {
-  console.error(`[boosting.js]: Error - Mismatch in boosting character. Request designated for "${requestData.boostingCharacter}", but provided "${booster.name}".`);
+  logger.error('BOOST', `Mismatch in boosting character. Request designated for "${requestData.boostingCharacter}", but provided "${booster.name}"`);
   await interaction.reply({
    content: `This request was made for **${requestData.boostingCharacter}**, not **${booster.name}**.`,
    ephemeral: true,
@@ -759,7 +812,7 @@ async function handleBoostAccept(interaction) {
 
  const boostEffectValidation = validateBoostEffect(booster.job, requestData.category);
  if (!boostEffectValidation.valid) {
-  console.error(`[boosting.js]: Error - ${boostEffectValidation.error}`);
+  logger.error('BOOST', boostEffectValidation.error);
   await interaction.reply({
    content: boostEffectValidation.error,
    ephemeral: true,
@@ -778,7 +831,7 @@ async function handleBoostAccept(interaction) {
    return;
   }
  } catch (error) {
-  console.error(`[boosting.js]: Error deducting stamina from ${booster.name}:`, error);
+  logger.error('BOOST', `Error deducting stamina from ${booster.name}: ${error.message}`);
   await interaction.reply({
    content: `❌ Error processing stamina cost for **${booster.name}**. Please try again.`,
    ephemeral: true,
@@ -794,6 +847,10 @@ async function handleBoostAccept(interaction) {
  requestData.acceptedAt = acceptedTime;
  requestData.durationRemaining = BOOST_DURATION;
  requestData.boostExpiresAt = boostExpiresAt;
+  // Ensure embed update has all required fields
+  requestData.boosterJob = booster.job;
+  requestData.requestedByIcon = (await fetchCharacterByName(requestData.targetCharacter))?.icon;
+  requestData.boosterIcon = booster.icon;
 
  // Update the target character's boostedBy field
  const targetCharacter = await fetchCharacterByName(requestData.targetCharacter);
@@ -807,23 +864,40 @@ async function handleBoostAccept(interaction) {
    
    await targetCharacter.save();
  } else {
-   console.error(`[boosting.js]: Error - Could not find target character "${requestData.targetCharacter}"`);
+   logger.error('BOOST', `Could not find target character "${requestData.targetCharacter}"`);
  }
 
  // Save updated request data
  await saveBoostingRequestToTempData(requestId, requestData);
 
  // Update the original boost request embed to show accepted status
-  await updateBoostRequestEmbed(interaction.client, requestData, 'accepted');
+  try {
+    const updated = await updateBoostRequestEmbed(interaction.client, requestData, 'accepted');
+    if (!updated) {
+      logger.warn('BOOST', `Failed to update request embed to accepted for ${requestId}`);
+    }
+  } catch (e) {
+    logger.error('BOOST', `Error updating request embed to accepted for ${requestId}`, e);
+  }
 
  // Create and send boost applied embed
   const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
   const embed = createBoostAppliedEmbed(embedData);
 
- await interaction.reply({
+ const sent = await interaction.reply({
   content: `Boost accepted and is now active for 24 hours!`,
   embeds: [embed],
  });
+
+ // Persist the applied embed message so we can update its status later
+ try {
+   const sentMsg = await interaction.fetchReply();
+   requestData.appliedMessageId = sentMsg.id;
+   requestData.appliedChannelId = sentMsg.channelId;
+   await saveBoostingRequestToTempData(requestId, requestData);
+ } catch (e) {
+   logger.warn('BOOST', `Could not persist applied embed message reference for ${requestId}: ${e.message}`);
+ }
 }
 
 async function handleBoostStatus(interaction) {
@@ -886,7 +960,7 @@ async function handleBoostStatus(interaction) {
 
  const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
  if (!boosterCharacter) {
-  console.error(`[boosting.js]: Error - Could not find booster character "${activeBoost.boostingCharacter}"`);
+  logger.error('BOOST', `Could not find booster character "${activeBoost.boostingCharacter}"`);
   await interaction.reply({
    content: `Error retrieving boost effect for ${characterName}.`,
    ephemeral: true,
@@ -896,7 +970,7 @@ async function handleBoostStatus(interaction) {
 
  const boostEffectValidation = validateBoostEffect(boosterCharacter.job, activeBoost.category);
  if (!boostEffectValidation.valid) {
-  console.error(`[boosting.js]: Error - ${boostEffectValidation.error}`);
+  logger.error('BOOST', boostEffectValidation.error);
   await interaction.reply({
    content: `Error retrieving boost effect for ${characterName}.`,
    ephemeral: true,
@@ -1038,7 +1112,7 @@ async function handleBoostUse(interaction) {
    ephemeral: false,
   });
   
-  console.log(`[boosting.js]: 🔮 Fortune Teller "Other" boost used - Weather prediction for ${selectedVillage}: ${predictedWeather}`);
+  logger.info('BOOST', `🔮 Fortune Teller "Other" boost used - Weather prediction for ${selectedVillage}: ${predictedWeather}`);
   return;
  }
 
@@ -1094,7 +1168,7 @@ async function handleBoostUse(interaction) {
    ephemeral: false,
   });
   
-  console.log(`[boosting.js]: 🎵 Entertainer "Other" boost used - Song of Storms for ${selectedVillage}: ${selectedWeather}`);
+  logger.info('BOOST', `🎵 Entertainer "Other" boost used - Song of Storms for ${selectedVillage}: ${selectedWeather}`);
   return;
  }
 
@@ -1183,3 +1257,32 @@ module.exports.getRemainingBoostTime = getRemainingBoostTime;
 module.exports.retrieveBoostingRequestFromTempDataByCharacter = retrieveBoostingRequestFromTempDataByCharacter;
 module.exports.saveBoostingRequestToTempData = saveBoostingRequestToTempData;
 module.exports.retrieveBoostingRequestFromTempData = retrieveBoostingRequestFromTempData;
+
+// Helper to update the 'Boost Applied' embed when status changes
+module.exports.updateBoostAppliedMessage = async function updateBoostAppliedMessage(client, requestData) {
+  try {
+    if (!requestData.appliedMessageId || !requestData.appliedChannelId) {
+      return false;
+    }
+
+    const channel = await client.channels.fetch(requestData.appliedChannelId);
+    if (!channel) return false;
+    const message = await channel.messages.fetch(requestData.appliedMessageId);
+    if (!message) return false;
+
+    // Rebuild applied embed with latest status
+    const booster = await fetchCharacterByNameWithFallback(requestData.boostingCharacter);
+    const targetCharacter = await fetchCharacterByNameWithFallback(requestData.targetCharacter);
+    const boostEffectValidation = validateBoostEffect(booster.job, requestData.category);
+    const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
+    // ensure status taken from requestData
+    embedData.status = requestData.status || embedData.status;
+    const embed = createBoostAppliedEmbed(embedData);
+
+    await message.edit({ embeds: [embed] });
+    return true;
+  } catch (e) {
+    logger.error('BOOST', `Failed to update Boost Applied message for ${requestData.boostRequestId}: ${e.message}`);
+    return false;
+  }
+}

@@ -26,8 +26,10 @@ const { hasPerk, getJobPerk, normalizeJobName, isValidJob } = require('../../mod
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { applyStealingBoost, applyStealingJailBoost, applyStealingLootBoost } = require('../../modules/boostIntegration');
+const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { getActiveBuffEffects } = require('../../modules/elixirModule');
 const logger = require('../../utils/logger');
+const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData } = require('../jobs/boosting');
 
 // Add StealStats model
 const StealStats = require('../../models/StealStatsModel');
@@ -232,7 +234,7 @@ async function updateDailySteal(character, activity) {
     character.dailyRoll.set(activity, now);
     await character.save();
   } catch (error) {
-            console.error(`[steal.js]: ❌ Failed to update daily steal for ${character.name}:`, error);
+        logger.error('JOB', `❌ Failed to update daily steal for ${character.name}`, error);
     
             // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -346,7 +348,7 @@ async function validateCharacter(characterName, userId, requireInventorySync = f
         
         return { valid: true, character };
     } catch (error) {
-        console.error(`[steal.js]: ❌ Error validating character "${characterName}":`, error);
+        logger.error('JOB', `❌ Error validating character "${characterName}"`, error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -691,7 +693,7 @@ async function isProtected(targetId) {
         
         return { protected: false };
     } catch (error) {
-        console.error('[steal.js]: Error checking protection:', error);
+        logger.error('NPC', 'Error checking protection', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -725,7 +727,7 @@ async function setProtection(targetId, duration = '2hours') {
             // This is an NPC
             const result = await NPC.setProtection(targetId, protectionDuration);
             if (!result) {
-                console.error(`[steal.js]: Failed to set protection for NPC: ${targetId}`);
+                logger.error('NPC', `Failed to set protection for NPC: ${targetId}`);
             }
         } else {
             // This is a player character
@@ -741,11 +743,11 @@ async function setProtection(targetId, duration = '2hours') {
                 character.setProtection(protectionDuration);
                 await character.save();
             } else {
-                console.error(`[steal.js]: Character not found for protection: ${targetId}`);
+                logger.error('NPC', `Character not found for protection: ${targetId}`);
             }
         }
     } catch (error) {
-        console.error('[steal.js]: Error setting protection:', error);
+        logger.error('NPC', 'Error setting protection', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -764,7 +766,7 @@ async function clearProtection(targetId) {
             // This is an NPC
             const result = await NPC.clearProtection(targetId);
             if (!result) {
-                console.error(`[steal.js]: Failed to clear protection for NPC: ${targetId}`);
+                logger.error('NPC', `Failed to clear protection for NPC: ${targetId}`);
             }
         } else {
             // This is a player character
@@ -773,11 +775,11 @@ async function clearProtection(targetId) {
                 character.clearProtection();
                 await character.save();
             } else {
-                console.error(`[steal.js]: Character not found for clearing protection: ${targetId}`);
+                logger.error('NPC', `Character not found for clearing protection: ${targetId}`);
             }
         }
     } catch (error) {
-        console.error('[steal.js]: Error clearing protection:', error);
+        logger.error('NPC', 'Error clearing protection', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -830,7 +832,7 @@ async function setGlobalSuccessProtection(targetId) {
       }
     }
   } catch (error) {
-    console.error('[steal.js]: Error setting global success protection:', error);
+    logger.error('NPC', 'Error setting global success protection', error);
     
             // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -865,7 +867,7 @@ async function setGlobalFailureProtection(targetId) {
       }
     }
   } catch (error) {
-    console.error('[steal.js]: Error setting global failure protection:', error);
+    logger.error('NPC', 'Error setting global failure protection', error);
     
             // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -910,7 +912,7 @@ async function checkTargetProtection(targetId, isNPCTarget) {
         
         return { protected: false };
     } catch (error) {
-        console.error('[steal.js]: Error checking target protection:', error);
+        logger.error('NPC', 'Error checking target protection', error);
         return { protected: false };
     }
 }
@@ -940,7 +942,7 @@ async function checkIndividualNPCCooldown(characterId, npcName) {
         
         return { onCooldown: false };
     } catch (error) {
-        console.error('[steal.js]: Error checking individual NPC cooldown:', error);
+        logger.error('NPC', 'Error checking individual NPC cooldown', error);
         return { onCooldown: false };
     }
 }
@@ -969,9 +971,9 @@ async function setTargetProtection(targetId, isNPCTarget, wasSuccessful) {
             }
         }
         
-        console.log(`[steal.js]: Set target protection for ${targetId} (${isNPCTarget ? 'NPC' : 'player'}) for ${wasSuccessful ? '1 week' : '24 hours'}`);
+        logger.info('NPC', `Set target protection for ${targetId} (${isNPCTarget ? 'NPC' : 'player'}) for ${wasSuccessful ? '1 week' : '24 hours'}`);
     } catch (error) {
-        console.error('[steal.js]: Error setting target protection:', error);
+        logger.error('NPC', 'Error setting target protection', error);
     }
 }
 
@@ -980,9 +982,9 @@ async function setTargetProtection(targetId, isNPCTarget, wasSuccessful) {
 async function setIndividualNPCCooldown(characterId, npcName) {
     try {
         await NPC.setPersonalLockout(npcName, characterId, NPC_COOLDOWN);
-        console.log(`[steal.js]: Set individual NPC cooldown for ${characterId} -> ${npcName} for 30 days`);
+        logger.info('NPC', `Set individual NPC cooldown for ${characterId} -> ${npcName} for 30 days`);
     } catch (error) {
-        console.error('[steal.js]: Error setting individual NPC cooldown:', error);
+        logger.error('NPC', 'Error setting individual NPC cooldown', error);
     }
 }
 
@@ -1028,7 +1030,7 @@ async function resetAllStealProtections() {
     const totalNpcResets = npcProtectionResult.modifiedCount + npcLockoutResult.modifiedCount;
     logger.success('SYNC', `Steal protection reset complete: ${totalNpcResets} NPC protections, ${characterResult.modifiedCount} player protections`);
   } catch (error) {
-    console.error('[steal.js]: ❌ Error resetting steal protections:', error);
+    logger.error('JOB', '❌ Error resetting steal protections', error);
     
             // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1113,7 +1115,7 @@ async function updateStealStats(characterId, success, itemRarity, victimCharacte
         
         await stats.save();
     } catch (error) {
-        console.error('[steal.js]: Error updating steal stats:', error);
+        logger.error('JOB', 'Error updating steal stats', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1152,7 +1154,7 @@ async function getStealStats(characterId) {
             successRate
         };
     } catch (error) {
-        console.error('[steal.js]: Error getting steal stats:', error);
+        logger.error('JOB', 'Error getting steal stats', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1192,7 +1194,7 @@ async function getItemEmoji(itemName) {
         }
         return '📦';
     } catch (error) {
-        console.error('[steal.js]: Error getting item emoji:', error);
+        logger.error('JOB', 'Error getting item emoji', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1261,7 +1263,7 @@ async function isCustomWeapon(itemName) {
         }
         return false;
     } catch (error) {
-        console.error('[steal.js]: ❌ Error checking if item is custom weapon:', error);
+        logger.error('LOOT', '❌ Error checking if item is custom weapon', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1317,7 +1319,7 @@ async function checkAndUpdateJailStatus(character) {
 async function sendToJail(character) {
     // Mod characters are immune to jail
     if (character.isModCharacter) {
-        console.log(`[steal.js]: 👑 Mod character ${character.name} is immune to jail.`);
+        logger.info('MODERATION', `👑 Mod character ${character.name} is immune to jail.`);
         return {
             success: false,
             message: `👑 ${character.name} is a mod character and cannot be sent to jail.`
@@ -1336,7 +1338,7 @@ async function sendToJail(character) {
         
         if (boosterChar && boosterChar.job === 'Priest') {
             jailDays = Math.ceil(jailDays / 2); // Halve jail time (3 → 2 days, rounded up)
-            console.log(`[steal.js]: ✨ Priest boost - Merciful Sentence (jail time reduced to ${jailDays} days)`);
+            logger.info('BOOST', `✨ Priest boost - Merciful Sentence (jail time reduced to ${jailDays} days)`);
         }
     }
     
@@ -1401,7 +1403,7 @@ function formatJailTimeLeftDaysHours(timeLeft) {
 // ------------------- Centralized Error Handling -------------------
 // Centralized error handling for steal operations to eliminate duplication
 async function handleStealError(error, interaction, operationType) {
-    console.error(`[steal.js]: ❌ Critical error during ${operationType} flow:`, error);
+    logger.error('JOB', `❌ Critical error during ${operationType} flow: ${operationType}`, error);
     
     // Call global error handler with enhanced context
     handleInteractionError(error, 'steal.js', {
@@ -1458,7 +1460,7 @@ async function handleStealError(error, interaction, operationType) {
             });
         }
     } catch (followUpError) {
-        console.error('[steal.js]: ❌ Failed to send error message:', followUpError);
+        logger.error('JOB', '❌ Failed to send error message', followUpError);
     }
 }
 
@@ -1481,9 +1483,9 @@ async function deactivateJobVoucherIfNeeded(thiefCharacter, voucherCheck) {
     if (thiefCharacter.jobVoucher && voucherCheck && !voucherCheck.skipVoucher) {
         const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
         if (!deactivationResult.success) {
-            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+            logger.error('JOB', `❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
         } else {
-            console.log(`[steal.js]: ✅ Job voucher deactivated for ${thiefCharacter.name}`);
+            logger.success('JOB', `✅ Job voucher deactivated for ${thiefCharacter.name}`);
         }
     }
 }
@@ -1506,7 +1508,7 @@ async function handleFailedAttempts(thiefCharacter, embed) {
         
         if (boosterChar && boosterChar.job === 'Teacher') {
             maxAttempts = 4; // Teacher grants +1 extra attempt
-            console.log(`[steal.js]: 📖 Teacher boost - Tactical Risk (+1 extra attempt before jail)`);
+            logger.info('BOOST', '📖 Teacher boost - Tactical Risk (+1 extra attempt before jail)');
         }
     }
     
@@ -1591,7 +1593,7 @@ async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, inte
             message: `⚠️ **Blight Infection!** ${thiefCharacter.name} has been infected with blight while stealing from ${targetCharacter.name} (Stage ${targetCharacter.blightStage} blight).\n\n🦠 **Blight Stage:** 1\n⏰ **Death Deadline:** <t:${Math.floor(deathDeadline.getTime() / 1000)}:F>\n💊 **Seek healing immediately!**`
         };
     } catch (error) {
-        console.error(`[steal.js]: ❌ Failed to infect ${thiefCharacter.name} with blight:`, error);
+        logger.error('BLIGHT', `❌ Failed to infect ${thiefCharacter.name} with blight`, error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1607,7 +1609,7 @@ async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, inte
 
 // ------------------- Centralized Success Handling -------------------
 // Centralized success handling to eliminate duplication
-async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, isNPC, interaction, voucherCheck, usedFallback, targetRarity, selectedTier) {
+async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, isNPC, interaction, voucherCheck, usedFallback, targetRarity, selectedTier, boostInfo = null) {
     incrementStreak(interaction.user.id);
     await updateStealStats(thiefCharacter._id, true, selectedItem.tier, isNPC ? null : targetCharacter, isNPC, isNPC ? targetCharacter : null);
     
@@ -1624,7 +1626,7 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             }
             // Note: Player targets do not get global protection on successful steals
         } catch (error) {
-        console.error('[steal.js]: Error setting protection after successful steal:', error);
+        logger.error('NPC', 'Error setting protection after successful steal', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1656,7 +1658,7 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             // Scholar: Calculated Grab (+1 extra item)
             if (boosterChar.job === 'Scholar') {
                 finalQuantity += 1;
-                console.log(`[steal.js]: 📚 Scholar boost - Calculated Grab (+1 extra item)`);
+                logger.info('BOOST', '📚 Scholar boost - Calculated Grab (+1 extra item)');
             }
         }
     }
@@ -1686,6 +1688,25 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         // Create and send the embed
         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, true, isNPC);
         
+        // Add boost flavor and impact summary (if any)
+        if (boostInfo && boostInfo.boosterJob) {
+            const boostFlavor = generateBoostFlavorText(boostInfo.boosterJob, 'Stealing', {
+                selectedTier: boostInfo.selectedTier,
+                selectedItemName: boostInfo.selectedItemName,
+            });
+            const impactLines = [];
+            if (boostInfo.baseline && boostInfo.boosted) {
+                impactLines.push(`> Uncommon weight: ${boostInfo.baseline.uncommon} → ${boostInfo.boosted.uncommon}`);
+                impactLines.push(`> Common weight: ${boostInfo.baseline.common} → ${boostInfo.boosted.common}`);
+                impactLines.push(`> Selected: ${boostInfo.selectedTier} (${boostInfo.selectedItemName})`);
+            }
+            embed.addFields({
+                name: '🎵 Elegy of Emptiness',
+                value: `${boostFlavor}\n${impactLines.join('\n')}`,
+                inline: false,
+            });
+        }
+
         // Add blight infection message if applicable
         if (blightResult.infected) {
             embed.addFields({
@@ -1731,9 +1752,22 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
-          console.log(`[steal.js]: 🧪 Clearing boost for ${thiefCharacter.name}`);
+          logger.info('BOOST', `🧪 Clearing boost for ${thiefCharacter.name} (before save) | boostedBy: ${thiefCharacter.boostedBy || 'none'}`);
           thiefCharacter.boostedBy = null;
           await thiefCharacter.save();
+          logger.success('BOOST', `🧪 Boost cleared for ${thiefCharacter.name}`);
+          // Mark any active Stealing boost as fulfilled to prevent re-application
+          try {
+            const active = await retrieveBoostingRequestFromTempDataByCharacter(thiefCharacter.name);
+            if (active && active.status === 'accepted' && active.category === 'Stealing') {
+              active.status = 'fulfilled';
+              active.fulfilledAt = Date.now();
+              await saveBoostingRequestToTempData(active.boostRequestId, active);
+              logger.info('BOOST', `✅ Marked stealing boost as fulfilled for ${thiefCharacter.name}`);
+            }
+          } catch (e) {
+            logger.error('BOOST', `Failed to mark stealing boost fulfilled for ${thiefCharacter.name}`, e);
+          }
         }
         
         // Always deactivate job voucher after any attempt
@@ -1782,7 +1816,7 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
             }
             // Note: Player targets do not get global protection on failed steals
         } catch (error) {
-        console.error('[steal.js]: Error setting protection after failed steal:', error);
+        logger.error('NPC', 'Error setting protection after failed steal', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1817,9 +1851,22 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
-          console.log(`[steal.js]: 🧪 Clearing boost for ${thiefCharacter.name}`);
+          logger.info('BOOST', `🧪 Clearing boost for ${thiefCharacter.name} (before save) | boostedBy: ${thiefCharacter.boostedBy || 'none'}`);
           thiefCharacter.boostedBy = null;
           await thiefCharacter.save();
+          logger.success('BOOST', `🧪 Boost cleared for ${thiefCharacter.name}`);
+          // Mark any active Stealing boost as fulfilled to prevent re-application
+          try {
+            const active = await retrieveBoostingRequestFromTempDataByCharacter(thiefCharacter.name);
+            if (active && active.status === 'accepted' && active.category === 'Stealing') {
+              active.status = 'fulfilled';
+              active.fulfilledAt = Date.now();
+              await saveBoostingRequestToTempData(active.boostRequestId, active);
+              logger.info('BOOST', `✅ Marked stealing boost as fulfilled for ${thiefCharacter.name}`);
+            }
+          } catch (e) {
+            logger.error('BOOST', `Failed to mark stealing boost fulfilled for ${thiefCharacter.name}`, e);
+          }
         }
         
         // Always deactivate job voucher after any attempt
@@ -1849,6 +1896,7 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
 // Centralized roll generation to eliminate duplication
 async function generateStealRoll(character = null) {
     let roll = Math.floor(Math.random() * 99) + 1;
+    logger.debug('JOB', `🎲 Base steal roll: ${roll}${character ? ` | character: ${character.name}` : ''}`);
     
     // ============================================================================
     // ------------------- Apply Fortune Teller Boost (Predicted Opportunity) -------------------
@@ -1860,7 +1908,7 @@ async function generateStealRoll(character = null) {
         if (boosterChar && boosterChar.job === 'Fortune Teller') {
             // Fortune Teller adds +20 to the roll (effectively +20% success rate)
             roll = Math.min(roll + 20, 99);
-            console.log(`[steal.js]: 🔮 Fortune Teller boost - Predicted Opportunity (+20 to roll, capped at 99)`);
+            logger.info('BOOST', '🔮 Fortune Teller boost - Predicted Opportunity (+20 to roll, capped at 99)');
         }
     }
     
@@ -1869,10 +1917,11 @@ async function generateStealRoll(character = null) {
         const buffEffects = getActiveBuffEffects(character);
         if (buffEffects && buffEffects.stealthBoost > 0) {
             roll += buffEffects.stealthBoost;
-            console.log(`[steal.js]: 🧪 Stealth buff applied - Steal roll increased by ${buffEffects.stealthBoost} to ${roll}`);
+            logger.info('BUFF', `🧪 Stealth buff applied - Steal roll increased by ${buffEffects.stealthBoost} to ${roll}`);
         }
     }
     
+    logger.info('JOB', `🎲 Final steal roll: ${roll}${character ? ` | character: ${character.name}` : ''}`);
     return roll;
 }
 
@@ -1970,10 +2019,10 @@ async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries
             });
         }
     } catch (error) {
-        console.error('[steal.js]: ❌ Error in processItemsWithRarity:', error);
+        logger.error('LOOT', '❌ Error in processItemsWithRarity', error);
         
         // Log additional context for debugging
-        console.log(`[steal.js]: 📊 Debug info - Item names: ${JSON.stringify(itemNames)}, isNPC: ${isNPC}`);
+        logger.debug('LOOT', `📊 Debug info - Item names count: ${itemNames?.length || 0}, isNPC: ${isNPC}`);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -1984,7 +2033,7 @@ async function processItemsWithRarity(itemNames, isNPC = false, inventoryEntries
         });
         
         // Fallback to individual processing if batch fails
-        console.log('[steal.js]: ⚠️ Falling back to individual item processing');
+        logger.warn('LOOT', '⚠️ Falling back to individual item processing');
         return await processItemsWithRarityFallback(itemNames, isNPC, inventoryEntries);
     }
 }
@@ -2331,7 +2380,7 @@ module.exports = {
             if (targetType === 'player') {
                 const targetValidation = await validateCharacter(targetName, null);
                 if (!targetValidation.valid) {
-                    console.log(`[steal.js]: ❌ Player target validation failed - targetName: "${targetName}"`);
+                    logger.warn('JOB', `❌ Player target validation failed - targetName: "${targetName}"`);
                     const errorMessage = targetValidation.error.includes('not found') 
                         ? `❌ **Player target not found: "${targetName}"**\n\n**Tip:** Make sure to select a character from the dropdown menu, not type the name manually.`
                         : targetValidation.error;
@@ -2398,7 +2447,7 @@ module.exports = {
                 if (success) {
                     // Performance timing for NPC steals
                     const npcEndTime = Date.now();
-                    console.log(`[steal.js]: ✅ NPC steal completed (${npcEndTime - startTime}ms)`);
+                    logger.success('COMMAND', `✅ NPC steal completed (${npcEndTime - startTime}ms)`);
                 }
             }
 
@@ -2436,13 +2485,13 @@ module.exports = {
                 if (success) {
                     // Performance timing for player steals
                     const playerEndTime = Date.now();
-                    console.log(`[steal.js]: ✅ Player steal completed (${playerEndTime - startTime}ms)`);
+                    logger.success('COMMAND', `✅ Player steal completed (${playerEndTime - startTime}ms)`);
                 }
             }
         } catch (error) {
             const errorTime = Date.now();
             const totalTime = errorTime - startTime;
-            console.log(`[steal.js]: ❌ Steal command failed after ${totalTime}ms`);
+            logger.error('COMMAND', `❌ Steal command failed after ${totalTime}ms`);
             
             // Enhanced error context for better debugging
             await handleInteractionError(error, interaction, {
@@ -2467,7 +2516,7 @@ module.exports = {
 function validateNPCTarget(targetName) {
     // Safety check: ensure NPCs is available
     if (!NPCs || typeof NPCs !== 'object') {
-        console.error('[steal.js]: ❌ Critical error - NPCs object is not available');
+        logger.error('NPC', '❌ Critical error - NPCs object is not available');
         return { 
             valid: false, 
             error: '❌ **System Error: NPC data not available**\n\n**Please contact a mod immediately and submit an error report.**\n\n**Error Details:** NPCs module failed to load properly.'
@@ -2512,7 +2561,7 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
         if (targetType === 'npc') {
             const npcValidation = validateNPCTarget(targetName);
             if (!npcValidation.valid) {
-                console.log(`[steal.js]: ❌ NPC validation failed - targetName: "${targetName}"`);
+                logger.warn('NPC', `❌ NPC validation failed - targetName: "${targetName}"`);
                 return { valid: false, error: npcValidation.error };
             }
             
@@ -2523,7 +2572,7 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
                 try {
                     // Check if Zone NPC data is properly loaded
                     if (!NPCs || !NPCs[mappedNPCName]) {
-                        console.error('[steal.js]: ❌ Zone NPC data not available');
+                        logger.error('NPC', '❌ Zone NPC data not available');
                         return { 
                             valid: false, 
                             error: '❌ **Zone NPC data is currently unavailable.**\n🔄 Please try again in a moment or contact a mod and submit an error report if the issue persists.' 
@@ -2533,14 +2582,14 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
                     // Check if Zone has any items available
                     const zoneItems = await getNPCItems(mappedNPCName);
                     if (!zoneItems || zoneItems.length === 0) {
-                        console.log('[steal.js]: ⚠️ Zone NPC has no items available');
+                        logger.warn('NPC', '⚠️ Zone NPC has no items available');
                         return { 
                             valid: false, 
                             error: '❌ **Zone currently has no items available to steal.**\n🔄 Please try again later or try stealing from a different NPC.' 
                         };
                     }
                 } catch (zoneError) {
-                    console.error('[steal.js]: ❌ Error validating Zone NPC:', zoneError);
+                    logger.error('NPC', '❌ Error validating Zone NPC', zoneError);
                     
                     // Call global error handler for tracking
                     handleInteractionError(zoneError, 'steal.js', {
@@ -2592,7 +2641,7 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
             // Player target validation
             const targetValidation = await validateCharacter(targetName, null);
             if (!targetValidation.valid) {
-                console.log(`[steal.js]: ❌ Player target validation failed - targetName: "${targetName}"`);
+                logger.warn('JOB', `❌ Player target validation failed - targetName: "${targetName}"`);
                 const errorMessage = targetValidation.error.includes('not found') 
                     ? `❌ **Player target not found: "${targetName}"**\n\n**Tip:** Make sure to select a character from the dropdown menu, not type the name manually.`
                     : targetValidation.error;
@@ -2711,7 +2760,7 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
             return { valid: true, target: targetCharacter, isNPC: false };
         }
     } catch (error) {
-        console.error('[steal.js]: Error in validateStealTarget:', error);
+        logger.error('JOB', 'Error in validateStealTarget', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -2748,7 +2797,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                                 peddlerInventoryWithoutCustomWeapons.push(itemName);
                             }
                         } catch (customWeaponError) {
-                            console.error(`[steal.js]: ❌ Error checking if Peddler item is custom weapon: ${itemName}`, customWeaponError);
+                            logger.error('LOOT', `❌ Error checking if Peddler item is custom weapon: ${itemName}`, customWeaponError);
                             
                             // Call global error handler for tracking
                             handleInteractionError(customWeaponError, 'steal.js', {
@@ -2772,7 +2821,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                     
                     npcInventory = peddlerInventoryWithoutCustomWeapons;
                 } catch (peddlerError) {
-                    console.error(`[steal.js]: ❌ Error processing Peddler inventory:`, peddlerError);
+                    logger.error('LOOT', '❌ Error processing Peddler inventory', peddlerError);
                     
                     // Call global error handler for tracking
                     handleInteractionError(peddlerError, 'steal.js', {
@@ -2800,7 +2849,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                             setCachedNPCItems(targetName, npcInventory);
                         }
                     } catch (npcError) {
-                        console.error(`[steal.js]: ❌ Error fetching items for NPC ${targetName}:`, npcError);
+                        logger.error('LOOT', `❌ Error fetching items for NPC ${targetName}`, npcError);
                         
                         // Call global error handler for tracking
                         handleInteractionError(npcError, 'steal.js', {
@@ -2849,7 +2898,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                     } else if (item && typeof item === 'object' && item.name) {
                         return item.name;
                     } else {
-                        console.warn(`[steal.js]: ⚠️ Unexpected item format in NPC inventory:`, item);
+                        logger.warn('LOOT', `⚠️ Unexpected item format in NPC inventory`);
                         return String(item);
                     }
                 }).filter(Boolean);
@@ -2870,7 +2919,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                             filteredNPCInventoryWithoutCustomWeapons.push(itemName);
                         }
                     } catch (customWeaponError) {
-                        console.error(`[steal.js]: ❌ Error checking if item is custom weapon: ${itemName}`, customWeaponError);
+                        logger.error('LOOT', `❌ Error checking if item is custom weapon: ${itemName}`, customWeaponError);
                         // Continue processing other items instead of failing completely
                         filteredNPCInventoryWithoutCustomWeapons.push(itemName);
                     }
@@ -2896,7 +2945,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                 selectedTier = fallbackResult.selectedTier;
                 usedFallback = fallbackResult.usedFallback;
             } catch (rarityError) {
-                console.error(`[steal.js]: ❌ Error processing items with rarity for NPC ${targetName}:`, rarityError);
+                logger.error('LOOT', `❌ Error processing items with rarity for NPC ${targetName}`, rarityError);
                 
                 // Call global error handler for tracking
                 handleInteractionError(rarityError, 'steal.js', {
@@ -2957,7 +3006,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                 inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
                 rawItemNames = inventoryEntries.map(entry => entry.itemName);
             } catch (inventoryError) {
-                console.error(`[steal.js]: ❌ Error fetching player inventory for ${targetCharacter.name}:`, inventoryError);
+                logger.error('LOOT', `❌ Error fetching player inventory for ${targetCharacter.name}`, inventoryError);
                 
                 // Call global error handler for tracking
                 handleInteractionError(inventoryError, 'steal.js', {
@@ -2999,7 +3048,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                         availableItemNamesWithoutCustomWeapons.push(itemName);
                     }
                 } catch (customWeaponError) {
-                    console.error(`[steal.js]: ❌ Error checking if item is custom weapon: ${itemName}`, customWeaponError);
+                    logger.error('LOOT', `❌ Error checking if item is custom weapon: ${itemName}`, customWeaponError);
                     
                     // Call global error handler for tracking
                     handleInteractionError(customWeaponError, 'steal.js', {
@@ -3030,7 +3079,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                 selectedTier = fallbackResult.selectedTier;
                 usedFallback = fallbackResult.usedFallback;
             } catch (rarityError) {
-                console.error(`[steal.js]: ❌ Error processing items with rarity for player ${targetCharacter.name}:`, rarityError);
+                logger.error('LOOT', `❌ Error processing items with rarity for player ${targetCharacter.name}`, rarityError);
                 
                 // Call global error handler for tracking
                 handleInteractionError(rarityError, 'steal.js', {
@@ -3068,7 +3117,7 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
             };
         }
     } catch (error) {
-        console.error('[steal.js]: Error in processItemsForStealing:', error);
+        logger.error('LOOT', 'Error in processItemsForStealing', error);
         
         // Provide more specific error messages based on the error type
         let errorMessage = '❌ **An error occurred while processing items for stealing.**';
@@ -3123,7 +3172,7 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
                 try {
                     await updateDailySteal(thiefCharacter, 'steal');
                 } catch (error) {
-                    console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                    logger.error('JOB', '❌ Failed to update daily steal', error);
                     
                     // Call global error handler for tracking
                     handleInteractionError(error, 'steal.js', {
@@ -3144,26 +3193,52 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
         // ------------------- Apply Entertainer Boost (Elegy of Emptiness) -------------------
         // ============================================================================
         let modifiedItems = items;
+        let boostInfo = null;
         if (thiefCharacter.boostedBy) {
             const { fetchCharacterByName } = require('../../database/db');
             const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
             
             if (boosterChar && boosterChar.job === 'Entertainer') {
-                // Increase weight for rare items (tier 3+)
+                // Increase weight for uncommon items (rarity ≥5). Steal flow uses tier strings: 'common' | 'uncommon'.
+                const weightBefore = items.reduce((sum, it) => sum + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
+                const baselineCommon = items.filter(it => it.tier === 'common').reduce((s, it) => s + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
+                const baselineUncommon = items.filter(it => it.tier === 'uncommon' || (it.itemRarity && it.itemRarity >= 5)).reduce((s, it) => s + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
+                const uncommonCount = items.filter(it => it.tier === 'uncommon' || (it.itemRarity && it.itemRarity >= 5)).length;
                 modifiedItems = items.map(item => {
-                    if (item.tier >= 3) {
-                        return { ...item, weight: (item.weight || RARITY_WEIGHTS[item.itemRarity] || 1) * 2 };
+                    const baseWeight = (item.weight !== undefined ? item.weight : (RARITY_WEIGHTS[item.itemRarity] || 1));
+                    if (item.tier === 'uncommon' || (item.itemRarity && item.itemRarity >= 5)) {
+                        return { ...item, weight: baseWeight * 2 };
                     }
-                    return item;
+                    return { ...item, weight: baseWeight };
                 });
-                console.log(`[steal.js]: 🎵 Entertainer boost - Elegy of Emptiness (rare items 2x weight)`);
+                const weightAfter = modifiedItems.reduce((sum, it) => sum + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
+                const boostedCommon = modifiedItems.filter(it => it.tier === 'common').reduce((s, it) => s + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
+                const boostedUncommon = modifiedItems.filter(it => it.tier === 'uncommon' || (it.itemRarity && it.itemRarity >= 5)).reduce((s, it) => s + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
+                boostInfo = {
+                    boosterJob: 'Entertainer',
+                    uncommonCount,
+                    baseline: { common: baselineCommon, uncommon: baselineUncommon, total: weightBefore },
+                    boosted: { common: boostedCommon, uncommon: boostedUncommon, total: weightAfter },
+                };
+                logger.info('BOOST', `🎵 Entertainer boost - Elegy of Emptiness (uncommon items 2x weight) | uncommonCount: ${uncommonCount} | weights (common/uncommon): ${baselineCommon}/${baselineUncommon} → ${boostedCommon}/${boostedUncommon} | total: ${weightBefore} → ${weightAfter}`);
+            } else if (!boosterChar) {
+                logger.warn('BOOST', `BoostedBy set to "${thiefCharacter.boostedBy}" but booster character not found`);
+            } else {
+                logger.debug('BOOST', `BoostedBy is "${thiefCharacter.boostedBy}" (job: ${boosterChar.job}) but no Entertainer effect applied in item weighting`);
             }
         }
 
         const selectedItem = getRandomItemByWeight(modifiedItems);
+        if (boostInfo) {
+            boostInfo.selectedTier = selectedItem.tier;
+            boostInfo.selectedItemName = selectedItem.itemName;
+        }
+        logger.info('LOOT', `🎯 Selected item: ${selectedItem.itemName} (tier ${selectedItem.tier})`);
         const roll = await generateStealRoll(thiefCharacter);
         const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter, targetName);
+        logger.info('JOB', `📐 Failure threshold: ${failureThreshold} | Roll: ${roll}`);
         const isSuccess = roll > failureThreshold;
+        logger.info('JOB', `🏁 Steal outcome: ${isSuccess ? 'SUCCESS' : 'FAILURE'}`);
 
         if (isSuccess) {
             const quantity = determineStealQuantity(selectedItem);
@@ -3179,7 +3254,8 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
                 voucherCheck, 
                 usedFallback, 
                 raritySelection, 
-                selectedTier
+                selectedTier,
+                boostInfo
             );
         } else {
             await handleStealFailure(
@@ -3199,7 +3275,7 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
         
         return true;
     } catch (error) {
-        console.error('[steal.js]: Error in executeStealAttempt:', error);
+        logger.error('JOB', 'Error in executeStealAttempt', error);
         await handleStealError(error, interaction, `${targetType} steal execution`);
         return false;
     }
@@ -3219,7 +3295,7 @@ async function validateChannelAccess(thiefCharacter, interaction) {
                 const requiredVillage = capitalizeWords(voucherPerk.village);
                 currentVillage = requiredVillage;
                 allowedChannel = villageChannels[requiredVillage];
-                console.log(`[steal.js]: 🎫 Voucher override - village: ${requiredVillage}`);
+                logger.info('JOB', `🎫 Voucher override - village: ${requiredVillage}`);
             }
         }
 
@@ -3229,7 +3305,7 @@ async function validateChannelAccess(thiefCharacter, interaction) {
 
         // If allowedChannel is undefined, allow the command to proceed (for testing)
         if (!allowedChannel) {
-            console.log(`[steal.js]: ⚠️ No channel configured for village ${currentVillage} - allowing command`);
+            logger.warn('JOB', `⚠️ No channel configured for village ${currentVillage} - allowing command`);
             return { valid: true };
         } else if (interaction.channelId !== allowedChannel && !isTestingChannel) {
             const channelMention = `<#${allowedChannel}>`;
@@ -3251,7 +3327,7 @@ async function validateChannelAccess(thiefCharacter, interaction) {
         
         return { valid: true };
     } catch (error) {
-        console.error('[steal.js]: Error in validateChannelAccess:', error);
+        logger.error('JOB', 'Error in validateChannelAccess', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -3272,13 +3348,13 @@ async function validateAndActivateJobVoucher(thiefCharacter, job, interaction) {
     try {
         let voucherCheck;
         if (thiefCharacter.jobVoucher) {
-            console.log(`[steal.js]: 🎫 Validating job voucher for ${thiefCharacter.name}`);
+            logger.info('JOB', `🎫 Validating job voucher for ${thiefCharacter.name}`);
             voucherCheck = await validateJobVoucher(thiefCharacter, job, 'STEALING');
             
             if (voucherCheck.skipVoucher) {
-                console.log(`[steal.js]: ✅ Voucher skipped - ${thiefCharacter.name} already has job "${job}"`);
+                logger.info('JOB', `✅ Voucher skipped - ${thiefCharacter.name} already has job "${job}"`);
             } else if (!voucherCheck.success) {
-                console.error(`[steal.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
+                logger.error('JOB', `❌ Voucher validation failed: ${voucherCheck.message}`);
                 await interaction.editReply({
                     content: voucherCheck.message,
                     ephemeral: true,
@@ -3305,7 +3381,7 @@ async function validateAndActivateJobVoucher(thiefCharacter, job, interaction) {
         
         return { success: true, voucherCheck };
     } catch (error) {
-        console.error('[steal.js]: Error in validateAndActivateJobVoucher:', error);
+        logger.error('JOB', 'Error in validateAndActivateJobVoucher', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -3382,7 +3458,7 @@ async function validateCharacterStatus(thiefCharacter, interaction) {
         
         return { valid: true };
     } catch (error) {
-        console.error('[steal.js]: Error in validateCharacterStatus:', error);
+        logger.error('JOB', 'Error in validateCharacterStatus', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {
@@ -3429,7 +3505,7 @@ async function validateThiefCharacter(characterName, userId, interaction) {
                     content: errorMessage, 
                     ephemeral: true 
                 });
-                console.log(`[steal.js]: ⚠️ Steal blocked - debuffed bandit: ${thiefCharacter.name}`);
+                logger.warn('JOB', `⚠️ Steal blocked - debuffed bandit: ${thiefCharacter.name}`);
                 return { valid: false, error: errorMessage };
             }
         }
@@ -3441,7 +3517,7 @@ async function validateThiefCharacter(characterName, userId, interaction) {
                 content: errorMessage, 
                 ephemeral: true 
             });
-            console.log(`[steal.js]: ⚠️ Steal blocked - KO'd bandit: ${thiefCharacter.name}`);
+            logger.warn('JOB', `⚠️ Steal blocked - KO'd bandit: ${thiefCharacter.name}`);
             return { valid: false, error: errorMessage };
         }
 
@@ -3500,7 +3576,7 @@ async function validateThiefCharacter(characterName, userId, interaction) {
         
         return { valid: true, character: thiefCharacter, jailStatus };
     } catch (error) {
-        console.error('[steal.js]: Error in validateThiefCharacter:', error);
+        logger.error('JOB', 'Error in validateThiefCharacter', error);
         
         // Call global error handler for tracking
         handleInteractionError(error, 'steal.js', {

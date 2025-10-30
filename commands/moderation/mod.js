@@ -52,6 +52,7 @@ const {
 // ------------------- Database Models -------------------
 const Character = require('../../models/CharacterModel');
 const Minigame = require('../../models/MinigameModel');
+const NPC = require('../../models/NPCModel');
 
 // ------------------- Custom Modules -------------------
 const { monsterMapping } = require('../../models/MonsterModel');
@@ -941,6 +942,20 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: stealreset -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('stealreset')
+    .setDescription('🗝️ Reset steal cooldown/state for a character (daily use, jail, NPC lockouts)')
+    .addStringOption(opt =>
+      opt
+        .setName('character')
+        .setDescription('Name of the character whose steal state to reset')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+)
+
 // ------------------- Subcommand: petrolls -------------------
 .addSubcommand(subcommand =>
   subcommand
@@ -1293,6 +1308,8 @@ async function execute(interaction) {
         return await handleWeather(interaction);
     } else if (subcommand === 'vendingreset') {
         return await handleVendingReset(interaction);
+    } else if (subcommand === 'stealreset') {
+        return await handleStealReset(interaction);
     } else if (subcommand === 'petrolls') {
         return await handlePetRolls(interaction);
     } else if (subcommand === 'resetrolls') {
@@ -1331,6 +1348,86 @@ async function execute(interaction) {
 // ============================================================================
 // ------------------- Handlers -------------------.
 // ============================================================================
+
+// ------------------- Function: handleStealReset -------------------
+// Resets steal-related cooldowns/state for a character: daily usage, failed attempts, jail, and NPC lockouts.
+async function handleStealReset(interaction) {
+  try {
+    const characterName = interaction.options.getString('character');
+
+    if (!characterName) {
+      return await interaction.editReply({ content: '❌ Please provide a character name.', ephemeral: true });
+    }
+
+    // If special value 'NPC' is provided, reset ALL NPC protections and personal lockouts
+    if (typeof characterName === 'string' && characterName.trim().toLowerCase() === 'npc') {
+      const protectionResult = await NPC.resetAllProtections();
+      const lockoutResult = await NPC.resetAllPersonalLockouts();
+
+      const totalNpcResets = (protectionResult?.modifiedCount || 0) + (lockoutResult?.modifiedCount || 0);
+
+      const embed = new EmbedBuilder()
+        .setColor('#00AAFF')
+        .setTitle('🗝️ NPC Theft Cooldowns Reset')
+        .setDescription('All NPC theft protections and personal lockouts have been cleared.')
+        .addFields(
+          { name: 'Global Protections Cleared', value: `${protectionResult?.modifiedCount || 0}`, inline: true },
+          { name: 'Personal Lockouts Cleared', value: `${lockoutResult?.modifiedCount || 0}`, inline: true },
+          { name: 'Total NPC Updates', value: `${totalNpcResets}`, inline: true },
+        )
+        .setTimestamp();
+
+      return await interaction.editReply({ embeds: [embed], ephemeral: true });
+    }
+
+    const character = await fetchCharacterByName(characterName);
+    if (!character) {
+      return await interaction.editReply({ content: `❌ Character not found: ${characterName}`, ephemeral: true });
+    }
+
+    // Reset character steal state
+    character.failedStealAttempts = 0;
+    character.inJail = false;
+    character.jailReleaseTime = null;
+    if (character.dailyRoll instanceof Map) {
+      character.dailyRoll.delete('steal');
+    } else if (character.dailyRoll && typeof character.dailyRoll.delete === 'function') {
+      character.dailyRoll.delete('steal');
+    } else if (character.dailyRoll) {
+      // Convert to Map if needed (in case stored as plain object)
+      try {
+        const m = new Map(character.dailyRoll);
+        m.delete('steal');
+        character.dailyRoll = m;
+      } catch (_) {
+        // As a fallback, clear entire dailyRoll
+        character.dailyRoll = new Map();
+      }
+    }
+    await character.save();
+
+    // Clear all NPC personal lockouts for this character
+    await NPC.updateMany(
+      { 'personalLockouts.characterId': character._id },
+      { $pull: { personalLockouts: { characterId: character._id } } }
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#00AAFF')
+      .setTitle('🗝️ Steal State Reset')
+      .setDescription(`Steal cooldowns and state have been reset for **${character.name}**.`)
+      .addFields(
+        { name: 'Daily Use', value: 'Cleared', inline: true },
+        { name: 'Failed Attempts', value: '0', inline: true },
+        { name: 'Jail State', value: 'Released', inline: true },
+      )
+      .setTimestamp();
+
+    return await interaction.editReply({ embeds: [embed], ephemeral: true });
+  } catch (error) {
+    return await handleInteractionError(error, interaction, { source: 'mod.js', subcommand: 'stealreset' });
+  }
+}
 
 // ------------------- Function: handleGive -------------------
 // Gives an item to a character by name, validating quantity and existence.

@@ -5,6 +5,7 @@
 const { fetchCharacterByName } = require("../database/db");
 const Item = require("../models/ItemModel");
 const generalCategories = require("../models/GeneralItemCategories");
+const logger = require('../utils/logger');
 
 // ============================================================================
 // ------------------- Boost Effects Configuration -------------------
@@ -312,7 +313,7 @@ async function safeDatabaseOperation(operation, errorMessage) {
  try {
   return await operation();
  } catch (error) {
-  console.error(`[boostingModule.js] ${errorMessage}:`, error);
+  logger.error('BOOST', `${errorMessage}: ${error.message}`);
   return null;
  }
 }
@@ -457,11 +458,17 @@ function applyFortuneTellerOtherBoost(villageWeatherData) {
 }
 
 function applyFortuneTellerLootingBoost(lootResult) {
- console.log(`[boostingModule.js]: 🔮 Fortune Teller Looting Boost - Fated Reroll`);
+ // Only handle structured loot results (to avoid duplicate logs when called with numeric rolls or items)
+ const isStructuredResult = lootResult && typeof lootResult === 'object' && 'damageValue' in lootResult;
+ if (!isStructuredResult) {
+  return lootResult;
+ }
+ 
+ logger.info('BOOST', `🔮 Fortune Teller Looting Boost - Fated Reroll`);
  
  // Check if damage was taken - if so, trigger reroll
- if (lootResult && lootResult.damageValue && lootResult.damageValue > 0) {
-  console.log(`[boostingModule.js]: 🔮 Damage detected (${lootResult.damageValue}) - triggering Fated Reroll`);
+ if (lootResult.damageValue && lootResult.damageValue > 0) {
+  logger.info('BOOST', `🔮 Damage detected (${lootResult.damageValue}) - triggering Fated Reroll`);
   
   // Mark that reroll was triggered
   return {
@@ -473,24 +480,24 @@ function applyFortuneTellerLootingBoost(lootResult) {
   };
  }
  
- console.log(`[boostingModule.js]: 🔮 No damage taken - Fated Reroll not needed`);
+ // No damage taken - skip noisy info log to prevent duplicates
  return lootResult;
 }
 
 function applyFortuneTellerGatheringBoost(gatherTable) {
- console.log(`[boostingModule.js]: 🔮 Fortune Teller Gathering Boost - Input: ${gatherTable.length} items`);
+logger.debug('BOOST', `🔮 Fortune Teller Gathering Boost - Input: ${gatherTable.length} items`);
  
  // Only include rarity 4+ items for dramatic rarity reversal effect
  const validItems = gatherTable.filter((item) => item.itemRarity && item.itemRarity >= 4);
- console.log(`[boostingModule.js]: 🔮 Valid items (rarity ≥ 4): ${validItems.length} items`);
+logger.debug('BOOST', `🔮 Valid items (rarity ≥ 4): ${validItems.length} items`);
 
  if (validItems.length === 0) {
-  console.log(`[boostingModule.js]: 🔮 No valid items found (rarity 4+) - returning original table`);
+  logger.debug('BOOST', `🔮 No valid items found (rarity 4+) - returning original table`);
   return gatherTable;
  }
 
  const maxRarity = Math.max(...validItems.map((item) => item.itemRarity));
- console.log(`[boostingModule.js]: 🔮 Max rarity in table: ${maxRarity}`);
+logger.debug('BOOST', `🔮 Max rarity in table: ${maxRarity}`);
  
  const boostedTable = [];
  const rarityGroups = {};
@@ -503,7 +510,7 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
   rarityGroups[rarity].push(item);
  });
 
- console.log(`[boostingModule.js]: 🔮 Rarity groups:`, Object.keys(rarityGroups).map(r => `${r}: ${rarityGroups[r].length} items`).join(', '));
+logger.debug('BOOST', `🔮 Rarity groups: ${Object.keys(rarityGroups).map(r => `${r}: ${rarityGroups[r].length} items`).join(', ')}`);
 
  // Progressive scaling: Rarity 10 gets highest weight, then 9, 8, 7, etc.
  Object.keys(rarityGroups)
@@ -515,11 +522,11 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
    // Progressive weight scaling: 10=20x, 9=18x, 8=16x, 7=14x, 6=12x, 5=10x, 4=8x, 3=6x, 2=4x, 1=2x
    const weight = (rarityNum * 2);
    
-   console.log(`[boostingModule.js]: 🔮 Rarity ${rarityNum}: ${items.length} items → weight ${weight}`);
+  logger.debug('BOOST', `🔮 Rarity ${rarityNum}: ${items.length} items → weight ${weight}`);
    
    // Log sample items for this rarity
    const sampleItems = items.slice(0, 2).map(item => item.itemName);
-   console.log(`[boostingModule.js]: 🔮 Sample items for rarity ${rarityNum}:`, sampleItems.join(', '));
+  logger.debug('BOOST', `🔮 Sample items for rarity ${rarityNum}: ${sampleItems.join(', ')}`);
 
    items.forEach((item) => {
     for (let i = 0; i < weight; i++) {
@@ -528,7 +535,7 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
    });
   });
 
- console.log(`[boostingModule.js]: 🔮 Fortune Teller boost complete - Output: ${boostedTable.length} items (${(boostedTable.length / gatherTable.length).toFixed(2)}x multiplier)`);
+logger.debug('BOOST', `🔮 Fortune Teller boost complete - Output: ${boostedTable.length} items (${(boostedTable.length / gatherTable.length).toFixed(2)}x multiplier)`);
  return boostedTable;
 }
 
@@ -972,7 +979,7 @@ async function getBoostEffectByCharacter(characterName, category) {
  );
 
  if (!character) {
-  console.error(`[boostingModule.js]: Error - Could not find character "${characterName}"`);
+  logger.error('BOOST', `Could not find character "${characterName}"`);
   return null;
  }
 
