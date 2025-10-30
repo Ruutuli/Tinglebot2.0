@@ -4,6 +4,7 @@
 // New file boostIntegration.js will be for applying effects to commands
 
 const { applyBoostEffect } = require('./boostingModule');
+const logger = require('../utils/logger');
 
 // ------------------- applyBoostToAction -------------------
 /**
@@ -44,12 +45,12 @@ async function applyBoostToAction(characterName, category, data, additionalData 
     
     // Log boost application for debugging (only for Looting category with numeric data)
     if (category === 'Looting' && typeof data === 'number' && typeof boostedData === 'number' && boostedData !== data) {
-      console.log(`[boostIntegration.js]: 🎓 Boost applied to ${characterName} for ${category} - Roll: ${data} → ${boostedData} (+${boostedData - data})`);
+      logger.info('BOOST', `🎓 Boost applied to ${characterName} for ${category} - Roll: ${data} → ${boostedData} (+${boostedData - data})`);
     }
     
     return boostedData;
   } catch (err) {
-    console.error(`Failed to apply boost to ${characterName} for ${category}:`, err);
+    logger.error('BOOST', `Failed to apply boost to ${characterName} for ${category}: ${err.message}`);
     return data; // Return original data on error to prevent breaking the action
   }
 }
@@ -360,7 +361,7 @@ async function getCharacterBoostStatus(characterName) {
       targetVillage: activeBoost.targetVillage // For Scholar boosts
     };
   } catch (err) {
-    console.error(`Failed to check boost status for ${characterName}:`, err);
+    logger.error('BOOST', `Failed to check boost status for ${characterName}: ${err.message}`);
     return null;
   }
 }
@@ -387,7 +388,7 @@ async function addBoostNotificationToEmbed(embed, characterName, category) {
       });
     }
   } catch (err) {
-    console.error(`Failed to add boost notification:`, err);
+    logger.error('BOOST', `Failed to add boost notification: ${err.message}`);
     // Don't throw - just skip the notification
   }
 }

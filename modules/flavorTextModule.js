@@ -1078,6 +1078,42 @@ const generateBoostFlavorText = (boosterJob, category = 'default', options = nul
 };
 
 // ============================================================================
+// ------------------- Unused Boost Flavor Text -------------------
+// ============================================================================
+
+// Centralized messages when a boost was active but did not apply and is consumed
+const UNUSED_BOOST_FLAVOR_MESSAGES = {
+  Entertainer: {
+    Looting: [
+      "🎭 Your Entertainer boost was active, but it didn't apply this time. It was used — better luck next time!"
+    ],
+    default: [
+      "🎭 Your Entertainer boost was active, but it didn't apply this time. It was used — better luck next time!"
+    ]
+  },
+  FortuneTeller: {
+    Looting: [
+      "🔮 Your Fortune Teller boost was active, but it didn't apply this time. It was used — better luck next time!"
+    ],
+    default: [
+      "🔮 Your Fortune Teller boost was active, but it didn't apply this time. It was used — better luck next time!"
+    ]
+  },
+  default: {
+    default: [
+      "⚡ Your boost was active, but it didn't apply this time. It was used — better luck next time!"
+    ]
+  }
+};
+
+const generateUnusedBoostFlavorText = (boosterJob, category = 'default') => {
+  const normalizedJob = boosterJob ? boosterJob.replace(/\s+/g, '') : 'default';
+  const jobMessages = UNUSED_BOOST_FLAVOR_MESSAGES[normalizedJob] || UNUSED_BOOST_FLAVOR_MESSAGES.default;
+  const categoryMessages = jobMessages[category] || jobMessages.default || UNUSED_BOOST_FLAVOR_MESSAGES.default.default;
+  return getRandomMessage(categoryMessages);
+};
+
+// ============================================================================
 // ------------------- Module Exports -------------------
 // ============================================================================
 
@@ -1120,4 +1156,5 @@ module.exports = {
   generateTeacherGatheringFlavorText,
   // Boost Flavor Text
   generateBoostFlavorText,
+  generateUnusedBoostFlavorText,
 };

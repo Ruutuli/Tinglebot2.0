@@ -79,6 +79,7 @@ const {
  createNoEncounterEmbed,
  createBlightStage3NoEncounterEmbed,
  createKOEmbed,
+  updateBoostRequestEmbed,
 } = require("../../embeds/embeds.js");
 
 // Models
@@ -87,6 +88,12 @@ const User = require("../../models/UserModel.js");
 
 // Character Stats
 const { handleKO } = require("../../modules/characterStatsModule.js");
+
+// Boost TempData helpers
+const {
+  retrieveBoostingRequestFromTempDataByCharacter,
+  saveBoostingRequestToTempData
+} = require('../../commands/jobs/boosting.js');
 
 const villageChannels = {
  Rudania: process.env.RUDANIA_TOWNHALL,
@@ -114,12 +121,35 @@ async function handleLootError(interaction, error, context = '') {
 }
 
 // Unified character update
-async function updateCharacterLootTimestamp(character, shouldClearBoost = true) {
+async function updateCharacterLootTimestamp(character, shouldClearBoost = true, client = null) {
   character.lastLootedAt = new Date().toISOString();
   
   // ------------------- Clear Boost After Use -------------------
   if (character.boostedBy && shouldClearBoost) {
     logger.info('BOOST', `Clearing boost for ${character.name}`);
+    try {
+      // Mark active boost as fulfilled in TempData and update embed
+      const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('./boosting.js');
+      const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
+      const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+      if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
+        activeBoost.status = 'fulfilled';
+        activeBoost.fulfilledAt = Date.now();
+        await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+        // If client provided, update the request embed status to fulfilled
+        if (client) {
+          try {
+            await updateBoostRequestEmbed(client, activeBoost, 'fulfilled');
+            // Update the 'Boost Applied' embed if we have its reference
+            await updateBoostAppliedMessage(client, activeBoost);
+          } catch (embedErr) {
+            logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);
+          }
+        }
+      }
+    } catch (e) {
+      logger.error('BOOST', `Failed to mark boost fulfilled while clearing for ${character.name}: ${e.message}`);
+    }
     character.boostedBy = null;
   } else if (character.boostedBy && !shouldClearBoost) {
     logger.info('BOOST', `Boost preserved for ${character.name}`);
@@ -183,7 +213,7 @@ async function validateJobForLoot(interaction, character, job) {
 
   const jobPerkInfo = getJobPerk(job);
   if (!jobPerkInfo || !jobPerkInfo.perks.includes("LOOTING")) {
-    console.error(`[Loot Command]: ${character.name} lacks required skills for job: "${job}"`);
+    logger.warn('LOOT', `${character.name} lacks required skills for job: "${job}"`);
     await interaction.editReply({
       embeds: [{
         color: 0x008B8B,
@@ -390,11 +420,11 @@ module.exports = {
                  // Apply resistance buffs
           if (buffEffects && buffEffects.blightResistance > 0) {
             infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
-            console.log(`[loot.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
+            logger.info('BLIGHT', `🧪 Blight resistance buff applied - infection chance now ${infectionChance}`);
           }
        if (buffEffects && buffEffects.fireResistance > 0) {
          infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-         console.log(`[loot.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
+         logger.info('BLIGHT', `🧪 Fire resistance buff applied - infection chance reduced`);
        }
        
        // Consume elixirs after applying their effects
@@ -406,7 +436,7 @@ module.exports = {
          await updateFunction(character._id, { buff: character.buff });
        } else if (character.buff?.active) {
          // Log when elixir is not used due to conditions not met
-         console.log(`[loot.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+         logger.info('ELIXIR', `Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
        }
        
        // Ensure chance stays within reasonable bounds
@@ -457,7 +487,7 @@ module.exports = {
              safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
            } else if (character.buff?.active) {
              // Log when elixir is not used due to conditions not being met
-             console.log(`[loot.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+            logger.info('ELIXIR', `Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
            }
          } else {
            safeMsg += `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n`;
@@ -465,7 +495,7 @@ module.exports = {
          }
          
          blightRainMessage = safeMsg;
-         console.log(`[loot.js]: 🧿 Character ${character.name} avoided blight infection`);
+        logger.info('BLIGHT', `🧿 Character ${character.name} avoided blight infection`);
        }
      }
    }
@@ -576,7 +606,7 @@ module.exports = {
          userId: interaction.user.id,
          characterName: character.name
        });
-       console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
+      logger.error('LOOT', `❌ Failed to update daily roll: ${error.message}`);
        await interaction.editReply({
          content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
          ephemeral: true
@@ -589,7 +619,7 @@ module.exports = {
    const region = getVillageRegionByName(currentVillage); // Get the region based on village
    if (!region) {
     // Reply if no region is found for the village
-    console.log(`[LOOT] No region found for village: ${currentVillage}`);
+    logger.warn('LOOT', `No region found for village: ${currentVillage}`);
     await interaction.editReply({
      content: `❌ **No region found for village "${currentVillage}".**`,
     });
@@ -670,13 +700,31 @@ module.exports = {
         return;
        }
 
+       // Mark boost as fulfilled and clear boostedBy after successful raid trigger
+       try {
+         const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+         if (activeBoost && activeBoost.status === 'accepted') {
+           activeBoost.status = 'fulfilled';
+           activeBoost.fulfilledAt = Date.now();
+           await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+           await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
+         }
+       } catch (e) {
+         logger.error('BOOST', `Failed to mark boost fulfilled (Blood Moon): ${e.message}`);
+       }
+       if (character.boostedBy) {
+         logger.info('BOOST', `Clearing boost for ${character.name} after Blood Moon raid trigger`);
+         character.boostedBy = null;
+         await character.save();
+       }
+
        // Deactivate Job Voucher AFTER successful raid trigger
        if (character.jobVoucher && !voucherCheck?.skipVoucher) {
          const deactivationResult = await deactivateJobVoucher(character._id);
          if (!deactivationResult.success) {
-           console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
+           logger.error('LOOT', `❌ Failed to deactivate job voucher for ${character.name}`);
          } else {
-           console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name} after Blood Moon raid trigger`);
+           logger.success('LOOT', `✅ Job voucher deactivated for ${character.name} after Blood Moon raid trigger`);
          }
        }
 
@@ -752,15 +800,7 @@ module.exports = {
         guildId: interaction.guildId,
         channelId: interaction.channelId
       });
-      console.error(`[loot.js]: Error during loot process: ${error.message}`, {
-        stack: error.stack,
-        interactionData: {
-          userId: interaction.user.id,
-          characterName: interaction.options.getString('charactername'),
-          guildId: interaction.guildId,
-          channelId: interaction.channelId,
-        },
-      });
+      logger.error('LOOT', `Error during loot process: ${error.message}`);
     }
 
     // Provide more specific error messages based on the error type
@@ -857,13 +897,31 @@ async function handleBloodMoonRerolls(
       return;
     }
 
+    // Mark boost as fulfilled and clear boostedBy after successful raid trigger (reroll)
+    try {
+      const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+      if (activeBoost && activeBoost.status === 'accepted') {
+        activeBoost.status = 'fulfilled';
+        activeBoost.fulfilledAt = Date.now();
+        await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+        await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
+      }
+    } catch (e) {
+      logger.error('BOOST', `Failed to mark boost fulfilled (Blood Moon reroll): ${e.message}`);
+    }
+    if (character.boostedBy) {
+      logger.info('BOOST', `Clearing boost for ${character.name} after Blood Moon raid trigger (reroll)`);
+      character.boostedBy = null;
+      await character.save();
+    }
+
     // Deactivate Job Voucher AFTER successful raid trigger
     if (character.jobVoucher) {
       const deactivationResult = await deactivateJobVoucher(character._id);
       if (!deactivationResult.success) {
-        console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
+        logger.error('LOOT', `❌ Failed to deactivate job voucher for ${character.name}`);
       } else {
-        console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name} after Blood Moon raid trigger (reroll)`);
+        logger.success('LOOT', `✅ Job voucher deactivated for ${character.name} after Blood Moon raid trigger (reroll)`);
       }
     }
 
@@ -898,10 +956,10 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
   
   // Check for blight stage 3 effect (no monsters)
   if (character.blightEffects?.noMonsters) {
-    console.log(`[loot.js]: 🧿 Character ${character.name} has blight stage 3 - no monsters allowed`);
+    logger.info('BLIGHT', `🧿 Character ${character.name} has blight stage 3 - no monsters allowed`);
     const embed = createBlightStage3NoEncounterEmbed(character, bloodMoonActive);
     await interaction.editReply({ embeds: [embed] });
-    console.log(`[loot.js]: ✅ Blight stage 3 no encounter embed sent`);
+    logger.info('BLIGHT', `✅ Blight stage 3 no encounter embed sent`);
     return null;
   }
 
@@ -909,10 +967,10 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
   logger.info('LOOT', `Found ${monstersByCriteria.length} monsters for ${currentVillage} with job ${job}`);
   
   if (monstersByCriteria.length === 0) {
-    console.log(`[loot.js]: 🌅 No monsters found for criteria - sending no encounter embed`);
+    logger.info('LOOT', `🌅 No monsters found for criteria - sending no encounter embed`);
     const embed = createNoEncounterEmbed(character, bloodMoonActive); // Send "No Encounter" embed
     await interaction.editReply({ embeds: [embed] });
-    console.log(`[loot.js]: ✅ No monsters criteria no encounter embed sent`);
+    logger.info('LOOT', `✅ No monsters criteria no encounter embed sent`);
     return null;
   }
 
@@ -920,10 +978,10 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
   logger.info('LOOT', `Encounter result: ${encounterResult.encounter}`);
   
   if (encounterResult.encounter === "No Encounter") {
-    console.log(`[loot.js]: 🌅 Encounter roll resulted in no encounter - sending no encounter embed`);
+    logger.info('LOOT', '🌅 Encounter roll resulted in no encounter - sending no encounter embed');
     const embed = createNoEncounterEmbed(character, bloodMoonActive); // Send "No Encounter" embed
     await interaction.editReply({ embeds: [embed] });
-    console.log(`[loot.js]: ✅ Encounter roll no encounter embed sent`);
+    logger.info('LOOT', '✅ Encounter roll no encounter embed sent');
     return null;
   }
 
@@ -968,7 +1026,7 @@ async function processLootingLogic(
   if (originalRoll && blightAdjustedRoll > originalRoll) {
     const improvement = blightAdjustedRoll - originalRoll;
     const multiplier = (blightAdjustedRoll / originalRoll).toFixed(1);
-    console.log(`[loot.js]: 💀 Blight boost applied to ${character.name} - Roll enhanced from ${originalRoll} to ${blightAdjustedRoll} (${multiplier}x multiplier, +${improvement} points)`);
+    logger.info('BLIGHT', `💀 Blight boost for ${character.name}: ${originalRoll} → ${blightAdjustedRoll} (${multiplier}x, +${improvement})`);
   }
 
   // ------------------- Apply Boosting Effects -------------------
@@ -982,7 +1040,7 @@ async function processLootingLogic(
     logger.info('LOOT', `📚 Boost applied to ${character.name} - Roll enhanced from ${rollBeforeBoost} to ${adjustedRandomValue} (+${improvement} points)`);
   }
 
-  const weightedItems = createWeightedItemList(items, adjustedRandomValue);
+  let weightedItems = createWeightedItemList(items, adjustedRandomValue);
   
   // Build roll display showing progression: original → blight → boost
   let rollDisplay = `${originalRoll}`;
@@ -1006,8 +1064,136 @@ async function processLootingLogic(
    defenseSuccess
   );
 
+  // Track whether a Fortune Teller reroll occurred and whether it improved the outcome
+  let fortuneRerollTriggered = false;
+  let fortuneRerollImproved = false;
+
+  // ------------------- Fortune Teller: Fated Reroll (if damage taken) -------------------
+  try {
+    const boostStatusForReroll = await getCharacterBoostStatus(character.name);
+    const hasFortuneTellerLootBoost = boostStatusForReroll && boostStatusForReroll.boosterJob === 'Fortune Teller' && boostStatusForReroll.category === 'Looting';
+    if (hasFortuneTellerLootBoost && outcome.hearts && outcome.hearts > 0) {
+      logger.info('BOOST', `🔮 Fortune Teller Fated Reroll triggered for ${character.name} (damage=${outcome.hearts})`);
+      fortuneRerollTriggered = true;
+
+      // Snapshot hearts before reroll (get fresh from DB to capture prior deductions)
+      let heartsBeforeReroll = null;
+      try {
+        const CharacterModel = character.isModCharacter ? require('../../models/ModCharacterModel.js') : require('../../models/CharacterModel.js');
+        const freshCharBefore = await CharacterModel.findById(character._id).select('currentHearts');
+        heartsBeforeReroll = freshCharBefore?.currentHearts ?? null;
+      } catch {}
+
+      // Perform a single reroll end-to-end
+      const diceRollReroll = Math.floor(Math.random() * 100) + 1;
+      let { damageValue: damageValueReroll, adjustedRandomValue: adjustedRandomValueReroll, attackSuccess: attackSuccessReroll, defenseSuccess: defenseSuccessReroll } =
+        calculateFinalValue(character, diceRollReroll);
+
+      // Apply standard looting roll boosts to the reroll as well
+      const rollBeforeBoostReroll = adjustedRandomValueReroll;
+      adjustedRandomValueReroll = await applyLootingBoost(character.name, adjustedRandomValueReroll);
+      if (adjustedRandomValueReroll > rollBeforeBoostReroll) {
+        const improvement = adjustedRandomValueReroll - rollBeforeBoostReroll;
+        logger.info('LOOT', `📚 Boost applied on reroll for ${character.name} - Roll enhanced from ${rollBeforeBoostReroll} to ${adjustedRandomValueReroll} (+${improvement} points)`);
+      }
+
+      const rerollOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValueReroll,
+        adjustedRandomValueReroll,
+        attackSuccessReroll,
+        defenseSuccessReroll
+      );
+
+      // Determine how many hearts were deducted by the reroll's getEncounterOutcome side-effect
+      let rerollAppliedHearts = 0;
+      try {
+        if (heartsBeforeReroll !== null) {
+          const CharacterModel = character.isModCharacter ? require('../../models/ModCharacterModel.js') : require('../../models/CharacterModel.js');
+          const freshCharAfter = await CharacterModel.findById(character._id).select('currentHearts');
+          if (freshCharAfter && typeof freshCharAfter.currentHearts === 'number') {
+            rerollAppliedHearts = Math.max(0, heartsBeforeReroll - freshCharAfter.currentHearts);
+          }
+        }
+      } catch {}
+
+      // Log reroll result in LOOT format
+      logger.info('LOOT', `${character.name} vs ${encounteredMonster.name} | Reroll: ${diceRollReroll}/100 | Damage: ${rerollOutcome.hearts || 0} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
+
+      // Choose the better outcome: prioritize fewer hearts (damage), then higher adjusted roll
+      const isRerollBetter = (rerollOutcome.hearts || 0) < (outcome.hearts || 0) || (
+        (rerollOutcome.hearts || 0) === (outcome.hearts || 0) && (adjustedRandomValueReroll || 0) > (outcome.adjustedRandomValue || 0)
+      );
+
+      if (isRerollBetter) {
+        logger.info('BOOST', `🔮 Fated Reroll improved outcome for ${character.name}: damage ${outcome.hearts || 0} → ${rerollOutcome.hearts || 0}, roll ${outcome.adjustedRandomValue} → ${adjustedRandomValueReroll}`);
+        fortuneRerollImproved = true;
+
+        // Hearts reconciliation: initial outcome already applied hearts. Restore, then apply final reroll hearts.
+        try {
+          const originalHearts = outcome.hearts || 0;
+          const finalHearts = rerollOutcome.hearts || 0;
+          const { recoverHearts, useHearts } = require('../../modules/characterStatsModule');
+          // Always undo reroll-applied hearts first (if any)
+          if (rerollAppliedHearts > 0) {
+            await recoverHearts(character._id, rerollAppliedHearts);
+            logger.info('BOOST', `🔄 Recovered ${rerollAppliedHearts} hearts applied by reroll for ${character.name}`);
+          }
+          if (originalHearts !== finalHearts) {
+            const { recoverHearts, useHearts } = require('../../modules/characterStatsModule');
+            if (originalHearts > 0) {
+              await recoverHearts(character._id, originalHearts);
+              logger.info('BOOST', `🔄 Recovered ${originalHearts} hearts to reconcile reroll for ${character.name}`);
+            }
+            if (finalHearts > 0) {
+              await useHearts(character._id, finalHearts);
+              logger.info('BOOST', `💔 Applied final reroll damage: ${finalHearts} hearts for ${character.name}`);
+            }
+          }
+        } catch (heartErr) {
+          logger.error('BOOST', `Failed to reconcile hearts after reroll for ${character.name}: ${heartErr.message}`);
+        }
+
+        // Replace base values with reroll results so downstream logic (elixirs, entertainer, loot weighting) uses them
+        damageValue = damageValueReroll;
+        adjustedRandomValue = adjustedRandomValueReroll;
+        attackSuccess = attackSuccessReroll;
+        defenseSuccess = defenseSuccessReroll;
+        // Update the computed outcome
+        for (const key of Object.keys(outcome)) {
+          delete outcome[key];
+        }
+        Object.assign(outcome, rerollOutcome);
+
+        // Recompute weighted items with the new adjusted roll
+        const newWeightedItems = createWeightedItemList(items, adjustedRandomValue);
+        // Replace reference used later
+        weightedItems = newWeightedItems; // ensure later references use updated weights
+
+        // Update roll display chain for logs
+        rollDisplay += ` → ${adjustedRandomValue}`;
+      } else {
+        logger.info('BOOST', `🔮 Fated Reroll did not improve outcome for ${character.name}; keeping original.`);
+        // Undo any hearts applied by the reroll so we keep the original damage only
+        try {
+          if (rerollAppliedHearts > 0) {
+            const { recoverHearts } = require('../../modules/characterStatsModule');
+            await recoverHearts(character._id, rerollAppliedHearts);
+            logger.info('BOOST', `🔄 Recovered ${rerollAppliedHearts} hearts from non-improving reroll for ${character.name}`);
+          }
+        } catch (heartErr) {
+          logger.error('BOOST', `Failed to undo reroll hearts for ${character.name}: ${heartErr.message}`);
+        }
+      }
+    }
+  } catch (e) {
+    logger.error('BOOST', `Failed during Fortune Teller Fated Reroll for ${character.name}: ${e.message}`);
+  }
+
   // Track elixir buff information for the embed
   let elixirBuffInfo = null;
+  let boostUnused = false;
 
   // ------------------- Elixir Consumption Logic -------------------
   // Check if elixirs should be consumed based on the monster encounter
@@ -1017,11 +1203,11 @@ async function processLootingLogic(
     // Check for active elixir buffs before consumption
     const activeBuff = getActiveBuffEffects(character);
     if (activeBuff) {
-      console.log(`[loot.js]: 🧪 ${character.name} has active elixir buff: ${character.buff.type}`);
+      logger.info('ELIXIR', `${character.name} has active elixir buff: ${character.buff.type}`);
       
       // Log specific elixir effects that might help
       if (activeBuff.fireResistance > 0 && encounteredMonster.name.includes('Fire')) {
-        console.log(`[loot.js]: 🔥 Fireproof Elixir active! ${character.name} has +${activeBuff.fireResistance} fire resistance against ${encounteredMonster.name}`);
+        logger.info('ELIXIR', `🔥 Fireproof Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.fireResistance} fire res)`);
         elixirBuffInfo = {
           helped: true,
           elixirName: 'Fireproof Elixir',
@@ -1031,7 +1217,7 @@ async function processLootingLogic(
         };
       }
       if (activeBuff.coldResistance > 0 && encounteredMonster.name.includes('Ice')) {
-        console.log(`[loot.js]: ❄️ Spicy Elixir active! ${character.name} has +${activeBuff.coldResistance} cold resistance against ${encounteredMonster.name}`);
+        logger.info('ELIXIR', `❄️ Spicy Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.coldResistance} cold res)`);
         elixirBuffInfo = {
           helped: true,
           elixirName: 'Spicy Elixir',
@@ -1041,7 +1227,7 @@ async function processLootingLogic(
         };
       }
       if (activeBuff.electricResistance > 0 && encounteredMonster.name.includes('Electric')) {
-        console.log(`[loot.js]: ⚡ Electro Elixir active! ${character.name} has +${activeBuff.electricResistance} electric resistance against ${encounteredMonster.name}`);
+        logger.info('ELIXIR', `⚡ Electro Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.electricResistance} elec res)`);
         elixirBuffInfo = {
           helped: true,
           elixirName: 'Electro Elixir',
@@ -1051,7 +1237,7 @@ async function processLootingLogic(
         };
       }
       if (activeBuff.blightResistance > 0) {
-        console.log(`[loot.js]: 🧿 Chilly Elixir active! ${character.name} has +${activeBuff.blightResistance} blight resistance`);
+        logger.info('ELIXIR', `🧿 Chilly Elixir active: ${character.name} (+${activeBuff.blightResistance} blight res)`);
         elixirBuffInfo = {
           helped: true,
           elixirName: 'Chilly Elixir',
@@ -1061,7 +1247,7 @@ async function processLootingLogic(
         };
       }
       if (activeBuff.stealthBoost > 0) {
-        console.log(`[loot.js]: 👻 Sneaky Elixir active! ${character.name} has +${activeBuff.stealthBoost} stealth boost for looting`);
+        logger.info('ELIXIR', `👻 Sneaky Elixir active: ${character.name} (+${activeBuff.stealthBoost} stealth)`);
         elixirBuffInfo = {
           helped: true,
           elixirName: 'Sneaky Elixir',
@@ -1071,7 +1257,7 @@ async function processLootingLogic(
         };
       }
       if (activeBuff.defenseBoost > 0) {
-        console.log(`[loot.js]: 🛡️ Tough Elixir active! ${character.name} has +${activeBuff.defenseBoost} defense boost`);
+        logger.info('ELIXIR', `🛡️ Tough Elixir active: ${character.name} (+${activeBuff.defenseBoost} defense)`);
         elixirBuffInfo = {
           helped: true,
           elixirName: 'Tough Elixir',
@@ -1081,7 +1267,7 @@ async function processLootingLogic(
         };
       }
       if (activeBuff.attackBoost > 0) {
-        console.log(`[loot.js]: ⚔️ Mighty Elixir active! ${character.name} has +${activeBuff.attackBoost} attack boost`);
+        logger.info('ELIXIR', `⚔️ Mighty Elixir active: ${character.name} (+${activeBuff.attackBoost} attack)`);
         elixirBuffInfo = {
           helped: true,
           elixirName: 'Mighty Elixir',
@@ -1095,23 +1281,23 @@ async function processLootingLogic(
     if (shouldConsumeElixir(character, 'loot', { monster: encounteredMonster })) {
       const consumedElixirType = character.buff.type;
       
-      console.log(`[loot.js]: 🧪 Elixir consumed for ${character.name} during loot encounter with ${encounteredMonster.name}`);
+      logger.info('ELIXIR', `Elixir consumed for ${character.name} during encounter with ${encounteredMonster.name}`);
       
       // Log what the elixir protected against
       if (consumedElixirType === 'fireproof' && encounteredMonster.name.includes('Fire')) {
-        console.log(`[loot.js]: 🔥 Fireproof Elixir protected ${character.name} from fire damage during encounter with ${encounteredMonster.name}`);
+        logger.info('ELIXIR', `🔥 Fireproof Elixir protected ${character.name} from fire damage vs ${encounteredMonster.name}`);
       } else if (consumedElixirType === 'spicy' && encounteredMonster.name.includes('Ice')) {
-        console.log(`[loot.js]: ❄️ Spicy Elixir protected ${character.name} from ice damage during encounter with ${encounteredMonster.name}`);
+        logger.info('ELIXIR', `❄️ Spicy Elixir protected ${character.name} from ice damage vs ${encounteredMonster.name}`);
       } else if (consumedElixirType === 'electro' && encounteredMonster.name.includes('Electric')) {
-        console.log(`[loot.js]: ⚡ Electro Elixir protected ${character.name} from electric damage during encounter with ${encounteredMonster.name}`);
+        logger.info('ELIXIR', `⚡ Electro Elixir protected ${character.name} from electric damage vs ${encounteredMonster.name}`);
       } else if (consumedElixirType === 'chilly') {
-        console.log(`[loot.js]: 🧿 Chilly Elixir protected ${character.name} from blight rain effects`);
+        logger.info('ELIXIR', `🧿 Chilly Elixir protected ${character.name} from blight rain effects`);
       } else if (consumedElixirType === 'sneaky') {
-        console.log(`[loot.js]: 👻 Sneaky Elixir helped ${character.name} with stealth during looting`);
+        logger.info('ELIXIR', `👻 Sneaky Elixir helped ${character.name} with stealth during looting`);
       } else if (consumedElixirType === 'tough') {
-        console.log(`[loot.js]: 🛡️ Tough Elixir provided defense boost for ${character.name} during encounter`);
+        logger.info('ELIXIR', `🛡️ Tough Elixir provided defense boost for ${character.name} during encounter`);
       } else if (consumedElixirType === 'mighty') {
-        console.log(`[loot.js]: ⚔️ Mighty Elixir provided attack boost for ${character.name} during encounter`);
+        logger.info('ELIXIR', `⚔️ Mighty Elixir provided attack boost for ${character.name} during encounter`);
       }
       
       consumeElixirBuff(character);
@@ -1120,10 +1306,10 @@ async function processLootingLogic(
       await Character.findByIdAndUpdate(character._id, { buff: character.buff });
     } else if (character.buff?.active) {
       // Log when elixir is not used due to conditions not met
-      console.log(`[loot.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+      logger.info('ELIXIR', `Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   } catch (elixirError) {
-    console.error(`[loot.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
+    logger.warn('ELIXIR', `Warning - Elixir consumption failed: ${elixirError.message}`);
     // Don't fail the loot if elixir consumption fails
   }
 
@@ -1135,7 +1321,7 @@ async function processLootingLogic(
     if (elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'fireproof') {
       // Fireproof elixir provides 1.5x roll multiplier (higher roll = less damage)
       outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
-      console.log(`[loot.js]: 🔥 Fireproof Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      logger.info('ELIXIR', `🔥 Fireproof Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
       
       // Store original damage for comparison
       const originalDamage = outcome.hearts;
@@ -1154,12 +1340,12 @@ async function processLootingLogic(
         const damageReduced = originalDamage - boostedOutcome.hearts;
         elixirBuffInfo.damageReduced = damageReduced;
         outcome.hearts = boostedOutcome.hearts;
-        console.log(`[loot.js]: 🔥 Fireproof Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
+        logger.info('ELIXIR', `🔥 Fireproof Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
       }
     } else if (elixirBuffInfo.encounterType === 'electric' && elixirBuffInfo.elixirType === 'electro') {
       // Electro elixir provides 1.5x roll multiplier (higher roll = less damage)
       outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
-      console.log(`[loot.js]: ⚡ Electro Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      logger.info('ELIXIR', `⚡ Electro Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
       
       // Store original damage for comparison
       const originalDamage = outcome.hearts;
@@ -1178,12 +1364,12 @@ async function processLootingLogic(
         const damageReduced = originalDamage - boostedOutcome.hearts;
         elixirBuffInfo.damageReduced = damageReduced;
         outcome.hearts = boostedOutcome.hearts;
-        console.log(`[loot.js]: ⚡ Electro Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
+        logger.info('ELIXIR', `⚡ Electro Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
       }
     } else if (elixirBuffInfo.encounterType === 'ice' && elixirBuffInfo.elixirType === 'spicy') {
       // Spicy elixir provides 1.5x roll multiplier (higher roll = less damage)
       outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
-      console.log(`[loot.js]: ❄️ Spicy Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      logger.info('ELIXIR', `❄️ Spicy Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
       
       // Store original damage for comparison
       const originalDamage = outcome.hearts;
@@ -1202,7 +1388,7 @@ async function processLootingLogic(
         const damageReduced = originalDamage - boostedOutcome.hearts;
         elixirBuffInfo.damageReduced = damageReduced;
         outcome.hearts = boostedOutcome.hearts;
-        console.log(`[loot.js]: ❄️ Spicy Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (${damageReduced} less damage)`);
+        logger.info('ELIXIR', `❄️ Spicy Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
       }
     }
   }
@@ -1228,28 +1414,36 @@ async function processLootingLogic(
         entertainerDamageReduction = originalHeartDamage - reducedDamage;
         
         if (entertainerDamageReduction > 0) {
-          console.log(`[loot.js]: 🎭 Entertainer boost - Requiem of Spirit (Tier ${monsterTier}) reduces damage from ${originalHeartDamage} to ${reducedDamage} (-${entertainerDamageReduction} hearts)`);
+          logger.info('BOOST', `🎭 Entertainer boost (Tier ${monsterTier}) reduces damage from ${originalHeartDamage} to ${reducedDamage} (-${entertainerDamageReduction})`);
           
           // Hearts were already removed by getEncounterOutcome - restore them and reapply correct amount
           // Step 1: Restore the hearts that were taken
           await recoverHearts(character._id, originalHeartDamage);
-          console.log(`[loot.js]: 🔄 Restored ${originalHeartDamage} hearts to reapply with boost`);
+          logger.info('BOOST', `🔄 Restored ${originalHeartDamage} hearts to reapply with boost`);
           
           // Step 2: Apply the boosted (reduced) damage
           if (reducedDamage > 0) {
             const { useHearts } = require('../../modules/characterStatsModule');
             await useHearts(character._id, reducedDamage);
-            console.log(`[loot.js]: 💔 Applied boosted damage: ${reducedDamage} hearts`);
+            logger.info('BOOST', `💔 Applied boosted damage: ${reducedDamage} hearts`);
           }
           
           // Update outcome to reflect the reduced damage
           outcome.hearts = reducedDamage;
+          // Ensure the textual result reflects the post-boost damage.
+          // If damage was fully negated, mark as a win with loot so the embed won't show damage text.
+          if (reducedDamage === 0) {
+            outcome.result = 'Win!/Loot';
+          } else if (outcome.result && typeof outcome.result === 'string' && outcome.result.includes('HEART(S)')) {
+            // If a damage string exists in result, update the heart count to the reduced value
+            outcome.result = outcome.result.replace(/(\d+)\s*HEART\(S\)/i, `${reducedDamage} HEART(S)`);
+          }
         }
       } else if (!outcome.hearts || outcome.hearts === 0) {
         // Boost was active but not needed (no damage taken)
         entertainerBoostUnused = true;
         damageWasTaken = false; // Ensure boost is not cleared
-        console.log(`[loot.js]: 🎭 Entertainer boost was active but not needed (no damage taken)`);
+        logger.info('BOOST', `🎭 Entertainer boost was active but not needed (no damage taken)`);
       }
     }
   }
@@ -1268,12 +1462,25 @@ async function processLootingLogic(
   }
 
   if (updatedCharacter.currentHearts === 0 && !updatedCharacter.ko) {
-   console.log(`[loot.js]: 💀 Character ${character.name} has been KO'd`);
+  logger.info('LOOT', `💀 Character ${character.name} has been KO'd`);
    await handleKO(updatedCharacter._id);
   }
 
   // Step 3: Generate Outcome Message
   const outcomeMessage = generateOutcomeMessage(outcome, character);
+
+  // Determine if an active Fortune Teller looting boost was unused (no damage taken)
+  try {
+    const boostStatus = await getCharacterBoostStatus(character.name);
+    if (boostStatus && boostStatus.boosterJob === 'Fortune Teller' && boostStatus.category === 'Looting') {
+      // Only mark as unused if no damage occurred AND no FT reroll was actually triggered
+      if ((!outcome.hearts || outcome.hearts === 0) && (typeof fortuneRerollTriggered === 'boolean' ? !fortuneRerollTriggered : true)) {
+        boostUnused = true;
+      }
+    }
+  } catch (e) {
+    logger.error('BOOST', `Failed to determine boost unused state: ${e.message}`);
+  }
 
   // Step 4: Loot Item Logic
   let lootedItem = null;
@@ -1283,7 +1490,7 @@ async function processLootingLogic(
 
    const inventoryLink = character.inventory || character.inventoryLink;
    if (!isValidGoogleSheetsUrl(inventoryLink)) {
-    console.log(`[loot.js]: ❌ Invalid inventory link for ${character.name}`);
+   logger.warn('LOOT', `Invalid inventory link for ${character.name}`);
     const embed = await createMonsterEncounterEmbed(
      character,
      encounteredMonster,
@@ -1300,11 +1507,13 @@ async function processLootingLogic(
      originalRoll, // Pass originalRoll to the embed
      blightRainMessage, // Pass blight rain message to the embed
      entertainerBoostUnused, // Pass flag indicating boost was active but unused
-     entertainerDamageReduction // Pass amount of damage reduced by Entertainer boost
+    entertainerDamageReduction, // Pass amount of damage reduced by Entertainer boost
+    blightAdjustedRoll, // Keep param order in sync
+    boostUnused // Fortune Teller unused flag
     );
     
     // Update timestamp and clear boost only if damage was taken
-    await updateCharacterLootTimestamp(character, damageWasTaken);
+    await updateCharacterLootTimestamp(character, damageWasTaken, interaction.client);
     
     await interaction.editReply({
      content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
@@ -1334,13 +1543,26 @@ async function processLootingLogic(
    blightRainMessage, // Pass blight rain message to the embed
    entertainerBoostUnused, // Pass flag indicating boost was active but unused
    entertainerDamageReduction, // Pass amount of damage reduced by Entertainer boost
-   blightAdjustedRoll // Pass blightAdjustedRoll for blight boost detection
+   blightAdjustedRoll, // Pass blightAdjustedRoll for blight boost detection
+   boostUnused // Fortune Teller unused flag
    );
   
-  // Update character timestamp and clear boost AFTER embed is created
+  // Update request embed to Fulfilled BEFORE clearing the boost
+  try {
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+    if (activeBoost && activeBoost.requestData) {
+      activeBoost.requestData.status = 'fulfilled';
+      await saveBoostingRequestToTempData(activeBoost.requestData.boostRequestId, activeBoost.requestData);
+      await updateBoostRequestEmbed(interaction.client, activeBoost.requestData, 'fulfilled');
+    }
+  } catch (e) {
+    logger.error('BOOST', `Failed to mark boost as fulfilled before clearing: ${e.message}`);
+  }
+
+  // Update character timestamp and clear boost AFTER marking fulfilled
   // Clear boost after monster encounter (boost was used for loot selection)
   // Note: This function is only called when a monster is encountered
-  await updateCharacterLootTimestamp(character, true);
+  await updateCharacterLootTimestamp(character, true, interaction.client);
   
   await interaction.editReply({ embeds: [embed] });
 
@@ -1348,13 +1570,13 @@ async function processLootingLogic(
   if (shouldDeactivateVoucher && character.jobVoucher) {
     const deactivationResult = await deactivateJobVoucher(character._id);
     if (!deactivationResult.success) {
-      console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
+      logger.error('LOOT', `❌ Failed to deactivate job voucher for ${character.name}`);
     } else {
-      console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name} in processLootingLogic`);
+      logger.success('LOOT', `✅ Job voucher deactivated for ${character.name} in processLootingLogic`);
     }
   }
   } catch (error) {
-    console.error(`[loot.js]: ❌ Error in processLootingLogic:`, error);
+    logger.error('LOOT', `Error in processLootingLogic: ${error.message}`);
     await handleLootError(interaction, error, "processing loot");
   }
 }
@@ -1476,12 +1698,14 @@ function generateOutcomeMessage(outcome, character = null) {
 // ------------------- Helper Function: Generate Looted Item -------------------
 async function generateLootedItem(encounteredMonster, weightedItems, character) {
  let lootedItem;
+ let isPriestDivineBlessingActive = false;
  
  // Check if character has Priest boost for guaranteed highest tier loot
  if (character && character.boostedBy) {
    const boostStatus = await getCharacterBoostStatus(character.name);
    
    if (boostStatus && boostStatus.boosterJob === 'Priest' && boostStatus.category === 'Looting') {
+     isPriestDivineBlessingActive = true;
      // Find the highest rarity item in the weighted items list
      const maxRarity = Math.max(...weightedItems.map(item => item.itemRarity || 0));
      const highestRarityItems = weightedItems.filter(item => (item.itemRarity || 0) === maxRarity);
@@ -1490,7 +1714,7 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
        // Randomly select from the highest rarity items
        const randomIndex = Math.floor(Math.random() * highestRarityItems.length);
        lootedItem = highestRarityItems[randomIndex];
-       logger.info('LOOT', `🙏 Priest Divine Favor: Selected highest rarity item (${maxRarity}) for ${character.name}`);
+       logger.info('LOOT', `🙏 Priest Divine Blessing: Selected highest rarity item (${maxRarity}) for ${character.name}`);
      } else {
        // Fallback to normal selection if no rarity found
        const randomIndex = Math.floor(Math.random() * weightedItems.length);
@@ -1507,7 +1731,7 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
    lootedItem = weightedItems[randomIndex];
  }
 
- if (encounteredMonster.name.includes("Chuchu")) {
+ if (!isPriestDivineBlessingActive && encounteredMonster.name.includes("Chuchu")) {
   let jellyType;
   if (encounteredMonster.name.includes('Ice')) {
     jellyType = 'White Chuchu Jelly';
@@ -1534,7 +1758,7 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
       lootedItem.emoji = jellyItem.emoji;
     }
   } catch (error) {
-    console.error(`[loot.js]: Error fetching emoji for ${jellyType}:`, error);
+    logger.warn('LOOT', `Error fetching emoji for ${jellyType}: ${error.message}`);
     // Keep the original emoji if there's an error
   }
  } else {

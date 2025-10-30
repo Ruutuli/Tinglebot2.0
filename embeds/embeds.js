@@ -12,7 +12,7 @@ const { getLastDebugValues } = require("../modules/buffModule");
 const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
 const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
 const { getMountEmoji, getMountThumbnail } = require("../modules/mountModule");
-const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText, generateBlightRollBoostFlavorText } = require("../modules/flavorTextModule");
+const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateUnusedBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText, generateBlightRollBoostFlavorText } = require("../modules/flavorTextModule");
 const { convertCmToFeetInches, isValidImageUrl } = require("../utils/validation");
 const { validateInventorySheet } = require("../utils/googleSheetsUtils");
 const { getCharacterBoostStatus } = require('../modules/boostIntegration');
@@ -1437,7 +1437,8 @@ const createMonsterEncounterEmbed = async (
  blightRainMessage = null,
  entertainerBoostUnused = false,
  entertainerDamageReduction = 0,
- blightAdjustedRoll = null
+  blightAdjustedRoll = null,
+  boostUnused = false
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1456,20 +1457,26 @@ const createMonsterEncounterEmbed = async (
  
  // Debug logging for boost info
  if (boostInfo) {
-   console.log(`[embeds.js]: 🎯 createMonsterEncounterEmbed - Boost info retrieved: ${boostInfo.boosterJob} ${boostInfo.boosterName} - ${boostInfo.boostName} for ${boostInfo.category}`);
+  logger.info('BOOST', 'createMonsterEncounterEmbed - Boost info retrieved', {
+    source: 'embeds.js',
+    boosterJob: boostInfo.boosterJob,
+    boosterName: boostInfo.boosterName,
+    boostName: boostInfo.boostName,
+    category: boostInfo.category
+  });
  } else {
    logger.info('LOOT', `No boost info found for character ${character.name}`);
  }
 
- // Modify boost flavor text for Entertainer based on damage taken
+// Modify boost flavor text for Entertainer based on damage taken
  if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'entertainer' && boostInfo.category === 'Looting') {
-   if (entertainerBoostUnused) {
-     // No damage taken - boost preserved
-     boostInfo = {
-       ...boostInfo,
-       boostFlavorText: "🎭 Your Entertainer boost was active, but you didn't need it! You took no damage, so the boost is preserved for next time."
-     };
-     console.log(`[embeds.js]: 🎭 Entertainer boost - unused (no damage), preserved`);
+  if (entertainerBoostUnused) {
+    // No damage taken - boost consumed without applying
+    boostInfo = {
+      ...boostInfo,
+      boostFlavorText: generateUnusedBoostFlavorText('Entertainer', 'Looting')
+    };
+    console.log(`[embeds.js]: 🎭 Entertainer boost - unused (no damage), consumed`);
    } else if (heartsRemaining !== undefined && heartsRemaining === character.maxHearts) {
      // Damage was fully negated by boost
      boostInfo = {
@@ -1489,6 +1496,16 @@ const createMonsterEncounterEmbed = async (
    // Otherwise use the default looting flavor text (no boost active or no reduction)
  }
 
+// Add flavor for Fortune Teller when reroll boost was active but not needed (no damage taken)
+if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'fortune teller' && boostInfo.category === 'Looting') {
+  if (boostUnused) {
+    boostInfo = {
+      ...boostInfo,
+      boostFlavorText: generateUnusedBoostFlavorText('Fortune Teller', 'Looting')
+    };
+  }
+}
+
  // Add progress indicator if provided
  const progressField = currentMonster && totalMonsters ? {
   name: "⚔️ __Battle Progress__",
@@ -1505,10 +1522,17 @@ const createMonsterEncounterEmbed = async (
  
  if (boostInfo && characterWon) {
    outcomeWithBoost = addBoostFlavorText(outcomeWithBoost, boostInfo);
- } else if (boostInfo && !characterWon) {
-   // Character lost - show message that boost was active but didn't help
-   outcomeWithBoost += `\n\n⚡ **Boost Effect:** Your boost was in effect, but because you lost the fight, you did not benefit! Better luck next time!`;
- }
+} else if (boostInfo && !characterWon) {
+  // If Fortune Teller improved the roll, consider it helpful even if damage occurred
+  const isFortuneTeller = boostInfo.boosterJob?.toLowerCase() === 'fortune teller';
+  const ftImproved = isFortuneTeller && originalRoll && actualRoll && actualRoll > originalRoll;
+  if (ftImproved) {
+    outcomeWithBoost = addBoostFlavorText(outcomeWithBoost, boostInfo);
+  } else {
+    // Otherwise show the generic 'did not improve' message
+    outcomeWithBoost += `\n\n⚡ **Boost Effect:** Your boost was in effect but did not improve results! Better luck next time!`;
+  }
+}
 
  // Add elixir buff information if available
  if (elixirBuffInfo && elixirBuffInfo.helped) {
@@ -1845,6 +1869,9 @@ function createWrongVillageEmbed(character, questVillage, isEscort = false, dest
   return embed;
 }
 
+// (Removed) Fortune Teller boost flavor adjustment was incorrectly placed at module scope
+// This logic must live inside the function where boostInfo and boostUnused are defined
+
 // ------------------- Function: createRaidKOEmbed -------------------
 // Creates an embed for characters who are KO'd and cannot participate in raids
 const createRaidKOEmbed = (character) => {
@@ -1928,7 +1955,6 @@ const createHealEmbed = async (
  let boostInfo = null;
  if (capturedBoostInfo) {
   // Use captured boost info and generate flavor text if needed
-  const { generateBoostFlavorText } = require('../modules/flavorTextModule');
   boostInfo = {
    ...capturedBoostInfo,
    boostFlavorText: capturedBoostInfo.boostFlavorText || generateBoostFlavorText(capturedBoostInfo.boosterJob, 'Healers')
@@ -1939,15 +1965,12 @@ const createHealEmbed = async (
   
   // Fallback: If boostInfo exists but lacks flavor text, generate it manually
   if (boostInfo && !boostInfo.boostFlavorText && boostInfo.boosterJob) {
-   const { generateBoostFlavorText } = require('../modules/flavorTextModule');
    boostInfo.boostFlavorText = generateBoostFlavorText(boostInfo.boosterJob, 'Healers');
   }
   
   // Also check if healer has boostedBy but getBoostInfo didn't work - try to get boost status directly
   if (!boostInfo && updatedHealer && updatedHealer.boostedBy && isFulfilled) {
    try {
-    const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-    const { generateBoostFlavorText } = require('../modules/flavorTextModule');
     const boostStatus = await getCharacterBoostStatus(updatedHealer.name);
     if (boostStatus && boostStatus.category === 'Healers') {
      boostInfo = {
@@ -2520,9 +2543,19 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
   const villageColor = getVillageColorByName(village) || '#7289DA';
   const villageEmoji = getVillageEmojiByName(village) || '🏘️';
   
-  // Calculate expiration time (24 hours from now)
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 24);
+  // Calculate expiration time using provided timestamps when available
+  let expiresAt;
+  if (status === 'accepted' && requestData.boostExpiresAt) {
+    expiresAt = new Date(requestData.boostExpiresAt);
+  } else if (status === 'pending' && requestData.expiresAt) {
+    expiresAt = new Date(requestData.expiresAt);
+  } else if (requestData.boostExpiresAt) {
+    expiresAt = new Date(requestData.boostExpiresAt);
+  } else {
+    // Fallback: 24 hours from now
+    expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+  }
   const expiresIn = `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`;
 
   // Determine status color and emoji
@@ -2532,6 +2565,11 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
       statusColor = '#FFA500'; // Orange
       statusEmoji = '⏳';
       statusText = 'Pending';
+      break;
+    case 'accepted':
+      statusColor = '#4CAF50'; // Green
+      statusEmoji = '✅';
+      statusText = 'Accepted';
       break;
     case 'fulfilled':
       statusColor = '#00FF00'; // Green
@@ -2616,17 +2654,44 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
     }
   );
 
+  // Title/description/footer vary by status
+  let title;
+  let description;
+  let footerText;
+  if (status === 'pending') {
+    title = `⚡ Boost Request Created`;
+    description = `**${requestedBy}** has requested a boost from **${booster}**!\n\nThis request will expire in **24 hours** if not accepted.`;
+    footerText = `Boost requested by ${requestedBy} • Expires if not accepted`;
+  } else if (status === 'accepted') {
+    title = `⚡ Boost Request Accepted`;
+    description = `**${booster}** has accepted the request for **${requestedBy}**.\n\nThe boost is now active for **24 hours**.`;
+    footerText = `Boost accepted by ${booster} • Active until shown expiry`;
+  } else if (status === 'fulfilled') {
+    title = `⚡ Boost Fulfilled`;
+    description = `The requested boost for **${requestedBy}** from **${booster}** has been fulfilled.`;
+    footerText = `Boost fulfilled • No longer active`;
+  } else if (status === 'cancelled') {
+    title = `⚡ Boost Cancelled`;
+    description = `The boost request from **${requestedBy}** to **${booster}** was cancelled.`;
+    footerText = `Boost cancelled`;
+  } else if (status === 'expired') {
+    title = `⚡ Boost Request Expired`;
+    description = `The boost request from **${requestedBy}** to **${booster}** has expired.`;
+    footerText = `Boost request expired`;
+  } else {
+    title = `⚡ Boost Request`;
+    description = `**${requestedBy}** has requested a boost from **${booster}**.`;
+    footerText = `Boost request`;
+  }
+
   const embed = new EmbedBuilder()
-    .setTitle(`⚡ Boost Request Created`)
-    .setDescription(
-      `**${requestedBy}** has requested a boost from **${booster}**!\n\n` +
-      `This request will expire in **24 hours** if not accepted.`
-    )
+    .setTitle(title)
+    .setDescription(description)
     .setColor(statusColor)
     .setThumbnail(requestData.requestedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png')
     .addFields(fields)
     .setFooter({ 
-      text: `Boost requested by ${requestedBy} • This request will expire in 24 hours if not accepted.`,
+      text: `${footerText}`,
       iconURL: requestData.boosterIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png'
     })
     .setTimestamp();
