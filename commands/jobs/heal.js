@@ -205,7 +205,7 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
     if (hasTeacherBoost) {
       // Get the booster info to check if it's a Teacher
       const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
-      if (activeBoost && activeBoost.status === 'fulfilled' && activeBoost.boostExpiresAt && Date.now() <= activeBoost.boostExpiresAt) {
+      if (activeBoost && activeBoost.status === 'accepted' && activeBoost.boostExpiresAt && Date.now() <= activeBoost.boostExpiresAt) {
         const booster = await fetchCharacterByName(activeBoost.boostingCharacter);
         // If healer has Teacher boost, allow healing - will add temporary hearts
         if (booster && (booster.job === 'Teacher' || activeBoost.boosterJob === 'Teacher')) {
@@ -287,7 +287,7 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
     if (hasPriestBoost) {
       // Get the booster info to check if it's a Priest
       const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
-      if (activeBoost && activeBoost.status === 'fulfilled' && activeBoost.boostExpiresAt && Date.now() <= activeBoost.boostExpiresAt) {
+      if (activeBoost && activeBoost.status === 'accepted' && activeBoost.boostExpiresAt && Date.now() <= activeBoost.boostExpiresAt) {
         const booster = await fetchCharacterByName(activeBoost.boostingCharacter);
         // If healer has Priest boost, allow healing - debuff will be removed during healing
         if (booster && (booster.job === 'Priest' || activeBoost.boosterJob === 'Priest')) {
@@ -949,7 +949,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     let teacherTempHeartsInfo = null;
     const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
     
-    if (activeBoost && activeBoost.status === 'fulfilled') {
+    if (activeBoost && activeBoost.status === 'accepted') {
       const currentTime = Date.now();
       if (!activeBoost.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt) {
         const boosterChar = await fetchCharacterByName(activeBoost.boostingCharacter);
@@ -1295,7 +1295,7 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
     let teacherTempHeartsInfo = null;
     const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
     
-    if (activeBoost && activeBoost.status === 'fulfilled') {
+    if (activeBoost && activeBoost.status === 'accepted') {
       const currentTime = Date.now();
       if (!activeBoost.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt) {
         const boosterChar = await fetchCharacterByName(activeBoost.boostingCharacter);

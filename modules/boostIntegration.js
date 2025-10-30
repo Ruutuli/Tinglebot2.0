@@ -42,6 +42,11 @@ async function applyBoostToAction(characterName, category, data, additionalData 
     // Apply the boost effect using the booster's job
     const boostedData = await applyBoostEffect(activeBoost.boostingCharacter, category, data, additionalData);
     
+    // Log boost application for debugging (only for Looting category with numeric data)
+    if (category === 'Looting' && typeof data === 'number' && typeof boostedData === 'number' && boostedData !== data) {
+      console.log(`[boostIntegration.js]: 🎓 Boost applied to ${characterName} for ${category} - Roll: ${data} → ${boostedData} (+${boostedData - data})`);
+    }
+    
     return boostedData;
   } catch (err) {
     console.error(`Failed to apply boost to ${characterName} for ${category}:`, err);
@@ -218,7 +223,7 @@ async function getBoosterInfo(characterName) {
       return null;
     }
     
-    if (activeBoost.status !== 'fulfilled') {
+    if (activeBoost.status !== 'accepted') {
       return null;
     }
     
@@ -327,7 +332,7 @@ async function getCharacterBoostStatus(characterName) {
     const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
     const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
     
-    if (!activeBoost || activeBoost.status !== 'fulfilled') {
+    if (!activeBoost || activeBoost.status !== 'accepted') {
       return null;
     }
 

@@ -77,7 +77,7 @@ const boostingEffects = {
   },
   Looting: {
    name: "Combat Insight",
-   description: "Add a flat +2 to your loot encounter roll to reflect knowledge of weak points.",
+   description: "Multiply your loot encounter roll by 1.2x to reflect knowledge of weak points.",
   },
   Mounts: {
    name: "Weather Wisdom",
@@ -119,8 +119,8 @@ const boostingEffects = {
    description: "When boosted by a Priest, any active debuffs on the patient are removed during healing.",
   },
   Looting: {
-   name: "Divine Test",
-   description: "Ask for protection or challenge; a +5 or -5 modifier is randomly applied to your loot roll.",
+   name: "Divine Blessing",
+   description: "Divine blessing ensures you receive the highest tier loot available from the monster.",
   },
   Mounts: {
    name: "Blessed Attempt",
@@ -247,7 +247,7 @@ const BOOST_MULTIPLIERS = {
  FORTUNE_TELLER_STEAL_BONUS: 20,
  TEACHER_TOKENS: 1.5,
  TEACHER_VENDING: 0.8,
- TEACHER_LOOT_BONUS: 2,
+ TEACHER_LOOT_MULTIPLIER: 1.2,
  TEACHER_STEAL_ATTEMPTS: 1,
  PRIEST_CRAFTING: 0.7, // 30% reduction
  PRIEST_TOKENS_SELL: 1.1,
@@ -634,7 +634,7 @@ function applyTeacherHealingBoost(healedCharacter) {
 }
 
 function applyTeacherLootingBoost(adjustedRoll) {
- return applyFlatBonus(adjustedRoll, BOOST_MULTIPLIERS.TEACHER_LOOT_BONUS, 100);
+ return applyPercentageBoost(adjustedRoll, BOOST_MULTIPLIERS.TEACHER_LOOT_MULTIPLIER);
 }
 
 function applyTeacherStealingBoost(failedAttempts) {
@@ -703,8 +703,9 @@ function applyPriestHealingBoost(patient) {
 }
 
 function applyPriestLootingBoost(adjustedRoll) {
- const modifier = Math.random() < 0.5 ? 5 : -5;
- return Math.max(0, Math.min(100, adjustedRoll + modifier));
+ // Priest Divine Favor is handled in loot selection, not roll modification
+ // Return the original roll unchanged
+ return adjustedRoll;
 }
 
 function applyPriestStealingBoost(jailTime) {

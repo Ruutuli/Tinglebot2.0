@@ -136,7 +136,7 @@ function formatBoostCategoryName(category) {
 async function fetchActiveBoost(characterName, category) {
   const request = retrieveBoostingRequestFromStorageByCharacter(characterName);
   if (!request) return null;
-  if (request.status !== 'fulfilled') return null;
+  if (request.status !== 'accepted') return null;
   if (request.category !== category) return null;
   return request;
 }
@@ -206,7 +206,7 @@ async function validateActiveBoost(targetCharacter) {
      // Check if this is a boost request for the target character
      if (requestData.targetCharacter === targetCharacter.name) {
        // Skip cancelled and fulfilled requests - only block on pending
-       if (requestData.status === "cancelled" || requestData.status === "fulfilled") {
+      if (requestData.status === "cancelled" || requestData.status === "fulfilled" || requestData.status === "accepted") {
          continue;
        }
        
@@ -312,7 +312,8 @@ function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boos
    boosterHearts: booster.currentHearts,
    boosterMaxStamina: booster.maxStamina,
    boosterMaxHearts: booster.maxHearts,
-   boostRequestId: requestData.boostRequestId
+   boostRequestId: requestData.boostRequestId,
+   status: requestData.status || 'accepted'
  };
 }
 
@@ -374,7 +375,7 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
       
       if (
         requestData.targetCharacter === characterName &&
-        requestData.status === "fulfilled" &&
+        requestData.status === "accepted" &&
         requestData.boostExpiresAt &&
         currentTime <= requestData.boostExpiresAt
       ) {
@@ -384,7 +385,7 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
         });
       } else if (
         requestData.targetCharacter === characterName &&
-        requestData.status === "fulfilled" &&
+        requestData.status === "accepted" &&
         requestData.boostExpiresAt &&
         currentTime > requestData.boostExpiresAt
       ) {
@@ -432,7 +433,7 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
 async function isBoostActive(characterName, category) {
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
 
- if (!activeBoost || activeBoost.status !== "fulfilled") {
+ if (!activeBoost || activeBoost.status !== "accepted") {
   return false;
  }
 
@@ -566,7 +567,7 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("cancel")
-    .setDescription("Cancel a pending boost request")
+    .setDescription("Cancel a pending boost request or active boost")
     .addStringOption((option) =>
      option
       .setName("requestid")
@@ -785,12 +786,12 @@ async function handleBoostAccept(interaction) {
   return;
  }
 
- // Update request data with fulfillment details
- const fulfilledTime = Date.now();
- const boostExpiresAt = fulfilledTime + BOOST_DURATION;
+// Update request data with acceptance details
+ const acceptedTime = Date.now();
+ const boostExpiresAt = acceptedTime + BOOST_DURATION;
 
- requestData.status = "fulfilled";
- requestData.fulfilledAt = fulfilledTime;
+ requestData.status = "accepted";
+ requestData.acceptedAt = acceptedTime;
  requestData.durationRemaining = BOOST_DURATION;
  requestData.boostExpiresAt = boostExpiresAt;
 
@@ -812,15 +813,15 @@ async function handleBoostAccept(interaction) {
  // Save updated request data
  await saveBoostingRequestToTempData(requestId, requestData);
 
- // Update the original boost request embed to show fulfilled status
-  await updateBoostRequestEmbed(interaction.client, requestData, 'fulfilled');
+ // Update the original boost request embed to show accepted status
+  await updateBoostRequestEmbed(interaction.client, requestData, 'accepted');
 
  // Create and send boost applied embed
   const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
   const embed = createBoostAppliedEmbed(embedData);
 
  await interaction.reply({
-  content: `Boost has been applied and will remain active for 24 hours!`,
+  content: `Boost accepted and is now active for 24 hours!`,
   embeds: [embed],
  });
 }
@@ -842,7 +843,7 @@ async function handleBoostStatus(interaction) {
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
  const currentTime = Date.now();
  
- if (!activeBoost || activeBoost.status !== "fulfilled") {
+ if (!activeBoost || activeBoost.status !== "accepted") {
   // If there's a pending boost that has expired, update its embed
   if (activeBoost && activeBoost.status === "pending" && activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
     activeBoost.status = "expired";
@@ -963,7 +964,7 @@ async function handleBoostUse(interaction) {
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
  const currentTime = Date.now();
  
- if (!activeBoost || activeBoost.status !== "fulfilled") {
+ if (!activeBoost || activeBoost.status !== "accepted") {
   await interaction.reply({
    content: `${characterName} does not have an active boost in the "Other" category.`,
    ephemeral: true,
@@ -1024,7 +1025,11 @@ async function handleBoostUse(interaction) {
    .setColor("#9B59B6")
    .setFooter({ text: "Weather prediction locked in for tomorrow!" });
 
-  // Clear the boost after use
+  // Mark request as fulfilled and clear the boost after use
+  activeBoost.status = "fulfilled";
+  activeBoost.fulfilledAt = Date.now();
+  await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+
   character.boostedBy = null;
   await character.save();
   
@@ -1076,7 +1081,11 @@ async function handleBoostUse(interaction) {
    .setColor("#E74C3C")
    .setFooter({ text: "The storm answers the song!" });
 
-  // Clear the boost after use
+  // Mark request as fulfilled and clear the boost after use
+  activeBoost.status = "fulfilled";
+  activeBoost.fulfilledAt = Date.now();
+  await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+
   character.boostedBy = null;
   await character.save();
   
@@ -1121,27 +1130,33 @@ async function handleBoostCancel(interaction) {
   return;
  }
 
- // Check if the request is pending (can't cancel fulfilled or expired requests)
- if (requestData.status !== "pending") {
+ // Check if the request can be cancelled (pending or accepted)
+ if (requestData.status === "fulfilled" || requestData.status === "expired" || requestData.status === "cancelled") {
   await interaction.reply({
-   content: `❌ **Cannot Cancel**\n\nThis boost request has already been ${requestData.status === "fulfilled" ? "fulfilled" : requestData.status === "expired" ? "expired" : requestData.status}. Only pending requests can be cancelled.`,
+   content: `❌ **Cannot Cancel**\n\nThis boost request has already been ${requestData.status === "fulfilled" ? "fulfilled" : requestData.status === "expired" ? "expired" : "cancelled"}.`,
    ephemeral: true,
   });
   return;
  }
 
- // Check if the request has expired
- const currentTime = Date.now();
- if (requestData.expiresAt && currentTime > requestData.expiresAt) {
-  // Auto-mark as expired
-  requestData.status = "expired";
-  await saveBoostingRequestToTempData(requestId, requestData);
-  
+ // Check if the request has expired (for pending requests only)
+ if (requestData.status === "pending" && requestData.expiresAt && Date.now() > requestData.expiresAt) {
   await interaction.reply({
    content: "❌ **Request Expired**\n\nThis boost request has already expired and cannot be cancelled.",
    ephemeral: true,
   });
   return;
+ }
+
+ // Handle accepted boosts - clear the character's boostedBy field
+ const wasAccepted = requestData.status === "accepted";
+ if (wasAccepted) {
+  const character = await fetchCharacterByName(requestData.targetCharacter);
+  if (character && character.boostedBy) {
+   character.boostedBy = null;
+   await character.save();
+   logger.info('BOOST', `Cleared boost for ${character.name} - boost cancelled by user`);
+  }
  }
 
  // Cancel the request
@@ -1151,8 +1166,9 @@ async function handleBoostCancel(interaction) {
  // Update the embed if it exists
  await updateBoostRequestEmbed(interaction.client, requestData, 'cancelled');
 
+ const statusMessage = wasAccepted ? "active boost" : "boost request";
  await interaction.reply({
-  content: `✅ **Boost Request Cancelled**\n\nSuccessfully cancelled the boost request from **${requestData.boostingCharacter}** for **${requestData.targetCharacter}**.\n\n**Request ID:** ${requestData.boostRequestId}`,
+  content: `✅ **${statusMessage.charAt(0).toUpperCase() + statusMessage.slice(1)} Cancelled**\n\nSuccessfully cancelled the ${statusMessage} from **${requestData.boostingCharacter}** for **${requestData.targetCharacter}**.\n\n**Request ID:** ${requestData.boostRequestId}`,
   ephemeral: true,
  });
 }
