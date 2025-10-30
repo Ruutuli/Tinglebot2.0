@@ -1043,6 +1043,14 @@ const BOOST_FLAVOR_MESSAGES = {
       "🔮 Premonition of the healing need ensures the process is more energy-efficient.",
       "✨ Fortune's guidance optimizes the healing process, reducing the stamina required."
     ],
+    Traveling: [
+      "🔮 Thanks to foresight, you anticipated dangerous weather and chose a safe detour.",
+      "✨ The Fortune Teller's blessing revealed an unhindered route—travel continues despite the storm.",
+      "🌟 A vision warned you ahead of time; you bypassed the hazard and pressed on.",
+      "💫 Prophetic insight guided your steps around the danger. The path remained clear.",
+      "🗺️ Foresight marked a safe corridor through the region—no delays from the weather.",
+      "🌬️ You saw the danger before it formed and avoided it entirely, traveling without interruption."
+    ],
     default: [
       "🔮 Mystical insight enhances your abilities with prophetic knowledge.",
       "✨ Fortune's favor improves your technique with magical guidance.",

@@ -2395,7 +2395,8 @@ const createInitialTravelEmbed = (
  paths,
  totalTravelDuration,
  mount = null,
- mode = 'on foot'
+ mode = 'on foot',
+ boostFlavor = null
 ) => {
  const startEmoji = villageEmojis[startingVillage.toLowerCase()] || "";
  const destEmoji = villageEmojis[destination.toLowerCase()] || "";
@@ -2419,6 +2420,14 @@ const createInitialTravelEmbed = (
   .setColor("#AA926A")
   .setAuthor({ name: "Travel Announcement", iconURL: character.icon })
   .setTimestamp();
+
+ if (boostFlavor) {
+  embed.addFields({
+   name: '🔮 Boost',
+   value: boostFlavor,
+   inline: false
+  });
+ }
 
  setDefaultImage(embed);
  return embed;

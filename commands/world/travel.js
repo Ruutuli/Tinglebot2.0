@@ -59,6 +59,10 @@ const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { retrieveAllByType } = require('../../utils/storage.js');
 const { getWeatherWithoutGeneration } = require('../../services/weatherService');
 const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
+const { applyTravelWeatherBoost } = require('../../modules/boostIntegration');
+const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
+const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../jobs/boosting');
+const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- External API Integrations -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
@@ -99,6 +103,9 @@ const PATH_CHANNELS = {
   pathOfScarletLeaves: PATH_OF_SCARLET_LEAVES,
   leafDewWay: LEAF_DEW_WAY
 };
+
+// Allow travel actions to be initiated from this testing channel as an override
+const TEST_TRAVEL_CHANNEL_ID = '1391812848099004578';
 
 const MODE_CHOICES = [
   { name: 'on foot',  value: 'on foot'  }
@@ -189,6 +196,11 @@ async function validateCorrectTravelChannel(interaction, character, startingVill
   }
 
   const currentChannel = interaction.channelId;
+
+  // Bypass channel path validation in the designated testing channel
+  if (currentChannel === TEST_TRAVEL_CHANNEL_ID) {
+    return true;
+  }
 
   if (totalTravelDuration === 2 && character.job && !hasPerk(character, 'DELIVERING')) {
     if (
@@ -416,33 +428,48 @@ module.exports = {
       }
 
       // ------------------- Check Severe Weather -------------------
+      let boostFlavorText = null;
       const severeWeather = await checkSevereWeather(startingVillage);
       if (severeWeather.blocked) {
-        const weatherEmbed = createWeatherTravelRestrictionEmbed(
-          character, 
-          severeWeather.condition, 
-          severeWeather.emoji, 
-          startingVillage, 
-          false
-        );
-        return interaction.editReply({
-          embeds: [weatherEmbed]
-        });
+        // Check for Fortune Teller Traveling boost override
+        const weatherOverride = await applyTravelWeatherBoost(character.name, true);
+        if (weatherOverride === false) {
+          logger.info('BOOST', `⚡ Fortune Teller boost applied: Foresight Detour allows ${character.name} to travel from ${startingVillage} despite ${severeWeather.condition}.`);
+          boostFlavorText = generateBoostFlavorText('Fortune Teller', 'Traveling');
+        } else {
+          const weatherEmbed = createWeatherTravelRestrictionEmbed(
+            character,
+            severeWeather.condition,
+            severeWeather.emoji,
+            startingVillage,
+            false
+          );
+          return interaction.editReply({
+            embeds: [weatherEmbed]
+          });
+        }
       }
 
       // Check destination weather as well
       const destinationSevereWeather = await checkSevereWeather(destination);
       if (destinationSevereWeather.blocked) {
-        const weatherEmbed = createWeatherTravelRestrictionEmbed(
-          character, 
-          destinationSevereWeather.condition, 
-          destinationSevereWeather.emoji, 
-          destination, 
-          true
-        );
-        return interaction.editReply({
-          embeds: [weatherEmbed]
-        });
+        // Check for Fortune Teller Traveling boost override (arrival side)
+        const weatherOverrideDest = await applyTravelWeatherBoost(character.name, true);
+        if (weatherOverrideDest === false) {
+          logger.info('BOOST', `⚡ Fortune Teller boost applied: Foresight Detour allows ${character.name} to arrive at ${destination} despite ${destinationSevereWeather.condition}.`);
+          boostFlavorText = boostFlavorText || generateBoostFlavorText('Fortune Teller', 'Traveling');
+        } else {
+          const weatherEmbed = createWeatherTravelRestrictionEmbed(
+            character,
+            destinationSevereWeather.condition,
+            destinationSevereWeather.emoji,
+            destination,
+            true
+          );
+          return interaction.editReply({
+            embeds: [weatherEmbed]
+          });
+        }
       }
 
       // ------------------- Mount Travel Logic -------------------
@@ -654,7 +681,7 @@ module.exports = {
       }
 
       // ------------------- Send Initial Travel Embed -------------------
-      const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration, null, mode);
+      const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration, null, mode, boostFlavorText);
       await interaction.followUp({ embeds: [initialEmbed] });
 
       // ------------------- Start Travel Processing -------------------
@@ -1139,6 +1166,32 @@ async function processTravelDay(day, context) {
           success: true
         });
         await character.save();
+
+        // ------------------- Clear Boost After Travel -------------------
+        if (character.boostedBy) {
+          logger.info('BOOST', `Clearing boost for ${character.name} after successful travel`);
+          try {
+            const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+            if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
+              activeBoost.status = 'fulfilled';
+              activeBoost.fulfilledAt = Date.now();
+              await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+              if (interaction?.client) {
+                try {
+                  await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
+                  await updateBoostAppliedMessage(interaction.client, activeBoost);
+                } catch (embedErr) {
+                  logger.error('BOOST', `Failed to update boost embeds on fulfillment: ${embedErr.message}`);
+                }
+              }
+            }
+          } catch (e) {
+            logger.error('BOOST', `Failed to mark boost fulfilled for ${character.name}: ${e.message}`);
+          }
+          // Clear boostedBy flag on character
+          character.boostedBy = null;
+          await character.save();
+        }
       } catch (error) {
         handleInteractionError(error, 'travel.js');
         await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
@@ -1150,7 +1203,8 @@ async function processTravelDay(day, context) {
     }
 
     // ------------------- Wrong-Road Validation -------------------
-    if (totalTravelDuration === 2 && character.job && !hasPerk(character, 'DELIVERING')) {
+    // Skip wrong-road checks in the designated testing channel
+    if (currentChannel !== TEST_TRAVEL_CHANNEL_ID && totalTravelDuration === 2 && character.job && !hasPerk(character, 'DELIVERING')) {
       if (
         (startingVillage === 'inariko' && destination === 'vhintl' && currentChannel !== PATH_CHANNELS.leafDewWay) ||
         (startingVillage === 'inariko' && destination === 'rudania' && currentChannel !== PATH_CHANNELS.pathOfScarletLeaves)
