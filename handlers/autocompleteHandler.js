@@ -3347,7 +3347,7 @@ async function handleHealAutocomplete(interaction, focusedOption) {
       const allCharacters = [...userCharacters, ...modCharacters];
       
       const choices = allCharacters.map((character) => ({
-        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        name: `${character.name} - ${character.currentHearts}/${character.maxHearts} ❤️`,
         value: character.name,
                 }));
                 
@@ -3373,7 +3373,7 @@ async function handleHealAutocomplete(interaction, focusedOption) {
       );
 
       const choices = healerCharacters.map((character) => ({
-        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        name: `${character.name} - ${character.currentStamina}/${character.maxStamina} 🟩`,
         value: character.name,
                 }));
                 
@@ -3396,7 +3396,7 @@ async function handleHealAutocomplete(interaction, focusedOption) {
       );
 
       const choices = healerCharacters.map((character) => ({
-        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        name: `${character.name} - ${character.currentStamina}/${character.maxStamina} 🟩`,
         value: character.name,
                 }));
                 
