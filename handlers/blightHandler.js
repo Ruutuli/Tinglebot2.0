@@ -72,19 +72,82 @@ const { sendUserDM } = require('../utils/messageUtils');
 // ============================================================================
 
 // ------------------- Function: get8PMESTInUTC -------------------
-// Converts 8:00 PM EST to UTC for consistent time comparisons
+// Converts 8:00 PM EST/EDT to UTC for consistent time comparisons
+// Uses America/New_York timezone to properly handle daylight saving time
 function get8PMESTInUTC(date = new Date()) {
-  // Create a date string representing 8:00 PM EST on the given date
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  // Get the date components in America/New_York timezone
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  });
   
-  // Create ISO string for 8:00 PM EST (UTC-5)
-  // Note: EST is always UTC-5, regardless of DST
-  const estTimeString = `${year}-${month}-${day}T20:00:00-05:00`;
+  const parts = formatter.formatToParts(date);
+  const values = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
   
-  // Parse and return UTC time
-  return new Date(estTimeString);
+  // Get the date components for the given date in EST/EDT
+  const year = parseInt(values.year);
+  const month = parseInt(values.month);
+  const day = parseInt(values.day);
+  
+  // To find 8 PM EST/EDT in UTC, we need to determine the offset
+  // Create a test date at noon on this date to determine DST status
+  const testUTC = Date.UTC(year, month - 1, day, 12, 0, 0);
+  const testDate = new Date(testUTC);
+  
+  // Format as EST/EDT and UTC to find the offset
+  const estParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    hour12: false
+  }).formatToParts(testDate);
+  const utcParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    hour: 'numeric',
+    hour12: false
+  }).formatToParts(testDate);
+  
+  const estHour = parseInt(estParts.find(p => p.type === 'hour').value);
+  const utcHour = parseInt(utcParts.find(p => p.type === 'hour').value);
+  const offsetHours = estHour - utcHour; // Negative: EST/EDT is behind UTC
+  
+  // 8 PM EST/EDT in UTC = 20:00 + |offsetHours|
+  // EST: offsetHours = -5, so 8 PM EST = 1 AM UTC next day (20 + 5 = 25 = 1 AM)
+  // EDT: offsetHours = -4, so 8 PM EDT = 12 AM UTC next day (20 + 4 = 24 = 0 AM)
+  const utcHour8PM = 20 + Math.abs(offsetHours);
+  
+  // Handle day rollover - create date at the correct UTC hour, which may be next day
+  let utcDay = day;
+  let utcMonth = month - 1;
+  let utcYear = year;
+  let finalHour = utcHour8PM;
+  
+  if (utcHour8PM >= 24) {
+    finalHour = utcHour8PM % 24;
+    utcDay += 1;
+    // Handle month/year rollover
+    const daysInMonth = new Date(year, month, 0).getDate();
+    if (utcDay > daysInMonth) {
+      utcDay = 1;
+      utcMonth += 1;
+      if (utcMonth >= 12) {
+        utcMonth = 0;
+        utcYear += 1;
+      }
+    }
+  }
+  
+  return new Date(Date.UTC(utcYear, utcMonth, utcDay, finalHour, 0, 0));
 }
 
 // ============================================================================
@@ -1907,13 +1970,16 @@ async function rollForBlightProgression(interaction, characterName) {
 
     const lastRollDate = character.lastRollDate || new Date(0);
     
-    // Determine which 8 PM EST boundary to check against
+    // Determine which 8 PM EST/EDT boundary to check against
     // If we're before 8 PM today, check against yesterday's 8 PM
     // If we're after 8 PM today, check against today's 8 PM
     let rollBoundary;
     if (estNow.getHours() < 20) {
       // Before 8 PM today - check against yesterday's 8 PM
-      rollBoundary = get8PMESTInUTC(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+      // Use calendar days instead of 24 hours to handle DST transitions correctly
+      const yesterdayInEST = new Date(estNow);
+      yesterdayInEST.setDate(yesterdayInEST.getDate() - 1);
+      rollBoundary = get8PMESTInUTC(yesterdayInEST);
     } else {
       // After 8 PM today - check against today's 8 PM
       rollBoundary = today8PMUTC;
@@ -3086,14 +3152,16 @@ async function checkMissedRolls(client) {
       logger.info('BLIGHT', `Checking ${character.name} - Last roll: ${lastRollDate.toISOString()}, Time since: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
 
       // ---- SKIP missed roll progression if newly blighted today or after last blight call ----
-      // Calculate current day's blight call (8:00 PM EST today) in UTC
+      // Calculate current day's blight call (8:00 PM EST/EDT today) in UTC
       const currentDayBlightCall = get8PMESTInUTC(new Date());
       
-      // Calculate last blight call (8:00 PM EST previous day) in UTC
-      // This gets the 8 PM blight call from 24 hours before NOW
-      const now = Date.now();
-      const yesterdayDate = new Date(now - 24 * 60 * 60 * 1000);
-      const lastBlightCall = get8PMESTInUTC(yesterdayDate);
+      // Calculate last blight call (8:00 PM EST/EDT previous calendar day) in UTC
+      // Use calendar days instead of 24 hours to handle DST transitions correctly
+      const now = new Date();
+      const nowInEST = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const yesterdayInEST = new Date(nowInEST);
+      yesterdayInEST.setDate(yesterdayInEST.getDate() - 1);
+      const lastBlightCall = get8PMESTInUTC(yesterdayInEST);
       
       // Skip if character was blighted after the last blight call (before the current blight call)
       // OR if character rolled after the last blight call
