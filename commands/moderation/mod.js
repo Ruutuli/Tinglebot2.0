@@ -1942,43 +1942,12 @@ async function handleApprove(interaction) {
           }
         }
 
-        // ------------------- Blight Healing Completion Logic -------------------
-        // Check if this submission is for blight healing and auto-complete it
+        // ------------------- Blight Healing Note -------------------
+        // Note: Blight healing is NOT auto-completed when approving submissions.
+        // Users must use /blight submit with their submission ID to complete the healing process.
+        // This ensures the user explicitly submits their approved work for healing.
         if (submission.blightId && submission.blightId !== 'N/A') {
-          try {
-            console.log(`[mod.js]: Processing blight healing completion for submission ${submissionId} with blightId: ${submission.blightId}`);
-            
-            const { retrieveBlightRequestFromStorage, deleteBlightRequestFromStorage } = require('../../utils/storage');
-            const { completeBlightHealing } = require('../../handlers/blightHandler');
-            const { fetchCharacterByName } = require('../../database/db');
-            
-            // Get the blight healing request
-            const blightRequest = await retrieveBlightRequestFromStorage(submission.blightId);
-            if (blightRequest && blightRequest.status === 'pending') {
-              // Get the character to heal
-              const character = await fetchCharacterByName(blightRequest.characterName);
-              if (character && character.blighted) {
-                console.log(`[mod.js]: Completing blight healing for character: ${character.name}`);
-                
-                // Complete the blight healing
-                await completeBlightHealing(character, interaction);
-                
-                // Mark the blight request as completed
-                blightRequest.status = 'completed';
-                blightRequest.submittedAt = new Date().toISOString();
-                await deleteBlightRequestFromStorage(submission.blightId);
-                
-                console.log(`[mod.js]: ✅ Blight healing completed for character: ${character.name}`);
-              } else {
-                console.log(`[mod.js]: Character ${blightRequest.characterName} not found or not blighted`);
-              }
-            } else {
-              console.log(`[mod.js]: Blight request ${submission.blightId} not found or already processed`);
-            }
-          } catch (blightError) {
-            console.error(`[mod.js]: ❌ Error processing blight healing for submission ${submissionId}:`, blightError);
-            // Continue with approval even if blight healing fails
-          }
+          console.log(`[mod.js]: Submission ${submissionId} has blightId ${submission.blightId} - user must use /blight submit to complete healing`);
         }
 
         // ------------------- Quest Completion Logic -------------------
