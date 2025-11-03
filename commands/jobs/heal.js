@@ -1082,7 +1082,13 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       capturedBoostInfo // boost info
     );
 
-    await interaction.followUp({ content: message, embeds: [embed] });
+    await interaction.followUp({ 
+      content: message, 
+      embeds: [embed],
+      allowedMentions: {
+        users: [originalRequesterId]
+      }
+    });
   } catch (error) {
     await handleInteractionErrorResponse(error, interaction, 'fulfilling the healing request');
   }
