@@ -64,24 +64,12 @@ async function sendIndividualRewardNotification(quest, participant, rewardResult
             return { success: false, error: 'Discord client not available' };
         }
 
-        // Determine the channel to send the notification to (prefer RP thread, then Sheikah Slate)
+        // Always send to Sheikah Slate channel only
         const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
-        let targetChannelId = null;
-        
-        if (quest.questType === QUEST_TYPES.RP && quest.rpThreadParentChannel) {
-            targetChannelId = quest.rpThreadParentChannel;
-        } else {
-            targetChannelId = SHEIKAH_SLATE_CHANNEL_ID;
-        }
-
-        if (!targetChannelId) {
-            targetChannelId = quest.targetChannel || QUEST_CHANNEL_ID;
-        }
-
-        const channel = await client.channels.fetch(targetChannelId);
+        const channel = await client.channels.fetch(SHEIKAH_SLATE_CHANNEL_ID);
         if (!channel) {
-            console.log(`[questRewardModule] ❌ Could not find channel ${targetChannelId} for notification`);
-            return { success: false, error: 'Channel not found' };
+            console.log(`[questRewardModule] ❌ Could not find Sheikah Slate channel ${SHEIKAH_SLATE_CHANNEL_ID} for notification`);
+            return { success: false, error: 'Sheikah Slate channel not found' };
         }
 
         // Create reward notification embed
@@ -312,62 +300,23 @@ async function sendQuestCompletionSummary(quest, completionReason) {
         
         addQuestInfoFields(embed, quest, additionalFields);
 
-        // Send to multiple channels
+        // Always send to Sheikah Slate channel only
         const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
-        const channelsToSend = [];
-
-        // 1. Send to RP thread if it's an RP quest
-        if (quest.questType === QUEST_TYPES.RP && quest.rpThreadParentChannel) {
-            try {
-                const rpThread = await client.channels.fetch(quest.rpThreadParentChannel);
-                if (rpThread) {
-                    channelsToSend.push(rpThread);
-                }
-            } catch (error) {
-                console.log(`[questRewardModule] ⚠️ Could not fetch RP thread ${quest.rpThreadParentChannel}:`, error.message);
-            }
-        }
-
-        // 2. Always send to Sheikah Slate channel
+        
         try {
             const sheikahSlateChannel = await client.channels.fetch(SHEIKAH_SLATE_CHANNEL_ID);
             if (sheikahSlateChannel) {
-                channelsToSend.push(sheikahSlateChannel);
+                await sheikahSlateChannel.send({ embeds: [embed] });
+                console.log(`[questRewardModule] ✅ Sent quest completion summary to Sheikah Slate channel`);
+                return { success: true };
+            } else {
+                console.log(`[questRewardModule] ⚠️ Could not fetch Sheikah Slate channel`);
+                return { success: false, error: 'Sheikah Slate channel not found' };
             }
         } catch (error) {
-            console.log(`[questRewardModule] ⚠️ Could not fetch Sheikah Slate channel:`, error.message);
+            console.error(`[questRewardModule] ❌ Error sending to Sheikah Slate channel:`, error);
+            return { success: false, error: error.message };
         }
-
-        // 3. Fallback to quest target channel if no other channels
-        if (channelsToSend.length === 0) {
-            const channelId = quest.targetChannel || QUEST_CHANNEL_ID;
-            try {
-                const channel = await client.channels.fetch(channelId);
-                if (channel) {
-                    channelsToSend.push(channel);
-                }
-            } catch (error) {
-                console.log(`[questRewardModule] ⚠️ Could not fetch fallback channel ${channelId}:`, error.message);
-            }
-        }
-
-        // Send to all channels
-        for (const channel of channelsToSend) {
-            try {
-                await channel.send({ embeds: [embed] });
-                console.log(`[questRewardModule] ✅ Sent quest completion summary to channel ${channel.id}`);
-            } catch (error) {
-                console.error(`[questRewardModule] ❌ Error sending to channel ${channel.id}:`, error);
-            }
-        }
-
-        if (channelsToSend.length === 0) {
-            console.log(`[questRewardModule] ⚠️ No channels available to send quest completion summary`);
-            return { success: false, error: 'No channels available' };
-        }
-
-        console.log(`[questRewardModule] ✅ Sent quest completion summary for ${quest.questID} to ${channelsToSend.length} channel(s)`);
-        return { success: true };
 
     } catch (error) {
         console.error(`[questRewardModule] ❌ Error sending quest completion summary:`, error);
