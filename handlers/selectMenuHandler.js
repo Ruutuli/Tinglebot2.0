@@ -63,6 +63,11 @@ async function handleSelectMenuInteraction(interaction) {
     // Ensure the interaction is from a string select menu
     if (!interaction.isStringSelectMenu()) return;
 
+    // Check if this is a Secret Santa select menu
+    if (interaction.customId.startsWith('secretsanta_')) {
+      return await handleSecretSantaSelectMenu(interaction);
+    }
+
     // Check if this is a submission-related select menu
     const submissionMenuIds = ['baseSelect', 'typeMultiplierSelect', 'productMultiplierSelect', 'addOnsSelect', 'specialWorksSelect'];
     if (!submissionMenuIds.includes(interaction.customId)) {

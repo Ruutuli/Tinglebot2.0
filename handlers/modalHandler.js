@@ -24,6 +24,9 @@ const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils
 // Custom handler functions for modal-related component interactions.
 const { handleMountNameSubmission } = require('./mountComponentHandler');
 
+// Secret Santa handler
+const { handleSecretSantaModal } = require('./secretSantaHandler');
+
 
 // ------------------- Helper Functions -------------------
 function generateSubmissionId() {
@@ -40,6 +43,11 @@ async function handleModalSubmission(interaction) {
   const customId = interaction.customId;
 
   try {
+    // Check if this is a Secret Santa modal
+    if (customId.startsWith('secretsanta_')) {
+      return await handleSecretSantaModal(interaction);
+    }
+
     // Get or create submission data using the new helper
     const { submissionId, submissionData } = await getOrCreateSubmission(userId);
 
