@@ -3149,36 +3149,75 @@ async function checkMissedRolls(client) {
     for (const character of blightedCharacters) {
       const lastRollDate = character.lastRollDate || new Date(0);
       const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
-      logger.info('BLIGHT', `Checking ${character.name} - Last roll: ${lastRollDate.toISOString()}, Time since: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
-
-      // ---- SKIP missed roll progression if newly blighted today or after last blight call ----
-      // Calculate current day's blight call (8:00 PM EST/EDT today) in UTC
-      const currentDayBlightCall = get8PMESTInUTC(new Date());
       
-      // Calculate last blight call (8:00 PM EST/EDT previous calendar day) in UTC
-      // Use calendar days instead of 24 hours to handle DST transitions correctly
+      // ---- Calculate blight call boundaries for robust checking ----
+      // This uses the same logic as rollForBlightProgression to ensure consistency
       const now = new Date();
-      const nowInEST = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-      const yesterdayInEST = new Date(nowInEST);
-      yesterdayInEST.setDate(yesterdayInEST.getDate() - 1);
-      const lastBlightCall = get8PMESTInUTC(yesterdayInEST);
+      const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
       
-      // Skip if character was blighted after the last blight call (before the current blight call)
-      // OR if character rolled after the last blight call
+      // Calculate today's 8 PM EST/EDT in UTC
+      const today8PMUTC = get8PMESTInUTC(now);
+      
+      // Determine the current roll boundary (same logic as rollForBlightProgression)
+      // If we're before 8 PM today, check against yesterday's 8 PM
+      // If we're after 8 PM today, check against today's 8 PM
+      let currentRollBoundary;
+      if (estNow.getHours() < 20) {
+        // Before 8 PM today - check against yesterday's 8 PM
+        const yesterdayInEST = new Date(estNow);
+        yesterdayInEST.setDate(yesterdayInEST.getDate() - 1);
+        currentRollBoundary = get8PMESTInUTC(yesterdayInEST);
+      } else {
+        // After 8 PM today - check against today's 8 PM
+        currentRollBoundary = today8PMUTC;
+      }
+      
+      // Calculate the previous blight call period (for missed roll detection)
+      // This is the period that just ended (the one we're checking if they missed)
+      // If we're at or after 8 PM today, the previous period was yesterday's 8 PM to today's 8 PM
+      // If we're before 8 PM today, the previous period was the day before yesterday's 8 PM to yesterday's 8 PM
+      let previousBlightCall;
+      if (estNow.getHours() >= 20) {
+        // At or after 8 PM today - previous period ended at today's 8 PM, started at yesterday's 8 PM
+        const yesterdayInEST = new Date(estNow);
+        yesterdayInEST.setDate(yesterdayInEST.getDate() - 1);
+        previousBlightCall = get8PMESTInUTC(yesterdayInEST); // Yesterday's 8 PM (start of the period we're checking)
+      } else {
+        // Before 8 PM today - previous period ended at yesterday's 8 PM, started at day before yesterday's 8 PM
+        const dayBeforeYesterdayInEST = new Date(estNow);
+        dayBeforeYesterdayInEST.setDate(dayBeforeYesterdayInEST.getDate() - 2);
+        previousBlightCall = get8PMESTInUTC(dayBeforeYesterdayInEST); // Day before yesterday's 8 PM
+      }
+      
+      // Enhanced logging for debugging
+      const estTimeStr = estNow.toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false });
+      logger.info('BLIGHT', `Checking ${character.name} - EST time: ${estTimeStr}, Last roll: ${lastRollDate.toISOString()}, Current boundary: ${currentRollBoundary.toISOString()}, Previous call: ${previousBlightCall.toISOString()}, Time since roll: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
+      
+      // ---- SKIP missed roll progression if newly blighted after previous blight call ----
       if (character.blightedAt) {
-        // Simply compare UTC timestamps directly - more reliable
-        const isBlightedAfterLastCall = character.blightedAt >= lastBlightCall;
+        const isBlightedAfterPreviousCall = character.blightedAt >= previousBlightCall;
         
-        if (isBlightedAfterLastCall) {
-          console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}, lastBlightCall=${lastBlightCall.toISOString()}) - infected after last blight call.`);
+        if (isBlightedAfterPreviousCall) {
+          console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}, previousBlightCall=${previousBlightCall.toISOString()}) - infected after previous blight call.`);
           continue;
         }
       }
       
-      // Check if character rolled after the last blight call
-      // The database stores UTC times, so we can compare directly
-      if (character.lastRollDate && character.lastRollDate > lastBlightCall) {
-        console.log(`[blightHandler]: Skipping missed roll for ${character.name} (lastRollDate=${character.lastRollDate.toISOString()}, lastBlightCall=${lastBlightCall.toISOString()}) - rolled after last blight call.`);
+      // ---- CRITICAL: Check if character rolled in the period we're checking ----
+      // The period we're checking is from previousBlightCall to currentRollBoundary
+      // If they rolled after previousBlightCall, they rolled in the period and didn't miss it
+      // This is the primary check that prevents false progression
+      if (character.lastRollDate && character.lastRollDate > previousBlightCall) {
+        const rollTimeStr = new Date(character.lastRollDate).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false });
+        const boundaryTimeStr = new Date(previousBlightCall).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false });
+        console.log(`[blightHandler]: ✅ Skipping missed roll for ${character.name} - rolled in period. Last roll: ${character.lastRollDate.toISOString()} (${rollTimeStr} EST), Previous boundary: ${previousBlightCall.toISOString()} (${boundaryTimeStr} EST)`);
+        continue;
+      }
+      
+      // Additional safety check: if we're before 8 PM today and they rolled after current boundary,
+      // they've already rolled for today's period (which hasn't ended yet)
+      if (estNow.getHours() < 20 && character.lastRollDate && character.lastRollDate > currentRollBoundary) {
+        console.log(`[blightHandler]: Skipping missed roll for ${character.name} (lastRollDate=${character.lastRollDate.toISOString()}, currentRollBoundary=${currentRollBoundary.toISOString()}) - already rolled in current period (before 8 PM check).`);
         continue;
       }
 
@@ -3402,12 +3441,27 @@ async function checkMissedRolls(client) {
       // ========================================================================
       // ------------------- Missed Roll → Auto Progression -------------------
       // ========================================================================
-      const oneDayMs = 24 * 60 * 60 * 1000;
-      if (timeSinceLastRoll > oneDayMs && character.blightStage < 5) {
-        console.log(`[blightHandler]: ${character.name} missed roll - Progressing from Stage ${character.blightStage}`);
+      // Only progress if they actually missed the previous blight call period
+      // A character has missed a roll if:
+      // 1. They're at or past 8 PM EST (so the period has ended)
+      // 2. Their last roll was BEFORE the previous blight call boundary (they didn't roll in the period)
+      // 3. They're not at stage 5 yet
+      // 
+      // We've already checked above that they didn't roll after the previous call or current boundary,
+      // so if we get here, they genuinely missed the roll period
+      const isPastBlightCallTime = estNow.getHours() >= 20;
+      const lastRollBeforePreviousCall = !character.lastRollDate || character.lastRollDate <= previousBlightCall;
+      const shouldProgress = isPastBlightCallTime && lastRollBeforePreviousCall && character.blightStage < 5;
+      
+      if (shouldProgress) {
+        const rollTimeStr = lastRollDate.getTime() > 0 ? new Date(lastRollDate).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false }) : 'Never';
+        const boundaryTimeStr = new Date(previousBlightCall).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false });
+        const currentTimeStr = now.toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false });
+        console.log(`[blightHandler]: ⚠️ ${character.name} missed roll - Last roll: ${lastRollDate.toISOString()} (${rollTimeStr} EST), Previous boundary: ${previousBlightCall.toISOString()} (${boundaryTimeStr} EST), Current time: ${now.toISOString()} (${currentTimeStr} EST), Progressing from Stage ${character.blightStage}`);
         character.blightStage += 1;
 
         if (character.blightStage === 5) {
+          const oneDayMs = 24 * 60 * 60 * 1000;
           character.deathDeadline = new Date(Date.now() + 7 * oneDayMs);
           console.log(`[blightHandler]: ${character.name} reached Stage 5 - Death deadline set to ${character.deathDeadline.toISOString()}`);
         }
