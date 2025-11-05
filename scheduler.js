@@ -53,6 +53,7 @@ const { bloodmoonDates, convertToHyruleanDate } = require("./modules/calendarMod
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest, regenerateArtWritingQuest } = require('./modules/helpWantedModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 const { updateAllRoleCountChannels } = require('./modules/roleCountChannelsModule');
+const { setupSecretSantaScheduler } = require('./modules/secretSantaModule');
 
 // Utilities
 const { safeAppendDataToSheet, extractSpreadsheetId } = require('./utils/googleSheetsUtils');
@@ -2316,6 +2317,7 @@ function initializeScheduler(client) {
  setupBoostingScheduler(client);
  setupWeatherScheduler(client);
  setupHelpWantedFixedScheduler(client);
+ setupSecretSantaScheduler(client);
  
  logger.success('SCHEDULER', 'All scheduled tasks initialized');
  

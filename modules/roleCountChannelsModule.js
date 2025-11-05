@@ -50,19 +50,62 @@ const ROLE_COUNT_CONFIG = {
  */
 async function getRoleMemberCount(guild, roleId) {
   try {
-    const role = guild.roles.cache.get(roleId);
+    // Try to get role from cache first
+    let role = guild.roles.cache.get(roleId);
+    
+    // If role not in cache, fetch it
+    if (!role) {
+      try {
+        role = await guild.roles.fetch(roleId);
+      } catch (fetchError) {
+        logger.warn('SYSTEM', `Role ${roleId} not found in guild (fetch failed: ${fetchError.message})`);
+        return 0;
+      }
+    }
+    
     if (!role) {
       logger.warn('SYSTEM', `Role ${roleId} not found in guild`);
       return 0;
     }
     
-    // Get all members with this role
-    const members = await guild.members.fetch();
-    const count = members.filter(member => member.roles.cache.has(roleId)).size;
+    // First, try using role.members.size (fastest, but only works if members are cached)
+    let count = role.members.size;
+    
+    // If count is 0, members might not be cached or role.members collection isn't populated
+    // Check if we have any members cached at all
+    const cachedMembersCount = guild.members.cache.size;
+    
+    // If role.members.size is 0 but we have cached members, try filtering the cache
+    if (count === 0 && cachedMembersCount > 0) {
+      // Use cached members to count - this is more reliable when role.members isn't populated
+      count = guild.members.cache.filter(member => member.roles.cache.has(roleId)).size;
+    }
+    
+    // If we still have 0 and no members are cached, try to fetch some members
+    if (count === 0 && cachedMembersCount === 0) {
+      try {
+        // Fetch members to populate the cache (limit to avoid rate limits)
+        // This will help populate the cache for future calls
+        await guild.members.fetch({ limit: 1000 });
+        // Now try both methods again
+        count = role.members.size;
+        if (count === 0) {
+          count = guild.members.cache.filter(member => member.roles.cache.has(roleId)).size;
+        }
+      } catch (fetchError) {
+        // If fetching fails, log but don't throw - return 0 as fallback
+        logger.debug('SYSTEM', `Could not fetch members for role count (${roleId}): ${fetchError.message}`);
+        // Return 0 rather than failing completely
+        return 0;
+      }
+    }
     
     return count;
   } catch (error) {
-    logger.error('SYSTEM', `Error getting member count for role ${roleId}`);
+    logger.error('SYSTEM', `Error getting member count for role ${roleId}: ${error.message || error}`);
+    if (error.stack) {
+      logger.debug('SYSTEM', `Stack trace for role ${roleId}:`, error.stack);
+    }
     return 0;
   }
 }

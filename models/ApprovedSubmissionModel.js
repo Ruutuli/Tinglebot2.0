@@ -30,8 +30,7 @@ const approvedSubmissionSchema = new mongoose.Schema({
   // ------------------- User Information -------------------
   userId: {
     type: String,
-    required: true,
-    index: true
+    required: true
   },
   username: {
     type: String,
