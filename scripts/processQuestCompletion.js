@@ -90,12 +90,51 @@ async function processQuest(questId) {
         console.log(`   Status: ${quest.status}`);
         console.log(`   Type: ${quest.questType}`);
         console.log(`   Completion Processed: ${quest.completionProcessed}`);
-        console.log(`   Posted At: ${quest.postedAt || 'Not posted'}`);
+        console.log(`   Created At: ${quest.createdAt ? new Date(quest.createdAt).toLocaleString() : 'Not set'}`);
+        console.log(`   Posted At: ${quest.postedAt ? new Date(quest.postedAt).toLocaleString() : 'Not posted'}`);
         console.log(`   Time Limit: ${quest.timeLimit || 'N/A'}\n`);
 
-        // Check if quest has expired
+        // Check if quest has expired and show date details
+        const startDate = quest.postedAt || quest.createdAt;
+        if (startDate && quest.timeLimit) {
+            const startDateTime = new Date(startDate);
+            const timeLimit = quest.timeLimit.toLowerCase();
+            let durationMs = 0;
+            
+            // Use same multipliers as QuestModel
+            const TIME_MULTIPLIERS = {
+                HOUR: 60 * 60 * 1000,
+                DAY: 24 * 60 * 60 * 1000,
+                WEEK: 7 * 24 * 60 * 60 * 1000,
+                MONTH: 30 * 24 * 60 * 60 * 1000
+            };
+            
+            if (timeLimit.includes('month')) {
+                const months = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+                durationMs = months * TIME_MULTIPLIERS.MONTH;
+            } else if (timeLimit.includes('week')) {
+                const weeks = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+                durationMs = weeks * TIME_MULTIPLIERS.WEEK;
+            } else if (timeLimit.includes('day')) {
+                const days = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+                durationMs = days * TIME_MULTIPLIERS.DAY;
+            } else if (timeLimit.includes('hour')) {
+                const hours = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+                durationMs = hours * TIME_MULTIPLIERS.HOUR;
+            }
+            
+            const expirationTime = new Date(startDateTime.getTime() + durationMs);
+            const now = new Date();
+            const daysUntil = Math.ceil((expirationTime - now) / (24 * 60 * 60 * 1000));
+            
+            console.log(`   Start Date: ${startDateTime.toLocaleString()}`);
+            console.log(`   Expiration Date: ${expirationTime.toLocaleString()}`);
+            console.log(`   Current Date: ${now.toLocaleString()}`);
+            console.log(`   ${daysUntil >= 0 ? 'Days Until' : 'Days Past'} Expiration: ${Math.abs(daysUntil)}\n`);
+        }
+        
         const timeExpired = quest.checkTimeExpiration();
-        console.log(`⏰ Time Expired Check: ${timeExpired ? 'YES' : 'NO'}\n`);
+        console.log(`⏰ Time Expired Check: ${timeExpired ? 'YES ✅' : 'NO ❌'}\n`);
 
         // Get participants
         const participants = Array.from(quest.participants.values());
@@ -128,23 +167,13 @@ async function processQuest(questId) {
             if (completionResult.completed && completionResult.needsRewardProcessing) {
                 console.log(`✅ Quest should be completed: ${completionResult.reason}\n`);
                 
-                // Process rewards
+                // Process rewards (this will also send the completion summary)
                 console.log('💰 Processing rewards...');
                 await questRewardModule.processQuestCompletion(quest.questID);
                 
                 // Mark as processed
                 await quest.markCompletionProcessed();
-                console.log('✅ Quest completion processed\n');
-                
-                // Send completion summary
-                console.log('📢 Sending completion summary...');
-                const summaryResult = await questRewardModule.sendQuestCompletionSummary(quest, completionResult.reason);
-                
-                if (summaryResult.success) {
-                    console.log('✅ Completion summary sent\n');
-                } else {
-                    console.log(`⚠️ Failed to send summary: ${summaryResult.error}\n`);
-                }
+                console.log('✅ Quest completion processed (summary sent automatically)\n');
             } else if (completionResult.completed) {
                 console.log(`ℹ️ Quest already processed: ${completionResult.reason}\n`);
             } else {
@@ -154,24 +183,13 @@ async function processQuest(questId) {
             // Quest is marked as completed but rewards weren't processed
             console.log('🔄 Quest is completed but rewards not processed. Processing now...\n');
             
-            // Process rewards
+            // Process rewards (this will also send the completion summary)
             console.log('💰 Processing rewards...');
             await questRewardModule.processQuestCompletion(quest.questID);
             
             // Mark as processed
             await quest.markCompletionProcessed();
-            console.log('✅ Quest completion processed\n');
-            
-            // Send completion summary
-            console.log('📢 Sending completion summary...');
-            const completionReason = quest.completionReason || 'time_expired';
-            const summaryResult = await questRewardModule.sendQuestCompletionSummary(quest, completionReason);
-            
-            if (summaryResult.success) {
-                console.log('✅ Completion summary sent\n');
-            } else {
-                console.log(`⚠️ Failed to send summary: ${summaryResult.error}\n`);
-            }
+            console.log('✅ Quest completion processed (summary sent automatically)\n');
         } else if (quest.completionProcessed) {
             console.log('ℹ️ Quest completion has already been processed.\n');
         } else {
