@@ -52,6 +52,83 @@ const PROGRESS_STATUS = {
 // ------------------- Notification Functions -------------------
 // ============================================================================
 
+// ------------------- Send Individual Reward Notification -------------------
+async function sendIndividualRewardNotification(quest, participant, rewardResult) {
+    try {
+        console.log(`[questRewardModule] 🎉 Sending reward notification for ${participant.characterName} in quest ${quest.questID}`);
+        
+        // Get the Discord client
+        const { client } = require('../index.js');
+        if (!client) {
+            console.log(`[questRewardModule] ❌ Discord client not available for notification`);
+            return { success: false, error: 'Discord client not available' };
+        }
+
+        // Determine the channel to send the notification to (prefer RP thread, then Sheikah Slate)
+        const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
+        let targetChannelId = null;
+        
+        if (quest.questType === QUEST_TYPES.RP && quest.rpThreadParentChannel) {
+            targetChannelId = quest.rpThreadParentChannel;
+        } else {
+            targetChannelId = SHEIKAH_SLATE_CHANNEL_ID;
+        }
+
+        if (!targetChannelId) {
+            targetChannelId = quest.targetChannel || QUEST_CHANNEL_ID;
+        }
+
+        const channel = await client.channels.fetch(targetChannelId);
+        if (!channel) {
+            console.log(`[questRewardModule] ❌ Could not find channel ${targetChannelId} for notification`);
+            return { success: false, error: 'Channel not found' };
+        }
+
+        // Create reward notification embed
+        const rewardEmbed = createBaseEmbed(
+            '🎉 Quest Reward Received!',
+            `**${participant.characterName}** has received their rewards for completing **${quest.title}**!`,
+            QUEST_COLORS.SUCCESS
+        );
+
+        const rewardFields = [];
+        
+        if (rewardResult.tokensAdded > 0) {
+            rewardFields.push({
+                name: '💰 Tokens',
+                value: `${rewardResult.tokensAdded} tokens`,
+                inline: true
+            });
+        }
+        
+        if (quest.itemReward && quest.itemRewardQty > 0) {
+            rewardFields.push({
+                name: '📦 Item Reward',
+                value: `${quest.itemRewardQty}x ${quest.itemReward}`,
+                inline: true
+            });
+        }
+
+        if (rewardFields.length > 0) {
+            rewardEmbed.addFields(rewardFields);
+        }
+
+        addQuestInfoFields(rewardEmbed, quest, []);
+
+        await channel.send({ 
+            content: `<@${participant.userId}>`,
+            embeds: [rewardEmbed] 
+        });
+
+        console.log(`[questRewardModule] ✅ Sent reward notification for ${participant.characterName} in quest ${quest.questID}`);
+        return { success: true };
+
+    } catch (error) {
+        console.error(`[questRewardModule] ❌ Error sending reward notification:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
 // ------------------- Send Quest Completion Notification -------------------
 async function sendQuestCompletionNotification(quest, participant, channelId = null) {
     try {
@@ -591,6 +668,10 @@ async function processParticipantReward(quest, participant) {
         const rewardResult = await distributeRewards(quest, participant);
         if (rewardResult.success) {
             updateParticipantRewardData(participant, quest, rewardResult, 'immediate');
+            
+            // Send individual notification to the participant
+            await sendIndividualRewardNotification(quest, participant, rewardResult);
+            
             console.log(`[questRewardModule.js] ✅ Successfully rewarded participant ${participant.characterName} for quest ${quest.questID}`);
             return 'rewarded';
         } else {
@@ -688,6 +769,8 @@ async function distributeItems(quest, participant) {
         // Import inventory utilities and database functions
         const { connectToInventories } = require('../database/db');
         const Item = require('../models/ItemModel');
+        const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
+        const { v4: uuidv4 } = require('uuid');
         
         // Connect to inventories database
         const inventoriesConnection = await connectToInventories();
@@ -710,7 +793,7 @@ async function distributeItems(quest, participant) {
         // Check if item already exists in inventory
         const existingItem = await inventoryCollection.findOne({
             characterId: character._id,
-            itemName: new RegExp(`^${escapeRegExp(quest.itemReward)}$`, 'i')
+            itemName: new RegExp(`^${escapeRegExp(item.itemName)}$`, 'i')
         });
         
         if (existingItem) {
@@ -736,6 +819,61 @@ async function distributeItems(quest, participant) {
             };
             
             await inventoryCollection.insertOne(newItem);
+        }
+        
+        // Sync to Google Sheets if character has inventory link
+        if (character.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+            try {
+                const { client } = require('../index.js');
+                const category = Array.isArray(item.category) ? item.category.join(', ') : (item.category || '');
+                const type = Array.isArray(item.type) ? item.type.join(', ') : (item.type || '');
+                const subtype = Array.isArray(item.subtype) ? item.subtype.join(', ') : (item.subtype || '');
+                
+                // Helper function to format date/time
+                const formatDateTime = (date) => {
+                    return date.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
+                };
+                
+                // Create addition log entry
+                const additionLogEntry = [
+                    character.name, // Character Name (A)
+                    item.itemName, // Item Name (B)
+                    quest.itemRewardQty, // Qty of Item (C) - positive for addition
+                    category, // Category (D)
+                    type, // Type (E)
+                    subtype, // Subtype (F)
+                    `Quest: ${quest.title}`, // Obtain (G)
+                    character.job || '', // Job (H)
+                    character.perk || '', // Perk (I)
+                    character.currentVillage || character.homeVillage || '', // Location (J)
+                    '', // Link (K) - no interaction link for quest rewards
+                    formatDateTime(new Date()), // Date/Time (L)
+                    uuidv4() // Confirmed Sync (M)
+                ];
+                
+                // Log to Google Sheets
+                await safeAppendDataToSheet(
+                    character.inventory,
+                    character,
+                    'loggedInventory!A:M',
+                    [additionLogEntry],
+                    client,
+                    { skipValidation: false, context: { commandName: 'questReward', characterName: character.name } }
+                );
+                
+                console.log(`[questRewardModule.js] 📊 Synced ${quest.itemRewardQty}x ${quest.itemReward} to Google Sheets for ${participant.characterName}`);
+            } catch (sheetError) {
+                // Don't fail the reward if sheet sync fails
+                console.error(`[questRewardModule.js] ⚠️ Failed to sync to Google Sheets: ${sheetError.message}`);
+            }
         }
         
         console.log(`[questRewardModule.js] 📦 Added ${quest.itemRewardQty}x ${quest.itemReward} to character ${participant.characterName}`);
