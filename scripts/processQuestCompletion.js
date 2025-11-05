@@ -191,7 +191,27 @@ async function processQuest(questId) {
             await quest.markCompletionProcessed();
             console.log('✅ Quest completion processed (summary sent automatically)\n');
         } else if (quest.completionProcessed) {
-            console.log('ℹ️ Quest completion has already been processed.\n');
+            // Check if rewards were actually distributed
+            const rewardedParticipants = participants.filter(p => p.progress === 'rewarded');
+            
+            if (rewardedParticipants.length === 0 && completedParticipants.length > 0) {
+                console.log('⚠️ Quest marked as processed but no rewards were distributed!');
+                console.log('   Force processing rewards now...\n');
+                
+                // Reset completion processed flag to allow reprocessing
+                quest.completionProcessed = false;
+                await quest.save();
+                
+                // Process rewards (this will also send the completion summary)
+                console.log('💰 Processing rewards...');
+                await questRewardModule.processQuestCompletion(quest.questID);
+                
+                // Mark as processed again
+                await quest.markCompletionProcessed();
+                console.log('✅ Quest rewards force processed\n');
+            } else {
+                console.log('ℹ️ Quest completion has already been processed.\n');
+            }
         } else {
             console.log('ℹ️ Quest is still active and not expired yet.\n');
         }

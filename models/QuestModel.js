@@ -1342,8 +1342,30 @@ questSchema.methods.getNormalizedTokenReward = function() {
         return Math.max(0, tokenReward);
     }
     
-    const parsed = parseFloat(tokenReward);
-    return !isNaN(parsed) ? Math.max(0, parsed) : 0;
+    // Handle special formats like "flat:300", "per_unit:50", etc.
+    if (typeof tokenReward === 'string') {
+        // Check for "flat:X" format
+        const flatMatch = tokenReward.match(/^flat:(\d+)$/i);
+        if (flatMatch) {
+            return Math.max(0, parseInt(flatMatch[1], 10));
+        }
+        
+        // Check for "per_unit:X" format
+        const perUnitMatch = tokenReward.match(/^per_unit:(\d+)$/i);
+        if (perUnitMatch) {
+            // For per_unit, we'd need participant info, so return 0 here
+            // The actual calculation should be done elsewhere with participant data
+            return 0;
+        }
+        
+        // Try to parse as a regular number
+        const parsed = parseFloat(tokenReward);
+        if (!isNaN(parsed)) {
+            return Math.max(0, parsed);
+        }
+    }
+    
+    return 0;
 };
 
 // ------------------- Export Quest Model -------------------
