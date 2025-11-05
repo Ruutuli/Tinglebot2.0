@@ -1224,8 +1224,8 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         this.completionProcessed = false; // Mark for reward processing
         await this.save();
         
-        // Send quest completion summary notification
-        await sendQuestSummary(this, COMPLETION_REASONS.TIME_EXPIRED);
+        // Don't send summary here - it will be sent after rewards are processed
+        // to avoid duplicate messages
         
         console.log(`[QuestModel.js] ⏰ Quest "${this.title}" completed due to time expiration`);
         return { completed: true, reason: COMPLETION_REASONS.TIME_EXPIRED, needsRewardProcessing: true };
@@ -1271,8 +1271,8 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         console.log(`[QuestModel.js] 🎉 Quest "${this.title}" completed - all participants finished`);
         await this.save();
         
-        // Send quest completion summary notification
-        await sendQuestSummary(this, COMPLETION_REASONS.ALL_PARTICIPANTS_COMPLETED);
+        // Don't send summary here - it will be sent after rewards are processed
+        // to avoid duplicate messages
         
         return { completed: true, reason: COMPLETION_REASONS.ALL_PARTICIPANTS_COMPLETED, needsRewardProcessing: true };
     }
@@ -1294,12 +1294,19 @@ questSchema.methods.markCompletionProcessed = async function() {
 
 // ------------------- Time Expiration Check ------------------
 questSchema.methods.checkTimeExpiration = function() {
-    if (!this.postedAt || !this.timeLimit) {
+    if (!this.timeLimit) {
+        return false;
+    }
+    
+    // Use postedAt if available, otherwise fall back to createdAt
+    // This handles quests that were created but never officially "posted"
+    const startDate = this.postedAt || this.createdAt;
+    if (!startDate) {
         return false;
     }
     
     const now = new Date();
-    const postedAt = new Date(this.postedAt);
+    const startDateTime = new Date(startDate);
     const timeLimit = this.timeLimit.toLowerCase();
     
     let durationMs = 0;
@@ -1318,7 +1325,7 @@ questSchema.methods.checkTimeExpiration = function() {
         durationMs = hours * TIME_MULTIPLIERS.HOUR;
     }
     
-    const expirationTime = new Date(postedAt.getTime() + durationMs);
+    const expirationTime = new Date(startDateTime.getTime() + durationMs);
     return now > expirationTime;
 };
 

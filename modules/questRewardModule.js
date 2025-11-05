@@ -530,6 +530,11 @@ async function processQuestCompletion(questId) {
 
         await quest.save();
         console.log(`[questRewardModule.js] ✅ Quest completion processing finished. Completed: ${results.completedCount}, Rewarded: ${results.rewardedCount}, Errors: ${results.errorCount}`);
+        
+        // Send completion summary after rewards are processed
+        // Use the quest's completion reason or default to time_expired
+        const completionReason = quest.completionReason || 'time_expired';
+        await sendQuestCompletionSummary(quest, completionReason);
 
     } catch (error) {
         handleError(error, 'questRewardModule.js');
@@ -679,30 +684,71 @@ async function distributeTokens(userId, tokensToAward) {
 async function distributeItems(quest, participant) {
     try {
         const character = await findCharacterSafely(participant.characterName, participant.userId);
-
-        if (!character.inventory) {
-            character.inventory = [];
+        
+        // Import inventory utilities and database functions
+        const { connectToInventories } = require('../database/db');
+        const Item = require('../models/ItemModel');
+        
+        // Connect to inventories database
+        const inventoriesConnection = await connectToInventories();
+        const db = inventoriesConnection.useDb('inventories');
+        
+        // Get collection name (per-character inventory)
+        const collectionName = character.name.toLowerCase();
+        const inventoryCollection = db.collection(collectionName);
+        
+        // Find the item in the Item model
+        const item = await Item.findOne({ 
+            itemName: new RegExp(`^${quest.itemReward.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+        });
+        
+        if (!item) {
+            console.log(`[questRewardModule.js] ⚠️ Item "${quest.itemReward}" not found in Item database`);
+            return { success: false, error: `Item "${quest.itemReward}" not found` };
         }
         
-        const existingItem = character.inventory.find(item => item.name === quest.itemReward);
+        // Check if item already exists in inventory
+        const existingItem = await inventoryCollection.findOne({
+            characterId: character._id,
+            itemName: new RegExp(`^${escapeRegExp(quest.itemReward)}$`, 'i')
+        });
+        
         if (existingItem) {
-            existingItem.quantity = (existingItem.quantity || 0) + quest.itemRewardQty;
+            // Update existing item quantity
+            await inventoryCollection.updateOne(
+                { _id: existingItem._id },
+                { $inc: { quantity: quest.itemRewardQty } }
+            );
         } else {
-            character.inventory.push({
-                name: quest.itemReward,
+            // Create new inventory entry
+            const newItem = {
+                characterId: character._id,
+                characterName: character.name,
+                itemName: item.itemName,
+                itemId: item._id,
                 quantity: quest.itemRewardQty,
-                obtainedAt: new Date(),
-                source: `Quest: ${quest.title}`
-            });
+                category: Array.isArray(item.category) ? item.category.join(', ') : (item.category || 'Misc'),
+                type: Array.isArray(item.type) ? item.type.join(', ') : (item.type || 'Unknown'),
+                subtype: Array.isArray(item.subtype) ? item.subtype.join(', ') : (item.subtype || ''),
+                location: character.currentVillage || character.homeVillage || 'Unknown',
+                date: new Date(),
+                obtain: `Quest: ${quest.title}`
+            };
+            
+            await inventoryCollection.insertOne(newItem);
         }
         
-        await character.save();
         console.log(`[questRewardModule.js] 📦 Added ${quest.itemRewardQty}x ${quest.itemReward} to character ${participant.characterName}`);
         
         return { success: true, itemsAdded: quest.itemRewardQty };
     } catch (error) {
         return { success: false, error: `Item distribution failed: ${error.message}` };
     }
+}
+
+// ------------------- Helper: Escape Regex ------------------
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ============================================================================
