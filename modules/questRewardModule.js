@@ -194,17 +194,8 @@ async function sendQuestCompletionSummary(quest, completionReason) {
             return { success: false, error: 'Discord client not available' };
         }
 
-        // Use quest channel or fallback
-        const channelId = quest.targetChannel || QUEST_CHANNEL_ID;
-        const channel = await client.channels.fetch(channelId);
-        
-        if (!channel) {
-            console.log(`[questRewardModule] ❌ Could not find channel ${channelId} for summary notification`);
-            return { success: false, error: 'Channel not found' };
-        }
-
         const participants = Array.from(quest.participants.values());
-        const completedParticipants = participants.filter(p => p.progress === 'completed');
+        const completedParticipants = participants.filter(p => p.progress === 'completed' || p.progress === 'rewarded');
         const rewardedParticipants = participants.filter(p => p.progress === 'rewarded');
 
         let summaryTitle = '🏁 Quest Completed!';
@@ -214,6 +205,11 @@ async function sendQuestCompletionSummary(quest, completionReason) {
             summaryTitle = '⏰ Quest Time Expired!';
             summaryDescription = `The quest **${quest.title}** has ended due to time expiration.`;
         }
+
+        // Build list of completed participants
+        const completedList = completedParticipants
+            .map(p => `• ${p.characterName}${p.progress === 'rewarded' ? ' ✅' : ''}`)
+            .join('\n') || 'None';
 
         const embed = createBaseEmbed(
             summaryTitle, 
@@ -228,11 +224,72 @@ async function sendQuestCompletionSummary(quest, completionReason) {
             { name: 'Completion Reason', value: completionReason.replace('_', ' ').toUpperCase(), inline: true }
         ];
         
+        // Add completed participants list if not too long
+        if (completedParticipants.length > 0 && completedParticipants.length <= 20) {
+            additionalFields.push({
+                name: 'Completed Participants',
+                value: completedList.length > 1024 ? completedList.substring(0, 1020) + '...' : completedList,
+                inline: false
+            });
+        }
+        
         addQuestInfoFields(embed, quest, additionalFields);
 
-        await channel.send({ embeds: [embed] });
+        // Send to multiple channels
+        const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
+        const channelsToSend = [];
 
-        console.log(`[questRewardModule] ✅ Sent quest completion summary for ${quest.questID}`);
+        // 1. Send to RP thread if it's an RP quest
+        if (quest.questType === QUEST_TYPES.RP && quest.rpThreadParentChannel) {
+            try {
+                const rpThread = await client.channels.fetch(quest.rpThreadParentChannel);
+                if (rpThread) {
+                    channelsToSend.push(rpThread);
+                }
+            } catch (error) {
+                console.log(`[questRewardModule] ⚠️ Could not fetch RP thread ${quest.rpThreadParentChannel}:`, error.message);
+            }
+        }
+
+        // 2. Always send to Sheikah Slate channel
+        try {
+            const sheikahSlateChannel = await client.channels.fetch(SHEIKAH_SLATE_CHANNEL_ID);
+            if (sheikahSlateChannel) {
+                channelsToSend.push(sheikahSlateChannel);
+            }
+        } catch (error) {
+            console.log(`[questRewardModule] ⚠️ Could not fetch Sheikah Slate channel:`, error.message);
+        }
+
+        // 3. Fallback to quest target channel if no other channels
+        if (channelsToSend.length === 0) {
+            const channelId = quest.targetChannel || QUEST_CHANNEL_ID;
+            try {
+                const channel = await client.channels.fetch(channelId);
+                if (channel) {
+                    channelsToSend.push(channel);
+                }
+            } catch (error) {
+                console.log(`[questRewardModule] ⚠️ Could not fetch fallback channel ${channelId}:`, error.message);
+            }
+        }
+
+        // Send to all channels
+        for (const channel of channelsToSend) {
+            try {
+                await channel.send({ embeds: [embed] });
+                console.log(`[questRewardModule] ✅ Sent quest completion summary to channel ${channel.id}`);
+            } catch (error) {
+                console.error(`[questRewardModule] ❌ Error sending to channel ${channel.id}:`, error);
+            }
+        }
+
+        if (channelsToSend.length === 0) {
+            console.log(`[questRewardModule] ⚠️ No channels available to send quest completion summary`);
+            return { success: false, error: 'No channels available' };
+        }
+
+        console.log(`[questRewardModule] ✅ Sent quest completion summary for ${quest.questID} to ${channelsToSend.length} channel(s)`);
         return { success: true };
 
     } catch (error) {
@@ -449,8 +506,10 @@ async function processQuestCompletion(questId) {
     try {
         const quest = await findQuestSafely(questId);
 
-        if (quest.status !== 'active') {
-            console.log(`[questRewardModule.js] ℹ️ Quest ${questId} is not active, skipping completion processing.`);
+        // Accept both 'active' and 'completed' status for reward processing
+        // (quests may be marked as completed before rewards are distributed)
+        if (quest.status !== 'active' && quest.status !== 'completed') {
+            console.log(`[questRewardModule.js] ℹ️ Quest ${questId} is not active or completed (status: ${quest.status}), skipping completion processing.`);
             return;
         }
 
