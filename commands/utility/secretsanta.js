@@ -374,9 +374,88 @@ async function handleMatch(interaction) {
   const result = await matchParticipants(interaction.client, false);
   
   if (result.success) {
-    await interaction.editReply({
-      content: `✅ Generated ${result.matches.length} matches (pending approval). Use \`/mod secretsanta preview\` to review them.`
-    });
+    // Get data to show stats
+    const data = await loadSecretSantaData();
+    const participants = data.participants.filter(p =>
+      p &&
+      p.userId &&
+      p.isSubstitute !== 'only_sub' &&
+      Array.isArray(p.characterLinks) &&
+      p.characterLinks.length > 0
+    );
+    const substitutes = data.participants.filter(p => 
+      p && (p.isSubstitute === 'yes' || p.isSubstitute === 'only_sub')
+    );
+    
+    // Build match preview list
+    let matchList = '';
+    for (let index = 0; index < result.matches.length; index++) {
+      const match = result.matches[index];
+      const santa = await getParticipant(match.santaId);
+      const giftee = await getParticipant(match.gifteeId);
+      const santaName = santa?.discordName || match.santaId;
+      const gifteeName = giftee?.discordName || match.gifteeId;
+      
+      matchList += `**${santaName}** → **${gifteeName}**\n`;
+    }
+    
+    const embed = new EmbedBuilder()
+      .setTitle('✅ Matches Generated!')
+      .setDescription(`**${result.matches.length} matches** have been generated and are pending approval.`)
+      .setImage(BORDER_IMAGE)
+      .setColor(0x00AE86)
+      .addFields(
+        { 
+          name: '🎁 Match Assignments', 
+          value: matchList || '*No matches*', 
+          inline: false 
+        },
+        { 
+          name: '📊 Matching Statistics', 
+          value: `**Participants Matched:** ${result.matches.length}\n**Total Participants:** ${participants.length}\n**Substitutes Available:** ${substitutes.length}\n**Unmatched:** ${result.unmatched?.length || 0}`, 
+          inline: false 
+        },
+        { 
+          name: '🔍 Matching Logic', 
+          value: `• Randomly shuffled all participants\n• Avoided self-matches\n• Respected "members to avoid" lists\n• Used fallback matching if needed\n• Ensured no duplicate assignments`, 
+          inline: false 
+        },
+        { 
+          name: '📝 Next Steps', 
+          value: `Use \`/mod-secretsanta approve\` to approve and send matches via DM.`, 
+          inline: false 
+        }
+      )
+      .setTimestamp();
+    
+    if (result.unmatched && result.unmatched.length > 0) {
+      let warningText = `**${result.unmatched.length} participant(s) could not be matched:**\n\n`;
+      
+      if (result.unmatchedDetails && result.unmatchedDetails.length > 0) {
+        result.unmatchedDetails.forEach((detail, index) => {
+          warningText += `**${detail.participant}**\n`;
+          warningText += `• ${detail.reason}\n`;
+          if (index < result.unmatchedDetails.length - 1) {
+            warningText += '\n';
+          }
+        });
+      } else {
+        // Fallback if details aren't available
+        result.unmatched.forEach((participant, index) => {
+          warningText += `• **${participant.discordName || participant.username || participant.userId}**\n`;
+        });
+      }
+      
+      warningText += '\nYou may need to manually adjust matches using `/mod-secretsanta editmatch`.';
+      
+      embed.addFields({
+        name: '⚠️ Unmatched Participants',
+        value: warningText,
+        inline: false
+      });
+    }
+    
+    await interaction.editReply({ embeds: [embed] });
   } else {
     await interaction.editReply({
       content: `❌ ${result.message || 'Failed to generate matches.'}`

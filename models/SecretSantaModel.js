@@ -33,8 +33,7 @@ const secretSantaParticipantSchema = new Schema({
   timestamps: true
 });
 
-// Index for faster lookups
-secretSantaParticipantSchema.index({ userId: 1 });
+// Index for faster lookups (userId already has index from unique: true)
 secretSantaParticipantSchema.index({ isSubstitute: 1 });
 
 // ============================================================================

@@ -118,11 +118,18 @@ async function handleSignupModalSubmit(interaction) {
       .map(name => name.trim())
       .filter(name => name.length > 0);
     
-    // Check if matches have been made (for edits)
+    // Check if matches have been made (for edits) and if signups are open
     const data = await loadSecretSantaData();
-    const existing = await getParticipant(userId);
+    const existingParticipant = await getParticipant(userId);
     
-    if (existing && data.settings.matched) {
+    // Check if signups are open (allow edits if already signed up)
+    if (!data.settings.signupsOpen && !existingParticipant) {
+      return await interaction.editReply({
+        content: '❌ Signups are currently closed for Roots Secret Santa.'
+      });
+    }
+    
+    if (existingParticipant && data.settings.matched) {
       return await interaction.editReply({
         content: '❌ Matches have already been made. You cannot edit your signup now.'
       });
