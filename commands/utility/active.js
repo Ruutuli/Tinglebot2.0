@@ -7,6 +7,8 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 
 // Inactive role ID from server-data.json
 const INACTIVE_ROLE_ID = '788148064182730782';
+// Active role ID
+const ACTIVE_ROLE_ID = '788137728943325185';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -38,11 +40,19 @@ module.exports = {
         });
       }
 
-      // Get the inactive role
+      // Get the inactive and active roles
       const inactiveRole = await interaction.guild.roles.fetch(INACTIVE_ROLE_ID);
       if (!inactiveRole) {
         return await interaction.editReply({
           content: '❌ Could not find the INACTIVE role. Please contact an administrator.',
+          ephemeral: true
+        });
+      }
+
+      const activeRole = await interaction.guild.roles.fetch(ACTIVE_ROLE_ID);
+      if (!activeRole) {
+        return await interaction.editReply({
+          content: '❌ Could not find the ACTIVE role. Please contact an administrator.',
           ephemeral: true
         });
       }
@@ -55,13 +65,14 @@ module.exports = {
         });
       }
 
-      // Remove the inactive role
+      // Remove the inactive role and add the active role
       try {
         await targetMember.roles.remove(inactiveRole);
+        await targetMember.roles.add(activeRole);
       } catch (error) {
-        console.error('[active.js]: Error removing inactive role:', error);
+        console.error('[active.js]: Error updating roles:', error);
         return await interaction.editReply({
-          content: '❌ Failed to remove the INACTIVE role. The bot may not have sufficient permissions.',
+          content: '❌ Failed to update roles. The bot may not have sufficient permissions.',
           ephemeral: true
         });
       }
@@ -78,8 +89,8 @@ module.exports = {
             inline: true
           },
           {
-            name: '✅ INACTIVE Role Removed',
-            value: 'The user can now access server channels normally.',
+            name: '✅ Roles Updated',
+            value: 'INACTIVE role removed and ACTIVE role added.',
             inline: false
           },
           {
@@ -100,7 +111,7 @@ module.exports = {
           const dmEmbed = new EmbedBuilder()
             .setColor('#00FF00')
             .setTitle('▶️ Welcome Back!')
-            .setDescription('You have been marked as active on the server! Your INACTIVE role has been removed.')
+            .setDescription('You have been marked as active on the server! Your INACTIVE role has been removed and your ACTIVE role has been added.')
             .addFields(
               {
                 name: '📋 Next Steps',

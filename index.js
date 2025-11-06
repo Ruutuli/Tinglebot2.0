@@ -633,7 +633,6 @@ async function initializeClient() {
         const ModCharacter = require('./models/ModCharacterModel');
         const Pet = require('./models/PetModel');
         const Mount = require('./models/MountModel');
-        const initializeInventoryModel = require('./models/InventoryModel');
         const Quest = require('./models/QuestModel');
         const Party = require('./models/PartyModel');
         const MinigameModel = require('./models/MinigameModel');
@@ -642,9 +641,6 @@ async function initializeClient() {
         const BlightRollHistory = require('./models/BlightRollHistoryModel');
         const ApprovedSubmission = require('./models/ApprovedSubmissionModel');
         const Raid = require('./models/RaidModel');
-        
-        // Initialize inventory model
-        const { model: Inventory } = await initializeInventoryModel();
         
         // For vending cleanup, we'll use the vending connection directly
         const { connectToVending } = require('./database/db');
@@ -680,11 +676,23 @@ async function initializeClient() {
         deletionResults.modCharacters = modCharacterResult.deletedCount;
         
         // 4. Delete inventories (for all characters)
-        if (allCharacterIds.length > 0) {
-          const inventoryResult = await Inventory.deleteMany({ 
-            characterId: { $in: allCharacterIds } 
-          });
-          deletionResults.inventoryItems = inventoryResult.deletedCount;
+        // Import deleteCharacterInventoryCollection function
+        const { deleteCharacterInventoryCollection } = require('./database/db');
+        let inventoryCollectionsDeleted = 0;
+        if (allCharacterNames.length > 0) {
+          for (const characterName of allCharacterNames) {
+            try {
+              // Each character has their own inventory collection
+              await deleteCharacterInventoryCollection(characterName);
+              inventoryCollectionsDeleted++;
+            } catch (inventoryError) {
+              // Collection might not exist, which is fine
+              if (inventoryError.code !== 26) { // Ignore "namespace not found" error
+                console.error(`[index.js]: ⚠️ Error deleting inventory collection for ${characterName}:`, inventoryError.message);
+              }
+            }
+          }
+          deletionResults.inventoryItems = inventoryCollectionsDeleted;
         } else {
           deletionResults.inventoryItems = 0;
         }
