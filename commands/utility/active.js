@@ -17,8 +17,7 @@ module.exports = {
         .setName('user')
         .setDescription('The user to mark as active (leave blank to mark yourself)')
         .setRequired(false)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+    ),
 
   async execute(interaction) {
     try {
