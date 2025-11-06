@@ -268,7 +268,7 @@ function createSignupModal(isEdit = false) {
     .setCustomId('membersToAvoid')
     .setLabel('Members to Avoid (Optional)')
     .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('Are there any members you would prefer not to be paired up with? (Discord usernames, one per line)')
+    .setPlaceholder('Exact Discord usernames (one per line). Must match exactly or matching won\'t work!')
     .setRequired(false)
     .setMaxLength(500);
   
