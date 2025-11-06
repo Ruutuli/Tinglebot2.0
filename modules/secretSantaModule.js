@@ -706,16 +706,46 @@ async function sendDMFailureNotification(client, santa, giftee, reason) {
   }
 }
 
+// ------------------- Function: initializeBlacklist -------------------
+// Ensures default blacklisted users are added to database settings on startup
+async function initializeBlacklist() {
+  await connectToTinglebot();
+  
+  const settings = await SecretSantaSettings.getSettings();
+  const defaultBlacklist = ['bogoro', 'ellowwell'];
+  
+  // Get current blacklist from database
+  const currentBlacklist = settings.blacklistedUsers || [];
+  
+  // Add default blacklist entries if they don't already exist
+  let updated = false;
+  for (const defaultUser of defaultBlacklist) {
+    const normalizedDefault = defaultUser.toLowerCase();
+    const exists = currentBlacklist.some(user => user.toLowerCase() === normalizedDefault);
+    
+    if (!exists) {
+      currentBlacklist.push(defaultUser);
+      updated = true;
+    }
+  }
+  
+  // Update settings if changes were made
+  if (updated) {
+    settings.blacklistedUsers = currentBlacklist;
+    await settings.save();
+    logger.info('SECRET_SANTA', `Initialized blacklist: Added default blacklisted users to database settings`);
+  }
+  
+  return settings;
+}
+
 // ------------------- Function: isBlacklisted -------------------
 async function isBlacklisted(userId, username, discordName) {
   const data = await loadSecretSantaData();
   const blacklist = data.settings.blacklistedUsers || [];
   
-  // Default blacklist from last year
-  const defaultBlacklist = ['bogoro', 'ellowwell'];
-  
-  // Check against all blacklists
-  const allBlacklisted = [...defaultBlacklist, ...blacklist];
+  // Check against blacklist (all entries should already be in database from initialization)
+  const allBlacklisted = [...blacklist];
   
   // Check userId, username, and discordName
   const userIdentifier = userId?.toLowerCase();
@@ -801,6 +831,15 @@ async function sendReminders(client) {
 
 // ------------------- Function: setupSecretSantaScheduler -------------------
 function setupSecretSantaScheduler(client) {
+  // Initialize blacklist on startup (after a delay to ensure MongoDB is ready)
+  setTimeout(async () => {
+    try {
+      await initializeBlacklist();
+    } catch (error) {
+      logger.error('SECRET_SANTA', 'Error initializing blacklist on startup:', error);
+    }
+  }, 5000); // 5 seconds after startup
+  
   // Check for deadline matching every hour
   setInterval(async () => {
     try {
@@ -851,6 +890,7 @@ module.exports = {
   checkDeadlineAndMatch,
   sendReminders,
   setupSecretSantaScheduler,
+  initializeBlacklist,
   isBlacklisted
 };
 
