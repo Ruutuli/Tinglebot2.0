@@ -121,6 +121,7 @@ async function handleSignupModalSubmit(interaction) {
     // Check if matches have been made (for edits) and if signups are open
     const data = await loadSecretSantaData();
     const existingParticipant = await getParticipant(userId);
+    const existing = !!existingParticipant;
     
     // Check if signups are open (allow edits if already signed up)
     if (!data.settings.signupsOpen && !existingParticipant) {
