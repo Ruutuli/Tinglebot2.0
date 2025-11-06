@@ -111,6 +111,7 @@ async function approveMatches() {
   settings.matched = true;
   settings.matchedAt = new Date();
   settings.matchesApproved = true;
+  settings.signupsOpen = false; // Close signups after matches are approved
   await settings.save();
   
   return true;
@@ -190,85 +191,345 @@ async function matchParticipants(client, sendDMs = true) {
     return { success: false, message: `Not enough participants to match (need at least 2, found ${participants.length})` };
   }
   
-  // Create a copy of participants for matching
-  const availableGiftees = [...participants];
-  const matches = [];
-  const matchedGifteeIds = new Set();
+  // Retry matching up to 200 times to ensure everyone gets matched
+  let matches = [];
+  let unmatchedDetails = [];
+  const maxAttempts = 200;
   
-  // Shuffle participants for random matching
-  const shuffledSantas = [...participants].sort(() => Math.random() - 0.5);
-  
-  for (const santa of shuffledSantas) {
-    // Find a compatible giftee
-    let giftee = undefined;
+  // Helper function to check if an avoid list entry matches a name
+  // Uses strict matching: exact match always works, substring matching only for entries >= 3 chars
+  function matchesAvoidEntry(avoidEntry, name) {
+    const normalizedAvoided = avoidEntry.toLowerCase().trim();
+    const normalizedName = name.toLowerCase().trim();
     
-    // Filter out:
-    // 1. Themselves
-    // 2. Already matched giftees
-    // 3. Members they want to avoid
-    // 4. People who want to avoid them (check if santa is in their avoid list)
-    const compatibleGiftees = availableGiftees.filter(g => {
-      // Can't be matched with themselves
-      if (g.userId === santa.userId) return false;
-      
-      // Already matched
-      if (matchedGifteeIds.has(g.userId)) return false;
-      
-      // Check if santa wants to avoid this giftee
-      if (santa.membersToAvoid && santa.membersToAvoid.some(name =>
-        g.discordName.toLowerCase().includes(name.toLowerCase()) ||
-        g.username.toLowerCase().includes(name.toLowerCase())
-      )) {
-        return false;
-      }
-      
-      // Check if giftee wants to avoid this santa
-      if (g.membersToAvoid && g.membersToAvoid.some(name =>
-        santa.discordName.toLowerCase().includes(name.toLowerCase()) ||
-        santa.username.toLowerCase().includes(name.toLowerCase())
-      )) {
-        return false;
-      }
-      
+    // Always check exact match first
+    if (normalizedName === normalizedAvoided) {
       return true;
-    });
-    
-    if (compatibleGiftees.length === 0) {
-      logger.warn('SECRET_SANTA', `No compatible giftee found for ${santa.username}`);
-      // Try fallback - ignore avoid lists
-      const fallbackGiftees = availableGiftees.filter(g => {
-        if (g.userId === santa.userId) return false;
-        if (matchedGifteeIds.has(g.userId)) return false;
-        return true;
-      });
-      
-      if (fallbackGiftees.length > 0) {
-        giftee = fallbackGiftees[Math.floor(Math.random() * fallbackGiftees.length)];
-        logger.warn('SECRET_SANTA', `Using fallback match for ${santa.username} (avoided members check skipped)`);
-      }
-    } else {
-      // Pick a random compatible giftee
-      giftee = compatibleGiftees[Math.floor(Math.random() * compatibleGiftees.length)];
     }
     
-    if (giftee) {
-      matches.push({
-        santaId: santa.userId,
-        gifteeId: giftee.userId,
-        matchedAt: new Date().toISOString(),
+    // Only do substring matching if the avoid entry is at least 3 characters long
+    // This prevents false positives like "a" matching "reaverofhearts"
+    if (normalizedAvoided.length >= 3) {
+      // Check if name contains the avoid entry (e.g., "ruutuli" contains "ruu")
+      if (normalizedName.includes(normalizedAvoided)) {
+        return true;
+      }
+      // Check if avoid entry contains the name (e.g., avoid entry is "ruutuli123" and name is "ruutuli")
+      if (normalizedAvoided.includes(normalizedName)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  // Helper function to check if two participants can match (respects avoid lists)
+  function canMatch(santa, giftee) {
+    if (santa.userId === giftee.userId) return false;
+    
+    // Check if santa wants to avoid giftee
+    if (santa.membersToAvoid && santa.membersToAvoid.some(avoidedName => {
+      const gifteeDiscord = giftee.discordName || '';
+      const gifteeUsername = giftee.username || '';
+      return matchesAvoidEntry(avoidedName, gifteeDiscord) ||
+             matchesAvoidEntry(avoidedName, gifteeUsername);
+    })) {
+      return false;
+    }
+    
+    // Check if giftee wants to avoid santa
+    if (giftee.membersToAvoid && giftee.membersToAvoid.some(avoidedName => {
+      const santaDiscord = santa.discordName || '';
+      const santaUsername = santa.username || '';
+      return matchesAvoidEntry(avoidedName, santaDiscord) ||
+             matchesAvoidEntry(avoidedName, santaUsername);
+    })) {
+      return false;
+    }
+    
+    return true;
+  }
+  
+  // Fisher-Yates shuffle function for truly random shuffling
+  function shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // COMPLETELY START OVER - reset everything
+    matches = [];
+    const matchedGifteeIds = new Set();
+    unmatchedDetails = [];
+    
+    // Calculate compatibility counts for each participant (how many people they can match with)
+    const participantCompatibility = new Map();
+    for (const santa of participants) {
+      let count = 0;
+      for (const giftee of participants) {
+        if (canMatch(santa, giftee)) count++;
+      }
+      participantCompatibility.set(santa.userId, count);
+    }
+    
+    // Shuffle participants COMPLETELY randomly, but prioritize those with fewer options
+    let shuffledSantas = shuffleArray(participants);
+    // Sort by compatibility (fewer options first) but keep randomization within same compatibility
+    shuffledSantas.sort((a, b) => {
+      const aCompat = participantCompatibility.get(a.userId) || 0;
+      const bCompat = participantCompatibility.get(b.userId) || 0;
+      if (aCompat !== bCompat) {
+        return aCompat - bCompat; // Fewer options first
+      }
+      // If same compatibility, keep random order from shuffle
+      return 0;
+    });
+    
+    for (const santa of shuffledSantas) {
+      // Find a compatible giftee
+      let giftee = undefined;
+      let matchReason = null;
+    
+      // Filter compatible giftees: not themselves, not already matched, and respects avoid lists
+      const compatibleGiftees = participants.filter(g => {
+        if (g.userId === santa.userId) return false; // Can't match with themselves
+        if (matchedGifteeIds.has(g.userId)) return false; // Already matched
+        return canMatch(santa, g); // Check avoid lists
       });
-      matchedGifteeIds.add(giftee.userId);
+      
+      if (compatibleGiftees.length === 0) {
+        // Try aggressive swapping: find any existing match where we can swap
+        const shuffledMatches = shuffleArray([...matches]);
+        let swapped = false;
+        
+        for (const existingMatch of shuffledMatches) {
+          if (swapped) break;
+          
+          const currentGiftee = participants.find(p => p.userId === existingMatch.gifteeId);
+          const currentSanta = participants.find(p => p.userId === existingMatch.santaId);
+          
+          if (!currentSanta || !currentGiftee) continue;
+          
+          // Check if santa can match with current giftee (that we want to free up)
+          if (!canMatch(santa, currentGiftee)) continue;
+          
+          // Find a new giftee for current santa (who is losing their current giftee)
+          const availableForCurrentSanta = participants.filter(g => {
+            if (g.userId === currentSanta.userId) return false;
+            if (g.userId === currentGiftee.userId) return false; // We're freeing this up
+            if (g.userId === santa.userId) return false;
+            return canMatch(currentSanta, g);
+          });
+          
+          if (availableForCurrentSanta.length > 0) {
+            // Prefer unmatched giftees for current santa
+            const unmatchedForCurrent = availableForCurrentSanta.filter(g => !matchedGifteeIds.has(g.userId));
+            const newGifteeForCurrent = (unmatchedForCurrent.length > 0 ? unmatchedForCurrent : availableForCurrentSanta)[
+              Math.floor(Math.random() * (unmatchedForCurrent.length > 0 ? unmatchedForCurrent.length : availableForCurrentSanta.length))
+            ];
+            
+            // If new giftee is already matched, remove that match (chain swap)
+            if (matchedGifteeIds.has(newGifteeForCurrent.userId)) {
+              const oldMatchIndex = matches.findIndex(m => m.gifteeId === newGifteeForCurrent.userId);
+              if (oldMatchIndex >= 0) {
+                matchedGifteeIds.delete(newGifteeForCurrent.userId);
+                matches.splice(oldMatchIndex, 1);
+              }
+            }
+            
+            // Update the existing match
+            const matchIndex = matches.findIndex(m => m.santaId === existingMatch.santaId);
+            if (matchIndex >= 0) {
+              matchedGifteeIds.delete(currentGiftee.userId);
+              matches[matchIndex].gifteeId = newGifteeForCurrent.userId;
+              matchedGifteeIds.add(newGifteeForCurrent.userId);
+            }
+            
+            // Match santa with the freed-up giftee
+            giftee = currentGiftee;
+            matchReason = 'swap';
+            swapped = true;
+            logger.info('SECRET_SANTA', `Swapped match: ${currentSanta.username || currentSanta.userId} → ${newGifteeForCurrent.username || newGifteeForCurrent.userId}, ${santa.username || santa.userId} → ${currentGiftee.username || currentGiftee.userId}`);
+          }
+        }
+        
+        // If still no match, log detailed info for debugging
+        if (!swapped) {
+          const unmatchedGiftees = participants.filter(g => {
+            if (g.userId === santa.userId) return false;
+            return !matchedGifteeIds.has(g.userId);
+          });
+          
+          const blockedCount = unmatchedGiftees.filter(g => !canMatch(santa, g)).length;
+          
+          // Detailed debugging: show exactly why ruutuli (or any participant) can't be matched
+          // Only log detailed info on first attempt or last 5 attempts to avoid spam
+          const shouldLogDetails = attempt === 0 || attempt >= maxAttempts - 5;
+          
+          if (blockedCount > 0 && unmatchedGiftees.length > 0 && shouldLogDetails) {
+            const blockingDetails = [];
+            for (const giftee of unmatchedGiftees) {
+              if (!canMatch(santa, giftee)) {
+                const reasons = [];
+                
+                // Check if santa wants to avoid this giftee
+                if (santa.membersToAvoid && santa.membersToAvoid.some(avoidedName => {
+                  const gifteeDiscord = giftee.discordName || '';
+                  const gifteeUsername = giftee.username || '';
+                  return matchesAvoidEntry(avoidedName, gifteeDiscord) ||
+                         matchesAvoidEntry(avoidedName, gifteeUsername);
+                })) {
+                  reasons.push(`${santa.username || santa.discordName || santa.userId} has ${giftee.username || giftee.discordName || giftee.userId} in their avoid list`);
+                }
+                
+                // Check if giftee wants to avoid this santa
+                if (giftee.membersToAvoid && giftee.membersToAvoid.some(avoidedName => {
+                  const santaDiscord = santa.discordName || '';
+                  const santaUsername = santa.username || '';
+                  return matchesAvoidEntry(avoidedName, santaDiscord) ||
+                         matchesAvoidEntry(avoidedName, santaUsername);
+                })) {
+                  reasons.push(`${giftee.username || giftee.discordName || giftee.userId} has ${santa.username || santa.discordName || santa.userId} in their avoid list`);
+                }
+                
+                blockingDetails.push(`${giftee.username || giftee.discordName || giftee.userId}: ${reasons.join('; ')}`);
+              }
+            }
+            
+            logger.warn('SECRET_SANTA', `[Attempt ${attempt + 1}] Cannot match ${santa.username || santa.discordName || santa.userId} - ${unmatchedGiftees.length} unmatched, ${blockedCount} blocked by avoid lists`);
+            logger.warn('SECRET_SANTA', `Blocking details for ${santa.username || santa.discordName || santa.userId}:`);
+            blockingDetails.forEach(detail => logger.warn('SECRET_SANTA', `  - ${detail}`));
+            
+            // Also show santa's avoid list
+            if (santa.membersToAvoid && santa.membersToAvoid.length > 0) {
+              logger.warn('SECRET_SANTA', `${santa.username || santa.discordName || santa.userId}'s avoid list: ${santa.membersToAvoid.join(', ')}`);
+            }
+          }
+          
+          // Build detailed reason for unmatched participant
+          let detailedReason = '';
+          if (unmatchedGiftees.length === 0) {
+            detailedReason = 'no available giftees remaining (all participants already matched)';
+          } else {
+            // Collect blocking information
+            const blockingInfo = [];
+            for (const giftee of unmatchedGiftees) {
+              if (!canMatch(santa, giftee)) {
+                const reasons = [];
+                if (santa.membersToAvoid && santa.membersToAvoid.some(avoidedName => {
+                  const gifteeDiscord = giftee.discordName || '';
+                  const gifteeUsername = giftee.username || '';
+                  return matchesAvoidEntry(avoidedName, gifteeDiscord) ||
+                         matchesAvoidEntry(avoidedName, gifteeUsername);
+                })) {
+                  reasons.push(`has ${giftee.username || giftee.discordName || giftee.userId} in avoid list`);
+                }
+                if (giftee.membersToAvoid && giftee.membersToAvoid.some(avoidedName => {
+                  const santaDiscord = santa.discordName || '';
+                  const santaUsername = santa.username || '';
+                  return matchesAvoidEntry(avoidedName, santaDiscord) ||
+                         matchesAvoidEntry(avoidedName, santaUsername);
+                })) {
+                  reasons.push(`${giftee.username || giftee.discordName || giftee.userId} has them in avoid list`);
+                }
+                if (reasons.length > 0) {
+                  blockingInfo.push(`${giftee.username || giftee.discordName || giftee.userId} (${reasons.join(', ')})`);
+                }
+              }
+            }
+            
+            if (blockingInfo.length > 0) {
+              detailedReason = `all ${unmatchedGiftees.length} available giftee(s) violate avoid lists: ${blockingInfo.join('; ')}`;
+            } else {
+              detailedReason = `all ${unmatchedGiftees.length} available giftee(s) violate avoid lists`;
+            }
+          }
+          
+          unmatchedDetails.push({
+            participant: santa.discordName || santa.username || santa.userId,
+            reason: detailedReason
+          });
+        }
+      } else {
+        // Pick a random compatible giftee
+        giftee = compatibleGiftees[Math.floor(Math.random() * compatibleGiftees.length)];
+        matchReason = 'normal';
+      }
+      
+      if (giftee) {
+        matches.push({
+          santaId: santa.userId,
+          gifteeId: giftee.userId,
+          matchedAt: new Date().toISOString(),
+        });
+        matchedGifteeIds.add(giftee.userId);
+      } else {
+        logger.error('SECRET_SANTA', `Could not find a match for ${santa.username}`);
+      }
+    }
+    
+    // Handle any unmatched participants
+    const matchedSantaIds = new Set(matches.map(m => m.santaId));
+    const unmatched = participants.filter(p => !matchedSantaIds.has(p.userId));
+    
+    // If everyone is matched, we're done!
+    if (unmatched.length === 0) {
+      logger.info('SECRET_SANTA', `Successfully matched all ${matches.length} participants on attempt ${attempt + 1}`);
+      break;
+    }
+    
+    // If this is the last attempt, try final fallback matching (ignore avoid lists)
+    if (attempt === maxAttempts - 1) {
+      logger.warn('SECRET_SANTA', `${unmatched.length} participant(s) could not be matched after ${maxAttempts} attempts:`, unmatched.map(u => u.username || u.discordName || u.userId));
+      
+      // For any remaining unmatched participants, try fallback matching (ignore avoid lists)
+      for (const santa of unmatched) {
+        const availableGiftees = participants.filter(g => {
+          if (g.userId === santa.userId) return false;
+          const matchedGifteeIds = new Set(matches.map(m => m.gifteeId));
+          if (matchedGifteeIds.has(g.userId)) return false;
+          return true;
+        });
+        
+        if (availableGiftees.length > 0) {
+          const giftee = availableGiftees[Math.floor(Math.random() * availableGiftees.length)];
+          matches.push({
+            santaId: santa.userId,
+            gifteeId: giftee.userId,
+            matchedAt: new Date().toISOString(),
+          });
+          logger.warn('SECRET_SANTA', `Final fallback match: ${santa.username || santa.discordName || santa.userId} → ${giftee.username || giftee.discordName || giftee.userId} (ignore avoid lists)`);
+        } else {
+          unmatchedDetails.push({
+            participant: santa.discordName || santa.username || santa.userId,
+            reason: 'no available giftees remaining (all participants already matched)'
+          });
+        }
+      }
     } else {
-      logger.error('SECRET_SANTA', `Could not find a match for ${santa.username}`);
+      // Log attempt but continue trying (only log every 10 attempts to reduce spam)
+      if (attempt % 10 === 0 || attempt < 5) {
+        logger.debug('SECRET_SANTA', `Attempt ${attempt + 1}: ${unmatched.length} participant(s) unmatched, retrying...`);
+      }
     }
   }
   
-  // Handle any unmatched participants
-  const matchedSantaIds = new Set(matches.map(m => m.santaId));
-  const unmatched = participants.filter(p => !matchedSantaIds.has(p.userId));
+  // Final check for unmatched
+  const finalMatchedSantaIds = new Set(matches.map(m => m.santaId));
+  const finalUnmatched = participants.filter(p => !finalMatchedSantaIds.has(p.userId));
   
-  if (unmatched.length > 0) {
-    logger.warn('SECRET_SANTA', `${unmatched.length} participant(s) could not be matched:`, unmatched.map(u => u.username || u.userId));
+  if (finalUnmatched.length > 0 && unmatchedDetails.length === 0) {
+    // Update unmatched details if we still have unmatched
+    finalUnmatched.forEach(santa => {
+      unmatchedDetails.push({
+        participant: santa.discordName || santa.username,
+        reason: 'no compatible matches found after all retry attempts'
+      });
+    });
   }
   
   // Validate no duplicate santas or giftees
@@ -285,6 +546,10 @@ async function matchParticipants(client, sendDMs = true) {
     return { success: false, message: 'Duplicate giftees found in matches!' };
   }
   
+  // Clear all existing matches (both pending and approved) before saving new ones
+  await connectToTinglebot();
+  await SecretSantaMatch.deleteMany({});
+  
   // Save matches as pending (waiting for approval)
   await savePendingMatches(matches);
   
@@ -294,7 +559,7 @@ async function matchParticipants(client, sendDMs = true) {
   }
   
   logger.success('SECRET_SANTA', `Matched ${matches.length} participants${sendDMs ? ' and sent DMs' : ' (pending approval)'}`);
-  return { success: true, matches, unmatched };
+  return { success: true, matches, unmatched: finalUnmatched, unmatchedDetails };
 }
 
 // ============================================================================
@@ -357,14 +622,6 @@ async function sendAssignmentDMs(client) {
         embed.addFields({
           name: '⚠️ Content to Avoid',
           value: giftee.contentToAvoid,
-          inline: false,
-        });
-      }
-      
-      if (giftee.membersToAvoid && giftee.membersToAvoid.length > 0) {
-        embed.addFields({
-          name: '🚫 Members to Avoid',
-          value: giftee.membersToAvoid.map((name) => `• ${name}`).join('\n'),
           inline: false,
         });
       }

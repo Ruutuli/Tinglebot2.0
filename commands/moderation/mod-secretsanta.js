@@ -14,7 +14,6 @@ const { connectToTinglebot } = require('../../database/db');
 // ------------------- Secret Santa Admin Handlers -------------------
 const {
   handleMatch,
-  handlePreview,
   handleApprove,
   handleSettings,
   handleParticipants,
@@ -38,14 +37,7 @@ const modSecretSantaCommand = new SlashCommandBuilder()
   .addSubcommand(sub =>
     sub
       .setName('match')
-      .setDescription('Generate matches (pending approval)')
-  )
-
-  // ------------------- Subcommand: preview -------------------
-  .addSubcommand(sub =>
-    sub
-      .setName('preview')
-      .setDescription('Preview pending matches')
+      .setDescription('Generate matches and show preview (pending approval)')
   )
 
   // ------------------- Subcommand: approve -------------------
@@ -150,8 +142,6 @@ async function execute(interaction) {
 
     if (subcommand === 'match') {
       return await handleMatch(interaction);
-    } else if (subcommand === 'preview') {
-      return await handlePreview(interaction);
     } else if (subcommand === 'approve') {
       return await handleApprove(interaction);
     } else if (subcommand === 'settings') {
