@@ -138,17 +138,6 @@ const {
 
 const { simulateWeightedWeather } = require('../../services/weatherService');
 
-// ------------------- Secret Santa Admin Handlers -------------------
-const {
-  handleMatch: handleSecretSantaMatch,
-  handlePreview: handleSecretSantaPreview,
-  handleApprove: handleSecretSantaApprove,
-  handleSettings: handleSecretSantaSettings,
-  handleParticipants: handleSecretSantaParticipants,
-  handleEditMatch: handleSecretSantaEditMatch,
-  handleBlacklist: handleSecretSantaBlacklist
-} = require('../utility/secretsanta');
-
 // ------------------- Database Models -------------------
 const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
 const ItemModel = require('../../models/ItemModel');
@@ -1227,102 +1216,6 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand Group: secretsanta -------------------
-.addSubcommandGroup(group =>
-  group
-    .setName('secretsanta')
-    .setDescription('🎁 Manage Roots Secret Santa event')
-    
-    .addSubcommand(sub =>
-      sub
-        .setName('match')
-        .setDescription('Generate matches (pending approval)')
-    )
-    
-    .addSubcommand(sub =>
-      sub
-        .setName('preview')
-        .setDescription('Preview pending matches')
-    )
-    
-    .addSubcommand(sub =>
-      sub
-        .setName('approve')
-        .setDescription('Approve and send matches via DM')
-    )
-    
-    .addSubcommand(sub =>
-      sub
-        .setName('settings')
-        .setDescription('Update deadlines and signup status')
-        .addStringOption(option =>
-          option
-            .setName('action')
-            .setDescription('What to update')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Open Signups', value: 'open' },
-              { name: 'Close Signups', value: 'close' },
-              { name: 'Set Signup Deadline', value: 'signup_deadline' },
-              { name: 'Set Submission Deadline', value: 'submission_deadline' }
-            )
-        )
-        .addStringOption(option =>
-          option
-            .setName('date')
-            .setDescription('Date in YYYY-MM-DD format (for deadline updates)')
-            .setRequired(false)
-        )
-    )
-    
-    .addSubcommand(sub =>
-      sub
-        .setName('participants')
-        .setDescription('View all participants')
-    )
-    
-    .addSubcommand(sub =>
-      sub
-        .setName('editmatch')
-        .setDescription('Manually edit a match')
-        .addUserOption(option =>
-          option
-            .setName('santa')
-            .setDescription('The Secret Santa')
-            .setRequired(true)
-        )
-        .addUserOption(option =>
-          option
-            .setName('giftee')
-            .setDescription('The giftee')
-            .setRequired(true)
-        )
-    )
-    
-    .addSubcommand(sub =>
-      sub
-        .setName('blacklist')
-        .setDescription('Manage blacklist')
-        .addStringOption(option =>
-          option
-            .setName('action')
-            .setDescription('What to do')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Add User', value: 'add' },
-              { name: 'Remove User', value: 'remove' },
-              { name: 'View Blacklist', value: 'view' }
-            )
-        )
-        .addStringOption(option =>
-          option
-            .setName('username')
-            .setDescription('Username or user ID to add/remove (required for add/remove)')
-            .setRequired(false)
-        )
-    )
-)
-
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -1330,41 +1223,8 @@ const modCommand = new SlashCommandBuilder()
 
 async function execute(interaction) {
   try {
-    // Check for subcommand group first (for secretsanta)
-    const subcommandGroup = interaction.options.getSubcommandGroup(false);
     const subcommand = interaction.options.getSubcommand(false);
     
-    // Handle secretsanta subcommand group
-    if (subcommandGroup === 'secretsanta') {
-      await connectToTinglebot();
-      
-      // Defer reply for secretsanta commands (handlers will handle permission checks)
-      try {
-        await interaction.deferReply({ flags: [4096] }); // ephemeral
-      } catch (deferError) {
-        console.error('[mod.js]: Failed to defer reply for secretsanta:', deferError);
-        return;
-      }
-      
-      if (subcommand === 'match') {
-        return await handleSecretSantaMatch(interaction);
-      } else if (subcommand === 'preview') {
-        return await handleSecretSantaPreview(interaction);
-      } else if (subcommand === 'approve') {
-        return await handleSecretSantaApprove(interaction);
-      } else if (subcommand === 'settings') {
-        return await handleSecretSantaSettings(interaction);
-      } else if (subcommand === 'participants') {
-        return await handleSecretSantaParticipants(interaction);
-      } else if (subcommand === 'editmatch') {
-        return await handleSecretSantaEditMatch(interaction);
-      } else if (subcommand === 'blacklist') {
-        return await handleSecretSantaBlacklist(interaction);
-      }
-      
-      return await safeReply(interaction, '❌ Unknown Secret Santa subcommand.');
-    }
-
     // Only defer with ephemeral for non-mount and non-weather commands
     try {
       if (subcommand !== 'mount' && subcommand !== 'weather') {
