@@ -762,7 +762,7 @@ function validateHealerPermission(healer, blightStage) {
 
 // ------------------- Function: completeBlightHealing -------------------
 // Applies healing effects and resets blight status.
-async function completeBlightHealing(character, interaction = null) {
+async function completeBlightHealing(character, interaction = null, client = null) {
   // Save healing completion to blight history
   await saveBlightEventToHistory(character, 'Healing Completed', {
     notes: `Character healed from blight - Stage ${character.blightStage} to 0`,
@@ -795,16 +795,37 @@ async function completeBlightHealing(character, interaction = null) {
 
     // If no other blighted characters, remove the blighted role
     if (otherBlightedCharacters.length === 0) {
+      let guild = null;
+      
+      // Try to get guild from interaction first
       if (interaction && interaction.guild) {
+        guild = interaction.guild;
+      } else if (interaction && interaction.client) {
+        // Try to get guild from interaction's client
+        const guildId = process.env.GUILD_ID;
+        if (guildId) {
+          guild = interaction.client.guilds.cache.get(guildId);
+        }
+      } else if (client) {
+        // Try to get guild from passed client parameter
+        const guildId = process.env.GUILD_ID;
+        if (guildId) {
+          guild = client.guilds.cache.get(guildId);
+        }
+      }
+      
+      if (guild) {
         try {
-          const member = await interaction.guild.members.fetch(character.userId);
+          const member = await guild.members.fetch(character.userId);
           await member.roles.remove('798387447967907910');
           logger.success('BLIGHT', `Removed blighted role from user ${character.userId}`);
+          console.log(`[blightHandler.js]: ✅ Removed blighted role from user ${character.userId}`);
         } catch (roleError) {
-          logger.warn('BLIGHT', `Could not remove blighted role from user ${character.userId}`);
+          logger.warn('BLIGHT', `Could not remove blighted role from user ${character.userId}: ${roleError.message}`);
+          console.warn(`[blightHandler.js]: ⚠️ Could not remove blighted role from user ${character.userId}:`, roleError);
         }
       } else {
-        console.log(`[blightHandler.js]: ✅ User ${character.userId} has no other blighted characters - blighted role should be removed (no interaction context)`);
+        console.log(`[blightHandler.js]: ⚠️ User ${character.userId} has no other blighted characters - blighted role should be removed but no guild context available`);
       }
     } else {
       console.log(`[blightHandler.js]: ✅ User ${character.userId} still has ${otherBlightedCharacters.length} other blighted character(s) - keeping blighted role`);
@@ -1433,7 +1454,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       submission.forfeitTokens = true;
 
       await deleteBlightRequestFromStorage(submissionId);
-      await completeBlightHealing(character, interaction);
+      await completeBlightHealing(character, interaction, interaction.client);
 
       const embed = createBlightHealingCompleteEmbed(character, healer, [
         {
@@ -1568,7 +1589,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       // Item removal is now automatically logged to Google Sheets by removeItemInventoryDatabase function
 
       await deleteBlightRequestFromStorage(submissionId);
-      await completeBlightHealing(character, interaction);
+      await completeBlightHealing(character, interaction, interaction.client);
 
       const embed = createBlightHealingCompleteEmbed(character, healer, [
         {
@@ -1637,7 +1658,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       submission.status = 'completed';
       submission.submittedAt = new Date().toISOString();
       await deleteBlightRequestFromStorage(submissionId);
-      await completeBlightHealing(character, interaction);
+      await completeBlightHealing(character, interaction, interaction.client);
 
       const embed = createBlightHealingCompleteEmbed(character, healer, [
         {
