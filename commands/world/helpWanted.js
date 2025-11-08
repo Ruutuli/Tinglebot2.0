@@ -11,6 +11,7 @@ const Character = require('../../models/CharacterModel');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
 const HelpWantedQuest = require('../../models/HelpWantedQuestModel');
 const { getWeatherWithoutGeneration } = require('../../services/weatherService');
+const VillageShopItem = require('../../models/VillageShopsModel');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -23,6 +24,8 @@ const QUEST_TYPE_EMOJIS = {
   'art': '🎨',
   'writing': '📝'
 };
+
+const VILLAGE_SHOP_SPECIAL_WEATHER_MAX_RETRY = 1;
 
 
 
@@ -512,10 +515,8 @@ async function removeQuestItems(character, quest, interaction) {
  * @param {number} amountUsed - Amount used in the quest
  * @returns {Promise<void>}
  */
-async function updateVillageShopsStock(itemName, amountUsed) {
+async function updateVillageShopsStock(itemName, amountUsed, retryAttempt = 0) {
   try {
-    const VillageShopItem = require('../../models/VillageShopsModel');
-    
     // Find the item in VillageShops and reduce stock
     let shopItem;
     if (itemName.includes('+')) {
@@ -530,10 +531,10 @@ async function updateVillageShopsStock(itemName, amountUsed) {
     
     if (shopItem && shopItem.stock > 0) {
       // ------------------- Failsafe: Fix specialWeather before saving -------------------
-      if (shopItem.specialWeather && typeof shopItem.specialWeather === 'object') {
-        console.warn(`[helpWanted.js]: Failsafe conversion of specialWeather for ${itemName}:`, shopItem.specialWeather);
-        shopItem.specialWeather = Object.values(shopItem.specialWeather).some(v => v === true);
-        console.log(`[helpWanted.js]: Failsafe converted specialWeather to: ${shopItem.specialWeather}`);
+      const normalizedSpecialWeather = VillageShopItem.normalizeSpecialWeather(shopItem.specialWeather);
+      if (shopItem.specialWeather !== normalizedSpecialWeather) {
+        console.warn(`[helpWanted.js]: Normalizing specialWeather for ${itemName}:`, shopItem.specialWeather, '→', normalizedSpecialWeather);
+        shopItem.specialWeather = normalizedSpecialWeather;
       }
       
       const newStock = Math.max(0, shopItem.stock - amountUsed);
@@ -557,13 +558,26 @@ async function updateVillageShopsStock(itemName, amountUsed) {
       // ------------------- Auto-fix corrupted data -------------------
       try {
         console.log(`[helpWanted.js]: Attempting to fix corrupted specialWeather data...`);
-        const VillageShopItem = require('../../models/VillageShopsModel');
-        const result = await VillageShopItem.fixSpecialWeatherData();
-        console.log(`[helpWanted.js]: Data cleanup completed:`, result);
+        const itemFilter = itemName.includes('+')
+          ? { itemName }
+          : { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } };
+        const cleanupResult = await VillageShopItem.fixSpecialWeatherData({
+          filter: itemFilter,
+          limit: 5,
+          source: 'updateVillageShopsStock'
+        });
+        console.log(`[helpWanted.js]: Data cleanup completed:`, cleanupResult);
         
-        // Retry the operation after fixing the data
-        console.log(`[helpWanted.js]: Retrying stock update after data cleanup...`);
-        return await updateVillageShopsStock(itemName, amountUsed);
+        if (cleanupResult.updated > 0 && retryAttempt < VILLAGE_SHOP_SPECIAL_WEATHER_MAX_RETRY) {
+          console.log(`[helpWanted.js]: Retrying stock update after data cleanup (attempt ${retryAttempt + 1})...`);
+          return await updateVillageShopsStock(itemName, amountUsed, retryAttempt + 1);
+        }
+        
+        if (cleanupResult.updated === 0) {
+          console.warn(`[helpWanted.js]: Cleanup found no updates for ${itemName}; skipping retry to avoid loop.`);
+        } else if (retryAttempt >= VILLAGE_SHOP_SPECIAL_WEATHER_MAX_RETRY) {
+          console.warn(`[helpWanted.js]: Maximum retry attempts reached for ${itemName}; aborting further retries.`);
+        }
       } catch (cleanupError) {
         console.error(`[helpWanted.js]: Error during data cleanup:`, cleanupError);
       }
