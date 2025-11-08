@@ -2,6 +2,63 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
+// ------------------- Utility: Normalize specialWeather values -------------------
+function normalizeSpecialWeather(value, depth = 0) {
+  if (depth > 10) {
+    console.warn('[VillageShopsModel]: normalizeSpecialWeather exceeded max depth, defaulting to false');
+    return false;
+  }
+
+  if (value === undefined || value === null) {
+    return false;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === '') {
+      return false;
+    }
+    if (['true', 'yes', 'y', '1', 'on', 'enabled'].includes(normalized)) {
+      return true;
+    }
+    if (['false', 'no', 'n', '0', 'off', 'disabled', 'null', 'none'].includes(normalized)) {
+      return false;
+    }
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(entry => normalizeSpecialWeather(entry, depth + 1));
+  }
+
+  if (value instanceof Map) {
+    return normalizeSpecialWeather(Object.fromEntries(value), depth + 1);
+  }
+
+  if (typeof value === 'object') {
+    if (typeof value.toObject === 'function') {
+      return normalizeSpecialWeather(value.toObject(), depth + 1);
+    }
+
+    const objectValues = Object.values(value);
+    if (objectValues.length === 0) {
+      return false;
+    }
+
+    return objectValues.some(entry => normalizeSpecialWeather(entry, depth + 1));
+  }
+
+  return Boolean(value);
+}
+
 // ------------------- Define the VillageShopItem schema -------------------
 const VillageShopItemSchema = new Schema({
   itemId: { type: Schema.Types.ObjectId, required: true, ref: 'Item' },
@@ -31,19 +88,17 @@ const VillageShopItemSchema = new Schema({
     type: Boolean, 
     default: false,
     set: function(value) {
-      // Custom setter to handle object to boolean conversion
-      if (value && typeof value === 'object') {
-        console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean for item: ${this.itemName || 'unknown'}`);
-        return Object.values(value).some(v => v === true);
+      const normalized = normalizeSpecialWeather(value);
+      if (typeof value !== 'boolean' && value !== undefined && value !== null) {
+        console.warn(`[VillageShopsModel]: Normalizing specialWeather for ${this.itemName || 'unknown'} from`, value, '→', normalized);
       }
-      return value || false;
+      return normalized;
     },
     validate: {
       validator: function(value) {
-        // Allow both boolean and object values during validation
-        return typeof value === 'boolean' || (typeof value === 'object' && value !== null);
+        return typeof value === 'boolean';
       },
-      message: 'specialWeather must be a boolean or object'
+      message: 'specialWeather must resolve to a boolean'
     }
   },
   petPerk: { type: Boolean, default: false },
@@ -107,10 +162,10 @@ VillageShopItemSchema.pre('validate', function(next) {
     }
     
     // Handle specialWeather conversion from object to boolean
-    if (this.specialWeather && typeof this.specialWeather === 'object') {
-      console.warn(`[VillageShopsModel]: Converting specialWeather from object to boolean in pre-validate hook for item: ${this.itemName || 'unknown'}`, this.specialWeather);
-      this.specialWeather = Object.values(this.specialWeather).some(v => v === true);
-      console.log(`[VillageShopsModel]: Converted specialWeather to: ${this.specialWeather}`);
+    const normalizedSpecialWeather = normalizeSpecialWeather(this.specialWeather);
+    if (this.specialWeather !== normalizedSpecialWeather) {
+      console.warn(`[VillageShopsModel]: Pre-validate normalization for ${this.itemName || 'unknown'}:`, this.specialWeather, '→', normalizedSpecialWeather);
+      this.specialWeather = normalizedSpecialWeather;
     }
     
     next();
@@ -124,10 +179,10 @@ VillageShopItemSchema.pre('validate', function(next) {
 VillageShopItemSchema.pre('save', function(next) {
   try {
     // Final safety check for specialWeather conversion
-    if (this.specialWeather && typeof this.specialWeather === 'object') {
-      console.warn(`[VillageShopsModel]: Final conversion of specialWeather from object to boolean in pre-save hook for item: ${this.itemName || 'unknown'}`, this.specialWeather);
-      this.specialWeather = Object.values(this.specialWeather).some(v => v === true);
-      console.log(`[VillageShopsModel]: Final converted specialWeather to: ${this.specialWeather}`);
+    const normalizedSpecialWeather = normalizeSpecialWeather(this.specialWeather);
+    if (this.specialWeather !== normalizedSpecialWeather) {
+      console.warn(`[VillageShopsModel]: Pre-save normalization for ${this.itemName || 'unknown'}:`, this.specialWeather, '→', normalizedSpecialWeather);
+      this.specialWeather = normalizedSpecialWeather;
     }
     
     next();
@@ -138,41 +193,65 @@ VillageShopItemSchema.pre('save', function(next) {
 });
 
 // ------------------- Utility function to fix corrupted specialWeather data -------------------
-VillageShopItemSchema.statics.fixSpecialWeatherData = async function() {
+VillageShopItemSchema.statics.fixSpecialWeatherData = async function(options = {}) {
   try {
-    console.log('[VillageShopsModel]: Starting specialWeather data cleanup...');
-    
-    // Find all documents with object-type specialWeather
-    const corruptedItems = await this.find({
-      specialWeather: { $type: 'object' }
-    });
-    
-    console.log(`[VillageShopsModel]: Found ${corruptedItems.length} items with object-type specialWeather`);
-    
-    let fixedCount = 0;
-    for (const item of corruptedItems) {
+    const { filter = {}, limit = 0, dryRun = false, source = 'manual' } = options;
+    console.log('[VillageShopsModel]: Starting specialWeather cleanup', { source, limit, dryRun, filter });
+
+    const query = { ...filter };
+    const projection = { itemName: 1, specialWeather: 1 };
+    let cursor = this.find(query, projection);
+    if (limit > 0) {
+      cursor = cursor.limit(limit);
+    }
+    const items = await cursor.lean();
+
+    let examined = 0;
+    let updated = 0;
+    let alreadyValid = 0;
+    let skipped = 0;
+
+    for (const item of items) {
+      examined++;
+      const normalized = normalizeSpecialWeather(item.specialWeather);
+      const needsUpdate = typeof item.specialWeather !== 'boolean' || item.specialWeather !== normalized;
+
+      if (!needsUpdate) {
+        alreadyValid++;
+        continue;
+      }
+
+      if (dryRun) {
+        console.warn(`[VillageShopsModel]: Dry-run would normalize ${item.itemName}:`, item.specialWeather, '→', normalized);
+        skipped++;
+        continue;
+      }
+
       try {
-        const oldValue = item.specialWeather;
-        const newValue = Object.values(oldValue).some(v => v === true);
-        
         await this.updateOne(
           { _id: item._id },
-          { $set: { specialWeather: newValue } }
+          { $set: { specialWeather: normalized } }
         );
-        
-        console.log(`[VillageShopsModel]: Fixed ${item.itemName}: ${JSON.stringify(oldValue)} → ${newValue}`);
-        fixedCount++;
-      } catch (error) {
-        console.error(`[VillageShopsModel]: Error fixing item ${item.itemName}:`, error);
+        console.warn(`[VillageShopsModel]: Normalized ${item.itemName}:`, item.specialWeather, '→', normalized);
+        updated++;
+      } catch (updateError) {
+        console.error(`[VillageShopsModel]: Error normalizing ${item.itemName}:`, updateError);
+        skipped++;
       }
     }
-    
-    console.log(`[VillageShopsModel]: Fixed ${fixedCount} items with corrupted specialWeather data`);
-    return { totalFound: corruptedItems.length, fixed: fixedCount };
+
+    const summary = { source, examined, updated, alreadyValid, skipped, dryRun };
+    console.log('[VillageShopsModel]: specialWeather cleanup summary', summary);
+    return summary;
   } catch (error) {
     console.error('[VillageShopsModel]: Error in fixSpecialWeatherData:', error);
     throw error;
   }
+};
+
+// ------------------- Expose normalizer for reuse -------------------
+VillageShopItemSchema.statics.normalizeSpecialWeather = function(value) {
+  return normalizeSpecialWeather(value);
 };
 
 // ------------------- Export the VillageShopItem model -------------------
