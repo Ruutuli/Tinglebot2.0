@@ -46,10 +46,17 @@ const {
  createGiftEmbed,
  createTradeEmbed,
  createTransferEmbed,
+ updateBoostRequestEmbed
 } = require("../../embeds/embeds.js");
 const { hasPerk } = require("../../modules/jobsModule");
 const TempData = require('../../models/TempDataModel');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
+const { applyPriestTokensBoost, applyFortuneTellerTokensBoost } = require("../../modules/boostingModule");
+const {
+ retrieveBoostingRequestFromTempDataByCharacter,
+ saveBoostingRequestToTempData,
+ updateBoostAppliedMessage
+} = require("../jobs/boosting");
 const DEFAULT_EMOJI = "🔹";
 
 async function getItemEmoji(itemName) {
@@ -1263,6 +1270,9 @@ async function handleShopBuy(interaction) {
     const discountMultiplier = hasBirthdayDiscount ? (100 - discountPercentage) / 100 : 1;
     let totalPrice = Math.floor(originalPrice * discountMultiplier);
     const savedAmount = originalPrice - totalPrice;
+    const boostFlavorNotes = [];
+    const boostFooterNotes = [];
+    let boostFooterIcon = null;
     
     // ============================================================================
     // ------------------- Apply Priest Boost for Buying -------------------
@@ -1273,7 +1283,12 @@ async function handleShopBuy(interaction) {
       
       if (boosterChar && boosterChar.job === 'Priest') {
         const beforeBoost = totalPrice;
-        totalPrice = Math.ceil(totalPrice * 0.9); // 10% discount
+        const boostedPrice = applyPriestTokensBoost(totalPrice, true);
+        const discountGained = beforeBoost - boostedPrice;
+        totalPrice = boostedPrice;
+        boostFooterIcon = boosterChar.icon || null;
+        boostFlavorNotes.push(`⛪ **Blessed Economy:** ${boosterChar.name}'s blessing saved 🪙 ${discountGained}.`);
+        boostFooterNotes.push('Blessed Economy active');
         logger.info('BOOST', `Priest boost - Blessed Economy (10% buying discount: ${beforeBoost} → ${totalPrice})`);
       }
     }
@@ -1407,8 +1422,22 @@ async function handleShopBuy(interaction) {
           value: `[View Tracker](${tokenTrackerLink})`,
           inline: true,
         }
-      )
-      .setFooter({ text: `The village bazaars thank you for your purchase!` });
+      );
+
+    // NOTE: Boost-aware embed — include flavor/footer updates whenever boosts adjust results.
+    if (boostFlavorNotes.length > 0) {
+      purchaseEmbed.addFields({
+        name: "🎭 Boost Effects",
+        value: boostFlavorNotes.join('\n'),
+        inline: false
+      });
+      purchaseEmbed.setFooter({
+        text: boostFooterNotes.join(' • '),
+        iconURL: boostFooterIcon || undefined
+      });
+    } else {
+      purchaseEmbed.setFooter({ text: `The village bazaars thank you for your purchase!` });
+    }
 
     // Add birthday discount field if applicable
     if (hasBirthdayDiscount) {
@@ -1417,10 +1446,39 @@ async function handleShopBuy(interaction) {
         value: `**${discountPercentage}% OFF** - You saved 🪙 ${savedAmount} tokens!\nOriginal Price: ~~🪙 ${originalPrice}~~ → Final Price: 🪙 ${totalPrice}`,
         inline: false
       });
-      purchaseEmbed.setFooter({ text: `Happy Birthday! The village celebrates with you! 🎉` });
+      const existingFooter = purchaseEmbed.data.footer?.text || '';
+      const existingFooterIcon = purchaseEmbed.data.footer?.icon_url || undefined;
+      const birthdayFooter = `Happy Birthday! The village celebrates with you! 🎉`;
+      const combinedFooter = existingFooter
+        ? `${birthdayFooter} • ${existingFooter}`
+        : birthdayFooter;
+      purchaseEmbed.setFooter({ text: combinedFooter, iconURL: existingFooterIcon });
     }
 
     await interaction.editReply({ embeds: [purchaseEmbed] });
+
+    if (boostFlavorNotes.length > 0 && character.boostedBy) {
+      try {
+        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+        if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
+          activeBoost.status = 'fulfilled';
+          activeBoost.fulfilledAt = Date.now();
+          await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+          if (interaction?.client) {
+            try {
+              await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
+              await updateBoostAppliedMessage(interaction.client, activeBoost);
+            } catch (embedErr) {
+              logger.error('BOOST', `Failed to update boost embeds on fulfillment for ${character.name}: ${embedErr.message}`);
+            }
+          }
+        }
+      } catch (boostErr) {
+        logger.error('BOOST', `Failed to mark buying boost fulfilled for ${character.name}: ${boostErr.message}`);
+      }
+      character.boostedBy = null;
+      await character.save();
+    }
   } catch (error) {
     handleInteractionError(error, interaction, {
       commandName: interaction.commandName,
@@ -1769,23 +1827,35 @@ if (quantity <= 0) {
   // ============================================================================
   // ------------------- Apply Token Boosts for Selling -------------------
   // ============================================================================
+  const boostFlavorNotes = [];
+  const boostFooterNotes = [];
+  let boostFooterIcon = null;
+
   if (character.boostedBy) {
     const { fetchCharacterByName } = require('../../database/db');
     const boosterChar = await fetchCharacterByName(character.boostedBy);
     
     if (boosterChar) {
-      const originalPrice = totalPrice;
+      boostFooterIcon = boosterChar.icon || null;
       
       // Fortune Teller: Fortunate Exchange (+10% when selling)
       if (boosterChar.job === 'Fortune Teller') {
-        totalPrice = Math.floor(totalPrice * 1.1);
-        logger.info('BOOST', `Fortune Teller boost - Fortunate Exchange (+10% tokens: ${originalPrice} → ${totalPrice})`);
+        const preBoostPrice = totalPrice;
+        totalPrice = applyFortuneTellerTokensBoost(totalPrice, false);
+        const fortuneDelta = totalPrice - preBoostPrice;
+        logger.info('BOOST', `Fortune Teller boost - Fortunate Exchange (+10% tokens: ${preBoostPrice} → ${totalPrice})`);
+        boostFlavorNotes.push(`🔮 **Fortunate Exchange:** ${boosterChar.name}'s foresight added 🪙 ${fortuneDelta}.`);
+        boostFooterNotes.push('Fortunate Exchange active');
       }
       
       // Priest: Blessed Economy (+10% when selling)
       if (boosterChar.job === 'Priest') {
-        totalPrice = Math.floor(totalPrice * 1.1);
-        logger.info('BOOST', `Priest boost - Blessed Economy (+10% tokens: ${originalPrice} → ${totalPrice})`);
+        const preBoostPrice = totalPrice;
+        totalPrice = applyPriestTokensBoost(totalPrice, false);
+        const priestDelta = totalPrice - preBoostPrice;
+        logger.info('BOOST', `Priest boost - Blessed Economy (+10% tokens: ${preBoostPrice} → ${totalPrice})`);
+        boostFlavorNotes.push(`⛪ **Blessed Economy:** ${boosterChar.name}'s blessing earned an extra 🪙 ${priestDelta}.`);
+        boostFooterNotes.push('Blessed Economy active');
       }
     }
   }
@@ -1858,6 +1928,7 @@ if (quantity <= 0) {
       : `Standard Price: 🪙 ${sellPrice} per item`;
   }
   
+  // NOTE: Boost-aware embed — include flavor/footer updates whenever boosts adjust results.
   const saleEmbed = new EmbedBuilder()
    .setTitle("✅ Sale Successful!")
    .setDescription(description)
@@ -1878,7 +1949,42 @@ if (quantity <= 0) {
     }
    );
 
+  if (boostFlavorNotes.length > 0) {
+   saleEmbed.addFields({
+    name: "🎭 Boost Effects",
+    value: boostFlavorNotes.join('\n'),
+    inline: false
+   });
+   saleEmbed.setFooter({
+    text: boostFooterNotes.join(' • '),
+    iconURL: boostFooterIcon || undefined
+   });
+  }
+
   interaction.editReply({ embeds: [saleEmbed] });
+
+  if (boostFlavorNotes.length > 0 && character.boostedBy) {
+   try {
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+    if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
+     activeBoost.status = 'fulfilled';
+     activeBoost.fulfilledAt = Date.now();
+     await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+     if (interaction?.client) {
+      try {
+       await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
+       await updateBoostAppliedMessage(interaction.client, activeBoost);
+      } catch (embedErr) {
+       logger.error('BOOST', `Failed to update boost embeds on fulfillment for ${character.name}: ${embedErr.message}`);
+      }
+     }
+    }
+   } catch (boostErr) {
+    logger.error('BOOST', `Failed to mark selling boost fulfilled for ${character.name}: ${boostErr.message}`);
+   }
+   character.boostedBy = null;
+   await character.save();
+  }
  } catch (error) {
   handleInteractionError(error, interaction, {
     commandName: interaction.commandName,

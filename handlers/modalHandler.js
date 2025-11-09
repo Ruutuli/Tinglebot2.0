@@ -26,6 +26,7 @@ const { handleMountNameSubmission } = require('./mountComponentHandler');
 
 // Secret Santa handler
 const { handleSecretSantaModal } = require('./secretSantaHandler');
+const logger = require('../utils/logger');
 
 
 // ------------------- Helper Functions -------------------
@@ -214,7 +215,7 @@ async function handleModalSubmission(interaction) {
     // Apply updates only if there are any
     if (Object.keys(updates).length > 0) {
       await updateSubmissionData(submissionId, updates);
-      console.log(`[modalHandler.js]: 💾 Applied updates to submission: ${submissionId}`);
+      logger.success('SUBMISSION', `💾 Applied updates to submission: ${submissionId}`);
     }
 
   } catch (error) {

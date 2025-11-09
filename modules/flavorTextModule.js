@@ -933,6 +933,23 @@ const BOOST_FLAVOR_MESSAGES = {
       "📖 Your teaching experience pays off as you create items with practical value.",
       "🔍 Practical knowledge ensures your crafted items serve real purposes."
     ],
+    Stealing: {
+      success: [
+        "🎓 Tactical Risk is ready, but you didn’t need it—your Teacher’s calm guidance kept the plan flawless.",
+        "📚 The Teacher’s steadiness never came into play; success arrived before you needed the safety net.",
+        "📖 Lessons well learned—no stumble meant Tactical Risk stayed holstered for another day.",
+        "🔍 Guidance paid off so well the extra grace wasn’t needed this time."
+      ],
+      failure: [
+        "🎓 Tactical Risk grants you one more failed attempt before the guards haul you to jail.",
+        "📚 The Teacher's lessons steady your nerves, allowing an extra failed steal before jail time kicks in.",
+        "📖 Thanks to Tactical Risk, you can stumble one more time before the cell doors slam shut.",
+        "🔍 Guidance from your Teacher buys you an additional failed attempt before jail is triggered."
+      ],
+      default: [
+        "🎓 Tactical Risk grants you one more failed attempt before the guards haul you to jail."
+      ]
+    },
     Healers: [
       "📚 Temporary Fortitude grants the patient +2 temporary hearts that persist until they take damage.",
       "🎓 The Teacher's wisdom strengthens the patient's resilience, providing extra protection after healing.",
@@ -990,6 +1007,13 @@ const BOOST_FLAVOR_MESSAGES = {
       "✨ Sacred blessing ensures you obtain the most valuable loot available.",
       "🌟 Heavenly blessing reveals the monster's greatest treasure to you.",
       "💫 The Priest's divine intervention secures the finest loot for you."
+    ],
+    Stealing: [
+      "🙏 Merciful Sentence halves the jail term, granting early release when faith intervenes.",
+      "✨ Divine mercy lightens the punishment—your sentence is reduced thanks to a Priest's blessing.",
+      "🌟 Sacred clemency shortens the stay behind bars under the Merciful Sentence.",
+      "💫 Holy intervention eases your punishment, halving jail time through the Priest's grace.",
+      "🙏 A Priest's Merciful Sentence softens the judgment, granting an early release."
     ],
     default: [
       "🙏 Divine blessing enhances your abilities with sacred power.",
@@ -1082,6 +1106,16 @@ const generateBoostFlavorText = (boosterJob, category = 'default', options = nul
     return getRandomMessage(categoryMessages(targetRegion));
   }
 
+  // Handle object-based message sets (e.g., outcome-specific)
+  if (categoryMessages && typeof categoryMessages === 'object' && !Array.isArray(categoryMessages)) {
+    if (options?.outcome && Array.isArray(categoryMessages[options.outcome])) {
+      return getRandomMessage(categoryMessages[options.outcome]);
+    }
+    if (Array.isArray(categoryMessages.default)) {
+      return getRandomMessage(categoryMessages.default);
+    }
+  }
+
   return getRandomMessage(categoryMessages);
 };
 
@@ -1119,6 +1153,66 @@ const generateUnusedBoostFlavorText = (boosterJob, category = 'default') => {
   const jobMessages = UNUSED_BOOST_FLAVOR_MESSAGES[normalizedJob] || UNUSED_BOOST_FLAVOR_MESSAGES.default;
   const categoryMessages = jobMessages[category] || jobMessages.default || UNUSED_BOOST_FLAVOR_MESSAGES.default.default;
   return getRandomMessage(categoryMessages);
+};
+
+// ============================================================================
+// ------------------- Submission Boost Flavor Text -------------------
+// ============================================================================
+
+const SUBMISSION_BOOST_MESSAGES = {
+  Scholar: {
+    writing: [
+      "📚 {boosterName}'s research notes sharpened {targets}' draft, adding 🪙 {tokenIncrease} to the final tally.",
+      "🎓 Hours in the stacks with {boosterName} paid off—{targets} banked an extra 🪙 {tokenIncrease}.",
+      "📝 Field studies guided by {boosterName} gave {targets} the edge for an additional 🪙 {tokenIncrease}.",
+      "🔍 {boosterName}'s annotated sources kept {targets} on track, securing 🪙 {tokenIncrease} more tokens.",
+      "📖 Late-night revisions with {boosterName} translated directly into 🪙 {tokenIncrease} bonus tokens for {targets}."
+    ],
+    default: [
+      "📚 {boosterName}'s scholarship bolstered {targets}, pulling in +🪙 {tokenIncrease} tokens."
+    ]
+  },
+  default: {
+    default: [
+      "⚡ Support from {boosterName} gave {targets} a boost worth 🪙 {tokenIncrease}."
+    ]
+  }
+};
+
+const formatNameList = (names = []) => {
+  if (!Array.isArray(names) || names.length === 0) {
+    return 'the crew';
+  }
+  if (names.length === 1) {
+    return names[0];
+  }
+  const allButLast = names.slice(0, -1);
+  const last = names[names.length - 1];
+  return `${allButLast.join(', ')} and ${last}`;
+};
+
+const generateSubmissionBoostFlavorText = (boosterJob, submissionType = 'default', options = {}) => {
+  if (!boosterJob) {
+    return null;
+  }
+
+  const normalizedJob = boosterJob.replace(/\s+/g, '');
+  const normalizedType = submissionType.toLowerCase();
+  const jobMessages = SUBMISSION_BOOST_MESSAGES[normalizedJob] || SUBMISSION_BOOST_MESSAGES.default;
+  const categoryMessages =
+    jobMessages[normalizedType] ||
+    jobMessages.default ||
+    SUBMISSION_BOOST_MESSAGES.default.default;
+
+  const template = getRandomMessage(categoryMessages);
+  const boosterName = options.boosterName || 'their booster';
+  const targets = formatNameList(options.targets);
+  const tokenIncrease = options.tokenIncrease ?? options.tokens ?? 0;
+
+  return template
+    .replace('{boosterName}', boosterName)
+    .replace('{targets}', targets)
+    .replace('{tokenIncrease}', tokenIncrease);
 };
 
 // ============================================================================
@@ -1165,4 +1259,5 @@ module.exports = {
   // Boost Flavor Text
   generateBoostFlavorText,
   generateUnusedBoostFlavorText,
+  generateSubmissionBoostFlavorText,
 };

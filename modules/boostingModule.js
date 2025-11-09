@@ -176,7 +176,8 @@ const boostingEffects = {
   },
   Tokens: {
    name: "Ballad of the Goddess",
-   description: "When an Entertainer is present in a tracked RP or quest, all participants receive a bonus token reward.",
+   description: "Passive effect. When an Entertainer is present in a tracked RP quest, all participants automatically receive the bonus token reward.",
+   passive: true,
   },
   Traveling: {
    name: "Bolero of Fire",
@@ -436,7 +437,10 @@ function applyFortuneTellerStealingBoost(baseChance) {
  return applyFlatBonus(baseChance, BOOST_MULTIPLIERS.FORTUNE_TELLER_STEAL_BONUS, 100);
 }
 
-function applyFortuneTellerTokensBoost(baseTokens) {
+function applyFortuneTellerTokensBoost(baseTokens, isBuying = false) {
+ if (isBuying) {
+  return baseTokens;
+ }
  return applyPercentageBoost(baseTokens, BOOST_MULTIPLIERS.FORTUNE_TELLER_TOKENS);
 }
 
@@ -800,10 +804,7 @@ function applyEntertainerLootingBoost(damageTaken, monsterTier = 1) {
 }
 
 function applyEntertainerTokensBoost(participants) {
- return participants.map((participant) => ({
-  ...participant,
-  tokens: (participant.tokens || 0) + 20,
- }));
+ return participants;
 }
 
 function applyEntertainerTravelingBoost(escapeRolls) {
@@ -1010,7 +1011,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
    case "Looting": return applyFortuneTellerLootingBoost(data);
    case "Mounts": return applyFortuneTellerMountsBoost(data);
    case "Stealing": return applyFortuneTellerStealingBoost(data);
-   case "Tokens": return applyFortuneTellerTokensBoost(data);
+  case "Tokens": return applyFortuneTellerTokensBoost(data, additionalData);
    case "Traveling": return applyFortuneTellerTravelingBoost(data);
    case "Vending": return applyFortuneTellerVendingBoost(data);
    case "Other": return applyFortuneTellerOtherBoost(data);
@@ -1054,6 +1055,11 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
 
  // Entertainer boosts
  if (normalizedJob === "Entertainer") {
+  const entertainerBoost = boostingEffects[normalizedJob][category];
+  if (entertainerBoost && entertainerBoost.passive) {
+   logger.info('BOOST', `Entertainer passive boost "${category}" acknowledged; no active effect applied.`);
+   return data;
+  }
   switch (category) {
    case "Crafting": return applyEntertainerCraftingBoost(data);
    case "Exploring": return applyEntertainerExploringBoost(data);

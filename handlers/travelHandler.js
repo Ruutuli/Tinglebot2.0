@@ -42,6 +42,8 @@ const {
   generateVictoryMessage
 } = require('../modules/flavorTextModule');
 const { getJobPerk, hasPerk } = require('../modules/jobsModule');
+const { applyTravelGatherBoost, applyTravelBoost } = require('../modules/boostIntegration');
+const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
 const {
   attemptFlee,
   calculateFinalValue,
@@ -253,7 +255,8 @@ async function assignVillageVisitingRole(interaction, destination, character = n
 // ------------------- Recover Helper -------------------
 // Attempts to recover a heart if character not KO'd, has stamina or Delivering perk,
 // handles full-hearts case, updates stats, travel log, and edits encounter embed.
-async function handleRecover(interaction, character, encounterMessage, travelLog) {
+async function handleRecover(interaction, character, encounterMessage, travelLog, travelContext = null) {
+  travelContext = travelContext || {};
   try {
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
@@ -293,18 +296,62 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
   
     // Stamina check & perform recovery
     let decision, outcomeMessage;
+    let restfulBlessingApplied = false;
+
     if (character.currentStamina >= 1 || hasPerk(character, 'DELIVERING')) {
       if (!hasPerk(character, 'DELIVERING')) {
         await useStamina(character._id, 1);
         // Update character object to reflect the stamina change
         character.currentStamina -= 1;
       }
-      await recoverHearts(character._id, 1);
-      character.currentHearts = Math.min(character.maxHearts, character.currentHearts + 1);
-      await updateCurrentHearts(character._id, character.currentHearts);
-  
-      decision = `💖 Recovered 1 heart${hasPerk(character,'DELIVERING') ? '' : ' (-1 🟩 stamina)'}.`;
-      outcomeMessage = `${character.name} recovered a heart${hasPerk(character,'DELIVERING') ? '' : ' and lost 1 🟩 stamina'}.`;
+
+      const heartsMissing = Math.max(0, character.maxHearts - character.currentHearts);
+      let baseRecovery = Math.min(1, heartsMissing);
+      if (baseRecovery <= 0) {
+        baseRecovery = 0;
+      }
+
+      let boostedRecovery = baseRecovery;
+      try {
+        const boostResult = await applyTravelBoost(character.name, baseRecovery || 1);
+        if (typeof boostResult === 'number') {
+          boostedRecovery = boostResult;
+          if (boostedRecovery > baseRecovery) {
+            restfulBlessingApplied = true;
+            travelContext.restfulBlessingApplied = true;
+          }
+        }
+      } catch (boostError) {
+        handleError(boostError, 'travelHandler.js (handleRecover - boost integration)');
+      }
+
+      const heartsToRecover = Math.min(
+        Math.max(boostedRecovery, baseRecovery || 1),
+        heartsMissing
+      );
+
+      const actualHeartsRecovered = heartsToRecover > 0 ? heartsToRecover : 0;
+
+      if (actualHeartsRecovered > 0) {
+        await recoverHearts(character._id, actualHeartsRecovered);
+        character.currentHearts = Math.min(character.maxHearts, character.currentHearts + actualHeartsRecovered);
+        await updateCurrentHearts(character._id, character.currentHearts);
+      }
+
+      const heartLabel = actualHeartsRecovered === 1 ? 'heart' : 'hearts';
+      decision = `💖 Recovered ${actualHeartsRecovered} ${heartLabel}${hasPerk(character,'DELIVERING') ? '' : ' (-1 🟩 stamina)'}.`;
+      outcomeMessage = `${character.name} recovered ${actualHeartsRecovered} ${heartLabel}${hasPerk(character,'DELIVERING') ? '' : ' and lost 1 🟩 stamina'}.`;
+
+      if (restfulBlessingApplied && actualHeartsRecovered > baseRecovery) {
+        const bonusHearts = actualHeartsRecovered - baseRecovery;
+        outcomeMessage += `\n📿 Restful Blessing added +${bonusHearts} extra hearts.`;
+        decision += `\n📿 Restful Blessing added +${bonusHearts} extra hearts.`;
+        travelContext.restfulBlessingBonus = (travelContext.restfulBlessingBonus || 0) + bonusHearts;
+      }
+
+      if (restfulBlessingApplied) {
+        travelContext.restfulBlessingApplied = true;
+      }
     } else {
       decision = `❌ Not enough stamina to recover.`;
       outcomeMessage = `${character.name} tried to recover but lacked stamina.`;
@@ -338,11 +385,13 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
 // ------------------- Gather Helper -------------------
 // Picks a random resource along path, updates inventory, stamina, logs outcome,
 // syncs sheet, and edits encounter embed.
-async function handleGather(interaction, character, currentPath, encounterMessage, travelLog) {
+async function handleGather(interaction, character, currentPath, encounterMessage, travelLog, travelContext = null) {
   if (typeof currentPath !== 'string') {
     throw new Error(`Invalid currentPath value: "${currentPath}" — expected a string like "leafDewWay".`);
   }
   
+  travelContext = travelContext || {};
+
   try {
     // ------------------- Travel Day Gathering Check ------------------
     // For travel, we only check if gathering has been used in this specific travel session
@@ -391,17 +440,79 @@ async function handleGather(interaction, character, currentPath, encounterMessag
 
     if (!available.length) {
       decision = `❌ No resources to gather.`;
+      outcomeMessage = 'No resources found';
     } else {
       const weighted = createWeightedItemList(available);
-      const chosen = weighted[Math.floor(Math.random() * weighted.length)];
-      
+      const rollRandomItem = () => {
+        const baseItem = weighted[Math.floor(Math.random() * weighted.length)];
+        return {
+          ...baseItem
+        };
+      };
+
+      const gatherRolls = [rollRandomItem()];
+      let finalRoll = gatherRolls[0];
+      let fieldLessonSummary = null;
+      let travelGuideSummary = null;
+      let activeBoost = null;
+      let hasTeacherTravelBoost = false;
+      let hasScholarTravelBoost = false;
+
+      try {
+        activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+        const now = Date.now();
+        hasTeacherTravelBoost =
+          activeBoost &&
+          activeBoost.status === 'accepted' &&
+          activeBoost.category === 'Traveling' &&
+          (!activeBoost.boostExpiresAt || now <= activeBoost.boostExpiresAt) &&
+          typeof activeBoost.boosterJob === 'string' &&
+          activeBoost.boosterJob.toLowerCase() === 'teacher';
+
+        hasScholarTravelBoost =
+          activeBoost &&
+          activeBoost.status === 'accepted' &&
+          activeBoost.category === 'Traveling' &&
+          (!activeBoost.boostExpiresAt || now <= activeBoost.boostExpiresAt) &&
+          typeof activeBoost.boosterJob === 'string' &&
+          activeBoost.boosterJob.toLowerCase() === 'scholar';
+
+        if (hasScholarTravelBoost) {
+          travelContext.scholarTravelGuideActive = true;
+        }
+
+        if (hasTeacherTravelBoost) {
+          gatherRolls.push(rollRandomItem());
+          const boostedResult = await applyTravelGatherBoost(character.name, gatherRolls);
+
+          if (boostedResult) {
+            if (Array.isArray(boostedResult)) {
+              finalRoll = boostedResult[boostedResult.length - 1] || gatherRolls[0];
+            } else {
+              finalRoll = boostedResult;
+            }
+
+            const [firstRoll, secondRoll] = gatherRolls;
+            const getName = (item) => item?.itemName || item?.name || 'Unknown Item';
+            const chosenName = getName(finalRoll);
+            fieldLessonSummary = {
+              first: getName(firstRoll),
+              second: getName(secondRoll),
+              chosen: chosenName
+            };
+          }
+        }
+      } catch (boostError) {
+        handleError(boostError, 'travelHandler.js (handleGather - boost integration)');
+      }
+
       // Format the item data properly
       const formattedItem = {
-        ...chosen,
-        quantity: chosen.quantity || 1,
-        category: Array.isArray(chosen.category) ? chosen.category : [chosen.category],
-        type: Array.isArray(chosen.type) ? chosen.type : [chosen.type],
-        subtype: Array.isArray(chosen.subtype) ? chosen.subtype : chosen.subtype ? [chosen.subtype] : [],
+        ...finalRoll,
+        quantity: finalRoll.quantity || 1,
+        category: Array.isArray(finalRoll.category) ? finalRoll.category : [finalRoll.category],
+        type: Array.isArray(finalRoll.type) ? finalRoll.type : [finalRoll.type],
+        subtype: Array.isArray(finalRoll.subtype) ? finalRoll.subtype : finalRoll.subtype ? [finalRoll.subtype] : [],
         perk: "", // Explicitly set perk to empty for gathered items
         obtain: "Travel" // Set the correct source for travel-gathered items
       };
@@ -410,12 +521,41 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       
       outcomeMessage = `Gathered ${formattedItem.quantity}× ${formattedItem.itemName}.`;
 
+      if (fieldLessonSummary) {
+        outcomeMessage += `\n📘 Field Lesson: first roll **${fieldLessonSummary.first}** ➜ second roll **${fieldLessonSummary.second}** ➜ kept **${fieldLessonSummary.chosen}**.`;
+      }
+
+      try {
+        if (hasScholarTravelBoost) {
+          const bonusRoll = rollRandomItem();
+          const formattedBonusItem = {
+            ...bonusRoll,
+            quantity: bonusRoll.quantity || 1,
+            category: Array.isArray(bonusRoll.category) ? bonusRoll.category : [bonusRoll.category],
+            type: Array.isArray(bonusRoll.type) ? bonusRoll.type : [bonusRoll.type],
+            subtype: Array.isArray(bonusRoll.subtype) ? bonusRoll.subtype : bonusRoll.subtype ? [bonusRoll.subtype] : [],
+            perk: "",
+            obtain: "Travel"
+          };
+
+          await syncToInventoryDatabase(character, formattedBonusItem, interaction);
+          travelGuideSummary = `\n📚 Travel Guide: gained an extra ${formattedBonusItem.quantity}× ${formattedBonusItem.itemName}.`;
+          travelContext.scholarTravelGuideTriggered = true;
+        }
+      } catch (scholarError) {
+        handleError(scholarError, 'travelHandler.js (handleGather - scholar boost)');
+      }
+
+      if (travelGuideSummary) {
+        outcomeMessage += travelGuideSummary;
+      }
+
       if (!hasPerk(character, 'DELIVERING')) {
         await useStamina(character._id, 1);
         // Update character object to reflect the stamina change
         character.currentStamina = Math.max(0, character.currentStamina - 1);
         outcomeMessage += ' (-1 🟩 stamina)';
-      }        
+      }
       decision = `🌱 ${outcomeMessage}`;
     }
 
@@ -608,15 +748,52 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
   // ------------------- Flee Helper -------------------
   // Handles three flee outcomes (success, failed+attack, failed+no-attack),
   // handles KO on flee, stamina, updates embed & logs outcomes.
-  async function handleFlee(interaction, character, encounterMessage, monster, travelLog) {
+  async function handleFlee(interaction, character, encounterMessage, monster, travelLog, travelContext = null) {
     try {
+      travelContext = travelContext || {};
       travelLog = Array.isArray(travelLog) ? travelLog : [];
   
       const jobPerk = getJobPerk(character.job);
       character.perk = jobPerk?.perks[0];
   
-      const result = await attemptFlee(character, monster);
-      let decision, outcomeMessage;
+    let fleeOptions = {};
+    let boleroApplied = false;
+    let boleroTriggered = false;
+
+    try {
+      if (!travelContext?.boleroOfFireUsedToday) {
+        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+        const now = Date.now();
+        const hasEntertainerTravelBoost =
+          activeBoost &&
+          activeBoost.status === 'accepted' &&
+          activeBoost.category === 'Traveling' &&
+          (!activeBoost.boostExpiresAt || now <= activeBoost.boostExpiresAt) &&
+          typeof activeBoost.boosterJob === 'string' &&
+          activeBoost.boosterJob.toLowerCase() === 'entertainer';
+
+        if (hasEntertainerTravelBoost) {
+          fleeOptions.advantageAttempts = 2;
+          boleroApplied = true;
+          if (travelContext) {
+            travelContext.entertainerBoleroActive = true;
+          }
+        }
+      }
+    } catch (boostError) {
+      handleError(boostError, 'travelHandler.js (handleFlee - boost integration)');
+    }
+
+    const result = await attemptFlee(character, monster, fleeOptions);
+    let decision, outcomeMessage;
+
+    if (boleroApplied && travelContext) {
+      travelContext.boleroOfFireUsedToday = true;
+      if (result.attempts && result.attempts > 1) {
+        boleroTriggered = true;
+        travelContext.entertainerBoleroTriggered = true;
+      }
+    }
   
       if (result.success) {
         // success
@@ -626,8 +803,20 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           character.currentStamina = Math.max(0, character.currentStamina - 1);
         }
         
-        decision = `💨 Successfully fled${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
-        outcomeMessage = `${character.name} escaped the ${monster.name}!`;
+      decision = `💨 Successfully fled${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
+      outcomeMessage = `${character.name} escaped the ${monster.name}!`;
+
+      if (boleroApplied) {
+        if (boleroTriggered) {
+          const extraMsg = `🎵 Bolero of Fire granted an extra escape attempt!`;
+          decision += `\n${extraMsg}`;
+          outcomeMessage += `\n${extraMsg}`;
+        } else {
+          const readyMsg = `🎵 Bolero of Fire kept the path clear for your escape.`;
+          decision += `\n${readyMsg}`;
+          outcomeMessage += `\n${readyMsg}`;
+        }
+      }
       } else if (result.attacked) {
         // attacked while fleeing
         const latestCharacter = await Character.findById(character._id);
@@ -658,8 +847,16 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           await useStamina(character._id,0);
           await character.save();
         } else {
-          decision = `⚠️ Flee failed and took ${result.damage} ❤️ hearts.`;
+        decision = `⚠️ Flee failed and took ${result.damage} ❤️ hearts.`;
         }
+
+      if (boleroApplied) {
+        const boleroFailMsg = boleroTriggered
+          ? `🎵 Bolero of Fire tried twice, but the monster still caught up!`
+          : `🎵 Bolero of Fire was ready, but the monster still caught you!`;
+        decision += `\n${boleroFailMsg}`;
+        outcomeMessage += `\n${boleroFailMsg}`;
+      }
       } else {
         // no attack
         if (!hasPerk(character, 'DELIVERING')) {
@@ -668,8 +865,16 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           character.currentStamina = Math.max(0, character.currentStamina - 1);
         }
         
-        decision = `💨 Flee failed but no attack${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
-        outcomeMessage = `${character.name} tried to flee but wasn't attacked.`;
+      decision = `💨 Flee failed but no attack${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
+      outcomeMessage = `${character.name} tried to flee but wasn't attacked.`;
+
+      if (boleroApplied) {
+        const extraMsg = boleroTriggered
+          ? `🎵 Bolero of Fire's second try kept you untouched.`
+          : `🎵 Bolero of Fire steadied your escape, even without a reroll.`;
+        decision += `\n${extraMsg}`;
+        outcomeMessage += `\n${extraMsg}`;
+      }
       }
   
       // Update embed with flee-specific flavor text
@@ -748,7 +953,8 @@ async function handleTravelInteraction(
     monster,
     travelLog,
     startingVillage,
-    preGeneratedFlavor
+    preGeneratedFlavor,
+    travelContext = null
   ) {
     try {
       // Check if this is a button interaction and handle potential expiration
@@ -774,10 +980,10 @@ async function handleTravelInteraction(
   
       switch (customId) {
         case 'recover':
-          result = await handleRecover(interaction, character, encounterMessage, travelLog);
+          result = await handleRecover(interaction, character, encounterMessage, travelLog, travelContext);
           break;
         case 'gather':
-          result = await handleGather(interaction, character, currentPath, encounterMessage, travelLog);
+          result = await handleGather(interaction, character, currentPath, encounterMessage, travelLog, travelContext);
           break;
         case 'fight':
           if (!monster) {
@@ -792,7 +998,7 @@ async function handleTravelInteraction(
           result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
           break;
         case 'flee':
-          result = await handleFlee(interaction, character, encounterMessage, monster, travelLog);
+          result = await handleFlee(interaction, character, encounterMessage, monster, travelLog, travelContext);
           break;
         case 'do_nothing':
           result = await handleDoNothing(interaction, character, encounterMessage, travelLog, preGeneratedFlavor);

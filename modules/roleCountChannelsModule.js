@@ -42,14 +42,21 @@ const ROLE_COUNT_CONFIG = {
 // ------------------- Core Functions -------------------
 // ============================================================================
 
+const MEMBER_FETCH_COOLDOWN_MS = 5 * 60 * 1000;
+let lastMemberFetchTimestamp = 0;
+
 /**
  * Get the count of members with a specific role
  * @param {Guild} guild - The Discord guild
  * @param {string} roleId - The role ID to count
  * @returns {Promise<number>} - The number of members with the role
  */
-async function getRoleMemberCount(guild, roleId) {
+async function getRoleMemberCount(guild, roleId, preFetchedMembers = null) {
   try {
+    if (preFetchedMembers) {
+      return preFetchedMembers.filter(member => member.roles.cache.has(roleId)).size;
+    }
+
     // Try to get role from cache first
     let role = guild.roles.cache.get(roleId);
     
@@ -86,7 +93,7 @@ async function getRoleMemberCount(guild, roleId) {
       try {
         // Fetch members to populate the cache (limit to avoid rate limits)
         // This will help populate the cache for future calls
-        await guild.members.fetch({ limit: 1000 });
+        await guild.members.fetch();
         // Now try both methods again
         count = role.members.size;
         if (count === 0) {
@@ -217,11 +224,32 @@ async function updateAllRoleCountChannels(guild) {
   
   try {
     logger.info('SYSTEM', `Updating role count channels for guild ${guild.name}`);
+
+    let membersCache = guild.members.cache;
+    const cachedCount = membersCache.size;
+    const expectedCount = guild.memberCount ?? cachedCount;
+    const now = Date.now();
+    const needsRefresh = cachedCount === 0 || (expectedCount && cachedCount < expectedCount);
+    const cooldownExpired = (now - lastMemberFetchTimestamp) > MEMBER_FETCH_COOLDOWN_MS;
+
+    if (needsRefresh && cooldownExpired) {
+      try {
+        logger.debug('SYSTEM', `Refreshing guild member cache for role counts (${cachedCount}/${expectedCount})`);
+        membersCache = await guild.members.fetch({ withPresences: false });
+        lastMemberFetchTimestamp = Date.now();
+        logger.debug('SYSTEM', `Member cache refreshed for role counts (${membersCache.size} members cached)`);
+      } catch (fetchError) {
+        logger.warn('SYSTEM', `Failed to refresh guild member cache for role counts: ${fetchError.message}`);
+        membersCache = guild.members.cache;
+      }
+    } else if (needsRefresh) {
+      logger.debug('SYSTEM', `Skipping member cache refresh for role counts (cooldown active, cache ${cachedCount}/${expectedCount})`);
+    }
     
     for (const [roleId, config] of Object.entries(ROLE_COUNT_CONFIG)) {
       try {
         // Get current member count for this role
-        const count = await getRoleMemberCount(guild, roleId);
+        const count = await getRoleMemberCount(guild, roleId, membersCache);
         
         // Find existing channel
         const existingChannel = await findRoleCountChannel(guild, roleId);

@@ -10,6 +10,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 // ============================================================================
 // Modules
 // ============================================================================
@@ -30,6 +31,8 @@ const {
   retrieveSubmissionFromStorage, 
   findLatestSubmissionIdForUser 
 } = require('../utils/storage');
+const { fetchCharacterByNameAndUserId, fetchCharacterByName } = require('../database/db');
+const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
 
 // Menu utilities to generate select menus for the submission process
 const {
@@ -222,7 +225,7 @@ async function handleSelectMenuInteraction(interaction) {
       // Apply updates first to ensure all data is saved
       if (Object.keys(updates).length > 0) {
         await updateSubmissionData(submissionId, updates);
-        console.log(`[selectMenuHandler.js]: 💾 Applied updates to submission: ${submissionId}`);
+        logger.success('SUBMISSION', `💾 Applied updates to submission: ${submissionId}`);
       }
 
       // Get the updated submission data
@@ -246,6 +249,73 @@ async function handleSelectMenuInteraction(interaction) {
         ...updatedSubmissionData,
         questBonus
       });
+      let finalTokenAmount = totalTokens;
+      const boostEffects = [];
+      let boostTokenIncrease = 0;
+
+      const taggedCharacters = Array.isArray(updatedSubmissionData.taggedCharacters)
+        ? updatedSubmissionData.taggedCharacters
+        : [];
+
+      const focusCharacters = [];
+      if (taggedCharacters.length > 0 && updatedSubmissionData.userId) {
+        for (const taggedName of taggedCharacters) {
+          try {
+            const character = await fetchCharacterByNameAndUserId(taggedName, updatedSubmissionData.userId);
+            if (character) {
+              focusCharacters.push(character);
+            }
+          } catch (fetchError) {
+            console.error(`[selectMenuHandler.js]: ❌ Failed to fetch character ${taggedName}:`, fetchError);
+          }
+        }
+      }
+
+      const processedBoosts = new Set();
+
+      for (const character of focusCharacters) {
+        if (!character.boostedBy) continue;
+
+        let booster;
+        try {
+          booster = await fetchCharacterByName(character.boostedBy);
+        } catch (fetchBoosterError) {
+          console.error(`[selectMenuHandler.js]: ❌ Failed to fetch booster ${character.boostedBy}:`, fetchBoosterError);
+          continue;
+        }
+
+        if (!booster) continue;
+
+        if (
+          updatedSubmissionData.category === 'art' &&
+          booster.job === 'Teacher' &&
+          !processedBoosts.has('teacher_tokens')
+        ) {
+          const boostedTokens = applyTeacherTokensBoost(finalTokenAmount);
+          const tokenIncrease = boostedTokens - finalTokenAmount;
+          if (tokenIncrease > 0) {
+            finalTokenAmount = boostedTokens;
+            boostEffects.push(`👩‍🏫 **Critique & Composition:** ${booster.name} added 🪙 ${tokenIncrease}.`);
+            processedBoosts.add('teacher_tokens');
+          }
+        }
+
+        if (
+          updatedSubmissionData.category === 'writing' &&
+          booster.job === 'Scholar' &&
+          !processedBoosts.has('scholar_tokens')
+        ) {
+          const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
+          const tokenIncrease = boostedTokens - finalTokenAmount;
+          if (tokenIncrease > 0) {
+            finalTokenAmount = boostedTokens;
+            boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
+            processedBoosts.add('scholar_tokens');
+          }
+        }
+      }
+
+      boostTokenIncrease = Math.max(0, finalTokenAmount - totalTokens);
       
       // Generate the breakdown string
       const breakdownString = generateTokenBreakdown({
@@ -256,20 +326,36 @@ async function handleSelectMenuInteraction(interaction) {
         addOnsApplied: updatedSubmissionData.addOnsApplied,
         specialWorksApplied: updatedSubmissionData.specialWorksApplied,
         typeMultiplierCounts: updatedSubmissionData.typeMultiplierCounts,
-        finalTokenAmount: totalTokens,
+        finalTokenAmount,
         collab: updatedSubmissionData.collab,
         questBonus
       });
 
       // Update with final calculations
-      await updateSubmissionData(submissionId, {
-        finalTokenAmount: totalTokens,
+      const submissionUpdatePayload = {
+        finalTokenAmount,
         tokenCalculation: breakdownString
-      });
+      };
+
+      if (boostEffects.length > 0) {
+        submissionUpdatePayload.boostEffects = boostEffects;
+        submissionUpdatePayload.boostTokenIncrease = boostTokenIncrease;
+      } else {
+        submissionUpdatePayload.boostEffects = [];
+        submissionUpdatePayload.boostTokenIncrease = 0;
+      }
+
+      await updateSubmissionData(submissionId, submissionUpdatePayload);
 
       // Show final confirmation with token breakdown
+      let confirmationMessage = `✅ **Submission Complete!**\n\n${breakdownString}`;
+      if (boostEffects.length > 0) {
+        confirmationMessage += `\n🎭 **Boost Effects**\n${boostEffects.join('\n')}`;
+      }
+      confirmationMessage += `\n💰 **Final Total:** ${finalTokenAmount} tokens`;
+
       await interaction.update({
-        content: `✅ **Submission Complete!**\n\n${breakdownString}\n\nClick "Confirm Submission" to finalize.`,
+        content: `${confirmationMessage}\n\nClick "Confirm Submission" to finalize.`,
         components: [getConfirmButtonRow()],
       });
     }
@@ -277,7 +363,7 @@ async function handleSelectMenuInteraction(interaction) {
     // Apply updates only if there are any (for non-special works selections)
     if (Object.keys(updates).length > 0 && customId !== 'specialWorksSelect') {
       await updateSubmissionData(submissionId, updates);
-      console.log(`[selectMenuHandler.js]: 💾 Applied updates to submission: ${submissionId}`);
+      logger.success('SUBMISSION', `💾 Applied updates to submission: ${submissionId}`);
     }
 
   } catch (error) {

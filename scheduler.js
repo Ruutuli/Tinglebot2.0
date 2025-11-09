@@ -54,6 +54,8 @@ const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBloc
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 const { updateAllRoleCountChannels } = require('./modules/roleCountChannelsModule');
 const { setupSecretSantaScheduler } = require('./modules/secretSantaModule');
+const { addBoostFlavorText, buildFooterText } = require('./embeds/embeds');
+const { generateBoostFlavorText } = require('./modules/flavorTextModule');
 
 // Utilities
 const { safeAppendDataToSheet, extractSpreadsheetId } = require('./utils/googleSheetsUtils');
@@ -81,6 +83,7 @@ const {
 
 // Constants
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
+const DEFAULT_JAIL_DURATION_MS = 3 * 24 * 60 * 60 * 1000;
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
 
 // Channel mappings
@@ -1165,18 +1168,39 @@ async function handleJailRelease(client) {
  let releasedCount = 0;
 
  for (const character of charactersToRelease) {
-  character.inJail = false;
-  character.failedStealAttempts = 0;
-  character.jailReleaseTime = null;
-  await character.save();
+ const jailDurationMs = character.jailDurationMs;
+ const jailBoostSource = character.jailBoostSource;
+ const wasBoostedRelease = typeof jailDurationMs === 'number' && jailDurationMs > 0 && jailDurationMs < DEFAULT_JAIL_DURATION_MS;
+ const servedDays = jailDurationMs ? Math.max(1, Math.round(jailDurationMs / (24 * 60 * 60 * 1000))) : 3;
+ const boostDetails = wasBoostedRelease ? {
+  boosterJob: 'Priest',
+  boosterName: jailBoostSource || 'Priest Ally',
+  boostName: 'Merciful Sentence',
+  boostFlavorText: generateBoostFlavorText('Priest', 'Stealing'),
+ } : null;
 
-  const releaseEmbed = createAnnouncementEmbed(
-   "Town Hall Proclamation",
-   `The town hall doors creak open and a voice rings out:\n\n> **${character.name}** has served their time and is hereby released from jail.\n\nMay you walk the path of virtue henceforth.`,
-   character.icon,
-   "https://storage.googleapis.com/tinglebot/Graphics/border.png",
-   "Town Hall Records • Reformed & Released"
-  );
+ let description = `The town hall doors creak open and a voice rings out:\n\n> **${character.name}** has served their time and is hereby released from jail.\n\nMay you walk the path of virtue henceforth.`;
+description = addBoostFlavorText(description, boostDetails);
+
+ const releaseEmbed = new EmbedBuilder()
+  .setColor("#88cc88")
+  .setTitle("Town Hall Proclamation")
+  .setDescription(description)
+  .addFields(
+   { name: '⏳ Time Served', value: `> ${servedDays} day${servedDays !== 1 ? 's' : ''}`, inline: true }
+  )
+  .setThumbnail(isValidImageUrl(character.icon) ? character.icon : DEFAULT_IMAGE_URL)
+  .setImage(DEFAULT_IMAGE_URL)
+  .setFooter({ text: buildFooterText("Town Hall Records • Reformed & Released", character, boostDetails) })
+  .setTimestamp();
+
+ character.inJail = false;
+ character.failedStealAttempts = 0;
+ character.jailReleaseTime = null;
+ character.jailStartTime = null;
+ character.jailDurationMs = null;
+ character.jailBoostSource = null;
+ await character.save();
 
   // Post announcement in character's current village town hall channel
   try {
@@ -1185,7 +1209,7 @@ async function handleJailRelease(client) {
    
    if (villageChannel) {
     await villageChannel.send({
-     content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
+    content: `<@${character.userId}>, your character **${character.name}** has been released from jail.${wasBoostedRelease ? ' They were granted early release thanks to a Priest\'s Merciful Sentence.' : ''}`,
      embeds: [releaseEmbed],
     });
     releasedCount++;
@@ -1199,7 +1223,7 @@ async function handleJailRelease(client) {
 
   const dmSent = await sendUserDM(
    character.userId,
-   `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`,
+ `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail.${wasBoostedRelease ? `\n✨ ${boostDetails.boostFlavorText}` : '\nRemember, a fresh start awaits you!'}`,
    client
   );
   

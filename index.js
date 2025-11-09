@@ -343,7 +343,7 @@ async function initializeClient() {
         } else if (interaction.isButton()) {
           await handleComponentInteraction(interaction);
         } else if (interaction.isStringSelectMenu()) {
-          console.log(`[index.js]: 🔄 Processing select menu interaction: ${interaction.customId}`);
+          logger.info('INTERACTION', `🔄 Processing select menu interaction: ${interaction.customId}`);
           
           // Route submission-related select menus to the submission handler
           const submissionMenuIds = ['baseSelect', 'typeMultiplierSelect', 'productMultiplierSelect', 'addOnsSelect', 'specialWorksSelect'];
@@ -378,7 +378,7 @@ async function initializeClient() {
           const { handleModalSubmission } = require("./handlers/modalHandler");
           await handleModalSubmission(interaction);
         } else {
-          console.warn(`[index.js]: Unhandled interaction type: ${interaction.type}`);
+          logger.warn('INTERACTION', `Unhandled interaction type: ${interaction.type}`);
         }
       } catch (error) {
         handleError(error, "index.js", {

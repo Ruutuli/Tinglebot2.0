@@ -124,6 +124,9 @@ const characterSchema = new Schema({
   failedFleeAttempts: { type: Number, default: 0 },
   inJail: { type: Boolean, default: false },
   jailReleaseTime: { type: Date, default: null },
+  jailStartTime: { type: Date, default: null },
+  jailDurationMs: { type: Number, default: null },
+  jailBoostSource: { type: String, default: null },
   canBeStolenFrom: { type: Boolean, default: true },
   
   // ------------------- Steal Protection -------------------

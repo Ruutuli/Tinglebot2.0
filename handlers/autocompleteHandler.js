@@ -676,6 +676,12 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "charactername") {
                   await handleBoostingStatusCharacterAutocomplete(interaction, focusedOption);
                 }
+              } else if (boostingSubcommand === "use") {
+                if (focusedOption.name === "charactername") {
+                  await handleBoostingUseCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "village") {
+                  await handleBoostingVillageAutocomplete(interaction, focusedOption);
+                }
               } else if (boostingSubcommand === "cancel") {
                 if (focusedOption.name === "requestid") {
                   await handleBoostingCancelRequestIdAutocomplete(interaction, focusedOption);
@@ -686,11 +692,9 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
 
           // ------------------- Submit Command -------------------
           case "submit":
-            console.log(`[autocompleteHandler.js]: Submit command autocomplete - focusedOption.name: ${focusedOption.name}`);
             if (focusedOption.name === "collab") {
               await handleSubmitCollabAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "tagged_characters") {
-              console.log(`[autocompleteHandler.js]: Calling handleTaggedCharactersAutocomplete for tagged_characters`);
               await handleTaggedCharactersAutocomplete(interaction, focusedOption);
             }
             break;
@@ -1659,48 +1663,41 @@ async function handleBoostingVillageAutocomplete(
  focusedOption
 ) {
  try {
-  // Get the current character and booster to determine available villages
-  const characterName = interaction.options.getString('character');
+  const characterName = interaction.options.getString('character') || interaction.options.getString('charactername');
   const boosterName = interaction.options.getString('booster');
   const category = interaction.options.getString('category');
-  
-  // Get the booster character to check their job
-  const { fetchCharacterByName } = require('../database/db');
-  const boosterCharacter = await fetchCharacterByName(boosterName);
-  
-  // Get the target character
-  const character = await fetchCharacterByName(characterName);
-  const currentVillage = character?.currentVillage;
-  
-  // Get all villages except the character's current village
-  const allVillages = getAllVillages();
-  const availableVillages = allVillages
-   .filter(village => village.toLowerCase() !== currentVillage?.toLowerCase());
-  
-  // Create choices with appropriate context based on the boost type
-  const choices = availableVillages.map((village) => {
-   // For Scholar Gathering boosts, this is required
-   if (boosterCharacter?.job === 'Scholar' && category === 'Gathering') {
-    return {
-     name: `${village} (Required for Scholar Gathering)`,
-     value: village,
-    };
-   }
-   // For other boosts, this is optional
-   else {
-    return {
-     name: `${village} (Optional target village)`,
-     value: village,
-    };
-   }
-  });
 
-  // Respond to the interaction with filtered village choices
+  let boosterCharacter = null;
+  let currentVillage = null;
+
+  if (boosterName) {
+   boosterCharacter = await fetchCharacterByName(boosterName);
+  }
+
+  if (characterName) {
+   const character = await fetchCharacterByName(characterName);
+   currentVillage = character?.currentVillage || null;
+  }
+
+  const allVillages = getAllVillages();
+  const availableVillages = typeof currentVillage === 'string'
+   ? allVillages.filter((village) => village.toLowerCase() !== currentVillage.toLowerCase())
+   : allVillages;
+
+  const isScholarGathering = boosterCharacter?.job === 'Scholar' && category === 'Gathering';
+  const labelSuffix = isScholarGathering ? 'Required for Scholar Gathering' : 'Optional target village';
+
+  const choices = availableVillages.map((village) => ({
+   name: `${village} (${labelSuffix})`,
+   value: village,
+  }));
+
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
-  // Handle errors gracefully and respond with a safe error message
+ logger.error('AUTOCOMPLETE', 'Error handling boosting village autocomplete', error);
+
   await safeRespondWithError(interaction);
  }
 }
@@ -5156,11 +5153,9 @@ async function handleSubmitCollabAutocomplete(interaction, focusedOption) {
 async function handleTaggedCharactersAutocomplete(interaction, focusedOption) {
   try {
     const searchQuery = focusedOption.value?.toLowerCase() || '';
-    console.log(`[handleTaggedCharactersAutocomplete]: Called with search query: "${searchQuery}"`);
     
     // Fetch ALL characters from the database (not just user-owned)
     const characters = await fetchAllCharacters();
-    console.log(`[handleTaggedCharactersAutocomplete]: Found ${characters.length} total characters`);
     
     // Filter characters based on search query
     const filteredCharacters = characters
@@ -5170,7 +5165,6 @@ async function handleTaggedCharactersAutocomplete(interaction, focusedOption) {
       })
       .slice(0, 25); // Discord limit
     
-    console.log(`[handleTaggedCharactersAutocomplete]: Filtered to ${filteredCharacters.length} characters`);
     
     // Map characters to choices (just character names)
     const choices = filteredCharacters.map(character => ({
@@ -5178,7 +5172,6 @@ async function handleTaggedCharactersAutocomplete(interaction, focusedOption) {
       value: character.name
     }));
     
-    console.log(`[handleTaggedCharactersAutocomplete]: Generated ${choices.length} choices`);
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
