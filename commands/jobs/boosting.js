@@ -47,11 +47,8 @@ const BOOST_CATEGORIES = [
   { name: "Crafting", value: "Crafting" },
   { name: "Healer", value: "Healers" },
   { name: "Stealing", value: "Stealing" },
-  { name: "Vending", value: "Vending" },
   { name: "Tokens", value: "Tokens" },
-  { name: "Exploring", value: "Exploring" },
   { name: "Traveling", value: "Traveling" },
-  { name: "Mounts", value: "Mounts" },
   { name: "Other", value: "Other" }
 ];
 
@@ -67,6 +64,13 @@ const SONG_OF_STORMS_SPECIAL_WEATHER = [
   "Meteor Shower",
   "Muggy",
   "Rock Slide",
+];
+
+const FORTUNE_TELLER_WEATHER_TYPES = ["sunny", "rainy", "stormy", "cloudy", "clear"];
+
+const OTHER_BOOST_CHOICES = [
+  { name: "Fortune Teller — Weather Prediction", value: "fortune_teller" },
+  { name: "Entertainer — Song of Storms", value: "entertainer" },
 ];
 
 // ============================================================================
@@ -600,6 +604,33 @@ async function getRemainingBoostTime(characterName, category) {
 // ------------------- Command Definition -------------------
 // ============================================================================
 
+function configureOtherBoostSubcommand(subcommand) {
+  return subcommand
+    .setName("other")
+    .setDescription("Use your 'Other' category boost (Fortune Teller: Weather Prediction, Entertainer: Song of Storms)")
+    .addStringOption((option) =>
+      option
+        .setName("charactername")
+        .setDescription("Your character name (must be boosted with 'Other' category)")
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("effect")
+        .setDescription("Choose which 'Other' boost effect to use")
+        .setRequired(false)
+        .addChoices(...OTHER_BOOST_CHOICES)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("village")
+        .setDescription("Target village (for weather prediction/storm)")
+        .setRequired(false)
+        .setAutocomplete(true)
+    );
+}
+
 module.exports = {
  data: new SlashCommandBuilder()
   .setName("boosting")
@@ -668,25 +699,7 @@ module.exports = {
       .setAutocomplete(true)
     )
   )
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("use")
-    .setDescription("Use your 'Other' category boost (Fortune Teller: Weather Prediction, Entertainer: Song of Storms)")
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("Your character name (must be boosted with 'Other' category)")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("village")
-      .setDescription("Target village (for weather prediction/storm)")
-      .setRequired(false)
-      .setAutocomplete(true)
-    )
-  )
+  .addSubcommand((subcommand) => configureOtherBoostSubcommand(subcommand))
   .addSubcommand((subcommand) =>
    subcommand
     .setName("cancel")
@@ -713,8 +726,8 @@ module.exports = {
    await handleBoostAccept(interaction);
   } else if (subcommand === "status") {
    await handleBoostStatus(interaction);
-  } else if (subcommand === "use") {
-   await handleBoostUse(interaction);
+  } else if (subcommand === "other") {
+   await handleBoostOther(interaction);
   } else if (subcommand === "cancel") {
    await handleBoostCancel(interaction);
   }
@@ -770,7 +783,7 @@ async function handleBoostRequest(interaction) {
   } else {
     fields.push({ name: "Cancel the Boost", value: `Run ${BOOSTING_CANCEL_COMMAND_MENTION} using your boost request ID.`, inline: false });
   }
-  fields.push({ name: "Use Your Boost", value: "Finish the action it applies to. For 'Other' boosts, use </boosting use:1429961744716927038>.", inline: false });
+  fields.push({ name: "Use Your Boost", value: "Finish the action it applies to. For 'Other' boosts, use `/boosting other`.", inline: false });
   if (expiresAt) {
     fields.push({ name: "Wait for Expiry", value: `Boost expires <t:${expiresAt}:R>.`, inline: false });
   }
@@ -1192,9 +1205,10 @@ async function handleBoostStatus(interaction) {
  });
 }
 
-async function handleBoostUse(interaction) {
+async function handleBoostOther(interaction) {
  const characterName = interaction.options.getString("charactername");
- const targetVillage = interaction.options.getString("village");
+ const rawTargetVillage = interaction.options.getString("village");
+ const effectChoice = interaction.options.getString("effect");
  const userId = interaction.user.id;
 
  const character = await fetchCharacterWithFallback(characterName, userId);
@@ -1207,35 +1221,34 @@ async function handleBoostUse(interaction) {
   return;
  }
 
- const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
- const hasAcceptedBoost = activeBoost && activeBoost.status === "accepted";
  const isEntertainer = character.job === 'Entertainer';
+ const isFortuneTeller = character.job === 'Fortune Teller';
 
- if (!hasAcceptedBoost) {
-  if (isEntertainer) {
-   await executeSongOfStorms(interaction, {
-    entertainer: character,
-    viaBoost: false,
-    providedVillage: targetVillage
-   });
-   return;
-  }
+ const requestedEffectJob = effectChoice === "fortune_teller"
+  ? "Fortune Teller"
+  : effectChoice === "entertainer"
+  ? "Entertainer"
+  : null;
 
+ const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+ const currentTime = Date.now();
+ const hasAcceptedBoost = activeBoost && activeBoost.status === "accepted";
+ const activeOtherBoost = hasAcceptedBoost && activeBoost.category === "Other";
+
+ if (hasAcceptedBoost && activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
   await interaction.reply({
-   content: `${characterName} does not have an active boost in the "Other" category.`,
+   content: `${characterName}'s boost has expired.`,
    ephemeral: true,
   });
   return;
  }
 
- const currentTime = Date.now();
-
- if (activeBoost.category !== "Other") {
-  if (isEntertainer) {
+ if (hasAcceptedBoost && !activeOtherBoost) {
+  if (isEntertainer && (!requestedEffectJob || requestedEffectJob === "Entertainer")) {
    await executeSongOfStorms(interaction, {
     entertainer: character,
     viaBoost: false,
-    providedVillage: targetVillage
+    providedVillage: rawTargetVillage
    });
    return;
   }
@@ -1247,80 +1260,252 @@ async function handleBoostUse(interaction) {
   return;
  }
 
- if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
+ let boosterCharacter = null;
+ let boostSourceJob = null;
+
+ if (activeOtherBoost) {
+  boosterCharacter = await fetchCharacterByNameWithFallback(activeBoost.boostingCharacter);
+  boostSourceJob = boosterCharacter?.job || activeBoost.boosterJob || null;
+ }
+
+ let effectJob = null;
+ let viaBoost = false;
+
+ if (activeOtherBoost) {
+  viaBoost = true;
+  effectJob = boostSourceJob || requestedEffectJob;
+
+  if (requestedEffectJob && effectJob && requestedEffectJob !== effectJob) {
+   await interaction.reply({
+    content: `This boost was provided by a ${effectJob}. Please choose the matching effect to use it.`,
+    ephemeral: true,
+   });
+   return;
+  }
+
+  if (!effectJob) {
+   effectJob = requestedEffectJob || boostSourceJob;
+  }
+ }
+
+ if (!viaBoost && requestedEffectJob) {
+  effectJob = requestedEffectJob;
+ }
+
+ if (!effectJob) {
+  if (isFortuneTeller) {
+   effectJob = "Fortune Teller";
+  } else if (isEntertainer) {
+   effectJob = "Entertainer";
+  }
+ }
+
+ if (!effectJob) {
   await interaction.reply({
-   content: `${characterName}'s boost has expired.`,
+   content: `${characterName} does not have an active boost in the "Other" category. Select which effect to use, or ensure your character has a qualifying boost.`,
    ephemeral: true,
   });
   return;
  }
 
- const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
- if (!boosterCharacter) {
+ if (viaBoost && boostSourceJob && effectJob !== boostSourceJob) {
   await interaction.reply({
-   content: `Error retrieving boost effect for ${characterName}.`,
+   content: `This boost was provided by a ${boostSourceJob}. Please select the matching effect.`,
    ephemeral: true,
   });
   return;
  }
 
- // ============================================================================
- // ------------------- Fortune Teller: Weather Prediction -------------------
- // ============================================================================
- if (boosterCharacter.job === 'Fortune Teller') {
-  const predictedVillages = ['Rudania', 'Inariko', 'Vhintl'];
-  const selectedVillage = targetVillage || predictedVillages[Math.floor(Math.random() * predictedVillages.length)];
-  const weatherTypes = ["sunny", "rainy", "stormy", "cloudy", "clear"];
-  const predictedWeather = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
-  
-  const embed = new EmbedBuilder()
-   .setTitle("🔮 Weather Prediction")
-   .setDescription(`**${character.name}** channels the power of **${boosterCharacter.name}** to glimpse into the future...`)
-   .addFields([
-    { name: "📍 Village", value: selectedVillage, inline: true },
-    { name: "🌤️ Tomorrow's Weather", value: predictedWeather.charAt(0).toUpperCase() + predictedWeather.slice(1), inline: true },
-    { name: "📅 Date", value: `<t:${Math.floor((Date.now() + 86400000) / 1000)}:D>`, inline: true },
-    { name: "✨ Boost Used", value: "Fortune Teller's Premonition", inline: false }
-   ])
-   .setColor("#9B59B6")
-   .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-   .setFooter({ text: "Weather prediction locked in for tomorrow!" });
+ if (!viaBoost) {
+  if (effectJob === "Fortune Teller" && !isFortuneTeller) {
+   await interaction.reply({
+    content: `Only Fortune Tellers can use the Weather Prediction ability without an active boost.`,
+    ephemeral: true,
+   });
+   return;
+  }
 
+  if (effectJob === "Entertainer" && !isEntertainer) {
+   await interaction.reply({
+    content: `Only Entertainers can perform the Song of Storms without an active boost.`,
+    ephemeral: true,
+   });
+   return;
+  }
+ }
+
+ if (viaBoost && !boosterCharacter) {
+  logger.error('BOOST', `Missing booster character data for ${activeBoost?.boostingCharacter} while resolving Other boost.`);
+  await interaction.reply({
+   content: `Unable to locate **${activeBoost?.boostingCharacter || 'the boosting character'}** to complete this boost. Please cancel and recreate the request.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ const staminaPerformer = viaBoost ? boosterCharacter : character;
+ const performerName = staminaPerformer?.name || (viaBoost ? activeBoost?.boostingCharacter : characterName);
+ const staminaAbilityLabel = effectJob === "Entertainer" ? "perform the Song of Storms" : "deliver the weather prediction";
+
+ if (!staminaPerformer || !staminaPerformer._id) {
+  logger.error('BOOST', `Missing performer data while attempting to deduct stamina for ${performerName} (${effectJob}).`);
+  await interaction.reply({
+   content: `Could not verify which character should spend stamina for this boost. Please try again later or contact staff.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ try {
+  const staminaResult = await useStamina(staminaPerformer._id, 1, {
+   source: 'boosting_other',
+   performer: performerName,
+   ability: effectJob,
+   boostRequestId: activeBoost?.boostRequestId || null
+  });
+
+  if (staminaResult?.exhausted) {
+   await interaction.reply({
+    content: `❌ **${performerName}** is too exhausted to ${staminaAbilityLabel}.`,
+    ephemeral: true,
+   });
+   return;
+  }
+ } catch (error) {
+  logger.error('BOOST', `Failed to deduct stamina for ${performerName} while using Other boost: ${error.message}`);
+  await interaction.reply({
+   content: `❌ Could not use stamina for **${performerName}**. Please try again in a moment.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ const normalizedVillage = rawTargetVillage
+  ? SONG_OF_STORMS_VILLAGES.find(
+     (village) => village.toLowerCase() === rawTargetVillage.toLowerCase()
+    )
+  : null;
+
+ if (rawTargetVillage && !normalizedVillage) {
+  await interaction.reply({
+   content: `Invalid village selection. Choose from ${SONG_OF_STORMS_VILLAGES.join(", ")}.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
+ if (effectJob === "Fortune Teller") {
+  const fortuneTeller = viaBoost
+   ? boosterCharacter || { name: activeBoost.boostingCharacter, job: boostSourceJob || "Fortune Teller" }
+   : character;
+
+  await executeFortuneTellerPrediction(interaction, {
+   fortuneTeller,
+   targetCharacter: character,
+   viaBoost,
+   activeBoost: viaBoost ? activeBoost : null,
+   providedVillage: normalizedVillage,
+  });
+  return;
+ }
+
+ if (effectJob === "Entertainer") {
+  const entertainer = viaBoost
+   ? boosterCharacter || { name: activeBoost.boostingCharacter, job: boostSourceJob || "Entertainer" }
+   : character;
+
+  await executeSongOfStorms(interaction, {
+   entertainer,
+   recipient: viaBoost ? character : null,
+   viaBoost,
+   activeBoost: viaBoost ? activeBoost : null,
+   providedVillage: normalizedVillage || rawTargetVillage,
+  });
+  return;
+ }
+
+ await interaction.reply({
+  content: `${effectJob} doesn't have an "Other" category boost that can be used with this command.`,
+  ephemeral: true,
+ });
+}
+
+async function executeFortuneTellerPrediction(interaction, options = {}) {
+ const {
+  fortuneTeller,
+  targetCharacter,
+  viaBoost = false,
+  activeBoost = null,
+  providedVillage = null,
+ } = options;
+
+ const village = providedVillage || SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
+ const predictedWeather = FORTUNE_TELLER_WEATHER_TYPES[Math.floor(Math.random() * FORTUNE_TELLER_WEATHER_TYPES.length)];
+ const formattedWeather = predictedWeather.charAt(0).toUpperCase() + predictedWeather.slice(1);
+ const forecastTimestamp = Math.floor((Date.now() + 86400000) / 1000);
+
+ const foretellerName = fortuneTeller?.name || "a Fortune Teller";
+ const targetName = targetCharacter?.name || "a traveler";
+
+ const embed = new EmbedBuilder()
+  .setTitle("🔮 Weather Prediction")
+  .setDescription(`**${targetName}** channels the insight of **${foretellerName}** to glimpse tomorrow's skies.`)
+  .addFields([
+   { name: "📍 Village", value: village, inline: true },
+   { name: "🌤️ Tomorrow's Weather", value: formattedWeather, inline: true },
+   { name: "📅 Date", value: `<t:${forecastTimestamp}:D>`, inline: true },
+  ])
+  .setColor("#9B59B6")
+  .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+  .setFooter({ text: "Weather prediction locked in for tomorrow!" });
+
+ if (viaBoost) {
+  embed.addFields({
+   name: "✨ Boost Used",
+   value: `Fortune Teller ${foretellerName}'s Weather Prediction`,
+   inline: false,
+  });
+ } else {
+  embed.addFields({
+   name: "✨ Ability Used",
+   value: "Fortune Teller's Weather Prediction",
+   inline: false,
+  });
+ }
+
+ if (fortuneTeller?.icon) {
+  embed.setAuthor({ name: foretellerName, iconURL: fortuneTeller.icon });
+ }
+
+ if (targetCharacter?.icon) {
+  embed.setThumbnail(targetCharacter.icon);
+ }
+
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: false,
+ });
+
+ if (viaBoost && activeBoost && activeBoost.boostRequestId) {
   activeBoost.status = "fulfilled";
   activeBoost.fulfilledAt = Date.now();
   await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
 
-  character.boostedBy = null;
-  await character.save();
-  
-  await interaction.reply({
-   embeds: [embed],
-   ephemeral: false,
-  });
-  
-  logger.info('BOOST', `🔮 Fortune Teller "Other" boost used - Weather prediction for ${selectedVillage}: ${predictedWeather}`);
-  return;
+  if (targetCharacter && targetCharacter.boostedBy) {
+   targetCharacter.boostedBy = null;
+   await targetCharacter.save();
+  }
+
+  if (typeof module.exports.updateBoostAppliedMessage === "function") {
+   try {
+    await module.exports.updateBoostAppliedMessage(interaction.client, activeBoost);
+   } catch (error) {
+    logger.warn('BOOST', `Unable to update boost applied message for ${activeBoost.boostRequestId}: ${error.message}`);
+   }
+  }
  }
 
- // ============================================================================
- // ------------------- Entertainer: Song of Storms -------------------
- // ============================================================================
- if (boosterCharacter.job === 'Entertainer') {
-  await executeSongOfStorms(interaction, {
-   entertainer: boosterCharacter,
-   recipient: character,
-   viaBoost: true,
-   activeBoost,
-   providedVillage: targetVillage
-  });
-  return;
- }
-
- // If we get here, the boost isn't Fortune Teller or Entertainer
- await interaction.reply({
-  content: `${boosterCharacter.job} doesn't have an "Other" category boost that can be used with this command.`,
-  ephemeral: true,
- });
+ logger.info('BOOST', `🔮 Weather prediction generated for ${village}: ${formattedWeather}${viaBoost ? ` (boost by ${foretellerName})` : ''}`);
 }
 
 async function executeSongOfStorms(interaction, options) {

@@ -48,6 +48,13 @@ async function applyBoostToAction(characterName, category, data, additionalData 
       logger.info('BOOST', `🎓 Boost applied to ${characterName} for ${category} - Roll: ${data} → ${boostedData} (+${boostedData - data})`);
     }
     
+    // Scholar travel boosts are intentionally additive—if the boost returns an
+    // unexpected type, fall back to the original payload to avoid corrupting
+    // travel state.
+    if (category === 'Traveling' && Array.isArray(data) && !Array.isArray(boostedData)) {
+      return data;
+    }
+
     return boostedData;
   } catch (err) {
     logger.error('BOOST', `Failed to apply boost to ${characterName} for ${category}: ${err.message}`);
