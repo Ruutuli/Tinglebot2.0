@@ -15,164 +15,164 @@ const boostingEffects = {
  "Fortune Teller": {
   Crafting: {
    name: "Foresight in Sales",
-   description: "Items crafted while boosted by a Fortune Teller sell for 20% more tokens.",
+   description: "The seer scripts the sale in advance—freshly crafted goods earn 20% more tokens once you bring them to market.",
   },
-  Exploring: {
-   name: "Premonition",
-   description: "Reveals whether the next quadrant contains blight before exploring it.",
-  },
+  // Exploring: {
+  //  name: "Premonition",
+  //  description: "A crystal vision reveals whether the next quadrant hides blight before anyone dares to step across the line.",
+  // },
   Gathering: {
    name: "Rarity Reversal",
-   description: "While boosted, rare items have a significantly higher chance to be gathered.",
+   description: "Rare treasures feel the pull of destiny, dramatically increasing the odds that high-rarity finds surface in your haul.",
   },
   Healers: {
    name: "Predictive Healing",
-   description: "The next healing action costs 50% less stamina, as the Fortune Teller foresaw the need.",
+   description: "Forewarned medics conserve effort; the next healing action costs 50% less stamina (rounded up) thanks to the teller’s cue.",
   },
   Looting: {
    name: "Fated Reroll",
-   description: "If you take damage during looting, the system rerolls once for a potentially better outcome.",
+   description: "Should looting go poorly and you take damage, fate compels a single reroll in search of a kinder result.",
   },
-  Mounts: {
-   name: "Rare Alignment",
-   description: "The next time a mount appears, there is a +30% higher chance it will be a Rare Mount.",
-  },
+  // Mounts: {
+  //  name: "Rare Alignment",
+  //  description: "When the next mount appears, destiny nudges the odds by +30% toward a rare-blooded companion.",
+  // },
   Stealing: {
    name: "Predicted Opportunity",
-   description: "Increases steal success rate by +20%, capped at 100%.",
+   description: "The teller marks the perfect moment—steal success chance rises by +20%, without exceeding a flawless score.",
   },
   Tokens: {
    name: "Fortunate Exchange",
-   description: "Boosted by a Fortune Teller, you earn 10% more tokens when selling to shops.",
+   description: "Trade forecasts ensure 10% extra tokens whenever you sell your wares to village shops.",
   },
   Traveling: {
    name: "Foresight Detour",
-   description: "Predicts dangerous weather and avoids it, allowing travel when others would be blocked.",
+   description: "Their charted detour nullifies weather roadblocks, letting the party travel even when conditions say to stay put.",
   },
-  Vending: {
-   name: "Reserved Fortune",
-   description: "Vendor may purchase one sold-out special item as if it was reserved for them by fate.",
-  },
+  // Vending: {
+  //  name: "Reserved Fortune",
+  //  description: "A fortune card reserves one sold-out special item so you may purchase it as though your name was on the ledger.",
+  // },
   Other: {
    name: "Weather Prediction",
-   description: "Can use the command /boost other to predict the weather for the next day in one village.",
+   description: "Use `/boost other` to lock in tomorrow’s weather forecast for any single village the moment the reading is given.",
   },
  },
 
  Teacher: {
   Crafting: {
    name: "Stamina Assistance",
-   description: "The Teacher can lend up to 3 stamina for crafting, with both characters splitting the stamina cost.",
+   description: "The mentor loans up to 3 stamina, splitting a crafting action’s cost between Teacher and student.",
   },
-  Exploring: {
-   name: "Study in Multiples",
-   description: "Double the amount of any item found during exploration, if it's a non-combat result.",
-  },
+  // Exploring: {
+  //  name: "Study in Multiples",
+  //  description: "For non-combat finds, the student catalogs one additional copy of whatever the expedition uncovered.",
+  // },
   Gathering: {
    name: "Practical Wisdom",
-   description: "You always gather something useful for crafting or daily life — never junk.",
+   description: "Lesson plans filter the table so you only gather useful supplies for crafting or village life—never junk.",
   },
   Healers: {
    name: "Temporary Fortitude",
-   description: "Boosted by a Teacher, the next patient gains +2 temporary hearts that persist until they are next damaged.",
+   description: "The Teacher’s bracing guidance grants +2 temporary hearts that last until the patient is next harmed.",
   },
   Looting: {
    name: "Combat Insight",
-   description: "Multiply your loot encounter roll by 1.2x to reflect knowledge of weak points.",
+   description: "Combat notes bump the loot roll by 20%, reflecting studied weak points and clever timing.",
   },
-  Mounts: {
-   name: "Weather Wisdom",
-   description: "While boosted by a Teacher, your mount can travel safely through dangerous weather that would block others.",
-  },
+  // Mounts: {
+  //  name: "Weather Wisdom",
+  //  description: "Field journals outline the safe route, allowing mounted travel even when storms would ground everyone else.",
+  // },
   Stealing: {
    name: "Tactical Risk",
-   description: "Boosted players are allowed one extra failed attempt before jail time is triggered.",
+   description: "The mentor intervenes once, granting an extra failed attempt before the guards haul you to jail.",
   },
   Tokens: {
    name: "Critique & Composition",
-   description: "Visual works submitted while boosted earn 1.5x their token value.",
+   description: "Structured critiques elevate visual submissions, boosting the final token payout by 50%.",
   },
   Traveling: {
    name: "Field Lesson",
-   description: "Roll twice on road gathers and choose the better result.",
+   description: "On the road they review two gather results, keeping whichever holds the higher rarity.",
   },
-  Vending: {
-   name: "Efficient Haggling",
-   description: "Vendor pays 20% fewer vending points during one restock.",
-  },
+  // Vending: {
+  //  name: "Efficient Haggling",
+  //  description: "Sharp math during restock saves 20% of the vending points that would normally be spent.",
+  // },
  },
 
  Priest: {
   Crafting: {
    name: "Spiritual Efficiency",
-   description: "Crafting while boosted by a Priest costs 30% less stamina, with a minimum savings of 1 stamina (doesn't apply to 1-stamina items).",
+   description: "Sacred rhythm trims crafting stamina by 30%, always saving at least 1 so long as the task costs 2 or more.",
   },
-  Exploring: {
-   name: "Divine Protection",
-   description: "Skip one blight exposure check during your next exploration attempt if blight is present.",
-  },
+  // Exploring: {
+  //  name: "Divine Protection",
+  //  description: "A blessing wards your next exploration, skipping one blight exposure check if corruption is present.",
+  // },
   Gathering: {
    name: "Divine Favor",
-   description: "Gathering while boosted by a Priest increases the chance of finding divine or spiritually attuned items.",
+   description: "Prayers weight the table toward consecrated relics and other spiritually attuned finds.",
   },
   Healers: {
    name: "Spiritual Cleanse",
-   description: "When boosted by a Priest, any active debuffs on the patient are removed during healing.",
+   description: "A purifying rite strips away every active debuff from the patient during the healing.",
   },
   Looting: {
    name: "Divine Blessing",
-   description: "Divine blessing ensures you receive the highest tier loot available from the monster.",
+   description: "Divine Blessing commands the loot tables to hand over the highest-tier treasure the monster carried.",
   },
-  Mounts: {
-   name: "Blessed Attempt",
-   description: "Your first failed mount attempt is automatically rerolled without costing stamina.",
-  },
+  // Mounts: {
+  //  name: "Blessed Attempt",
+  //  description: "If the first taming attempt falters, the blessing resets it once without costing extra stamina.",
+  // },
   Stealing: {
    name: "Merciful Sentence",
-   description: "While boosted by a Priest, jail time is cut in half if caught.",
+   description: "Mercy tempers justice—any jail sentence from a failed steal is cut in half.",
   },
   Tokens: {
    name: "Blessed Economy",
-   description: "While boosted, you earn 10% more when selling to shops and pay 10% less when buying.",
+   description: "Markets treat you kindly: sell orders pay 10% more tokens, and purchases cost 10% fewer.",
   },
   Traveling: {
    name: "Restful Blessing",
-   description: "When recovering during travel, gain +2 extra hearts.",
+   description: "When you rest on the road, gain +2 additional hearts from the priest’s gentle hymn.",
   },
-  Vending: {
-   name: "Blessed Restock",
-   description: "When a vendor is boosted by a Priest, they receive a divine favor: +20 bonus points when collecting vending points this month.",
-  },
+  // Vending: {
+  //  name: "Blessed Restock",
+  //  description: "Temple tithe delivers +20 bonus vending points the next time you collect for the month.",
+  // },
  },
 
  Entertainer: {
   Crafting: {
    name: "Song of Double Time",
-   description: "Boosted by an Entertainer, you can craft one extra item at no material or stamina cost.",
+   description: "The Entertainer conducts the Song of Double Time, producing one extra crafted item with no extra cost.",
   },
-  Exploring: {
-   name: "Song of Soaring",
-   description: "After exploring, instantly return to your current village's plaza via magical performance.",
-  },
+  // Exploring: {
+  //  name: "Song of Soaring",
+  //  description: "After exploring, the performance of the Song of Soaring carries everyone straight back to the village plaza.",
+  // },
   Gathering: {
    name: "Minuet of Forest",
-   description: "Gather one bonus item from a curated list of beautiful or performance-themed items, if available.",
+   description: "The Minuet of Forest swaps in a trove of performer-marked curios so you can snag a bonus themed item when available.",
   },
   Healers: {
    name: "Song of Healing",
-   description: "Emotional and musical healing grants +1 bonus heart recovered when revived from 0 HP.",
+   description: "A stirring refrain restores +1 extra heart whenever someone rises from 0 HP.",
   },
   Looting: {
    name: "Requiem of Spirit",
-   description: "Monsters are dazzled by flair. Reduce damage taken by 1 heart per 2 tiers (T1-2: -1♥, T3-4: -2♥, T5-6: -3♥, etc). Works in raids!",
+   description: "Show-stopping flourishes dazzle foes, reducing incoming damage by 1 heart per two monster tiers (works in raids).",
   },
-  Mounts: {
-   name: "Epona's Song",
-   description: "You're more likely to tame a mount that fits the local region's style, folklore, or wildlife.",
-  },
+  // Mounts: {
+  //  name: "Epona's Song",
+  //  description: "Epona’s Song raises the weight of fitting mounts, making region-appropriate companions more likely to answer.",
+  // },
   Stealing: {
    name: "Elegy of Emptiness",
-   description: "If the steal is successful, you're more likely to get a rare item.",
+   description: "If the steal succeeds, higher-tier loot entries have doubled weight, making rarer prizes likelier.",
   },
   Tokens: {
    name: "Ballad of the Goddess",
@@ -181,59 +181,59 @@ const boostingEffects = {
   },
   Traveling: {
    name: "Bolero of Fire",
-   description: "If ambushed during travel, roll two escape attempts and take the better one.",
+   description: "If ambushed on the road, the Bolero grants two escape rolls—keep the stronger result.",
   },
-  Vending: {
-   name: "Song of Time",
-   description: "Vendor may collect points at any point during the month.",
-  },
+  // Vending: {
+  //  name: "Song of Time",
+  //  description: "Song of Time lets vendors collect their points at any moment in the month without waiting for schedule windows.",
+  // },
   Other: {
    name: "Song of Storms",
-   description: "Guaranteed Special Weather in one of the 3 villages the following day",
+   description: "Song of Storms designates one of the three villages for guaranteed special weather the following day.",
   },
  },
 
  Scholar: {
   Crafting: {
    name: "Resource Optimization",
-   description: "When boosted by a Scholar, crafting consumes 30% fewer materials. Only applies when total material needed is more than 1.",
+   description: "Resource ledgers trim material needs by 30% on recipes requiring more than one total unit, with sensible rounding.",
   },
-  Exploring: {
-   name: "Historical Discovery",
-   description: "25% chance to uncover a lore-related reward (e.g., ruins, tomes, or lore-tagged items) instead of a normal event.",
-  },
+  // Exploring: {
+  //  name: "Historical Discovery",
+  //  description: "There’s a 25% chance to swap your result for a lore discovery—ruins, tomes, or other story-rich rewards flagged with bonuses.",
+  // },
   Gathering: {
    name: "Cross-Region Insight",
-   description: "Gather from another village's item table without leaving your current location.",
+   description: "Specify a distant village and the Scholar will pull that settlement’s gather table without anyone needing to travel.",
   },
   Healers: {
    name: "Efficient Recovery",
-   description: "Boosted by a Scholar, both the healer and recipient recover 1 stamina after the healing is complete.",
+   description: "Academic breathing drills return 1 stamina to both healer and recipient after the action, up to their maximums.",
   },
   Looting: {
    name: "Double Haul",
-   description: "If you win the encounter, collect 2x the normal loot quantity.",
+   description: "Field notes secure twice the usual quantity from a successful loot encounter.",
   },
-  Mounts: {
-   name: "Tactical Recommendation",
-   description: "When boosted by a Scholar, the mount embed highlights the recommended action based on the current environment.",
-  },
+  // Mounts: {
+  //  name: "Tactical Recommendation",
+  //  description: "The Scholar writes the mount embed note, highlighting the recommended approach for the current terrain.",
+  // },
   Stealing: {
    name: "Calculated Grab",
-   description: "Gain +1 extra item if the steal is successful.",
+   description: "Ledgers leave space for one more trinket—add +1 extra item whenever the steal succeeds.",
   },
   Tokens: {
    name: "Research Stipend",
-   description: "Written works submitted while boosted earn 1.5x their token value.",
+   description: "Research grants bump written submissions by 50% when the tokens are tallied.",
   },
   Traveling: {
    name: "Travel Guide",
-   description: "Gain one extra road gather result during the journey thanks to Scholar's guidance.",
+   description: "A penned itinerary adds +1 to the number of road gather results you receive during the journey.",
   },
-  Vending: {
-   name: "Demand Forecast",
-   description: "When boosted, the vendor receives a recommendation for 1 item that is rare across all player inventories — ideal for stocking.",
-  },
+  // Vending: {
+  //  name: "Demand Forecast",
+  //  description: "Their census of inventories surfaces whichever stock item is rarest across players, ready for your next restock.",
+  // },
  },
 };
 
@@ -275,7 +275,8 @@ const SPECIAL_WEATHER_TYPES = [
  "Rock Slide",
 ];
 
-const VILLAGES = ["Village A", "Village B", "Village C"];
+// Note: Keep this list in sync with boosting command usage expectations.
+const VILLAGES = ["Rudania", "Inariko", "Vhintl"];
 
 
 
@@ -785,7 +786,27 @@ function applyEntertainerMountsBoost(regionMounts) {
 }
 
 async function applyEntertainerGatheringBoost(regionItems) {
- return await processEntertainerItems();
+ const entertainerItems = await processEntertainerItems();
+
+ // Ensure we always return an array so calling code can safely iterate.
+ if (!Array.isArray(regionItems)) {
+  return entertainerItems.length > 0 ? entertainerItems : regionItems;
+ }
+
+ if (!entertainerItems.length) {
+  return [...regionItems];
+ }
+
+ const mergedItems = [...regionItems];
+ const existingNames = new Set(regionItems.map((item) => item.itemName));
+
+ entertainerItems.forEach((item) => {
+  if (!existingNames.has(item.itemName)) {
+   mergedItems.push(item);
+  }
+ });
+
+ return mergedItems;
 }
 
 function applyEntertainerHealingBoost(baseHealing, wasKO) {
@@ -953,8 +974,16 @@ function applyScholarTokensBoost(baseTokens) {
  return applyPercentageBoost(baseTokens, BOOST_MULTIPLIERS.SCHOLAR_TOKENS);
 }
 
-function applyScholarTravelingBoost(roadGathers) {
- return roadGathers + BOOST_MULTIPLIERS.SCHOLAR_TRAVEL_BONUS;
+function applyScholarTravelingBoost(travelData) {
+ // Numeric travel values (resting hearts, escape checks, weather flags) should
+ // remain untouched by the Scholar boost; the calling flow handles the bonus work.
+ if (!Array.isArray(travelData)) {
+  return travelData;
+ }
+
+ // For gather tables, return a shallow copy so callers can append additional rolls
+ // without mutating the original array reference.
+ return [...travelData];
 }
 
 function applyScholarVendingBoost(allInventories) {

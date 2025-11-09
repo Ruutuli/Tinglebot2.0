@@ -717,9 +717,15 @@ module.exports = {
                 });
 
                 const entertainerItems = await applyGatheringBoost(character.name, availableForBonus);
-                if (Array.isArray(entertainerItems) && entertainerItems.length > 0) {
-                  const bonusIndex = Math.floor(Math.random() * entertainerItems.length);
-                  const bonusItem = entertainerItems[bonusIndex];
+                // Entertainer boosts augment (not replace) the filtered pool—fallback to the
+                // original selection if no dedicated bonus items are configured.
+                const entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
+                  ? entertainerItems
+                  : availableForBonus;
+
+                if (entertainerBonusPool.length > 0) {
+                  const bonusIndex = Math.floor(Math.random() * entertainerBonusPool.length);
+                  const bonusItem = entertainerBonusPool[bonusIndex];
 
                   await addItemInventoryDatabase(
                     character._id,
@@ -1028,11 +1034,15 @@ module.exports = {
         // Handle Entertainer bonus item
         if (isEntertainerBoost) {
           const entertainerItems = await applyGatheringBoost(character.name, availableItems);
-          
-          if (entertainerItems && entertainerItems.length > 0) {
+          // Preserve the filtered list if no Entertainer-specific items are available.
+          const entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
+            ? entertainerItems
+            : availableItems;
+
+          if (entertainerBonusPool.length > 0) {
             // Select a random entertainer item as bonus
-            const bonusIndex = Math.floor(Math.random() * entertainerItems.length);
-            bonusItem = entertainerItems[bonusIndex];
+            const bonusIndex = Math.floor(Math.random() * entertainerBonusPool.length);
+            bonusItem = entertainerBonusPool[bonusIndex];
 
           }
         }

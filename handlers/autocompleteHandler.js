@@ -676,9 +676,9 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "charactername") {
                   await handleBoostingStatusCharacterAutocomplete(interaction, focusedOption);
                 }
-              } else if (boostingSubcommand === "use") {
+              } else if (boostingSubcommand === "other") {
                 if (focusedOption.name === "charactername") {
-                  await handleBoostingUseCharacterAutocomplete(interaction, focusedOption);
+                  await handleBoostingOtherCharacterAutocomplete(interaction, focusedOption);
                 } else if (focusedOption.name === "village") {
                   await handleBoostingVillageAutocomplete(interaction, focusedOption);
                 }
@@ -1285,59 +1285,29 @@ async function handleBoostingStatusCharacterAutocomplete(interaction, focusedOpt
  }
 }
 
-// ------------------- Boosting Use Character Autocomplete -------------------
-async function handleBoostingUseCharacterAutocomplete(interaction, focusedOption) {
+// ------------------- Boosting Other Character Autocomplete -------------------
+async function handleBoostingOtherCharacterAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
-  const [charactersResult, modCharactersResult, boostingTempData] = await Promise.all([
+  const [charactersResult, modCharactersResult] = await Promise.all([
    fetchCharactersByUserId(userId),
    fetchModCharactersByUserId(userId),
-   TempData.findAllByType('boosting'),
   ]);
 
   const characters = charactersResult || [];
   const modCharacters = modCharactersResult || [];
   const allCharacters = [...characters, ...modCharacters];
-  const now = Date.now();
-  const activeOtherBoostMap = new Map();
 
-  for (const tempData of boostingTempData || []) {
-   const requestData = tempData?.data;
-   if (!requestData) continue;
-   if (requestData.status !== 'accepted') continue;
-   if (requestData.category !== 'Other') continue;
-   if (requestData.boostExpiresAt && now > requestData.boostExpiresAt) continue;
-
-   activeOtherBoostMap.set(requestData.targetCharacter.toLowerCase(), requestData);
-  }
-
-  const choices = allCharacters
-   .filter((character) => {
-    const hasActiveOtherBoost = activeOtherBoostMap.has(character.name.toLowerCase());
-    const isEntertainer = typeof character.job === 'string' && character.job.toLowerCase() === 'entertainer';
-    return hasActiveOtherBoost || isEntertainer;
-   })
-   .map((character) => {
-    const hasActiveOtherBoost = activeOtherBoostMap.has(character.name.toLowerCase());
-    const statusLabel = hasActiveOtherBoost ? 'Other boost active' : 'Entertainer self-cast';
-    const villageLabel = typeof character.currentVillage === 'string' && character.currentVillage.length > 0
-     ? capitalize(character.currentVillage)
-     : 'Unknown Village';
-    const jobLabel = typeof character.job === 'string' && character.job.length > 0
-     ? capitalize(character.job)
-     : 'Unknown Job';
-
-    return {
-     name: `${character.name} | ${villageLabel} | ${jobLabel} • ${statusLabel}`,
-     value: character.name,
-    };
-   });
+  const choices = allCharacters.map((character) => ({
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name,
+  }));
 
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
-  logger.error('AUTOCOMPLETE', 'Error handling boosting use character autocomplete', error);
+  logger.error('AUTOCOMPLETE', 'Error handling boosting other character autocomplete', error);
   await safeRespondWithError(interaction);
  }
 }
@@ -5381,7 +5351,7 @@ module.exports = {
   handleBoostingAcceptCharacterAutocomplete,
   handleBoostingRequestIdAutocomplete,
   handleBoostingStatusCharacterAutocomplete,
- handleBoostingUseCharacterAutocomplete,
+ handleBoostingOtherCharacterAutocomplete,
 
  // ------------------- Change Job Functions -------------------
  handleChangeJobNewJobAutocomplete,
