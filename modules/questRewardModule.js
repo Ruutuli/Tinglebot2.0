@@ -17,6 +17,7 @@ const QUEST_CHANNEL_ID = process.env.QUESTS_BOARD || '1305486549252706335';
 const DEFAULT_POST_REQUIREMENT = 15;
 const DEFAULT_ROLL_REQUIREMENT = 1;
 const RP_SIGNUP_WINDOW_DAYS = 7;
+const ENTERTAINER_BONUS_AMOUNT = 100;
 const QUEST_COLORS = {
     SUCCESS: 0x00FF00,
     EXPIRED: 0xFFA500,
@@ -80,11 +81,20 @@ async function sendIndividualRewardNotification(quest, participant, rewardResult
         );
 
         const rewardFields = [];
+        const tokenBreakdown = rewardResult.tokenBreakdown || {};
         
         if (rewardResult.tokensAdded > 0) {
             rewardFields.push({
                 name: '💰 Tokens',
-                value: `${rewardResult.tokensAdded} tokens`,
+                value: `${rewardResult.tokensAdded} tokens${tokenBreakdown.entertainerBonus ? ' (Entertainer bonus applied)' : ''}`,
+                inline: true
+            });
+        }
+        
+        if (tokenBreakdown.entertainerBonus) {
+            rewardFields.push({
+                name: '🎭 Entertainer Bonus',
+                value: `+${tokenBreakdown.entertainerBonus} tokens`,
                 inline: true
             });
         }
@@ -510,6 +520,99 @@ function computeTokens(quest) {
     return quest.getNormalizedTokenReward();
 }
 
+// ------------------- Entertainer Bonus Helpers ------------------
+function normalizeJobName(job) {
+    return typeof job === 'string' ? job.trim().toLowerCase() : '';
+}
+
+async function buildQuestRewardContext(quest, participants = []) {
+    const context = {};
+    context.entertainerBonus = await detectEntertainerBonus(participants);
+
+    if (context.entertainerBonus.enabled) {
+        const entertainerNames = context.entertainerBonus.entertainers
+            .map(performer => performer.characterName)
+            .join(', ');
+        const questIdentifier = quest?.questID || quest?.title || 'unknown quest';
+        console.log(`[questRewardModule.js] 🎭 Entertainer bonus active for ${questIdentifier}: +${context.entertainerBonus.amountPerParticipant} tokens per participant (Entertainer(s): ${entertainerNames})`);
+    }
+
+    return context;
+}
+
+async function detectEntertainerBonus(participants = []) {
+    if (!participants.length) {
+        return {
+            enabled: false,
+            amountPerParticipant: 0,
+            entertainers: [],
+            inspectedParticipants: 0
+        };
+    }
+
+    const eligibleParticipants = participants.filter(participant => {
+        if (!participant) return false;
+        const progress = participant.progress || 'active';
+        return progress !== 'failed' && progress !== 'disqualified';
+    });
+
+    if (!eligibleParticipants.length) {
+        return {
+            enabled: false,
+            amountPerParticipant: 0,
+            entertainers: [],
+            inspectedParticipants: participants.length
+        };
+    }
+
+    const lookupPromises = eligibleParticipants.map(participant =>
+        Character.findOne({ userId: participant.userId, name: participant.characterName }).lean()
+    );
+
+    const lookupResults = await Promise.allSettled(lookupPromises);
+
+    const entertainers = [];
+
+    lookupResults.forEach((result, index) => {
+        const participant = eligibleParticipants[index];
+
+        if (result.status === 'fulfilled') {
+            const character = result.value;
+
+            if (!character) {
+                console.log(`[questRewardModule.js] ⚠️ Character record not found for ${participant.characterName} (${participant.userId}) while checking Entertainer bonus`);
+                return;
+            }
+
+            const jobName = normalizeJobName(character.job);
+            if (jobName === 'entertainer') {
+                entertainers.push({
+                    userId: participant.userId,
+                    characterName: participant.characterName
+                });
+            }
+        } else {
+            console.error(`[questRewardModule.js] ❌ Error fetching character for Entertainer bonus check (${participant?.characterName || 'Unknown'}):`, result.reason);
+        }
+    });
+
+    if (!entertainers.length) {
+        return {
+            enabled: false,
+            amountPerParticipant: 0,
+            entertainers,
+            inspectedParticipants: eligibleParticipants.length
+        };
+    }
+
+    return {
+        enabled: true,
+        amountPerParticipant: ENTERTAINER_BONUS_AMOUNT,
+        entertainers,
+        inspectedParticipants: eligibleParticipants.length
+    };
+}
+
 // ------------------- Group Members Retrieval ------------------
 async function getGroupMembers(questId, groupId) {
     try {
@@ -574,9 +677,11 @@ async function processAllParticipants(quest, participants) {
     let rewardedCount = 0;
     let errorCount = 0;
 
+    const rewardContext = await buildQuestRewardContext(quest, participants);
+
     for (const participant of participants) {
         try {
-            const result = await processParticipantReward(quest, participant);
+            const result = await processParticipantReward(quest, participant, rewardContext);
             if (result === 'rewarded') {
                 rewardedCount++;
             } else if (result === 'completed') {
@@ -594,7 +699,7 @@ async function processAllParticipants(quest, participants) {
 }
 
 // ------------------- Process Individual Participant Reward ------------------
-async function processParticipantReward(quest, participant) {
+async function processParticipantReward(quest, participant, rewardContext = {}) {
     try {
         // Use unified reward status checking
         const rewardStatus = getParticipantRewardStatus(participant);
@@ -614,7 +719,7 @@ async function processParticipantReward(quest, participant) {
             participant.completedAt = new Date();
         }
 
-        const rewardResult = await distributeRewards(quest, participant);
+        const rewardResult = await distributeRewards(quest, participant, rewardContext);
         if (rewardResult.success) {
             updateParticipantRewardData(participant, quest, rewardResult, 'immediate');
             
@@ -650,21 +755,38 @@ function updateParticipantRewardData(participant, quest, rewardResult, rewardSou
 // ============================================================================
 
 // ------------------- Distribute Quest Rewards ------------------
-async function distributeRewards(quest, participant) {
+async function distributeRewards(quest, participant, rewardContext = {}) {
     try {
         const results = {
             success: true,
             errors: [],
             tokensAdded: 0,
-            itemsAdded: 0
+            itemsAdded: 0,
+            tokenBreakdown: {
+                base: 0
+            }
         };
 
-        const tokensToAward = computeTokens(quest);
+        const baseTokensToAward = computeTokens(quest);
+        results.tokenBreakdown.base = baseTokensToAward;
+
+        const entertainerBonusActive = rewardContext?.entertainerBonus?.enabled === true;
+        const entertainerBonusAmount = entertainerBonusActive ? rewardContext.entertainerBonus.amountPerParticipant : 0;
+
+        if (entertainerBonusActive) {
+            results.tokenBreakdown.entertainerBonus = entertainerBonusAmount;
+        }
+
+        const totalTokensToAward = baseTokensToAward + entertainerBonusAmount;
+        results.tokenBreakdown.total = totalTokensToAward;
         
-        if (tokensToAward > 0) {
-            const tokenResult = await distributeTokens(participant.userId, tokensToAward);
+        if (totalTokensToAward > 0) {
+            const tokenResult = await distributeTokens(participant.userId, totalTokensToAward);
             if (tokenResult.success) {
                 results.tokensAdded = tokenResult.tokensAdded;
+                if (entertainerBonusActive && entertainerBonusAmount > 0) {
+                    console.log(`[questRewardModule.js] 🎭 Added Entertainer bonus of +${entertainerBonusAmount} tokens for ${participant.characterName} (${participant.userId})`);
+                }
             } else {
                 results.errors.push(tokenResult.error);
             }
@@ -933,7 +1055,10 @@ async function processRPQuestCompletion(quest, participant) {
         participant.progress = 'completed';
         participant.completedAt = new Date();
         
-        const rewardResult = await distributeRewards(quest, participant);
+        const participants = Array.from(quest.participants?.values?.() || []);
+        const rewardContext = await buildQuestRewardContext(quest, participants);
+        
+        const rewardResult = await distributeRewards(quest, participant, rewardContext);
         
         if (rewardResult.success) {
             console.log(`[questRewardModule.js] ✅ RP quest completed and rewards distributed for ${participant.characterName}`);
@@ -1022,6 +1147,8 @@ async function processQuestMonthlyRewards(quest) {
         let errors = 0;
         let alreadyRewarded = 0;
         
+        const rewardContext = await buildQuestRewardContext(quest, participants);
+        
         for (const participant of participants) {
             try {
                 // Enhanced reward status checking to prevent double-rewarding
@@ -1031,7 +1158,7 @@ async function processQuestMonthlyRewards(quest) {
                     alreadyRewarded++;
                     console.log(`[questRewardModule.js] ℹ️ Participant ${participant.characterName} already rewarded (${participant.progress})`);
                 } else if (rewardStatus === 'needs_rewarding') {
-                    const rewardResult = await distributeParticipantMonthlyRewards(quest, participant);
+                    const rewardResult = await distributeParticipantMonthlyRewards(quest, participant, rewardContext);
                     
                     if (rewardResult.success) {
                         updateParticipantRewardData(participant, quest, rewardResult, 'monthly');
@@ -1128,9 +1255,9 @@ async function validateQuestRewardStatus(questId) {
 }
 
 // ------------------- Distribute Participant Monthly Rewards ------------------
-async function distributeParticipantMonthlyRewards(quest, participant) {
+async function distributeParticipantMonthlyRewards(quest, participant, rewardContext = {}) {
     // Use the existing distributeRewards function for consistency
-    return await distributeRewards(quest, participant);
+    return await distributeRewards(quest, participant, rewardContext);
 }
 
 // ------------------- Get Quest Reward Summary ------------------

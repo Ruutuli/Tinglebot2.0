@@ -24,9 +24,166 @@ const {
   updateSubmissionData 
 } = require('../../utils/storage.js');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils.js');
-const { createWritingSubmissionEmbed, createArtSubmissionEmbed } = require('../../embeds/embeds.js');
+const { createWritingSubmissionEmbed, createArtSubmissionEmbed, updateBoostRequestEmbed } = require('../../embeds/embeds.js');
 const User = require('../../models/UserModel.js'); 
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
+const { applyScholarTokensBoost } = require('../../modules/boostingModule');
+const {
+  retrieveBoostingRequestFromTempDataByCharacter,
+  saveBoostingRequestToTempData,
+  updateBoostAppliedMessage
+} = require('../jobs/boosting');
+const {
+  fetchAllCharacters,
+  fetchCharacterByNameAndUserId,
+  fetchModCharacterByNameAndUserId,
+  fetchCharacterByName,
+  fetchModCharacterByName
+} = require('../../database/db');
+
+async function parseTaggedCharacters(taggedCharactersInput, interaction) {
+  let taggedCharacters = [];
+  if (!taggedCharactersInput) {
+    return taggedCharacters;
+  }
+
+  const characterNames = taggedCharactersInput
+    .split(',')
+    .map(name => name.trim())
+    .filter(name => name.length > 0);
+
+  if (characterNames.length === 0) {
+    await interaction.editReply({
+      content: '❌ **Invalid tagged characters format.** Please provide character names separated by commas.',
+      ephemeral: true,
+    });
+    return null;
+  }
+
+  try {
+    const allCharacters = await fetchAllCharacters();
+    const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
+
+    const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
+    if (invalidCharacters.length > 0) {
+      await interaction.editReply({
+        content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct.`,
+        ephemeral: true,
+      });
+      return null;
+    }
+  } catch (error) {
+    handleInteractionError(error, 'submit.js');
+    await interaction.editReply({
+      content: '❌ **Error validating tagged characters. Please try again later.**',
+      ephemeral: true,
+    });
+    return null;
+  }
+
+  return characterNames;
+}
+
+async function resolveCharacter(characterName, userId = null) {
+  if (!characterName || typeof characterName !== 'string') {
+    return null;
+  }
+
+  const trimmedName = characterName.trim();
+  let character = null;
+
+  if (userId) {
+    try {
+      character = await fetchCharacterByNameAndUserId(trimmedName, userId);
+    } catch (error) {
+      console.error(`[submit.js]: ❌ Error fetching character ${trimmedName} by user ${userId}:`, error);
+    }
+
+    if (!character) {
+      try {
+        character = await fetchModCharacterByNameAndUserId(trimmedName, userId);
+      } catch (modError) {
+        console.error(`[submit.js]: ❌ Error fetching mod character ${trimmedName} by user ${userId}:`, modError);
+      }
+    }
+  }
+
+  if (!character) {
+    try {
+      character = await fetchCharacterByName(trimmedName);
+    } catch (fallbackError) {
+      console.error(`[submit.js]: ❌ Error fetching character ${trimmedName}:`, fallbackError);
+    }
+  }
+
+  if (!character) {
+    try {
+      character = await fetchModCharacterByName(trimmedName);
+    } catch (modFallbackError) {
+      console.error(`[submit.js]: ❌ Error fetching mod character ${trimmedName}:`, modFallbackError);
+    }
+  }
+
+  return character;
+}
+
+async function fulfillTokenBoost(characterOrName, client) {
+  if (!characterOrName) {
+    return;
+  }
+
+  const characterName = typeof characterOrName === 'string'
+    ? characterOrName
+    : characterOrName.name;
+
+  if (!characterName) {
+    return;
+  }
+
+  let characterDoc = null;
+  if (typeof characterOrName === 'object' && typeof characterOrName.save === 'function') {
+    characterDoc = characterOrName;
+  } else {
+    characterDoc = await fetchCharacterByName(characterName);
+    if (!characterDoc) {
+      characterDoc = await fetchModCharacterByName(characterName);
+    }
+  }
+
+  if (!characterDoc) {
+    console.warn(`[submit.js]: ⚠️ Unable to resolve character document for ${characterName} when clearing boost.`);
+    return;
+  }
+
+  try {
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+    if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
+      activeBoost.status = 'fulfilled';
+      activeBoost.fulfilledAt = Date.now();
+      await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+
+      if (client) {
+        try {
+          await updateBoostRequestEmbed(client, activeBoost, 'fulfilled');
+          await updateBoostAppliedMessage(client, activeBoost);
+        } catch (embedError) {
+          console.error(`[submit.js]: ❌ Failed to update boost embeds for ${characterName}:`, embedError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[submit.js]: ❌ Failed to mark token boost fulfilled:`, error);
+  }
+
+  try {
+    if (characterDoc.boostedBy) {
+      characterDoc.boostedBy = null;
+      await characterDoc.save();
+    }
+  } catch (saveError) {
+    console.error(`[submit.js]: ❌ Failed to clear boost for ${characterName}:`, saveError);
+  }
+}
 
 // ============================================================================
 // ------------------- Command Definition -------------------
@@ -51,13 +208,6 @@ module.exports = {
             .setName('title')
             .setDescription('Title for your submission')
             .setRequired(false)
-        )
-        .addStringOption(option =>
-          option
-            .setName('charactername')
-            .setDescription('Character submitting (for Teacher boost: Critique & Composition)')
-            .setRequired(false)
-            .setAutocomplete(true)
         )
         .addStringOption(option =>
           option
@@ -112,13 +262,6 @@ module.exports = {
             .setName('description')
             .setDescription('Brief description of your writing')
             .setRequired(false)
-        )
-        .addStringOption(option =>
-          option
-            .setName('charactername')
-            .setDescription('Character submitting (for Scholar boost: Research Stipend)')
-            .setRequired(false)
-            .setAutocomplete(true)
         )
         .addStringOption(option =>
           option
@@ -241,7 +384,6 @@ module.exports = {
         const user = interaction.user;
         const attachedFile = interaction.options.getAttachment('file');
         const title = interaction.options.getString('title')?.trim() || attachedFile.name; // Use user-input title or default to file name
-        const characterName = interaction.options.getString('charactername');
         const questId = interaction.options.getString('questid') || 'N/A';
         const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
@@ -283,32 +425,9 @@ module.exports = {
         }
 
         // Parse and validate tagged characters
-        let taggedCharacters = [];
-        if (taggedCharactersInput) {
-          // Split by comma and trim whitespace
-          const characterNames = taggedCharactersInput.split(',').map(name => name.trim()).filter(name => name.length > 0);
-          
-          if (characterNames.length === 0) {
-            await interaction.editReply({ 
-              content: '❌ **Invalid tagged characters format.** Please provide character names separated by commas.' 
-            });
-            return;
-          }
-
-          // Validate that all characters exist in the database
-          const { fetchAllCharacters } = require('../../database/db');
-          const allCharacters = await fetchAllCharacters();
-          const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
-          
-          const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
-          if (invalidCharacters.length > 0) {
-            await interaction.editReply({ 
-              content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct.` 
-            });
-            return;
-          }
-
-          taggedCharacters = characterNames;
+        let taggedCharacters = await parseTaggedCharacters(taggedCharactersInput, interaction);
+        if (!taggedCharacters) {
+          return;
         }
 
         // Check if a file is attached
@@ -342,7 +461,6 @@ module.exports = {
           username: user.username,
           userAvatar: user.displayAvatarURL({ dynamic: true }),
           category: 'art',
-          characterName: characterName || null,
           questEvent: questId,
           questBonus: 'N/A',
           collab: collab.length > 0 ? collab : [],
@@ -391,7 +509,6 @@ module.exports = {
           return;
         }
         const description = interaction.options.getString('description') || 'No description provided.';
-        const characterName = interaction.options.getString('charactername');
         const questId = interaction.options.getString('questid') || 'N/A';
         const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
@@ -479,26 +596,90 @@ module.exports = {
         // Calculate tokens for the writing submission with collaboration splitting
         const tokenCalculation = calculateWritingTokensWithCollab(wordCount, collab, questBonus);
         let finalTokenAmount = tokenCalculation.totalTokens;
-        
-        // ============================================================================
-        // ------------------- Apply Scholar Boost (Research Stipend +50%) -------------------
-        // ============================================================================
-        if (characterName) {
-          const { fetchCharacterByNameAndUserId } = require('../../database/db');
-          const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-          
-          if (character && character.boostedBy) {
-            const { fetchCharacterByName } = require('../../database/db');
-            const boosterChar = await fetchCharacterByName(character.boostedBy);
-            
-            if (boosterChar && boosterChar.job === 'Scholar') {
-              const originalTokens = finalTokenAmount;
-              finalTokenAmount = Math.floor(finalTokenAmount * 1.5);
-              console.log(`[submit.js]: 📚 Scholar boost - Research Stipend (+50% tokens: ${originalTokens} → ${finalTokenAmount})`);
+        const boostEffects = [];
+        const boostedCharacters = new Map();
+        const processedBoostTypes = new Set();
+        const boostMetadataMap = new Map();
+
+        // Ensure tagged character list is unique while preserving display order
+        const normalizedTagSet = new Set();
+        const finalTaggedCharacters = [];
+        if (Array.isArray(taggedCharacters)) {
+          for (const rawName of taggedCharacters) {
+            const normalized = rawName.toLowerCase();
+            if (normalizedTagSet.has(normalized)) continue;
+            normalizedTagSet.add(normalized);
+            finalTaggedCharacters.push(rawName);
+          }
+        }
+
+        const boostCandidateNames = new Set(
+          finalTaggedCharacters.map(name => name.trim()).filter(Boolean)
+        );
+
+
+        for (const candidateName of boostCandidateNames) {
+          const character = await resolveCharacter(candidateName, interaction.user.id);
+          if (!character) {
+            continue;
+          }
+
+          const normalizedCharacterName = character.name.toLowerCase();
+          if (!normalizedTagSet.has(normalizedCharacterName)) {
+            normalizedTagSet.add(normalizedCharacterName);
+            finalTaggedCharacters.push(character.name);
+          }
+
+          if (!character.boostedBy) {
+            continue;
+          }
+
+          const boosterChar = await resolveCharacter(character.boostedBy);
+          if (!boosterChar) {
+            console.warn(`[submit.js]: ⚠️ Booster ${character.boostedBy} not found for ${character.name}`);
+            continue;
+          }
+
+          if (
+            boosterChar.job === 'Scholar' &&
+            !processedBoostTypes.has('scholar_tokens')
+          ) {
+            const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
+            const tokenIncrease = boostedTokens - finalTokenAmount;
+            if (tokenIncrease > 0) {
+              console.log(`[submit.js]: 📚 Scholar boost - Research Stipend applied for ${character.name} by ${boosterChar.name} (+${tokenIncrease} tokens)`);
+              finalTokenAmount = boostedTokens;
+              boostEffects.push(`📚 **Research Stipend:** ${boosterChar.name} added 🪙 ${tokenIncrease}.`);
+              processedBoostTypes.add('scholar_tokens');
+              boostedCharacters.set(normalizedCharacterName, character);
+              const metadataKey = `${boosterChar.job.toLowerCase()}_${boosterChar.name.toLowerCase()}`;
+              if (!boostMetadataMap.has(metadataKey)) {
+                boostMetadataMap.set(metadataKey, {
+                  boostType: 'scholar_tokens',
+                  boosterJob: boosterChar.job,
+                  boosterName: boosterChar.name,
+                  targets: new Set(),
+                  tokenIncrease: 0
+                });
+              }
+              const metadataRecord = boostMetadataMap.get(metadataKey);
+              metadataRecord.targets.add(character.name);
+              metadataRecord.tokenIncrease += tokenIncrease;
             }
           }
         }
-    
+
+        taggedCharacters = finalTaggedCharacters;
+
+        const boostTokenIncrease = Math.max(0, finalTokenAmount - tokenCalculation.totalTokens);
+        const boostMetadata = Array.from(boostMetadataMap.values()).map(entry => ({
+          boostType: entry.boostType,
+          boosterJob: entry.boosterJob,
+          boosterName: entry.boosterName,
+          targets: Array.from(entry.targets),
+          tokenIncrease: entry.tokenIncrease
+        }));
+
         // Create a unique submission ID and save to database
         const submissionId = generateUniqueId('W');
         const submissionData = {
@@ -507,7 +688,6 @@ module.exports = {
           username: user.username,
           userAvatar: user.displayAvatarURL({ dynamic: true }),
           category: 'writing',
-          characterName: characterName || null,
           title,
           wordCount,
           finalTokenAmount,
@@ -518,9 +698,18 @@ module.exports = {
           questBonus: questBonus,
           collab: collab.length > 0 ? collab : [],
           blightId: blightId,
-          taggedCharacters: taggedCharacters.length > 0 ? taggedCharacters : [],
+          taggedCharacters: taggedCharacters,
           tokenTracker: userData.tokenTracker || null,
         };
+        if (boostEffects.length > 0) {
+          submissionData.boostEffects = boostEffects;
+        }
+        if (boostTokenIncrease > 0) {
+          submissionData.boostTokenIncrease = boostTokenIncrease;
+        }
+        if (boostMetadata.length > 0) {
+          submissionData.boostMetadata = boostMetadata;
+        }
     
         // Save to database
         await saveSubmissionToStorage(submissionId, submissionData);
@@ -537,6 +726,12 @@ module.exports = {
           messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}` 
         });
 
+        if (boostEffects.length > 0 && boostedCharacters.size > 0) {
+          for (const character of boostedCharacters.values()) {
+            await fulfillTokenBoost(character, interaction.client);
+          }
+        }
+
         // Send notification to approval channel
         try {
           const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
@@ -546,8 +741,14 @@ module.exports = {
             
             // Add quest bonus breakdown if present
             if (questBonus && questBonus > 0) {
-              const baseTokens = finalTokenAmount - questBonus;
-              tokenDisplay = `${baseTokens} + ${questBonus} quest bonus = ${finalTokenAmount} tokens`;
+              const baseTokens = tokenCalculation.totalTokens - questBonus;
+              if (boostTokenIncrease > 0) {
+                tokenDisplay = `${baseTokens} + ${questBonus} quest bonus + ${boostTokenIncrease} boost = ${finalTokenAmount} tokens`;
+              } else {
+                tokenDisplay = `${baseTokens} + ${questBonus} quest bonus = ${finalTokenAmount} tokens`;
+              }
+            } else if (boostTokenIncrease > 0) {
+              tokenDisplay = `${tokenCalculation.totalTokens} + ${boostTokenIncrease} boost = ${finalTokenAmount} tokens`;
             }
             
             if (collab && collab.length > 0) {
@@ -558,18 +759,18 @@ module.exports = {
 
             // Build notification fields dynamically
             const notificationFields = [
-              { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
-              { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-              { name: '📝 Title', value: title || 'Untitled', inline: true },
-              { name: '💰 Token Amount', value: tokenDisplay, inline: true },
-              { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
-              { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: true }
+              { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: false },
+              { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+              { name: '📝 Title', value: title || 'Untitled', inline: false },
+              { name: '💰 Token Amount', value: tokenDisplay, inline: false },
+              { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: false },
+              { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: false }
             ];
 
             // Add collaboration field if present
             if (collab && collab.length > 0) {
               const collabDisplay = collab.join(', ');
-              notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+              notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: false });
             }
 
             // Add quest/event fields if present
@@ -577,7 +778,7 @@ module.exports = {
               notificationFields.push({ 
                 name: '🎯 Quest/Event', 
                 value: `\`${questId}\``, 
-                inline: true 
+                inline: false 
               });
             }
 
@@ -585,7 +786,7 @@ module.exports = {
               notificationFields.push({ 
                 name: '🎁 Quest Bonus', 
                 value: `+${questBonus} tokens`, 
-                inline: true 
+                inline: false 
               });
             }
 
@@ -594,7 +795,7 @@ module.exports = {
               notificationFields.push({ 
                 name: '🩸 Blight Healing ID', 
                 value: `\`${blightId}\``, 
-                inline: true 
+                inline: false 
               });
             }
 
@@ -604,7 +805,15 @@ module.exports = {
               notificationFields.push({ 
                 name: '🏷️ Tagged Characters', 
                 value: taggedDisplay, 
-                inline: true 
+                inline: false 
+              });
+            }
+
+            if (boostEffects.length > 0) {
+              notificationFields.push({
+                name: '🎭 Boost Effects',
+                value: boostEffects.join('\n'),
+                inline: false
               });
             }
 
@@ -881,7 +1090,6 @@ module.exports = {
     }
     
   },
-
   // ------------------- Autocomplete Handler -------------------
   // Handles autocomplete for the submit command options
   async onAutocomplete(interaction) {

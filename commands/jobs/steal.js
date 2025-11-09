@@ -27,6 +27,7 @@ const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJ
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { applyStealingBoost, applyStealingJailBoost, applyStealingLootBoost } = require('../../modules/boostIntegration');
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
+const { getBoostInfo, addBoostFlavorText, buildFooterText } = require('../../embeds/embeds');
 const { getActiveBuffEffects } = require('../../modules/elixirModule');
 const logger = require('../../utils/logger');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData } = require('../jobs/boosting');
@@ -370,7 +371,7 @@ function createBaseEmbed(title, color = '#AA926A') {
         .setTimestamp();
 }
 
-async function createStealResultEmbed(thiefCharacter, targetCharacter, item, quantity, roll, failureThreshold, isSuccess, isNPC = false) {
+async function createStealResultEmbed(thiefCharacter, targetCharacter, item, quantity, roll, failureThreshold, isSuccess, isNPC = false, boostDetails = null) {
     const itemEmoji = item.emoji || await getItemEmoji(item.itemName);
     const successField = `Roll: **${roll}** / 99 = ${isSuccess ? '✅ Success!' : '❌ Failure!'}`;
     
@@ -408,8 +409,19 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
         }
     }
     
+    const baseDescription = `${npcFlavorText}${npcFlavorText ? '\n\n' : ''}[**${thiefCharacter.name}**](${thiefCharacter.inventory || thiefCharacter.inventoryLink}) ${isSuccess ? 'successfully stole from' : 'tried to steal from'} ${isNPC ? targetCharacter : `[**${targetCharacter.name}**](${targetCharacter.inventory || targetCharacter.inventoryLink})`}`;
+    let contextualBoostDetails = boostDetails;
+    if (boostDetails && boostDetails.boosterJob) {
+        const contextualFlavor = generateBoostFlavorText(boostDetails.boosterJob, 'Stealing', { outcome: isSuccess ? 'success' : 'failure' });
+        contextualBoostDetails = {
+            ...boostDetails,
+            boostFlavorText: contextualFlavor
+        };
+    }
+    const descriptionWithBoost = addBoostFlavorText(baseDescription, contextualBoostDetails);
+
     const embed = createBaseEmbed(isSuccess ? '💰 Item Stolen!' : '💢 Failed Steal!', isSuccess ? '#AA926A' : '#ff0000')
-        .setDescription(`${npcFlavorText}\n\n[**${thiefCharacter.name}**](${thiefCharacter.inventory || thiefCharacter.inventoryLink}) ${isSuccess ? 'successfully stole from' : 'tried to steal from'} ${isNPC ? targetCharacter : `[**${targetCharacter.name}**](${targetCharacter.inventory || targetCharacter.inventoryLink})`}`)
+        .setDescription(descriptionWithBoost)
         .addFields(
             { name: '📦 Item', value: `> **${itemEmoji} ${item.itemName}**${isSuccess ? ` x**${quantity}**` : ''}`, inline: false },
             { name: '🎲 Roll', value: `> ${successField}`, inline: false },
@@ -421,7 +433,7 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
             iconURL: thiefCharacter.icon 
         })
         .setFooter({ 
-            text: isSuccess ? 'Steal successful!' : 'Steal failed!', 
+            text: buildFooterText(isSuccess ? 'Steal successful!' : 'Steal failed!', thiefCharacter, boostDetails), 
             iconURL: isNPC ? npcIcon : targetCharacter.icon 
         });
 
@@ -1302,12 +1314,21 @@ async function checkAndUpdateJailStatus(character) {
     if (timeLeft <= 0) {
         character.inJail = false;
         character.jailReleaseTime = null;
+        character.jailStartTime = null;
+        character.jailDurationMs = null;
+        character.jailBoostSource = null;
         await character.save();
         return { isInJail: false, timeLeft: 0 };
     }
     
-    // Calculate the date when the character was jailed (3 days before release)
-    const jailedDate = new Date(releaseTime - (3 * 24 * 60 * 60 * 1000));
+    let jailedDate = null;
+    if (character.jailStartTime) {
+        jailedDate = new Date(character.jailStartTime);
+    } else if (character.jailDurationMs) {
+        jailedDate = new Date(releaseTime - character.jailDurationMs);
+    } else {
+        jailedDate = new Date(releaseTime - (3 * 24 * 60 * 60 * 1000));
+    }
     
     return { 
         isInJail: true, 
@@ -1339,16 +1360,23 @@ async function sendToJail(character) {
         if (boosterChar && boosterChar.job === 'Priest') {
             jailDays = Math.ceil(jailDays / 2); // Halve jail time (3 → 2 days, rounded up)
             logger.info('BOOST', `✨ Priest boost - Merciful Sentence (jail time reduced to ${jailDays} days)`);
+        character.jailBoostSource = boosterChar.name || boosterChar.characterName || boosterChar._id?.toString() || 'Priest';
+    } else {
+        character.jailBoostSource = null;
         }
     }
     
     const now = new Date();
     const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const releaseDateEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + jailDays, 0, 0, 0, 0);
+    const jailDurationMs = jailDays * 24 * 60 * 60 * 1000;
+    const jailStartEST = new Date(releaseDateEST.getTime() - jailDurationMs);
     
     // Store the EST midnight time directly
     character.inJail = true;
     character.jailReleaseTime = releaseDateEST;
+    character.jailStartTime = jailStartEST;
+    character.jailDurationMs = jailDurationMs;
     character.failedStealAttempts = 0; // Reset counter
     await character.save();
     
@@ -1493,36 +1521,47 @@ async function deactivateJobVoucherIfNeeded(thiefCharacter, voucherCheck) {
 // ------------------- Centralized Failed Attempts Handling -------------------
 // Centralized failed attempts logic to eliminate duplication
 async function handleFailedAttempts(thiefCharacter, embed) {
-    // Increment failed attempts counter
-    thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
-    await thiefCharacter.save();
-    
-    // ============================================================================
-    // ------------------- Apply Teacher Boost (Tactical Risk) -------------------
-    // ============================================================================
+    const priorAttempts = thiefCharacter.failedStealAttempts || 0;
     let maxAttempts = 3; // Base: 3 failed attempts before jail
+    let teacherFreeFailApplied = false;
+    let boosterChar = null;
     
     if (thiefCharacter.boostedBy) {
         const { fetchCharacterByName } = require('../../database/db');
-        const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
+        boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
+        if (boosterChar && boosterChar.job === 'Teacher') {
+            teacherFreeFailApplied = true;
+            logger.info('BOOST', '📖 Teacher boost - Tactical Risk absorbed this failed attempt (no strike recorded)');
+        }
+    }
+    
+    if (!teacherFreeFailApplied) {
+        thiefCharacter.failedStealAttempts = priorAttempts + 1;
+        await thiefCharacter.save();
         
         if (boosterChar && boosterChar.job === 'Teacher') {
-            maxAttempts = 4; // Teacher grants +1 extra attempt
+            maxAttempts = 4;
             logger.info('BOOST', '📖 Teacher boost - Tactical Risk (+1 extra attempt before jail)');
         }
     }
     
-    const attemptsLeft = maxAttempts - thiefCharacter.failedStealAttempts;
+    const attemptsAfter = teacherFreeFailApplied ? priorAttempts : (thiefCharacter.failedStealAttempts || 0);
+    const attemptsLeft = maxAttempts - attemptsAfter;
     let warningMessage = '';
     let attemptsText = '';
     
-    if (attemptsLeft === 1) {
+    if (teacherFreeFailApplied) {
+        const remaining = Math.max(0, attemptsLeft);
+        attemptsText = `Tactical Risk absorbed this failure. You still have ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before jail time!`;
+    } else if (attemptsLeft === 1) {
         warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
         attemptsText = 'You have 1 attempt remaining before jail time!';
     } else if (attemptsLeft <= 0) {
         // Send to jail using centralized function
         const jailResult = await sendToJail(thiefCharacter);
-        const jailDays = jailResult.success ? Math.ceil((jailResult.timeLeft / (24 * 60 * 60 * 1000))) : 3;
+        const dayMs = 24 * 60 * 60 * 1000;
+        const jailDurationMs = thiefCharacter.jailDurationMs || (jailResult.success ? Math.ceil(jailResult.timeLeft / dayMs) * dayMs : JAIL_DURATION);
+        const jailDays = Math.max(1, Math.round(jailDurationMs / dayMs));
         warningMessage = `⛔ **You have been sent to jail for ${jailDays} day${jailDays !== 1 ? 's' : ''}!**`;
         attemptsText = 'Too many failed attempts!';
     } else {
@@ -1662,6 +1701,14 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             }
         }
     }
+
+    if (!selectedItem.isNPC && Number.isFinite(selectedItem.quantity)) {
+        const maxAvailable = Math.max(1, selectedItem.quantity || 1);
+        if (finalQuantity > maxAvailable) {
+            logger.warn('BOOST', `📚 Scholar boost capped by available quantity | requested: ${finalQuantity} | available: ${maxAvailable} | item: ${selectedItem.itemName}`);
+            finalQuantity = maxAvailable;
+        }
+    }
     
     const stolenItem = {
         itemName: selectedItem.itemName,
@@ -1678,7 +1725,7 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         if (!isNPC) {
             const removedItem = {
                 itemName: selectedItem.itemName,
-                quantity: -quantity,
+                quantity: -finalQuantity,
                 obtain: `Item stolen by ${thiefCharacter.name}`,
                 date: new Date()
             };
@@ -1686,7 +1733,8 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         }
         
         // Create and send the embed
-        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, true, isNPC);
+        const embedBoostDetails = await getBoostInfo(thiefCharacter, 'Stealing');
+        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, finalQuantity, roll, failureThreshold, true, isNPC, embedBoostDetails);
         
         // Add boost flavor and impact summary (if any)
         if (boostInfo && boostInfo.boosterJob) {
@@ -1695,14 +1743,27 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
                 selectedItemName: boostInfo.selectedItemName,
             });
             const impactLines = [];
-            if (boostInfo.baseline && boostInfo.boosted) {
+            if (boostInfo.mode === 'highest-rarity') {
+                // No extra info in the embed for highest rarity focus
+            } else if (boostInfo.baseline && boostInfo.boosted) {
                 impactLines.push(`> Uncommon weight: ${boostInfo.baseline.uncommon} → ${boostInfo.boosted.uncommon}`);
                 impactLines.push(`> Common weight: ${boostInfo.baseline.common} → ${boostInfo.boosted.common}`);
                 impactLines.push(`> Selected: ${boostInfo.selectedTier} (${boostInfo.selectedItemName})`);
             }
+            const embedValue = impactLines.length > 0
+                ? `${boostFlavor}\n${impactLines.join('\n')}`
+                : boostFlavor;
             embed.addFields({
                 name: '🎵 Elegy of Emptiness',
-                value: `${boostFlavor}\n${impactLines.join('\n')}`,
+                value: embedValue,
+                inline: false,
+            });
+        } else if (embedBoostDetails) {
+            const boostName = embedBoostDetails.boostName || 'Active Boost';
+            const boostValue = generateBoostFlavorText(embedBoostDetails.boosterJob, 'Stealing', { outcome: isSuccess ? 'success' : 'failure' });
+            embed.addFields({
+                name: `⚡ ${boostName}`,
+                value: boostValue,
                 inline: false,
             });
         }
@@ -1752,10 +1813,6 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
-          logger.info('BOOST', `🧪 Clearing boost for ${thiefCharacter.name} (before save) | boostedBy: ${thiefCharacter.boostedBy || 'none'}`);
-          thiefCharacter.boostedBy = null;
-          await thiefCharacter.save();
-          logger.success('BOOST', `🧪 Boost cleared for ${thiefCharacter.name}`);
           // Mark any active Stealing boost as fulfilled to prevent re-application
           try {
             const active = await retrieveBoostingRequestFromTempDataByCharacter(thiefCharacter.name);
@@ -1768,6 +1825,10 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
           } catch (e) {
             logger.error('BOOST', `Failed to mark stealing boost fulfilled for ${thiefCharacter.name}`, e);
           }
+          logger.info('BOOST', `🧪 Clearing boost for ${thiefCharacter.name} (before save) | boostedBy: ${thiefCharacter.boostedBy || 'none'}`);
+          thiefCharacter.boostedBy = null;
+          await thiefCharacter.save();
+          logger.success('BOOST', `🧪 Boost cleared for ${thiefCharacter.name}`);
         }
         
         // Always deactivate job voucher after any attempt
@@ -1836,7 +1897,8 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
     }
     
     try {
-        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, 0, roll, failureThreshold, false, isNPC);
+        const embedBoostDetails = await getBoostInfo(thiefCharacter, 'Stealing');
+        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, 0, roll, failureThreshold, false, isNPC, embedBoostDetails);
         
         // Add fallback message if needed
         if (usedFallback) {
@@ -1851,10 +1913,6 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
-          logger.info('BOOST', `🧪 Clearing boost for ${thiefCharacter.name} (before save) | boostedBy: ${thiefCharacter.boostedBy || 'none'}`);
-          thiefCharacter.boostedBy = null;
-          await thiefCharacter.save();
-          logger.success('BOOST', `🧪 Boost cleared for ${thiefCharacter.name}`);
           // Mark any active Stealing boost as fulfilled to prevent re-application
           try {
             const active = await retrieveBoostingRequestFromTempDataByCharacter(thiefCharacter.name);
@@ -1867,6 +1925,10 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
           } catch (e) {
             logger.error('BOOST', `Failed to mark stealing boost fulfilled for ${thiefCharacter.name}`, e);
           }
+          logger.info('BOOST', `🧪 Clearing boost for ${thiefCharacter.name} (before save) | boostedBy: ${thiefCharacter.boostedBy || 'none'}`);
+          thiefCharacter.boostedBy = null;
+          await thiefCharacter.save();
+          logger.success('BOOST', `🧪 Boost cleared for ${thiefCharacter.name}`);
         }
         
         // Always deactivate job voucher after any attempt
@@ -3198,29 +3260,72 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
             const { fetchCharacterByName } = require('../../database/db');
             const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
             
-            if (boosterChar && boosterChar.job === 'Entertainer') {
-                // Increase weight for uncommon items (rarity ≥5). Steal flow uses tier strings: 'common' | 'uncommon'.
-                const weightBefore = items.reduce((sum, it) => sum + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
-                const baselineCommon = items.filter(it => it.tier === 'common').reduce((s, it) => s + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
-                const baselineUncommon = items.filter(it => it.tier === 'uncommon' || (it.itemRarity && it.itemRarity >= 5)).reduce((s, it) => s + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
-                const uncommonCount = items.filter(it => it.tier === 'uncommon' || (it.itemRarity && it.itemRarity >= 5)).length;
-                modifiedItems = items.map(item => {
-                    const baseWeight = (item.weight !== undefined ? item.weight : (RARITY_WEIGHTS[item.itemRarity] || 1));
-                    if (item.tier === 'uncommon' || (item.itemRarity && item.itemRarity >= 5)) {
-                        return { ...item, weight: baseWeight * 2 };
+        if (boosterChar && boosterChar.job === 'Entertainer') {
+                // Focus selection on the highest rarity available within the resolved tier
+                const preferenceOrder = [];
+                if (selectedTier && selectedTier !== 'any') {
+                    preferenceOrder.push(selectedTier);
+                }
+                if (raritySelection && !preferenceOrder.includes(raritySelection)) {
+                    preferenceOrder.push(raritySelection);
+                }
+                preferenceOrder.push('any');
+
+                let resolvedTier = 'any';
+                let candidatePool = items;
+                for (const tier of preferenceOrder) {
+                    if (tier === 'any') {
+                        resolvedTier = 'any';
+                        candidatePool = items;
+                        break;
                     }
-                    return { ...item, weight: baseWeight };
-                });
-                const weightAfter = modifiedItems.reduce((sum, it) => sum + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
-                const boostedCommon = modifiedItems.filter(it => it.tier === 'common').reduce((s, it) => s + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
-                const boostedUncommon = modifiedItems.filter(it => it.tier === 'uncommon' || (it.itemRarity && it.itemRarity >= 5)).reduce((s, it) => s + (it.weight !== undefined ? it.weight : (RARITY_WEIGHTS[it.itemRarity] || 1)), 0);
-                boostInfo = {
-                    boosterJob: 'Entertainer',
-                    uncommonCount,
-                    baseline: { common: baselineCommon, uncommon: baselineUncommon, total: weightBefore },
-                    boosted: { common: boostedCommon, uncommon: boostedUncommon, total: weightAfter },
-                };
-                logger.info('BOOST', `🎵 Entertainer boost - Elegy of Emptiness (uncommon items 2x weight) | uncommonCount: ${uncommonCount} | weights (common/uncommon): ${baselineCommon}/${baselineUncommon} → ${boostedCommon}/${boostedUncommon} | total: ${weightBefore} → ${weightAfter}`);
+                    const matches = items.filter(it => it.tier === tier);
+                    if (matches.length > 0) {
+                        resolvedTier = tier;
+                        candidatePool = matches;
+                        break;
+                    }
+                }
+
+                const availableRarities = [...new Set(candidatePool.map(it => it.itemRarity).filter(Boolean))].sort((a, b) => a - b);
+                const highestRarity = availableRarities.length > 0 ? availableRarities[availableRarities.length - 1] : null;
+
+                if (highestRarity !== null) {
+                    const narrowedPool = candidatePool.filter(it => it.itemRarity === highestRarity);
+                    if (narrowedPool.length > 0) {
+                        modifiedItems = narrowedPool.map(item => ({
+                            ...item,
+                            weight: item.weight !== undefined ? item.weight : (RARITY_WEIGHTS[item.itemRarity] || 1)
+                        }));
+                        boostInfo = {
+                            boosterJob: 'Entertainer',
+                            mode: 'highest-rarity',
+                            requestedTier: raritySelection || 'any',
+                            resolvedTier,
+                            candidateCount: candidatePool.length,
+                            narrowedCount: narrowedPool.length,
+                            highestRarity,
+                            availableRarities,
+                            narrowedItemNames: narrowedPool.map(it => it.itemName)
+                        };
+                        logger.info('BOOST', `🎵 Entertainer boost - Elegy of Emptiness (highest rarity focus) | requested: ${raritySelection || 'any'} | resolvedTier: ${resolvedTier} | pool ${candidatePool.length} → ${narrowedPool.length} | highestRarity: ${highestRarity}`);
+                    } else {
+                        boostInfo = {
+                            boosterJob: 'Entertainer',
+                            mode: 'highest-rarity',
+                            requestedTier: raritySelection || 'any',
+                            resolvedTier,
+                            candidateCount: candidatePool.length,
+                            narrowedCount: 0,
+                            highestRarity,
+                            availableRarities,
+                            narrowedItemNames: []
+                        };
+                        logger.warn('BOOST', `🎵 Entertainer boost - Elegy of Emptiness could not narrow pool (no items matched highest rarity ${highestRarity}).`);
+                    }
+                } else {
+                    logger.warn('BOOST', '🎵 Entertainer boost - Elegy of Emptiness found no item rarities to prioritize.');
+                }
             } else if (!boosterChar) {
                 logger.warn('BOOST', `BoostedBy set to "${thiefCharacter.boostedBy}" but booster character not found`);
             } else {

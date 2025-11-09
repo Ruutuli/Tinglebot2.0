@@ -12,7 +12,7 @@ const { getLastDebugValues } = require("../modules/buffModule");
 const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
 const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
 const { getMountEmoji, getMountThumbnail } = require("../modules/mountModule");
-const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateUnusedBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText, generateBlightRollBoostFlavorText } = require("../modules/flavorTextModule");
+const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateUnusedBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText, generateBlightRollBoostFlavorText, generateSubmissionBoostFlavorText } = require("../modules/flavorTextModule");
 const { convertCmToFeetInches, isValidImageUrl } = require("../utils/validation");
 const { validateInventorySheet } = require("../utils/googleSheetsUtils");
 const { getCharacterBoostStatus } = require('../modules/boostIntegration');
@@ -31,6 +31,7 @@ const { monsterMapping } = require("../models/MonsterModel");
 const DEFAULT_EMOJI = "🔹";
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/100x100";
+const WRITING_SUBMISSION_THUMBNAIL_URL = "https://static.wikia.nocookie.net/zelda_gamepedia_en/images/5/51/ALttP_Book_of_Mudora_Artwork_2.png/revision/latest?cb=20100201171604&format=original";
 
 // ------------------- Region Color Mapping ------------------
 const regionColors = {
@@ -928,97 +929,177 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
 // ------------------- Function: createWritingSubmissionEmbed -------------------
 // Creates an embed for writing submission approvals with token calculations
 const createWritingSubmissionEmbed = (submissionData) => {
- // Build fields array dynamically - only include non-N/A fields
- const fields = [];
+  const fields = [];
 
- // Always include these core fields
- if (submissionData.submissionId && submissionData.submissionId !== 'N/A') {
-   fields.push({ name: "Submission ID", value: `\`${submissionData.submissionId}\``, inline: false });
- }
- 
- fields.push({ name: "Member", value: `<@${submissionData.userId}>`, inline: true });
- fields.push({ name: "Word Count", value: `${submissionData.wordCount}`, inline: true });
- 
- // Add blight ID if provided
- if (submissionData.blightId && submissionData.blightId !== 'N/A') {
-   fields.push({ name: "🩸 Blight Healing ID", value: `\`${submissionData.blightId}\``, inline: true });
- }
- 
- // Add quest/event fields if present
- if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
-   fields.push({ name: "Quest/Event", value: `\`${submissionData.questEvent}\``, inline: true });
- }
- 
- if (submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0) {
-   fields.push({ name: "Quest Bonus", value: `+${submissionData.questBonus} tokens`, inline: true });
- }
+  const hasCollaborators =
+    submissionData.collab &&
+    ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) ||
+      (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
 
- // Add collab field if present
- const hasCollaborators = submissionData.collab && ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) || (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
- 
- if (hasCollaborators) {
-   const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
-   const collabDisplay = collaborators.join(', ');
-   fields.push({ name: "Collaboration", value: `Collaborating with ${collabDisplay}`, inline: true });
- }
+  const questBonusValue =
+    submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0
+      ? submissionData.questBonus
+      : 0;
+  const boostIncreaseValue =
+    submissionData.boostTokenIncrease && submissionData.boostTokenIncrease > 0
+      ? submissionData.boostTokenIncrease
+      : 0;
 
- // Add tagged characters field if present
- if (submissionData.taggedCharacters && submissionData.taggedCharacters.length > 0) {
-   const taggedDisplay = submissionData.taggedCharacters.join(', ');
-   fields.push({ name: "Tagged Characters", value: taggedDisplay, inline: true });
- }
- 
-   // Calculate token display based on collaboration and quest bonus
-  let tokenDisplay = `${submissionData.finalTokenAmount} Tokens`;
-  
-  // Add quest bonus breakdown if present
-  if (submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0) {
-    const baseTokens = submissionData.finalTokenAmount - submissionData.questBonus;
-    tokenDisplay = `${baseTokens} + ${submissionData.questBonus} quest bonus = ${submissionData.finalTokenAmount} Tokens`;
+  let baseTokenPortion = null;
+  if (submissionData.tokenCalculation && typeof submissionData.tokenCalculation === 'object') {
+    baseTokenPortion =
+      submissionData.tokenCalculation.finalTotal ??
+      submissionData.tokenCalculation.totalTokens ??
+      null;
   }
-  
+
+  if (baseTokenPortion === null) {
+    baseTokenPortion = submissionData.finalTokenAmount - boostIncreaseValue;
+  }
+
+  if (questBonusValue > 0) {
+    baseTokenPortion -= questBonusValue;
+  }
+
+  let tokenDisplay = `${submissionData.finalTokenAmount} tokens`;
+  if (questBonusValue > 0 || boostIncreaseValue > 0) {
+    const breakdownParts = [];
+    if (
+      typeof baseTokenPortion === 'number' &&
+      !Number.isNaN(baseTokenPortion) &&
+      baseTokenPortion >= 0
+    ) {
+      breakdownParts.push(`${baseTokenPortion} base`);
+    }
+    if (questBonusValue > 0) {
+      breakdownParts.push(`${questBonusValue} quest bonus`);
+    }
+    if (boostIncreaseValue > 0) {
+      breakdownParts.push(`${boostIncreaseValue} boost`);
+    }
+    tokenDisplay = `${breakdownParts.join(' + ')} = ${submissionData.finalTokenAmount} tokens`;
+  }
+
   if (hasCollaborators) {
-    const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
+    const collaborators = Array.isArray(submissionData.collab)
+      ? submissionData.collab
+      : [submissionData.collab];
     const totalParticipants = 1 + collaborators.length;
     const splitTokens = Math.floor(submissionData.finalTokenAmount / totalParticipants);
     tokenDisplay += ` (${splitTokens} each)`;
   }
-  
+
+  if (submissionData.submissionId && submissionData.submissionId !== 'N/A') {
+    fields.push({ name: "🆔 Submission ID", value: `\`${submissionData.submissionId}\``, inline: true });
+  }
+
+  fields.push({ name: "👤 Member", value: `<@${submissionData.userId}>`, inline: true });
+  fields.push({ name: "📝 Word Count", value: `${submissionData.wordCount}`, inline: true });
+
   fields.push({
-    name: "Token Total",
-    value: tokenDisplay,
+    name: "💰 Token Summary",
+    value: `**${tokenDisplay}**`,
+    inline: false,
+  });
+
+  if (submissionData.blightId && submissionData.blightId !== 'N/A') {
+    fields.push({ name: "🩸 Blight Healing ID", value: `\`${submissionData.blightId}\``, inline: true });
+  }
+
+  if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+    fields.push({ name: "🎯 Quest/Event", value: `\`${submissionData.questEvent}\``, inline: true });
+  }
+
+  if (questBonusValue > 0) {
+    fields.push({ name: "🎁 Quest Bonus", value: `+${questBonusValue} tokens`, inline: true });
+  }
+
+  if (hasCollaborators) {
+    const collaborators = Array.isArray(submissionData.collab)
+      ? submissionData.collab
+      : [submissionData.collab];
+    const collabDisplay = collaborators.join(', ');
+    fields.push({ name: "🤝 Collaboration", value: collabDisplay, inline: true });
+  }
+
+  if (submissionData.taggedCharacters && submissionData.taggedCharacters.length > 0) {
+    const taggedDisplay = submissionData.taggedCharacters.join(', ');
+    fields.push({ name: "🏷️ Tagged Characters", value: taggedDisplay, inline: true });
+  }
+
+  if (submissionData.boostEffects && submissionData.boostEffects.length > 0) {
+    const formattedEffects = submissionData.boostEffects.map(effect =>
+      effect.startsWith('•') ? effect : `• ${effect}`
+    );
+    fields.push({
+      name: "🎭 Boost Effects",
+      value: formattedEffects.join('\n'),
+      inline: false,
+    });
+  }
+
+  fields.push({
+    name: "🔗 Submission Link",
+    value: submissionData.link ? `[View Submission](${submissionData.link})` : "N/A",
     inline: true,
   });
- fields.push({
-   name: "Submission Link",
-   value: `[View Submission](${submissionData.link})`,
-   inline: true,
- });
- fields.push({
-   name: "Token Tracker Link",
-   value: submissionData.tokenTracker
-    ? `[Token Tracker](${submissionData.tokenTracker})`
-    : "N/A",
-   inline: true,
- });
- fields.push({ name: "Description", value: submissionData.description, inline: false });
 
- const embed = new EmbedBuilder()
-  .setColor("#AA926A")
-  .setTitle(`📚 ${submissionData.title}`)
-  .setAuthor({
-   name: `Submitted by: ${submissionData.username}`,
-   iconURL: submissionData.userAvatar || "https://via.placeholder.com/128",
-  })
-  .addFields(fields)
-  .setImage(DEFAULT_IMAGE_URL)
-  .setTimestamp();
+  fields.push({
+    name: "📊 Token Tracker",
+    value: submissionData.tokenTracker ? `[Token Tracker](${submissionData.tokenTracker})` : "N/A",
+    inline: true,
+  });
+
+  const boostMetadata = Array.isArray(submissionData.boostMetadata) ? submissionData.boostMetadata : [];
+  const boostSummaries = boostMetadata
+    .map(metadata =>
+      generateSubmissionBoostFlavorText(metadata.boosterJob, 'writing', {
+        boosterName: metadata.boosterName,
+        targets: metadata.targets,
+        tokenIncrease: metadata.tokenIncrease ?? boostIncreaseValue,
+      })
+    )
+    .filter(Boolean);
+
+  const descriptionLines = [];
+  if (boostSummaries.length > 0) {
+    descriptionLines.push(boostSummaries.join('\n'));
+  }
+
+  const rawDescription =
+    typeof submissionData.description === 'string' && submissionData.description.trim().length > 0
+      ? submissionData.description.trim()
+      : '_No description provided._';
+  descriptionLines.push(rawDescription);
+
+  const submissionTitle = submissionData.title || 'Untitled Submission';
+
+  const embed = new EmbedBuilder()
+    .setColor("#AA926A")
+    .setTitle(`📚 ${submissionTitle}`)
+    .setAuthor({
+      name: `Submitted by: ${submissionData.username}`,
+      iconURL: submissionData.userAvatar || "https://via.placeholder.com/128",
+    })
+    .setDescription(descriptionLines.join('\n\n'))
+    .addFields(fields)
+    .setThumbnail(WRITING_SUBMISSION_THUMBNAIL_URL)
+    .setImage(DEFAULT_IMAGE_URL)
+    .setTimestamp();
 
  // Set different footer based on submission type
  if (submissionData.tokenCalculation === 'No tokens - Display only') {
-   embed.setFooter({ text: "✅ Auto-approved - Display only" });
+  let footerText = "✅ Auto-approved - Display only";
+  if (submissionData.boostEffects && submissionData.boostEffects.length > 0) {
+    footerText += " • Boost active";
+  }
+  embed.setFooter({ text: footerText });
  } else {
-   embed.setFooter({ text: "⏳ Please wait for a mod to approve your submission!" });
+  let footerText = "⏳ Please wait for a mod to approve your submission!";
+  if (submissionData.boostEffects && submissionData.boostEffects.length > 0) {
+    footerText += " • Boost active";
+  }
+  embed.setFooter({ text: footerText });
  }
 
  return embed;
@@ -1133,6 +1214,14 @@ const createArtSubmissionEmbed = (submissionData) => {
     const taggedDisplay = submissionData.taggedCharacters.join(', ');
     fields.push({ name: 'Tagged Characters', value: taggedDisplay, inline: true });
   }
+
+  if (submissionData.boostEffects && submissionData.boostEffects.length > 0) {
+    fields.push({
+      name: '🎭 Boost Effects',
+      value: submissionData.boostEffects.join('\n'),
+      inline: false
+    });
+  }
   
   // Calculate token display based on collaboration
   let tokenDisplay = `${finalTokenAmount || 0} Tokens`;
@@ -1159,10 +1248,18 @@ const createArtSubmissionEmbed = (submissionData) => {
 
   // Set different footer and timestamp based on submission type
   if (tokenCalculation === 'No tokens - Display only') {
-    embed.setFooter({ text: '✅ Auto-approved - Display only', iconURL: undefined })
+    let footerText = '✅ Auto-approved - Display only';
+    if (submissionData.boostEffects && submissionData.boostEffects.length > 0) {
+      footerText += ' • Boost active';
+    }
+    embed.setFooter({ text: footerText, iconURL: undefined })
          .setTimestamp(updatedAt || new Date());
   } else {
-    embed.setFooter({ text: '⏳ Please wait for a mod to approve your submission!', iconURL: undefined })
+    let footerText = '⏳ Please wait for a mod to approve your submission!';
+    if (submissionData.boostEffects && submissionData.boostEffects.length > 0) {
+      footerText += ' • Boost active';
+    }
+    embed.setFooter({ text: footerText, iconURL: undefined })
          .setTimestamp(updatedAt || new Date());
   }
 

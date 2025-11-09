@@ -203,7 +203,7 @@ async function saveSubmissionToStorage(key, submissionData) {
    { upsert: true, new: true }
   );
 
-  console.log(`[storage.js]: Saved submission ${key}`);
+  logger.success('STORAGE', `Saved submission ${key}`);
   return result;
  } catch (error) {
   console.error(`[storage.js]: Error saving submission ${key}:`, error);

@@ -11,6 +11,7 @@
 
 // ------------------- Standard Libraries -------------------
 const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 
 // ------------------- Discord.js Components -------------------
 const {
@@ -341,19 +342,19 @@ async function handleConfirmation(interaction, userId, submissionData) {
 
         // Build notification fields dynamically
         const notificationFields = [
-          { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
-          { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-          { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: true },
-          { name: '💰 Token Amount', value: tokenDisplay, inline: true },
-          { name: '🆔 Submission ID', value: `\`${submissionData.submissionId}\``, inline: true },
-          { name: '🔗 View Submission', value: `[Click Here](${messageUrl})`, inline: true }
+          { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: false },
+          { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+          { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: false },
+          { name: '💰 Token Amount', value: tokenDisplay, inline: false },
+          { name: '🆔 Submission ID', value: `\`${submissionData.submissionId}\``, inline: false },
+          { name: '🔗 View Submission', value: `[Click Here](${messageUrl})`, inline: false }
         ];
 
         // Add collaboration field if present
         if (hasCollaborators) {
           const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
           const collabDisplay = collaborators.join(', ');
-          notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+          notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: false });
         }
 
         // Add blight ID if provided
@@ -361,7 +362,7 @@ async function handleConfirmation(interaction, userId, submissionData) {
           notificationFields.push({ 
             name: '🩸 Blight Healing ID', 
             value: `\`${submissionData.blightId}\``, 
-            inline: true 
+            inline: false 
           });
         }
 
@@ -375,7 +376,7 @@ async function handleConfirmation(interaction, userId, submissionData) {
           .setTimestamp();
 
         const notificationMessage = await approvalChannel.send({ embeds: [notificationEmbed] });
-        console.log(`[componentHandler.js]: ✅ Notification sent to approval channel for ${submissionType} submission`);
+        logger.success('SUBMISSION', `✅ Notification sent to approval channel for ${submissionType} submission`);
         
         // Save the pending notification message ID to the submission data
         await updateSubmissionData(submissionData.submissionId, {
@@ -387,7 +388,7 @@ async function handleConfirmation(interaction, userId, submissionData) {
       // Don't throw here, just log the error since the submission was already posted
     }
 
-    console.log(`[componentHandler.js]: ✅ Confirmed submission ${submissionData.submissionId} with ${totalTokens} tokens`);
+    logger.success('SUBMISSION', `✅ Confirmed submission ${submissionData.submissionId} with ${totalTokens} tokens`);
   } catch (error) {
     console.error('Error in handleConfirmation:', error);
     try {

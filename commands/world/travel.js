@@ -697,7 +697,9 @@ module.exports = {
         travelLog: [],
         mount: null,
         mode,
-        startingWeather
+        startingWeather,
+        scholarTravelGuideActive: false,
+        scholarTravelGuideTriggered: false
       });
       
     } catch (error) {
@@ -830,6 +832,10 @@ async function processTravelDay(day, context) {
     // Reset the travel gathering flag for each new travel day
     // This allows gathering once per travel day, not per real day
     character.travelGathered = false;
+
+    context.boleroOfFireUsedToday = false;
+    context.entertainerBoleroActive = false;
+    context.entertainerBoleroTriggered = false;
 
 
     // ------------------- Mount Travel: Skip Encounters & Gathering -------------------
@@ -1145,6 +1151,12 @@ async function processTravelDay(day, context) {
       }
     
       // Filter out "fight: win & loot" logs from final summary
+      if (context.scholarTravelGuideActive && !context.scholarTravelGuideTriggered) {
+        context.travelLog.push('📚 **Travel Guide** was watching the roads, but there wasn\'t enough time to gather anything on this journey.');
+      }
+      if (context.entertainerBoleroActive && !context.entertainerBoleroTriggered) {
+        context.travelLog.push('🎵 **Bolero of Fire** crackled in the air, warding off trouble before it could find you.');
+      }
       const filteredLog = context.travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
       const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
 
@@ -1318,7 +1330,9 @@ async function processTravelDay(day, context) {
               encounterMessage,
               monster,
               context.travelLog,
-              startingVillage
+              startingVillage,
+              undefined,
+              context
             );
             // Only append the decision to the daily log if it's not a damage message
             if (!decision.includes('heart')) {
@@ -1347,7 +1361,9 @@ async function processTravelDay(day, context) {
                 encounterMessage,
                 monster,
                 context.travelLog,
-                startingVillage
+              startingVillage,
+              undefined,
+              context
               );
           
               dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
@@ -1429,7 +1445,8 @@ async function processTravelDay(day, context) {
             null,
             context.travelLog,
             startingVillage,
-            i.customId === 'do_nothing' ? doNothingFlavor : undefined
+            i.customId === 'do_nothing' ? doNothingFlavor : undefined,
+            context
           );    
           dailyLogEntry += `${decision}\n`;
           const updated = new EmbedBuilder(safeMessage.embeds[0].toJSON()).setDescription(
@@ -1459,7 +1476,8 @@ async function processTravelDay(day, context) {
               null,
               context.travelLog,
               startingVillage,
-              doNothingFlavor
+              doNothingFlavor,
+              context
             );
             dailyLogEntry += `${decision}\n`;
           }

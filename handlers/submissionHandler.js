@@ -9,12 +9,19 @@
 const { EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
-const { createArtSubmissionEmbed } = require('../embeds/embeds.js');
+const { createArtSubmissionEmbed, createWritingSubmissionEmbed, updateBoostRequestEmbed } = require('../embeds/embeds.js');
 // ============================================================================
 // Database Services
 // ============================================================================
 
-const { appendEarnedTokens, updateTokenBalance } = require('../database/db');
+const {
+  appendEarnedTokens,
+  updateTokenBalance,
+  fetchCharacterByNameAndUserId,
+  fetchModCharacterByNameAndUserId,
+  fetchCharacterByName,
+  fetchModCharacterByName
+} = require('../database/db');
 
 // ============================================================================
 // Utility Functions
@@ -29,6 +36,55 @@ const {
   deleteSubmissionFromStorage,
   findLatestSubmissionIdForUser 
 } = require('../utils/storage');
+const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
+const { 
+  retrieveBoostingRequestFromTempDataByCharacter,
+  saveBoostingRequestToTempData,
+  updateBoostAppliedMessage
+} = require('../commands/jobs/boosting');
+
+async function resolveTaggedCharacter(characterName, userId = null) {
+  if (!characterName || typeof characterName !== 'string') {
+    return null;
+  }
+
+  const trimmedName = characterName.trim();
+  let character = null;
+
+  if (userId) {
+    try {
+      character = await fetchCharacterByNameAndUserId(trimmedName, userId);
+    } catch (error) {
+      console.error(`[submissionHandler.js]: ❌ Error fetching character ${trimmedName} by user ${userId}:`, error);
+    }
+
+    if (!character) {
+      try {
+        character = await fetchModCharacterByNameAndUserId(trimmedName, userId);
+      } catch (modError) {
+        console.error(`[submissionHandler.js]: ❌ Error fetching mod character ${trimmedName} by user ${userId}:`, modError);
+      }
+    }
+  }
+
+  if (!character) {
+    try {
+      character = await fetchCharacterByName(trimmedName);
+    } catch (fallbackError) {
+      console.error(`[submissionHandler.js]: ❌ Error fetching character ${trimmedName}:`, fallbackError);
+    }
+  }
+
+  if (!character) {
+    try {
+      character = await fetchModCharacterByName(trimmedName);
+    } catch (modFallbackError) {
+      console.error(`[submissionHandler.js]: ❌ Error fetching mod character ${trimmedName}:`, modFallbackError);
+    }
+  }
+
+  return character;
+}
 
 
 // ============================================================================
@@ -138,30 +194,136 @@ async function handleSubmissionCompletion(interaction) {
     console.log(`[submissionHandler.js]: 📊 Token breakdown:`, breakdown);
 
     let finalTokenAmount = totalTokens;
+    const boostEffects = Array.isArray(submissionData.boostEffects) ? [...submissionData.boostEffects] : [];
+    const boostFulfillmentMap = new Map();
+    const boostMetadataMap = new Map();
     
-    // ============================================================================
-    // ------------------- Apply Teacher Boost for Art (Critique & Composition +50%) -------------------
-    // ============================================================================
-    if (submissionData.characterName && submissionData.category === 'art') {
-      const { fetchCharacterByNameAndUserId } = require('../database/db');
-      const character = await fetchCharacterByNameAndUserId(submissionData.characterName, submissionData.userId);
-      
-      if (character && character.boostedBy) {
-        const { fetchCharacterByName } = require('../database/db');
-        const boosterChar = await fetchCharacterByName(character.boostedBy);
-        
-        if (boosterChar && boosterChar.job === 'Teacher') {
-          const originalTokens = finalTokenAmount;
-          finalTokenAmount = Math.floor(finalTokenAmount * 1.5);
-          console.log(`[submissionHandler.js]: 📖 Teacher boost - Critique & Composition (+50% tokens: ${originalTokens} → ${finalTokenAmount})`);
+    const taggedCharacters = Array.isArray(submissionData.taggedCharacters)
+      ? submissionData.taggedCharacters
+      : [];
+
+    const focusCharacterMap = new Map();
+
+    if (taggedCharacters.length > 0) {
+      for (const taggedName of taggedCharacters) {
+        if (!taggedName) continue;
+        const normalizedName = taggedName.trim().toLowerCase();
+        if (focusCharacterMap.has(normalizedName)) continue;
+
+        const character = await resolveTaggedCharacter(taggedName, submissionData.userId);
+        if (character) {
+          focusCharacterMap.set(normalizedName, character);
+        }
+      }
+    }
+
+    const focusCharacters = Array.from(focusCharacterMap.values());
+    const processedBoostTypes = new Set();
+
+    for (const character of focusCharacters) {
+      if (!character || !character.boostedBy) continue;
+
+      const boosterChar = await resolveTaggedCharacter(character.boostedBy);
+      if (!boosterChar) {
+        console.warn(`[submissionHandler.js]: ⚠️ Booster ${character.boostedBy} not found for ${character.name}`);
+        continue;
+      }
+
+      if (
+        submissionData.category === 'art' &&
+        boosterChar.job === 'Teacher' &&
+        !processedBoostTypes.has('teacher_tokens')
+      ) {
+        const teacherEffectAlreadyLogged = boostEffects.some(effect =>
+          effect.includes('Critique & Composition')
+        );
+
+        const boostedTokens = applyTeacherTokensBoost(finalTokenAmount);
+        const tokenIncrease = boostedTokens - finalTokenAmount;
+        if (tokenIncrease > 0) {
+          finalTokenAmount = boostedTokens;
+          if (!teacherEffectAlreadyLogged) {
+            boostEffects.push(`👩‍🏫 **Critique & Composition:** ${boosterChar.name} added 🪙 ${tokenIncrease}.`);
+          }
+          processedBoostTypes.add('teacher_tokens');
+          boostFulfillmentMap.set(character.name.toLowerCase(), character);
+          const metadataKey = `${boosterChar.job.toLowerCase()}_${boosterChar.name.toLowerCase()}`;
+          if (!boostMetadataMap.has(metadataKey)) {
+            boostMetadataMap.set(metadataKey, {
+              boostType: 'teacher_tokens',
+              boosterJob: boosterChar.job,
+              boosterName: boosterChar.name,
+              targets: new Set(),
+              tokenIncrease: 0
+            });
+          }
+          const metadataRecord = boostMetadataMap.get(metadataKey);
+          metadataRecord.targets.add(character.name);
+          metadataRecord.tokenIncrease += tokenIncrease;
+          console.log(`[submissionHandler.js]: 📖 Teacher boost - Critique & Composition (+${tokenIncrease} tokens)`);
+        }
+      }
+
+      if (
+        submissionData.category === 'writing' &&
+        boosterChar.job === 'Scholar' &&
+        !processedBoostTypes.has('scholar_tokens')
+      ) {
+        const scholarEffectAlreadyLogged = boostEffects.some(effect =>
+          effect.includes('Research Stipend')
+        );
+
+        const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
+        const tokenIncrease = boostedTokens - finalTokenAmount;
+        if (tokenIncrease > 0) {
+          finalTokenAmount = boostedTokens;
+          if (!scholarEffectAlreadyLogged) {
+            boostEffects.push(`📚 **Research Stipend:** ${boosterChar.name} added 🪙 ${tokenIncrease}.`);
+          }
+          processedBoostTypes.add('scholar_tokens');
+          boostFulfillmentMap.set(character.name.toLowerCase(), character);
+          const metadataKey = `${boosterChar.job.toLowerCase()}_${boosterChar.name.toLowerCase()}`;
+          if (!boostMetadataMap.has(metadataKey)) {
+            boostMetadataMap.set(metadataKey, {
+              boostType: 'scholar_tokens',
+              boosterJob: boosterChar.job,
+              boosterName: boosterChar.name,
+              targets: new Set(),
+              tokenIncrease: 0
+            });
+          }
+          const metadataRecord = boostMetadataMap.get(metadataKey);
+          metadataRecord.targets.add(character.name);
+          metadataRecord.tokenIncrease += tokenIncrease;
+          console.log(`[submissionHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens)`);
         }
       }
     }
 
     // Update submission data with final calculations
+    const boostTokenIncrease = Math.max(0, finalTokenAmount - totalTokens);
+    const boostMetadata = Array.from(boostMetadataMap.values()).map(entry => ({
+      boostType: entry.boostType,
+      boosterJob: entry.boosterJob,
+      boosterName: entry.boosterName,
+      targets: Array.from(entry.targets),
+      tokenIncrease: entry.tokenIncrease
+    }));
+
     submissionData.finalTokenAmount = finalTokenAmount;
     submissionData.tokenCalculation = breakdown;
     submissionData.updatedAt = new Date();
+    if (boostEffects.length > 0) {
+      submissionData.boostEffects = boostEffects;
+    }
+    if (boostTokenIncrease > 0) {
+      submissionData.boostTokenIncrease = boostTokenIncrease;
+    }
+    if (boostMetadata.length > 0) {
+      submissionData.boostMetadata = boostMetadata;
+    } else {
+      delete submissionData.boostMetadata;
+    }
 
     // Save updated submission data using submissionId
     console.log(`[submissionHandler.js]: 💾 Saving final submission data for ID: ${submissionId}`);
@@ -170,13 +332,19 @@ async function handleSubmissionCompletion(interaction) {
 
     // Create and send the embed
     console.log(`[submissionHandler.js]: 🎨 Creating submission embed`);
-    const embed = createArtSubmissionEmbed(submissionData);
+    const embed = submissionData.category === 'writing'
+      ? createWritingSubmissionEmbed(submissionData)
+      : createArtSubmissionEmbed(submissionData);
     const sentMessage = await interaction.reply({ embeds: [embed] });
     console.log(`[submissionHandler.js]: ✅ Submission embed sent`);
 
     // Update submission data with message URL
     submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
     await saveSubmissionToStorage(submissionId, submissionData);
+
+    for (const character of boostFulfillmentMap.values()) {
+      await fulfillTokenBoost(character, interaction.client);
+    }
 
     // Link submission to quest if quest ID is provided
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
@@ -210,37 +378,43 @@ async function handleSubmissionCompletion(interaction) {
         const typeColor = isWriting ? '#FF6B35' : '#FF0000'; // Orange for writing, red for art
         
         // Calculate token display based on collaboration and quest bonus
-        let tokenDisplay = `${totalTokens} tokens`;
+        let tokenDisplay = `${finalTokenAmount} tokens`;
         const hasCollaborators = submissionData.collab && ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) || (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
         
         // Add quest bonus breakdown if present
         if (submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0) {
           const baseTokens = totalTokens - submissionData.questBonus;
-          tokenDisplay = `${baseTokens} + ${submissionData.questBonus} quest bonus = ${totalTokens} tokens`;
+          if (boostTokenIncrease > 0) {
+            tokenDisplay = `${baseTokens} + ${submissionData.questBonus} quest bonus + ${boostTokenIncrease} boost = ${finalTokenAmount} tokens`;
+          } else {
+            tokenDisplay = `${baseTokens} + ${submissionData.questBonus} quest bonus = ${finalTokenAmount} tokens`;
+          }
+        } else if (boostTokenIncrease > 0) {
+          tokenDisplay = `${totalTokens} + ${boostTokenIncrease} boost = ${finalTokenAmount} tokens`;
         }
         
         if (hasCollaborators) {
           const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
           const totalParticipants = 1 + collaborators.length;
-          const splitTokens = Math.floor(totalTokens / totalParticipants);
+          const splitTokens = Math.floor(finalTokenAmount / totalParticipants);
           tokenDisplay += ` (${splitTokens} each)`;
         }
 
         // Build notification fields dynamically
         const notificationFields = [
-          { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
-          { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-          { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: true },
-          { name: '💰 Token Amount', value: tokenDisplay, inline: true },
-          { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
-          { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: true }
+          { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: false },
+          { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+          { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: false },
+          { name: '💰 Token Amount', value: tokenDisplay, inline: false },
+          { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: false },
+          { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: false }
         ];
 
         // Add collaboration field if present
         if (hasCollaborators) {
           const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
           const collabDisplay = collaborators.join(', ');
-          notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+          notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: false });
         }
 
         // Add quest/event fields if present
@@ -248,7 +422,7 @@ async function handleSubmissionCompletion(interaction) {
           notificationFields.push({ 
             name: '🎯 Quest/Event', 
             value: `\`${submissionData.questEvent}\``, 
-            inline: true 
+            inline: false 
           });
         }
 
@@ -256,7 +430,7 @@ async function handleSubmissionCompletion(interaction) {
           notificationFields.push({ 
             name: '🎁 Quest Bonus', 
             value: `+${submissionData.questBonus} tokens`, 
-            inline: true 
+            inline: false 
           });
         }
 
@@ -265,7 +439,24 @@ async function handleSubmissionCompletion(interaction) {
           notificationFields.push({ 
             name: '🩸 Blight Healing ID', 
             value: `\`${submissionData.blightId}\``, 
-            inline: true 
+            inline: false 
+          });
+        }
+
+        if (submissionData.taggedCharacters && submissionData.taggedCharacters.length > 0) {
+          const taggedDisplay = submissionData.taggedCharacters.join(', ');
+          notificationFields.push({
+            name: '🏷️ Tagged Characters',
+            value: taggedDisplay,
+            inline: false
+          });
+        }
+
+        if (submissionData.boostEffects && submissionData.boostEffects.length > 0) {
+          notificationFields.push({
+            name: '🎭 Boost Effects',
+            value: submissionData.boostEffects.join('\n'),
+            inline: false
           });
         }
 
@@ -298,8 +489,8 @@ async function handleSubmissionCompletion(interaction) {
     const submissionTitle = submissionData.title || fileName;
     const submissionUrl = submissionData.fileUrl || fileUrl;
     
-    await appendEarnedTokens(user.id, submissionTitle, submissionCategory, totalTokens, submissionUrl);
-    await updateTokenBalance(user.id, totalTokens);
+    await appendEarnedTokens(user.id, submissionTitle, submissionCategory, finalTokenAmount, submissionUrl);
+    await updateTokenBalance(user.id, finalTokenAmount);
     console.log(`[submissionHandler.js]: ✅ Token count updated`);
 
     // Clean up storage
@@ -458,6 +649,64 @@ async function handleSubmitAction(interaction) {
     if (!interaction.replied) {
       await interaction.reply({ content: '⚠️ **Unknown action!**', ephemeral: true });
     }
+  }
+}
+
+async function fulfillTokenBoost(characterOrName, client) {
+  if (!characterOrName) {
+    return;
+  }
+
+  const characterName = typeof characterOrName === 'string'
+    ? characterOrName
+    : characterOrName.name;
+
+  if (!characterName) {
+    return;
+  }
+
+  let characterDoc = null;
+  if (typeof characterOrName === 'object' && typeof characterOrName.save === 'function') {
+    characterDoc = characterOrName;
+  } else {
+    characterDoc = await fetchCharacterByName(characterName);
+    if (!characterDoc) {
+      characterDoc = await fetchModCharacterByName(characterName);
+    }
+  }
+
+  if (!characterDoc) {
+    console.warn(`[submissionHandler.js]: ⚠️ Unable to resolve character document for ${characterName} when clearing boost.`);
+    return;
+  }
+
+  try {
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+    if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
+      activeBoost.status = 'fulfilled';
+      activeBoost.fulfilledAt = Date.now();
+      await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+
+      if (client) {
+        try {
+          await updateBoostRequestEmbed(client, activeBoost, 'fulfilled');
+          await updateBoostAppliedMessage(client, activeBoost);
+        } catch (embedError) {
+          console.error(`[submissionHandler.js]: ❌ Failed to update boost embeds for ${characterName}:`, embedError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[submissionHandler.js]: ❌ Failed to mark token boost fulfilled for ${characterName}:`, error);
+  }
+
+  try {
+    if (characterDoc.boostedBy) {
+      characterDoc.boostedBy = null;
+      await characterDoc.save();
+    }
+  } catch (saveError) {
+    console.error(`[submissionHandler.js]: ❌ Failed to clear boost for ${characterName}:`, saveError);
   }
 }
 

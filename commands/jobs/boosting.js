@@ -30,6 +30,8 @@ const {
 const BOOST_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const REQUEST_EXPIRATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 const TESTING_CHANNEL_ID = '1391812848099004578';
+const BOOSTING_ACCEPT_COMMAND_MENTION = '</boosting accept:1433351189185171456>';
+const BOOSTING_CANCEL_COMMAND_MENTION = '</boosting cancel:1429961744716927038>';
 
 const EXEMPT_CATEGORIES = [
  "Tokens",
@@ -51,6 +53,20 @@ const BOOST_CATEGORIES = [
   { name: "Traveling", value: "Traveling" },
   { name: "Mounts", value: "Mounts" },
   { name: "Other", value: "Other" }
+];
+
+const SONG_OF_STORMS_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
+const SONG_OF_STORMS_SPECIAL_WEATHER = [
+  "Avalanche",
+  "Blight Rain",
+  "Drought",
+  "Fairy Circle",
+  "Flood",
+  "Flower Bloom",
+  "Jubilee",
+  "Meteor Shower",
+  "Muggy",
+  "Rock Slide",
 ];
 
 // ============================================================================
@@ -129,6 +145,89 @@ function formatBoostCategoryName(category) {
   return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
 }
 
+// ------------------- Formatting Helpers -------------------
+function formatDuration(durationMs) {
+  if (!durationMs || durationMs <= 0) {
+    return '0m';
+  }
+
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes > 0 || hours > 0) {
+    parts.push(`${minutes}m`);
+  }
+  if (hours === 0 && minutes === 0) {
+    parts.push(`${seconds}s`);
+  }
+
+  return parts.join(' ');
+}
+
+function parseStoredBoostEffect(effectString) {
+  if (!effectString || typeof effectString !== 'string') {
+    return { name: 'Unknown', description: 'N/A' };
+  }
+
+  const [rawName, rawDescription] = effectString.split('—').map(part => part.trim());
+  return {
+    name: rawName || 'Unknown',
+    description: rawDescription || 'N/A'
+  };
+}
+
+// ------------------- Boost Lookup Helpers -------------------
+async function getPendingBoostRequestForCharacter(characterName) {
+  try {
+    const allBoostingData = await TempData.findAllByType('boosting');
+    const pendingRequests = [];
+
+    for (const tempData of allBoostingData) {
+      const requestData = tempData?.data;
+      if (!requestData || requestData.targetCharacter !== characterName) {
+        continue;
+      }
+      if (requestData.status !== 'pending') {
+        continue;
+      }
+
+      pendingRequests.push({
+        ...requestData,
+        tempExpiresAt: tempData.expiresAt ? tempData.expiresAt.getTime() : null,
+        tempCreatedAt: tempData.createdAt ? tempData.createdAt.getTime() : null
+      });
+    }
+
+    if (pendingRequests.length === 0) {
+      return null;
+    }
+
+    pendingRequests.sort((a, b) => {
+      const aTime = typeof a.timestamp === 'number' ? a.timestamp : (a.tempCreatedAt || 0);
+      const bTime = typeof b.timestamp === 'number' ? b.timestamp : (b.tempCreatedAt || 0);
+      return bTime - aTime;
+    });
+
+    return pendingRequests[0];
+  } catch (error) {
+    logger.error('BOOST', `Error retrieving pending boost for ${characterName}:`, error);
+    return null;
+  }
+}
+
+function stripTempMetaFields(requestData) {
+  const cleaned = { ...requestData };
+  delete cleaned.tempExpiresAt;
+  delete cleaned.tempCreatedAt;
+  return cleaned;
+}
+
 /**
  * Asynchronously retrieves an active boost for a character based on character name and boost category.
  * Returns the boost request if it exists, is fulfilled, and the category matches; otherwise, null.
@@ -163,6 +262,13 @@ function validateBoostEffect(boosterJob, category) {
      error: `❌ **No Boost Available**\n\n**${boosterJob}** doesn't have a boost effect for the **${categoryDisplayName}** category.\n\n💡 **Tip:** Only certain jobs can provide boosts for specific categories. Check the boost descriptions to see which jobs can boost each category.`
    };
  }
+  // Handle passive boosts that shouldn't be requested manually
+  if (boost.passive) {
+    return {
+      valid: false,
+      error: `🎭 **Passive Boost**\n\n**${boosterJob}**'s **${boost.name}** is a passive effect and triggers automatically when the Entertainer participates in the quest.\n\n💡 No manual boost request or usage is required—just include the Entertainer in the RP quest.`
+    };
+  }
  return { valid: true, boost };
 }
 
@@ -660,10 +766,9 @@ async function handleBoostRequest(interaction) {
 
   const fields = [];
   if (requestId) {
-    fields.push({ name: "Cancel the Boost", value: `Run </boosting cancel:1429961744716927038> with **Request ID:** \
-\`${requestId}\``, inline: false });
+    fields.push({ name: "Cancel the Boost", value: `Run ${BOOSTING_CANCEL_COMMAND_MENTION} with **Request ID:** \`${requestId}\``, inline: false });
   } else {
-    fields.push({ name: "Cancel the Boost", value: "Run </boosting cancel:1429961744716927038> using your boost request ID.", inline: false });
+    fields.push({ name: "Cancel the Boost", value: `Run ${BOOSTING_CANCEL_COMMAND_MENTION} using your boost request ID.`, inline: false });
   }
   fields.push({ name: "Use Your Boost", value: "Finish the action it applies to. For 'Other' boosts, use </boosting use:1429961744716927038>.", inline: false });
   if (expiresAt) {
@@ -741,8 +846,8 @@ async function handleBoostRequest(interaction) {
  const boosterOwnerId = boosterCharacter.userId;
  const boosterOwnerMention = `<@${boosterOwnerId}>`;
 
- // HARDCODE the slash command mention so it's always clickable
-const commandMention = '</boosting accept:1433351189185171456>';
+// HARDCODE the slash command mention so it's always clickable
+const commandMention = BOOSTING_ACCEPT_COMMAND_MENTION;
 
 const reply = await interaction.reply({
  content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run ${commandMention} within 24 hours.`,
@@ -914,108 +1019,175 @@ async function handleBoostStatus(interaction) {
   return;
  }
 
- const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
  const currentTime = Date.now();
- 
- if (!activeBoost || activeBoost.status !== "accepted") {
-  // If there's a pending boost that has expired, update its embed
-  if (activeBoost && activeBoost.status === "pending" && activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
-    activeBoost.status = "expired";
-    await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-    
-    // Update the embed to show expired status
-    await updateBoostRequestEmbed(interaction.client, activeBoost, 'expired');
-  }
-  
-  await interaction.reply({
-   content: `${characterName} does not have any active boosts.`,
-   ephemeral: true,
-  });
-  return;
- }
+ const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
 
- if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
-  activeBoost.status = "expired";
-  await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+ if (activeBoost && activeBoost.status === "accepted") {
+  if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
+   activeBoost.status = "expired";
+   await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+   await updateBoostRequestEmbed(interaction.client, activeBoost, 'expired');
 
-  // Update the original boost request embed to show expired status
-  await updateBoostRequestEmbed(interaction.client, activeBoost, 'expired');
-
-  // Clear the boostedBy field from the character
-  if (character.boostedBy) {
+   if (character.boostedBy) {
     character.boostedBy = null;
     await character.save();
-  }
+   }
 
-  await interaction.reply({
-   content: `${characterName}'s boost has expired.`,
-   ephemeral: true,
-  });
-  return;
- }
-
- const timeRemaining = activeBoost.boostExpiresAt - currentTime;
- const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
- const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-
- const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
- if (!boosterCharacter) {
-  logger.error('BOOST', `Could not find booster character "${activeBoost.boostingCharacter}"`);
-  await interaction.reply({
-   content: `Error retrieving boost effect for ${characterName}.`,
-   ephemeral: true,
-  });
-  return;
- }
-
- const boostEffectValidation = validateBoostEffect(boosterCharacter.job, activeBoost.category);
- if (!boostEffectValidation.valid) {
-  logger.error('BOOST', boostEffectValidation.error);
-  await interaction.reply({
-   content: `Error retrieving boost effect for ${characterName}.`,
-   ephemeral: true,
-  });
-  return;
- }
-
- // Format category for display
- const categoryDisplayName = activeBoost.category === 'Healers' ? 'Healer' : activeBoost.category;
- 
- // Create fields array for the embed
- const fields = [
-  { name: "Boost Type", value: boostEffectValidation.boost.name, inline: true },
-  { name: "Category", value: categoryDisplayName, inline: true },
-  { name: "Boosted By", value: activeBoost.boostingCharacter, inline: true },
-  { name: "Effect", value: boostEffectValidation.boost.description, inline: false },
-  {
-   name: "Time Remaining",
-   value: `${hoursRemaining}h ${minutesRemaining}m`,
-   inline: true,
-  },
-  {
-   name: "Expires",
-   value: `<t:${Math.floor(activeBoost.boostExpiresAt / 1000)}:R>`,
-   inline: true,
-  }
- ];
-
- // Add cross-region gathering information for Scholar Gathering boosts
- if (activeBoost.boosterJob === 'Scholar' && activeBoost.category === 'Gathering' && activeBoost.targetVillage) {
-   fields.push({
-     name: "🎯 Cross-Region Gathering",
-     value: `**Can gather from:** ${activeBoost.targetVillage}\n**Current location:** ${character.currentVillage}\n*Character stays in current location while gathering from target village*`,
-     inline: false
+   await interaction.reply({
+    content: `${characterName}'s boost has expired.`,
+    ephemeral: true,
    });
+   return;
+  }
+
+  const boosterCharacter = await fetchCharacterByNameWithFallback(activeBoost.boostingCharacter);
+  const boosterJob = boosterCharacter?.job || activeBoost.boosterJob || "Unknown";
+  const boostEffect = getBoostEffect(boosterJob, activeBoost.category);
+  const storedEffect = parseStoredBoostEffect(activeBoost.boostEffect);
+  const boostName = boostEffect?.name || storedEffect.name;
+  const boostDescription = boostEffect?.description || storedEffect.description;
+  const timeRemaining = activeBoost.boostExpiresAt ? Math.max(0, activeBoost.boostExpiresAt - currentTime) : 0;
+  const categoryDisplayName = activeBoost.category === 'Healers' ? 'Healer' : formatBoostCategoryName(activeBoost.category);
+
+  const fields = [
+   { name: "Boost Type", value: boostName, inline: true },
+   { name: "Category", value: categoryDisplayName, inline: true },
+   { name: "Boosted By", value: activeBoost.boostingCharacter, inline: true },
+   { name: "Booster Job", value: boosterJob, inline: true },
+   { name: "Effect", value: boostDescription, inline: false },
+  ];
+
+  if (timeRemaining > 0) {
+   fields.push({ name: "Time Remaining", value: formatDuration(timeRemaining), inline: true });
+  }
+
+  if (activeBoost.boostExpiresAt) {
+   fields.push({ name: "Expires", value: `<t:${Math.floor(activeBoost.boostExpiresAt / 1000)}:R>`, inline: true });
+  }
+
+  if (activeBoost.acceptedAt) {
+   fields.push({ name: "Started", value: `<t:${Math.floor(activeBoost.acceptedAt / 1000)}:R>`, inline: true });
+  }
+
+  fields.push({ name: "Request ID", value: activeBoost.boostRequestId, inline: false });
+
+  if (activeBoost.boosterJob === 'Scholar' && activeBoost.category === 'Gathering' && activeBoost.targetVillage) {
+   fields.push({
+    name: "🎯 Cross-Region Gathering",
+    value: `**Can gather from:** ${activeBoost.targetVillage}\n**Current location:** ${character.currentVillage}\n*Character stays in current location while gathering from target village*`,
+    inline: false
+   });
+  }
+
+  const embed = new EmbedBuilder()
+   .setTitle(`Active Boost Status: ${characterName}`)
+   .setDescription(`**${characterName}** is currently boosted by **${activeBoost.boostingCharacter}**.`)
+   .addFields(fields)
+   .setColor("#4CAF50")
+   .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
+   .setFooter({ text: "Boost will automatically expire when duration ends" });
+
+  if (character.icon || activeBoost.requestedByIcon) {
+   embed.setThumbnail(character.icon || activeBoost.requestedByIcon);
+  }
+
+  if (boosterCharacter?.icon || activeBoost.boosterIcon) {
+   embed.setAuthor({
+    name: activeBoost.boostingCharacter,
+    iconURL: boosterCharacter?.icon || activeBoost.boosterIcon
+   });
+  }
+
+  await interaction.reply({
+   embeds: [embed],
+   ephemeral: true,
+  });
+  return;
  }
 
- const embed = new EmbedBuilder()
-  .setTitle(`Active Boost Status: ${characterName}`)
-  .addFields(fields)
-  .setColor("#4CAF50")
-  .setFooter({ text: "Boost will automatically expire when duration ends" });
+ const pendingBoost = await getPendingBoostRequestForCharacter(characterName);
+
+ if (pendingBoost) {
+  if (pendingBoost.tempExpiresAt && currentTime > pendingBoost.tempExpiresAt) {
+   const updatedRequest = stripTempMetaFields({ ...pendingBoost, status: "expired" });
+   await saveBoostingRequestToTempData(updatedRequest.boostRequestId, updatedRequest);
+   await updateBoostRequestEmbed(interaction.client, updatedRequest, 'expired');
+
+   await interaction.reply({
+    content: `${characterName}'s boost request has expired.`,
+    ephemeral: true,
+   });
+   return;
+  }
+
+  const pendingEffect = parseStoredBoostEffect(pendingBoost.boostEffect);
+  const expiresTimestamp = pendingBoost.tempExpiresAt ? `<t:${Math.floor(pendingBoost.tempExpiresAt / 1000)}:R>` : "No expiry set";
+  const expiresIn = pendingBoost.tempExpiresAt ? formatDuration(Math.max(0, pendingBoost.tempExpiresAt - currentTime)) : null;
+  const categoryDisplayName = pendingBoost.category === 'Healers' ? 'Healer' : formatBoostCategoryName(pendingBoost.category);
+
+  const fields = [
+   { name: "Requested Booster", value: pendingBoost.boostingCharacter, inline: true },
+   { name: "Category", value: categoryDisplayName, inline: true },
+  ];
+
+  if (pendingEffect.name !== 'Unknown' || pendingEffect.description !== 'N/A') {
+   const effectLines = [];
+   if (pendingEffect.name !== 'Unknown') {
+    effectLines.push(pendingEffect.name);
+   }
+   if (pendingEffect.description !== 'N/A') {
+    effectLines.push(pendingEffect.description);
+   }
+   fields.push({ name: "Expected Boost", value: effectLines.join('\n'), inline: false });
+  }
+
+  fields.push({ name: "Request ID", value: pendingBoost.boostRequestId, inline: false });
+
+  if (pendingBoost.timestamp) {
+   fields.push({ name: "Requested", value: `<t:${Math.floor(pendingBoost.timestamp / 1000)}:R>`, inline: true });
+  }
+
+  if (pendingBoost.tempExpiresAt) {
+   fields.push({ name: "Expires", value: expiresTimestamp, inline: true });
+   if (expiresIn) {
+    fields.push({ name: "Time Remaining", value: expiresIn, inline: true });
+   }
+  }
+
+  fields.push({
+   name: "Need to Cancel?",
+   value: `Use ${BOOSTING_CANCEL_COMMAND_MENTION} with ID \`${pendingBoost.boostRequestId}\`.`,
+   inline: false
+  });
+
+  const embed = new EmbedBuilder()
+   .setTitle(`Pending Boost Request: ${characterName}`)
+   .setDescription(`Waiting for **${pendingBoost.boostingCharacter}** to accept the boost.`)
+   .addFields(fields)
+   .setColor("#F1C40F")
+   .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
+   .setFooter({ text: "Boost requests expire automatically if not accepted in time." });
+
+  if (character.icon || pendingBoost.requestedByIcon) {
+   embed.setThumbnail(character.icon || pendingBoost.requestedByIcon);
+  }
+
+  if (pendingBoost.boosterIcon) {
+   embed.setAuthor({
+    name: pendingBoost.boostingCharacter,
+    iconURL: pendingBoost.boosterIcon
+   });
+  }
+
+  await interaction.reply({
+   embeds: [embed],
+   ephemeral: true,
+  });
+  return;
+ }
 
  await interaction.reply({
-  embeds: [embed],
+  content: `${characterName} does not have any active boosts or pending requests.`,
   ephemeral: true,
  });
 }
@@ -1036,9 +1208,19 @@ async function handleBoostUse(interaction) {
  }
 
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
- const currentTime = Date.now();
- 
- if (!activeBoost || activeBoost.status !== "accepted") {
+ const hasAcceptedBoost = activeBoost && activeBoost.status === "accepted";
+ const isEntertainer = character.job === 'Entertainer';
+
+ if (!hasAcceptedBoost) {
+  if (isEntertainer) {
+   await executeSongOfStorms(interaction, {
+    entertainer: character,
+    viaBoost: false,
+    providedVillage: targetVillage
+   });
+   return;
+  }
+
   await interaction.reply({
    content: `${characterName} does not have an active boost in the "Other" category.`,
    ephemeral: true,
@@ -1046,7 +1228,18 @@ async function handleBoostUse(interaction) {
   return;
  }
 
+ const currentTime = Date.now();
+
  if (activeBoost.category !== "Other") {
+  if (isEntertainer) {
+   await executeSongOfStorms(interaction, {
+    entertainer: character,
+    viaBoost: false,
+    providedVillage: targetVillage
+   });
+   return;
+  }
+
   await interaction.reply({
    content: `${characterName}'s active boost is for "${activeBoost.category}", not "Other". This command only works with "Other" category boosts.`,
    ephemeral: true,
@@ -1075,17 +1268,10 @@ async function handleBoostUse(interaction) {
  // ------------------- Fortune Teller: Weather Prediction -------------------
  // ============================================================================
  if (boosterCharacter.job === 'Fortune Teller') {
-  const { getCurrentWeather, setNextDayWeather } = require('../../services/weatherService');
-  
-  const villages = ['Rudania', 'Inariko', 'Vhintl'];
-  const selectedVillage = targetVillage || villages[Math.floor(Math.random() * villages.length)];
-  
-  // Get or generate next day weather
+  const predictedVillages = ['Rudania', 'Inariko', 'Vhintl'];
+  const selectedVillage = targetVillage || predictedVillages[Math.floor(Math.random() * predictedVillages.length)];
   const weatherTypes = ["sunny", "rainy", "stormy", "cloudy", "clear"];
   const predictedWeather = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
-  
-  // TODO: Integrate with actual weather service to lock in the prediction
-  // await setNextDayWeather(selectedVillage, predictedWeather);
   
   const embed = new EmbedBuilder()
    .setTitle("🔮 Weather Prediction")
@@ -1097,9 +1283,9 @@ async function handleBoostUse(interaction) {
     { name: "✨ Boost Used", value: "Fortune Teller's Premonition", inline: false }
    ])
    .setColor("#9B59B6")
+   .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
    .setFooter({ text: "Weather prediction locked in for tomorrow!" });
 
-  // Mark request as fulfilled and clear the boost after use
   activeBoost.status = "fulfilled";
   activeBoost.fulfilledAt = Date.now();
   await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
@@ -1120,55 +1306,13 @@ async function handleBoostUse(interaction) {
  // ------------------- Entertainer: Song of Storms -------------------
  // ============================================================================
  if (boosterCharacter.job === 'Entertainer') {
-  const { getCurrentWeather, setSpecialWeather } = require('../../services/weatherService');
-  
-  const villages = ['Rudania', 'Inariko', 'Vhintl'];
-  const specialWeatherTypes = [
-   "Avalanche",
-   "Blight Rain", 
-   "Drought",
-   "Fairy Circle",
-   "Flood",
-   "Flower Bloom",
-   "Jubilee",
-   "Meteor Shower",
-   "Muggy",
-   "Rock Slide",
-  ];
-  
-  const selectedVillage = targetVillage || villages[Math.floor(Math.random() * villages.length)];
-  const selectedWeather = specialWeatherTypes[Math.floor(Math.random() * specialWeatherTypes.length)];
-  
-  // TODO: Integrate with actual weather service to guarantee the special weather
-  // await setSpecialWeather(selectedVillage, selectedWeather);
-  
-  const embed = new EmbedBuilder()
-   .setTitle("🎵 Song of Storms")
-   .setDescription(`**${character.name}** plays an ancient melody, and **${boosterCharacter.name}'s** music reshapes the very skies...`)
-   .addFields([
-    { name: "📍 Village", value: selectedVillage, inline: true },
-    { name: "⛈️ Guaranteed Weather", value: selectedWeather, inline: true },
-    { name: "📅 When", value: `<t:${Math.floor((Date.now() + 86400000) / 1000)}:D>`, inline: true },
-    { name: "✨ Boost Used", value: "Entertainer's Song of Storms", inline: false },
-    { name: "🌩️ Effect", value: "This special weather will occur tomorrow, guaranteed!", inline: false }
-   ])
-   .setColor("#E74C3C")
-   .setFooter({ text: "The storm answers the song!" });
-
-  // Mark request as fulfilled and clear the boost after use
-  activeBoost.status = "fulfilled";
-  activeBoost.fulfilledAt = Date.now();
-  await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-
-  character.boostedBy = null;
-  await character.save();
-  
-  await interaction.reply({
-   embeds: [embed],
-   ephemeral: false,
+  await executeSongOfStorms(interaction, {
+   entertainer: boosterCharacter,
+   recipient: character,
+   viaBoost: true,
+   activeBoost,
+   providedVillage: targetVillage
   });
-  
-  logger.info('BOOST', `🎵 Entertainer "Other" boost used - Song of Storms for ${selectedVillage}: ${selectedWeather}`);
   return;
  }
 
@@ -1177,6 +1321,108 @@ async function handleBoostUse(interaction) {
   content: `${boosterCharacter.job} doesn't have an "Other" category boost that can be used with this command.`,
   ephemeral: true,
  });
+}
+
+async function executeSongOfStorms(interaction, options) {
+ const {
+  entertainer,
+  recipient = null,
+  viaBoost = false,
+  activeBoost = null,
+  providedVillage = null
+ } = options || {};
+
+ const { scheduleSpecialWeather } = require('../../services/weatherService');
+
+ const selectedVillage = SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
+ const selectedWeather = SONG_OF_STORMS_SPECIAL_WEATHER[Math.floor(Math.random() * SONG_OF_STORMS_SPECIAL_WEATHER.length)];
+ const overrideProvided = Boolean(providedVillage);
+
+ try {
+  const scheduleResult = await scheduleSpecialWeather(selectedVillage, selectedWeather, {
+   triggeredBy: entertainer?.name || 'Unknown Entertainer',
+   recipient: recipient?.name || null,
+   source: viaBoost ? 'Song of Storms (Boosted)' : 'Song of Storms (Self)'
+  });
+
+  const activationTimestamp = scheduleResult?.startOfPeriod
+   ? Math.floor(scheduleResult.startOfPeriod.getTime() / 1000)
+   : Math.floor((Date.now() + 86400000) / 1000);
+
+  const description = viaBoost
+   ? `**${recipient?.name || 'A companion'}** plays the melody taught by **${entertainer?.name || 'an Entertainer'}**, and the skies tremble in response.`
+   : `**${entertainer?.name || 'An Entertainer'}** performs the Song of Storms, letting the winds decide where tomorrow's spectacle unfolds.`;
+
+  const embed = new EmbedBuilder()
+   .setTitle("🎵 Song of Storms")
+   .setDescription(description)
+   .addFields([
+    {
+     name: "🎲 Selection",
+     value: "The melody chooses randomly among Rudania, Inariko, and Vhintl. The exact village and weather remain hidden until the town halls post tomorrow's forecast.",
+     inline: false
+    },
+    {
+     name: "📅 Reveal",
+     value: `<t:${activationTimestamp}:D>`,
+     inline: true
+    }
+   ])
+   .setColor("#E74C3C")
+   .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+   .setFooter({ text: "The storm answers the song—find out where at dawn." });
+
+  if (viaBoost && entertainer?.name) {
+   embed.addFields({ name: "✨ Boost Used", value: `Entertainer ${entertainer.name}'s Song of Storms`, inline: false });
+  }
+
+  if (viaBoost && recipient?.name) {
+   embed.addFields({ name: "🤝 Beneficiary", value: recipient.name, inline: false });
+  }
+
+  if (overrideProvided) {
+   embed.addFields({
+    name: "⚠️ Note",
+    value: "Manual village selections are ignored—Song of Storms always lets the winds decide.",
+    inline: false
+   });
+  }
+
+  await interaction.reply({
+   embeds: [embed],
+   ephemeral: false,
+  });
+
+  if (viaBoost && activeBoost && recipient) {
+   activeBoost.status = "fulfilled";
+   activeBoost.fulfilledAt = Date.now();
+   await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+
+   recipient.boostedBy = null;
+   await recipient.save();
+  }
+
+  logger.info(
+   'BOOST',
+   `🎵 Song of Storms triggered by ${entertainer?.name || 'Unknown'}${recipient ? ` for ${recipient.name}` : ''}: ${selectedWeather} in ${selectedVillage}`
+  );
+ } catch (error) {
+  logger.error(
+   'BOOST',
+   `Song of Storms failed for ${entertainer?.name || 'Unknown Entertainer'}:`,
+   error
+  );
+
+  const errorMessage = "❌ **Song of Storms falters.** Please try again later or contact a moderator.";
+
+  if (interaction.replied) {
+   await interaction.followUp({ content: errorMessage, ephemeral: true });
+  } else if (interaction.deferred) {
+   await interaction.editReply({ content: errorMessage });
+  } else {
+   await interaction.reply({ content: errorMessage, ephemeral: true });
+  }
+ }
 }
 
 async function handleBoostCancel(interaction) {
@@ -1240,10 +1486,19 @@ async function handleBoostCancel(interaction) {
  // Update the embed if it exists
  await updateBoostRequestEmbed(interaction.client, requestData, 'cancelled');
 
- const statusMessage = wasAccepted ? "active boost" : "boost request";
+ const statusMessage = wasAccepted ? "Active Boost Cancelled" : "Boost Request Cancelled";
+ const cancelEmbed = new EmbedBuilder()
+  .setColor(0x2ecc71)
+  .setTitle('✅ Boost Cancelled')
+  .setDescription(`Successfully cancelled the boost from **${requestData.boostingCharacter}** for **${requestData.targetCharacter}**.`)
+  .addFields(
+   { name: 'Status', value: statusMessage, inline: false },
+   { name: 'Request ID', value: requestData.boostRequestId, inline: false }
+  )
+  .setTimestamp();
+
  await interaction.reply({
-  content: `✅ **${statusMessage.charAt(0).toUpperCase() + statusMessage.slice(1)} Cancelled**\n\nSuccessfully cancelled the ${statusMessage} from **${requestData.boostingCharacter}** for **${requestData.targetCharacter}**.\n\n**Request ID:** ${requestData.boostRequestId}`,
-  ephemeral: true,
+  embeds: [cancelEmbed],
  });
 }
 

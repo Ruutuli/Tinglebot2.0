@@ -427,21 +427,40 @@ function calculateWeightedDamage(tier) {
 // ------------------- Attempt Flee -------------------
 // Attempts to flee from an encounter. Calculates flee chance, applies damage if fleeing fails,
 // and updates character state accordingly.
-async function attemptFlee(character, monster) {
+async function attemptFlee(character, monster, options = {}) {
   try {
+    const advantageAttempts = Math.max(1, options.advantageAttempts || 1);
+    const originalFailedAttempts = character.failedFleeAttempts || 0;
     const baseFleeChance = 0.5;
-    const bonusFleeChance = character.failedFleeAttempts * 0.05;
+    const bonusFleeChance = originalFailedAttempts * 0.05;
     const fleeChance = Math.min(baseFleeChance + bonusFleeChance, 0.95);
-    const fleeRoll = Math.random();
 
-    if (fleeRoll < fleeChance) {
-      console.log(`[rngModule.js]: 🏃 ${character.name} fled from ${monster.name}`);
-      character.failedFleeAttempts = 0;
-      await character.save();
-      return { success: true, message: "You successfully fled!" };
+    const rollSucceeds = () => Math.random() < fleeChance;
+
+    let attemptsMade = 0;
+    let success = false;
+
+    while (attemptsMade < advantageAttempts) {
+      attemptsMade += 1;
+      if (rollSucceeds()) {
+        success = true;
+        break;
+      }
     }
 
-    character.failedFleeAttempts += 1;
+    if (success) {
+      console.log(`[rngModule.js]: 🏃 ${character.name} fled from ${monster.name} (attempts: ${attemptsMade})`);
+      character.failedFleeAttempts = 0;
+      await character.save();
+      return {
+        success: true,
+        message: "You successfully fled!",
+        attempts: attemptsMade,
+        advantageApplied: advantageAttempts > 1
+      };
+    }
+
+    character.failedFleeAttempts = originalFailedAttempts + 1;
     await character.save();
 
     const monsterDamage = calculateWeightedDamage(monster.tier);
@@ -454,7 +473,7 @@ async function attemptFlee(character, monster) {
     character.currentHearts -= monsterDamage;
     
     if (character.currentHearts <= 0) {
-      console.log(`[rngModule.js]: 💀 ${character.name} KO'd by ${monster.name} during flee`);
+      console.log(`[rngModule.js]: 💀 ${character.name} KO'd by ${monster.name} during flee (attempts: ${attemptsMade})`);
       await handleKO(character._id, {
         commandName: 'flee_attempt',
         characterName: character.name,
@@ -465,7 +484,9 @@ async function attemptFlee(character, monster) {
         success: false,
         attacked: true,
         damage: monsterDamage,
-        message: "The monster attacked and knocked you out!"
+        message: "The monster attacked and knocked you out!",
+        attempts: attemptsMade,
+        advantageApplied: advantageAttempts > 1
       };
     }
 
@@ -473,7 +494,9 @@ async function attemptFlee(character, monster) {
       success: false,
       attacked: true,
       damage: monsterDamage,
-      message: `The monster attacked and dealt ${monsterDamage} hearts of damage!`
+      message: `The monster attacked and dealt ${monsterDamage} hearts of damage!`,
+      attempts: attemptsMade,
+      advantageApplied: advantageAttempts > 1
     };
   } catch (error) {
     handleError(error, 'rngModule.js');

@@ -106,10 +106,9 @@ function normalizeVillageName(name) {
   return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 }
 
-function getCurrentSeason() {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const day = now.getDate();
+function getCurrentSeason(referenceDate = new Date()) {
+  const month = referenceDate.getMonth() + 1;
+  const day = referenceDate.getDate();
   
   // Spring: March 21 - June 20
   if (month === 3 && day >= 21) return 'spring';
@@ -824,6 +823,110 @@ function specialWeatherFlavorText(weatherType) {
   return weatherTextMap[weatherType] || "Unknown weather condition.";
 }
 
+// ------------------- Schedule Guaranteed Special Weather -------------------
+async function scheduleSpecialWeather(village, specialLabel, options = {}) {
+  try {
+    const normalizedVillage = normalizeVillageName(village);
+    if (!normalizedVillage) {
+      throw new Error('A village is required to schedule special weather.');
+    }
+
+    const normalizedLabel = String(specialLabel || '').trim();
+    if (!normalizedLabel) {
+      throw new Error('A special weather label is required to schedule special weather.');
+    }
+
+    const specialEntry = specials.find(
+      (entry) => entry.label.toLowerCase() === normalizedLabel.toLowerCase()
+    );
+
+    if (!specialEntry) {
+      throw new Error(`Unknown special weather label "${specialLabel}".`);
+    }
+
+    const now = new Date();
+    const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+    const startOfNextPeriod = new Date(estTime);
+    startOfNextPeriod.setHours(8, 0, 0, 0);
+    startOfNextPeriod.setDate(startOfNextPeriod.getDate() + 1);
+
+    const endOfNextPeriod = new Date(startOfNextPeriod);
+    endOfNextPeriod.setDate(endOfNextPeriod.getDate() + 1);
+    endOfNextPeriod.setHours(7, 59, 59, 999);
+
+    const startOfNextPeriodUTC = new Date(
+      startOfNextPeriod.getTime() - startOfNextPeriod.getTimezoneOffset() * 60000
+    );
+    const endOfNextPeriodUTC = new Date(
+      endOfNextPeriod.getTime() - endOfNextPeriod.getTimezoneOffset() * 60000
+    );
+
+    let weatherDoc = await Weather.findOne({
+      village: normalizedVillage,
+      date: {
+        $gte: startOfNextPeriodUTC,
+        $lte: endOfNextPeriodUTC
+      }
+    });
+
+    let generatedWeather = null;
+    const seasonForPeriod = getCurrentSeason(startOfNextPeriod);
+
+    if (!weatherDoc) {
+      generatedWeather = await simulateWeightedWeather(normalizedVillage, seasonForPeriod, {
+        useDatabaseHistory: true
+      });
+
+      if (!generatedWeather) {
+        throw new Error(`Failed to generate baseline weather for ${normalizedVillage}.`);
+      }
+
+      weatherDoc = new Weather({
+        village: normalizedVillage,
+        date: startOfNextPeriodUTC,
+        season: seasonForPeriod,
+        temperature: generatedWeather.temperature,
+        wind: generatedWeather.wind,
+        precipitation: generatedWeather.precipitation
+      });
+    } else if (!weatherDoc.season) {
+      weatherDoc.season = seasonForPeriod;
+    }
+
+    weatherDoc.special = {
+      label: specialEntry.label,
+      emoji: specialEntry.emoji,
+      probability: 'Guaranteed (Song of Storms)'
+    };
+
+    const savedWeather = await weatherDoc.save();
+
+    const logContext = {
+      village: normalizedVillage,
+      special: specialEntry.label,
+      startOfPeriod: startOfNextPeriodUTC.toISOString(),
+      triggeredBy: options.triggeredBy || 'Unknown',
+      recipient: options.recipient || null,
+      source: options.source || 'Song of Storms'
+    };
+
+    console.log('[weatherService.js]: 🎵 Scheduled special weather', logContext);
+
+    const serializedWeather =
+      typeof savedWeather.toObject === 'function' ? savedWeather.toObject() : savedWeather;
+
+    return {
+      weather: serializedWeather,
+      startOfPeriod: startOfNextPeriodUTC,
+      endOfPeriod: endOfNextPeriodUTC
+    };
+  } catch (error) {
+    console.error('[weatherService.js]: ❌ Error scheduling special weather:', error);
+    throw error;
+  }
+}
+
 // ------------------- Generate Weather Embed -------------------
 async function generateWeatherEmbed(village, weather, options = {}) {
   try {
@@ -892,12 +995,14 @@ module.exports = {
   // Banner and embed generation
   generateBanner,
   generateWeatherEmbed,
+  specialWeatherFlavorText,
   
   // Utility functions
   getCurrentSeason,
   normalizeVillageName,
   parseFahrenheit,
   parseWind,
+  scheduleSpecialWeather,
   
   // Cache management
   bannerCache
