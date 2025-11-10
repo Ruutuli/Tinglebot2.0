@@ -70,6 +70,12 @@ const SONG_OF_STORMS_SPECIAL_WEATHER = [
   "Rock Slide",
 ];
 
+const WEATHER_EMBED_COLORS = {
+ Rudania: 0xd7342a,
+ Inariko: 0x277ecd,
+ Vhintl: 0x25c059,
+};
+
 function resolveVillageName(input) {
  if (!input || typeof input !== 'string') {
   return null;
@@ -96,6 +102,38 @@ const OTHER_BOOST_CHOICES = [
   { name: "Fortune Teller — Weather Prediction", value: "fortune_teller" },
   { name: "Entertainer — Song of Storms", value: "entertainer" },
 ];
+
+// ------------------- Embed Helpers -------------------
+function createOtherBoostErrorEmbed(options = {}) {
+ const {
+  title = "❌ Unable to Use Boost",
+  description = "Something went wrong while trying to use this boost.",
+  suggestions = [],
+  context = [],
+  footer = "Need help? Ping a moderator and share this message.",
+ } = options;
+
+ const embed = new EmbedBuilder()
+  .setTitle(title)
+  .setDescription(description)
+  .setColor("#E74C3C")
+  .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
+  .setFooter({ text: footer });
+
+ if (Array.isArray(context) && context.length > 0) {
+  embed.addFields(context);
+ }
+
+ if (Array.isArray(suggestions) && suggestions.length > 0) {
+  embed.addFields({
+   name: "How to Resolve",
+   value: suggestions.map((suggestion) => `• ${suggestion}`).join("\n"),
+   inline: false,
+  });
+ }
+
+ return embed;
+}
 
 // ============================================================================
 // ------------------- Utility Functions -------------------
@@ -1048,13 +1086,23 @@ async function handleBoostStatus(interaction) {
 
  const character = await fetchCharacterWithFallback(characterName, userId);
  
- if (!character) {
-  await interaction.reply({
-   content: "You do not own this character.",
-   ephemeral: true,
-  });
-  return;
- }
+if (!character) {
+ const embed = createOtherBoostErrorEmbed({
+  title: "❌ Character Not Found",
+  description: `I can't find **${characterName}** among your characters.`,
+  suggestions: [
+   "Double-check the spelling and capitalization of the character name.",
+   "If this is a mod character, confirm it is assigned to your Discord account.",
+   "Switch to a character you own and run `/boosting other` again.",
+  ],
+ });
+
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: true,
+ });
+ return;
+}
 
  const currentTime = Date.now();
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
@@ -1260,10 +1308,27 @@ async function handleBoostOther(interaction) {
  const activeOtherBoost = hasAcceptedBoost && activeBoost.category === "Other";
 
  if (hasAcceptedBoost && activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
-  await interaction.reply({
-   content: `${characterName}'s boost has expired.`,
-   ephemeral: true,
-  });
+ const embed = createOtherBoostErrorEmbed({
+  title: "⌛ Boost Expired",
+  description: `**${characterName}** no longer has an active boost to draw from.`,
+  suggestions: [
+   "Ask the original booster to accept a new request.",
+   "Run `/boosting request` to set up a fresh boost before using `/boosting other`.",
+  ],
+  context: [
+   {
+    name: "Previous Booster",
+    value: activeBoost?.boostingCharacter ? activeBoost.boostingCharacter : "Unknown",
+    inline: true,
+   },
+  ],
+  footer: "Boosts last 24 hours once accepted.",
+ });
+
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: true,
+ });
   return;
  }
 
@@ -1277,10 +1342,27 @@ async function handleBoostOther(interaction) {
    return;
   }
 
-  await interaction.reply({
-   content: `${characterName}'s active boost is for "${activeBoost.category}", not "Other". This command only works with "Other" category boosts.`,
-   ephemeral: true,
-  });
+ const embed = createOtherBoostErrorEmbed({
+  title: "🎯 Different Boost Active",
+  description: `**${characterName}** is currently boosted for **${activeBoost.category}**, so the Other boost command is locked.`,
+  context: [
+   {
+    name: "Active Boost",
+    value: `${activeBoost.boostingCharacter || "Unknown"} → ${activeBoost.category}`,
+    inline: false,
+   },
+  ],
+  suggestions: [
+   "Use the appropriate command for the active boost category.",
+   "Cancel the boost with `/boosting cancel` if you need to switch categories.",
+   "Request a new boost specifically for the Other category before retrying.",
+  ],
+ });
+
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: true,
+ });
   return;
  }
 
@@ -1300,10 +1382,31 @@ async function handleBoostOther(interaction) {
   effectJob = boostSourceJob || requestedEffectJob;
 
   if (requestedEffectJob && effectJob && requestedEffectJob !== effectJob) {
-   await interaction.reply({
-    content: `This boost was provided by a ${effectJob}. Please choose the matching effect to use it.`,
-    ephemeral: true,
-   });
+  const embed = createOtherBoostErrorEmbed({
+   title: "❌ Effect Mismatch",
+   description: `This boost was granted by a **${effectJob}**, so the selected effect does not line up.`,
+   suggestions: [
+    "Choose the effect that matches the booster’s job from the dropdown.",
+    "If you meant to use the other effect, request a fresh boost from the correct job.",
+   ],
+   context: [
+    {
+     name: "Boosted By",
+     value: activeBoost?.boostingCharacter || "Unknown booster",
+     inline: true,
+    },
+    {
+     name: "Selected Effect",
+     value: requestedEffectJob ? requestedEffectJob : "None",
+     inline: true,
+    },
+   ],
+  });
+
+  await interaction.reply({
+   embeds: [embed],
+   ephemeral: true,
+  });
    return;
   }
 
@@ -1325,94 +1428,253 @@ async function handleBoostOther(interaction) {
  }
 
  if (!effectJob) {
-  await interaction.reply({
-   content: `${characterName} does not have an active boost in the "Other" category. Select which effect to use, or ensure your character has a qualifying boost.`,
-   ephemeral: true,
-  });
+ const embed = createOtherBoostErrorEmbed({
+  title: "🔍 No Other Boost Detected",
+  description: `**${characterName}** does not have an active Other-category boost to channel.`,
+  suggestions: [
+   "Pick the correct effect from the dropdown if you received a boost.",
+   "Run `/boosting status` to confirm the boost category and remaining time.",
+   "Request a new Other boost before using `/boosting other`.",
+  ],
+ });
+
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: true,
+ });
   return;
  }
 
  if (viaBoost && boostSourceJob && effectJob !== boostSourceJob) {
-  await interaction.reply({
-   content: `This boost was provided by a ${boostSourceJob}. Please select the matching effect.`,
-   ephemeral: true,
-  });
+ const embed = createOtherBoostErrorEmbed({
+  title: "🔄 Choose the Matching Effect",
+  description: `This boost originated from a **${boostSourceJob}**, so you must pick that effect to use it.`,
+  suggestions: [
+   "Select the effect that matches the booster’s job.",
+   "If you wanted the alternate effect, cancel and request a new boost from that job.",
+  ],
+  context: [
+   {
+    name: "Boosted By",
+    value: activeBoost?.boostingCharacter || "Unknown booster",
+    inline: true,
+   },
+  ],
+ });
+
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: true,
+ });
   return;
  }
 
  if (!viaBoost) {
   if (effectJob === "Fortune Teller" && !isFortuneTeller) {
+   const embed = new EmbedBuilder()
+    .setTitle("🔮 Weather Prediction Locked")
+    .setDescription(`Only **Fortune Tellers** can seal tomorrow's forecast without an active boost.`)
+    .addFields(
+     {
+      name: "Current Character",
+      value: `${character.name} — ${character.job}`,
+      inline: true,
+     },
+     {
+      name: "How to Unlock",
+      value: [
+       "• Switch to one of your Fortune Teller characters.",
+       "• Or ask an Entertainer or Scholar to boost you, then run `/boosting other` again.",
+      ].join("\n"),
+      inline: false,
+     },
+     {
+      name: "Need a Boost?",
+      value: "Use `/boosting request` to invite a Fortune Teller to share their divination.",
+      inline: false,
+     },
+    )
+    .setColor("#9B59B6")
+    .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
+    .setFooter({ text: "Weather Prediction requires a Fortune Teller or an active boost." });
+
    await interaction.reply({
-    content: `Only Fortune Tellers can use the Weather Prediction ability without an active boost.`,
+    embeds: [embed],
     ephemeral: true,
    });
    return;
   }
 
   if (effectJob === "Entertainer" && !isEntertainer) {
-   await interaction.reply({
-    content: `Only Entertainers can perform the Song of Storms without an active boost.`,
-    ephemeral: true,
-   });
+  const embed = createOtherBoostErrorEmbed({
+   title: "🎵 Song of Storms Locked",
+   description: `Only **Entertainers** can perform the Song of Storms without an active boost.`,
+   suggestions: [
+    "Swap to one of your Entertainer characters to play the melody.",
+    "Ask an Entertainer to boost you, then run `/boosting other` again.",
+   ],
+   context: [
+    {
+     name: "Current Character",
+     value: `${character.name} — ${character.job}`,
+     inline: true,
+    },
+   ],
+  });
+
+  await interaction.reply({
+   embeds: [embed],
+   ephemeral: true,
+  });
    return;
   }
  }
 
  if (viaBoost && !boosterCharacter) {
   logger.error('BOOST', `Missing booster character data for ${activeBoost?.boostingCharacter} while resolving Other boost.`);
-  await interaction.reply({
-   content: `Unable to locate **${activeBoost?.boostingCharacter || 'the boosting character'}** to complete this boost. Please cancel and recreate the request.`,
-   ephemeral: true,
-  });
+ const embed = createOtherBoostErrorEmbed({
+  title: "❌ Booster Data Missing",
+  description: `I can't retrieve **${activeBoost?.boostingCharacter || "the boosting character"}** right now.`,
+  suggestions: [
+   "Cancel the boost with `/boosting cancel`.",
+   "Create a fresh request so the booster can accept again.",
+   "If the issue persists, contact a moderator.",
+  ],
+ });
+
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: true,
+ });
   return;
  }
 
- const staminaPerformer = viaBoost ? boosterCharacter : character;
- const performerName = staminaPerformer?.name || (viaBoost ? activeBoost?.boostingCharacter : characterName);
- const staminaAbilityLabel = effectJob === "Entertainer" ? "perform the Song of Storms" : "deliver the weather prediction";
+const staminaPerformer = viaBoost ? boosterCharacter : character;
+const performerName = staminaPerformer?.name || (viaBoost ? activeBoost?.boostingCharacter : characterName);
+const staminaAbilityLabel = effectJob === "Entertainer" ? "perform the Song of Storms" : "deliver the weather prediction";
+const staminaCost = 1;
+const staminaBefore =
+ typeof staminaPerformer?.currentStamina === "number" ? staminaPerformer.currentStamina : null;
+const staminaMax =
+ typeof staminaPerformer?.maxStamina === "number" ? staminaPerformer.maxStamina : null;
+let staminaAfter = staminaBefore;
+let staminaResult = null;
+let staminaMessage = '';
+let isModStamina = false;
+const normalizedVillage = rawTargetVillage ? resolveVillageName(rawTargetVillage) : null;
+const shouldDeferFortunePrediction = effectJob === "Fortune Teller";
+const staminaUsageMetadata = {
+ source: 'boosting_other',
+ performer: performerName,
+ ability: effectJob,
+ boostRequestId: activeBoost?.boostRequestId || null
+};
 
- if (!staminaPerformer || !staminaPerformer._id) {
-  logger.error('BOOST', `Missing performer data while attempting to deduct stamina for ${performerName} (${effectJob}).`);
-  await interaction.reply({
-   content: `Could not verify which character should spend stamina for this boost. Please try again later or contact staff.`,
-   ephemeral: true,
-  });
-  return;
- }
+if (rawTargetVillage && !normalizedVillage) {
+ const embed = createOtherBoostErrorEmbed({
+  title: "📍 Invalid Village",
+  description: "That village isn't eligible for this effect.",
+  suggestions: [
+   `Pick one of the Song of Storms villages: ${SONG_OF_STORMS_VILLAGES.join(", ")}.`,
+   "Leave the village field blank to let the system choose automatically.",
+  ],
+  context: [
+   {
+    name: "Typed Value",
+    value: rawTargetVillage,
+    inline: true,
+   },
+  ],
+ });
 
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: true,
+ });
+ return;
+}
+
+if (!shouldDeferFortunePrediction && (!staminaPerformer || !staminaPerformer._id)) {
+ logger.error('BOOST', `Missing performer data while attempting to deduct stamina for ${performerName} (${effectJob}).`);
+ const embed = createOtherBoostErrorEmbed({
+  title: "⚠️ Stamina Check Failed",
+  description: "I couldn't determine which character should spend stamina for this action.",
+  suggestions: [
+   "Cancel and recreate the boost to refresh the stored data.",
+   "If the booster changed names, set up the boost again with the updated name.",
+   "Flag this to staff if the problem repeats.",
+  ],
+  context: [
+   {
+    name: "Intended Performer",
+    value: performerName || "Unknown",
+    inline: true,
+   },
+   {
+    name: "Intended Ability",
+    value: effectJob,
+    inline: true,
+   },
+  ],
+ });
+
+ await interaction.reply({
+  embeds: [embed],
+  ephemeral: true,
+ });
+ return;
+}
+
+if (!shouldDeferFortunePrediction) {
  try {
-  const staminaResult = await useStamina(staminaPerformer._id, 1, {
-   source: 'boosting_other',
-   performer: performerName,
-   ability: effectJob,
-   boostRequestId: activeBoost?.boostRequestId || null
-  });
+  staminaResult = await useStamina(staminaPerformer._id, staminaCost, staminaUsageMetadata);
 
   if (staminaResult?.exhausted) {
+   const embed = createOtherBoostErrorEmbed({
+    title: "💤 Stamina Depleted",
+    description: `**${performerName}** is too exhausted to ${staminaAbilityLabel}.`,
+    suggestions: [
+     "Let the character recover stamina before trying again.",
+     "Use items or abilities that restore stamina if available.",
+     "Swap to another qualifying character who has stamina remaining.",
+    ],
+   });
+
    await interaction.reply({
-    content: `❌ **${performerName}** is too exhausted to ${staminaAbilityLabel}.`,
+    embeds: [embed],
     ephemeral: true,
    });
    return;
   }
+
+  staminaMessage = staminaResult?.message || '';
+  isModStamina = /Mod character/i.test(staminaMessage);
+
+  if (!isModStamina && staminaBefore !== null) {
+   staminaAfter = Math.max(0, staminaBefore - staminaCost);
+   staminaPerformer.currentStamina = staminaAfter;
+  } else if (isModStamina) {
+   staminaAfter = staminaBefore;
+  }
  } catch (error) {
   logger.error('BOOST', `Failed to deduct stamina for ${performerName} while using Other boost: ${error.message}`);
+  const embed = createOtherBoostErrorEmbed({
+   title: "❌ Stamina Deduction Failed",
+   description: `I couldn't process the stamina cost for **${performerName}**.`,
+   suggestions: [
+    "Wait a moment and try the command again.",
+    "Cancel and rebuild the boost if the issue continues.",
+    "Reach out to staff with this message if it keeps happening.",
+   ],
+  });
+
   await interaction.reply({
-   content: `❌ Could not use stamina for **${performerName}**. Please try again in a moment.`,
+   embeds: [embed],
    ephemeral: true,
   });
   return;
  }
-
-const normalizedVillage = rawTargetVillage ? resolveVillageName(rawTargetVillage) : null;
-
-if (rawTargetVillage && !normalizedVillage) {
-  await interaction.reply({
-   content: `Invalid village selection. Choose from ${SONG_OF_STORMS_VILLAGES.join(", ")}.`,
-   ephemeral: true,
-  });
-  return;
- }
+}
 
  if (effectJob === "Fortune Teller") {
   const fortuneTeller = viaBoost
@@ -1424,7 +1686,20 @@ if (rawTargetVillage && !normalizedVillage) {
    targetCharacter: character,
    viaBoost,
    activeBoost: viaBoost ? activeBoost : null,
-   providedVillage: normalizedVillage,
+  providedVillage: normalizedVillage,
+  staminaContext: {
+   performerName,
+   staminaCost,
+   staminaBefore,
+   staminaAfter,
+   staminaMax,
+   staminaMessage,
+   isModStamina,
+   performerId: staminaPerformer?._id ? staminaPerformer._id.toString() : null,
+   shouldDeferStamina: shouldDeferFortunePrediction,
+   useStaminaMetadata: staminaUsageMetadata,
+   staminaPerformerRef: staminaPerformer
+  },
   });
   return;
  }
@@ -1456,10 +1731,32 @@ async function executeFortuneTellerPrediction(interaction, options = {}) {
   targetCharacter,
   viaBoost = false,
   activeBoost = null,
-  providedVillage = null,
+ providedVillage = null,
+ staminaContext = {},
  } = options;
 
+const {
+ performerName = fortuneTeller?.name || targetCharacter?.name || 'Unknown',
+ staminaCost = 1,
+ staminaBefore = null,
+ staminaAfter = null,
+ staminaMax = null,
+ staminaMessage = '',
+ isModStamina = false,
+ performerId = null,
+ shouldDeferStamina = false,
+ useStaminaMetadata = null,
+ staminaPerformerRef = null,
+} = staminaContext;
+
+let effectiveStaminaCost = staminaCost;
+let effectiveStaminaAfter = staminaAfter;
+let effectiveStaminaMessage = staminaMessage;
+let effectiveIsModStamina = isModStamina;
+let staminaSpent = !shouldDeferStamina && effectiveStaminaCost > 0;
+
 let selectedVillage = null;
+const staminaAbilityDescription = "deliver the weather prediction";
 
 try {
  const candidateVillages = [
@@ -1577,20 +1874,129 @@ let weatherDocId = weatherDoc?._id ? weatherDoc._id.toString() : null;
   weatherData.season = seasonForPeriod;
  }
 
- if (!weatherData) {
-  throw new Error(`Weather data unavailable for ${selectedVillage}.`);
- }
-
-if (weatherData?.prediction?.lockedAt) {
- const lockedByName = weatherData.prediction.lockedByName || 'another diviner';
- await interaction.reply({
-  content: `❌ **Divination already sealed.** ${lockedByName} has already locked in ${selectedVillage}'s forecast for tomorrow.`,
-  ephemeral: true,
- });
- return;
+if (!weatherData) {
+ throw new Error(`Weather data unavailable for ${selectedVillage}.`);
 }
 
- const forecastTimestamp = Math.floor(startOfNextPeriodUTC.getTime() / 1000);
+const existingPrediction = weatherData?.prediction || null;
+const isAlreadyLocked = Boolean(existingPrediction?.lockedAt);
+
+if (shouldDeferStamina) {
+ if (isAlreadyLocked) {
+  effectiveStaminaCost = 0;
+  effectiveStaminaAfter = staminaBefore;
+  staminaSpent = false;
+  effectiveIsModStamina = false;
+  effectiveStaminaMessage =
+   effectiveStaminaMessage || 'Forecast previously sealed; no stamina spent.';
+ } else {
+  if (!performerId) {
+   logger.error(
+    'BOOST',
+    `Missing performer data while attempting deferred stamina deduction for ${performerName} (Fortune Teller).`
+   );
+   const embed = createOtherBoostErrorEmbed({
+    title: "⚠️ Stamina Check Failed",
+    description: "I couldn't determine which character should spend stamina for this action.",
+    suggestions: [
+     "Cancel and recreate the boost to refresh the stored data.",
+     "If the booster changed names, set up the boost again with the updated name.",
+     "Flag this to staff if the problem repeats.",
+    ],
+    context: [
+     {
+      name: "Intended Performer",
+      value: performerName || "Unknown",
+      inline: true,
+     },
+     {
+      name: "Intended Ability",
+      value: "Fortune Teller",
+      inline: true,
+     },
+    ],
+   });
+
+   await interaction.reply({
+    embeds: [embed],
+    ephemeral: true,
+   });
+   return;
+  }
+
+  const metadata = useStaminaMetadata || {
+   source: 'boosting_other',
+   performer: performerName,
+   ability: 'Fortune Teller',
+   boostRequestId: activeBoost?.boostRequestId || null,
+  };
+
+  try {
+   const deferredResult = await useStamina(performerId, effectiveStaminaCost, metadata);
+
+   if (deferredResult?.exhausted) {
+    const embed = createOtherBoostErrorEmbed({
+     title: "💤 Stamina Depleted",
+     description: `**${performerName}** is too exhausted to ${staminaAbilityDescription}.`,
+     suggestions: [
+      "Let the character recover stamina before trying again.",
+      "Use items or abilities that restore stamina if available.",
+      "Swap to another qualifying character who has stamina remaining.",
+     ],
+    });
+
+    await interaction.reply({
+     embeds: [embed],
+     ephemeral: true,
+    });
+    return;
+   }
+
+   effectiveStaminaMessage = deferredResult?.message || '';
+   effectiveIsModStamina = /Mod character/i.test(effectiveStaminaMessage);
+
+   if (!effectiveIsModStamina && staminaBefore !== null) {
+    effectiveStaminaAfter = Math.max(0, staminaBefore - effectiveStaminaCost);
+   } else if (effectiveIsModStamina) {
+    effectiveStaminaAfter = staminaBefore;
+   }
+
+   if (staminaPerformerRef && typeof staminaPerformerRef === 'object') {
+    staminaPerformerRef.currentStamina = effectiveStaminaAfter;
+   }
+
+   staminaSpent = !effectiveIsModStamina && effectiveStaminaCost > 0;
+  } catch (error) {
+   logger.error(
+    'BOOST',
+    `Failed to deduct stamina for ${performerName} while delivering a weather prediction: ${error.message}`
+   );
+   const embed = createOtherBoostErrorEmbed({
+    title: "❌ Stamina Deduction Failed",
+    description: `I couldn't process the stamina cost for **${performerName}**.`,
+    suggestions: [
+     "Wait a moment and try the command again.",
+     "Cancel and rebuild the boost if the issue continues.",
+     "Reach out to staff with this message if it keeps happening.",
+    ],
+   });
+
+   await interaction.reply({
+    embeds: [embed],
+    ephemeral: true,
+   });
+   return;
+  }
+ }
+}
+
+if (!shouldDeferStamina) {
+ staminaSpent = !effectiveIsModStamina && effectiveStaminaCost > 0;
+}
+
+const forecastTimestamp = existingPrediction?.periodStart
+ ? Math.floor(new Date(existingPrediction.periodStart).getTime() / 1000)
+ : Math.floor(startOfNextPeriodUTC.getTime() / 1000);
  const foretellerName = fortuneTeller?.name || 'a Fortune Teller';
  const targetName = targetCharacter?.name || 'a traveler';
 
@@ -1606,78 +2012,178 @@ if (weatherData?.prediction?.lockedAt) {
  const windLabel = weatherData?.wind?.label || 'Unknown';
  const windProbability = weatherData?.wind?.probability || null;
 
- const forecastLines = [
-  `${precipitationEmoji} ${precipitationLabel}${
-   precipitationProbability ? ` (${precipitationProbability})` : ''
-  }`,
- ];
+const precipitationDisplay = `${precipitationEmoji} ${precipitationLabel}${
+ precipitationProbability ? ` (${precipitationProbability})` : ''
+}`;
 
- if (weatherData?.special?.label) {
-  const specialEmoji = weatherData.special.emoji || '✨';
-  const specialProbability = weatherData.special.probability || null;
-  const specialLine = `✨ ${specialEmoji} ${weatherData.special.label}${
-   specialProbability ? ` (${specialProbability})` : ''
-  }`;
-  forecastLines.push(specialLine.trim());
+const temperatureDisplay = `${temperatureEmoji} ${temperatureLabel}${
+ temperatureProbability ? ` (${temperatureProbability})` : ''
+}`;
+
+const windDisplay = `${windEmoji} ${windLabel}${windProbability ? ` (${windProbability})` : ''}`;
+
+let specialDisplay = null;
+
+if (weatherData?.special?.label) {
+ const specialEmoji = weatherData.special.emoji || '✨';
+ const specialProbability = weatherData.special.probability || null;
+ specialDisplay = `${specialEmoji} ${weatherData.special.label}${
+  specialProbability ? ` (${specialProbability})` : ''
+ }`;
+}
+
+const lockOwnerName = isAlreadyLocked
+ ? existingPrediction?.lockedByName || 'another diviner'
+ : foretellerName;
+
+let lockTimestamp =
+ isAlreadyLocked && existingPrediction?.lockedAt
+  ? new Date(existingPrediction.lockedAt)
+  : new Date();
+if (!(lockTimestamp instanceof Date) || Number.isNaN(lockTimestamp.getTime())) {
+ lockTimestamp = new Date();
+}
+const lockedAtEpoch = lockTimestamp ? Math.floor(lockTimestamp.getTime() / 1000) : null;
+
+const embedColor = WEATHER_EMBED_COLORS[selectedVillage] || 0x9b59b6;
+const summaryEmojis = [
+ precipitationEmoji,
+ temperatureEmoji,
+ windEmoji,
+ weatherData?.special?.emoji || '',
+]
+ .filter(Boolean)
+ .join(' ');
+
+const descriptionLines = [
+ summaryEmojis,
+ isAlreadyLocked
+  ? `**${foretellerName}** revisits the sealed forecast for **${selectedVillage}**.`
+  : `**${foretellerName}** seals tomorrow's forecast for **${selectedVillage}**.`,
+ targetCharacter ? `Divination shared with **${targetName}**.` : null,
+ lockedAtEpoch
+  ? `Locked by **${lockOwnerName}** on <t:${lockedAtEpoch}:f>.`
+  : `Locked by **${lockOwnerName}**.`,
+].filter(Boolean);
+
+const embedFields = [
+ {
+  name: '📍 Village',
+  value: selectedVillage,
+  inline: true,
+ },
+ {
+  name: '📅 Date',
+  value: `<t:${forecastTimestamp}:D>`,
+  inline: true,
+ },
+ {
+  name: '🕰️ Forecast Window',
+  value: `<t:${forecastTimestamp}:F>`,
+  inline: false,
+ },
+ {
+  name: 'Temperature',
+  value: temperatureDisplay,
+  inline: true,
+ },
+ {
+  name: 'Wind',
+  value: windDisplay,
+  inline: true,
+ },
+ {
+  name: 'Precipitation',
+  value: precipitationDisplay,
+  inline: true,
+ },
+];
+
+if (specialDisplay) {
+ embedFields.push({
+  name: 'Special Weather',
+  value: specialDisplay,
+  inline: false,
+ });
+}
+
+if (weatherData?.season) {
+ embedFields.push({
+  name: 'Season',
+  value: weatherData.season.charAt(0).toUpperCase() + weatherData.season.slice(1),
+  inline: true,
+ });
+}
+
+const staminaFieldLabel = viaBoost ? '🪫 Booster Stamina' : '🪫 Stamina';
+const staminaFieldLines = [];
+
+if (staminaSpent && effectiveStaminaCost > 0) {
+ staminaFieldLines.push(`**${performerName}** spent ${effectiveStaminaCost} stamina.`);
+ if (effectiveStaminaAfter !== null && staminaMax !== null) {
+  staminaFieldLines.push(`Remaining: ${effectiveStaminaAfter}/${staminaMax}`);
  }
+}
 
- const insightLine = `**${foretellerName}** reads tomorrow's signs for **${selectedVillage}**.`;
+if (!staminaSpent && shouldDeferStamina && effectiveStaminaCost === 0 && !effectiveStaminaMessage) {
+ staminaFieldLines.push('No stamina spent.');
+}
 
- const embed = new EmbedBuilder()
-  .setTitle('🔮 Weather Prediction')
-  .setDescription(insightLine)
-  .addFields(
-   { name: '📍 Village', value: selectedVillage, inline: true },
-   { name: '📅 Date', value: `<t:${forecastTimestamp}:D>`, inline: true },
-   { name: '🌤️ Tomorrow\'s Skies', value: forecastLines.join('\n'), inline: false },
-   {
-    name: '🌡️ Temperature',
-    value: `${temperatureEmoji} ${temperatureLabel}${
-     temperatureProbability ? ` (${temperatureProbability})` : ''
-    }`,
-    inline: true,
-   },
-   {
-    name: '💨 Wind',
-    value: `${windEmoji} ${windLabel}${windProbability ? ` (${windProbability})` : ''}`,
-    inline: true,
-   },
-  )
-  .setColor('#9B59B6')
-  .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-  .setFooter({ text: 'Weather prediction locked in for tomorrow!' });
+if (effectiveStaminaMessage) {
+ staminaFieldLines.push(effectiveStaminaMessage);
+}
 
- if (weatherData?.season) {
-  embed.addFields({
-   name: '🍃 Season',
-   value: weatherData.season.charAt(0).toUpperCase() + weatherData.season.slice(1),
-   inline: true,
-  });
+if (staminaFieldLines.length) {
+ embedFields.push({
+  name: staminaFieldLabel,
+  value: staminaFieldLines.join('\n'),
+  inline: false,
+ });
+}
+
+if (viaBoost) {
+ embedFields.push({
+  name: '✨ Boost Used',
+  value: `Fortune Teller ${foretellerName}'s Weather Prediction`,
+  inline: false,
+ });
+} else {
+ embedFields.push({
+  name: '✨ Ability',
+  value: "Fortune Teller's Weather Prediction",
+  inline: false,
+ });
+}
+
+if (isAlreadyLocked) {
+ embedFields.push({
+  name: 'Status',
+  value: `Forecast already sealed by **${lockOwnerName}**. Sharing stored results.`,
+  inline: false,
+ });
+}
+
+const embed = new EmbedBuilder()
+ .setTitle('🔮 Weather Prediction')
+ .setColor(embedColor);
+
+if (descriptionLines.length) {
+ embed.setDescription(descriptionLines.join('\n'));
+}
+
+embed.addFields(embedFields);
+embed
+ .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+ .setFooter({ text: 'Forecast sealed. Revisit after the next weather shift.' })
+ .setTimestamp(lockTimestamp);
+
+if (fortuneTeller) {
+ const authorOptions = { name: `${foretellerName} • Fortune Teller` };
+ if (fortuneTeller.icon) {
+  authorOptions.iconURL = fortuneTeller.icon;
  }
-
- if (viaBoost) {
-  embed.addFields({
-   name: '✨ Boost Used',
-   value: `Fortune Teller ${foretellerName}'s Weather Prediction`,
-   inline: false,
-  });
- } else {
-  embed.addFields({
-   name: '✨ Ability Used',
-   value: "Fortune Teller's Weather Prediction",
-   inline: false,
-  });
- }
-
-embed.addFields({
- name: '🔐 Prediction Locked By',
- value: foretellerName,
- inline: true,
-});
-
- if (fortuneTeller?.icon) {
-  embed.setAuthor({ name: foretellerName, iconURL: fortuneTeller.icon });
- }
+ embed.setAuthor(authorOptions);
+}
 
  if (targetCharacter?.icon) {
   embed.setThumbnail(targetCharacter.icon);
@@ -1688,32 +2194,36 @@ embed.addFields({
   ephemeral: false,
  });
 
-const predictionRecord = {
- lockedAt: new Date(),
- lockedById: fortuneTeller?._id ? fortuneTeller._id.toString() : null,
- lockedByName: foretellerName,
- targetCharacterId: targetCharacter?._id ? targetCharacter._id.toString() : null,
- targetCharacterName: targetName,
- viaBoost,
- boostRequestId: viaBoost ? activeBoost?.boostRequestId || null : null,
- periodStart: startOfNextPeriodUTC,
- periodEnd: endOfNextPeriodUTC,
-};
+let predictionRecord = existingPrediction || null;
 
-const weatherRecordId = weatherDocId || (weatherData?._id ? weatherData._id.toString() : null);
+if (!isAlreadyLocked) {
+ predictionRecord = {
+  lockedAt: lockTimestamp,
+  lockedById: fortuneTeller?._id ? fortuneTeller._id.toString() : null,
+  lockedByName: foretellerName,
+  targetCharacterId: targetCharacter?._id ? targetCharacter._id.toString() : null,
+  targetCharacterName: targetName,
+  viaBoost,
+  boostRequestId: viaBoost ? activeBoost?.boostRequestId || null : null,
+  periodStart: startOfNextPeriodUTC,
+  periodEnd: endOfNextPeriodUTC,
+ };
 
-if (weatherRecordId) {
- try {
-  await Weather.updateOne(
-   { _id: weatherRecordId },
-   { $set: { prediction: predictionRecord } }
-  );
-  weatherData.prediction = predictionRecord;
- } catch (updateError) {
-  logger.warn(
-   'BOOST',
-   `Unable to persist prediction lock for ${selectedVillage}: ${updateError.message}`
-  );
+ const weatherRecordId = weatherDocId || (weatherData?._id ? weatherData._id.toString() : null);
+
+ if (weatherRecordId) {
+  try {
+   await Weather.updateOne(
+    { _id: weatherRecordId },
+    { $set: { prediction: predictionRecord } }
+   );
+   weatherData.prediction = predictionRecord;
+  } catch (updateError) {
+   logger.warn(
+    'BOOST',
+    `Unable to persist prediction lock for ${selectedVillage}: ${updateError.message}`
+   );
+  }
  }
 }
 
@@ -1739,12 +2249,15 @@ if (weatherRecordId) {
   }
  }
 
- logger.info(
-  'BOOST',
-  `🔮 Weather prediction locked for ${selectedVillage}: ${precipitationLabel}${
-   weatherData?.special?.label ? ` + ${weatherData.special.label}` : ''
-  }${viaBoost ? ` (boost by ${foretellerName})` : ''}`
- );
+const logAction = isAlreadyLocked ? '🔁 Weather prediction retrieved' : '🔮 Weather prediction locked';
+logger.info(
+ 'BOOST',
+ `${logAction} for ${selectedVillage}: ${precipitationLabel}${
+  weatherData?.special?.label ? ` + ${weatherData.special.label}` : ''
+ }${viaBoost ? ` (boost by ${foretellerName})` : ''}${
+  isAlreadyLocked ? ` (originally sealed by ${lockOwnerName})` : ''
+ }`
+);
 } catch (error) {
  logger.error(
   'BOOST',
@@ -1775,9 +2288,10 @@ async function executeSongOfStorms(interaction, options) {
   providedVillage = null
  } = options || {};
 
- const selectedVillage = SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
- const selectedWeather = SONG_OF_STORMS_SPECIAL_WEATHER[Math.floor(Math.random() * SONG_OF_STORMS_SPECIAL_WEATHER.length)];
- const overrideProvided = Boolean(providedVillage);
+const resolvedVillage = providedVillage ? resolveVillageName(providedVillage) : null;
+const selectedVillage = resolvedVillage || SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
+const selectedWeather = SONG_OF_STORMS_SPECIAL_WEATHER[Math.floor(Math.random() * SONG_OF_STORMS_SPECIAL_WEATHER.length)];
+const manualSelection = Boolean(resolvedVillage);
 
  try {
   const scheduleResult = await scheduleSpecialWeather(selectedVillage, selectedWeather, {
@@ -1790,8 +2304,14 @@ async function executeSongOfStorms(interaction, options) {
    ? Math.floor(scheduleResult.startOfPeriod.getTime() / 1000)
    : Math.floor((Date.now() + 86400000) / 1000);
 
- const performerName = entertainer?.name || 'An Entertainer';
- const description = `**${performerName}** performs the Song of Storms, letting the winds decide where tomorrow's spectacle unfolds.`;
+const performerName = entertainer?.name || 'An Entertainer';
+const description = manualSelection
+ ? `**${performerName}** performs the Song of Storms, guiding tomorrow's spectacle toward **${selectedVillage}**.`
+ : `**${performerName}** performs the Song of Storms, letting the winds decide where tomorrow's spectacle unfolds.`;
+
+const selectionFieldValue = manualSelection
+ ? `The melody is directed to **${selectedVillage}**. The exact weather remains hidden until the town halls share tomorrow's forecast.`
+ : "The melody chooses randomly among Rudania, Inariko, and Vhintl. The exact village and weather remain hidden until the town halls post tomorrow's forecast.";
 
   const embed = new EmbedBuilder()
    .setTitle("🎵 Song of Storms")
@@ -1799,7 +2319,7 @@ async function executeSongOfStorms(interaction, options) {
    .addFields([
     {
      name: "🎲 Selection",
-     value: "The melody chooses randomly among Rudania, Inariko, and Vhintl. The exact village and weather remain hidden until the town halls post tomorrow's forecast.",
+    value: selectionFieldValue,
      inline: false
     },
     {
@@ -1816,13 +2336,13 @@ async function executeSongOfStorms(interaction, options) {
    embed.addFields({ name: "✨ Boost Used", value: `Entertainer ${entertainer.name}'s Song of Storms`, inline: false });
   }
 
-  if (overrideProvided) {
-   embed.addFields({
-    name: "⚠️ Note",
-    value: "Manual village selections are ignored—Song of Storms always lets the winds decide.",
-    inline: false
-   });
-  }
+ if (manualSelection) {
+  embed.addFields({
+   name: "📍 Village",
+   value: selectedVillage,
+   inline: true
+  });
+ }
 
   await interaction.reply({
    embeds: [embed],
@@ -1840,7 +2360,7 @@ async function executeSongOfStorms(interaction, options) {
 
   logger.info(
    'BOOST',
-   `🎵 Song of Storms triggered by ${entertainer?.name || 'Unknown'}${recipient ? ` for ${recipient.name}` : ''}: ${selectedWeather} in ${selectedVillage}`
+  `🎵 Song of Storms triggered by ${entertainer?.name || 'Unknown'}${recipient ? ` for ${recipient.name}` : ''}: ${selectedWeather} in ${selectedVillage}${manualSelection ? ' (manual selection)' : ''}`
   );
  } catch (error) {
   logger.error(
