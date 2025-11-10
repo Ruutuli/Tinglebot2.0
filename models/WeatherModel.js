@@ -30,6 +30,17 @@ const WeatherSchema = new mongoose.Schema({
     emoji: String,
     probability: String
   },
+  prediction: {
+   lockedAt: Date,
+   lockedById: String,
+   lockedByName: String,
+   targetCharacterId: String,
+   targetCharacterName: String,
+   viaBoost: Boolean,
+   boostRequestId: String,
+   periodStart: Date,
+   periodEnd: Date
+  },
   season: {
     type: String,
     required: true,
