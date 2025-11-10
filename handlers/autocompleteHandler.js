@@ -1706,12 +1706,14 @@ async function handleBoostingVillageAutocomplete(
    currentVillage = character?.currentVillage || null;
   }
 
-  const allVillages = getAllVillages();
-  const availableVillages = typeof currentVillage === 'string'
-   ? allVillages.filter((village) => village.toLowerCase() !== currentVillage.toLowerCase())
-   : allVillages;
-
   const isScholarGathering = boosterCharacter?.job === 'Scholar' && category === 'Gathering';
+  const allVillages = getAllVillages();
+
+  const availableVillages =
+   isScholarGathering && typeof currentVillage === 'string'
+    ? allVillages.filter((village) => village.toLowerCase() !== currentVillage.toLowerCase())
+    : allVillages;
+
   const labelSuffix = isScholarGathering ? 'Required for Scholar Gathering' : 'Optional target village';
 
   const choices = availableVillages.map((village) => ({
