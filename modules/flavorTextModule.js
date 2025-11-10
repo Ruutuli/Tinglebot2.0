@@ -856,237 +856,257 @@ const BOOST_FLAVOR_MESSAGES = {
   // Job-specific boost messages
   Scholar: {
     Healers: [
-      "📚 Efficient Recovery techniques allow both healer and patient to regain stamina after healing.",
-      "🎓 Scholarly knowledge of energy management ensures the healing process itself restores vitality.",
-      "📖 The Scholar's methods optimize recovery, granting stamina to both parties after treatment.",
-      "🔍 Academic expertise in healing sciences enhances stamina recovery for all involved.",
-      "📚 Research-based techniques ensure efficient energy transfer during the healing process.",
-      "🎓 The Scholar's understanding of the body's energy flow benefits both healer and patient."
+      "📚 Efficient Recovery keeps the tempo precise—both healer and patient immediately regain +1 stamina as the lesson wraps.",
+      "🎓 Study-breath drills click into place; healer and recipient each reclaim one stamina before the poultice cools.",
+      "📖 Annotated checklists trim wasted effort, handing +1 stamina back to everyone involved in the treatment."
     ],
-    Gathering: (targetRegion) => [
-      `📚 Thanks to your boost, you gathered this item that is normally found in ${targetRegion}!`,
-      `🎓 Your scholarly insight revealed treasures from ${targetRegion}!`,
-      `📖 The Scholar's knowledge of ${targetRegion} led to this discovery!`,
-      `🔍 Cross-region expertise uncovered ${targetRegion}'s hidden bounty!`,
-      `📚 The Scholar's research of ${targetRegion} proved invaluable!`,
-      `🎓 Thanks to scholarly wisdom, ${targetRegion} shared its secrets!`,
-      `📖 Your boost granted access to ${targetRegion}'s natural resources!`,
-      `🔍 The Scholar's guidance revealed ${targetRegion}'s hidden treasures!`,
-      `📚 Academic knowledge of ${targetRegion} made this gathering possible!`,
-      `🎓 Scholarly expertise unlocked ${targetRegion}'s natural wealth!`,
-      `📖 Your boost tapped into ${targetRegion}'s regional specialties!`,
-      `🔍 The Scholar's insight revealed ${targetRegion}'s local treasures!`,
-      `📚 Thanks to your boost, you accessed ${targetRegion}'s unique resources!`,
-      `🎓 Scholarly knowledge of ${targetRegion} led to this valuable find!`,
-      `📖 Your boost revealed ${targetRegion}'s regional bounty!`,
-      `🔍 The Scholar's expertise uncovered ${targetRegion}'s hidden gems!`,
-      `📚 Cross-region insight revealed ${targetRegion}'s natural treasures!`,
-      `🎓 Thanks to your boost, you discovered ${targetRegion}'s local specialties!`,
-      `📖 Scholarly wisdom granted access to ${targetRegion}'s resources!`,
-      `🔍 Your boost unlocked ${targetRegion}'s regional knowledge!`,
-      `📚 The Scholar's research revealed ${targetRegion}'s hidden wealth!`,
-      `🎓 Academic expertise made ${targetRegion}'s treasures accessible!`,
-      `📖 Your boost tapped into ${targetRegion}'s natural knowledge!`,
-      `🔍 Scholarly insight revealed ${targetRegion}'s local bounty!`
-    ],
+    Gathering: (options = {}) => {
+      const region = options?.targetRegion || "a far-off province";
+      return [
+        `📚 Cross-Region Insight rewrites the chart—you gather straight from ${region} without leaving camp.`,
+        `🎓 Scholarly atlases overlay the map so today's haul mirrors ${region}'s own gather table.`,
+        `📖 Field notes ferry ${region}'s resources into your pack as if you'd trekked there yourself.`,
+        `🔍 Research dossiers hijack the loot pool; every roll now pulls from ${region}'s specialties.`
+      ];
+    },
     Crafting: [
-      "📚 Scholarly research enhances your crafting, resulting in superior quality.",
-      "🎓 Academic knowledge improves your technique, creating exceptional items.",
-      "📖 Your studies pay off as you craft with scholarly precision.",
-      "🔍 Research-backed methods produce outstanding results."
+      "📚 Resource Optimization shaves roughly 30% off the materials, rounded smartly so nothing essential is lost.",
+      "🎓 Ledger math trims the recipe by a third, leaving your stores noticeably heavier after the build.",
+      "🔍 Research-backed plans pare material costs down by 30%, with sensible rounding to keep the work tidy."
     ],
     Exploring: [
-      "📚 Your scholarly knowledge guides your exploration, revealing hidden secrets.",
-      "🎓 Academic expertise enhances your discoveries, uncovering rare findings.",
-      "📖 The Scholar's wisdom illuminates your path through unknown territories.",
-      "🔍 Research-based exploration leads to exceptional discoveries."
+      "📚 Lecture notes whisper of hidden lore—there’s a one-in-four chance the find flips into a story-rich discovery.",
+      "🎓 A historian's hunch nudges the roll toward ancient clues, sometimes rewriting the outcome entirely.",
+      "🔍 Archival prep makes lore rewards far likelier; every quadrant feels primed for a tale."
+    ],
+    Looting: [
+      "📚 Double Haul tallies the spoils twice—Scholarly prep doubles the quantity on a successful loot.",
+      "🎓 Workbook margins ensured space for backups; every item you pull arrives with a twin.",
+      "🔍 The inventory plan calls for duplicates, so the loot chest yields everything in pairs."
+    ],
+    Stealing: [
+      "📚 Calculated Grab leaves one more slot open in the ledger—add +1 extra item to the take.",
+      "🎓 Meticulous pocket diagrams make space for an additional trinket while you slip away.",
+      "🔍 Planning ahead nets one more prize; the haul grows by an extra item."
+    ],
+    Tokens: [
+      "📚 Research Stipend bumps the payout—written submissions cash in at 150% of their usual tokens.",
+      "🎓 Annotated drafts wow the judges, pushing the token reward up by half again.",
+      "🔍 Scholarly citations impress the panel, inflating the token total by 50%."
+    ],
+    Traveling: [
+      "📚 Travel Guide adds a bonus road gather result to the itinerary, keeping the best surprises coming.",
+      "🎓 A penned itinerary earns you +1 extra roll on the roadside haul chart.",
+      "🔍 Route notes insist on an additional road gather, padding the journey with extra finds."
     ],
     default: [
-      "📚 Scholarly knowledge enhances your abilities, providing an academic edge.",
-      "🎓 Your studies pay off as you perform with scholarly precision.",
-      "📖 Academic expertise improves your technique in all endeavors.",
-      "🔍 Research-backed methods produce superior results."
+      "📚 Scholarly planning keeps every action efficient—exactly as the ledgers foretold.",
+      "🎓 Study sessions translate seamlessly into on-field advantages.",
+      "🔍 Research-backed methods bend the odds toward the outcome you calculated."
     ]
   },
   Teacher: {
     Gathering: [
-      "📚 The Teacher's wisdom guided your hand to this practical material.",
-      "🎓 Thanks to your Teacher's guidance, you found something truly useful.",
-      "📖 The Teacher's knowledge revealed the value in what others might overlook.",
-      "🔍 Your Teacher's insight led you to gather something worth crafting with.",
-      "📚 Practical wisdom ensured you collected materials that serve a purpose.",
-      "🎓 The Teacher's guidance helped you avoid junk and find real value.",
-      "📖 Your Teacher's knowledge revealed the hidden usefulness in this material.",
-      "🔍 Thanks to scholarly guidance, you gathered something worth keeping.",
-      "📚 The Teacher's wisdom ensured you found materials for crafting or daily life.",
-      "🎓 Your Teacher's insight led you to practical, valuable materials.",
-      "📖 Scholarly knowledge helped you distinguish useful items from junk.",
-      "🔍 The Teacher's guidance revealed materials that serve a real purpose.",
-      "📚 Thanks to your Teacher, you gathered something truly worthwhile.",
-      "🎓 The Teacher's wisdom ensured you found materials worth the effort.",
-      "📖 Your Teacher's knowledge led you to practical, usable materials.",
-      "🔍 Scholarly guidance helped you avoid waste and find real value."
+      "📚 Practical Wisdom filters the table—only useful crafting stock makes it into your basket.",
+      "🎓 The Teacher keeps junk off the list so every pull is something the village can actually use.",
+      "🔍 Lesson plans cull the clutter, leaving your bag filled with reliable materials."
     ],
     Crafting: [
-      "🎓 The Teacher's guidance improves your crafting technique, creating practical items.",
-      "📚 Educational wisdom enhances your ability to craft useful tools and gear.",
-      "📖 Your teaching experience pays off as you create items with practical value.",
-      "🔍 Practical knowledge ensures your crafted items serve real purposes."
+      "🎓 Stamina Assistance splits the bill—the Teacher fronts up to 3 stamina so you don't shoulder it alone.",
+      "📚 Classroom coaching means as much as three stamina comes straight from the mentor's reserves.",
+      "🔍 Shared effort knocks up to 3 stamina off your personal cost while the Teacher covers the gap."
+    ],
+    Looting: [
+      "🎓 Combat Insight adds a studied flourish—loot rolls climb by 20% after the lecture.",
+      "📚 Weak-point diagrams pay off, nudging the loot check up by a solid fifth.",
+      "🔍 Tactical notes sharpen your timing so the loot value surges by twenty percent."
+    ],
+    Tokens: [
+      "🎓 Critique & Composition turns sketches into showcases—visual submissions pay 50% more tokens.",
+      "📚 Structured feedback elevates the piece, bumping the final token haul by half again.",
+      "🔍 The mentor's critique doubles as promotion, rewarding the art with a 1.5x token payout."
+    ],
+    Traveling: [
+      "🎓 Field Lesson reviews the first two roadside finds and keeps whichever holds the higher rarity.",
+      "📚 Study-on-the-go lets you compare the opening road hauls and keep the better prize.",
+      "🔍 The Teacher weighs the first two results, stashing whichever rarity shines brightest."
     ],
     Stealing: {
       success: [
-        "🎓 Tactical Risk is ready, but you didn’t need it—your Teacher’s calm guidance kept the plan flawless.",
-        "📚 The Teacher’s steadiness never came into play; success arrived before you needed the safety net.",
-        "📖 Lessons well learned—no stumble meant Tactical Risk stayed holstered for another day.",
-        "🔍 Guidance paid off so well the extra grace wasn’t needed this time."
+        "🎓 Tactical Risk stayed holstered—the plan was flawless before you needed the safety net.",
+        "📚 Guidance paid off; success came early and the extra grace remains unused.",
+        "📖 Lessons well learned left no slip-ups, so the backup chance remains untouched."
       ],
       failure: [
         "🎓 Tactical Risk grants you one more failed attempt before the guards haul you to jail.",
-        "📚 The Teacher's lessons steady your nerves, allowing an extra failed steal before jail time kicks in.",
-        "📖 Thanks to Tactical Risk, you can stumble one more time before the cell doors slam shut.",
-        "🔍 Guidance from your Teacher buys you an additional failed attempt before jail is triggered."
+        "📚 The Teacher's steadying hand buys you an extra failed steal before the cell door closes.",
+        "🔍 Coaching cues earn you another mulligan—the next failure still won’t send you to jail."
       ],
       default: [
         "🎓 Tactical Risk grants you one more failed attempt before the guards haul you to jail."
       ]
     },
     Healers: [
-      "📚 Temporary Fortitude grants the patient +2 temporary hearts that persist until they take damage.",
-      "🎓 The Teacher's wisdom strengthens the patient's resilience, providing extra protection after healing.",
-      "📖 Educational guidance enhances recovery, granting temporary hearts that shield until next injury.",
-      "🔍 Practical knowledge ensures the patient gains additional temporary vitality that lasts until damaged.",
-      "📚 The Teacher's insight fortifies the patient with extra hearts that remain until they take harm.",
-      "🎓 Scholarly wisdom provides temporary fortification, adding +2 hearts that persist through the next damage."
+      "📚 Temporary Fortitude grants the patient +2 temporary hearts that linger until damage finally lands.",
+      "🎓 The Teacher braces the patient with two bonus hearts that last right up until they’re struck.",
+      "🔍 Coaching breaths build a +2 heart buffer, sticking around until the next injury."
     ],
     default: [
-      "🎓 The Teacher's wisdom enhances your abilities with practical knowledge.",
-      "📚 Educational experience improves your technique in all endeavors.",
-      "📖 Your teaching background provides practical insights for better results.",
-      "🔍 Practical wisdom ensures your efforts produce useful outcomes."
+      "🎓 The Teacher keeps everyone on-task, turning diligent study into tangible perks.",
+      "📚 Educational experience cancels weaknesses before they surface.",
+      "🔍 Practical wisdom trims mistakes before they ever happen."
     ]
   },
   Priest: {
     Gathering: [
-      "🙏 Blessed by divine favor, this item radiates with sacred energy.",
-      "✨ A gift from the heavens, found after meeting with a priest.",
-      "🌟 Touched by the divine, this item carries ancient blessings.",
-      "💫 Sacred and pure, this item seems to glow with inner light.",
-      "🙏 The priest's blessing has revealed this divine treasure.",
-      "✨ Divine intervention has guided your hand to this sacred item.",
-      "🌟 Blessed by the gods, this item hums with spiritual power.",
-      "💫 A holy relic, discovered through divine guidance.",
-      "🙏 The priest's prayers have led you to this blessed find.",
-      "✨ Sacred energy flows through this divinely-gifted item.",
-      "🌟 A heavenly blessing has revealed this spiritual treasure.",
-      "💫 Touched by the divine, this item carries ancient wisdom.",
-      "🙏 Blessed by the priest's guidance, this sacred item is yours.",
-      "✨ Divine favor has shone upon your gathering efforts.",
-      "🌟 A holy blessing has revealed this spiritual artifact.",
-      "💫 Sacred and pure, this item glows with divine energy."
+      "🙏 Divine Favor tilts the table toward consecrated relics—holy curios seem eager to be found.",
+      "✨ Prayers weight the rolls so spiritually attuned materials drift straight into your pack.",
+      "🌟 The blessing swaps mundane scraps for relic-grade treasures with sacred ease."
     ],
     Crafting: [
-      "🙏 Divine blessing enhances your crafting, creating items of sacred quality.",
-      "✨ Holy favor improves your technique, resulting in spiritually significant items.",
-      "🌟 Sacred energy guides your hands as you craft with divine inspiration.",
-      "💫 The Priest's blessing ensures your crafted items carry spiritual significance."
+      "🙏 Spiritual Efficiency trims crafting stamina by about 30%, always saving at least one when the task costs two or more.",
+      "✨ Holy tempo lightens the labor—expect roughly a third less stamina spent, never dipping below a one-point discount.",
+      "💫 A quiet hymn loosens the strain, cutting stamina usage by nearly a third (minimum one saved)."
     ],
     Healers: [
-      "✨ Spiritual Cleanse purifies the patient's body, removing all active debuffs during the healing process.",
-      "🙏 Divine intervention cleanses the soul, erasing harmful effects as health is restored.",
-      "🌟 Sacred energy washes away corruption, leaving the patient free of afflictions.",
-      "💫 The Priest's blessing purifies body and spirit, removing all debuffs while healing.",
-      "✨ Holy light dispels all negative effects, granting the patient a clean recovery.",
-      "🙏 Spiritual healing cleanses the patient completely, removing all active debuffs."
+      "✨ Spiritual Cleanse purges every active debuff as the healing takes hold.",
+      "🙏 Divine intervention wipes corruption clean, leaving the patient free of ailments.",
+      "🌟 Sacred light scorches away harmful effects while the hearts refill."
     ],
     Looting: [
-      "🙏 Divine Blessing guides your hand to the most precious treasure the monster possessed.",
-      "✨ Sacred blessing ensures you receive the highest quality loot from your victory.",
-      "🌟 Holy intervention reveals the monster's most valuable treasure to you.",
-      "💫 The Priest's blessing guarantees you claim the finest prize from the encounter.",
-      "🙏 Divine guidance leads you to the monster's most treasured possession.",
-      "✨ Sacred blessing ensures you obtain the most valuable loot available.",
-      "🌟 Heavenly blessing reveals the monster's greatest treasure to you.",
-      "💫 The Priest's divine intervention secures the finest loot for you."
+      "🙏 Divine Blessing commands the tables to hand over the monster's highest-tier treasure.",
+      "✨ Sacred decree skips lesser baubles—only the finest prize remains for you.",
+      "💫 Holy writ secures the rarest spoil; nothing short of the top reward will answer."
     ],
     Stealing: [
-      "🙏 Merciful Sentence halves the jail term, granting early release when faith intervenes.",
-      "✨ Divine mercy lightens the punishment—your sentence is reduced thanks to a Priest's blessing.",
-      "🌟 Sacred clemency shortens the stay behind bars under the Merciful Sentence.",
-      "💫 Holy intervention eases your punishment, halving jail time through the Priest's grace.",
-      "🙏 A Priest's Merciful Sentence softens the judgment, granting an early release."
+      "🙏 Merciful Sentence halves the jail term if the heist goes south—faith pleads your case.",
+      "✨ Divine mercy cuts any jail time in two, turning hard time into a brief repentance.",
+      "🌟 Sacred clemency slices the sentence by half, letting you out twice as fast."
+    ],
+    Tokens: [
+      "🙏 Blessed Economy sweetens every trade—sell orders pay 10% more while purchases cost 10% less.",
+      "✨ The altar's favor boosts outgoing sales by ten percent and trims buying costs by the same margin.",
+      "🌟 Sacred markets lean in your favor: +10% on sales, -10% on purchases."
+    ],
+    Traveling: [
+      "🙏 Restful Blessing adds +2 hearts whenever you rest on the road, sung softly over the campfire.",
+      "✨ A gentle hymn tops off the party with two bonus hearts during travel rests.",
+      "🌟 The priest’s lullaby grants +2 hearts each time the group beds down on the trail."
     ],
     default: [
-      "🙏 Divine blessing enhances your abilities with sacred power.",
-      "✨ Holy favor improves your technique with spiritual guidance.",
-      "🌟 Sacred energy illuminates your path to better results.",
-      "💫 The Priest's blessing ensures your efforts carry divine significance."
+      "🙏 Divine guidance walks beside you, turning every action into a small miracle.",
+      "✨ Holy favor wraps your efforts in soft light and kinder odds.",
+      "🌟 Sacred energy keeps the path clear and the results blessed."
     ]
   },
   Entertainer: {
-    Gathering: [
-      "🎭 The Entertainer's charm attracts extra treasures, leading to bonus discoveries.",
-      "🎪 Performance magic enhances your gathering, revealing additional valuable items.",
-      "🎨 Artistic flair guides your search, uncovering extra resources with style.",
-      "🎪 The Entertainer's presence brings good fortune, resulting in bonus finds.",
-      "🎭 Charismatic energy enhances your gathering, leading to extra discoveries.",
-      "🎪 Performance skills improve your luck, revealing additional valuable items.",
-      "🎨 Creative spirit guides your hands to bonus treasures.",
-      "🎪 The Entertainer's magic ensures you find extra resources with flair."
+    Gathering: (options = {}) => {
+      const bonus = options?.bonusItemName;
+      const bonusLine = bonus
+        ? `the troupe's marked keepsake **${bonus}** joins the haul for free`
+        : "a performer-marked curio hops into the haul for free";
+      return [
+        `🎭 Minuet of Forest slips into a bright refrain—${bonusLine}.`,
+        `🎪 The melody rewrites the loot so the Entertainer's bonus item appears alongside the rest.`,
+        `🎨 Stagecraft swaps in the troupe's signature prize, gifting you the themed extra with flair.`
+      ];
+    },
+    Crafting: [
+      "🎭 Song of Double Time keeps the rhythm quick—produce one extra crafted item at no additional cost.",
+      "🎪 The performance echoes through the workshop, yielding a bonus copy without touching the stores.",
+      "🎨 Artistic tempo lets the project finish with an extra piece for free."
     ],
     Looting: [
-      "🎭 Your performance dazzles monsters, reducing the damage they inflict.",
-      "🎪 The Entertainer's flair confuses enemies, softening their blows.",
-      "🎨 Theatrical presence distracts monsters, making their attacks less effective.",
-      "🎭 Showmanship mesmerizes foes, weakening their assault.",
-      "🎪 Performance magic shields you from the worst of enemy attacks.",
-      "🎨 Your artistic flair leaves monsters bewildered, reducing their impact.",
-      "🎭 The Entertainer's charm deflects some of the monster's fury.",
-      "🎪 Captivating performance reduces the monster's effectiveness in battle."
+      "🎭 Requiem of Spirit dazzles the foe, chopping incoming damage by one heart for every two monster tiers (raids included).",
+      "🎪 Showstopping footwork blunts the blow—subtract a heart per two tiers the enemy carries.",
+      "🎨 Stage presence steals their fury, reducing the strike by one heart for every couple of tiers."
+    ],
+    Stealing: [
+      "🎭 Elegy of Emptiness doubles the weight of higher-tier loot entries when the steal succeeds—rarities flock to your pockets.",
+      "🎨 The afterimage trick lures upscale prizes; successful steals see high-tier rewards weighted twice as heavy.",
+      "🎪 Shadow doubles guide your hands so the rarer options dominate the take whenever the steal lands."
+    ],
+    Tokens: [
+      "🎭 Ballad of the Goddess is passive magic—just showing up in the RP guarantees everyone the bonus token payout.",
+      "🎪 The troupe's anthem quietly awards the group their bonus tokens so long as an Entertainer is on stage.",
+      "🎨 Background harmonies handle the paperwork; the extra tokens trigger automatically for the whole party."
+    ],
+    Traveling: [
+      "🎵 Bolero of Fire grants two escape rolls from a road ambush—keep the stronger result.",
+      "🎪 The rhythm splits the odds, letting you roll twice to flee danger and hold the better attempt.",
+      "🎭 A double measure buys a second escape roll, and you stride away with the higher outcome."
     ],
     Healers: [
-      "🎵 The Song of Healing resonates through the patient's body, granting an extra heart of recovery when reviving from unconsciousness.",
-      "🎼 Musical vibrations enhance the healing process, ensuring the patient gains additional strength upon revival.",
-      "🎶 The Entertainer's melody soothes the wounded soul, providing bonus healing when bringing someone back from the brink.",
-      "🎵 Harmonious tones amplify the healer's efforts, granting an extra heart to those revived from critical condition.",
-      "🎼 The power of song strengthens the revival process, ensuring the patient recovers with additional vitality.",
-      "🎶 Melodic healing enhances the recovery, granting one extra heart when the patient returns from unconsciousness."
+      "🎵 Song of Healing resonates through the patient, granting an extra heart when they rise from 0 HP.",
+      "🎼 Musical vibrations bolster the revival, gifting +1 heart as consciousness returns.",
+      "🎶 A gentle encore ensures anyone revived grabs an additional heart of strength."
+    ],
+    Other: [
+      "🎵 Song of Storms cues tomorrow's spectacle—one village wakes to guaranteed special weather.",
+      "🎪 The melody rewrites the forecast, promising a dramatic weather event at dawn.",
+      "🎨 Crescendoed chords earmark a village for tomorrow's special skies."
     ],
     default: [
-      "🎭 The Entertainer's charm enhances your abilities with extra flair.",
-      "🎪 Performance magic improves your technique with artistic style.",
-      "🎨 Creative energy guides your efforts to better results.",
-      "🎪 The Entertainer's presence brings good fortune to all endeavors."
+      "🎭 Curtains rise and the odds sway in your favor—showmanship changes the script.",
+      "🎪 Performance magic adds flourish and function to everything you attempt.",
+      "🎨 Creative energy keeps the party in rhythm, turning daring plans into crowd-pleasers."
     ]
   },
   FortuneTeller: {
+    Crafting: [
+      "🔮 Foresight in Sales scripts the ledger—crafted goods earn 20% more tokens when you finally sell them.",
+      "✨ Prophetic price-setting bumps the eventual sale value by a fifth.",
+      "🌟 The vision locks in a 20% token premium for every item you craft today."
+    ],
+    Gathering: (options = {}) => {
+      const region = options?.targetRegion || "that distant region";
+      return [
+        `📚 Cross-Region Insight swaps the gather list—you pull treasures normally found in ${region}.`,
+        `🎓 Scholarly foresight drags ${region}'s table onto your map without the travel time.`,
+        `🔍 Destiny redraws the chart so ${region}'s rarities fall into your satchel here and now.`
+      ];
+    },
     Healers: [
-      "🔮 Predictive Healing allows the Fortune Teller to foresee the need, reducing the stamina cost for healing.",
-      "✨ Prophetic insight reveals the most efficient healing methods, conserving the healer's energy.",
-      "🌟 Fortunetelling knowledge predicts the optimal moment, making healing less taxing on stamina.",
-      "💫 The Fortune Teller's vision foresaw this healing, allowing it to cost significantly less stamina.",
-      "🔮 Premonition of the healing need ensures the process is more energy-efficient.",
-      "✨ Fortune's guidance optimizes the healing process, reducing the stamina required."
+      "🔮 Predictive Healing halves the stamina cost (rounded up) before you even lay out the bandages.",
+      "✨ Prophetic timing slices the stamina bill by 50%, rounded to the nearest mercy.",
+      "💫 Fortune's guidance whispers the sequence, trimming the stamina expense to half, rounded up."
+    ],
+    Looting: [
+      "🔮 Fated Reroll stands ready—if a loot attempt leaves you bruised, destiny grants a second roll.",
+      "✨ The vision catches a rough outcome; take a reroll if the monster managed to land a hit.",
+      "🌟 Should damage spill, fate compels a reroll in search of a kinder result."
+    ],
+    Stealing: [
+      "🔮 Predicted Opportunity marks the perfect moment—steal success chances jump by +20% (never above flawless).",
+      "✨ A whispered cue adds twenty percentage points to the steal attempt without breaking the cap.",
+      "🌟 The seer times your grab, granting +20% success chance while respecting the natural ceiling."
+    ],
+    Tokens: [
+      "🔮 Fortunate Exchange sweetens every sale by 10% when you trade with village shops.",
+      "✨ Market omens ensure wares fetch ten percent more tokens at the counter.",
+      "🌟 The teller's haggling script nets a flat +10% token bonus on sales."
     ],
     Traveling: [
-      "🔮 Thanks to foresight, you anticipated dangerous weather and chose a safe detour.",
-      "✨ The Fortune Teller's blessing revealed an unhindered route—travel continues despite the storm.",
-      "🌟 A vision warned you ahead of time; you bypassed the hazard and pressed on.",
-      "💫 Prophetic insight guided your steps around the danger. The path remained clear.",
-      "🗺️ Foresight marked a safe corridor through the region—no delays from the weather.",
-      "🌬️ You saw the danger before it formed and avoided it entirely, traveling without interruption."
+      "🔮 Foresight Detour charts a safe route—weather roadblocks can't halt the party today.",
+      "✨ Prophetic maps nullify storms, letting you travel even when the skies say stay put.",
+      "🌟 A crystal vision spots the dry path; the weather can’t bar your way."
+    ],
+    Other: [
+      "🔮 Weather Prediction seals tomorrow's forecast for the chosen village the instant the reading is cast.",
+      "✨ The vision locks in the next day's weather, no matter which village you name.",
+      "🌟 Divination fixes tomorrow's skies—the town crier will read exactly what you documented."
     ],
     default: [
-      "🔮 Mystical insight enhances your abilities with prophetic knowledge.",
-      "✨ Fortune's favor improves your technique with magical guidance.",
-      "🌟 Mystical energy illuminates your path to better results.",
-      "💫 The Fortune Teller's vision ensures your efforts are blessed with good luck."
+      "🔮 Mystical insight keeps the plan three steps ahead.",
+      "✨ Fortune's favor improves your technique with prophetic guidance.",
+      "🌟 The seer's whispers bend fate toward your goal."
     ]
   },
   default: [
-    "⚡ Boosted abilities enhance your performance with extra power.",
-    "✨ Enhanced skills improve your technique for better results.",
-    "🌟 Boosted energy guides your efforts to superior outcomes.",
-    "💫 Enhanced abilities ensure your actions are more effective."
+    "⚡ The boost flexes its muscle, plainly spelling out the edge it grants.",
+    "✨ Enhanced skills kick in exactly where the booster promised they would.",
+    "🌟 Charged energy reshapes the scene to match the boon you claimed.",
+    "💫 The active boost announces its effect, leaving no doubt about the advantage earned."
   ]
 };
 
@@ -1100,10 +1120,14 @@ const generateBoostFlavorText = (boosterJob, category = 'default', options = nul
   const jobMessages = BOOST_FLAVOR_MESSAGES[normalizedJob] || BOOST_FLAVOR_MESSAGES.default;
   let categoryMessages = jobMessages[category] || jobMessages.default || BOOST_FLAVOR_MESSAGES.default;
 
-  // Scholar Gathering: categoryMessages is a function expecting targetRegion
-  if (boosterJob === 'Scholar' && category === 'Gathering' && typeof categoryMessages === 'function') {
-    const targetRegion = options?.targetRegion || null;
-    return getRandomMessage(categoryMessages(targetRegion));
+  if (typeof categoryMessages === 'function') {
+    const generatedMessages = categoryMessages(options || {});
+    if (Array.isArray(generatedMessages)) {
+      return getRandomMessage(generatedMessages.length ? generatedMessages : BOOST_FLAVOR_MESSAGES.default);
+    }
+    if (typeof generatedMessages === 'string') {
+      return generatedMessages;
+    }
   }
 
   // Handle object-based message sets (e.g., outcome-specific)
