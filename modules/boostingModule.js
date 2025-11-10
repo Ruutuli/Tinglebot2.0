@@ -1130,6 +1130,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
 // ============================================================================
 
 module.exports = {
+ normalizeJobName,
  getBoostEffect,
  getBoostEffectByCharacter,
  applyBoostEffect,

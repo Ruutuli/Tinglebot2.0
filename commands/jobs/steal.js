@@ -1651,6 +1651,7 @@ async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, inte
 async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, isNPC, interaction, voucherCheck, usedFallback, targetRarity, selectedTier, boostInfo = null) {
     incrementStreak(interaction.user.id);
     await updateStealStats(thiefCharacter._id, true, selectedItem.tier, isNPC ? null : targetCharacter, isNPC, isNPC ? targetCharacter : null);
+    const isSuccess = true;
     
     // Check for blight infection
     const blightResult = await checkBlightInfection(thiefCharacter, targetCharacter, isNPC, interaction);

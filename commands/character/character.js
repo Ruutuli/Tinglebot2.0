@@ -923,7 +923,7 @@ async function handleCreateCharacter(interaction, subcommand) {
         'HEALING': process.env.JOB_PERK_HEALING,
         'GATHERING': process.env.JOB_PERK_GATHERING,
         'CRAFTING': process.env.JOB_PERK_CRAFTING,
-        'BOOSTING': process.env.JOB_PERK_BOOSTING,
+        'BOOST': process.env.JOB_PERK_BOOST || process.env.JOB_PERK_BOOSTING,
         'VENDING': process.env.JOB_PERK_VENDING
       };
 
@@ -1831,7 +1831,7 @@ async function handleChangeJob(interaction) {
     'HEALING': process.env.JOB_PERK_HEALING,
     'GATHERING': process.env.JOB_PERK_GATHERING,
     'CRAFTING': process.env.JOB_PERK_CRAFTING,
-    'BOOSTING': process.env.JOB_PERK_BOOSTING,
+    'BOOST': process.env.JOB_PERK_BOOST || process.env.JOB_PERK_BOOSTING,
     'VENDING': process.env.JOB_PERK_VENDING
   };
 

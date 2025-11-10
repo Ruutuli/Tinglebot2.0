@@ -11,7 +11,7 @@ const {
  fetchModCharacterByNameAndUserId,
  fetchModCharacterByName,
 } = require('../../database/db');
-const { getBoostEffect } = require('../../modules/boostingModule');
+const { getBoostEffect, normalizeJobName } = require('../../modules/boostingModule');
 const { getJobPerk } = require('../../modules/jobsModule');
 const { useStamina } = require('../../modules/characterStatsModule');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
@@ -27,6 +27,8 @@ const {
   simulateWeightedWeather,
   getCurrentSeason,
   scheduleSpecialWeather,
+  getNextPeriodBounds,
+  findWeatherForPeriod,
 } = require('../../services/weatherService');
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
@@ -825,7 +827,7 @@ async function handleBoostRequest(interaction) {
  // Validate active boost
  const activeBoostValidation = await validateActiveBoost(targetCharacter);
  if (!activeBoostValidation.valid) {
-  logger.error('BOOST', activeBoostValidation.error);
+  logger.debug('BOOST', '[Validation] Active boost already present; notifying user without logging full message.');
   // Build a helpful embed with options to cancel, use, or wait for expiry
   const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(targetCharacter.name);
   const boosterName = activeBoost?.boostingCharacter || boosterCharacter?.name || "their booster";
@@ -869,7 +871,7 @@ async function handleBoostRequest(interaction) {
  const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID;
  const villageValidation = validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel);
  if (!villageValidation.valid) {
-  logger.error('BOOST', villageValidation.error);
+  logger.debug('BOOST', '[Validation] Village mismatch detected during boost request.');
   await interaction.reply({
    content: villageValidation.error,
    ephemeral: true,
@@ -880,7 +882,7 @@ async function handleBoostRequest(interaction) {
  // Validate boost request - target character can request any boost category
  const boostRequestValidation = validateBoostRequest(targetCharacter, category);
  if (!boostRequestValidation.valid) {
-  logger.error('BOOST', boostRequestValidation.error);
+  logger.debug('BOOST', '[Validation] Boost request invalid for target character.');
   await interaction.reply({
    content: boostRequestValidation.error,
    ephemeral: true,
@@ -891,7 +893,7 @@ async function handleBoostRequest(interaction) {
    // Validate boost effect
   const boostEffectValidation = validateBoostEffect(boosterCharacter.job, category);
   if (!boostEffectValidation.valid) {
-   logger.error('BOOST', `Error - ${boostEffectValidation.error}`);
+   logger.debug('BOOST', `[Validation] ${boostEffectValidation.error}`);
    await interaction.reply({
     content: boostEffectValidation.error,
     ephemeral: true,
@@ -1293,8 +1295,9 @@ async function handleBoostOther(interaction) {
   return;
  }
 
- const isEntertainer = character.job === 'Entertainer';
- const isFortuneTeller = character.job === 'Fortune Teller';
+ const normalizedJob = typeof character.job === "string" ? normalizeJobName(character.job) : "";
+ const isEntertainer = normalizedJob === "Entertainer";
+ const isFortuneTeller = normalizedJob === "Fortune Teller";
 
  const requestedEffectJob = effectChoice === "fortune_teller"
   ? "Fortune Teller"
@@ -1371,7 +1374,8 @@ async function handleBoostOther(interaction) {
 
  if (activeOtherBoost) {
   boosterCharacter = await fetchCharacterByNameWithFallback(activeBoost.boostingCharacter);
-  boostSourceJob = boosterCharacter?.job || activeBoost.boosterJob || null;
+  const rawBoosterJob = boosterCharacter?.job || activeBoost.boosterJob || null;
+  boostSourceJob = rawBoosterJob ? normalizeJobName(rawBoosterJob) : null;
  }
 
  let effectJob = null;
@@ -1783,31 +1787,18 @@ try {
   selectedVillage = SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
  }
 
- const now = new Date();
- const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+const now = new Date();
+const {
+ startUTC: startOfNextPeriodUTC,
+ endUTC: endOfNextPeriodUTC,
+ startEastern: startOfNextPeriod,
+} = getNextPeriodBounds(now);
 
- const startOfNextPeriod = new Date(estNow);
- startOfNextPeriod.setHours(8, 0, 0, 0);
- startOfNextPeriod.setDate(startOfNextPeriod.getDate() + 1);
-
- const endOfNextPeriod = new Date(startOfNextPeriod);
- endOfNextPeriod.setDate(endOfNextPeriod.getDate() + 1);
- endOfNextPeriod.setHours(7, 59, 59, 999);
-
- const startOfNextPeriodUTC = new Date(
-  startOfNextPeriod.getTime() - startOfNextPeriod.getTimezoneOffset() * 60000
- );
- const endOfNextPeriodUTC = new Date(
-  endOfNextPeriod.getTime() - endOfNextPeriod.getTimezoneOffset() * 60000
- );
-
- let weatherDoc = await Weather.findOne({
-  village: selectedVillage,
-  date: {
-   $gte: startOfNextPeriodUTC,
-   $lte: endOfNextPeriodUTC,
-  },
- });
+let weatherDoc = await findWeatherForPeriod(
+ selectedVillage,
+ startOfNextPeriodUTC,
+ endOfNextPeriodUTC
+);
 
 let weatherDocId = weatherDoc?._id ? weatherDoc._id.toString() : null;
  const seasonForPeriod = getCurrentSeason(startOfNextPeriod);
@@ -1846,13 +1837,12 @@ let weatherDocId = weatherDoc?._id ? weatherDoc._id.toString() : null;
     typeof savedWeather.toObject === 'function' ? savedWeather.toObject() : savedWeather;
   } catch (creationError) {
    if (creationError.code === 11000) {
-    const duplicate = await Weather.findOne({
-     village: selectedVillage,
-     date: {
-      $gte: startOfNextPeriodUTC,
-      $lte: endOfNextPeriodUTC,
-     },
-    });
+    const duplicate = await findWeatherForPeriod(
+     selectedVillage,
+     startOfNextPeriodUTC,
+     endOfNextPeriodUTC,
+     { legacyFallback: false }
+    );
 
     if (duplicate) {
      weatherDoc = duplicate;

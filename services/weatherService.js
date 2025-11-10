@@ -95,6 +95,7 @@ const OVERLAY_MAPPING = {
 // Banner cache for performance
 const bannerCache = new Map();
 const CACHE_DURATION = 300000; // 5 minutes
+const LEGACY_PERIOD_FALLBACK_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 // ============================================================================
 // ------------------- Utility Functions -------------------
@@ -140,6 +141,92 @@ function normalizeSeason(season) {
   if (s === 'autumn') return 'fall';
   if (s === 'fall') return 'fall';
   return s;
+}
+
+function getEasternReference(referenceDate = new Date()) {
+  const baseDate = referenceDate instanceof Date ? new Date(referenceDate) : new Date(referenceDate);
+  const easternDate = new Date(baseDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const offsetMs = baseDate.getTime() - easternDate.getTime();
+  return { easternDate, offsetMs };
+}
+
+function getCurrentPeriodBounds(referenceDate = new Date()) {
+  const { easternDate, offsetMs } = getEasternReference(referenceDate);
+
+  const startEastern = new Date(easternDate);
+  startEastern.setHours(8, 0, 0, 0);
+
+  if (easternDate.getHours() < 8) {
+    startEastern.setDate(startEastern.getDate() - 1);
+  }
+
+  const endEastern = new Date(startEastern);
+  endEastern.setDate(endEastern.getDate() + 1);
+  endEastern.setHours(7, 59, 59, 999);
+
+  return {
+    startUTC: new Date(startEastern.getTime() + offsetMs),
+    endUTC: new Date(endEastern.getTime() + offsetMs),
+    startEastern,
+    endEastern
+  };
+}
+
+function getNextPeriodBounds(referenceDate = new Date()) {
+  const { easternDate, offsetMs } = getEasternReference(referenceDate);
+
+  const startEastern = new Date(easternDate);
+  startEastern.setHours(8, 0, 0, 0);
+  startEastern.setDate(startEastern.getDate() + 1);
+
+  const endEastern = new Date(startEastern);
+  endEastern.setDate(endEastern.getDate() + 1);
+  endEastern.setHours(7, 59, 59, 999);
+
+  return {
+    startUTC: new Date(startEastern.getTime() + offsetMs),
+    endUTC: new Date(endEastern.getTime() + offsetMs),
+    startEastern,
+    endEastern
+  };
+}
+
+async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
+  const { legacyFallback = true, fallbackWindowMs = LEGACY_PERIOD_FALLBACK_MS } = options;
+  const normalizedVillage = normalizeVillageName(village);
+
+  let weather = await Weather.findOne({
+    village: normalizedVillage,
+    date: {
+      $gte: startUTC,
+      $lte: endUTC
+    }
+  });
+
+  if (!weather && legacyFallback) {
+    const legacyWeather = await Weather.findOne({
+      village: normalizedVillage,
+      date: {
+        $gte: new Date(startUTC.getTime() - fallbackWindowMs),
+        $lte: new Date(endUTC.getTime() - fallbackWindowMs)
+      }
+    });
+
+    if (legacyWeather) {
+      legacyWeather.date = startUTC;
+
+      if (legacyWeather.prediction) {
+        legacyWeather.prediction.periodStart = startUTC;
+        legacyWeather.prediction.periodEnd = endUTC;
+        legacyWeather.markModified('prediction');
+      }
+
+      weather = await legacyWeather.save();
+      console.warn(`[weatherService.js]: ⚠️ Realigned legacy weather record for ${normalizedVillage} to new UTC window.`);
+    }
+  }
+
+  return weather;
 }
 
 // ------------------- Weather Data Parsing -------------------
@@ -559,38 +646,10 @@ async function getWeatherWithoutGeneration(village) {
     const normalizedVillage = normalizeVillageName(village);
     
     // Get current time in EST/EDT
-    const now = new Date();
-    const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const { startUTC: startOfPeriodUTC, endUTC: endOfPeriodUTC } = getCurrentPeriodBounds();
     
-    // Calculate the start of the current weather period (8am EST/EDT of the current day)
-    const startOfPeriod = new Date(estTime);
-    startOfPeriod.setHours(8, 0, 0, 0);
-    
-    // If current time is before 8am EST/EDT, use previous day's 8am as start
-    if (estTime.getHours() < 8) {
-      startOfPeriod.setDate(startOfPeriod.getDate() - 1);
-    }
-    
-    // Calculate the end of the current weather period (7:59:59 AM EST/EDT of the next day)
-    const endOfPeriod = new Date(startOfPeriod);
-    endOfPeriod.setDate(endOfPeriod.getDate() + 1);
-    endOfPeriod.setHours(7, 59, 59, 999);
-    
-    // Convert EST/EDT times to UTC for database query
-    // The startOfPeriod and endOfPeriod are already in EST/EDT, so we need to convert them to UTC
-    // We can do this by creating a new Date object with the EST/EDT time and letting JavaScript handle the conversion
-    const startOfPeriodUTC = new Date(startOfPeriod.getTime() - (startOfPeriod.getTimezoneOffset() * 60000));
-    const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
-    
-    // Get weather from the current period
-    const weather = await Weather.findOne({
-      village: normalizedVillage,
-      date: {
-        $gte: startOfPeriodUTC,
-        $lte: endOfPeriodUTC
-      }
-    });
-    
+    // Get weather from the current period with legacy fallback support
+    const weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, endOfPeriodUTC);
     
     return weather;
   } catch (error) {
@@ -605,37 +664,10 @@ async function getCurrentWeather(village) {
     const normalizedVillage = normalizeVillageName(village);
     
     // Get current time in EST/EDT
-    const now = new Date();
-    const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-    
-    // Calculate the start of the current weather period (8am EST/EDT of the current day)
-    const startOfPeriod = new Date(estTime);
-    startOfPeriod.setHours(8, 0, 0, 0);
-    
-    // If current time is before 8am EST/EDT, use previous day's 8am as start
-    if (estTime.getHours() < 8) {
-      startOfPeriod.setDate(startOfPeriod.getDate() - 1);
-    }
-    
-    // Calculate the end of the current weather period (7:59:59 AM EST/EDT of the next day)
-    const endOfPeriod = new Date(startOfPeriod);
-    endOfPeriod.setDate(endOfPeriod.getDate() + 1);
-    endOfPeriod.setHours(7, 59, 59, 999);
-    
-    // Convert EST/EDT times to UTC for database query
-    // The startOfPeriod and endOfPeriod are already in EST/EDT, so we need to convert them to UTC
-    // We can do this by creating a new Date object with the EST/EDT time and letting JavaScript handle the conversion
-    const startOfPeriodUTC = new Date(startOfPeriod.getTime() - (startOfPeriod.getTimezoneOffset() * 60000));
-    const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
+    const { startUTC: startOfPeriodUTC, endUTC: endOfPeriodUTC } = getCurrentPeriodBounds();
     
     // Get weather from the current period
-    let weather = await Weather.findOne({
-      village: normalizedVillage,
-      date: {
-        $gte: startOfPeriodUTC,
-        $lte: endOfPeriodUTC
-      }
-    });
+    let weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, endOfPeriodUTC);
     
     // Only generate new weather if none exists for the current period
     if (!weather) {
@@ -844,31 +876,17 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
       throw new Error(`Unknown special weather label "${specialLabel}".`);
     }
 
-    const now = new Date();
-    const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const {
+      startUTC: startOfNextPeriodUTC,
+      endUTC: endOfNextPeriodUTC,
+      startEastern: startOfNextPeriod
+    } = getNextPeriodBounds();
 
-    const startOfNextPeriod = new Date(estTime);
-    startOfNextPeriod.setHours(8, 0, 0, 0);
-    startOfNextPeriod.setDate(startOfNextPeriod.getDate() + 1);
-
-    const endOfNextPeriod = new Date(startOfNextPeriod);
-    endOfNextPeriod.setDate(endOfNextPeriod.getDate() + 1);
-    endOfNextPeriod.setHours(7, 59, 59, 999);
-
-    const startOfNextPeriodUTC = new Date(
-      startOfNextPeriod.getTime() - startOfNextPeriod.getTimezoneOffset() * 60000
+    let weatherDoc = await findWeatherForPeriod(
+      normalizedVillage,
+      startOfNextPeriodUTC,
+      endOfNextPeriodUTC
     );
-    const endOfNextPeriodUTC = new Date(
-      endOfNextPeriod.getTime() - endOfNextPeriod.getTimezoneOffset() * 60000
-    );
-
-    let weatherDoc = await Weather.findOne({
-      village: normalizedVillage,
-      date: {
-        $gte: startOfNextPeriodUTC,
-        $lte: endOfNextPeriodUTC
-      }
-    });
 
     let generatedWeather = null;
     const seasonForPeriod = getCurrentSeason(startOfNextPeriod);
@@ -999,6 +1017,9 @@ module.exports = {
   
   // Utility functions
   getCurrentSeason,
+  getCurrentPeriodBounds,
+  getNextPeriodBounds,
+  findWeatherForPeriod,
   normalizeVillageName,
   parseFahrenheit,
   parseWind,
