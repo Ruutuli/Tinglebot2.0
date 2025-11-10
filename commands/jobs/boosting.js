@@ -22,7 +22,12 @@ const {
   updateBoostRequestEmbed,
   createBoostAppliedEmbed,
 } = require('../../embeds/embeds.js');
-
+const Weather = require('../../models/WeatherModel');
+const {
+  simulateWeightedWeather,
+  getCurrentSeason,
+  scheduleSpecialWeather,
+} = require('../../services/weatherService');
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
 // ============================================================================
@@ -48,8 +53,7 @@ const BOOST_CATEGORIES = [
   { name: "Healer", value: "Healers" },
   { name: "Stealing", value: "Stealing" },
   { name: "Tokens", value: "Tokens" },
-  { name: "Traveling", value: "Traveling" },
-  { name: "Other", value: "Other" }
+  { name: "Traveling", value: "Traveling" }
 ];
 
 const SONG_OF_STORMS_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
@@ -66,7 +70,27 @@ const SONG_OF_STORMS_SPECIAL_WEATHER = [
   "Rock Slide",
 ];
 
-const FORTUNE_TELLER_WEATHER_TYPES = ["sunny", "rainy", "stormy", "cloudy", "clear"];
+function resolveVillageName(input) {
+ if (!input || typeof input !== 'string') {
+  return null;
+ }
+
+ const stripped = input
+  .replace(/\(.*?\)/g, '')
+  .replace(/current\s*village/gi, '')
+  .replace(/home\s*village/gi, '')
+  .replace(/hometown/gi, '')
+  .replace(/—/g, ' ')
+  .replace(/-/g, ' ')
+  .trim();
+
+ const lower = stripped.toLowerCase();
+ return (
+  SONG_OF_STORMS_VILLAGES.find(
+   (village) => lower === village.toLowerCase() || lower.includes(village.toLowerCase())
+  ) || null
+ );
+}
 
 const OTHER_BOOST_CHOICES = [
   { name: "Fortune Teller — Weather Prediction", value: "fortune_teller" },
@@ -1380,13 +1404,9 @@ async function handleBoostOther(interaction) {
   return;
  }
 
- const normalizedVillage = rawTargetVillage
-  ? SONG_OF_STORMS_VILLAGES.find(
-     (village) => village.toLowerCase() === rawTargetVillage.toLowerCase()
-    )
-  : null;
+const normalizedVillage = rawTargetVillage ? resolveVillageName(rawTargetVillage) : null;
 
- if (rawTargetVillage && !normalizedVillage) {
+if (rawTargetVillage && !normalizedVillage) {
   await interaction.reply({
    content: `Invalid village selection. Choose from ${SONG_OF_STORMS_VILLAGES.join(", ")}.`,
    ephemeral: true,
@@ -1439,39 +1459,221 @@ async function executeFortuneTellerPrediction(interaction, options = {}) {
   providedVillage = null,
  } = options;
 
- const village = providedVillage || SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
- const predictedWeather = FORTUNE_TELLER_WEATHER_TYPES[Math.floor(Math.random() * FORTUNE_TELLER_WEATHER_TYPES.length)];
- const formattedWeather = predictedWeather.charAt(0).toUpperCase() + predictedWeather.slice(1);
- const forecastTimestamp = Math.floor((Date.now() + 86400000) / 1000);
+let selectedVillage = null;
 
- const foretellerName = fortuneTeller?.name || "a Fortune Teller";
- const targetName = targetCharacter?.name || "a traveler";
+try {
+ const candidateVillages = [
+  providedVillage,
+  targetCharacter?.currentVillage,
+  targetCharacter?.homeVillage,
+  targetCharacter?.hometown,
+  targetCharacter?.village,
+ ];
+
+ for (const candidate of candidateVillages) {
+  if (!candidate) {
+   continue;
+  }
+
+  const resolvedCandidate = resolveVillageName(candidate);
+  if (resolvedCandidate) {
+   selectedVillage = resolvedCandidate;
+   break;
+  }
+ }
+
+ if (!selectedVillage) {
+  selectedVillage = SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
+ }
+
+ const now = new Date();
+ const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+ const startOfNextPeriod = new Date(estNow);
+ startOfNextPeriod.setHours(8, 0, 0, 0);
+ startOfNextPeriod.setDate(startOfNextPeriod.getDate() + 1);
+
+ const endOfNextPeriod = new Date(startOfNextPeriod);
+ endOfNextPeriod.setDate(endOfNextPeriod.getDate() + 1);
+ endOfNextPeriod.setHours(7, 59, 59, 999);
+
+ const startOfNextPeriodUTC = new Date(
+  startOfNextPeriod.getTime() - startOfNextPeriod.getTimezoneOffset() * 60000
+ );
+ const endOfNextPeriodUTC = new Date(
+  endOfNextPeriod.getTime() - endOfNextPeriod.getTimezoneOffset() * 60000
+ );
+
+ let weatherDoc = await Weather.findOne({
+  village: selectedVillage,
+  date: {
+   $gte: startOfNextPeriodUTC,
+   $lte: endOfNextPeriodUTC,
+  },
+ });
+
+let weatherDocId = weatherDoc?._id ? weatherDoc._id.toString() : null;
+ const seasonForPeriod = getCurrentSeason(startOfNextPeriod);
+
+ let weatherData = weatherDoc
+  ? (typeof weatherDoc.toObject === 'function' ? weatherDoc.toObject() : weatherDoc)
+  : null;
+
+ if (!weatherData) {
+  const generatedWeather = await simulateWeightedWeather(selectedVillage, seasonForPeriod, {
+   useDatabaseHistory: true,
+  });
+
+  if (!generatedWeather) {
+   throw new Error(`Failed to generate weather for ${selectedVillage}.`);
+  }
+
+  const weatherPayload = {
+   village: selectedVillage,
+   date: startOfNextPeriodUTC,
+   season: generatedWeather.season || seasonForPeriod,
+   temperature: generatedWeather.temperature,
+   wind: generatedWeather.wind,
+   precipitation: generatedWeather.precipitation,
+  };
+
+  if (generatedWeather.special) {
+   weatherPayload.special = generatedWeather.special;
+  }
+
+  try {
+   const savedWeather = await Weather.create(weatherPayload);
+   weatherDoc = savedWeather;
+   weatherDocId = savedWeather?._id ? savedWeather._id.toString() : weatherDocId;
+   weatherData =
+    typeof savedWeather.toObject === 'function' ? savedWeather.toObject() : savedWeather;
+  } catch (creationError) {
+   if (creationError.code === 11000) {
+    const duplicate = await Weather.findOne({
+     village: selectedVillage,
+     date: {
+      $gte: startOfNextPeriodUTC,
+      $lte: endOfNextPeriodUTC,
+     },
+    });
+
+    if (duplicate) {
+     weatherDoc = duplicate;
+     weatherDocId = duplicate?._id ? duplicate._id.toString() : weatherDocId;
+     weatherData =
+      typeof duplicate.toObject === 'function' ? duplicate.toObject() : duplicate;
+    } else {
+     throw creationError;
+    }
+   } else {
+    throw creationError;
+   }
+  }
+ } else if (!weatherData.season) {
+  await Weather.updateOne(
+   { _id: weatherDoc._id },
+   { $set: { season: seasonForPeriod } }
+  );
+  weatherData.season = seasonForPeriod;
+ }
+
+ if (!weatherData) {
+  throw new Error(`Weather data unavailable for ${selectedVillage}.`);
+ }
+
+if (weatherData?.prediction?.lockedAt) {
+ const lockedByName = weatherData.prediction.lockedByName || 'another diviner';
+ await interaction.reply({
+  content: `❌ **Divination already sealed.** ${lockedByName} has already locked in ${selectedVillage}'s forecast for tomorrow.`,
+  ephemeral: true,
+ });
+ return;
+}
+
+ const forecastTimestamp = Math.floor(startOfNextPeriodUTC.getTime() / 1000);
+ const foretellerName = fortuneTeller?.name || 'a Fortune Teller';
+ const targetName = targetCharacter?.name || 'a traveler';
+
+ const precipitationEmoji = weatherData?.precipitation?.emoji || '🌧️';
+ const precipitationLabel = weatherData?.precipitation?.label || 'Unknown';
+ const precipitationProbability = weatherData?.precipitation?.probability || null;
+
+ const temperatureEmoji = weatherData?.temperature?.emoji || '🌡️';
+ const temperatureLabel = weatherData?.temperature?.label || 'Unknown';
+ const temperatureProbability = weatherData?.temperature?.probability || null;
+
+ const windEmoji = weatherData?.wind?.emoji || '💨';
+ const windLabel = weatherData?.wind?.label || 'Unknown';
+ const windProbability = weatherData?.wind?.probability || null;
+
+ const forecastLines = [
+  `${precipitationEmoji} ${precipitationLabel}${
+   precipitationProbability ? ` (${precipitationProbability})` : ''
+  }`,
+ ];
+
+ if (weatherData?.special?.label) {
+  const specialEmoji = weatherData.special.emoji || '✨';
+  const specialProbability = weatherData.special.probability || null;
+  const specialLine = `✨ ${specialEmoji} ${weatherData.special.label}${
+   specialProbability ? ` (${specialProbability})` : ''
+  }`;
+  forecastLines.push(specialLine.trim());
+ }
+
+ const insightLine = `**${foretellerName}** reads tomorrow's signs for **${selectedVillage}**.`;
 
  const embed = new EmbedBuilder()
-  .setTitle("🔮 Weather Prediction")
-  .setDescription(`**${targetName}** channels the insight of **${foretellerName}** to glimpse tomorrow's skies.`)
-  .addFields([
-   { name: "📍 Village", value: village, inline: true },
-   { name: "🌤️ Tomorrow's Weather", value: formattedWeather, inline: true },
-   { name: "📅 Date", value: `<t:${forecastTimestamp}:D>`, inline: true },
-  ])
-  .setColor("#9B59B6")
+  .setTitle('🔮 Weather Prediction')
+  .setDescription(insightLine)
+  .addFields(
+   { name: '📍 Village', value: selectedVillage, inline: true },
+   { name: '📅 Date', value: `<t:${forecastTimestamp}:D>`, inline: true },
+   { name: '🌤️ Tomorrow\'s Skies', value: forecastLines.join('\n'), inline: false },
+   {
+    name: '🌡️ Temperature',
+    value: `${temperatureEmoji} ${temperatureLabel}${
+     temperatureProbability ? ` (${temperatureProbability})` : ''
+    }`,
+    inline: true,
+   },
+   {
+    name: '💨 Wind',
+    value: `${windEmoji} ${windLabel}${windProbability ? ` (${windProbability})` : ''}`,
+    inline: true,
+   },
+  )
+  .setColor('#9B59B6')
   .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-  .setFooter({ text: "Weather prediction locked in for tomorrow!" });
+  .setFooter({ text: 'Weather prediction locked in for tomorrow!' });
+
+ if (weatherData?.season) {
+  embed.addFields({
+   name: '🍃 Season',
+   value: weatherData.season.charAt(0).toUpperCase() + weatherData.season.slice(1),
+   inline: true,
+  });
+ }
 
  if (viaBoost) {
   embed.addFields({
-   name: "✨ Boost Used",
+   name: '✨ Boost Used',
    value: `Fortune Teller ${foretellerName}'s Weather Prediction`,
    inline: false,
   });
  } else {
   embed.addFields({
-   name: "✨ Ability Used",
+   name: '✨ Ability Used',
    value: "Fortune Teller's Weather Prediction",
    inline: false,
   });
  }
+
+embed.addFields({
+ name: '🔐 Prediction Locked By',
+ value: foretellerName,
+ inline: true,
+});
 
  if (fortuneTeller?.icon) {
   embed.setAuthor({ name: foretellerName, iconURL: fortuneTeller.icon });
@@ -1486,8 +1688,37 @@ async function executeFortuneTellerPrediction(interaction, options = {}) {
   ephemeral: false,
  });
 
+const predictionRecord = {
+ lockedAt: new Date(),
+ lockedById: fortuneTeller?._id ? fortuneTeller._id.toString() : null,
+ lockedByName: foretellerName,
+ targetCharacterId: targetCharacter?._id ? targetCharacter._id.toString() : null,
+ targetCharacterName: targetName,
+ viaBoost,
+ boostRequestId: viaBoost ? activeBoost?.boostRequestId || null : null,
+ periodStart: startOfNextPeriodUTC,
+ periodEnd: endOfNextPeriodUTC,
+};
+
+const weatherRecordId = weatherDocId || (weatherData?._id ? weatherData._id.toString() : null);
+
+if (weatherRecordId) {
+ try {
+  await Weather.updateOne(
+   { _id: weatherRecordId },
+   { $set: { prediction: predictionRecord } }
+  );
+  weatherData.prediction = predictionRecord;
+ } catch (updateError) {
+  logger.warn(
+   'BOOST',
+   `Unable to persist prediction lock for ${selectedVillage}: ${updateError.message}`
+  );
+ }
+}
+
  if (viaBoost && activeBoost && activeBoost.boostRequestId) {
-  activeBoost.status = "fulfilled";
+  activeBoost.status = 'fulfilled';
   activeBoost.fulfilledAt = Date.now();
   await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
 
@@ -1496,16 +1727,43 @@ async function executeFortuneTellerPrediction(interaction, options = {}) {
    await targetCharacter.save();
   }
 
-  if (typeof module.exports.updateBoostAppliedMessage === "function") {
+  if (typeof module.exports.updateBoostAppliedMessage === 'function') {
    try {
     await module.exports.updateBoostAppliedMessage(interaction.client, activeBoost);
    } catch (error) {
-    logger.warn('BOOST', `Unable to update boost applied message for ${activeBoost.boostRequestId}: ${error.message}`);
+    logger.warn(
+     'BOOST',
+     `Unable to update boost applied message for ${activeBoost.boostRequestId}: ${error.message}`
+    );
    }
   }
  }
 
- logger.info('BOOST', `🔮 Weather prediction generated for ${village}: ${formattedWeather}${viaBoost ? ` (boost by ${foretellerName})` : ''}`);
+ logger.info(
+  'BOOST',
+  `🔮 Weather prediction locked for ${selectedVillage}: ${precipitationLabel}${
+   weatherData?.special?.label ? ` + ${weatherData.special.label}` : ''
+  }${viaBoost ? ` (boost by ${foretellerName})` : ''}`
+ );
+} catch (error) {
+ logger.error(
+  'BOOST',
+  `Failed to deliver weather prediction${selectedVillage ? ` for ${selectedVillage}` : ''}: ${
+   error.message
+  }`
+ );
+
+ const errorMessage =
+  '❌ **The divination falters.** Please try again in a moment or contact a moderator.';
+
+ if (interaction.replied) {
+  await interaction.followUp({ content: errorMessage, ephemeral: true });
+ } else if (interaction.deferred) {
+  await interaction.editReply({ content: errorMessage });
+ } else {
+  await interaction.reply({ content: errorMessage, ephemeral: true });
+ }
+}
 }
 
 async function executeSongOfStorms(interaction, options) {
@@ -1516,8 +1774,6 @@ async function executeSongOfStorms(interaction, options) {
   activeBoost = null,
   providedVillage = null
  } = options || {};
-
- const { scheduleSpecialWeather } = require('../../services/weatherService');
 
  const selectedVillage = SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
  const selectedWeather = SONG_OF_STORMS_SPECIAL_WEATHER[Math.floor(Math.random() * SONG_OF_STORMS_SPECIAL_WEATHER.length)];
@@ -1534,9 +1790,8 @@ async function executeSongOfStorms(interaction, options) {
    ? Math.floor(scheduleResult.startOfPeriod.getTime() / 1000)
    : Math.floor((Date.now() + 86400000) / 1000);
 
-  const description = viaBoost
-   ? `**${recipient?.name || 'A companion'}** plays the melody taught by **${entertainer?.name || 'an Entertainer'}**, and the skies tremble in response.`
-   : `**${entertainer?.name || 'An Entertainer'}** performs the Song of Storms, letting the winds decide where tomorrow's spectacle unfolds.`;
+ const performerName = entertainer?.name || 'An Entertainer';
+ const description = `**${performerName}** performs the Song of Storms, letting the winds decide where tomorrow's spectacle unfolds.`;
 
   const embed = new EmbedBuilder()
    .setTitle("🎵 Song of Storms")
@@ -1559,10 +1814,6 @@ async function executeSongOfStorms(interaction, options) {
 
   if (viaBoost && entertainer?.name) {
    embed.addFields({ name: "✨ Boost Used", value: `Entertainer ${entertainer.name}'s Song of Storms`, inline: false });
-  }
-
-  if (viaBoost && recipient?.name) {
-   embed.addFields({ name: "🤝 Beneficiary", value: recipient.name, inline: false });
   }
 
   if (overrideProvided) {
