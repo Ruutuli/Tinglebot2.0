@@ -744,7 +744,10 @@ function applyPriestVendingBoost(basePoints) {
 // ------------------- Entertainer Boost Functions -------------------
 // ============================================================================
 
-function applyEntertainerCraftingBoost(craftedItem) {
+function applyEntertainerCraftingBoost(craftedItem, context = {}) {
+ if (context && context.type === 'stamina') {
+  return craftedItem;
+ }
  // Handle both number input (quantity) and object input (item with quantity)
  // For crafting boost: add 1 extra item at no cost
  if (typeof craftedItem === 'number') {
@@ -1090,7 +1093,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
    return data;
   }
   switch (category) {
-   case "Crafting": return applyEntertainerCraftingBoost(data);
+   case "Crafting": return applyEntertainerCraftingBoost(data, additionalData);
    case "Exploring": return applyEntertainerExploringBoost(data);
    case "Gathering": return await applyEntertainerGatheringBoost(data);
    case "Healers": return applyEntertainerHealingBoost(data, additionalData);

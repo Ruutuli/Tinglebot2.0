@@ -70,7 +70,8 @@ async function applyCraftingBoost(characterName, basePrice) {
 }
 
 async function applyCraftingStaminaBoost(characterName, staminaCost) {
-  return await applyBoostToAction(characterName, 'Crafting', staminaCost);
+  const context = { type: 'stamina' };
+  return await applyBoostToAction(characterName, 'Crafting', staminaCost, context);
 }
 
 async function applyCraftingMaterialBoost(characterName, materials, craftQuantity = 1) {
