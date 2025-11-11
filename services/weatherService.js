@@ -912,6 +912,31 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
       weatherDoc.season = seasonForPeriod;
     }
 
+    const existingSpecialLabel = weatherDoc?.special?.label;
+    const existingSpecialProbability = weatherDoc?.special?.probability;
+    const hasGuaranteedSpecial =
+      existingSpecialLabel &&
+      typeof existingSpecialProbability === 'string' &&
+      existingSpecialProbability.toLowerCase().includes('guaranteed');
+
+    if (hasGuaranteedSpecial) {
+      const error = new Error(
+        `${normalizedVillage} already has guaranteed special weather scheduled for the next period.`
+      );
+      error.code = 'SPECIAL_WEATHER_ALREADY_SET';
+      error.village = normalizedVillage;
+      error.existingSpecial = existingSpecialLabel;
+      console.warn(
+        '[weatherService.js]: ⚠️ Attempt to reschedule Song of Storms special rejected',
+        {
+          village: normalizedVillage,
+          existingSpecial: existingSpecialLabel,
+          probability: existingSpecialProbability
+        }
+      );
+      throw error;
+    }
+
     weatherDoc.special = {
       label: specialEntry.label,
       emoji: specialEntry.emoji,

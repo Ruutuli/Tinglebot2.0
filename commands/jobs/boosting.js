@@ -2353,13 +2353,28 @@ const selectionFieldValue = manualSelection
   `🎵 Song of Storms triggered by ${entertainer?.name || 'Unknown'}${recipient ? ` for ${recipient.name}` : ''}: ${selectedWeather} in ${selectedVillage}${manualSelection ? ' (manual selection)' : ''}`
   );
  } catch (error) {
-  logger.error(
-   'BOOST',
-   `Song of Storms failed for ${entertainer?.name || 'Unknown Entertainer'}:`,
-   error
-  );
+  if (error.code === 'SPECIAL_WEATHER_ALREADY_SET') {
+   logger.warn(
+    'BOOST',
+    `Song of Storms duplicate special attempt blocked for ${error.village || selectedVillage}: ${error.existingSpecial || 'Unknown Special'}`
+   );
+  } else {
+   logger.error(
+    'BOOST',
+    `Song of Storms failed for ${entertainer?.name || 'Unknown Entertainer'}:`,
+    error
+   );
+  }
 
-  const errorMessage = "❌ **Song of Storms falters.** Please try again later or contact a moderator.";
+ let errorMessage;
+
+ if (error.code === 'SPECIAL_WEATHER_ALREADY_SET') {
+  const villageName = error.village || selectedVillage;
+  const existingSpecial = error.existingSpecial ? ` (**${error.existingSpecial}** already awaits there)` : '';
+  errorMessage = `❌ **Song of Storms falters.** ${villageName} already has tomorrow's weather set${existingSpecial}. Please try another village!`;
+ } else {
+  errorMessage = "❌ **Song of Storms falters.** Please try again later or contact a moderator.";
+ }
 
   if (interaction.replied) {
    await interaction.followUp({ content: errorMessage, ephemeral: true });
