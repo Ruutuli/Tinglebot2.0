@@ -12,6 +12,24 @@ const getRandomMessage = (messages) => {
   return messages[Math.floor(Math.random() * messages.length)];
 };
 
+// Normalizes job names (handles casing, spacing, and extra descriptors like ": Name")
+const normalizeBoostJobKey = (jobName) => {
+  if (!jobName || typeof jobName !== 'string') {
+    return null;
+  }
+
+  const primarySegment = jobName.split(':')[0].trim();
+  if (!primarySegment) {
+    return null;
+  }
+
+  return primarySegment
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+};
+
 // Generic message generator for different contexts
 const generateContextualMessage = (messageSets, context, damage = null) => {
   const messages = messageSets[context] || messageSets.default;
@@ -1115,9 +1133,10 @@ const BOOST_FLAVOR_MESSAGES = {
 // ============================================================================
 
 const generateBoostFlavorText = (boosterJob, category = 'default', options = null) => {
-  // Normalize job name: remove spaces (e.g., "Fortune Teller" -> "FortuneTeller")
-  const normalizedJob = boosterJob ? boosterJob.replace(/\s+/g, '') : null;
-  const jobMessages = BOOST_FLAVOR_MESSAGES[normalizedJob] || BOOST_FLAVOR_MESSAGES.default;
+  const normalizedJobKey = normalizeBoostJobKey(boosterJob);
+  const jobMessages =
+    (normalizedJobKey && BOOST_FLAVOR_MESSAGES[normalizedJobKey]) ||
+    BOOST_FLAVOR_MESSAGES.default;
   let categoryMessages = jobMessages[category] || jobMessages.default || BOOST_FLAVOR_MESSAGES.default;
 
   if (typeof categoryMessages === 'function') {
@@ -1173,8 +1192,8 @@ const UNUSED_BOOST_FLAVOR_MESSAGES = {
 };
 
 const generateUnusedBoostFlavorText = (boosterJob, category = 'default') => {
-  const normalizedJob = boosterJob ? boosterJob.replace(/\s+/g, '') : 'default';
-  const jobMessages = UNUSED_BOOST_FLAVOR_MESSAGES[normalizedJob] || UNUSED_BOOST_FLAVOR_MESSAGES.default;
+  const normalizedJobKey = normalizeBoostJobKey(boosterJob) || 'default';
+  const jobMessages = UNUSED_BOOST_FLAVOR_MESSAGES[normalizedJobKey] || UNUSED_BOOST_FLAVOR_MESSAGES.default;
   const categoryMessages = jobMessages[category] || jobMessages.default || UNUSED_BOOST_FLAVOR_MESSAGES.default.default;
   return getRandomMessage(categoryMessages);
 };
@@ -1220,7 +1239,7 @@ const generateSubmissionBoostFlavorText = (boosterJob, submissionType = 'default
     return null;
   }
 
-  const normalizedJob = boosterJob.replace(/\s+/g, '');
+  const normalizedJob = normalizeBoostJobKey(boosterJob) || 'default';
   const normalizedType = submissionType.toLowerCase();
   const jobMessages = SUBMISSION_BOOST_MESSAGES[normalizedJob] || SUBMISSION_BOOST_MESSAGES.default;
   const categoryMessages =
