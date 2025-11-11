@@ -1331,6 +1331,10 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   
   // Send final summary
   await sendMonsterHuntSummary(interaction, character, questId, monsterList, summary, totalLoot, defeatedAll, heartsRemaining);
+
+  if (blightRainMessage) {
+    await interaction.followUp({ content: blightRainMessage });
+  }
 }
 
 /**
