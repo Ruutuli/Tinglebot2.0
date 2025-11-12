@@ -1319,6 +1319,13 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
     };
     console.log(`[embeds.js]: ✅ New Scholar boost flavor text: ${boostInfo.boostFlavorText}`);
   }
+  if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'priest') {
+    const outcome = isDivineItemWithPriestBoost ? 'success' : 'noDivine';
+    boostInfo = {
+      ...boostInfo,
+      boostFlavorText: generateBoostFlavorText('Priest', 'Gathering', { outcome })
+    };
+  }
   let description = addBoostFlavorText(flavorText, boostInfo);
  
  // Add bonus item information if present

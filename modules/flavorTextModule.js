@@ -976,11 +976,23 @@ const BOOST_FLAVOR_MESSAGES = {
     ]
   },
   Priest: {
-    Gathering: [
-      "🙏 Divine Favor tilts the table toward consecrated relics—holy curios seem eager to be found.",
-      "✨ Prayers weight the rolls so spiritually attuned materials drift straight into your pack.",
-      "🌟 The blessing swaps mundane scraps for relic-grade treasures with sacred ease."
-    ],
+    Gathering: {
+      success: [
+        "🙏 Divine Favor tilts the table toward consecrated relics—holy curios seem eager to be found.",
+        "✨ Prayers weight the rolls so spiritually attuned materials drift straight into your pack.",
+        "🌟 The blessing swaps mundane scraps for relic-grade treasures with sacred ease."
+      ],
+      noDivine: [
+        "🙏 The ritual held steady, but while the blessing was active no divine materials answered the call.",
+        "✨ Prayers lingered in the air, yet no sacred relic surfaced while the boost was in effect.",
+        "🌟 The blessing shimmered, but none of the haul carried the divine spark this time."
+      ],
+      default: [
+        "🙏 Divine guidance walks beside you, turning every action into a small miracle.",
+        "✨ Holy favor wraps your efforts in soft light and kinder odds.",
+        "🌟 Sacred energy keeps the path clear and the results blessed."
+      ]
+    },
     Crafting: [
       "🙏 Spiritual Efficiency trims crafting stamina by about 30%, always saving at least one when the task costs two or more.",
       "✨ Holy tempo lightens the labor—expect roughly a third less stamina spent, never dipping below a one-point discount.",
