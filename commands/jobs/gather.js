@@ -16,7 +16,7 @@ const { v4: uuidv4 } = require('uuid');
 // ============================================================================
 // ------------------- Database Services -------------------
 // ============================================================================
-const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters } = require('../../database/db.js');
+const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchItemByName } = require('../../database/db.js');
 
 // ============================================================================
 // ------------------- Modules -------------------
@@ -1074,14 +1074,15 @@ module.exports = {
         // Check if this is a divine item gathered with Priest boost
         let isDivineItemWithPriestBoost = false;
         if (character.boostedBy && boosterCharacter && boosterCharacter.job === 'Priest') {
-          // Check if the gathered item is a divine item - check both the item itself and the database
-          const Item = require('../../models/ItemModel');
-          const divineItem = await Item.findOne({ itemName: randomItem.itemName, divineItems: true });
-          
-          // Check if the item itself has divineItems flag or if it's found in the database
-          if (randomItem.divineItems === true || divineItem) {
+          // Check if the gathered item is a divine item - check the in-memory flag first
+          if (randomItem.divineItems === true || randomItem.priestBoostItem === true) {
             isDivineItemWithPriestBoost = true;
-  
+          } else {
+            // Fall back to database lookup to confirm divine status
+            const fetchedItem = await fetchItemByName(randomItem.itemName, { source: 'gather_priest_check' });
+            if (fetchedItem?.divineItems === true) {
+              isDivineItemWithPriestBoost = true;
+            }
           }
         }
 

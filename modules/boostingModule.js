@@ -343,6 +343,36 @@ function createEnhancedItemTable(baseTable, itemsToAdd, weight = 2, rarity = 3) 
 
 // Processes divine items for Priest gathering boost
 async function processDivineItems(baseTable) {
+ const tagPriestDivineItem = (itemEntry, sourceEntry = null) => {
+  if (!itemEntry) {
+   return itemEntry;
+  }
+
+  itemEntry.divineItems = true;
+  itemEntry.priestBoostItem = true;
+
+  if (sourceEntry) {
+   if (
+    sourceEntry.type &&
+    (!Array.isArray(itemEntry.type) || itemEntry.type.length === 0)
+   ) {
+    itemEntry.type = Array.isArray(sourceEntry.type)
+     ? [...sourceEntry.type]
+     : [sourceEntry.type];
+   }
+
+   if (sourceEntry.image && !itemEntry.image) {
+    itemEntry.image = sourceEntry.image;
+   }
+
+   if (sourceEntry.emoji && !itemEntry.emoji) {
+    itemEntry.emoji = sourceEntry.emoji;
+   }
+  }
+
+  return itemEntry;
+ };
+
  const divineItems = await safeDatabaseOperation(
   () => Item.find({ divineItems: true }),
   "Error fetching divine items"
@@ -360,18 +390,20 @@ async function processDivineItems(baseTable) {
   );
 
   if (existingIndex >= 0) {
-   combinedTable[existingIndex].weight = (combinedTable[existingIndex].weight || 1) * 3;
-   combinedTable[existingIndex].divineItems = true;
+   const existingItem = combinedTable[existingIndex];
+   existingItem.weight = (existingItem.weight || 1) * 3;
+   tagPriestDivineItem(existingItem, divineItem);
   } else {
-   combinedTable.push({
+   combinedTable.push(
+    tagPriestDivineItem({
     itemName: divineItem.itemName,
     itemRarity: divineItem.itemRarity || 5,
     weight: 3,
     type: divineItem.type || ["Natural"],
     image: divineItem.image,
     emoji: divineItem.emoji,
-    divineItems: true,
-   });
+   }, divineItem)
+   );
   }
  });
 

@@ -83,6 +83,32 @@ const userSchema = new mongoose.Schema({
       tokensReceived: { type: Number }, // Tokens received (boostCount × 500)
       timestamp: { type: Date, default: Date.now }
     }]
+  },
+
+  // ------------------- Quest Completion Tracking -------------------
+  quests: {
+    totalCompleted: { type: Number, default: 0 }, // Total number of standard quests completed
+    lastCompletionAt: { type: Date, default: null }, // Timestamp of most recent quest completion
+    typeTotals: {
+      art: { type: Number, default: 0 },
+      writing: { type: Number, default: 0 },
+      interactive: { type: Number, default: 0 },
+      rp: { type: Number, default: 0 },
+      artWriting: { type: Number, default: 0 },
+      other: { type: Number, default: 0 }
+    },
+    completions: [
+      {
+        questId: { type: String },
+        questType: { type: String },
+        questTitle: { type: String },
+        completedAt: { type: Date, default: Date.now },
+        rewardedAt: { type: Date, default: null },
+        tokensEarned: { type: Number, default: 0 },
+        itemsEarned: [{ name: String, quantity: Number }],
+        rewardSource: { type: String, default: 'immediate' }
+      }
+    ]
   }
 });
 
@@ -338,6 +364,138 @@ userSchema.methods.getTotalXPForLevel = function(targetLevel) {
   }
   
   return totalXP;
+};
+
+// ------------------- Quest Tracking Methods -------------------
+function getQuestTypeKey(questType = '') {
+  const normalized = questType.trim().toLowerCase();
+  
+  if (normalized === 'art') return 'art';
+  if (normalized === 'writing') return 'writing';
+  if (normalized === 'interactive') return 'interactive';
+  if (normalized === 'rp') return 'rp';
+  if (normalized === 'art / writing' || normalized === 'art/writing') return 'artWriting';
+  
+  return 'other';
+}
+
+function defaultQuestTracking() {
+  return {
+    totalCompleted: 0,
+    lastCompletionAt: null,
+    typeTotals: {
+      art: 0,
+      writing: 0,
+      interactive: 0,
+      rp: 0,
+      artWriting: 0,
+      other: 0
+    },
+    completions: []
+  };
+}
+
+userSchema.methods.ensureQuestTracking = function() {
+  if (!this.quests) {
+    this.quests = defaultQuestTracking();
+  } else {
+    if (!this.quests.typeTotals) {
+      this.quests.typeTotals = { ...defaultQuestTracking().typeTotals };
+    } else {
+      const defaults = defaultQuestTracking().typeTotals;
+      for (const key of Object.keys(defaults)) {
+        if (typeof this.quests.typeTotals[key] !== 'number') {
+          this.quests.typeTotals[key] = defaults[key];
+        }
+      }
+    }
+    
+    if (!Array.isArray(this.quests.completions)) {
+      this.quests.completions = [];
+    }
+    
+    if (typeof this.quests.totalCompleted !== 'number') {
+      this.quests.totalCompleted = 0;
+    }
+  }
+  
+  return this.quests;
+};
+
+userSchema.methods.recordQuestCompletion = async function({
+  questId = null,
+  questType = null,
+  questTitle = null,
+  completedAt = null,
+  rewardedAt = null,
+  tokensEarned = 0,
+  itemsEarned = [],
+  rewardSource = 'immediate'
+} = {}) {
+  const questTracking = this.ensureQuestTracking();
+  const completionTimestamp = rewardedAt || completedAt || new Date();
+  const typeKey = getQuestTypeKey(questType);
+  const normalizedItems = Array.isArray(itemsEarned)
+    ? itemsEarned.map(item => ({
+        name: item?.name || null,
+        quantity: typeof item?.quantity === 'number' ? item.quantity : 1
+      }))
+    : [];
+  
+  let isNewCompletion = true;
+  if (questId) {
+    const existingCompletion = questTracking.completions.find(entry => entry.questId === questId);
+    if (existingCompletion) {
+      existingCompletion.questType = questType;
+      existingCompletion.questTitle = questTitle;
+      existingCompletion.completedAt = completedAt || existingCompletion.completedAt || completionTimestamp;
+      existingCompletion.rewardedAt = rewardedAt || completionTimestamp;
+      existingCompletion.tokensEarned = tokensEarned;
+      existingCompletion.itemsEarned = normalizedItems;
+      existingCompletion.rewardSource = rewardSource;
+      isNewCompletion = false;
+    }
+  }
+  
+  if (isNewCompletion) {
+    questTracking.completions.push({
+      questId,
+      questType,
+      questTitle,
+      completedAt: completedAt || completionTimestamp,
+      rewardedAt: rewardedAt || completionTimestamp,
+      tokensEarned,
+      itemsEarned: normalizedItems,
+      rewardSource
+    });
+    
+    questTracking.totalCompleted += 1;
+    questTracking.typeTotals[typeKey] = (questTracking.typeTotals[typeKey] || 0) + 1;
+  }
+  
+  questTracking.lastCompletionAt = completionTimestamp;
+  
+  if (questTracking.completions.length > 25) {
+    questTracking.completions = questTracking.completions.slice(-25);
+  }
+  
+  await this.save();
+  
+  return {
+    totalCompleted: questTracking.totalCompleted,
+    lastCompletionAt: questTracking.lastCompletionAt,
+    typeTotals: questTracking.typeTotals
+  };
+};
+
+userSchema.methods.getQuestStats = function() {
+  const questTracking = this.ensureQuestTracking();
+  return {
+    totalCompleted: questTracking.totalCompleted,
+    lastCompletionAt: questTracking.lastCompletionAt,
+    typeTotals: { ...questTracking.typeTotals },
+    recentCompletions: questTracking.completions.slice(-5).reverse()
+  };
 };
 
 userSchema.methods.importMee6Levels = async function(mee6Level, lastExchangedLevel = 0) {
