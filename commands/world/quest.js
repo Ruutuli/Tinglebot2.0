@@ -4,6 +4,7 @@ const { handleInteractionError } = require("../../utils/globalErrorHandler");
 const logger = require("../../utils/logger");
 const Quest = require("../../models/QuestModel");
 const Character = require("../../models/CharacterModel");
+const User = require("../../models/UserModel");
 const { 
     BORDER_IMAGE, 
     QUEST_CHANNEL_ID, 
@@ -79,6 +80,11 @@ module.exports = {
   )
   .addSubcommand(subcommand =>
    subcommand
+    .setName("stats")
+    .setDescription("View your quest completion stats")
+  )
+  .addSubcommand(subcommand =>
+   subcommand
     .setName("postcount")
     .setDescription("Display post counts for all participants in an RP quest")
     .addStringOption(option =>
@@ -102,6 +108,7 @@ module.exports = {
     leave: () => this.handleLeaveQuest(interaction),
     list: () => this.handleListQuests(interaction),
     status: () => this.handleQuestStatus(interaction),
+   stats: () => this.handleQuestStats(interaction),
     postcount: () => this.handlePostCount(interaction)
    };
 
@@ -226,6 +233,98 @@ module.exports = {
  },
 
  // ============================================================================
+// ------------------- Quest Stats Handler -------------------
+// ============================================================================
+ async handleQuestStats(interaction) {
+  const targetUser = interaction.user;
+
+  try {
+   const userDocument = await User.findOne({ discordId: targetUser.id });
+
+   if (!userDocument) {
+    return interaction.reply({
+     content: `No quest data found for <@${targetUser.id}>.`,
+     flags: MessageFlags.Ephemeral
+    });
+   }
+
+   const stats = typeof userDocument.getQuestStats === "function"
+    ? userDocument.getQuestStats()
+    : userDocument.quests || {};
+
+   const totalCompleted = stats.totalCompleted || 0;
+
+   if (totalCompleted === 0) {
+    if (targetUser.id === interaction.user.id) {
+     return interaction.reply({
+      content: "You have not completed any quests yet.",
+      flags: MessageFlags.Ephemeral
+     });
+    }
+
+    return interaction.reply({
+     content: `<@${targetUser.id}> has not completed any quests yet.`,
+     flags: MessageFlags.Ephemeral
+    });
+   }
+
+   const lastCompletionAt = stats.lastCompletionAt
+    ? this.formatQuestStatsDate(stats.lastCompletionAt)
+    : "Unknown";
+
+   const typeBreakdown = this.formatQuestTypeTotals(stats.typeTotals || {});
+   const recentCompletions = this.buildRecentQuestCompletions(stats.recentCompletions || []);
+
+   const title = targetUser.id === interaction.user.id
+    ? "Your Quest Stats"
+    : `${targetUser.username}'s Quest Stats`;
+
+   const description = `You have completed **${totalCompleted}** quest${totalCompleted === 1 ? "" : "s"}.`;
+
+   const statsEmbed = createBaseEmbed(
+    title,
+    description,
+    QUEST_COLORS.INFO
+   );
+
+   const avatarUrl = targetUser.displayAvatarURL({ extension: "png", size: 256 });
+   if (avatarUrl) {
+    statsEmbed.setThumbnail(avatarUrl);
+   }
+
+   statsEmbed.addFields(
+    {
+     name: "Last Quest Completion",
+     value: lastCompletionAt,
+     inline: true
+    },
+    {
+     name: "Quest Types",
+     value: typeBreakdown,
+     inline: true
+    },
+    {
+     name: "Recent Quests",
+     value: recentCompletions,
+     inline: false
+    }
+   );
+
+   return interaction.reply({
+    embeds: [statsEmbed],
+    flags: MessageFlags.Ephemeral
+   });
+
+  } catch (error) {
+   console.error("[quest.js]❌ Error in handleQuestStats:", error);
+   return interaction.reply({
+    content: "[quest.js]❌ An error occurred while retrieving quest stats.",
+    flags: MessageFlags.Ephemeral
+   });
+  }
+ },
+
+// ============================================================================
  // ------------------- Quest Embed Update Handler -------------------
  // ============================================================================
  async updateQuestEmbed(guild, quest, client = null, updateSource = 'questJoin') {
@@ -338,6 +437,59 @@ module.exports = {
  },
 
  // ============================================================================
+// ------------------- Quest Stats Helpers -------------------
+// ============================================================================
+ formatQuestStatsDate(dateInput) {
+  const date = new Date(dateInput);
+
+  if (Number.isNaN(date.getTime())) {
+   return "Unknown";
+  }
+
+  return date.toLocaleString("en-US", {
+   year: "numeric",
+   month: "short",
+   day: "numeric"
+  });
+ },
+
+ formatQuestTypeTotals(typeTotals) {
+  const breakdown = [
+   { key: "art", label: "Art" },
+   { key: "writing", label: "Writing" },
+   { key: "interactive", label: "Interactive" },
+   { key: "rp", label: "RP" },
+   { key: "artWriting", label: "Art / Writing" },
+   { key: "other", label: "Other" }
+  ];
+
+  const lines = breakdown.map(entry => {
+   const total = typeof typeTotals[entry.key] === "number" ? typeTotals[entry.key] : 0;
+   return `${entry.label}: **${total}**`;
+  });
+
+  return lines.join("\n");
+ },
+
+ buildRecentQuestCompletions(recentCompletions) {
+  if (!Array.isArray(recentCompletions) || recentCompletions.length === 0) {
+   return "*No recent quests on record*";
+  }
+
+  const entries = recentCompletions
+   .slice(0, 5)
+   .map(completion => {
+    const title = completion.questTitle || completion.questId || "Unknown Quest";
+    const type = completion.questType || "Unknown";
+    const completedDate = completion.rewardedAt || completion.completedAt;
+    const formattedDate = this.formatQuestStatsDate(completedDate);
+    return `• ${title} (${type}) – ${formattedDate}`;
+   });
+
+  return entries.join("\n");
+ },
+
+// ============================================================================
  // ------------------- Core Update Logic -------------------
  // ============================================================================
  async performEmbedUpdate(quest, client, updateSource) {

@@ -722,6 +722,7 @@ async function processParticipantReward(quest, participant, rewardContext = {}) 
         const rewardResult = await distributeRewards(quest, participant, rewardContext);
         if (rewardResult.success) {
             updateParticipantRewardData(participant, quest, rewardResult, 'immediate');
+            await recordUserQuestCompletion(participant, quest, rewardResult, 'immediate');
             
             // Send individual notification to the participant
             await sendIndividualRewardNotification(quest, participant, rewardResult);
@@ -829,6 +830,31 @@ async function distributeTokens(userId, tokensToAward) {
         return { success: true, tokensAdded: tokensToAward };
     } catch (error) {
         return { success: false, error: `Token distribution failed: ${error.message}` };
+    }
+}
+
+async function recordUserQuestCompletion(participant, quest, rewardResult, rewardSource = 'immediate') {
+    try {
+        const user = await findUserSafely(participant.userId);
+        if (!user || typeof user.recordQuestCompletion !== 'function') {
+            console.warn(`[questRewardModule.js] ⚠️ User ${participant.userId} missing recordQuestCompletion method`);
+            return;
+        }
+        
+        await user.recordQuestCompletion({
+            questId: quest.questID,
+            questType: quest.questType,
+            questTitle: quest.title,
+            completedAt: participant.completedAt || new Date(),
+            rewardedAt: participant.rewardedAt || new Date(),
+            tokensEarned: rewardResult.tokensAdded || 0,
+            itemsEarned: participant.itemsEarned || [],
+            rewardSource
+        });
+        
+        console.log(`[questRewardModule.js] 🗒️ Recorded quest completion for user ${participant.userId} (${quest.questID})`);
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Failed to record quest completion for user ${participant.userId}:`, error);
     }
 }
 
@@ -1162,6 +1188,7 @@ async function processQuestMonthlyRewards(quest) {
                     
                     if (rewardResult.success) {
                         updateParticipantRewardData(participant, quest, rewardResult, 'monthly');
+                        await recordUserQuestCompletion(participant, quest, rewardResult, 'monthly');
                         rewarded++;
                         console.log(`[questRewardModule.js] ✅ Rewarded ${participant.characterName} for quest ${quest.questID}`);
                     } else {
