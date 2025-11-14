@@ -343,8 +343,8 @@ module.exports = {
     : `${targetUser.username}'s Quest Stats`;
 
 const completionSummary = legacyInfo.totalTransferred > 0
- ? `✨ **All-Time Quests:** ${formatQuestCount(allTimeTotal)} ┇ 📘 Tracked: ${formatQuestCount(totalCompleted)} ┇ 🕰️ Legacy: ${formatQuestCount(legacyInfo.totalTransferred)}`
- : `✨ You have completed **${formatQuestCount(totalCompleted)}** quest${totalCompleted === 1 ? "" : "s"}.`;
+ ? `✨ **All-Time Quests:** ${this.formatQuestCount(allTimeTotal)} ┇ 📘 Tracked: ${this.formatQuestCount(totalCompleted)} ┇ 🕰️ Legacy: ${this.formatQuestCount(legacyInfo.totalTransferred)}`
+ : `✨ You have completed **${this.formatQuestCount(totalCompleted)}** quest${totalCompleted === 1 ? "" : "s"}.`;
 
    const statsEmbed = createBaseEmbed(
     title,
@@ -361,11 +361,11 @@ const completionSummary = legacyInfo.totalTransferred > 0
    ? `✅ **Transferred:** ${legacyInfo.transferredAt ? this.formatQuestStatsDate(legacyInfo.transferredAt) : '*date unknown*'}`
    : "⚠️ **Not transferred** — use `/quest transfer` to import your legacy quests.";
 
- const snapshotLines = [
-  `• 🎯 **Tracked Quests:** ${formatQuestCount(totalCompleted)}`,
-  `• 🗒️ **Legacy Quests:** ${formatQuestCount(legacyInfo.totalTransferred || 0)}`,
-  `• 🧮 **All-Time Total:** ${formatQuestCount(allTimeTotal)}`,
- `• 🎁 **Pending Turn-Ins:** ${formatQuestCount(pendingTurnIns)} • Sets Ready: **${redeemableSets}**`,
+const snapshotLines = [
+ `• 🎯 **Tracked Quests:** ${this.formatQuestCount(totalCompleted)}`,
+ `• 🗒️ **Legacy Quests:** ${this.formatQuestCount(legacyInfo.totalTransferred || 0)}`,
+ `• 🧮 **All-Time Total:** ${this.formatQuestCount(allTimeTotal)}`,
+`• 🎁 **Pending Turn-Ins:** ${this.formatQuestCount(pendingTurnIns)} • Sets Ready: **${redeemableSets}**`,
    `• 🧭 **Unique Quest Types:** ${uniqueTypes}`,
    `• 🏆 **Favorite Quest Type:** ${favoriteType}`,
    `• 📅 **Last Completion:** ${lastCompletionAt}`
@@ -623,24 +623,24 @@ async handleQuestTurnIn(interaction) {
   {
    name: "📦 Legacy Import",
    value: [
-    `• 📚 **Transferred:** ${formatQuestCount(transferResult.legacy.totalTransferred)} quests`,
-    `• 🎁 **Pending Turn-Ins:** ${formatQuestCount(transferResult.legacy.pendingTurnIns)}`
+   `• 📚 **Transferred:** ${this.formatQuestCount(transferResult.legacy.totalTransferred)} quests`,
+   `• 🎁 **Pending Turn-Ins:** ${this.formatQuestCount(transferResult.legacy.pendingTurnIns)}`
    ].join("\n"),
    inline: false
   },
   {
    name: "📈 Updated Totals",
    value: [
-    `• 🧮 **All-Time Total:** ${formatQuestCount(transferResult.allTimeTotal)} quests`,
-    `• 🎯 **Tracked Quests:** ${formatQuestCount(user.quests.totalCompleted || 0)}`
+   `• 🧮 **All-Time Total:** ${this.formatQuestCount(transferResult.allTimeTotal)} quests`,
+   `• 🎯 **Tracked Quests:** ${this.formatQuestCount(user.quests.totalCompleted || 0)}`
    ].join("\n"),
    inline: false
   },
   {
    name: "🎉 Turn-In Progress",
    value: [
-    `• ✅ **Sets Ready:** ${formatQuestCount(turnInSummary.redeemableSets || 0)}`,
-    `• ➕ **Toward Next:** ${formatQuestCount(turnInSummary.remainder || 0)}/10`
+   `• ✅ **Sets Ready:** ${this.formatQuestCount(turnInSummary.redeemableSets || 0)}`,
+   `• ➕ **Toward Next:** ${this.formatQuestCount(turnInSummary.remainder || 0)}/10`
    ].join("\n"),
    inline: false
   }
