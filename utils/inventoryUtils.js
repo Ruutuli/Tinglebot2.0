@@ -409,8 +409,8 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       }
       await inventoryCollection.insertOne(boostedItem);
     } else if (inventoryItem) {
-      // For crafted items without boost tag, always create a new entry to maintain separation
-      if (obtain === 'Crafting') {
+      // For crafted or moderator-granted items without boost tag, always create a new entry to maintain separation
+      if (obtain === 'Crafting' || (typeof obtain === 'string' && obtain.toLowerCase() === 'Admin Give`')) {
         const newCraftedItem = {
           characterId,
           itemName: item.itemName,
@@ -421,7 +421,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
           subtype: Array.isArray(item.subtype) ? item.subtype.join(", ") : "",
           location: character.currentVillage || "Unknown",
           date: new Date(),
-          obtain: 'Crafting',
+          obtain: obtain,
         };
         if (craftedAt) {
           newCraftedItem.craftedAt = craftedAt;
