@@ -710,7 +710,15 @@ function applyTeacherVendingBoost(baseCost) {
 // ------------------- Priest Boost Functions -------------------
 // ============================================================================
 
-function applyPriestCraftingBoost(baseStaminaCost) {
+function applyPriestCraftingBoost(baseValue, context = {}) {
+ const isStaminaContext = context?.type === 'stamina' || context == null;
+
+ if (!isStaminaContext || typeof baseValue !== 'number') {
+  return baseValue;
+ }
+
+ const baseStaminaCost = baseValue;
+
  // Special case: 1 stamina items get no reduction
  if (baseStaminaCost === 1) {
   return 1;
@@ -1101,9 +1109,9 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
  }
 
  // Priest boosts
- if (normalizedJob === "Priest") {
+if (normalizedJob === "Priest") {
   switch (category) {
-   case "Crafting": return applyPriestCraftingBoost(data);
+   case "Crafting": return applyPriestCraftingBoost(data, additionalData);
    case "Exploring": return applyPriestExploringBoost(data);
    case "Gathering": return await applyPriestGatheringBoost(data);
    case "Healers": return applyPriestHealingBoost(data);

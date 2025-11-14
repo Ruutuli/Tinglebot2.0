@@ -75,11 +75,13 @@ async function applyCraftingStaminaBoost(characterName, staminaCost) {
 }
 
 async function applyCraftingMaterialBoost(characterName, materials, craftQuantity = 1) {
-  return await applyBoostToAction(characterName, 'Crafting', materials, craftQuantity);
+  const context = { type: 'materials', craftQuantity };
+  return await applyBoostToAction(characterName, 'Crafting', materials, context);
 }
 
 async function applyCraftingQuantityBoost(characterName, craftedItem) {
-  return await applyBoostToAction(characterName, 'Crafting', craftedItem);
+  const context = { type: 'quantity' };
+  return await applyBoostToAction(characterName, 'Crafting', craftedItem, context);
 }
 
 // For Gathering Commands  
