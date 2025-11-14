@@ -108,7 +108,13 @@ const userSchema = new mongoose.Schema({
         itemsEarned: [{ name: String, quantity: Number }],
         rewardSource: { type: String, default: 'immediate' }
       }
-    ]
+    ],
+    legacy: {
+      totalTransferred: { type: Number, default: 0 },
+      pendingTurnIns: { type: Number, default: 0 },
+      transferredAt: { type: Date, default: null },
+      transferUsed: { type: Boolean, default: false }
+    }
   }
 });
 
@@ -383,6 +389,7 @@ function defaultQuestTracking() {
   return {
     totalCompleted: 0,
     lastCompletionAt: null,
+    pendingTurnIns: 0,
     typeTotals: {
       art: 0,
       writing: 0,
@@ -391,7 +398,13 @@ function defaultQuestTracking() {
       artWriting: 0,
       other: 0
     },
-    completions: []
+    completions: [],
+    legacy: {
+      totalTransferred: 0,
+      pendingTurnIns: 0,
+      transferredAt: null,
+      transferUsed: false
+    }
   };
 }
 
@@ -416,6 +429,21 @@ userSchema.methods.ensureQuestTracking = function() {
     
     if (typeof this.quests.totalCompleted !== 'number') {
       this.quests.totalCompleted = 0;
+    }
+
+    if (typeof this.quests.pendingTurnIns !== 'number') {
+      this.quests.pendingTurnIns = 0;
+    }
+
+    if (!this.quests.legacy) {
+      this.quests.legacy = { ...defaultQuestTracking().legacy };
+    } else {
+      const legacyDefaults = defaultQuestTracking().legacy;
+      for (const key of Object.keys(legacyDefaults)) {
+        if (typeof this.quests.legacy[key] === 'undefined' || this.quests.legacy[key] === null) {
+          this.quests.legacy[key] = legacyDefaults[key];
+        }
+      }
     }
   }
   
@@ -470,6 +498,7 @@ userSchema.methods.recordQuestCompletion = async function({
     });
     
     questTracking.totalCompleted += 1;
+    questTracking.pendingTurnIns = (questTracking.pendingTurnIns || 0) + 1;
     questTracking.typeTotals[typeKey] = (questTracking.typeTotals[typeKey] || 0) + 1;
   }
   
@@ -490,11 +519,139 @@ userSchema.methods.recordQuestCompletion = async function({
 
 userSchema.methods.getQuestStats = function() {
   const questTracking = this.ensureQuestTracking();
+  const legacy = questTracking.legacy || defaultQuestTracking().legacy;
+  const legacyClone = {
+    totalTransferred: legacy.totalTransferred || 0,
+    pendingTurnIns: legacy.pendingTurnIns || 0,
+    transferredAt: legacy.transferredAt || null,
+    transferUsed: legacy.transferUsed || false
+  };
+  const allTimeTotal = (questTracking.totalCompleted || 0) + legacyClone.totalTransferred;
+  const turnInSummary = this.getQuestTurnInSummary();
   return {
     totalCompleted: questTracking.totalCompleted,
+    legacy: legacyClone,
+    allTimeTotal,
     lastCompletionAt: questTracking.lastCompletionAt,
     typeTotals: { ...questTracking.typeTotals },
-    recentCompletions: questTracking.completions.slice(-5).reverse()
+    recentCompletions: questTracking.completions.slice(-5).reverse(),
+    pendingTurnIns: turnInSummary.totalPending,
+    turnInSummary
+  };
+};
+
+userSchema.methods.canUseLegacyQuestTransfer = function() {
+  const questTracking = this.ensureQuestTracking();
+  return questTracking.legacy?.transferUsed !== true;
+};
+
+userSchema.methods.applyLegacyQuestTransfer = async function({
+  totalCompleted = 0,
+  pendingTurnIns = 0
+} = {}) {
+  const questTracking = this.ensureQuestTracking();
+
+  if (questTracking.legacy?.transferUsed) {
+    return {
+      success: false,
+      error: 'Legacy quest transfer has already been used.'
+    };
+  }
+
+  const sanitizedTotal = Number.isFinite(totalCompleted) ? Math.max(0, Math.floor(totalCompleted)) : 0;
+  const sanitizedPending = Number.isFinite(pendingTurnIns) ? Math.max(0, Math.floor(pendingTurnIns)) : 0;
+
+  if (sanitizedPending > sanitizedTotal) {
+    return {
+      success: false,
+      error: 'Pending turn-ins cannot exceed total transferred quests.'
+    };
+  }
+
+  questTracking.legacy.totalTransferred = sanitizedTotal;
+  questTracking.legacy.pendingTurnIns = sanitizedPending;
+  questTracking.legacy.transferredAt = new Date();
+  questTracking.legacy.transferUsed = true;
+
+  await this.save();
+
+  return {
+    success: true,
+    legacy: {
+      totalTransferred: questTracking.legacy.totalTransferred,
+      pendingTurnIns: questTracking.legacy.pendingTurnIns,
+      transferredAt: questTracking.legacy.transferredAt,
+      transferUsed: questTracking.legacy.transferUsed
+    },
+    allTimeTotal: (questTracking.totalCompleted || 0) + questTracking.legacy.totalTransferred,
+    pendingTurnIns: this.getQuestPendingTurnIns(),
+    turnInSummary: this.getQuestTurnInSummary()
+  };
+};
+
+userSchema.methods.getQuestPendingTurnIns = function() {
+  const questTracking = this.ensureQuestTracking();
+  const legacyPending = questTracking.legacy?.pendingTurnIns || 0;
+
+  // Placeholder for future non-legacy pending tracking.
+  const currentPending = questTracking.pendingTurnIns || 0;
+
+  return legacyPending + currentPending;
+};
+
+userSchema.methods.getQuestTurnInSummary = function() {
+  const questTracking = this.ensureQuestTracking();
+  const legacyPending = questTracking.legacy?.pendingTurnIns || 0;
+  const currentPending = questTracking.pendingTurnIns || 0;
+  const totalPending = legacyPending + currentPending;
+  const redeemableSets = Math.floor(totalPending / 10);
+  const remainder = totalPending % 10;
+
+  return {
+    totalPending,
+    redeemableSets,
+    remainder,
+    legacyPending,
+    currentPending
+  };
+};
+
+userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
+  const questTracking = this.ensureQuestTracking();
+  const sanitizedAmount = Number.isFinite(amount) ? Math.max(0, Math.floor(amount)) : 0;
+
+  if (sanitizedAmount <= 0) {
+    return { success: false, error: 'Amount to consume must be greater than zero.' };
+  }
+
+  const totalPending = this.getQuestPendingTurnIns();
+  if (totalPending < sanitizedAmount) {
+    return {
+      success: false,
+      error: `Not enough pending quest turn-ins. You currently have ${totalPending}.`
+    };
+  }
+
+  let remaining = sanitizedAmount;
+
+  if (questTracking.pendingTurnIns && questTracking.pendingTurnIns > 0) {
+    const deductCurrent = Math.min(questTracking.pendingTurnIns, remaining);
+    questTracking.pendingTurnIns -= deductCurrent;
+    remaining -= deductCurrent;
+  }
+
+  if (remaining > 0 && questTracking.legacy?.pendingTurnIns) {
+    questTracking.legacy.pendingTurnIns = Math.max(0, questTracking.legacy.pendingTurnIns - remaining);
+    remaining = 0;
+  }
+
+  await this.save();
+
+  return {
+    success: true,
+    consumed: sanitizedAmount,
+    remainingPending: this.getQuestPendingTurnIns(),
+    turnInSummary: this.getQuestTurnInSummary()
   };
 };
 

@@ -78,6 +78,25 @@ module.exports = {
     .setName("status")
     .setDescription("Check your current quest participation status")
   )
+.addSubcommand(subcommand =>
+ subcommand
+  .setName("transfer")
+  .setDescription("Transfer your legacy quest totals into the system")
+  .addIntegerOption(option =>
+   option
+    .setName("total")
+    .setDescription("Total number of legacy quests you completed")
+    .setRequired(true)
+    .setMinValue(0)
+  )
+  .addIntegerOption(option =>
+   option
+    .setName("pending")
+    .setDescription("How many of those legacy quests are still unredeemed")
+    .setRequired(true)
+    .setMinValue(0)
+  )
+)
   .addSubcommand(subcommand =>
    subcommand
     .setName("stats")
@@ -108,6 +127,7 @@ module.exports = {
     leave: () => this.handleLeaveQuest(interaction),
     list: () => this.handleListQuests(interaction),
     status: () => this.handleQuestStatus(interaction),
+   transfer: () => this.handleLegacyQuestTransfer(interaction),
    stats: () => this.handleQuestStats(interaction),
     postcount: () => this.handlePostCount(interaction)
    };
@@ -248,13 +268,31 @@ module.exports = {
     });
    }
 
-   const stats = typeof userDocument.getQuestStats === "function"
-    ? userDocument.getQuestStats()
-    : userDocument.quests || {};
+  const stats = typeof userDocument.getQuestStats === "function"
+   ? userDocument.getQuestStats()
+   : userDocument.quests || {};
 
-   const totalCompleted = stats.totalCompleted || 0;
+  const totalCompleted = stats.totalCompleted || 0;
+  const legacyInfo = stats.legacy || {
+   totalTransferred: 0,
+   pendingTurnIns: 0,
+   transferredAt: null,
+   transferUsed: false
+  };
+  const allTimeTotal = typeof stats.allTimeTotal === "number"
+   ? stats.allTimeTotal
+   : totalCompleted + (legacyInfo.totalTransferred || 0);
+  const pendingTurnIns = typeof stats.pendingTurnIns === "number"
+   ? stats.pendingTurnIns
+   : legacyInfo.pendingTurnIns || 0;
+ const turnInSummary = stats.turnInSummary || {
+  totalPending: pendingTurnIns,
+  redeemableSets: Math.floor(pendingTurnIns / 10),
+  remainder: pendingTurnIns % 10
+ };
+ const redeemableSets = turnInSummary.redeemableSets || 0;
 
-   if (totalCompleted === 0) {
+  if (allTimeTotal === 0) {
     if (targetUser.id === interaction.user.id) {
      return interaction.reply({
       content: "You have not completed any quests yet.",
@@ -272,19 +310,24 @@ module.exports = {
     ? this.formatQuestStatsDate(stats.lastCompletionAt)
     : "Unknown";
 
-   const typeBreakdown = this.formatQuestTypeTotals(stats.typeTotals || {});
+   const typeTotals = stats.typeTotals || {};
+   const uniqueTypes = this.countCompletedQuestTypes(typeTotals);
+   const favoriteType = this.getFavoriteQuestType(typeTotals);
+   const typeBreakdown = this.formatQuestTypeTotals(typeTotals);
    const recentCompletions = this.buildRecentQuestCompletions(stats.recentCompletions || []);
 
    const title = targetUser.id === interaction.user.id
     ? "Your Quest Stats"
     : `${targetUser.username}'s Quest Stats`;
 
-   const description = `You have completed **${totalCompleted}** quest${totalCompleted === 1 ? "" : "s"}.`;
+  const completionSummary = legacyInfo.totalTransferred > 0
+   ? `You have completed **${allTimeTotal}** quests total (**${totalCompleted}** tracked, **${legacyInfo.totalTransferred}** legacy).`
+   : `You have completed **${totalCompleted}** quest${totalCompleted === 1 ? "" : "s"}.`;
 
    const statsEmbed = createBaseEmbed(
     title,
-    description,
-    QUEST_COLORS.INFO
+   `${completionSummary}\nKeep completing quests to unlock more rewards and milestones!`,
+    QUEST_COLORS.SUCCESS
    );
 
    const avatarUrl = targetUser.displayAvatarURL({ extension: "png", size: 256 });
@@ -292,19 +335,38 @@ module.exports = {
     statsEmbed.setThumbnail(avatarUrl);
    }
 
+  const legacyStatus = legacyInfo.transferUsed
+   ? `Transferred on ${legacyInfo.transferredAt ? this.formatQuestStatsDate(legacyInfo.transferredAt) : '*date unknown*'}`
+   : "Not transferred yet — use `/quest transfer`";
+
+  const snapshotLines = [
+   `- Current System Quests: **${totalCompleted}**`,
+   `- Legacy Quests: **${legacyInfo.totalTransferred || 0}**`,
+   `- All-Time Total: **${allTimeTotal}**`,
+  `- Pending Turn-Ins: **${pendingTurnIns}** (${redeemableSets} set${redeemableSets === 1 ? "" : "s"} ready)`,
+   `- Unique Quest Types: **${uniqueTypes}**`,
+   `- Favorite Quest Type: **${favoriteType}**`,
+   `- Last Completion: ${lastCompletionAt}`
+  ];
+
    statsEmbed.addFields(
     {
-     name: "Last Quest Completion",
-     value: lastCompletionAt,
-     inline: true
+     name: "Quest Snapshot",
+     value: snapshotLines.join("\n"),
+     inline: false
     },
+   {
+    name: "Legacy Transfer",
+    value: legacyStatus,
+    inline: false
+   },
     {
-     name: "Quest Types",
+     name: "Quest Type Breakdown",
      value: typeBreakdown,
      inline: true
     },
     {
-     name: "Recent Quests",
+     name: "Recent Quest Completions",
      value: recentCompletions,
      inline: false
     }
@@ -319,6 +381,98 @@ module.exports = {
    console.error("[quest.js]❌ Error in handleQuestStats:", error);
    return interaction.reply({
     content: "[quest.js]❌ An error occurred while retrieving quest stats.",
+    flags: MessageFlags.Ephemeral
+   });
+  }
+ },
+
+// ============================================================================
+// ------------------- Legacy Quest Transfer Handler -------------------
+// ============================================================================
+ async handleLegacyQuestTransfer(interaction) {
+  try {
+   const totalLegacy = interaction.options.getInteger("total");
+   const pendingLegacy = interaction.options.getInteger("pending");
+
+   if (totalLegacy <= 0 && pendingLegacy <= 0) {
+    return interaction.reply({
+     content: "You need at least one legacy quest or pending turn-in to transfer.",
+     flags: MessageFlags.Ephemeral
+    });
+   }
+
+   if (pendingLegacy > totalLegacy) {
+    return interaction.reply({
+     content: "Pending turn-ins cannot be greater than your total legacy quests. Please double-check your numbers.",
+     flags: MessageFlags.Ephemeral
+    });
+   }
+
+   const user = await User.getOrCreateUser(interaction.user.id);
+
+   if (!user.canUseLegacyQuestTransfer()) {
+    return interaction.reply({
+     content: "You have already transferred your legacy quest totals.",
+     flags: MessageFlags.Ephemeral
+    });
+   }
+
+   const transferResult = await user.applyLegacyQuestTransfer({
+    totalCompleted: totalLegacy,
+    pendingTurnIns: pendingLegacy
+   });
+
+   if (!transferResult.success) {
+    return interaction.reply({
+     content: `❌ ${transferResult.error || 'Unable to apply legacy transfer.'}`,
+     flags: MessageFlags.Ephemeral
+    });
+   }
+
+   const turnInSummary = transferResult.turnInSummary || {
+    redeemableSets: Math.floor((transferResult.pendingTurnIns || 0) / 10),
+    remainder: (transferResult.pendingTurnIns || 0) % 10
+   };
+
+   const summaryEmbed = createBaseEmbed(
+    "Legacy Quest Transfer Completed",
+    "Your legacy quest progress has been added to your profile and will count toward future rewards.",
+    QUEST_COLORS.SUCCESS
+   );
+
+   summaryEmbed.addFields(
+    {
+     name: "Legacy Quests Transferred",
+     value: `**${transferResult.legacy.totalTransferred}** quests`,
+     inline: true
+    },
+    {
+     name: "Unredeemed Legacy Quests",
+     value: `**${transferResult.legacy.pendingTurnIns}** awaiting reward`,
+     inline: true
+    },
+    {
+     name: "All-Time Quest Total",
+     value: `**${transferResult.allTimeTotal}** quests`,
+     inline: false
+    },
+    {
+     name: "Turn-In Progress",
+     value: `Sets ready: **${turnInSummary.redeemableSets || 0}**\nRemaining toward next: **${turnInSummary.remainder || 0}/10**`,
+     inline: false
+    }
+   );
+
+   summaryEmbed.setFooter({ text: "This transfer can only be performed once." });
+
+   return interaction.reply({
+    embeds: [summaryEmbed],
+    flags: MessageFlags.Ephemeral
+   });
+  } catch (error) {
+   console.error("[quest.js]❌ Error in handleLegacyQuestTransfer:", error);
+   return interaction.reply({
+    content: "[quest.js]❌ An error occurred while transferring legacy quests.",
     flags: MessageFlags.Ephemeral
    });
   }
@@ -446,11 +600,8 @@ module.exports = {
    return "Unknown";
   }
 
-  return date.toLocaleString("en-US", {
-   year: "numeric",
-   month: "short",
-   day: "numeric"
-  });
+  const unix = Math.floor(date.getTime() / 1000);
+  return `<t:${unix}:D>`;
  },
 
  formatQuestTypeTotals(typeTotals) {
@@ -463,12 +614,24 @@ module.exports = {
    { key: "other", label: "Other" }
   ];
 
-  const lines = breakdown.map(entry => {
-   const total = typeof typeTotals[entry.key] === "number" ? typeTotals[entry.key] : 0;
-   return `${entry.label}: **${total}**`;
-  });
+  const totalsWithValues = breakdown
+   .map(entry => ({
+    ...entry,
+    total: typeof typeTotals[entry.key] === "number" ? typeTotals[entry.key] : 0
+   }))
+   .filter(entry => entry.total > 0)
+   .sort((a, b) => b.total - a.total);
 
-  return lines.join("\n");
+  if (totalsWithValues.length === 0) {
+   return "*No completed quest types yet*";
+  }
+
+  return totalsWithValues
+   .map((entry, index) => {
+    const prefix = index === 0 ? ">" : "-";
+    return `${prefix} **${entry.label}**: ${entry.total}`;
+   })
+   .join("\n");
  },
 
  buildRecentQuestCompletions(recentCompletions) {
@@ -483,10 +646,36 @@ module.exports = {
     const type = completion.questType || "Unknown";
     const completedDate = completion.rewardedAt || completion.completedAt;
     const formattedDate = this.formatQuestStatsDate(completedDate);
-    return `• ${title} (${type}) – ${formattedDate}`;
+    return `- ${title} — ${type} — ${formattedDate}`;
    });
 
   return entries.join("\n");
+ },
+
+ countCompletedQuestTypes(typeTotals = {}) {
+  return Object.values(typeTotals).filter(total => typeof total === "number" && total > 0).length;
+ },
+
+ getFavoriteQuestType(typeTotals = {}) {
+  const breakdown = [
+   { key: "art", label: "Art" },
+   { key: "writing", label: "Writing" },
+   { key: "interactive", label: "Interactive" },
+   { key: "rp", label: "RP" },
+   { key: "artWriting", label: "Art / Writing" },
+   { key: "other", label: "Other" }
+  ];
+
+  let favorite = { label: "N/A", total: 0 };
+
+  for (const entry of breakdown) {
+   const total = typeof typeTotals[entry.key] === "number" ? typeTotals[entry.key] : 0;
+   if (total > favorite.total) {
+    favorite = { label: entry.label, total };
+   }
+  }
+
+  return favorite.total > 0 ? `${favorite.label} (${favorite.total})` : "N/A";
  },
 
 // ============================================================================
