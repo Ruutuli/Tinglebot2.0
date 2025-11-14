@@ -731,6 +731,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "questid") {
                   await handleQuestIdAutocomplete(interaction, focusedOption);
                 }
+              } else if (questSubcommand === "turnin") {
+                if (focusedOption.name === "character") {
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "quest");
+                }
               }
             }
             break;

@@ -99,6 +99,27 @@ module.exports = {
 )
   .addSubcommand(subcommand =>
    subcommand
+    .setName("turnin")
+    .setDescription("Exchange 10 completed quests for a special reward")
+    .addStringOption(option =>
+     option
+      .setName("reward")
+      .setDescription("Choose the reward you want to receive")
+      .setRequired(true)
+      .addChoices(
+       { name: "Character Slot", value: "character_slot" },
+       { name: "Spirit Orb", value: "spirit_orb" }
+      )
+    )
+    .addStringOption(option =>
+     option
+      .setName("character")
+      .setDescription("Character receiving the Spirit Orb (required for Spirit Orb rewards)")
+      .setAutocomplete(true)
+    )
+  )
+  .addSubcommand(subcommand =>
+   subcommand
     .setName("stats")
     .setDescription("View your quest completion stats")
   )
@@ -127,6 +148,7 @@ module.exports = {
     leave: () => this.handleLeaveQuest(interaction),
     list: () => this.handleListQuests(interaction),
     status: () => this.handleQuestStatus(interaction),
+   turnin: () => this.handleQuestTurnIn(interaction),
    transfer: () => this.handleLegacyQuestTransfer(interaction),
    stats: () => this.handleQuestStats(interaction),
     postcount: () => this.handlePostCount(interaction)
@@ -320,9 +342,9 @@ module.exports = {
     ? "Your Quest Stats"
     : `${targetUser.username}'s Quest Stats`;
 
-  const completionSummary = legacyInfo.totalTransferred > 0
-   ? `You have completed **${allTimeTotal}** quests total (**${totalCompleted}** tracked, **${legacyInfo.totalTransferred}** legacy).`
-   : `You have completed **${totalCompleted}** quest${totalCompleted === 1 ? "" : "s"}.`;
+const completionSummary = legacyInfo.totalTransferred > 0
+ ? `✨ **All-Time Quests:** ${formatQuestCount(allTimeTotal)} ┇ 📘 Tracked: ${formatQuestCount(totalCompleted)} ┇ 🕰️ Legacy: ${formatQuestCount(legacyInfo.totalTransferred)}`
+ : `✨ You have completed **${formatQuestCount(totalCompleted)}** quest${totalCompleted === 1 ? "" : "s"}.`;
 
    const statsEmbed = createBaseEmbed(
     title,
@@ -336,37 +358,37 @@ module.exports = {
    }
 
   const legacyStatus = legacyInfo.transferUsed
-   ? `Transferred on ${legacyInfo.transferredAt ? this.formatQuestStatsDate(legacyInfo.transferredAt) : '*date unknown*'}`
-   : "Not transferred yet — use `/quest transfer`";
+   ? `✅ **Transferred:** ${legacyInfo.transferredAt ? this.formatQuestStatsDate(legacyInfo.transferredAt) : '*date unknown*'}`
+   : "⚠️ **Not transferred** — use `/quest transfer` to import your legacy quests.";
 
-  const snapshotLines = [
-   `- Current System Quests: **${totalCompleted}**`,
-   `- Legacy Quests: **${legacyInfo.totalTransferred || 0}**`,
-   `- All-Time Total: **${allTimeTotal}**`,
-  `- Pending Turn-Ins: **${pendingTurnIns}** (${redeemableSets} set${redeemableSets === 1 ? "" : "s"} ready)`,
-   `- Unique Quest Types: **${uniqueTypes}**`,
-   `- Favorite Quest Type: **${favoriteType}**`,
-   `- Last Completion: ${lastCompletionAt}`
+ const snapshotLines = [
+  `• 🎯 **Tracked Quests:** ${formatQuestCount(totalCompleted)}`,
+  `• 🗒️ **Legacy Quests:** ${formatQuestCount(legacyInfo.totalTransferred || 0)}`,
+  `• 🧮 **All-Time Total:** ${formatQuestCount(allTimeTotal)}`,
+ `• 🎁 **Pending Turn-Ins:** ${formatQuestCount(pendingTurnIns)} • Sets Ready: **${redeemableSets}**`,
+   `• 🧭 **Unique Quest Types:** ${uniqueTypes}`,
+   `• 🏆 **Favorite Quest Type:** ${favoriteType}`,
+   `• 📅 **Last Completion:** ${lastCompletionAt}`
   ];
 
    statsEmbed.addFields(
     {
-     name: "Quest Snapshot",
+    name: "📊 Quest Snapshot",
      value: snapshotLines.join("\n"),
      inline: false
     },
    {
-    name: "Legacy Transfer",
+   name: "🕰️ Legacy Transfer",
     value: legacyStatus,
     inline: false
    },
     {
-     name: "Quest Type Breakdown",
+    name: "📚 Quest Type Breakdown",
      value: typeBreakdown,
      inline: true
     },
     {
-     name: "Recent Quest Completions",
+    name: "📝 Recent Quest Completions",
      value: recentCompletions,
      inline: false
     }
@@ -389,6 +411,163 @@ module.exports = {
 // ============================================================================
 // ------------------- Legacy Quest Transfer Handler -------------------
 // ============================================================================
+async handleQuestTurnIn(interaction) {
+ try {
+  const rewardType = interaction.options.getString("reward");
+  const characterName = interaction.options.getString("character");
+  const requiredTurnIns = 10;
+
+  if (!["character_slot", "spirit_orb"].includes(rewardType)) {
+   return interaction.reply({
+    content: "❌ Invalid reward selection. Please choose a valid reward option.",
+    flags: MessageFlags.Ephemeral
+   });
+  }
+
+  const user = await User.getOrCreateUser(interaction.user.id);
+  const currentSummary = user.getQuestTurnInSummary();
+  const totalPending = currentSummary.totalPending || 0;
+  const redeemableSets = currentSummary.redeemableSets || 0;
+
+  if (totalPending < requiredTurnIns || redeemableSets < 1) {
+   const shortage = requiredTurnIns - (totalPending % requiredTurnIns || requiredTurnIns);
+   const message =
+    totalPending < requiredTurnIns
+     ? `You need at least ${requiredTurnIns} pending quest turn-ins to redeem a reward. You currently have ${this.formatQuestCount(totalPending)}.`
+     : `You need a full set of ${requiredTurnIns} turn-ins (10, 20, 30, etc.) to redeem a reward.`;
+
+   return interaction.reply({
+    content: `❌ ${message}\n• Pending turn-ins: ${this.formatQuestCount(totalPending)}\n• Sets ready: ${this.formatQuestCount(redeemableSets)}\n• Turn-ins needed for next reward: ${this.formatQuestCount(shortage)}`,
+    flags: MessageFlags.Ephemeral
+   });
+  }
+
+  let character = null;
+  if (rewardType === "spirit_orb") {
+   if (!characterName) {
+    return interaction.reply({
+     content: "❌ Please specify which character should receive the Spirit Orb.",
+     flags: MessageFlags.Ephemeral
+    });
+   }
+
+   character = await this.validateCharacter(interaction, characterName, interaction.user.id);
+   if (!character) {
+    return;
+   }
+  }
+
+  const consumeResult = await user.consumeQuestTurnIns(requiredTurnIns);
+  if (!consumeResult.success) {
+   return interaction.reply({
+    content: `❌ ${consumeResult.error || "Unable to redeem quest turn-ins right now. Please try again later."}`,
+    flags: MessageFlags.Ephemeral
+   });
+  }
+
+  const updatedSummary = consumeResult.turnInSummary || user.getQuestTurnInSummary();
+  const rewardFields = [];
+  let rewardValue = "";
+  let description = "";
+
+  if (rewardType === "character_slot") {
+   const previousSlots = typeof user.characterSlot === "number" ? user.characterSlot : 2;
+   user.characterSlot = previousSlots + 1;
+   await user.save();
+
+   rewardFields.push({
+    name: "🎫 Character Slots",
+    value: `> ${previousSlots} → ${user.characterSlot}`,
+    inline: true
+   });
+
+   rewardValue = "+1 Character Slot";
+   description = "You exchanged 10 completed quests for a new character slot.";
+  } else {
+   const { getCharacterInventoryCollection } = require("../../database/db");
+   const inventoryCollection = await getCharacterInventoryCollection(character.name);
+   const existingOrb = await inventoryCollection.findOne({
+    characterId: character._id,
+    itemName: { $regex: /^spirit orb$/i }
+   });
+
+   const previousOrbs = existingOrb?.quantity || 0;
+   const newOrbTotal = previousOrbs + 1;
+
+   if (existingOrb) {
+    await inventoryCollection.updateOne(
+     { _id: existingOrb._id },
+     { $set: { quantity: newOrbTotal } }
+    );
+   } else {
+    await inventoryCollection.insertOne({
+     characterId: character._id,
+     itemName: "Spirit Orb",
+     quantity: 1,
+     category: "Material",
+     type: "Special",
+     subtype: "",
+     addedAt: new Date()
+    });
+   }
+
+   await Character.findByIdAndUpdate(character._id, { spiritOrbs: newOrbTotal });
+
+   rewardFields.push({
+    name: "<:spiritorb:1171310851748270121> Spirit Orbs",
+    value: `> ${previousOrbs} → ${newOrbTotal}`,
+    inline: true
+   });
+
+   rewardValue = "+1 <:spiritorb:1171310851748270121> Spirit Orb";
+   description = `You exchanged 10 completed quests for a Spirit Orb for **${character.name}**.`;
+  }
+
+  const summaryEmbed = createBaseEmbed(
+   "Quest Turn-In Redeemed",
+   description,
+   QUEST_COLORS.SUCCESS
+  );
+
+  summaryEmbed.addFields(
+   {
+    name: "🎁 Reward",
+    value: rewardValue,
+    inline: false
+   },
+   ...rewardFields,
+   {
+    name: "📊 Updated Turn-In Progress",
+    value: [
+     `• Pending Turn-Ins: ${this.formatQuestCount(updatedSummary.totalPending || 0)}`,
+     `• Sets Ready: ${this.formatQuestCount(updatedSummary.redeemableSets || 0)}`,
+     `• Toward Next: ${this.formatQuestCount(updatedSummary.remainder || 0)}/10`
+    ].join("\n"),
+    inline: false
+   }
+  );
+
+  return interaction.reply({
+   embeds: [summaryEmbed],
+   flags: MessageFlags.Ephemeral
+  });
+ } catch (error) {
+  console.error("[quest.js]❌ Error in handleQuestTurnIn:", error);
+
+  if (!interaction.replied && !interaction.deferred) {
+   return interaction.reply({
+    content: "[quest.js]❌ An error occurred while processing your quest turn-in.",
+    flags: MessageFlags.Ephemeral
+   });
+  }
+
+  return interaction.followUp({
+   content: "[quest.js]❌ An error occurred while processing your quest turn-in.",
+   flags: MessageFlags.Ephemeral
+  });
+ }
+},
+
  async handleLegacyQuestTransfer(interaction) {
   try {
    const totalLegacy = interaction.options.getInteger("total");
@@ -440,28 +619,32 @@ module.exports = {
     QUEST_COLORS.SUCCESS
    );
 
-   summaryEmbed.addFields(
-    {
-     name: "Legacy Quests Transferred",
-     value: `**${transferResult.legacy.totalTransferred}** quests`,
-     inline: true
-    },
-    {
-     name: "Unredeemed Legacy Quests",
-     value: `**${transferResult.legacy.pendingTurnIns}** awaiting reward`,
-     inline: true
-    },
-    {
-     name: "All-Time Quest Total",
-     value: `**${transferResult.allTimeTotal}** quests`,
-     inline: false
-    },
-    {
-     name: "Turn-In Progress",
-     value: `Sets ready: **${turnInSummary.redeemableSets || 0}**\nRemaining toward next: **${turnInSummary.remainder || 0}/10**`,
-     inline: false
-    }
-   );
+ summaryEmbed.addFields(
+  {
+   name: "📦 Legacy Import",
+   value: [
+    `• 📚 **Transferred:** ${formatQuestCount(transferResult.legacy.totalTransferred)} quests`,
+    `• 🎁 **Pending Turn-Ins:** ${formatQuestCount(transferResult.legacy.pendingTurnIns)}`
+   ].join("\n"),
+   inline: false
+  },
+  {
+   name: "📈 Updated Totals",
+   value: [
+    `• 🧮 **All-Time Total:** ${formatQuestCount(transferResult.allTimeTotal)} quests`,
+    `• 🎯 **Tracked Quests:** ${formatQuestCount(user.quests.totalCompleted || 0)}`
+   ].join("\n"),
+   inline: false
+  },
+  {
+   name: "🎉 Turn-In Progress",
+   value: [
+    `• ✅ **Sets Ready:** ${formatQuestCount(turnInSummary.redeemableSets || 0)}`,
+    `• ➕ **Toward Next:** ${formatQuestCount(turnInSummary.remainder || 0)}/10`
+   ].join("\n"),
+   inline: false
+  }
+ );
 
    summaryEmbed.setFooter({ text: "This transfer can only be performed once." });
 
@@ -603,6 +786,13 @@ module.exports = {
   const unix = Math.floor(date.getTime() / 1000);
   return `<t:${unix}:D>`;
  },
+
+formatQuestCount(count = 0) {
+ if (!Number.isFinite(count)) {
+  return `${count}`;
+ }
+ return count.toLocaleString("en-US");
+},
 
  formatQuestTypeTotals(typeTotals) {
   const breakdown = [
