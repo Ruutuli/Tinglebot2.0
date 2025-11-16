@@ -45,6 +45,11 @@ const WeatherSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: ['spring', 'summer', 'fall', 'winter']
+  },
+  postedToDiscord: {
+    type: Boolean,
+    default: false,
+    required: true
   }
 }, {
   timestamps: true

@@ -18,6 +18,7 @@ const Raid = require("./models/RaidModel");
 const RuuGame = require("./models/RuuGameModel");
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
 const ItemModel = require('./models/ItemModel');
+const Weather = require('./models/WeatherModel');
 
 // Database functions
 const {
@@ -183,9 +184,12 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
  try {
   if (checkExisting) {
    const existingWeather = await getWeatherWithoutGeneration(village);
-   if (existingWeather) {
-    logger.info('WEATHER', `Weather already exists for ${village}, skipping post`);
-    return false; // Weather already exists
+   if (existingWeather && existingWeather.postedToDiscord) {
+    logger.info('WEATHER', `Weather already exists and posted for ${village}, skipping post`);
+    return false; // Weather already exists and was posted
+   }
+   if (existingWeather && !existingWeather.postedToDiscord) {
+    logger.info('WEATHER', `Weather exists for ${village} but not posted, will post now`);
    }
   }
 
@@ -225,6 +229,16 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
   
   logger.info('WEATHER', `Sending weather message to ${village} channel...`);
   await channel.send({ embeds: [embed], files });
+  
+  // Mark weather as posted to Discord
+  if (weather._id) {
+   await Weather.updateOne(
+    { _id: weather._id },
+    { $set: { postedToDiscord: true } }
+   );
+   logger.info('WEATHER', `Marked weather as posted for ${village}`);
+  }
+  
   logger.success('WEATHER', `Successfully posted weather for ${village}`);
   return true;
  } catch (error) {
@@ -301,9 +315,11 @@ async function checkAndPostWeatherOnRestart(client) {
    return 0;
   }
   
-  // Restart check should always attempt to post, even if weather exists in DB
-  // This catches cases where weather was created but never posted to Discord
-  return await processWeatherForAllVillages(client, false, 'restart check');
+  // Restart check with checkExisting=true will:
+  // - Skip if weather exists and is already posted
+  // - Post if weather exists but wasn't posted (catches missed posts)
+  // - Generate and post if weather doesn't exist
+  return await processWeatherForAllVillages(client, true, 'restart check');
  } catch (error) {
   logger.error('WEATHER', 'Restart check failed');
   handleError(error, "scheduler.js", {
