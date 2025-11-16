@@ -301,7 +301,9 @@ async function checkAndPostWeatherOnRestart(client) {
    return 0;
   }
   
-  return await processWeatherForAllVillages(client, true, 'restart check');
+  // Restart check should always attempt to post, even if weather exists in DB
+  // This catches cases where weather was created but never posted to Discord
+  return await processWeatherForAllVillages(client, false, 'restart check');
  } catch (error) {
   logger.error('WEATHER', 'Restart check failed');
   handleError(error, "scheduler.js", {
