@@ -973,9 +973,20 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
 // ------------------- Generate Weather Embed -------------------
 async function generateWeatherEmbed(village, weather, options = {}) {
   try {
+    // Validate village constants exist
+    if (!VILLAGE_COLORS[village]) {
+      throw new Error(`No color defined for village: ${village}`);
+    }
+    if (!VILLAGE_ICONS[village]) {
+      throw new Error(`No icon path defined for village: ${village}`);
+    }
+    
     // Use the original season for icon lookup since SEASON_ICONS expects 'fall'
     const seasonKey = weather.season || 'spring';
     const seasonIconPath = SEASON_ICONS[seasonKey];
+    if (!seasonIconPath) {
+      throw new Error(`No season icon path for season: ${seasonKey}`);
+    }
     const seasonIconName = `${seasonKey}.png`;
     const seasonAttachment = new AttachmentBuilder(seasonIconPath, { name: seasonIconName });
     const crestIconPath = VILLAGE_ICONS[village];

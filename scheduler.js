@@ -184,29 +184,51 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
   if (checkExisting) {
    const existingWeather = await getWeatherWithoutGeneration(village);
    if (existingWeather) {
+    logger.info('WEATHER', `Weather already exists for ${village}, skipping post`);
     return false; // Weather already exists
    }
   }
 
+  logger.info('WEATHER', `Getting weather for ${village}...`);
   const weather = await getCurrentWeather(village);
   if (!weather) {
-   logger.error('WEATHER', `Failed to get weather for ${village}`);
+   logger.error('WEATHER', `Failed to get weather for ${village} - getCurrentWeather returned null/undefined`);
    return false;
   }
 
   const channelId = TOWNHALL_CHANNELS[village];
-  const channel = client.channels.cache.get(channelId);
-
-  if (!channel) {
-   logger.error('WEATHER', `Channel not found: ${channelId}`);
+  if (!channelId) {
+   logger.error('WEATHER', `No channel ID configured for ${village} in TOWNHALL_CHANNELS`);
    return false;
   }
 
+  logger.info('WEATHER', `Looking up channel ${channelId} for ${village}...`);
+  let channel = client.channels.cache.get(channelId);
+
+  if (!channel) {
+   logger.error('WEATHER', `Channel not found in cache: ${channelId} for ${village}. Attempting fetch...`);
+   try {
+    channel = await client.channels.fetch(channelId);
+    if (!channel) {
+     logger.error('WEATHER', `Channel ${channelId} does not exist for ${village}`);
+     return false;
+    }
+    logger.info('WEATHER', `Successfully fetched channel ${channelId} for ${village}`);
+   } catch (fetchError) {
+    logger.error('WEATHER', `Failed to fetch channel ${channelId} for ${village}: ${fetchError.message}`);
+    return false;
+   }
+  }
+
+  logger.info('WEATHER', `Generating embed for ${village}...`);
   const { embed, files } = await generateWeatherEmbed(village, weather);
+  
+  logger.info('WEATHER', `Sending weather message to ${village} channel...`);
   await channel.send({ embeds: [embed], files });
+  logger.success('WEATHER', `Successfully posted weather for ${village}`);
   return true;
  } catch (error) {
-  logger.error('WEATHER', `Error posting weather for ${village}`, error.message);
+  logger.error('WEATHER', `Error posting weather for ${village}: ${error.message}`, error.stack);
   handleError(error, "scheduler.js", {
    commandName: 'postWeatherForVillage',
    village: village
@@ -219,19 +241,37 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
  try {
   const villages = Object.keys(TOWNHALL_CHANNELS);
   let postedCount = 0;
+  const results = [];
 
   for (const village of villages) {
-   const posted = await postWeatherForVillage(client, village, checkExisting);
-   if (posted) postedCount++;
+   try {
+    const posted = await postWeatherForVillage(client, village, checkExisting);
+    if (posted) {
+     postedCount++;
+     results.push({ village, success: true });
+    } else {
+     results.push({ village, success: false, reason: 'postWeatherForVillage returned false' });
+    }
+   } catch (error) {
+    results.push({ village, success: false, reason: error.message });
+    logger.error('WEATHER', `Failed to post weather for ${village}: ${error.message}`);
+   }
+  }
+
+  const failedVillages = results.filter(r => !r.success).map(r => r.village);
+  if (failedVillages.length > 0) {
+   logger.error('WEATHER', `Failed to post weather for: ${failedVillages.join(', ')}`);
   }
 
   if (postedCount > 0) {
    logger.success('WEATHER', `Posted to ${postedCount}/${villages.length} villages${context ? ` (${context})` : ''}`);
+  } else if (failedVillages.length > 0) {
+   logger.error('WEATHER', `No weather posted - all villages failed${context ? ` (${context})` : ''}`);
   }
 
   return postedCount;
  } catch (error) {
-  logger.error('WEATHER', `Process failed${context ? ` (${context})` : ''}`);
+  logger.error('WEATHER', `Process failed${context ? ` (${context})` : ''}`, error.message);
   handleError(error, "scheduler.js", {
    commandName: 'processWeatherForAllVillages',
    context: context
