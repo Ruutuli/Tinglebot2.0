@@ -774,6 +774,10 @@ async function generateBanner(village, weather, options = {}) {
       console.error(`[weatherService.js]: Failed to get banner for ${village}`);
       return null;
     }
+    if (!fs.existsSync(bannerPath)) {
+      console.error(`[weatherService.js]: Banner file does not exist: ${bannerPath}`);
+      return null;
+    }
     
     // Special weather overlay takes priority
     let overlayPath = null;
@@ -973,6 +977,20 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
 // ------------------- Generate Weather Embed -------------------
 async function generateWeatherEmbed(village, weather, options = {}) {
   try {
+    // Validate weather object structure
+    if (!weather) {
+      throw new Error('Weather object is null or undefined');
+    }
+    if (!weather.temperature || !weather.temperature.label) {
+      throw new Error(`Invalid weather object: missing temperature.label for ${village}`);
+    }
+    if (!weather.wind || !weather.wind.label) {
+      throw new Error(`Invalid weather object: missing wind.label for ${village}`);
+    }
+    if (!weather.precipitation || !weather.precipitation.label) {
+      throw new Error(`Invalid weather object: missing precipitation.label for ${village}`);
+    }
+    
     // Validate village constants exist
     if (!VILLAGE_COLORS[village]) {
       throw new Error(`No color defined for village: ${village}`);
@@ -987,9 +1005,15 @@ async function generateWeatherEmbed(village, weather, options = {}) {
     if (!seasonIconPath) {
       throw new Error(`No season icon path for season: ${seasonKey}`);
     }
+    if (!fs.existsSync(seasonIconPath)) {
+      throw new Error(`Season icon file does not exist: ${seasonIconPath}`);
+    }
     const seasonIconName = `${seasonKey}.png`;
     const seasonAttachment = new AttachmentBuilder(seasonIconPath, { name: seasonIconName });
     const crestIconPath = VILLAGE_ICONS[village];
+    if (!fs.existsSync(crestIconPath)) {
+      throw new Error(`Village icon file does not exist: ${crestIconPath}`);
+    }
     const crestIconName = `crest_${village.toLowerCase()}.png`;
     const crestAttachment = new AttachmentBuilder(crestIconPath, { name: crestIconName });
     const tempEmoji = weather.temperature.emoji || '🌡️';
