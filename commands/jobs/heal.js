@@ -1061,12 +1061,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
 
     // Notify requester
     const originalRequesterId = healingRequest.requesterUserId;
-    let message = `<@${originalRequesterId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
-    
-    // Add fallback message if original message couldn't be updated
-    if (!originalMessageUpdated) {
-      message += `\n\nℹ️ **Note:** The original healing request message could not be updated (it may have been deleted).`;
-    }
+    const pingMessage = `🔔 <@${originalRequesterId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
 
     const embed = await createHealEmbed(
       healerCharacter,
@@ -1082,13 +1077,23 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       capturedBoostInfo // boost info
     );
 
-    await interaction.followUp({ 
-      content: message, 
+    // Send embed via interaction.followUp() and user ping via channel.send()
+    // This approach works because channel.send() properly handles user mentions
+    await interaction.followUp({
       embeds: [embed],
-      allowedMentions: {
-        users: [originalRequesterId]
-      }
     });
+    
+    // Add fallback message if original message couldn't be updated
+    let finalPingMessage = pingMessage;
+    if (!originalMessageUpdated) {
+      finalPingMessage += `\n\nℹ️ **Note:** The original healing request message could not be updated (it may have been deleted).`;
+    }
+    
+    if (channel) {
+      await channel.send({ 
+        content: finalPingMessage 
+      });
+    }
   } catch (error) {
     await handleInteractionErrorResponse(error, interaction, 'fulfilling the healing request');
   }
