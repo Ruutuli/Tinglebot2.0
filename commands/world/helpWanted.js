@@ -926,8 +926,168 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   
   const items = await fetchItemsByMonster(monsterName);
   const diceRoll = Math.floor(Math.random() * 100) + 1;
-  const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, elixirBuffs } = calculateFinalValue(character, diceRoll);
-  const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+  let { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, elixirBuffs } = calculateFinalValue(character, diceRoll);
+  let outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+  
+  // ------------------- Fortune Teller: Fated Reroll (if damage taken) -------------------
+  let fortuneRerollTriggered = false;
+  let fortuneRerollImproved = false;
+  try {
+    const { getCharacterBoostStatus } = require('../../modules/boostIntegration');
+    const { applyLootingBoost } = require('../../modules/boostIntegration');
+    const { recoverHearts, useHearts } = require('../../modules/characterStatsModule');
+    const boostStatusForReroll = await getCharacterBoostStatus(character.name);
+    const hasFortuneTellerLootBoost = boostStatusForReroll && boostStatusForReroll.boosterJob === 'Fortune Teller' && boostStatusForReroll.category === 'Looting';
+    
+    if (hasFortuneTellerLootBoost && outcome.hearts && outcome.hearts > 0) {
+      const logger = require('../../utils/logger');
+      logger.info('BOOST', `🔮 Fortune Teller Fated Reroll triggered for ${character.name} in HWQ (damage=${outcome.hearts})`);
+      fortuneRerollTriggered = true;
+
+      // Snapshot hearts before reroll
+      let heartsBeforeReroll = null;
+      try {
+        const freshCharBefore = await Character.findById(character._id).select('currentHearts');
+        heartsBeforeReroll = freshCharBefore?.currentHearts ?? null;
+      } catch {}
+
+      // Perform a single reroll end-to-end
+      const diceRollReroll = Math.floor(Math.random() * 100) + 1;
+      let { damageValue: damageValueReroll, adjustedRandomValue: adjustedRandomValueReroll, attackSuccess: attackSuccessReroll, defenseSuccess: defenseSuccessReroll } =
+        calculateFinalValue(character, diceRollReroll);
+
+      // Apply standard looting roll boosts to the reroll as well
+      const rollBeforeBoostReroll = adjustedRandomValueReroll;
+      adjustedRandomValueReroll = await applyLootingBoost(character.name, adjustedRandomValueReroll);
+      if (adjustedRandomValueReroll > rollBeforeBoostReroll) {
+        const improvement = adjustedRandomValueReroll - rollBeforeBoostReroll;
+        logger.info('BOOST', `📚 Boost applied on reroll for ${character.name} - Roll enhanced from ${rollBeforeBoostReroll} to ${adjustedRandomValueReroll} (+${improvement} points)`);
+      }
+
+      const rerollOutcome = await getEncounterOutcome(
+        character,
+        monster,
+        damageValueReroll,
+        adjustedRandomValueReroll,
+        attackSuccessReroll,
+        defenseSuccessReroll
+      );
+
+      // Determine how many hearts were deducted by the reroll
+      let rerollAppliedHearts = 0;
+      try {
+        if (heartsBeforeReroll !== null) {
+          const freshCharAfter = await Character.findById(character._id).select('currentHearts');
+          if (freshCharAfter && typeof freshCharAfter.currentHearts === 'number') {
+            rerollAppliedHearts = Math.max(0, heartsBeforeReroll - freshCharAfter.currentHearts);
+          }
+        }
+      } catch {}
+
+      // Choose the better outcome: prioritize fewer hearts (damage), then higher adjusted roll
+      const isRerollBetter = (rerollOutcome.hearts || 0) < (outcome.hearts || 0) || (
+        (rerollOutcome.hearts || 0) === (outcome.hearts || 0) && (adjustedRandomValueReroll || 0) > (outcome.adjustedRandomValue || 0)
+      );
+
+      if (isRerollBetter) {
+        logger.info('BOOST', `🔮 Fated Reroll improved outcome for ${character.name}: damage ${outcome.hearts || 0} → ${rerollOutcome.hearts || 0}, roll ${outcome.adjustedRandomValue} → ${adjustedRandomValueReroll}`);
+        fortuneRerollImproved = true;
+
+        // Hearts reconciliation: initial outcome already applied hearts. Restore, then apply final reroll hearts.
+        try {
+          const originalHearts = outcome.hearts || 0;
+          const finalHearts = rerollOutcome.hearts || 0;
+          // Always undo reroll-applied hearts first (if any)
+          if (rerollAppliedHearts > 0) {
+            await recoverHearts(character._id, rerollAppliedHearts);
+            logger.info('BOOST', `🔄 Recovered ${rerollAppliedHearts} hearts applied by reroll for ${character.name}`);
+          }
+          if (originalHearts !== finalHearts) {
+            if (originalHearts > 0) {
+              await recoverHearts(character._id, originalHearts);
+              logger.info('BOOST', `🔄 Recovered ${originalHearts} hearts to reconcile reroll for ${character.name}`);
+            }
+            if (finalHearts > 0) {
+              await useHearts(character._id, finalHearts);
+              logger.info('BOOST', `💔 Applied final reroll damage: ${finalHearts} hearts for ${character.name}`);
+            }
+          }
+        } catch (heartErr) {
+          logger.error('BOOST', `Failed to reconcile hearts after reroll for ${character.name}: ${heartErr.message}`);
+        }
+
+        // Replace base values with reroll results
+        damageValue = damageValueReroll;
+        adjustedRandomValue = adjustedRandomValueReroll;
+        attackSuccess = attackSuccessReroll;
+        defenseSuccess = defenseSuccessReroll;
+        // Update the computed outcome
+        for (const key of Object.keys(outcome)) {
+          delete outcome[key];
+        }
+        Object.assign(outcome, rerollOutcome);
+      } else {
+        logger.info('BOOST', `🔮 Fated Reroll did not improve outcome for ${character.name}; keeping original.`);
+        // Undo any hearts applied by the reroll so we keep the original damage only
+        try {
+          if (rerollAppliedHearts > 0) {
+            await recoverHearts(character._id, rerollAppliedHearts);
+            logger.info('BOOST', `🔄 Recovered ${rerollAppliedHearts} hearts from non-improving reroll for ${character.name}`);
+          }
+        } catch (heartErr) {
+          logger.error('BOOST', `Failed to undo reroll hearts for ${character.name}: ${heartErr.message}`);
+        }
+      }
+    }
+  } catch (e) {
+    const logger = require('../../utils/logger');
+    logger.error('BOOST', `Failed during Fortune Teller Fated Reroll for ${character.name}: ${e.message}`);
+  }
+  
+  // ------------------- Apply Entertainer Boost (Damage Reduction) -------------------
+  let entertainerDamageReduction = 0;
+  let entertainerBoostUnused = false;
+  if (character.boostedBy && outcome.hearts && outcome.hearts > 0) {
+    const { fetchCharacterByName } = require('../../database/db');
+    const { recoverHearts } = require('../../modules/characterStatsModule');
+    const { applyLootingDamageBoost } = require('../../modules/boostIntegration');
+    const boosterChar = await fetchCharacterByName(character.boostedBy);
+    
+    if (boosterChar && boosterChar.job?.toLowerCase() === 'entertainer') {
+      const originalHeartDamage = outcome.hearts;
+      const monsterTier = monster.tier || 1;
+      const reducedDamage = await applyLootingDamageBoost(character.name, outcome.hearts, monsterTier);
+      entertainerDamageReduction = originalHeartDamage - reducedDamage;
+      
+      if (entertainerDamageReduction > 0) {
+        const logger = require('../../utils/logger');
+        logger.info('BOOST', `🎭 Entertainer boost (Tier ${monsterTier}) reduces HWQ damage from ${originalHeartDamage} to ${reducedDamage} (-${entertainerDamageReduction})`);
+        
+        // Hearts were already removed by getEncounterOutcome - restore them and reapply correct amount
+        await recoverHearts(character._id, originalHeartDamage);
+        logger.info('BOOST', `🔄 Restored ${originalHeartDamage} hearts to reapply with boost`);
+        
+        // Apply the boosted (reduced) damage
+        if (reducedDamage > 0) {
+          const { useHearts } = require('../../modules/characterStatsModule');
+          await useHearts(character._id, reducedDamage);
+          logger.info('BOOST', `💔 Applied boosted damage: ${reducedDamage} hearts`);
+        }
+        
+        // Update outcome to reflect the reduced damage
+        outcome.hearts = reducedDamage;
+        if (reducedDamage === 0) {
+          outcome.result = 'Win!/Loot';
+        } else if (outcome.result && typeof outcome.result === 'string' && outcome.result.includes('HEART(S)')) {
+          outcome.result = outcome.result.replace(/(\d+)\s*HEART\(S\)/i, `${reducedDamage} HEART(S)`);
+        }
+      }
+    }
+  } else if (character.boostedBy && (!outcome.hearts || outcome.hearts === 0)) {
+    entertainerBoostUnused = true;
+    const logger = require('../../utils/logger');
+    logger.info('BOOST', `🎭 Entertainer boost was active but not needed (no damage taken)`);
+  }
   
   // Generate outcome message
   let outcomeMessage;
@@ -1224,6 +1384,43 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     try {
       const encounterResult = await processMonsterEncounter(character, monsterName, heartsRemaining);
       heartsRemaining = encounterResult.newHeartsRemaining;
+      
+      // ------------------- Clear Boost After Encounter -------------------
+      // Clear boost after the first encounter (similar to loot.js and raids)
+      // Reload character to get latest state before checking boost
+      const refreshedCharacter = await Character.findById(character._id);
+      if (refreshedCharacter && refreshedCharacter.boostedBy && i === 0) {
+        const logger = require('../../utils/logger');
+        logger.info('BOOST', `Clearing boost for ${refreshedCharacter.name} after HWQ monster encounter`);
+        try {
+          // Mark active boost as fulfilled in TempData and update embed
+          const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../jobs/boosting.js');
+          const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
+          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(refreshedCharacter.name);
+          if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
+            activeBoost.status = 'fulfilled';
+            activeBoost.fulfilledAt = Date.now();
+            await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+            // If interaction/client provided, update the request embed status to fulfilled
+            if (interaction?.client) {
+              try {
+                await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
+                // Update the 'Boost Applied' embed if we have its reference
+                await updateBoostAppliedMessage(interaction.client, activeBoost);
+              } catch (embedErr) {
+                logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);
+              }
+            }
+          }
+        } catch (e) {
+          logger.error('BOOST', `Failed to mark boost fulfilled while clearing for ${refreshedCharacter.name}: ${e.message}`);
+        }
+        refreshedCharacter.boostedBy = null;
+        await refreshedCharacter.save();
+        // Update character object reference
+        Object.assign(character, refreshedCharacter.toObject ? refreshedCharacter.toObject() : refreshedCharacter);
+        console.log(`[helpWanted.js]: 🎭 Boost cleared for ${character.name} after HWQ monster encounter`);
+      }
       
       // Handle KO
       if (heartsRemaining === 0) {

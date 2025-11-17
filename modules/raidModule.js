@@ -138,39 +138,135 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       throw new Error('Failed to calculate raid battle outcome');
     }
 
-    // ------------------- Apply Entertainer Boost (Damage Reduction) -------------------
-    // Check if character has Entertainer boost for looting and apply damage reduction
-    if (character.boostedBy) {
-      const { fetchCharacterByName } = require('../database/db');
-      const { recoverHearts } = require('./characterStatsModule');
-      const boosterChar = await fetchCharacterByName(character.boostedBy);
+    // ------------------- Fortune Teller: Fated Reroll (if damage taken) -------------------
+    // Check if character has Fortune Teller boost and damage was taken
+    let fortuneRerollTriggered = false;
+    let fortuneRerollImproved = false;
+    
+    // Calculate initial damage for reroll check
+    let initialCharacterDamage = characterHeartsBefore - (outcome.playerHearts?.current || character.currentHearts);
+    
+    try {
+      const { getCharacterBoostStatus } = require('./boostIntegration');
+      const boostStatusForReroll = await getCharacterBoostStatus(character.name);
+      const hasFortuneTellerLootBoost = boostStatusForReroll && boostStatusForReroll.boosterJob === 'Fortune Teller' && boostStatusForReroll.category === 'Looting';
       
-      if (boosterChar && boosterChar.job?.toLowerCase() === 'entertainer') {
-        // For high-tier monsters (5-10), damage is in outcome.playerHearts
-        const characterDamage = characterHeartsBefore - (outcome.playerHearts?.current || character.currentHearts);
+      if (hasFortuneTellerLootBoost && initialCharacterDamage > 0) {
+        logger.info('RAID', `🔮 Fortune Teller Fated Reroll triggered for ${character.name} in raid (damage=${initialCharacterDamage})`);
+        fortuneRerollTriggered = true;
+
+        // Perform a single reroll end-to-end
+        const diceRollReroll = Math.floor(Math.random() * 100) + 1;
+        const { calculateRaidFinalValue } = require('./rngModule');
+        let { damageValue: damageValueReroll, adjustedRandomValue: adjustedRandomValueReroll, attackSuccess: attackSuccessReroll, defenseSuccess: defenseSuccessReroll } =
+          calculateRaidFinalValue(character, diceRollReroll);
+
+        // Create a copy of the monster for reroll
+        const monsterCopyReroll = { ...monster };
+        let rerollOutcome;
         
-        if (characterDamage > 0) {
-          const monsterTier = monster.tier || 5;
-          const { applyEntertainerLootingBoost } = require('./boostingModule');
-          const reducedDamage = applyEntertainerLootingBoost(characterDamage, monsterTier);
-          const damageReduction = characterDamage - reducedDamage;
+        // Get reroll outcome using the same tier-specific logic
+        switch (monster.tier) {
+        case 5:
+          rerollOutcome = await getTier5EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
+          break;
+        case 6:
+          rerollOutcome = await getTier6EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
+          break;
+        case 7:
+          rerollOutcome = await getTier7EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
+          break;
+        case 8:
+          rerollOutcome = await getTier8EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
+          break;
+        case 9:
+          rerollOutcome = await getTier9EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
+          break;
+        case 10:
+          rerollOutcome = await getTier10EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
+          break;
+        default:
+          rerollOutcome = null;
+        }
+
+        if (rerollOutcome) {
+          const rerollDamage = characterHeartsBefore - (rerollOutcome.playerHearts?.current || character.currentHearts);
           
-          if (damageReduction > 0) {
-            console.log(`[raidModule.js]: 🎭 Entertainer boost - Requiem of Spirit (Tier ${monsterTier}) reduces raid damage from ${characterDamage} to ${reducedDamage} (-${damageReduction} hearts)`);
+          // Choose the better outcome: prioritize fewer hearts (damage), then higher adjusted roll
+          const isRerollBetter = rerollDamage < initialCharacterDamage || (
+            rerollDamage === initialCharacterDamage && (adjustedRandomValueReroll || 0) > (adjustedRandomValue || 0)
+          );
+
+          if (isRerollBetter) {
+            logger.info('RAID', `🔮 Fated Reroll improved outcome for ${character.name}: damage ${initialCharacterDamage} → ${rerollDamage}, roll ${adjustedRandomValue} → ${adjustedRandomValueReroll}`);
+            fortuneRerollImproved = true;
             
-            // Restore the excess hearts that were taken
-            await recoverHearts(character._id, damageReduction);
-            
-            // Update outcome to reflect the reduced damage
-            if (outcome.playerHearts) {
-              outcome.playerHearts.current = characterHeartsBefore - reducedDamage;
-            }
-            
-            // Refresh character to get updated hearts
-            character.currentHearts = characterHeartsBefore - reducedDamage;
+            // Replace outcome with reroll result
+            outcome = rerollOutcome;
+            adjustedRandomValue = adjustedRandomValueReroll;
+            attackSuccess = attackSuccessReroll;
+            defenseSuccess = defenseSuccessReroll;
+            damageValue = damageValueReroll;
+          } else {
+            logger.info('RAID', `🔮 Fated Reroll did not improve outcome for ${character.name}; keeping original.`);
           }
         }
       }
+    } catch (e) {
+      logger.error('RAID', `Failed during Fortune Teller Fated Reroll for ${character.name}: ${e.message}`);
+    }
+
+    // ------------------- Apply Entertainer Boost (Damage Reduction) -------------------
+    // Calculate actual damage taken (hearts were modified in memory by encounter module, but not saved to DB)
+    // In raid context, the encounter module modifies character.currentHearts in memory but doesn't call useHearts
+    const characterDamage = characterHeartsBefore - (outcome.playerHearts?.current || character.currentHearts);
+    let finalDamage = characterDamage;
+    
+    // Check if character has Entertainer boost and apply damage reduction BEFORE saving to database
+    if (character.boostedBy && characterDamage > 0) {
+      const { fetchCharacterByName } = require('../database/db');
+      const boosterChar = await fetchCharacterByName(character.boostedBy);
+      
+      if (boosterChar && boosterChar.job?.toLowerCase() === 'entertainer') {
+        const monsterTier = monster.tier || 5;
+        const { applyEntertainerLootingBoost } = require('./boostingModule');
+        finalDamage = applyEntertainerLootingBoost(characterDamage, monsterTier);
+        const damageReduction = characterDamage - finalDamage;
+        
+        if (damageReduction > 0) {
+          console.log(`[raidModule.js]: 🎭 Entertainer boost - Requiem of Spirit (Tier ${monsterTier}) reduces raid damage from ${characterDamage} to ${finalDamage} (-${damageReduction} hearts)`);
+        }
+      }
+    }
+
+    // ------------------- Apply Damage to Database -------------------
+    // In raid context, the encounter module doesn't save hearts to DB, so we need to do it here
+    // Apply the final damage (after boost reduction) to the database
+    if (finalDamage > 0) {
+      const { useHearts } = require('./characterStatsModule');
+      const { createEncounterContext } = require('./encounterModule');
+      // Calculate final hearts after damage
+      const finalHearts = Math.max(0, characterHeartsBefore - finalDamage);
+      
+      // Use useHearts to properly save damage and handle KO if needed
+      await useHearts(character._id, finalDamage, createEncounterContext(character, 'raid_damage'));
+      
+      // Reload character from database to get the latest state (useHearts may have updated KO status)
+      const { fetchCharacterById } = require('../database/db');
+      const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
+      if (updatedCharacter) {
+        // Update the character object reference with fresh data
+        Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
+      }
+      
+      // Update outcome to reflect final damage
+      if (outcome.playerHearts) {
+        outcome.playerHearts.current = character.currentHearts;
+      }
+    } else if (outcome.playerHearts) {
+      // No damage taken, but ensure we have the correct hearts value
+      outcome.playerHearts.current = characterHeartsBefore;
+      character.currentHearts = characterHeartsBefore;
     }
 
     // ------------------- Elixir Consumption Logic -------------------
@@ -638,20 +734,45 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
         if (raid.monster.currentHearts <= 0) {
           await raid.completeRaid('defeated');
         } else {
-          // Update character object with new hearts value from battle result
-          character.currentHearts = battleResult.playerHearts.current;
+          // Reload character from database to get the latest state (hearts were saved in processRaidBattle)
+          const { fetchCharacterById } = require('../database/db');
+          const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
+          if (updatedCharacter) {
+            // Update the character object reference with fresh data
+            Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
+          }
           
-          // Ensure character's KO status is saved before advancing turn
-          if (battleResult.playerHearts.current <= 0) {
-            // Character was KO'd, make sure it's saved
-            character.ko = true;
-            character.currentHearts = 0;
+          // ------------------- Clear Boost After Raid Turn -------------------
+          // Similar to loot.js - clear boost after damage/encounter
+          if (character.boostedBy) {
+            const logger = require('../utils/logger');
+            logger.info('BOOST', `Clearing boost for ${character.name} after raid turn`);
+            try {
+              // Mark active boost as fulfilled in TempData and update embed
+              const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../commands/jobs/boosting.js');
+              const { updateBoostRequestEmbed } = require('../embeds/embeds.js');
+              const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+              if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
+                activeBoost.status = 'fulfilled';
+                activeBoost.fulfilledAt = Date.now();
+                await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+                // If interaction/client provided, update the request embed status to fulfilled
+                if (interaction?.client) {
+                  try {
+                    await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
+                    // Update the 'Boost Applied' embed if we have its reference
+                    await updateBoostAppliedMessage(interaction.client, activeBoost);
+                  } catch (embedErr) {
+                    logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);
+                  }
+                }
+              }
+            } catch (e) {
+              logger.error('BOOST', `Failed to mark boost fulfilled while clearing for ${character.name}: ${e.message}`);
+            }
+            character.boostedBy = null;
             await character.save();
-            console.log(`[raidModule.js]: 💀 Character ${character.name} KO'd and saved to database`);
-          } else {
-            // Save the updated hearts value for non-KO'd characters
-            await character.save();
-            console.log(`[raidModule.js]: 💔 Character ${character.name} hearts updated to ${character.currentHearts}/${character.maxHearts}`);
+            console.log(`[raidModule.js]: 🎭 Boost cleared for ${character.name} after raid turn`);
           }
           
           // Advance to next turn if monster is not defeated
