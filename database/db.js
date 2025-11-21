@@ -330,6 +330,12 @@ const fetchCharactersByUserId = async (userId) => {
 const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  try {
   await connectToTinglebot();
+  
+  // Handle null/undefined characterName
+  if (!characterName) {
+    return null;
+  }
+  
   // Get the actual name part before the "|" if it exists
   const actualName = characterName.split('|')[0].trim();
   
@@ -348,6 +354,7 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   return character;
  } catch (error) {
   handleError(error, "db.js");
+  const actualName = characterName ? characterName.split('|')[0].trim() : 'null/undefined';
   console.error(`[characterService]: ❌ Error searching for "${actualName}": ${error.message}`);
   throw error;
  }
