@@ -162,6 +162,11 @@ const data = new SlashCommandBuilder()
   .setName('specialweather')
   .setDescription('Gather special items during special weather conditions')
   .addStringOption(option =>
+    option.setName('charactername')
+      .setDescription('The name of the character')
+      .setRequired(true)
+      .setAutocomplete(true))
+  .addStringOption(option =>
     option.setName('weather')
       .setDescription('The special weather type')
       .setRequired(true)
@@ -191,14 +196,22 @@ async function execute(interaction) {
     }
     
     const userId = interaction.user.id;
+    const characterName = interaction.options.getString('charactername');
     const weatherType = interaction.options.getString('weather');
     const weatherLabel = capitalizeWords(weatherType);
     
     // Fetch character
-    const character = await fetchCharacterByNameAndUserId(interaction.user.id);
+    let character = await fetchCharacterByNameAndUserId(characterName, userId);
+    
+    // If not found as regular character, try as mod character
+    if (!character) {
+      const { fetchModCharacterByNameAndUserId } = require('../../database/db');
+      character = await fetchModCharacterByNameAndUserId(characterName, userId);
+    }
+    
     if (!character) {
       return interaction.editReply({ 
-        content: '❌ You need to create a character first! Use `/character` to get started.' 
+        content: `❌ **Character ${characterName} not found or does not belong to you.**` 
       });
     }
     
