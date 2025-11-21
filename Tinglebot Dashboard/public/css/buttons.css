@@ -1,0 +1,486 @@
+
+/* ============================================================================
+   Button Wrapper
+============================================================================ */
+
+.button-wrapper {
+  overflow: hidden;
+  position: relative;
+  padding: 0.5rem 0;
+  margin: 0.5rem 0;
+  border-radius: 16px;
+}
+
+/* ============================================================================
+   Base Button Styles
+============================================================================ */
+
+.button,
+.primary-button,
+.discord-login-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 500;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem;
+  border: none;
+  border-radius: var(--card-radius);
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  width: auto;
+  outline: none;
+}
+
+.button {
+  background: var(--primary-color);
+}
+
+.button:hover {
+  background: var(--primary-hover);
+}
+
+.button:focus,
+.discord-login-button:focus {
+  outline: 2px solid var(--primary-hover);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Button Modifiers
+============================================================================ */
+
+.button--full {
+  width: 100%;
+}
+
+.button--icon {
+  gap: 0.5rem;
+}
+
+.button--circle {
+  border-radius: 50%;
+  padding: 0.6rem;
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+}
+
+.button--glass,
+.primary-button {
+  backdrop-filter: blur(var(--frost-blur));
+  background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: var(--section-shadow);
+  color: var(--text-primary);
+}
+
+.button--glass:hover,
+.primary-button:hover {
+  background: linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.2));
+  box-shadow: var(--section-glow);
+  transform: translateY(-1px);
+}
+
+.button--loading,
+.discord-login-button.login-loading {
+  cursor: not-allowed;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.button--loading i,
+.discord-login-button.login-loading i {
+  animation: spin 1s linear infinite;
+}
+
+.button--danger {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid var(--error-color);
+  color: var(--error-color);
+}
+
+.button--danger:hover {
+  background: var(--error-color);
+  color: white;
+  transform: translateY(-1px);
+}
+
+/* Shine Animation Overlay */
+.button-shine {
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  transition: left 0.5s ease;
+}
+
+.button:hover .button-shine {
+  left: 100%;
+}
+
+
+
+/* ============================================================================
+   Specific Buttons
+============================================================================ */
+
+/* Back Button */
+.back-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  width: 38px;
+  height: 38px;
+  padding: 0.5rem;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+  backdrop-filter: blur(var(--frost-blur));
+  box-shadow: var(--card-shadow);
+  position: relative;
+  z-index: 1001;
+}
+
+.back-button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  transform: translateX(-2px) scale(1.05);
+  box-shadow: 0 4px 16px rgba(0, 163, 218, 0.3);
+}
+
+.back-button:active {
+  transform: translateX(-1px) scale(0.95);
+}
+
+/* Retry Button */
+.retry-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.retry-button:hover {
+  background-color: var(--primary-hover);
+}
+
+/* Logout Button */
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid var(--error-color);
+  border-radius: 0.5rem;
+  color: var(--error-color);
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.logout-button:hover {
+  background: var(--error-color);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.logout-button i {
+  font-size: 1rem;
+}
+
+/* ============================================================================
+   Discord Login Button
+============================================================================ */
+
+.discord-login-button {
+  background: linear-gradient(135deg, #5865F2 0%, #4752C4 100%);
+  box-shadow: 0 8px 25px rgba(88, 101, 242, 0.4);
+  color: white;
+}
+
+.discord-login-button:hover {
+  background: linear-gradient(135deg, #4752C4 0%, #3C45A5 100%);
+  box-shadow: 0 10px 30px rgba(88, 101, 242, 0.5);
+  transform: translateY(-1px);
+}
+
+/* ============================================================================ */
+/* MOBILE RESPONSIVE DESIGN FOR BUTTONS                                         */
+/* ============================================================================ */
+
+/* Mobile-first responsive breakpoints */
+@media (max-width: 768px) {
+  /* Button wrapper mobile */
+  .button-wrapper {
+    padding: 0.375rem 0;
+    margin: 0.375rem 0;
+  }
+  
+  /* Base button mobile */
+  .button,
+  .primary-button,
+  .discord-login-button {
+    font-size: 0.95rem;
+    padding: 1rem 1.25rem;
+    min-height: 48px; /* Ensure minimum touch target size */
+    gap: 0.625rem;
+  }
+  
+  /* Button circle mobile */
+  .button--circle {
+    width: 44px;
+    height: 44px;
+    padding: 0.75rem;
+    font-size: 1.1rem;
+  }
+  
+  /* Back button mobile */
+  .back-button {
+    width: 42px;
+    height: 42px;
+    padding: 0.625rem;
+    font-size: 1.05rem;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+  }
+  
+  .back-button:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: translateX(-2px) scale(1.1);
+    box-shadow: 0 4px 20px rgba(0, 163, 218, 0.4);
+  }
+  
+  .back-button:active {
+    transform: translateX(-1px) scale(0.9);
+  }
+  
+  /* Logout button mobile */
+  .logout-button {
+    padding: 0.875rem 1.125rem;
+    font-size: 0.95rem;
+    min-height: 48px;
+  }
+  
+  /* Discord login button mobile */
+  .discord-login-button {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 1.125rem 1.5rem;
+    min-height: 52px;
+  }
+  
+  /* Disable hover effects on mobile */
+  .button:hover,
+  .primary-button:hover,
+  .discord-login-button:hover,
+  .back-button:hover,
+  .logout-button:hover {
+    transform: none;
+  }
+  
+  /* Add active states for touch feedback */
+  .button:active,
+  .primary-button:active,
+  .discord-login-button:active,
+  .back-button:active,
+  .logout-button:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .button-wrapper {
+    padding: 0.25rem 0;
+    margin: 0.25rem 0;
+  }
+  
+  .button,
+  .primary-button,
+  .discord-login-button {
+    font-size: 0.9rem;
+    padding: 0.875rem 1rem;
+    min-height: 44px;
+    gap: 0.5rem;
+  }
+  
+  .button--circle {
+    width: 40px;
+    height: 40px;
+    padding: 0.625rem;
+    font-size: 1rem;
+  }
+  
+  .back-button {
+    width: 40px;
+    height: 40px;
+    padding: 0.5rem;
+    font-size: 1rem;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  .back-button:hover {
+    transform: translateX(-2px) scale(1.05);
+    box-shadow: 0 3px 15px rgba(0, 163, 218, 0.3);
+  }
+  
+  .back-button:active {
+    transform: translateX(-1px) scale(0.9);
+  }
+  
+  .logout-button {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    min-height: 44px;
+  }
+  
+  .discord-login-button {
+    font-size: 0.95rem;
+    padding: 1rem 1.25rem;
+    min-height: 48px;
+  }
+}
+
+/* Landscape mobile optimizations */
+@media (max-width: 768px) and (orientation: landscape) {
+  .button-wrapper {
+    padding: 0.25rem 0;
+    margin: 0.25rem 0;
+  }
+  
+  .button,
+  .primary-button,
+  .discord-login-button {
+    padding: 0.75rem 1rem;
+    min-height: 44px;
+  }
+  
+  .discord-login-button {
+    padding: 0.875rem 1.125rem;
+    min-height: 46px;
+  }
+  
+  /* Back button landscape mobile */
+  .back-button {
+    width: 40px;
+    height: 40px;
+    padding: 0.5rem;
+    font-size: 1rem;
+  }
+}
+
+/* Touch-friendly interactions for mobile */
+@media (hover: none) and (pointer: coarse) {
+  /* Ensure all buttons have adequate touch targets */
+  .button,
+  .primary-button,
+  .discord-login-button,
+  .back-button,
+  .logout-button,
+  .retry-button {
+    min-height: 48px;
+    min-width: 48px;
+  }
+  
+  /* Remove all hover effects on touch devices */
+  .button:hover,
+  .primary-button:hover,
+  .discord-login-button:hover,
+  .back-button:hover,
+  .logout-button:hover,
+  .retry-button:hover {
+    transform: none;
+    box-shadow: inherit;
+    background: inherit;
+    border-color: inherit;
+    color: inherit;
+  }
+  
+  /* Enhanced active states for better touch feedback */
+  .button:active,
+  .primary-button:active,
+  .discord-login-button:active,
+  .back-button:active,
+  .logout-button:active,
+  .retry-button:active {
+    transform: scale(0.96);
+    transition: transform 0.1s ease;
+  }
+  
+  /* Back button specific touch targets */
+  .back-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Mobile performance optimizations */
+@media (max-width: 768px) {
+  /* Reduce transition complexity for better performance */
+  .button,
+  .primary-button,
+  .discord-login-button,
+  .back-button,
+  .logout-button,
+  .retry-button {
+    transition: transform 0.1s ease, background-color 0.2s ease;
+  }
+  
+  /* Simplify shine animation on mobile */
+  .button-shine {
+    display: none; /* Disable shine effect on mobile for performance */
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .button,
+  .primary-button,
+  .discord-login-button {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .primary-button,
+  .discord-login-button,
+  .back-button,
+  .logout-button,
+  .retry-button {
+    transition: none;
+  }
+  
+  .button-shine {
+    display: none;
+  }
+}

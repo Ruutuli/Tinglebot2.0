@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Inventories • Tinglebot Dashboard</title>
+  <link rel="icon" type="image/png" href="/images/tingleicon.png" />
+  <link rel="preload" href="js/auth.js" as="script" crossorigin="anonymous">
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/users.css" />
+  <link rel="stylesheet" href="css/inventories.css" />
+  <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
+</head>
+<body class="inventories-page">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <a href="#sidebar-navigation" class="skip-link">Skip to navigation</a>
+
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+        <i class="fas fa-bars" aria-hidden="true"></i>
+      </button>
+      <div class="breadcrumb">Inventories</div>
+    </div>
+    <div class="topbar-right">
+      <div class="bot-status online">
+        <span class="status-dot"></span>
+        <span class="status-text">Online</span>
+      </div>
+      <div class="user-menu" id="user-menu">
+        <img src="/images/ankleicon.png" alt="Profile picture of the user" class="user-avatar" id="user-avatar" />
+        <span class="username" id="username">Loading...</span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-content">
+            <div class="user-info" id="user-info" style="display: none;">
+              <div class="user-details">
+                <img src="/images/ankleicon.png" alt="User avatar" class="user-dropdown-avatar" id="user-dropdown-avatar">
+                <div>
+                  <div class="user-name" id="user-name">Loading...</div>
+                  <div class="user-discriminator" id="user-discriminator">#0000</div>
+                </div>
+              </div>
+              <div class="user-stats">
+                <div>
+                  <div class="stat-label">Tokens</div>
+                  <div class="stat-value" id="user-tokens">0</div>
+                </div>
+                <div>
+                  <div class="stat-label">Character Slots</div>
+                  <div class="stat-value" id="user-slots">0</div>
+                </div>
+              </div>
+              <div class="user-actions">
+                <button class="profile-button" type="button">
+                  <i class="fas fa-user"></i> Profile
+                </button>
+                <button class="logout-button" type="button">
+                  <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+              </div>
+            </div>
+            <div class="guest-info" id="guest-info" style="display: none;">
+              <div class="guest-message">
+                <i class="fas fa-user-circle"></i>
+                <span>Guest User</span>
+              </div>
+              <div class="guest-actions">
+                <button class="login-button" type="button">
+                  <i class="fab fa-discord"></i> Login with Discord
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-wrapper">
+    <aside class="sidebar" id="sidebar-navigation" role="navigation" aria-label="Main sidebar navigation">
+      <div class="sidebar-header">
+        <img src="/images/tingleicon.png" alt="Tinglebot Logo" class="bot-logo" />
+        <h1>Tinglebot</h1>
+      </div>
+      <nav class="sidebar-nav" aria-label="Main sidebar navigation">
+        <ul>
+          <li>
+            <a href="/" data-section="dashboard-section"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+          </li>
+          <li>
+            <a href="/#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Discord</span></a>
+          </li>
+          <li>
+            <a href="/#users" data-section="users-section"><i class="fas fa-users"></i><span>Users</span></a>
+          </li>
+          <li>
+            <a href="/#levels" data-section="levels-section"><i class="fas fa-level-up-alt"></i><span>Levels</span></a>
+          </li>
+          <li>
+            <a href="/#calendar" data-section="calendar-section"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a>
+          </li>
+          <li>
+            <a href="/#suggestion-box-section" data-section="suggestion-box-section"><i class="fas fa-lightbulb"></i><span>Suggestion Box</span></a>
+          </li>
+          <li>
+            <a href="/#member-lore-section" data-section="member-lore-section"><i class="fas fa-scroll"></i><span>Member Lore</span></a>
+          </li>
+          <li>
+            <a href="/#gallery-section" data-section="gallery-section"><i class="fas fa-images"></i><span>Gallery</span></a>
+          </li>
+          <li>
+            <a href="/#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a>
+          </li>
+          <li>
+            <a href="/#relationships-section" data-section="relationships-section"><i class="fas fa-heart"></i><span>Relationships</span></a>
+          </li>
+          <li>
+            <a href="/map"><i class="fas fa-map"></i><span>Map</span></a>
+          </li>
+          <li class="active" id="inventories-nav-item">
+            <a href="/inventories.html"><i class="fas fa-boxes"></i><span>Inventories</span></a>
+          </li>
+          <li>
+            <a href="/#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a>
+          </li>
+          <li>
+            <a href="/#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a>
+          </li>
+          <li id="admin-area-nav-item" style="display: none;">
+            <a href="/#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main class="main-content inventories-main" id="main-content" role="main" tabindex="-1">
+      <section class="inventories-hero">
+        <div>
+          <h1>Character Inventories</h1>
+          <p>Review every item across your characters, transfer stacks in seconds, and keep locations, perks, and notes up to date.</p>
+        </div>
+        <button type="button" class="refresh-button" id="refresh-inventory-button">
+          <i class="fas fa-sync"></i> Refresh
+        </button>
+      </section>
+
+      <section class="inventory-summary-grid" aria-label="Inventory summary cards">
+        <article class="summary-card">
+          <span class="summary-label">Total Items</span>
+          <span class="summary-value" id="summary-total-items">0</span>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Unique Item Types</span>
+          <span class="summary-value" id="summary-unique-items">0</span>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Characters Tracked</span>
+          <span class="summary-value" id="summary-character-count">0</span>
+        </article>
+      </section>
+
+      <section class="inventory-controls" aria-label="Inventory filters">
+        <div class="control-group">
+          <label for="inventory-search-input">Search items</label>
+          <input type="search" id="inventory-search-input" placeholder="Search by item name..." autocomplete="off" />
+        </div>
+        <div class="control-group">
+          <label for="inventory-category-filter">Category</label>
+          <select id="inventory-category-filter">
+            <option value="all">All categories</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="inventory-character-filter">Character</label>
+          <select id="inventory-character-filter">
+            <option value="all">All characters</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="inventory-transfer-card" aria-label="Transfer items between characters">
+        <div class="card-header">
+          <h2>Transfer Items</h2>
+          <p>Move items between characters while keeping everything in sync.</p>
+        </div>
+        <form id="transfer-form" class="transfer-form">
+          <label>
+            From character
+            <select id="transfer-source-select" required>
+              <option value="">Select character</option>
+            </select>
+          </label>
+          <label>
+            Item
+            <select id="transfer-item-select" required>
+              <option value="">Select item</option>
+            </select>
+          </label>
+          <label>
+            To character
+            <select id="transfer-destination-select" required>
+              <option value="">Select character</option>
+            </select>
+          </label>
+          <label>
+            Quantity
+            <input type="number" id="transfer-quantity" min="1" inputmode="numeric" required />
+          </label>
+          <button type="submit" class="primary-button">
+            <i class="fas fa-exchange-alt"></i> Transfer Items
+          </button>
+        </form>
+        <p class="transfer-disclaimer" role="note">
+          Transfers made here will not log to your Google Sheet. If you track inventory there, remember to add these changes manually.
+        </p>
+      </section>
+
+      <section class="inventory-table-card">
+        <div class="card-header">
+          <div>
+            <h2>All Items</h2>
+            <p>Combined counts for every item across your roster.</p>
+          </div>
+          <div class="card-actions">
+            <button type="button" class="ghost-button" id="aggregated-collapse-toggle" aria-expanded="true">
+              <i class="fas fa-chevron-up" aria-hidden="true"></i>
+              <span class="collapse-label">Collapse</span>
+            </button>
+          </div>
+        </div>
+        <div class="legend-row" aria-label="Inventory legend">
+          <span class="legend-chip legend-equipped">
+            <i class="fas fa-lock" aria-hidden="true"></i>
+            <span>Equipped (transfer locked)</span>
+          </span>
+        </div>
+        <div class="table-wrapper" id="aggregated-table-wrapper">
+          <table id="aggregated-items-table">
+            <thead>
+              <tr>
+                <th scope="col">Item</th>
+                <th scope="col">Total</th>
+                <th scope="col">Characters</th>
+                <th scope="col">Category</th>
+                <th scope="col">Type</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="aggregated-items-body">
+              <tr class="empty-row">
+                <td colspan="6">No inventory data loaded yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-controls" id="aggregated-pagination" aria-live="polite">
+          <button type="button" id="aggregated-prev" class="pagination-button" disabled>
+            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            <span>Prev</span>
+          </button>
+          <span id="aggregated-page-info" class="pagination-info">Page 1</span>
+          <button type="button" id="aggregated-next" class="pagination-button" disabled>
+            <span>Next</span>
+            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+          </button>
+        </div>
+      </section>
+
+      <section class="character-section">
+        <div class="card-header">
+          <h2>Character Inventories</h2>
+          <p>Manage item stacks, update tags, or jump directly into a transfer.</p>
+        </div>
+        <div class="legend-row" aria-label="Inventory legend">
+          <span class="legend-chip legend-equipped">
+            <i class="fas fa-lock" aria-hidden="true"></i>
+            <span>Equipped (transfer locked)</span>
+          </span>
+        </div>
+        <div class="character-grid" id="character-inventory-grid">
+          <div class="empty-state">
+            <i class="fas fa-box-open"></i>
+            <p>Refresh to load your characters' inventories.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="equipped-gear-card" aria-label="Equipped gear overview">
+        <div class="card-header">
+          <div>
+            <h2>Equipped Gear</h2>
+            <p>See what each character currently has equipped before you move stacks.</p>
+          </div>
+        </div>
+        <div class="equipped-gear-grid" id="equipped-gear-content">
+          <div class="empty-state">
+            <i class="fas fa-shield-alt"></i>
+            <p>No equipped gear detected yet.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="inventory-loading-state" class="inventory-loading" aria-live="polite" hidden>
+    <div class="spinner"></div>
+    <p>Loading inventories...</p>
+  </div>
+
+  <div id="inventory-toast" class="inventory-toast" role="status" aria-live="polite"></div>
+
+  <aside id="item-management-drawer" class="management-drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div>
+        <p class="drawer-label">Managing Item</p>
+        <h3 id="management-item-name">Item</h3>
+        <p id="management-character-name" class="drawer-subtitle"></p>
+      </div>
+      <button type="button" id="close-management-drawer" aria-label="Close drawer">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <form id="item-management-form" class="management-form">
+      <input type="hidden" id="management-character-id" />
+      <input type="hidden" id="management-item-id" />
+      <label>
+        Quantity
+        <input type="number" id="management-quantity" min="0" required />
+      </label>
+      <label>
+        Location
+        <input type="text" id="management-location" maxlength="120" />
+      </label>
+      <label>
+        Job Tag
+        <input type="text" id="management-job" maxlength="120" />
+      </label>
+      <label>
+        Perk Tag
+        <input type="text" id="management-perk" maxlength="120" />
+      </label>
+      <label>
+        Obtain Notes
+        <input type="text" id="management-obtain" maxlength="200" />
+      </label>
+      <label class="checkbox-field">
+        <input type="checkbox" id="management-fortune" />
+        Crafted with Fortune Teller boost
+      </label>
+      <label>
+        Notes
+        <textarea id="management-notes" rows="3" maxlength="280" placeholder="Add optional notes..."></textarea>
+      </label>
+      <div class="management-actions">
+        <button type="submit" class="primary-button">
+          <i class="fas fa-save"></i> Save Changes
+        </button>
+        <button type="button" class="danger-button" id="delete-item-button">
+          <i class="fas fa-trash"></i> Delete Item
+        </button>
+      </div>
+    </form>
+  </aside>
+
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/inventories.js"></script>
+</body>
+</html>
+

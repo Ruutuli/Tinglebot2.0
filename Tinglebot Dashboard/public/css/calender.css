@@ -1,0 +1,1793 @@
+/* ============================================================================
+   📆 CALENDAR STYLES - COMPLETE MODERN REDESIGN
+   Modern, responsive calendar with clean desktop grid and mobile list view
+   ============================================================================ */
+
+/* ============================================================================
+   🎨 CSS VARIABLES & BASE STYLES
+   ============================================================================ */
+
+:root {
+  /* Calendar Color Palette */
+  --calendar-primary: #3b82f6;
+  --calendar-primary-hover: #2563eb;
+  --calendar-primary-light: #dbeafe;
+  --calendar-secondary: #64748b;
+  --calendar-accent: #f59e0b;
+  --calendar-success: #10b981;
+  --calendar-danger: #ef4444;
+  --calendar-warning: #f59e0b;
+  --calendar-info: #06b6d4;
+  
+  /* Background Colors */
+  --calendar-bg: var(--bg-primary);
+  --calendar-bg-secondary: var(--bg-secondary);
+  --calendar-bg-card: var(--card-background);
+  --calendar-bg-hover: rgba(59, 130, 246, 0.05);
+  
+  /* Text Colors */
+  --calendar-text: var(--text-primary);
+  --calendar-text-secondary: var(--text-secondary);
+  --calendar-text-muted: rgba(100, 116, 139, 0.7);
+  
+  /* Border & Spacing */
+  --calendar-border: var(--border-color);
+  --calendar-border-light: rgba(148, 163, 184, 0.2);
+  --calendar-radius: 12px;
+  --calendar-radius-sm: 8px;
+  --calendar-radius-lg: 16px;
+  
+  /* Shadows */
+  --calendar-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --calendar-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --calendar-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --calendar-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  
+  /* Transitions */
+  --calendar-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --calendar-transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================================
+   📱 CALENDAR CONTAINER & LAYOUT
+   ============================================================================ */
+
+.calendar-container {
+  max-width: none;
+  margin: 0;
+  padding: 0 0.5rem 3rem 0.5rem;
+  width: 100%;
+}
+
+/* Calendar Overview Stats */
+.calendar-overview {
+  margin-bottom: 2rem;
+}
+
+.calendar-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.calendar-stat-item {
+  background: var(--calendar-bg-card);
+  border: 1px solid var(--calendar-border);
+  border-radius: var(--calendar-radius);
+  padding: 1rem;
+  text-align: center;
+  transition: var(--calendar-transition);
+  box-shadow: var(--calendar-shadow);
+}
+
+.calendar-stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--calendar-shadow-md);
+}
+
+.calendar-stat-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--calendar-text-secondary);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.calendar-stat-item .stat-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--calendar-text);
+  margin-bottom: 0.25rem;
+}
+
+.calendar-stat-item .stat-subtitle {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--calendar-text-muted);
+}
+
+/* ============================================================================
+   🗂️ CALENDAR TABS
+   ============================================================================ */
+
+.calendar-tabs {
+  display: flex;
+  background: var(--calendar-bg-card);
+  border: 1px solid var(--calendar-border);
+  border-radius: var(--calendar-radius);
+  padding: 0.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--calendar-shadow);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-width: 100%;
+}
+
+.calendar-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.calendar-tab {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--calendar-radius-sm);
+  color: var(--calendar-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--calendar-transition);
+  white-space: nowrap;
+}
+
+.calendar-tab:hover {
+  background: var(--calendar-bg-hover);
+  color: var(--calendar-text);
+}
+
+.calendar-tab.active {
+  background: var(--calendar-primary);
+  color: white;
+  box-shadow: var(--calendar-shadow);
+}
+
+.calendar-tab i {
+  font-size: 1rem;
+}
+
+/* ============================================================================
+   📅 CALENDAR CONTENT AREA
+   ============================================================================ */
+
+.calendar-content {
+  background: var(--calendar-bg-card);
+  border: 1px solid var(--calendar-border);
+  border-radius: var(--calendar-radius);
+  box-shadow: var(--calendar-shadow);
+  overflow: hidden;
+}
+
+.calendar-tab-content {
+  display: none;
+  padding: 1rem;
+}
+
+.calendar-tab-content.active {
+  display: block;
+}
+
+/* ============================================================================
+   📆 MONTHLY CALENDAR VIEW
+   ============================================================================ */
+
+.monthly-calendar-container {
+  width: 100%;
+}
+
+/* Calendar Header */
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--calendar-border-light);
+}
+
+.calendar-navigation {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.calendar-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--calendar-bg-secondary);
+  border: 1px solid var(--calendar-border);
+  border-radius: var(--calendar-radius-sm);
+  color: var(--calendar-text);
+  cursor: pointer;
+  transition: var(--calendar-transition);
+}
+
+.calendar-nav-btn:hover {
+  background: var(--calendar-primary);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--calendar-shadow);
+}
+
+.calendar-title h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--calendar-text);
+  margin: 0;
+}
+
+.calendar-title p {
+  font-size: 0.875rem;
+  color: var(--calendar-text-secondary);
+  margin: 0.25rem 0 0 0;
+}
+
+.calendar-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.calendar-control-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--calendar-primary);
+  color: white;
+  border: none;
+  border-radius: var(--calendar-radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--calendar-transition);
+}
+
+.calendar-control-btn:hover {
+  background: var(--calendar-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--calendar-shadow);
+}
+
+/* Calendar Grid */
+.calendar-grid {
+  margin-bottom: 1rem;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  margin-bottom: 1px;
+  background: var(--calendar-border-light);
+  border-radius: var(--calendar-radius-sm) var(--calendar-radius-sm) 0 0;
+}
+
+.weekday {
+  background: var(--calendar-bg-secondary);
+  padding: 1rem 0.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--calendar-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Calendar days grid - overridden by mobile format */
+
+.calendar-day {
+  background: var(--calendar-bg-card);
+  padding: 0.75rem 0.5rem;
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  cursor: pointer;
+  transition: var(--calendar-transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.calendar-day:hover {
+  background: var(--calendar-bg-hover);
+  transform: scale(1.02);
+  z-index: 1;
+  box-shadow: var(--calendar-shadow-md);
+}
+
+.calendar-day.other-month:hover {
+  background: var(--calendar-bg-secondary);
+  transform: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+.calendar-day.other-month {
+  background: rgba(100, 116, 139, 0.1);
+  color: var(--calendar-text-muted);
+  opacity: 0.95;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.calendar-day.other-month .day-number {
+  color: var(--calendar-text-muted);
+  opacity: 1;
+}
+
+.calendar-day.other-month .hyrulean-date {
+  color: var(--calendar-text-muted);
+  opacity: 0.9;
+}
+
+.calendar-day.other-month .day-events {
+  opacity: 1;
+}
+
+.calendar-day.other-month .day-event {
+  opacity: 1;
+}
+
+.calendar-day.today {
+  background: rgba(59, 130, 246, 0.1);
+  border: 2px solid var(--calendar-primary);
+}
+
+.calendar-day.has-birthday {
+  border-left: 4px solid var(--calendar-success);
+}
+
+.calendar-day.has-bloodmoon {
+  border-left: 4px solid var(--calendar-danger);
+}
+
+.day-number {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--calendar-text);
+  margin-bottom: 0.25rem;
+}
+
+.hyrulean-date {
+  font-size: 0.75rem;
+  color: var(--calendar-text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  flex: 1;
+  overflow: hidden;
+}
+
+.day-event {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--calendar-radius-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  max-height: 1.5rem;
+}
+
+.day-event.birthday {
+  background: var(--calendar-success);
+  color: white;
+}
+
+.day-event.bloodmoon {
+  background: linear-gradient(135deg, var(--calendar-danger), #dc2626);
+  color: white;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================================
+   📱 MOBILE LIST VIEW
+   ============================================================================ */
+
+/* Desktop calendar grid - default view */
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--calendar-border-light);
+  border-radius: 0 0 var(--calendar-radius-sm) var(--calendar-radius-sm);
+  min-height: 450px;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  margin-bottom: 1px;
+  background: var(--calendar-border-light);
+  border-radius: var(--calendar-radius-sm) var(--calendar-radius-sm) 0 0;
+}
+
+.calendar-day {
+  background: var(--calendar-bg-card);
+  padding: 0.75rem 0.5rem;
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  cursor: pointer;
+  transition: var(--calendar-transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.calendar-day:hover {
+  background: var(--calendar-bg-hover);
+  transform: scale(1.02);
+  z-index: 1;
+  box-shadow: var(--calendar-shadow-md);
+}
+
+.calendar-day.other-month:hover {
+  background: var(--calendar-bg-secondary);
+  transform: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+.calendar-day.other-month {
+  background: rgba(100, 116, 139, 0.1);
+  color: var(--calendar-text-muted);
+  opacity: 0.95;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.calendar-day.other-month .day-number {
+  color: var(--calendar-text-muted);
+  opacity: 1;
+}
+
+.calendar-day.other-month .hyrulean-date {
+  color: var(--calendar-text-muted);
+  opacity: 0.9;
+}
+
+.calendar-day.other-month .day-events {
+  opacity: 1;
+}
+
+.calendar-day.other-month .day-event {
+  opacity: 1;
+}
+
+.calendar-day.today {
+  background: rgba(59, 130, 246, 0.1);
+  border: 2px solid var(--calendar-primary);
+}
+
+.calendar-day.has-birthday {
+  border-left: 4px solid var(--calendar-success);
+}
+
+.calendar-day.has-bloodmoon {
+  border-left: 4px solid var(--calendar-danger);
+}
+
+.day-number {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--calendar-text);
+  margin-bottom: 0.25rem;
+}
+
+.hyrulean-date {
+  font-size: 0.75rem;
+  color: var(--calendar-text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  flex: 1;
+  overflow: hidden;
+}
+
+.day-event {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--calendar-radius-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  max-height: 1.5rem;
+}
+
+.day-event.birthday {
+  background: var(--calendar-success);
+  color: white;
+  position: relative;
+  cursor: help;
+}
+
+.day-event.birthday .tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  min-width: 100px;
+  text-align: center;
+  max-width: 200px;
+}
+
+.day-event.birthday .tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+.day-event.birthday:hover .tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Tooltip styles for desktop calendar */
+.day-event.birthday .tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  min-width: 100px;
+  text-align: center;
+  max-width: 200px;
+}
+
+.day-event.birthday .tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+.day-event.bloodmoon {
+  background: linear-gradient(135deg, var(--calendar-danger), #dc2626);
+  color: white;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.weekday {
+  background: var(--calendar-bg-secondary);
+  padding: 1rem 0.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--calendar-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Mobile day cards - hidden on desktop */
+.mobile-day-card {
+  display: none;
+}
+
+/* Media query for mobile view */
+@media (max-width: 768px) {
+  .calendar-days {
+    display: block;
+    background: transparent;
+    border-radius: 0;
+  }
+  
+  .calendar-weekdays {
+    display: none;
+  }
+  
+  .calendar-day {
+    display: none;
+  }
+  
+  .mobile-day-card {
+    display: block;
+    background: linear-gradient(145deg, var(--calendar-bg-card), rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 16px;
+    margin-bottom: 0.75rem;
+    padding: 1.5rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.04),
+      0 1px 3px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(20px);
+  }
+  
+  .mobile-day-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--calendar-primary), var(--calendar-accent), var(--calendar-success));
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+  
+  .mobile-day-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.02), rgba(16, 185, 129, 0.02));
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+  }
+  
+  .mobile-day-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 
+      0 8px 25px rgba(0, 0, 0, 0.08),
+      0 4px 12px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  .mobile-day-card:hover::before {
+    opacity: 1;
+  }
+  
+  .mobile-day-card:hover::after {
+    opacity: 1;
+  }
+  
+  .mobile-day-card:active {
+    transform: translateY(-2px) scale(1.01);
+    transition: all 0.15s ease;
+  }
+  
+  .mobile-day-card.today {
+    border-color: var(--calendar-primary);
+    background: linear-gradient(145deg, 
+      rgba(59, 130, 246, 0.05), 
+      rgba(16, 185, 129, 0.03),
+      var(--calendar-bg-card));
+    box-shadow: 
+      0 4px 15px rgba(59, 130, 246, 0.08),
+      0 2px 8px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  
+  .mobile-day-card.today::before {
+    opacity: 1;
+    background: linear-gradient(90deg, var(--calendar-primary), var(--calendar-success));
+    height: 5px;
+  }
+  
+  .mobile-day-card.today::after {
+    opacity: 1;
+  }
+  
+  .mobile-day-card.has-birthday {
+    border-left: 5px solid var(--calendar-success);
+    background: linear-gradient(145deg, 
+      var(--calendar-bg-card), 
+      rgba(16, 185, 129, 0.03),
+      rgba(16, 185, 129, 0.01));
+    box-shadow: 
+      0 2px 8px rgba(16, 185, 129, 0.1),
+      0 1px 3px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  .mobile-day-card.has-bloodmoon {
+    border-left: 5px solid var(--calendar-danger);
+    background: linear-gradient(145deg, 
+      var(--calendar-bg-card), 
+      rgba(239, 68, 68, 0.03),
+      rgba(239, 68, 68, 0.01));
+    box-shadow: 
+      0 2px 8px rgba(239, 68, 68, 0.1),
+      0 1px 3px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  .mobile-day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    position: relative;
+  }
+  
+  .mobile-day-header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3), transparent);
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+  
+  .mobile-day-card:hover .mobile-day-header::after {
+    opacity: 1;
+  }
+  
+  .mobile-day-number {
+    font-size: 2.25rem;
+    font-weight: 900;
+    color: var(--calendar-text);
+    line-height: 1;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, var(--calendar-text), rgba(100, 116, 139, 0.8));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .mobile-day-card.today .mobile-day-number {
+    background: linear-gradient(135deg, var(--calendar-primary), var(--calendar-success));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .mobile-day-of-week {
+    font-size: 0.875rem;
+    color: var(--calendar-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 700;
+    background: rgba(100, 116, 139, 0.1);
+    padding: 0.375rem 0.875rem;
+    border-radius: 20px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  
+  .mobile-day-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.25rem;
+    min-height: 3rem;
+  }
+  
+  .mobile-hyrulean-date {
+    font-size: 0.95rem;
+    color: var(--calendar-text-secondary);
+    font-style: italic;
+    font-weight: 700;
+    background: linear-gradient(145deg, 
+      rgba(100, 116, 139, 0.08), 
+      rgba(59, 130, 246, 0.05),
+      rgba(16, 185, 129, 0.03));
+    padding: 0.625rem 1.125rem;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    box-shadow: 
+      0 2px 4px rgba(0, 0, 0, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+  }
+  
+  .mobile-hyrulean-date::before {
+    content: '🌙';
+    margin-right: 0.5rem;
+    font-style: normal;
+    font-size: 1rem;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+  }
+  
+  .mobile-hyrulean-date::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.05));
+    border-radius: 12px;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+  }
+  
+  .mobile-day-card:hover .mobile-hyrulean-date {
+    transform: translateY(-1px);
+    box-shadow: 
+      0 4px 8px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  .mobile-day-card:hover .mobile-hyrulean-date::after {
+    opacity: 1;
+  }
+  
+  .mobile-day-events {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-end;
+    min-width: 0;
+    flex: 1;
+    min-height: 2.5rem;
+    justify-content: center;
+  }
+  
+  .mobile-day-events:empty {
+    min-height: 0;
+  }
+  
+  .mobile-day-events:empty::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.2), transparent);
+    border-radius: 1px;
+    opacity: 0.6;
+  }
+  
+  .mobile-day-event {
+    font-size: 0.8rem;
+    padding: 0.625rem 1.125rem;
+    border-radius: 20px;
+    font-weight: 700;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    box-shadow: 
+      0 3px 8px rgba(0, 0, 0, 0.15),
+      0 1px 3px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+  }
+  
+  .mobile-day-event::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: all 0.6s ease;
+  }
+  
+  .mobile-day-event:hover {
+    transform: translateY(-2px) scale(1.08);
+    box-shadow: 
+      0 6px 15px rgba(0, 0, 0, 0.2),
+      0 3px 8px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  
+  .mobile-day-event:hover::before {
+    left: 100%;
+  }
+  
+  .mobile-day-event:active {
+    transform: translateY(-1px) scale(1.05);
+    transition: all 0.15s ease;
+  }
+  
+  .mobile-day-event.birthday {
+    background: linear-gradient(145deg, 
+      var(--calendar-success), 
+      #059669,
+      #047857);
+    color: white;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    position: relative;
+    cursor: help;
+  }
+  
+  .mobile-day-event.birthday .tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    margin-bottom: 0.5rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    pointer-events: none;
+  }
+  
+  .mobile-day-event.birthday .tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba(0, 0, 0, 0.9);
+  }
+  
+  .mobile-day-event.birthday:hover .tooltip {
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .mobile-day-event.birthday::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+    border-radius: 20px;
+    z-index: 1;
+  }
+  
+  .mobile-day-event.bloodmoon {
+    background: linear-gradient(145deg, 
+      var(--calendar-danger), 
+      #dc2626,
+      #b91c1c);
+    color: white;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.2);
+  }
+  
+  .mobile-day-event.bloodmoon::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+    border-radius: 20px;
+  }
+}
+
+/* ============================================================================
+   🎂 BIRTHDAYS TAB
+   ============================================================================ */
+
+.birthdays-container {
+  width: 100%;
+}
+
+.birthdays-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.birthdays-header h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--calendar-text);
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.birthdays-header p {
+  color: var(--calendar-text-secondary);
+  margin: 0;
+}
+
+.birthdays-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.birthday-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--calendar-bg-card);
+  border: 1px solid var(--calendar-border);
+  border-radius: var(--calendar-radius);
+  transition: var(--calendar-transition);
+  box-shadow: var(--calendar-shadow);
+}
+
+.birthday-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--calendar-shadow-md);
+}
+
+.birthday-item.today {
+  border-color: var(--calendar-success);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.birthday-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--calendar-bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.birthday-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.birthday-avatar i {
+  font-size: 1.25rem;
+  color: var(--calendar-text-secondary);
+}
+
+.birthday-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.birthday-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--calendar-text);
+  margin-bottom: 0.25rem;
+}
+
+.birthday-date {
+  font-size: 0.875rem;
+  color: var(--calendar-text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.birthday-hyrulean-date {
+  font-size: 0.75rem;
+  color: var(--calendar-text-muted);
+  font-style: italic;
+}
+
+.birthday-days {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--calendar-primary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.birthday-item.today .birthday-days {
+  color: var(--calendar-success);
+}
+
+.birthdays-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--calendar-text-secondary);
+}
+
+.birthdays-empty i {
+  font-size: 3rem;
+  color: var(--calendar-text-muted);
+  margin-bottom: 1rem;
+}
+
+.birthdays-empty h4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.birthdays-empty p {
+  margin: 0;
+}
+
+/* ============================================================================
+   🌙 HYRULEAN CALENDAR TAB
+   ============================================================================ */
+
+.hyrulean-container {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--calendar-radius);
+  padding: 1.5rem;
+  backdrop-filter: blur(10px);
+}
+
+.hyrulean-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  background: rgba(59, 130, 246, 0.05);
+  padding: 1.5rem;
+  border-radius: var(--calendar-radius);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.hyrulean-header h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--calendar-text);
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.hyrulean-header p {
+  color: var(--calendar-text-secondary);
+  margin: 0;
+  font-weight: 500;
+}
+
+.hyrulean-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+  max-width: 100%;
+}
+
+.hyrulean-month-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: var(--calendar-radius);
+  padding: 1.5rem;
+  transition: var(--calendar-transition);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+}
+
+.hyrulean-month-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(16, 185, 129, 0.03));
+  opacity: 0;
+  transition: var(--calendar-transition);
+  pointer-events: none;
+}
+
+.hyrulean-month-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.hyrulean-month-card:hover::before {
+  opacity: 1;
+}
+
+.hyrulean-month-card.current {
+  border-color: var(--calendar-primary);
+  background: rgba(59, 130, 246, 0.1);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.2);
+}
+
+.hyrulean-month-card.current::before {
+  opacity: 1;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.05));
+}
+
+.hyrulean-month-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.hyrulean-month-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--calendar-text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.hyrulean-month-id {
+  font-size: 0.875rem;
+  color: var(--calendar-text-secondary);
+  background: rgba(100, 116, 139, 0.15);
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--calendar-radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-weight: 600;
+  backdrop-filter: blur(5px);
+}
+
+.hyrulean-month-dates {
+  font-size: 0.875rem;
+  color: var(--calendar-text-secondary);
+  text-align: center;
+  background: rgba(100, 116, 139, 0.08);
+  padding: 0.5rem;
+  border-radius: var(--calendar-radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
+   🩸 BLOOD MOON TAB
+   ============================================================================ */
+
+.bloodmoon-container {
+  width: 100%;
+}
+
+.bloodmoon-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.bloodmoon-header h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--calendar-text);
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.bloodmoon-header p {
+  color: var(--calendar-text-secondary);
+  margin: 0;
+}
+
+.bloodmoon-cycle-info {
+  background: var(--calendar-bg-card);
+  border: 1px solid var(--calendar-border);
+  border-radius: var(--calendar-radius);
+  padding: 1.5rem;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--calendar-shadow);
+}
+
+.bloodmoon-cycle-info.current {
+  border-color: var(--calendar-danger);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.bloodmoon-cycle-day {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--calendar-danger);
+  margin-bottom: 0.5rem;
+}
+
+.bloodmoon-cycle-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--calendar-text);
+  margin-bottom: 1rem;
+}
+
+.bloodmoon-cycle-description {
+  font-size: 0.875rem;
+  color: var(--calendar-text-secondary);
+  line-height: 1.5;
+}
+
+.bloodmoon-dates-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.bloodmoon-dates-header {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--calendar-text);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.bloodmoon-date-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--calendar-bg-card);
+  border: 1px solid var(--calendar-border);
+  border-radius: var(--calendar-radius);
+  transition: var(--calendar-transition);
+  box-shadow: var(--calendar-shadow);
+}
+
+.bloodmoon-date-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--calendar-shadow-md);
+}
+
+.bloodmoon-date-item.today {
+  border-color: var(--calendar-danger);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.bloodmoon-date-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--calendar-danger), #dc2626);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  transition: var(--calendar-transition);
+}
+
+.bloodmoon-date-icon i {
+  font-size: 1.1rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.bloodmoon-date-icon:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.bloodmoon-date-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bloodmoon-date-real {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--calendar-text);
+  margin-bottom: 0.25rem;
+}
+
+.bloodmoon-date-hyrulean {
+  font-size: 0.875rem;
+  color: var(--calendar-text-secondary);
+}
+
+.bloodmoon-date-cycle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--calendar-danger);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   ⚠️ ERROR & LOADING STATES
+   ============================================================================ */
+
+.calendar-error,
+.calendar-loading {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--calendar-text-secondary);
+}
+
+.calendar-error i {
+  font-size: 3rem;
+  color: var(--calendar-warning);
+  margin-bottom: 1rem;
+}
+
+.calendar-error p {
+  font-size: 1rem;
+  margin: 0 0 1.5rem 0;
+}
+
+.calendar-retry-btn {
+  background: var(--calendar-primary);
+  color: white;
+  border: none;
+  border-radius: var(--calendar-radius-sm);
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--calendar-transition);
+}
+
+.calendar-retry-btn:hover {
+  background: var(--calendar-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--calendar-shadow);
+}
+
+.calendar-loading .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--calendar-border-light);
+  border-top: 4px solid var(--calendar-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.calendar-loading p {
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* ============================================================================
+   📱 RESPONSIVE DESIGN
+   ============================================================================ */
+
+@media (max-width: 1024px) {
+  .calendar-container {
+    padding: 0 0.25rem;
+  }
+  
+  .calendar-stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .calendar-tabs {
+    flex-wrap: wrap;
+  }
+  
+  .calendar-tab {
+    min-width: 100px;
+  }
+}
+
+@media (max-width: 768px) {
+  .calendar-container {
+    padding: 0 0.5rem;
+  }
+  
+  .calendar-stats {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .calendar-stat-item {
+    padding: 0.75rem;
+  }
+  
+  .calendar-tabs {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .calendar-tab {
+    min-width: auto;
+    justify-content: flex-start;
+  }
+  
+  .calendar-tab-content {
+    padding: 1rem;
+  }
+  
+  .calendar-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .calendar-navigation {
+    justify-content: center;
+  }
+  
+  .calendar-controls {
+    justify-content: center;
+  }
+  
+  .hyrulean-calendar-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .birthday-item {
+    padding: 0.75rem;
+  }
+  
+  .birthday-avatar {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .calendar-stat-item .stat-value {
+    font-size: 1.25rem;
+  }
+  
+  .calendar-title h3 {
+    font-size: 1.25rem;
+  }
+  
+  .birthday-item {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.75rem;
+  }
+  
+  .birthday-info {
+    order: 1;
+  }
+  
+  .birthday-days {
+    order: 2;
+    text-align: center;
+  }
+  
+  .bloodmoon-date-item {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.75rem;
+  }
+  
+  .bloodmoon-date-cycle {
+    text-align: center;
+  }
+}
+
+/* ============================================================================
+   🎨 DARK MODE SUPPORT
+   ============================================================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --calendar-bg-hover: rgba(59, 130, 246, 0.1);
+    --calendar-primary-light: rgba(59, 130, 246, 0.2);
+  }
+}
+
+/* ============================================================================
+   📅 CALENDAR EVENTS LIST
+   ============================================================================ */
+
+.calendar-events {
+  background: var(--calendar-bg-card);
+  border: 1px solid var(--calendar-border);
+  border-radius: var(--calendar-radius);
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--calendar-shadow);
+}
+
+.calendar-events h4 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--calendar-text);
+  margin: 0 0 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.calendar-events h4::before {
+  content: '📅';
+  font-size: 1.1rem;
+}
+
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.event-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--calendar-bg-secondary);
+  border: 1px solid var(--calendar-border-light);
+  border-radius: var(--calendar-radius-sm);
+  transition: var(--calendar-transition);
+}
+
+.event-item:hover {
+  background: var(--calendar-bg-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--calendar-shadow);
+}
+
+.event-icon {
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--calendar-bg-card);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.event-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--calendar-text);
+  margin-bottom: 0.25rem;
+}
+
+.event-date {
+  font-size: 0.875rem;
+  color: var(--calendar-text-secondary);
+  font-style: italic;
+}
+
+.birthday-event {
+  border-left: 4px solid var(--calendar-success);
+}
+
+.birthday-event .event-icon {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.bloodmoon-event {
+  border-left: 4px solid var(--calendar-danger);
+}
+
+.bloodmoon-event .event-icon {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1));
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1);
+}
+
+.no-events {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--calendar-text-secondary);
+  font-style: italic;
+  background: var(--calendar-bg-secondary);
+  border-radius: var(--calendar-radius-sm);
+  border: 1px dashed var(--calendar-border-light);
+}
+
+/* ============================================================================
+   ♿ ACCESSIBILITY IMPROVEMENTS
+   ============================================================================ */
+
+.calendar-tab:focus,
+.calendar-nav-btn:focus,
+.calendar-control-btn:focus,
+.calendar-retry-btn:focus {
+  outline: 2px solid var(--calendar-primary);
+  outline-offset: 2px;
+}
+
+.calendar-day:focus {
+  outline: 2px solid var(--calendar-primary);
+  outline-offset: -2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .calendar-day.today {
+    border-width: 3px;
+  }
+  
+  .calendar-day.has-birthday,
+  .calendar-day.has-bloodmoon {
+    border-left-width: 6px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .calendar-day,
+  .birthday-item,
+  .hyrulean-month-card,
+  .bloodmoon-date-item,
+  .calendar-stat-item {
+    transition: none;
+  }
+  
+  .calendar-day:hover,
+  .birthday-item:hover,
+  .hyrulean-month-card:hover,
+  .bloodmoon-date-item:hover,
+  .calendar-stat-item:hover {
+    transform: none;
+  }
+  
+  .loading-spinner {
+    animation: none;
+  }
+}

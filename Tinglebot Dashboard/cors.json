@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:5001", "https://localhost:5001", "http://127.0.0.1:5001", "https://127.0.0.1:5001"],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin", "Access-Control-Allow-Methods"],
+    "maxAgeSeconds": 3600
+  }
+]

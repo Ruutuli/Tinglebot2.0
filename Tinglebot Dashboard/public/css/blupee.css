@@ -1,0 +1,338 @@
+/* ============================================================================
+   blupee.css
+   Purpose: Styles and animations for the blupee hunt gamification feature
+============================================================================ */
+
+/* ============================================================================
+   Blupee Container
+============================================================================ */
+
+.blupee-container {
+  position: fixed;
+  width: 80px;
+  height: 80px;
+  cursor: pointer;
+  z-index: 9999;
+  transition: transform 0.8s ease-in-out, opacity 1s ease-out;
+  pointer-events: all;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  will-change: left, top, transform;
+}
+
+.blupee-container:hover {
+  transform: scale(1.1) translateY(-10px) !important;
+  filter: brightness(1.2);
+}
+
+/* ============================================================================
+   Blupee Image
+============================================================================ */
+
+.blupee-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0, 255, 255, 0.4));
+  animation: blupee-glow 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ============================================================================
+   Sparkle Effect
+============================================================================ */
+
+.blupee-sparkle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.blupee-sparkle::before,
+.blupee-sparkle::after {
+  content: '';
+  position: absolute;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, rgba(0, 255, 255, 0.4) 40%, transparent 70%);
+  border-radius: 50%;
+  animation: blupee-sparkle 3s ease-in-out infinite;
+}
+
+.blupee-sparkle::before {
+  width: 20px;
+  height: 20px;
+  top: 10%;
+  left: 80%;
+  animation-delay: 0s;
+}
+
+.blupee-sparkle::after {
+  width: 15px;
+  height: 15px;
+  top: 70%;
+  left: 10%;
+  animation-delay: 1.5s;
+}
+
+/* ============================================================================
+   Animations
+============================================================================ */
+
+@keyframes blupee-glow {
+  0%, 100% {
+    filter: drop-shadow(0 4px 8px rgba(0, 255, 255, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 4px 16px rgba(0, 255, 255, 0.8));
+  }
+}
+
+@keyframes blupee-sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+}
+
+/* ============================================================================
+   Clicked State
+============================================================================ */
+
+.blupee-clicked {
+  animation: blupee-collect 0.8s ease-out forwards !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+
+@keyframes blupee-collect {
+  0% {
+    transform: scale(1) translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5) translateY(-30px) rotate(180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0) translateY(-60px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
+   Fade Out
+============================================================================ */
+
+.blupee-fade-out {
+  animation: blupee-disappear 1s ease-out forwards !important;
+  pointer-events: none !important;
+}
+
+@keyframes blupee-disappear {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* ============================================================================
+   Spark Burst Effect
+============================================================================ */
+
+.blupee-spark {
+  position: fixed;
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle, #ffffff 0%, #00ffff 50%, transparent 100%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10000;
+  animation: blupee-spark-burst 1s ease-out forwards;
+}
+
+@keyframes blupee-spark-burst {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx, 50px), var(--ty, 50px)) scale(0);
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
+   Notification Styles
+============================================================================ */
+
+.blupee-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 10001;
+  min-width: 280px;
+  max-width: 400px;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.blupee-notification-show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.blupee-notification-success {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.blupee-notification-error {
+  background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+}
+
+.blupee-notification-icon {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+  animation: blupee-notification-bounce 0.6s ease-out;
+}
+
+@keyframes blupee-notification-bounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+.blupee-notification-content {
+  flex: 1;
+  color: white;
+}
+
+.blupee-notification-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 4px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.blupee-notification-message {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 2px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.blupee-notification-subtitle {
+  font-size: 12px;
+  opacity: 0.9;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================================================
+   Mobile Responsiveness
+============================================================================ */
+
+@media (max-width: 768px) {
+  .blupee-container {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .blupee-notification {
+    right: 10px;
+    left: 10px;
+    min-width: auto;
+    max-width: none;
+    padding: 12px 16px;
+  }
+  
+  .blupee-notification-icon {
+    font-size: 24px;
+  }
+  
+  .blupee-notification-title {
+    font-size: 14px;
+  }
+  
+  .blupee-notification-message {
+    font-size: 16px;
+  }
+  
+  .blupee-notification-subtitle {
+    font-size: 11px;
+  }
+}
+
+/* ============================================================================
+   Accessibility
+============================================================================ */
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .blupee-container,
+  .blupee-image,
+  .blupee-sparkle::before,
+  .blupee-sparkle::after,
+  .blupee-notification,
+  .blupee-spark {
+    animation: none !important;
+    transition: opacity 0.3s ease !important;
+  }
+  
+  .blupee-container:hover {
+    transform: scale(1.05) !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .blupee-notification {
+    border: 3px solid white;
+  }
+  
+  .blupee-container {
+    outline: 2px solid white;
+    outline-offset: 2px;
+  }
+}
+
+/* ============================================================================
+   Z-Index Management
+============================================================================ */
+
+/* Ensure blupee appears above most content but below modals */
+.blupee-container {
+  z-index: 9999;
+}
+
+.blupee-spark {
+  z-index: 10000;
+}
+
+.blupee-notification {
+  z-index: 10001;
+}
+

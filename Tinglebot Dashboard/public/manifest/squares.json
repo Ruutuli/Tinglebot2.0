@@ -1,0 +1,2527 @@
+{
+  "grid": {
+    "cols": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J"
+    ],
+    "rows": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ]
+  },
+  "squareSize": {
+    "w": 2400,
+    "h": 1666
+  },
+  "canvas": {
+    "w": 24000,
+    "h": 20000
+  },
+  "squares": {
+    "A1": {
+      "bounds": {
+        "x0": 0,
+        "y0": 0,
+        "x1": 2400,
+        "y1": 1666
+      },
+      "layers": [
+        "MAP_0002_Map-Base",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": false,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A2": {
+      "bounds": {
+        "x0": 0,
+        "y0": 1666,
+        "x1": 2400,
+        "y1": 3332
+      },
+      "layers": [
+        "MAP_0002_Map-Base",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": false,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A3": {
+      "bounds": {
+        "x0": 0,
+        "y0": 3332,
+        "x1": 2400,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A4": {
+      "bounds": {
+        "x0": 0,
+        "y0": 4998,
+        "x1": 2400,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A5": {
+      "bounds": {
+        "x0": 0,
+        "y0": 6664,
+        "x1": 2400,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A6": {
+      "bounds": {
+        "x0": 0,
+        "y0": 8330,
+        "x1": 2400,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A7": {
+      "bounds": {
+        "x0": 0,
+        "y0": 9996,
+        "x1": 2400,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A8": {
+      "bounds": {
+        "x0": 0,
+        "y0": 11662,
+        "x1": 2400,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A9": {
+      "bounds": {
+        "x0": 0,
+        "y0": 13328,
+        "x1": 2400,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A10": {
+      "bounds": {
+        "x0": 0,
+        "y0": 14994,
+        "x1": 2400,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A11": {
+      "bounds": {
+        "x0": 0,
+        "y0": 16660,
+        "x1": 2400,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "A12": {
+      "bounds": {
+        "x0": 0,
+        "y0": 18326,
+        "x1": 2400,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northwest",
+        "village": null
+      }
+    },
+    "B1": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 0,
+        "x1": 4800,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B2": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 1666,
+        "x1": 4800,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B3": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 3332,
+        "x1": 4800,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B4": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 4998,
+        "x1": 4800,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B5": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 6664,
+        "x1": 4800,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B6": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 8330,
+        "x1": 4800,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B7": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 9996,
+        "x1": 4800,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B8": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 11662,
+        "x1": 4800,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B9": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 13328,
+        "x1": 4800,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B10": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 14994,
+        "x1": 4800,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B11": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 16660,
+        "x1": 4800,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "B12": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 18326,
+        "x1": 4800,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C1": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 0,
+        "x1": 7200,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C2": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 1666,
+        "x1": 7200,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C3": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 3332,
+        "x1": 7200,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C4": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 4998,
+        "x1": 7200,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C5": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 6664,
+        "x1": 7200,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0000_BLIGHT",
+        "MAP_0001_hidden-areas",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C6": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 8330,
+        "x1": 7200,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C7": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 9996,
+        "x1": 7200,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C8": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 11662,
+        "x1": 7200,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C9": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 13328,
+        "x1": 7200,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C10": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 14994,
+        "x1": 7200,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C11": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 16660,
+        "x1": 7200,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "C12": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 18326,
+        "x1": 7200,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D1": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 0,
+        "x1": 9600,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D2": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 1666,
+        "x1": 9600,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D3": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 3332,
+        "x1": 9600,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D4": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 4998,
+        "x1": 9600,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D5": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 6664,
+        "x1": 9600,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D6": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 8330,
+        "x1": 9600,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D7": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 9996,
+        "x1": 9600,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D8": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 11662,
+        "x1": 9600,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D9": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 13328,
+        "x1": 9600,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D10": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 14994,
+        "x1": 9600,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D11": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 16660,
+        "x1": 9600,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "D12": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 18326,
+        "x1": 9600,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "north",
+        "village": null
+      }
+    },
+    "E1": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 0,
+        "x1": 12000,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E2": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 1666,
+        "x1": 12000,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E3": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 3332,
+        "x1": 12000,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E4": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 4998,
+        "x1": 12000,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E5": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 6664,
+        "x1": 12000,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E6": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 8330,
+        "x1": 12000,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E7": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 9996,
+        "x1": 12000,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E8": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 11662,
+        "x1": 12000,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E9": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 13328,
+        "x1": 12000,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E10": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 14994,
+        "x1": 12000,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E11": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 16660,
+        "x1": 12000,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "E12": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 18326,
+        "x1": 12000,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "village-borders",
+        "region-names",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "central",
+        "village": "Inariko"
+      }
+    },
+    "F1": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 0,
+        "x1": 14400,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F2": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 1666,
+        "x1": 14400,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F3": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 3332,
+        "x1": 14400,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F4": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 4998,
+        "x1": 14400,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F5": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 6664,
+        "x1": 14400,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F6": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 8330,
+        "x1": 14400,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F7": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 9996,
+        "x1": 14400,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F8": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 11662,
+        "x1": 14400,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F9": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 13328,
+        "x1": 14400,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders",
+        "MAP_0002s_0001s_0000_CIRCLE-VHINTL-CYAN",
+        "MAP_0002s_0001s_0001_CIRCLE-VHINTL-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F10": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 14994,
+        "x1": 14400,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0001s_0002_Vhintl-Marker",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders",
+        "MAP_0002s_0001s_0000_CIRCLE-VHINTL-CYAN",
+        "MAP_0002s_0001s_0001_CIRCLE-VHINTL-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F11": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 16660,
+        "x1": 14400,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "F12": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 18326,
+        "x1": 14400,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "northeast",
+        "village": null
+      }
+    },
+    "G1": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 0,
+        "x1": 16800,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G2": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 1666,
+        "x1": 16800,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G3": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 3332,
+        "x1": 16800,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G4": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 4998,
+        "x1": 16800,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G5": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 6664,
+        "x1": 16800,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G6": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 8330,
+        "x1": 16800,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G7": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 9996,
+        "x1": 16800,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN",
+        "MAP_0002s_0000s_0001_CIRCLE-INARIKO-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G8": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 11662,
+        "x1": 16800,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN",
+        "MAP_0002s_0000s_0001_CIRCLE-INARIKO-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G9": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 13328,
+        "x1": 16800,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders",
+        "MAP_0002s_0001s_0000_CIRCLE-VHINTL-CYAN"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G10": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 14994,
+        "x1": 16800,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0001s_0000_CIRCLE-VHINTL-CYAN"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G11": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 16660,
+        "x1": 16800,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "G12": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 18326,
+        "x1": 16800,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "east",
+        "village": null
+      }
+    },
+    "H1": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 0,
+        "x1": 19200,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H2": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 1666,
+        "x1": 19200,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H3": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 3332,
+        "x1": 19200,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H4": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 4998,
+        "x1": 19200,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0002s_0000_CIRCLE-RUDANIA-CYAN",
+        "MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H5": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 6664,
+        "x1": 19200,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0001s_0000_Rudania-Marker",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders",
+        "MAP_0002s_0002s_0000_CIRCLE-RUDANIA-CYAN",
+        "MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H6": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 8330,
+        "x1": 19200,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H7": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 9996,
+        "x1": 19200,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0000s_0001_CIRCLE-INARIKO-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H8": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 11662,
+        "x1": 19200,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0001s_0001_Inariko-Marker",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN",
+        "MAP_0002s_0000s_0001_CIRCLE-INARIKO-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H9": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 13328,
+        "x1": 19200,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H10": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 14994,
+        "x1": 19200,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H11": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 16660,
+        "x1": 19200,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "H12": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 18326,
+        "x1": 19200,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southeast",
+        "village": null
+      }
+    },
+    "I1": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 0,
+        "x1": 21600,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I2": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 1666,
+        "x1": 21600,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I3": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 3332,
+        "x1": 21600,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I4": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 4998,
+        "x1": 21600,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0002s_0000_CIRCLE-RUDANIA-CYAN",
+        "MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I5": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 6664,
+        "x1": 21600,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders",
+        "MAP_0002s_0002s_0000_CIRCLE-RUDANIA-CYAN",
+        "MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I6": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 8330,
+        "x1": 21600,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I7": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 9996,
+        "x1": 21600,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I8": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 11662,
+        "x1": 21600,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I9": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 13328,
+        "x1": 21600,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I10": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 14994,
+        "x1": 21600,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I11": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 16660,
+        "x1": 21600,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "I12": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 18326,
+        "x1": 21600,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "south",
+        "village": null
+      }
+    },
+    "J1": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 0,
+        "x1": 24000,
+        "y1": 1666
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J2": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 1666,
+        "x1": 24000,
+        "y1": 3332
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J3": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 3332,
+        "x1": 24000,
+        "y1": 4998
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J4": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 4998,
+        "x1": 24000,
+        "y1": 6664
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J5": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 6664,
+        "x1": 24000,
+        "y1": 8330
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J6": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 8330,
+        "x1": 24000,
+        "y1": 9996
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J7": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 9996,
+        "x1": 24000,
+        "y1": 11662
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J8": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 11662,
+        "x1": 24000,
+        "y1": 13328
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J9": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 13328,
+        "x1": 24000,
+        "y1": 14994
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J10": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 14994,
+        "x1": 24000,
+        "y1": 16660
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT",
+        "MAP_0001s_0003_Region-Borders"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J11": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 16660,
+        "x1": 24000,
+        "y1": 18326
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    },
+    "J12": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 18326,
+        "x1": 24000,
+        "y1": 19992
+      },
+      "layers": [
+        "base",
+        "paths",
+        "region-borders",
+        "MAP_0001_hidden-areas",
+        "MAP_0000_BLIGHT"
+      ],
+      "hasPreview": true,
+      "meta": {
+        "region": "southwest",
+        "village": null
+      }
+    }
+  }
+}

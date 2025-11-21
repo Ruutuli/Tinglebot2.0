@@ -1,0 +1,1452 @@
+/* ============================================================================
+ * File: databaseEditor.css
+ * Purpose: Styles for the admin database editor interface - Matching theme
+ * ============================================================================ */
+
+/* ============================================================================
+ * Database Editor Section
+ * ============================================================================ */
+
+#database-editor-section {
+  padding: 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+  animation: fadeIn 0.3s ease;
+}
+
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.database-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 3px solid;
+  border-image: linear-gradient(90deg, #cbb687 0%, #e5dcb7 100%) 1;
+}
+
+.database-editor-header h2 {
+  color: var(--text-primary);
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.database-editor-header i {
+  margin-right: 0.5rem;
+  color: #cbb687;
+}
+
+/* Database Editor Back Button - Specific styling to override buttons.css */
+#database-editor-section .back-button,
+.database-editor-header .back-button {
+  background: linear-gradient(135deg, 
+    rgba(203, 182, 135, 0.2) 0%, 
+    rgba(229, 220, 183, 0.12) 50%,
+    rgba(203, 182, 135, 0.18) 100%
+  ) !important;
+  color: #e5dcb7 !important;
+  border: 2px solid rgba(203, 182, 135, 0.5) !important;
+  padding: 1rem 1.5rem !important;
+  border-radius: 12px !important;
+  cursor: pointer !important;
+  font-size: 1rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(203, 182, 135, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.1) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  backdrop-filter: blur(8px) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  min-height: auto !important;
+  min-width: auto !important;
+  width: auto !important;
+  height: auto !important;
+  justify-content: center !important;
+  margin-right: auto !important;
+  z-index: auto !important;
+}
+
+#database-editor-section .back-button::before,
+.database-editor-header .back-button::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: -100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.2), 
+    transparent
+  ) !important;
+  transition: left 0.6s ease !important;
+}
+
+#database-editor-section .back-button:hover,
+.database-editor-header .back-button:hover {
+  background: linear-gradient(135deg, 
+    rgba(203, 182, 135, 0.3) 0%, 
+    rgba(229, 220, 183, 0.2) 50%,
+    rgba(203, 182, 135, 0.25) 100%
+  ) !important;
+  border-color: rgba(203, 182, 135, 0.7) !important;
+  color: #ffffff !important;
+  transform: translateX(-4px) translateY(-2px) !important;
+  box-shadow: 
+    0 8px 20px rgba(203, 182, 135, 0.3),
+    0 0 0 1px rgba(203, 182, 135, 0.5),
+    inset 0 1px 3px rgba(255, 255, 255, 0.2) !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+}
+
+#database-editor-section .back-button:hover::before,
+.database-editor-header .back-button:hover::before {
+  left: 100% !important;
+}
+
+#database-editor-section .back-button:active,
+.database-editor-header .back-button:active {
+  transform: translateX(-2px) translateY(-1px) scale(0.98) !important;
+  box-shadow: 
+    0 4px 12px rgba(203, 182, 135, 0.4),
+    0 0 0 1px rgba(203, 182, 135, 0.6),
+    inset 0 1px 2px rgba(255, 255, 255, 0.15) !important;
+}
+
+#database-editor-section .back-button i,
+.database-editor-header .back-button i {
+  font-size: 1.1rem !important;
+  transition: transform 0.3s ease !important;
+}
+
+#database-editor-section .back-button:hover i,
+.database-editor-header .back-button:hover i {
+  transform: translateX(-2px) !important;
+}
+
+#database-editor-section .back-button:focus,
+.database-editor-header .back-button:focus {
+  outline: none !important;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.2),
+    0 0 0 3px rgba(203, 182, 135, 0.4),
+    inset 0 1px 2px rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ============================================================================
+ * Controls Section
+ * ============================================================================ */
+
+.db-editor-controls {
+  background: var(--card-background);
+  padding: 1.5rem;
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--border-color);
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.model-selector-container {
+  flex: 1;
+  min-width: 250px;
+}
+
+.model-selector-container label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+#model-selector {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  font-size: 1rem;
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#model-selector:focus {
+  outline: none;
+  border-color: #cbb687;
+  background: var(--card-background);
+}
+
+.search-container {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 250px;
+}
+
+#db-search-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  font-size: 1rem;
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+}
+
+#db-search-input:focus {
+  outline: none;
+  border-color: #cbb687;
+  background: var(--card-background);
+}
+
+#db-search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.search-btn,
+.create-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--card-radius);
+  font-size: 1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.search-btn {
+  background: linear-gradient(135deg, var(--accent), var(--primary-hover));
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 163, 218, 0.3);
+}
+
+.search-btn:hover {
+  background: linear-gradient(135deg, var(--primary-hover), var(--accent));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 163, 218, 0.4);
+}
+
+.create-btn {
+  background: linear-gradient(135deg, #49D59C, #1F5D50);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(73, 213, 156, 0.3);
+}
+
+.create-btn:hover {
+  background: linear-gradient(135deg, #1F5D50, #49D59C);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(73, 213, 156, 0.4);
+}
+
+/* ============================================================================
+ * Records Table
+ * ============================================================================ */
+
+#records-container {
+  background: var(--card-background);
+  border-radius: 16px;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(203, 182, 135, 0.1);
+  border: 2px solid;
+  border-image: linear-gradient(135deg, rgba(203, 182, 135, 0.2) 0%, rgba(229, 220, 183, 0.1) 100%) 1;
+  overflow: hidden;
+  position: relative;
+}
+
+#records-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.02) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.records-table-wrapper {
+  overflow-x: auto;
+  max-height: 650px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.records-table-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.records-table-wrapper::-webkit-scrollbar-track {
+  background: rgba(203, 182, 135, 0.1);
+  border-radius: 4px;
+}
+
+.records-table-wrapper::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #cbb687 0%, #e5dcb7 100%);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.records-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #e5dcb7 0%, #cbb687 100%);
+}
+
+.db-records-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.95rem;
+}
+
+.db-records-table thead {
+  background: linear-gradient(135deg, #2a2318 0%, #1f1a13 100%);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.db-records-table thead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #cbb687 50%, transparent 100%);
+}
+
+.db-records-table th {
+  padding: 1.25rem 1rem;
+  text-align: left;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 2px solid #cbb687;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+}
+
+.db-records-table th:first-child {
+  border-top-left-radius: 16px;
+}
+
+.db-records-table th:last-child {
+  border-top-right-radius: 16px;
+}
+
+.db-records-table th::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(203, 182, 135, 0.4) 50%, transparent 100%);
+}
+
+.db-records-table td {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.db-records-table tbody tr {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.db-records-table tbody tr:nth-child(even) {
+  background: rgba(203, 182, 135, 0.02);
+}
+
+.db-records-table tbody tr:hover {
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.1) 0%, rgba(229, 220, 183, 0.05) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(203, 182, 135, 0.15);
+}
+
+.db-records-table tbody tr:hover td {
+  color: var(--text-primary);
+}
+
+.db-records-table tbody tr:hover td::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(135deg, #cbb687 0%, #e5dcb7 100%);
+}
+
+#database-editor-section .action-btn {
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.1) 0%, rgba(229, 220, 183, 0.05) 100%);
+  border: 1px solid rgba(203, 182, 135, 0.2);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.75rem;
+  color: #cbb687;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+#database-editor-section .action-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+#database-editor-section .action-btn:hover::before {
+  left: 100%;
+}
+
+#database-editor-section .action-btn:hover {
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.2) 0%, rgba(229, 220, 183, 0.15) 100%);
+  border-color: rgba(203, 182, 135, 0.4);
+  color: #e5dcb7;
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 
+    0 6px 16px rgba(203, 182, 135, 0.3),
+    0 0 0 1px rgba(203, 182, 135, 0.3);
+#database-editor-section .edit-btn {
+  color: #cbb687;
+}
+
+#database-editor-section .edit-btn:hover {
+  color: #e5dcb7;
+}
+
+/* Special styling for Actions column (now first) */
+.db-records-table th:first-child,
+.db-records-table td:first-child {
+  text-align: center;
+  width: 80px;
+}
+
+/* Special styling for name/title columns */
+.db-records-table td[data-field="name"],
+.db-records-table td[data-field="title"],
+.db-records-table td[data-field="itemName"] {
+  font-weight: 600;
+  color: #e5dcb7;
+}
+
+/* Improved text formatting */
+.db-records-table td[data-type="number"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-records-table td[data-type="boolean"] {
+  text-align: center;
+}
+
+/* Loading state */
+.records-table-wrapper.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.records-table-wrapper.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(203, 182, 135, 0.3);
+  border-top: 3px solid #cbb687;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ============================================================================
+ * Pagination
+ * ============================================================================ */
+
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--glass-bg);
+}
+
+.pagination-btn {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--card-background);
+  border-radius: var(--card-radius);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: var(--glass-bg);
+  border-color: #cbb687;
+  color: #cbb687;
+  transform: translateY(-1px);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#pagination-info {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ============================================================================
+ * Empty State
+ * ============================================================================ */
+
+.empty-state {
+  background: var(--card-background);
+  padding: 4rem 2rem;
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.empty-state i {
+  font-size: 4rem;
+  color: #cbb687;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+}
+
+/* ============================================================================
+ * Modal Styles
+ * ============================================================================ */
+
+#record-edit-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: none !important;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease;
+}
+
+#record-edit-modal.show {
+  display: flex !important;
+}
+
+#record-edit-modal.hidden {
+  display: none !important;
+}
+
+/* Database Editor Modal - Override all conflicting styles */
+#record-edit-modal .modal-content,
+#record-edit-modal .db-editor-modal,
+.db-editor-modal {
+  background: var(--card-background) !important;
+  border-radius: 16px !important;
+  border: 2px solid !important;
+  border-image: linear-gradient(135deg, #cbb687 0%, #e5dcb7 50%, #cbb687 100%) 1 !important;
+  width: 98% !important;
+  max-width: 1800px !important;
+  height: 98vh !important;
+  max-height: 98vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(203, 182, 135, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  position: relative !important;
+  padding: 0 !important;
+  transform: none !important;
+  backdrop-filter: none !important;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2.5rem 2rem;
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, #cbb687 0%, #e5dcb7 100%) 1;
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.15) 0%, rgba(229, 220, 183, 0.08) 100%);
+  position: relative;
+  border-radius: 16px 16px 0 0;
+}
+
+.modal-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: 800;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  position: relative;
+  z-index: 1;
+}
+
+.modal-close {
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #dc3545;
+  padding: 0.75rem;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.modal-close:hover {
+  background: rgba(220, 53, 69, 0.2);
+  border-color: rgba(220, 53, 69, 0.5);
+  color: #ff6b7a;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+  background: linear-gradient(135deg, var(--glass-bg) 0%, rgba(203, 182, 135, 0.02) 100%);
+  position: relative;
+  min-height: 0; /* Important for flex child scrolling */
+}
+
+.modal-body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(203, 182, 135, 0.3) 50%, transparent 100%);
+}
+
+/* Custom scrollbar for modal body */
+.modal-body::-webkit-scrollbar {
+  width: 12px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: rgba(203, 182, 135, 0.1);
+  border-radius: 6px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #cbb687 0%, #e5dcb7 100%);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #e5dcb7 0%, #cbb687 100%);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.5rem;
+  padding: 2.5rem 2rem;
+  border-top: 2px solid;
+  border-image: linear-gradient(90deg, #cbb687 0%, #e5dcb7 100%) 1;
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.12) 0%, rgba(229, 220, 183, 0.06) 100%);
+  position: relative;
+  border-radius: 0 0 16px 16px;
+}
+
+.modal-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(203, 182, 135, 0.02) 100%);
+  pointer-events: none;
+}
+
+.modal-footer button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--card-radius);
+  cursor: pointer;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--primary-hover));
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 163, 218, 0.3);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-hover), var(--accent));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 163, 218, 0.4);
+}
+
+.btn-secondary {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--card-background);
+  border-color: #cbb687;
+  color: #cbb687;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #c82333, #bd2130);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(220, 53, 69, 0.4);
+}
+
+/* ============================================================================
+ * Form Sections
+ * ============================================================================ */
+
+.form-section-header {
+  grid-column: 1 / -1; /* Span all columns */
+  margin: 2rem 0 1rem 0;
+  padding: 1rem 0;
+  border-bottom: 2px solid rgba(203, 182, 135, 0.3);
+  position: relative;
+}
+
+.form-section-header h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #e5dcb7;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.form-section-header h4::before {
+  content: '';
+  width: 4px;
+  height: 1.25rem;
+  background: linear-gradient(135deg, #cbb687 0%, #e5dcb7 100%);
+  border-radius: 2px;
+}
+
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(203, 182, 135, 0.3) 50%, transparent 100%);
+  margin-top: 0.5rem;
+}
+
+/* ============================================================================
+ * Form Fields
+ * ============================================================================ */
+
+#record-form {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* Default to 4 columns */
+  gap: 1.5rem;
+  max-width: 100%;
+  padding: 0.5rem;
+}
+
+/* For ultra-wide screens, use 5 columns */
+@media (min-width: 2000px) {
+  #record-form {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+/* For very large screens, use 4 columns */
+@media (min-width: 1600px) and (max-width: 1999px) {
+  #record-form {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* For large screens, use 3 columns */
+@media (min-width: 1200px) and (max-width: 1599px) {
+  #record-form {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* For medium screens, use 2 columns */
+@media (min-width: 768px) and (max-width: 1199px) {
+  #record-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* For small screens, use 1 column */
+@media (max-width: 767px) {
+  #record-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.05) 0%, rgba(229, 220, 183, 0.02) 100%);
+  border-radius: 14px;
+  padding: 1.25rem;
+  border: 1px solid rgba(203, 182, 135, 0.15);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+/* Special full-width styling for specific fields like TableRoll entries */
+.form-field-group.full-width {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+/* TableRoll entries editor - custom styling for full width and proper display */
+.table-roll-entries-editor {
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.table-roll-entries-editor .table-entries-list {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.table-roll-entries-editor .table-entries-list > div {
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Ensure inputs within table roll entries use appropriate widths */
+.table-roll-entries-editor input,
+.table-roll-entries-editor textarea {
+  box-sizing: border-box !important;
+}
+
+/* Override any conflicting padding from parent */
+.form-field-group.full-width {
+  max-width: 100% !important;
+}
+
+.form-field-group.full-width .table-roll-entries-editor,
+.form-field-group.full-width .table-entries-list,
+.form-field-group.full-width .table-entries-list > * {
+  max-width: 100% !important;
+}
+
+.form-field-group.full-width input,
+.form-field-group.full-width textarea,
+.form-field-group.full-width select {
+  width: auto; /* Let grid handle sizing */
+}
+
+/* Specific grid layout fixes for entry cards */
+.table-roll-entries-editor > div[style*="grid"] {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.form-field-group::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(203, 182, 135, 0.3) 50%, transparent 100%);
+}
+
+.form-field-group:hover {
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.08) 0%, rgba(229, 220, 183, 0.04) 100%);
+  border-color: rgba(203, 182, 135, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(203, 182, 135, 0.1);
+}
+
+.form-field-group label {
+  font-weight: 700;
+  color: #e5dcb7;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  margin-bottom: 0.25rem;
+  position: relative;
+}
+
+.form-field-group label span {
+  background: linear-gradient(135deg, #e5dcb7 0%, #cbb687 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+
+.form-field-group .field-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-top: -0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(203, 182, 135, 0.1);
+  border-radius: 8px;
+  border-left: 3px solid #cbb687;
+  font-style: italic;
+}
+
+.form-field-group .required {
+  color: #dc3545;
+  font-weight: 800;
+}
+
+.form-field-group input,
+.form-field-group select,
+.form-field-group textarea {
+  padding: 1.25rem;
+  border: 2px solid rgba(203, 182, 135, 0.2);
+  border-radius: 14px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(45, 45, 45, 0.8) 100%);
+  color: #e5dcb7;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.2),
+    0 1px 2px rgba(203, 182, 135, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.form-field-group select {
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(45, 45, 45, 0.8) 100%) !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbb687' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 1rem center !important;
+  background-size: 1rem !important;
+  padding-right: 3rem;
+  color: #e5dcb7 !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+}
+
+.form-field-group select option {
+  background: rgba(26, 26, 26, 0.95) !important;
+  color: #e5dcb7 !important;
+  padding: 0.5rem !important;
+}
+
+/* Number input spinner styling */
+.form-field-group input[type="number"] {
+  /* Keep default spinners visible */
+  position: relative;
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) - keep native spinners but style them */
+.form-field-group input[type="number"]::-webkit-inner-spin-button,
+.form-field-group input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: inner-spin-button;
+  appearance: auto;
+  opacity: 1;
+  height: 100%;
+  cursor: pointer;
+  /* Let the browser handle the arrow appearance */
+}
+
+/* Firefox - hide default spinners since they don't look good */
+@-moz-document url-prefix() {
+  .form-field-group input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+}
+
+/* Image field styling */
+.form-field-group .image-preview {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(203, 182, 135, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(203, 182, 135, 0.2);
+}
+
+.form-field-group .image-preview img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid rgba(203, 182, 135, 0.3);
+}
+
+.form-field-group .image-preview .image-link {
+  color: #cbb687;
+  text-decoration: none;
+  font-size: 0.9rem;
+  word-break: break-all;
+  transition: color 0.3s ease;
+}
+
+.form-field-group .image-preview .image-link:hover {
+  color: #e5dcb7;
+  text-decoration: underline;
+}
+
+/* Array contributor indicator */
+.array-contributor-indicator {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(203, 182, 135, 0.1);
+  border: 1px solid rgba(203, 182, 135, 0.3);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #cbb687;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.array-contributor-indicator:hover {
+  background: rgba(203, 182, 135, 0.15);
+  border-color: rgba(203, 182, 135, 0.5);
+}
+
+.array-contributor-indicator i {
+  color: #e5dcb7;
+  font-size: 0.9rem;
+}
+
+.form-field-group input:focus,
+.form-field-group select:focus,
+.form-field-group textarea:focus {
+  outline: none;
+  border-color: rgba(203, 182, 135, 0.6);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(45, 45, 45, 0.9) 100%);
+  box-shadow: 
+    0 0 0 4px rgba(203, 182, 135, 0.2),
+    inset 0 2px 4px rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(203, 182, 135, 0.15);
+  transform: translateY(-2px);
+}
+
+.form-field-group input:disabled {
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.6;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.form-field-group textarea {
+  resize: vertical;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  min-height: 100px;
+}
+
+.field-type-hint {
+  color: rgba(203, 182, 135, 0.8);
+  font-size: 0.85rem;
+  font-weight: 600;
+  align-self: flex-start;
+  background: linear-gradient(135deg, rgba(203, 182, 135, 0.15) 0%, rgba(229, 220, 183, 0.08) 100%);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(203, 182, 135, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 0.25rem;
+}
+
+.field-help-icon {
+  color: #cbb687;
+  cursor: help;
+  font-size: 1rem;
+  opacity: 0.8;
+  transition: all 0.3s ease;
+  background: rgba(203, 182, 135, 0.1);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(203, 182, 135, 0.3);
+}
+
+.field-help-icon:hover {
+  opacity: 1;
+  background: rgba(203, 182, 135, 0.2);
+  border-color: rgba(203, 182, 135, 0.5);
+  transform: scale(1.1);
+  color: #e5dcb7;
+}
+
+.tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  z-index: 1000;
+  max-width: 300px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(203, 182, 135, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.tooltip.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid rgba(0, 0, 0, 0.9);
+}
+
+/* ============================================================================
+ * Database Editor Notifications (Top-Right Toast)
+ * ============================================================================ */
+
+body > .db-notification,
+div.db-notification {
+  position: fixed !important;
+  top: 1.5rem !important;
+  right: 1.5rem !important;
+  bottom: auto !important;
+  left: auto !important;
+  background: var(--card-background);
+  padding: 0.875rem 1.25rem;
+  border-radius: 8px;
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(203, 182, 135, 0.2);
+  border: 2px solid transparent;
+  z-index: 999999 !important;
+  max-width: 320px;
+  min-width: 220px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateY(-20px) scale(0.9);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+body > .db-notification i,
+div.db-notification i {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+body > .db-notification span,
+div.db-notification span {
+  flex: 1;
+  line-height: 1.3;
+}
+
+body > .db-notification.show,
+div.db-notification.show {
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
+  pointer-events: auto !important;
+}
+
+@keyframes dbToastSlideIn {
+  0% { 
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+  60% {
+    transform: translateY(5px) scale(1.02);
+  }
+  100% { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+body > .db-notification-success,
+div.db-notification-success {
+  border-color: #49D59C !important;
+  background: linear-gradient(135deg, 
+    rgba(73, 213, 156, 0.15) 0%, 
+    rgba(73, 213, 156, 0.05) 100%) !important;
+  color: #49D59C !important;
+}
+
+body > .db-notification-success i,
+div.db-notification-success i {
+  color: #49D59C !important;
+  text-shadow: 0 0 10px rgba(73, 213, 156, 0.5);
+}
+
+body > .db-notification-error,
+div.db-notification-error {
+  border-color: #dc3545 !important;
+  background: linear-gradient(135deg, 
+    rgba(220, 53, 69, 0.15) 0%, 
+    rgba(220, 53, 69, 0.05) 100%) !important;
+  color: #dc3545 !important;
+}
+
+body > .db-notification-error i,
+div.db-notification-error i {
+  color: #dc3545 !important;
+  text-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+}
+
+body > .db-notification-warning,
+div.db-notification-warning {
+  border-color: #ffc107 !important;
+  background: linear-gradient(135deg, 
+    rgba(255, 193, 7, 0.15) 0%, 
+    rgba(255, 193, 7, 0.05) 100%) !important;
+  color: #ffc107 !important;
+}
+
+body > .db-notification-warning i,
+div.db-notification-warning i {
+  color: #ffc107 !important;
+  text-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+}
+
+body > .db-notification-info,
+div.db-notification-info {
+  border-color: #cbb687 !important;
+  background: linear-gradient(135deg, 
+    rgba(203, 182, 135, 0.15) 0%, 
+    rgba(203, 182, 135, 0.05) 100%) !important;
+  color: #cbb687 !important;
+}
+
+body > .db-notification-info i,
+div.db-notification-info i {
+  color: #cbb687 !important;
+  text-shadow: 0 0 10px rgba(203, 182, 135, 0.5);
+}
+
+/* ============================================================================
+ * Responsive Design
+ * ============================================================================ */
+
+@media (max-width: 768px) {
+  #database-editor-section {
+    padding: 1rem;
+  }
+  
+  .db-editor-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .model-selector-container,
+  .search-container {
+    min-width: 100%;
+  }
+  
+  .db-editor-modal {
+    width: 98%;
+    height: 98vh;
+    max-height: 98vh;
+  }
+  
+  .modal-body {
+    padding: 1.5rem;
+  }
+  
+  body > .db-notification,
+  div.db-notification {
+    left: 1rem !important;
+    right: 1rem !important;
+    min-width: unset !important;
+    max-width: unset !important;
+    top: 1rem !important;
+  }
+  
+  .modal-footer {
+    flex-direction: column;
+  }
+  
+  .modal-footer button {
+    width: 100%;
+  }
+  
+  .records-table-wrapper {
+    max-height: 400px;
+  }
+  
+  .db-records-table th,
+  .db-records-table td {
+    padding: 0.5rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Additional responsive improvements for larger modals */
+@media (min-width: 1920px) {
+  #record-edit-modal .modal-content,
+  #record-edit-modal .db-editor-modal,
+  .db-editor-modal {
+    max-width: 1800px !important;
+  }
+}
+
+@media (min-width: 2400px) {
+  #record-edit-modal .modal-content,
+  #record-edit-modal .db-editor-modal,
+  .db-editor-modal {
+    max-width: 2000px !important;
+  }
+}
+
+/* Override any mobile responsive styles that might make modal small */
+@media (max-width: 768px) {
+  #record-edit-modal .modal-content,
+  #record-edit-modal .db-editor-modal,
+  .db-editor-modal {
+    width: 98% !important;
+    max-width: 98vw !important;
+    height: 98vh !important;
+    max-height: 98vh !important;
+  }
+}
+
+}
