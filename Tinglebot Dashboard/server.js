@@ -139,7 +139,7 @@ app.use(session({
   saveUninitialized: true, // Allow saving uninitialized sessions
   store: sessionStore,
   cookie: {
-    secure: false, // Always false for localhost development
+    secure: isProduction && !isLocalhost, // true in production HTTPS, false for localhost
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: 'lax',
@@ -413,7 +413,18 @@ app.use(helmet({
 }));
 
 // Additional security headers
-app.use(helmet.hsts({ maxAge: 31536000, includeSubDomains: true }));
+// HSTS only enabled in production when HTTPS is confirmed working
+// Railway will provision SSL automatically, but don't set HSTS until certificate is valid
+if (isProduction && !isLocalhost) {
+  app.use((req, res, next) => {
+    // Only set HSTS if we're actually getting HTTPS requests
+    // Railway provides HTTPS, so if x-forwarded-proto is https, we can set HSTS
+    if (req.headers['x-forwarded-proto'] === 'https' || req.secure) {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+  });
+}
 app.use(helmet.noSniff());
 app.use(helmet.frameguard({ action: "deny" }));
 app.use(helmet.referrerPolicy({ policy: "no-referrer-when-downgrade" }));
@@ -7600,9 +7611,10 @@ app.use((req, res, next) => {
   // Enable XSS protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
   
-  // Strict Transport Security (HTTPS only)
-  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  // Strict Transport Security (HTTPS only) - only set if actually using HTTPS
+  // Don't set HSTS if Railway hasn't provisioned SSL certificate yet
+  if (isProduction && !isLocalhost && (req.secure || req.headers['x-forwarded-proto'] === 'https')) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
   
   // Referrer Policy

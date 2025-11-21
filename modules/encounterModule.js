@@ -1169,5 +1169,6 @@ module.exports = {
     getTier8EncounterOutcome,
     getTier9EncounterOutcome,
     getTier10EncounterOutcome,
-    calculateDamage
+    calculateDamage,
+    createEncounterContext
 }; 
