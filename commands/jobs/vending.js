@@ -38,39 +38,6 @@ const command = new SlashCommandBuilder()
   sub
    .setName("setup")
    .setDescription("Set up your vending shop")
-   .addStringOption((opt) =>
-    opt
-     .setName("charactername")
-     .setDescription("Your character's name")
-     .setRequired(true)
-     .setAutocomplete(true)
-   )
-   .addStringOption((opt) =>
-    opt
-     .setName("shoplink")
-     .setDescription("Google Sheets URL for your shop inventory")
-     .setRequired(true)
-   )
-   .addStringOption((opt) =>
-    opt
-     .setName("pouchtype")
-     .setDescription("Your shop pouch type")
-     .setRequired(true)
-     .addChoices(
-      { name: "None", value: "none" },
-      { name: "Bronze", value: "bronze" },
-      { name: "Silver", value: "silver" },
-      { name: "Gold", value: "gold" }
-     )
-   )
-   .addIntegerOption((opt) =>
-    opt.setName("points").setDescription("Your current vending points (if any)")
-   )
-   .addStringOption((opt) =>
-    opt
-     .setName("shopimage")
-     .setDescription("URL for your shop banner image (optional)")
-   )
  )
 
  .addSubcommand((sub) =>
