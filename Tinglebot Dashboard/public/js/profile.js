@@ -2936,7 +2936,9 @@ function showVendingSetupModal(character) {
 
   const modalContent = document.createElement('div');
   modalContent.className = 'character-modal-content';
-  modalContent.style.maxWidth = '700px';
+  modalContent.style.maxWidth = '95vw';
+  modalContent.style.maxHeight = '90vh';
+  modalContent.style.overflow = 'auto';
 
   modalContent.innerHTML = `
     <div class="character-modal-header">
@@ -3290,10 +3292,12 @@ function showVendingSetupModal(character) {
           rowData[field] = parseFloat(input.value) || 0;
         } else if (input.type === 'checkbox') {
           rowData[field] = input.checked;
+        } else if (input.type === 'date') {
+          rowData[field] = input.value || null;
         } else if (input.tagName === 'SELECT') {
           rowData[field] = input.value === 'true';
         } else {
-          rowData[field] = input.value.trim();
+          rowData[field] = input.value.trim() || null;
         }
       });
 

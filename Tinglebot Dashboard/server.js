@@ -6796,7 +6796,7 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
           otherPrice: row.otherPrice || 'N/A',
           tradesOpen: tradesOpen,
           slot: row.slot || null,
-          date: row.date ? new Date(row.date) : new Date()
+          date: row.date ? (row.date instanceof Date ? row.date : new Date(row.date)) : new Date()
         });
 
         await vendingItem.save();
