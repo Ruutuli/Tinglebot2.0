@@ -1,0 +1,189 @@
+/* ============================================================================
+   Village Shop Controls - Now using standard search-filter-control classes
+============================================================================ */
+
+
+/* ============================================================================
+   Village Shops Grid
+============================================================================ */
+
+.village-shops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+
+
+/* ============================================================================
+   Stock Badge
+============================================================================ */
+
+.stock-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: rgba(73, 213, 156, 0.15);
+  border: 1px solid rgba(73, 213, 156, 0.3);
+  color: var(--totk-light-green);
+  transition: all 0.2s ease;
+}
+
+.stock-badge:hover {
+  background: rgba(73, 213, 156, 0.25);
+  border-color: rgba(73, 213, 156, 0.5);
+  transform: scale(1.05);
+}
+
+.stock-badge i {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.stock-count {
+  font-weight: 600;
+  color: var(--totk-light-green);
+}
+
+/* ============================================================================ */
+/* MOBILE RESPONSIVE DESIGN                                                     */
+/* ============================================================================ */
+
+/* Mobile-first responsive breakpoints */
+@media (max-width: 1024px) {
+  .village-shops-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Village Shops Grid Mobile */
+  .village-shops-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 0.75rem 0;
+  }
+  
+  /* Stock Badge Mobile */
+  .stock-badge {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    gap: 5px;
+    min-height: 32px; /* Ensure readable touch target */
+  }
+  
+  .stock-badge i {
+    font-size: 0.7rem;
+  }
+  
+  .stock-count {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Village Shops Grid Extra Small */
+  .village-shops-grid {
+    gap: 0.875rem;
+    padding: 0.5rem 0;
+  }
+  
+  /* Stock Badge Extra Small */
+  .stock-badge {
+    padding: 5px 8px;
+    font-size: 0.7rem;
+    gap: 4px;
+  }
+  
+  .stock-badge i {
+    font-size: 0.65rem;
+  }
+  
+  .stock-count {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Village Shops Grid Small */
+  .village-shops-grid {
+    gap: 0.75rem;
+    padding: 0.375rem 0;
+  }
+  
+  /* Stock Badge Small */
+  .stock-badge {
+    padding: 4px 7px;
+    font-size: 0.65rem;
+    gap: 3px;
+    min-height: 28px;
+  }
+  
+  .stock-badge i {
+    font-size: 0.6rem;
+  }
+  
+  .stock-count {
+    font-size: 0.65rem;
+  }
+}
+
+/* Touch-friendly interactions for mobile */
+@media (hover: none) and (pointer: coarse) {
+  /* Stock Badge Touch Targets */
+  .stock-badge {
+    min-height: 36px;
+    padding: 6px 10px;
+  }
+  
+  /* Remove hover effects on touch devices */
+  .stock-badge:hover {
+    transform: none;
+    background: rgba(73, 213, 156, 0.15);
+    border-color: rgba(73, 213, 156, 0.3);
+  }
+  
+  /* Add active states for better touch feedback */
+  .stock-badge:active {
+    transform: scale(0.96);
+    transition: transform 0.1s ease;
+    background: rgba(73, 213, 156, 0.25);
+  }
+}
+
+/* Landscape mobile optimizations */
+@media (max-width: 768px) and (orientation: landscape) {
+  .village-shops-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.875rem;
+  }
+  
+  .stock-badge {
+    padding: 5px 8px;
+    font-size: 0.7rem;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .stock-badge {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .stock-badge {
+    transition: none;
+  }
+  
+  .stock-badge:hover,
+  .stock-badge:active {
+    transform: none;
+  }
+}

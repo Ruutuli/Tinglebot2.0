@@ -7,53 +7,25 @@ const { connectToVending } = require('../database/db');
 const vendingInventorySchema = new Schema({
   characterName: { type: String, required: true }, // Character name
   itemName: { type: String, required: true }, // Item name
-  itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', required: false }, // Reference to Item model (optional for custom items)
+  itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', required: true }, // Reference to Item model
   stockQty: { type: Number, default: 1 }, // Quantity in stock
   costEach: { type: Number, default: 0 }, // Cost in vending points
   pointsSpent: { type: Number, default: 0 }, // Total points spent
   boughtFrom: { type: String }, // Village where item was bought
-  tokenPrice: { type: Number, default: null }, // Price in tokens (null if not set)
-  artPrice: { type: String, default: null }, // Price in art (null if not set)
-  otherPrice: { type: String, default: null }, // Other price type (null if not set)
-  barterOpen: { type: Boolean, default: false }, // Whether trades are open
-  tradesOpen: { type: Boolean, default: false }, // Whether trades are open (legacy field, use barterOpen)
+  tokenPrice: { type: Number, default: 0 }, // Price in tokens
+  artPrice: { type: String, default: 'N/A' }, // Price in art
+  otherPrice: { type: String, default: 'N/A' }, // Other price type
+  tradesOpen: { type: Boolean, default: false }, // Whether trades are open
   slot: { type: String }, // Slot number
   date: { type: Date, default: Date.now }, // Date added to inventory
-  slotsUsed: { type: Number, default: 1 }, // Number of slots this item takes up
-  // New fields for personal items tracking
-  isPersonalItem: { type: Boolean, default: false }, // True if item came from personal inventory, false if from vending stock
-  source: { type: String, enum: ['vending_stock', 'personal_inventory', 'custom'], default: 'vending_stock' }, // Where item came from
-  // Custom item support
-  isCustomItem: { type: Boolean, default: false }, // True if this is a custom cosmetic item not in ItemModel
-  customItemData: { type: Schema.Types.Mixed, default: null } // Custom item metadata (image, description, etc.)
+  slotsUsed: { type: Number, default: 1 } // Number of slots this item takes up
 });
 
 // Add unique compound index for characterName + slot
 vendingInventorySchema.index({ characterName: 1, slot: 1 }, { unique: true });
 
-// Add virtual for checking if item has pricing
-vendingInventorySchema.virtual('hasPricing').get(function() {
-  return (
-    (this.tokenPrice !== null && this.tokenPrice !== 0 && this.tokenPrice !== undefined) ||
-    (this.artPrice !== null && this.artPrice !== 'N/A' && this.artPrice !== '' && this.artPrice !== undefined) ||
-    (this.otherPrice !== null && this.otherPrice !== 'N/A' && this.otherPrice !== '' && this.otherPrice !== undefined) ||
-    (this.barterOpen === true || this.tradesOpen === true)
-  );
-});
-
-// Ensure virtuals are included in JSON output
-vendingInventorySchema.set('toJSON', { virtuals: true });
-vendingInventorySchema.set('toObject', { virtuals: true });
-
 // Add pre-save hook to validate stack sizes
 vendingInventorySchema.pre('save', function(next) {
-  // Sync barterOpen and tradesOpen (legacy compatibility)
-  if (this.isModified('barterOpen') && !this.isModified('tradesOpen')) {
-    this.tradesOpen = this.barterOpen;
-  } else if (this.isModified('tradesOpen') && !this.isModified('barterOpen')) {
-    this.barterOpen = this.tradesOpen;
-  }
-
   if (this.stackable) {
     // For stackable items, ensure quantity doesn't exceed maxStackSize
     if (this.stockQty > this.maxStackSize) {
@@ -92,10 +64,7 @@ const vendingRequestSchema = new Schema({
   notes: { type: String },
   buyerId: { type: String, required: true },
   buyerUsername: { type: String, required: true },
-  date: { type: Date, default: Date.now },
-  // Vendor self-purchase tracking
-  isVendorSelfPurchase: { type: Boolean, default: false },
-  sellPrice: { type: Number, default: null } // ROTW SELL price if vendor self-purchase
+  date: { type: Date, default: Date.now }
 });
 
 // ------------------- Create and export the VendingRequest model -------------------

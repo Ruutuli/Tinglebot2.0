@@ -77,6 +77,13 @@ const {
 
  const { createVendingSetupInstructionsEmbed } = require("../embeds/embeds.js");
 
+// ------------------- Validation Functions -------------------
+const {
+  validateVendingItem,
+  validateVendingPrices,
+  validateVendingLocation
+} = require('../utils/validation.js');
+
 // ------------------- Vending Model Helper -------------------
 async function getVendingModel(characterName) {
   return await initializeVendingInventoryModel(characterName);
@@ -118,6 +125,7 @@ async function executeVending(interaction) {
 
 // ------------------- handleCollectPoints -------------------
 // Handles monthly vending point collection for eligible characters.
+// Only available from the 1st to the 5th of each month.
 async function handleCollectPoints(interaction) {
   try {
     const characterName = interaction.options.getString('charactername');
@@ -135,16 +143,38 @@ async function handleCollectPoints(interaction) {
       throw error; // Re-throw other errors
     }
 
+    // ------------------- Window Restriction Check -------------------
+    // Credit collection and restock are only available from 1st to 5th of each month
     const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
+    const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const estDate = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
+    const currentDay = estDate.getDate();
+    const currentMonth = estDate.getMonth() + 1;
+    const currentYear = estDate.getFullYear();
+
+    // Check if outside collection window (1st-5th)
+    if (currentDay < 1 || currentDay > 5) {
+      const nextWindowStart = new Date(currentYear, currentMonth, 1);
+      if (currentMonth === 12) {
+        nextWindowStart.setFullYear(currentYear + 1);
+        nextWindowStart.setMonth(0);
+      } else {
+        nextWindowStart.setMonth(currentMonth);
+      }
+      const nextWindowEnd = new Date(nextWindowStart);
+      nextWindowEnd.setDate(5);
+
+      return interaction.reply({
+        content: `❌ **Outside Collection Window**\n\nVending credit collection is only available from the **1st to the 5th** of each month.\n\n**Current date:** ${estDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n**Next collection window:** ${nextWindowStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${nextWindowEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+      });
+    }
 
     // ------------------- Claim Check -------------------
     const alreadyClaimed = character.lastCollectedMonth === currentMonth;
 
     if (alreadyClaimed) {
       return interaction.reply({
-        content: `⚠️ **Already Claimed**\n\n${characterName} has already claimed vending points for this month.\n\nNext claim available: **${new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString()}**`
+        content: `⚠️ **Already Claimed**\n\n${characterName} has already claimed vending points for this month.\n\nNext claim available: **${new Date(currentYear, currentMonth, 1).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}**`
       });
     }
 
@@ -202,18 +232,45 @@ async function handleCollectPoints(interaction) {
 
 // ------------------- handleRestock -------------------
 // Allows Shopkeepers/Merchants to restock items from monthly vending stock.
+// Only available from the 1st to the 5th of each month.
 async function handleRestock(interaction) {
   try {
     await interaction.deferReply();
+
+    // ------------------- Window Restriction Check -------------------
+    // Credit collection and restock are only available from 1st to 5th of each month
+    const now = new Date();
+    const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const estDate = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
+    const currentDay = estDate.getDate();
+    const currentMonth = estDate.getMonth() + 1;
+    const currentYear = estDate.getFullYear();
+
+    // Check if outside restock window (1st-5th)
+    if (currentDay < 1 || currentDay > 5) {
+      const nextWindowStart = new Date(currentYear, currentMonth, 1);
+      if (currentMonth === 12) {
+        nextWindowStart.setFullYear(currentYear + 1);
+        nextWindowStart.setMonth(0);
+      } else {
+        nextWindowStart.setMonth(currentMonth);
+      }
+      const nextWindowEnd = new Date(nextWindowStart);
+      nextWindowEnd.setDate(5);
+
+      return interaction.editReply({
+        content: `❌ **Outside Restock Window**\n\nVending restock is only available from the **1st to the 5th** of each month.\n\n**Current date:** ${estDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n**Next restock window:** ${nextWindowStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${nextWindowEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+      });
+    }
 
     // ------------------- Input Parsing -------------------
     const characterName = interaction.options.getString('charactername');
     const itemName = interaction.options.getString('itemname');
     const stockQty = interaction.options.getInteger('quantity');
     const manualSlot = interaction.options.getString('slot');
-    const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
-    const artPrice = interaction.options.getString('artprice') || 'N/A';
-    const otherPrice = interaction.options.getString('otherprice') || 'N/A';
+    const tokenPrice = interaction.options.getInteger('tokenprice');
+    const artPrice = interaction.options.getString('artprice');
+    const otherPrice = interaction.options.getString('otherprice');
     const barterOpen = interaction.options.getBoolean('barteropen') || false;
     const userId = interaction.user.id;
 
@@ -322,31 +379,47 @@ async function handleRestock(interaction) {
       slot: newSlot
     });
 
-    // Get item details to check stackable status
+    // ------------------- Price Validation -------------------
+    // At least one price must be set before items can be sold
+    const priceItem = {
+      tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
+      artPrice: artPrice && artPrice.trim() !== '' ? artPrice : null,
+      otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : null,
+      barterOpen: barterOpen
+    };
+
+    const priceValidation = validateVendingPrices(priceItem);
+    if (priceValidation.length > 0) {
+      return interaction.editReply({
+        content: `❌ **Price Validation Failed**\n\n${priceValidation.join('\n')}\n\nPlease set at least one of the following:\n• **Token Price** (number)\n• **Art Price** (description)\n• **Other Price** (description)\n• **Barter Open** (true/false)`
+      });
+    }
+
+    // Get item details to check stackable status (allow custom items)
     const itemDetails = await ItemModel.findOne({ itemName });
-    if (!itemDetails) {
-      return interaction.editReply(`❌ Could not find item details for ${itemName}.`);
-    }
+    const isCustomItem = !itemDetails;
+    
+    if (!isCustomItem) {
+      const maxStackSize = itemDetails.maxStackSize || 10;
+      const isStackable = itemDetails.stackable;
 
-    const maxStackSize = itemDetails.maxStackSize || 10;
-    const isStackable = itemDetails.stackable;
+      if (!isStackable && stockQty > 1) {
+        return interaction.editReply(`❌ ${itemName} is not stackable. You can only add 1 at a time.`);
+      }
 
-    if (!isStackable && stockQty > 1) {
-      return interaction.editReply(`❌ ${itemName} is not stackable. You can only add 1 at a time.`);
-    }
-
-    if (existingItem) {
-      const newTotal = existingItem.stockQty + stockQty;
-      if (newTotal > maxStackSize) {
+      if (existingItem) {
+        const newTotal = existingItem.stockQty + stockQty;
+        if (newTotal > maxStackSize) {
+          return interaction.editReply(
+            `❌ Cannot add ${stockQty} more ${itemName}. This would exceed the maximum stack size of ${maxStackSize}. ` +
+            `Current stack: ${existingItem.stockQty}, Maximum allowed: ${maxStackSize}`
+          );
+        }
+      } else if (stockQty > maxStackSize) {
         return interaction.editReply(
-          `❌ Cannot add ${stockQty} more ${itemName}. This would exceed the maximum stack size of ${maxStackSize}. ` +
-          `Current stack: ${existingItem.stockQty}, Maximum allowed: ${maxStackSize}`
+          `❌ Cannot add ${stockQty} ${itemName}. Maximum stack size is ${maxStackSize}.`
         );
       }
-    } else if (stockQty > maxStackSize) {
-      return interaction.editReply(
-        `❌ Cannot add ${stockQty} ${itemName}. Maximum stack size is ${maxStackSize}.`
-      );
     }
 
     // ------------------- Update Inventory -------------------
@@ -358,7 +431,13 @@ async function handleRestock(interaction) {
           $inc: { stockQty: stockQty, pointsSpent: totalCost },
           $set: { 
             date: new Date(), 
-            boughtFrom: character.currentVillage
+            boughtFrom: character.currentVillage,
+            // Update prices if provided
+            tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : existingItem.tokenPrice,
+            artPrice: artPrice && artPrice.trim() !== '' ? artPrice : existingItem.artPrice,
+            otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : existingItem.otherPrice,
+            barterOpen: barterOpen !== undefined ? barterOpen : existingItem.barterOpen,
+            tradesOpen: barterOpen !== undefined ? barterOpen : existingItem.tradesOpen // Legacy compatibility
           }
         }
       );
@@ -369,19 +448,27 @@ async function handleRestock(interaction) {
         await vendCollection.deleteOne({ _id: existingItem._id });
       }
     } else {
-      // Insert new item
+      // Insert new item with new fields
       await vendCollection.insertOne({
+        characterName: characterName,
         itemName,
+        itemId: itemDetails ? itemDetails._id : null,
         stockQty,
         costEach: pointCost,
         pointsSpent: totalCost,
-        tokenPrice,
-        artPrice,
-        otherPrice,
-        barterOpen,
+        tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
+        artPrice: artPrice && artPrice.trim() !== '' ? artPrice : null,
+        otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : null,
+        barterOpen: barterOpen,
+        tradesOpen: barterOpen, // Legacy compatibility
         boughtFrom: character.currentVillage,
         slot: newSlot,
-        date: new Date()
+        date: new Date(),
+        // New fields for tracking
+        isPersonalItem: false, // Items from vending stock are not personal
+        source: 'vending_stock', // Source is vending stock
+        isCustomItem: isCustomItem, // True if item doesn't exist in ItemModel
+        customItemData: isCustomItem ? { name: itemName } : null
       });
     }
 
@@ -490,15 +577,39 @@ async function handleVendingBarter(interaction) {
         return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
       }
 
-      // ------------------- Village Validation -------------------
-      if (buyer.currentVillage?.toLowerCase() !== shopOwner.currentVillage?.toLowerCase()) {
-        return interaction.editReply(
-          `❌ **Village Mismatch**\n\n` +
-          `You must be in the same village as the vendor to barter.\n\n` +
-          `Your location: **${buyer.currentVillage || 'Unknown'}**\n` +
-          `Vendor's location: **${shopOwner.currentVillage || 'Unknown'}**\n\n` +
-          `💡 **Travel Tip:** Use </travel:1379850586987430009> to travel to ${shopOwner.currentVillage} and barter with ${shopOwner.name}.`
-        );
+      // ------------------- Merchant vs Shopkeeper Location Validation -------------------
+      const locationValidation = validateVendingLocation(shopOwner, buyer);
+      
+      if (!locationValidation.valid) {
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ Location Restriction')
+          .setDescription(locationValidation.error)
+          .addFields(
+            { name: '👤 Vendor', value: shopOwner.name, inline: true },
+            { name: '🏘️ Vendor Location', value: shopOwner.currentVillage || 'Unknown', inline: true },
+            { name: '🏠 Vendor Home', value: shopOwner.homeVillage || 'Unknown', inline: true },
+            { name: '👤 Buyer', value: buyer.name, inline: true },
+            { name: '🏘️ Buyer Location', value: buyer.currentVillage || 'Unknown', inline: true },
+            { name: '💼 Vendor Job', value: shopOwner.job || 'Unknown', inline: true }
+          );
+
+        if (locationValidation.vendorLocation || locationValidation.buyerLocation) {
+          errorEmbed.addFields({
+            name: '💡 Travel Tip',
+            value: locationValidation.vendorJob === 'shopkeeper' 
+              ? `Shopkeepers can only sell when they are in their home village (${shopOwner.homeVillage}). Please wait for ${shopOwner.name} to return home.`
+              : `Use </travel:1379850586987430009> to travel to ${shopOwner.currentVillage} and barter with ${shopOwner.name}.`,
+            inline: false
+          });
+        }
+
+        errorEmbed
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: 'Village restriction active' })
+          .setTimestamp();
+
+        return interaction.editReply({ embeds: [errorEmbed] });
       }
 
       // ------------------- Token Tracker Sync Validation -------------------
@@ -574,38 +685,76 @@ async function handleVendingBarter(interaction) {
         return interaction.editReply(`⚠️ ${targetShopName} only has ${requestedItem.stockQty} ${requestedItemName} in stock.`);
       }
   
-      // ------------------- Payment Type Specific Validation -------------------
-      switch (paymentType) {
-        case 'tokens':
-          if (!requestedItem.tokenPrice) {
-            return interaction.editReply(`⚠️ ${requestedItemName} is not available for token purchase.`);
-          }
-          const totalCost = requestedItem.tokenPrice * quantity;
-          const userTokens = await getTokenBalance(buyerId);
-          if (userTokens < totalCost) {
-            return interaction.editReply(`⚠️ You don't have enough tokens. Required: ${totalCost}, Your balance: ${userTokens}`);
-          }
-          break;
-
-        case 'art':
-          if (!requestedItem.artPrice || requestedItem.artPrice === 'N/A' || requestedItem.artPrice === '') {
-            return interaction.editReply(`⚠️ ${requestedItemName} is not available for art purchase.`);
-          }
-          break;
-
-        case 'barter':
-          if (!requestedItem.barterOpen) {
-            return interaction.editReply(`⚠️ ${targetShopName} is not accepting barters for ${requestedItemName}.`);
-          }
-          // Check if buyer has the offered item
-          const buyerInventory = await connectToInventories(buyer);
-          const offeredItem = buyerInventory.inventory.find(item => 
-            item.name.toLowerCase() === offeredItemName.toLowerCase()
+      // ------------------- Vendor Self-Purchase Check -------------------
+      // If vendor is buying from own shop, must use ROTW SELL price
+      const isVendorSelfPurchase = buyer.userId === shopOwner.userId;
+      
+      if (isVendorSelfPurchase) {
+        // Vendor buying from own shop - must use tokens and ROTW SELL price
+        if (paymentType !== 'tokens') {
+          return interaction.editReply(
+            `❌ **Self-Purchase Restriction**\n\n` +
+            `Vendors purchasing from their own shop must use **token payment** and pay the **ROTW SELL price** (not the shop's token price).\n\n` +
+            `Please select **Tokens** as your payment method.`
           );
-          if (!offeredItem || offeredItem.quantity < 1) {
-            return interaction.reply(`⚠️ You don't have **${offeredItemName}** in your inventory.`);
-          }
-          break;
+        }
+
+        // Get item details to find sell price
+        const itemDetails = await ItemModel.findOne({ itemName: requestedItemName });
+        if (!itemDetails) {
+          return interaction.editReply(`❌ Could not find item details for ${requestedItemName}. Vendors cannot purchase custom items from their own shop.`);
+        }
+
+        const sellPrice = itemDetails.sellPrice || 0;
+        if (sellPrice <= 0) {
+          return interaction.editReply(`❌ This item has no sell price set. Vendors cannot purchase items without a sell price from their own shop.`);
+        }
+
+        const totalCost = sellPrice * quantity;
+        const userTokens = await getTokenBalance(buyerId);
+        if (userTokens < totalCost) {
+          return interaction.editReply(
+            `⚠️ **Insufficient Tokens**\n\n` +
+            `You need **${totalCost} tokens** to purchase ${quantity}x ${requestedItemName} from your own shop (ROTW SELL price: ${sellPrice} per item).\n\n` +
+            `Your balance: **${userTokens} tokens**\n` +
+            `Shortage: **${totalCost - userTokens} tokens**`
+          );
+        }
+      } else {
+        // Normal buyer - use shop's pricing
+        // ------------------- Payment Type Specific Validation -------------------
+        switch (paymentType) {
+          case 'tokens':
+            if (!requestedItem.tokenPrice || requestedItem.tokenPrice === null) {
+              return interaction.editReply(`⚠️ ${requestedItemName} is not available for token purchase.`);
+            }
+            const totalCost = requestedItem.tokenPrice * quantity;
+            const userTokens = await getTokenBalance(buyerId);
+            if (userTokens < totalCost) {
+              return interaction.editReply(`⚠️ You don't have enough tokens. Required: ${totalCost}, Your balance: ${userTokens}`);
+            }
+            break;
+
+          case 'art':
+            if (!requestedItem.artPrice || requestedItem.artPrice === 'N/A' || requestedItem.artPrice === '' || requestedItem.artPrice === null) {
+              return interaction.editReply(`⚠️ ${requestedItemName} is not available for art purchase.`);
+            }
+            break;
+
+          case 'barter':
+            if (!requestedItem.barterOpen && !requestedItem.tradesOpen) {
+              return interaction.editReply(`⚠️ ${targetShopName} is not accepting barters for ${requestedItemName}.`);
+            }
+            // Check if buyer has the offered item
+            const buyerInventory = await connectToInventories(buyer);
+            const offeredItem = buyerInventory.inventory.find(item => 
+              item.name.toLowerCase() === offeredItemName.toLowerCase()
+            );
+            if (!offeredItem || offeredItem.quantity < 1) {
+              return interaction.reply(`⚠️ You don't have **${offeredItemName}** in your inventory.`);
+            }
+            break;
+        }
       }
   
       // ------------------- Create Barter Request -------------------
@@ -621,7 +770,11 @@ async function handleVendingBarter(interaction) {
         notes: notes || '',
         buyerId,
         buyerUsername: buyerName,
-        date: new Date()
+        date: new Date(),
+        // Store if this is a vendor self-purchase
+        isVendorSelfPurchase: isVendorSelfPurchase,
+        // Store sell price if vendor self-purchase
+        sellPrice: isVendorSelfPurchase ? (await ItemModel.findOne({ itemName: requestedItemName }))?.sellPrice : null
       };
   
       // Save to both MongoDB model and temporary storage
@@ -709,14 +862,49 @@ async function handleFulfill(interaction) {
       // ------------------- Fetch Characters -------------------
       const buyer = await fetchCharacterByName(userCharacterName);
       const vendor = await fetchCharacterByName(vendorCharacterName);
-  
+
       if (!buyer || !vendor) {
         return interaction.editReply("❌ Buyer or vendor character could not be found.");
       }
-  
+
+      // ------------------- Check if Vendor Self-Purchase -------------------
+      const isVendorSelfPurchase = buyer.userId === vendor.userId || request.isVendorSelfPurchase;
+
+      // ------------------- Validate Vendor Inventory -------------------
+      const VendingInventory = await getVendingModel(vendor.name);
+      const stockItem = await VendingInventory.findOne({
+        itemName: itemName
+      });
+
+      if (!stockItem || stockItem.stockQty < quantity) {
+        return interaction.editReply(`⚠️ ${vendor.name} does not have enough stock of **${itemName}** to fulfill this request.`);
+      }
+
       // ------------------- Handle Token Payment -------------------
       if (paymentMethod === 'tokens') {
-        const totalCost = stockItem.tokenPrice * quantity;
+        let totalCost;
+        
+        if (isVendorSelfPurchase) {
+          // Vendor buying from own shop - use ROTW SELL price
+          const itemDetails = await ItemModel.findOne({ itemName: itemName });
+          if (!itemDetails) {
+            return interaction.editReply(`❌ Could not find item details for ${itemName}. Vendors cannot purchase custom items from their own shop.`);
+          }
+
+          const sellPrice = itemDetails.sellPrice || request.sellPrice || 0;
+          if (sellPrice <= 0) {
+            return interaction.editReply(`❌ This item has no sell price set. Vendors cannot purchase items without a sell price from their own shop.`);
+          }
+
+          totalCost = sellPrice * quantity;
+        } else {
+          // Normal buyer - use shop's token price
+          if (!stockItem.tokenPrice || stockItem.tokenPrice === null) {
+            return interaction.editReply(`❌ This item is not available for token purchase.`);
+          }
+          totalCost = stockItem.tokenPrice * quantity;
+        }
+
         const buyerTokens = await getTokenBalance(buyerId);
         
         if (buyerTokens < totalCost) {
@@ -724,22 +912,26 @@ async function handleFulfill(interaction) {
         }
 
         // Transfer tokens from buyer to vendor
+        // Note: If vendor self-purchase, tokens go from vendor to vendor (effectively just deducted)
         await updateTokenBalance(buyerId, -totalCost);
         await updateTokenBalance(vendor.userId, totalCost);
 
         // Log token transaction in buyer's token tracker
-        const buyer = await User.findOne({ discordId: buyerId });
-        if (buyer && buyer.tokenTracker) {
+        const buyerUser = await User.findOne({ discordId: buyerId });
+        if (buyerUser && buyerUser.tokenTracker) {
           try {
             const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+            const purchaseDescription = isVendorSelfPurchase 
+              ? `Self-purchase from own shop (ROTW SELL price) - ${itemName} x${quantity}`
+              : `Purchase from ${vendor.name} - ${itemName} x${quantity}`;
             const buyerTokenRow = [
-              `Purchase from ${vendor.name} - ${itemName} x${quantity}`,
+              purchaseDescription,
               interactionUrl,
               "vending",
               "spent",
               `-${totalCost}`
             ];
-            await safeAppendDataToSheet(buyer.tokenTracker, buyer, "loggedTracker!B7:F", [buyerTokenRow], undefined, { skipValidation: true });
+            await safeAppendDataToSheet(buyerUser.tokenTracker, buyerUser, "loggedTracker!B7:F", [buyerTokenRow], undefined, { skipValidation: true });
             console.log(`[vendingHandler.js]: ✅ Logged token transaction to buyer's tracker for user ${buyerId}`);
           } catch (buyerSheetError) {
             console.error(`[vendingHandler.js]: ❌ Error logging to buyer's token tracker:`, buyerSheetError.message);
@@ -747,17 +939,21 @@ async function handleFulfill(interaction) {
         }
 
         // Log token transaction in vendor's sheet
+        const vendorShopLink = vendor.shopLink || vendor.vendingSetup?.shopLink;
         if (vendorShopLink) {
           try {
             const spreadsheetId = extractSpreadsheetId(vendorShopLink);
             const auth = await authorizeSheets();
+            const paymentNote = isVendorSelfPurchase 
+              ? `Self-purchase (ROTW SELL price: ${totalCost / quantity} per item)`
+              : 'Token Payment';
             const tokenTransactionRow = [
               [
                 vendor.name, // Vendor
                 userCharacterName, // Buyer
                 'Tokens', // Item
                 totalCost, // Amount
-                'Token Payment', // Payment Method
+                paymentNote, // Payment Method
                 itemName, // Item Purchased
                 `${quantity}x ${itemName}`, // Notes
                 new Date().toLocaleDateString('en-US') // Date
@@ -770,16 +966,6 @@ async function handleFulfill(interaction) {
         }
       }
   
-      // ------------------- Validate Vendor Inventory -------------------
-      const VendingInventory = await getVendingModel(vendor.name);
-      const stockItem = await VendingInventory.findOne({
-        itemName: itemName
-      });
-  
-      if (!stockItem || stockItem.stockQty < quantity) {
-        return interaction.editReply(`⚠️ ${vendor.name} does not have enough stock of **${itemName}** to fulfill this request.`);
-      }
-
       // ------------------- Update Google Sheets -------------------
       // Update vendor's vendingShop sheet
       const vendorShopLink = vendor.shopLink || vendor.vendingSetup?.shopLink;
@@ -2054,6 +2240,120 @@ async function handleSyncButton(interaction) {
   }
 }
 
+// ------------------- handleAddPersonalItem -------------------
+// Helper function to add items from personal inventory to shop.
+// Personal items are marked as isPersonalItem: true and cannot be removed without purchase.
+async function handleAddPersonalItem(characterName, itemName, quantity, slot, tokenPrice, artPrice, otherPrice, barterOpen) {
+  try {
+    const character = await fetchCharacterByName(characterName);
+    if (!character) {
+      throw new Error(`Character ${characterName} not found`);
+    }
+
+    // Validate vendor job
+    const job = character.job?.toLowerCase();
+    if (job !== 'shopkeeper' && job !== 'merchant') {
+      throw new Error(`${characterName} must be a Shopkeeper or Merchant to add items to shop.`);
+    }
+
+    // Get vending collection
+    const vendCollection = await getVendingCollection(characterName);
+
+    // Check if item exists in personal inventory (this would be called from inventory context)
+    // For now, we'll just mark it as a personal item when adding
+
+    // Price validation
+    const priceItem = {
+      tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
+      artPrice: artPrice && artPrice.trim() !== '' ? artPrice : null,
+      otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : null,
+      barterOpen: barterOpen
+    };
+
+    const priceValidation = validateVendingPrices(priceItem);
+    if (priceValidation.length > 0) {
+      throw new Error(`Price validation failed: ${priceValidation.join(', ')}`);
+    }
+
+    // Try to get item details (may not exist for custom items)
+    const itemDetails = await ItemModel.findOne({ itemName });
+    const isCustomItem = !itemDetails;
+
+    // Check slot limits
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+    const baseSlots = baseSlotLimits[job] || 0;
+    const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+    const totalSlots = baseSlots + extraSlots;
+
+    // Validate slot
+    const slotNumber = parseInt(slot.replace(/[^0-9]/g, ''));
+    if (isNaN(slotNumber) || slotNumber < 1 || slotNumber > totalSlots) {
+      throw new Error(`Invalid slot number. You have ${totalSlots} total slots available.`);
+    }
+
+    // Check if slot is available
+    const existingItem = await vendCollection.findOne({ 
+      slot: slot,
+      itemName: { $ne: itemName }
+    });
+    if (existingItem) {
+      throw new Error(`Slot ${slot} is already occupied by ${existingItem.itemName}.`);
+    }
+
+    // Check if item already exists in this slot
+    const existingSameItem = await vendCollection.findOne({
+      itemName,
+      slot: slot
+    });
+
+    if (existingSameItem) {
+      // Update existing item
+      await vendCollection.updateOne(
+        { _id: existingSameItem._id },
+        {
+          $inc: { stockQty: quantity },
+          $set: {
+            tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : existingSameItem.tokenPrice,
+            artPrice: artPrice && artPrice.trim() !== '' ? artPrice : existingSameItem.artPrice,
+            otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : existingSameItem.otherPrice,
+            barterOpen: barterOpen !== undefined ? barterOpen : existingSameItem.barterOpen,
+            tradesOpen: barterOpen !== undefined ? barterOpen : existingSameItem.tradesOpen
+          }
+        }
+      );
+    } else {
+      // Insert new personal item
+      await vendCollection.insertOne({
+        characterName: characterName,
+        itemName,
+        itemId: itemDetails ? itemDetails._id : null,
+        stockQty: quantity,
+        costEach: 0, // Personal items don't cost vending points
+        pointsSpent: 0, // Personal items don't cost vending points
+        tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
+        artPrice: artPrice && artPrice.trim() !== '' ? artPrice : null,
+        otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : null,
+        barterOpen: barterOpen,
+        tradesOpen: barterOpen, // Legacy compatibility
+        boughtFrom: character.currentVillage,
+        slot: slot,
+        date: new Date(),
+        // Mark as personal item
+        isPersonalItem: true,
+        source: 'personal_inventory',
+        isCustomItem: isCustomItem,
+        customItemData: isCustomItem ? { name: itemName } : null
+      });
+    }
+
+    return { success: true, message: `Successfully added ${quantity}x ${itemName} to shop as personal item.` };
+  } catch (error) {
+    console.error('[handleAddPersonalItem]: Error:', error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // ------------------- Module Exports -------------------
 // Export all public vending subcommand handlers.
@@ -2072,5 +2372,6 @@ module.exports = {
     handleShopLink,
     viewVendingStock,
     handleVendingViewVillage,
-    handleSyncButton
+    handleSyncButton,
+    handleAddPersonalItem
 };

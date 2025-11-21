@@ -1,0 +1,192 @@
+/* ============================================================================ */
+/* Location Colors                                                              */
+/* ============================================================================ */
+
+.location-eldin {
+  background-color: #d9534f !important;
+  color: #ffffff !important;
+}
+.location-eldin:hover {
+  background-color: #f76d6a !important;
+}
+
+.location-faron {
+  background-color: #5cb85c !important;
+  color: #ffffff !important;
+}
+.location-faron:hover {
+  background-color: #76d276 !important;
+}
+
+.location-gerudo {
+  background-color: #f0ad4e !important;
+  color: #ffffff !important;
+}
+.location-gerudo:hover {
+  background-color: #ffc766 !important;
+}
+
+.location-hebra {
+  background-color: #b39ddb !important;
+  color: #ffffff !important;
+}
+.location-hebra:hover {
+  background-color: #c9b4ef !important;
+}
+
+.location-lanayru {
+  background-color: #337ab7 !important;
+  color: #ffffff !important;
+}
+.location-lanayru:hover {
+  background-color: #4f94d4 !important;
+}
+
+.location-leafdew {
+  background-color: #20cfcf !important;
+  color: #ffffff !important;
+}
+.location-leafdew:hover {
+  background-color: #45e5e5 !important;
+}
+
+.location-scarletleaves {
+  background-color: #a259e6 !important;
+  color: #ffffff !important;
+}
+.location-scarletleaves:hover {
+  background-color: #be78ff !important;
+}
+
+.location-central-hyrule {
+  background-color: #17a2b8 !important;
+  color: #ffffff !important;
+}
+.location-central-hyrule:hover {
+  background-color: #38bcd2 !important;
+}
+
+
+/* ============================================================================ */
+/* Village Crest Display                                                        */
+/* ============================================================================ */
+
+.village-crest {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  z-index: 2;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.village-crest-img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  padding: 2px;
+}
+
+/* ============================================================================ */
+/* MOBILE RESPONSIVE DESIGN                                                     */
+/* ============================================================================ */
+
+/* Mobile-first responsive breakpoints */
+@media (max-width: 768px) {
+  /* Village Crest Mobile */
+  .village-crest {
+    top: 8px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+  }
+  
+  .village-crest-img {
+    width: 85%;
+    height: 85%;
+    padding: 1px;
+  }
+  
+  /* Location Button Mobile - Ensure minimum touch target */
+  [class*="location-"] {
+    min-height: 48px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Village Crest Small */
+  .village-crest {
+    top: 6px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+  }
+  
+  .village-crest-img {
+    width: 90%;
+    height: 90%;
+  }
+  
+  /* Location Button Small */
+  [class*="location-"] {
+    min-height: 44px;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Touch-friendly interactions for mobile */
+@media (hover: none) and (pointer: coarse) {
+  /* Ensure all location buttons have adequate touch targets */
+  [class*="location-"] {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Remove hover effects on touch devices */
+  [class*="location-"]:hover {
+    background-color: inherit !important;
+  }
+  
+  /* Add active states for better touch feedback */
+  [class*="location-"]:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+    filter: brightness(1.1);
+  }
+}
+
+/* Landscape mobile optimizations */
+@media (max-width: 768px) and (orientation: landscape) {
+  .village-crest {
+    top: 6px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+  }
+  
+  [class*="location-"] {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  [class*="location-"],
+  .stock-badge {
+    transition: none;
+  }
+  
+  [class*="location-"]:active,
+  .stock-badge:active {
+    transform: none;
+  }
+}

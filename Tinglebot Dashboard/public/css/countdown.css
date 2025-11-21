@@ -1,0 +1,629 @@
+/* ==========================================================================
+   COUNTDOWN SECTION STYLES
+   ========================================================================== */
+
+   .countdown-section {
+    margin-bottom: var(--section-spacing);
+    animation: fadeInUp 0.6s ease-out;
+  }
+  
+  /* -------------------- Header -------------------- */
+  .countdown-header {
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+  
+  .countdown-header h2 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: var(--text-primary);
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  
+  .countdown-header h2 i {
+    font-size: 1.5rem;
+    color: var(--accent);
+  }
+  
+  .countdown-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin: 0;
+  }
+  
+  /* -------------------- Countdown Grid -------------------- */
+  .countdown-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  
+  /* ==========================================================================
+     COUNTDOWN CARDS
+     ========================================================================== */
+  
+  .countdown-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--card-radius);
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+  }
+  
+  .countdown-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--primary-gradient);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .countdown-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--section-shadow);
+    border-color: var(--accent);
+  }
+  
+  .countdown-card:hover::before {
+    opacity: 1;
+  }
+  
+  /* Card Variants */
+  .countdown-card.primary    { border-left: 4px solid var(--totk-light-green); }
+  .countdown-card.warning    { border-left: 4px solid var(--totk-ocher); }
+  .countdown-card.danger     { border-left: 4px solid var(--blight-border); }
+  .countdown-card.info       { border-left: 4px solid var(--botw-blue); }
+  
+  /* -------------------- Card Icon -------------------- */
+  .countdown-icon {
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+  
+  .countdown-icon i {
+    font-size: 2rem;
+    color: var(--accent);
+  }
+  
+  /* Icon Color Overrides per Variant */
+  .countdown-card.primary .countdown-icon i { color: var(--totk-light-green); }
+  .countdown-card.warning .countdown-icon i { color: var(--totk-ocher); }
+  .countdown-card.danger  .countdown-icon i { color: var(--blight-border); }
+  .countdown-card.info    .countdown-icon i { color: var(--botw-blue); }
+  
+  /* -------------------- Card Content -------------------- */
+  .countdown-content h3 {
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+  
+  .countdown-description {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-align: center;
+    margin: 0;
+    line-height: 1.4;
+  }
+  
+  /* -------------------- Countdown Timer -------------------- */
+  .countdown-timer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .time-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 60px;
+  }
+  
+  .time-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+    font-family: 'Courier New', monospace;
+  }
+  
+  .time-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 0.25rem;
+  }
+  
+  .time-separator {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-top: -0.5rem;
+  }
+  
+  /* ==========================================================================
+     EVENT SUMMARY STYLES
+     ========================================================================== */
+  
+  .events-summary {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--card-radius);
+    padding: 1.5rem;
+    margin-top: 1rem;
+  }
+  
+  .events-summary h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  
+  .events-summary h3 i {
+    color: var(--accent);
+  }
+  
+  /* -------------------- Individual Event Items -------------------- */
+  .countdown-event-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0.5rem;
+    border-left: 3px solid var(--accent);
+    transition: all 0.2s ease;
+  }
+  
+  .countdown-event-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(2px);
+  }
+  
+  /* Event Icon */
+  .countdown-event-icon {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  
+  .countdown-event-icon i {
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+  
+  /* Event Details */
+  .countdown-event-details {
+    flex: 1;
+  }
+  
+  .countdown-event-name {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+  }
+  
+  .countdown-event-time,
+  .countdown-event-description {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+  
+  .countdown-event-description {
+    margin-top: 0.25rem;
+  }
+  
+  /* ==========================================================================
+     MOBILE RESPONSIVE STYLES
+     ========================================================================== */
+  
+  @media (max-width: 1024px) {
+    .countdown-header h2 {
+      font-size: 1.5rem;
+    }
+    
+    .countdown-grid {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.25rem;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    /* Countdown Section Mobile */
+    .countdown-section {
+      margin-bottom: 1.5rem;
+    }
+    
+    /* Header Mobile */
+    .countdown-header {
+      margin-bottom: 1.5rem;
+    }
+    
+    .countdown-header h2 {
+      font-size: 1.25rem;
+      gap: 0.5rem;
+    }
+    
+    .countdown-header h2 i {
+      font-size: 1.25rem;
+    }
+    
+    .countdown-header p {
+      font-size: 0.9rem;
+    }
+    
+    /* Grid Mobile */
+    .countdown-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    /* Cards Mobile */
+    .countdown-card {
+      padding: 1.25rem;
+    }
+    
+    .countdown-icon {
+      margin-bottom: 0.75rem;
+    }
+    
+    .countdown-icon i {
+      font-size: 1.75rem;
+    }
+    
+    .countdown-content h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    .countdown-description {
+      font-size: 0.8rem;
+    }
+    
+    /* Timer Mobile */
+    .countdown-timer {
+      gap: 0.25rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    .time-unit {
+      min-width: 50px;
+    }
+    
+    .time-value {
+      font-size: 1.5rem;
+    }
+    
+    .time-label {
+      font-size: 0.7rem;
+    }
+    
+    .time-separator {
+      font-size: 1.25rem;
+      margin-top: -0.25rem;
+    }
+    
+    /* Events Summary Mobile */
+    .events-summary {
+      padding: 1.25rem;
+      margin-top: 0.75rem;
+    }
+    
+    .events-summary h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    .countdown-event-item {
+      padding: 0.5rem;
+      gap: 0.75rem;
+    }
+    
+    .countdown-event-icon {
+      width: 1.75rem;
+      height: 1.75rem;
+    }
+    
+    .countdown-event-icon i {
+      font-size: 0.8rem;
+    }
+    
+    .countdown-event-name {
+      font-size: 0.8rem;
+    }
+    
+    .countdown-event-time,
+    .countdown-event-description {
+      font-size: 0.7rem;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    /* Countdown Section Extra Small */
+    .countdown-section {
+      margin-bottom: 1rem;
+    }
+    
+    /* Header Extra Small */
+    .countdown-header {
+      margin-bottom: 1rem;
+    }
+    
+    .countdown-header h2 {
+      font-size: 1.1rem;
+    }
+    
+    .countdown-header h2 i {
+      font-size: 1.1rem;
+    }
+    
+    .countdown-header p {
+      font-size: 0.85rem;
+    }
+    
+    /* Grid Extra Small */
+    .countdown-grid {
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    
+    /* Cards Extra Small */
+    .countdown-card {
+      padding: 1rem;
+    }
+    
+    .countdown-icon i {
+      font-size: 1.5rem;
+    }
+    
+    .countdown-content h3 {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .countdown-description {
+      font-size: 0.75rem;
+    }
+    
+    /* Timer Extra Small */
+    .countdown-timer {
+      gap: 0.2rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .time-unit {
+      min-width: 45px;
+    }
+    
+    .time-value {
+      font-size: 1.25rem;
+    }
+    
+    .time-label {
+      font-size: 0.65rem;
+    }
+    
+    .time-separator {
+      font-size: 1.1rem;
+    }
+    
+    /* Events Summary Extra Small */
+    .events-summary {
+      padding: 1rem;
+      margin-top: 0.5rem;
+    }
+    
+    .events-summary h3 {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .countdown-event-item {
+      padding: 0.4rem;
+      gap: 0.5rem;
+    }
+    
+    .countdown-event-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+    
+    .countdown-event-icon i {
+      font-size: 0.7rem;
+    }
+    
+    .countdown-event-name {
+      font-size: 0.75rem;
+    }
+    
+    .countdown-event-time,
+    .countdown-event-description {
+      font-size: 0.65rem;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    /* Countdown Section Small */
+    .countdown-section {
+      margin-bottom: 0.75rem;
+    }
+    
+    /* Header Small */
+    .countdown-header {
+      margin-bottom: 0.75rem;
+    }
+    
+    .countdown-header h2 {
+      font-size: 1rem;
+    }
+    
+    .countdown-header h2 i {
+      font-size: 1rem;
+    }
+    
+    .countdown-header p {
+      font-size: 0.8rem;
+    }
+    
+    /* Grid Small */
+    .countdown-grid {
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    /* Cards Small */
+    .countdown-card {
+      padding: 0.75rem;
+    }
+    
+    .countdown-icon {
+      margin-bottom: 0.5rem;
+    }
+    
+    .countdown-icon i {
+      font-size: 1.25rem;
+    }
+    
+    .countdown-content h3 {
+      font-size: 0.9rem;
+      margin-bottom: 0.4rem;
+    }
+    
+    .countdown-description {
+      font-size: 0.7rem;
+    }
+    
+    /* Timer Small */
+    .countdown-timer {
+      gap: 0.15rem;
+      margin-bottom: 0.4rem;
+    }
+    
+    .time-unit {
+      min-width: 40px;
+    }
+    
+    .time-value {
+      font-size: 1.1rem;
+    }
+    
+    .time-label {
+      font-size: 0.6rem;
+    }
+    
+    .time-separator {
+      font-size: 1rem;
+    }
+    
+    /* Events Summary Small */
+    .events-summary {
+      padding: 0.75rem;
+      margin-top: 0.4rem;
+    }
+    
+    .events-summary h3 {
+      font-size: 0.9rem;
+      margin-bottom: 0.4rem;
+    }
+    
+    .countdown-event-item {
+      padding: 0.3rem;
+      gap: 0.4rem;
+    }
+    
+    .countdown-event-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    
+    .countdown-event-icon i {
+      font-size: 0.6rem;
+    }
+    
+    .countdown-event-name {
+      font-size: 0.7rem;
+    }
+    
+    .countdown-event-time,
+    .countdown-event-description {
+      font-size: 0.6rem;
+    }
+  }
+  
+  /* Touch-friendly interactions */
+  @media (hover: none) and (pointer: coarse) {
+    .countdown-card {
+      min-height: 120px;
+    }
+    
+    .countdown-card:active {
+      transform: scale(0.98);
+      transition: transform 0.1s ease;
+    }
+    
+    .countdown-event-item:active {
+      transform: translateX(1px);
+      transition: transform 0.1s ease;
+    }
+  }
+  
+  /* Landscape mobile optimizations */
+  @media (max-width: 768px) and (orientation: landscape) {
+    .countdown-section {
+      margin-bottom: 1rem;
+    }
+    
+    .countdown-header {
+      margin-bottom: 1rem;
+    }
+    
+    .countdown-header h2 {
+      font-size: 1.1rem;
+    }
+    
+    .countdown-grid {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+    
+    .countdown-card {
+      padding: 1rem;
+    }
+    
+    .countdown-content h3 {
+      font-size: 1rem;
+    }
+    
+    .countdown-description {
+      font-size: 0.8rem;
+    }
+  }
+  

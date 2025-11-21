@@ -1,0 +1,2727 @@
+<!-- ========================================================================== -->
+<!-- 01-document-setup — DOCTYPE, HTML tag, Head Metadata                      -->
+<!-- ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Tinglebot 2.0 Dashboard</title>
+  
+  <!-- SEO & Social Meta -->
+  <meta name="description" content="Tinglebot 2.0 Dashboard: Manage, explore, and analyze your Tinglebot data models, stats, and more." />
+  <meta property="og:title" content="Tinglebot 2.0 Dashboard" />
+  <meta property="og:description" content="Manage, explore, and analyze your Tinglebot data models, stats, and more." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://tinglebot.xyz/" />
+  <meta property="og:image" content="https://tinglebot.xyz/images/tingleicon.png" />
+  <link rel="icon" type="image/png" href="/images/tingleicon.png" />
+  <meta name="theme-color" content="#00A3DA" />
+  
+  <!-- Canonical URL -->
+  <link rel="canonical" href="https://tinglebot.xyz/" />
+  
+  <!-- JSON-LD Organization schema -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Organization",
+    "name":"Tinglebot Dashboard",
+    "url":"https://tinglebot.xyz/",
+    "logo":"https://tinglebot.xyz/images/tingleicon.png",
+    "description":"Manage, explore, and analyze your Tinglebot data models, stats, and more."
+  }
+  </script>
+  
+  <!-- Resource Preloading for Critical Assets -->
+  <link rel="preload" href="css/styles.css" as="style">
+  <link rel="preload" href="js/ui.js" as="script" crossorigin="anonymous">
+  <link rel="preload" href="js/auth.js" as="script" crossorigin="anonymous">
+  <link rel="dns-prefetch" href="https://kit.fontawesome.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  
+  <!-- Critical CSS - Load immediately -->
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/suggestions.css" />
+  <link rel="stylesheet" href="css/memberLore.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+  <link rel="stylesheet" href="css/buttons.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/charts.css" />
+  <link rel="stylesheet" href="css/databaseEditor.css" />
+  <link rel="stylesheet" href="css/character.css" />
+  <link rel="stylesheet" href="css/characterOfTheWeek.css" />
+  <link rel="stylesheet" href="css/countdown.css" />
+  <link rel="stylesheet" href="css/discord.css" />
+  <link rel="stylesheet" href="css/inventory.css" />
+  <link rel="stylesheet" href="css/items.css" />
+  <link rel="stylesheet" href="css/model.css" />
+  <link rel="stylesheet" href="css/monsters.css" />
+  <link rel="stylesheet" href="css/pets.css" />
+  <link rel="stylesheet" href="css/pagination.css" />
+  <link rel="stylesheet" href="css/profile.css" />
+  <link rel="stylesheet" href="css/searchFilter.css" />
+  <link rel="stylesheet" href="css/shops.css" />
+  <link rel="stylesheet" href="css/stats.css" />
+  <link rel="stylesheet" href="css/users.css" />
+  <link rel="stylesheet" href="css/village.css" />
+  <link rel="stylesheet" href="css/weather.css" />
+  <link rel="stylesheet" href="css/blupee.css" />
+  <link rel="stylesheet" href="css/calender.css" />
+  <link rel="stylesheet" href="css/bloodmoon.css" />
+  <link rel="stylesheet" href="css/relationships.css" />
+  <link rel="stylesheet" href="css/settings.css" />
+  <link rel="stylesheet" href="css/quests.css" />
+  <link rel="stylesheet" href="css/hwqs.css" />
+  <link rel="stylesheet" href="css/levels.css" />
+  <link rel="stylesheet" href="css/map.css" />
+  <link rel="stylesheet" href="css/gallery.css" />
+  
+  <!-- External Scripts with Integrity -->
+  <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0/dist/chartjs-plugin-datalabels.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
+  <!--
+    NOTE: In a real app, hardcoded values like the dashboard title, URLs, and Open Graph image should be made dynamic via server-side rendering or a build process.
+  -->
+</head>
+
+<!-- ========================================================================== -->
+<!-- 02-global-resources — CSS, Fonts, Icons, Scripts                          -->
+<!-- ========================================================================== -->
+<body>
+  <!-- Skip Links for Accessibility -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <a href="#sidebar-navigation" class="skip-link">Skip to navigation</a>
+  
+  <!-- ========================================================================== -->
+  <!-- 03-header — Topbar / Navbar / Notifications                               -->
+  <!-- ========================================================================== -->
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+        <i class="fas fa-bars" aria-hidden="true"></i>
+      </button>
+      <div class="breadcrumb">Dashboard</div>
+    </div>
+    <div class="topbar-right">
+      <div class="bot-status online">
+        <span class="status-dot"></span>
+        <span class="status-text">Online</span>
+      </div>
+      <div class="user-menu" id="user-menu">
+        <img src="/images/ankleicon.png" alt="Profile picture of the user" class="user-avatar" id="user-avatar" />
+        <span class="username" id="username">Loading...</span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-content">
+            <div class="user-info" id="user-info" style="display: none;">
+              <div class="user-details">
+                <img src="/images/ankleicon.png" alt="Profile picture" class="user-dropdown-avatar" id="user-dropdown-avatar" />
+                <div class="user-text">
+                  <span class="user-name" id="user-name">Username</span>
+                  <span class="user-discriminator" id="user-discriminator">#0000</span>
+                </div>
+              </div>
+              <div class="user-stats">
+                <span class="user-tokens">Tokens: <span id="user-tokens">0</span></span>
+                <span class="user-slots">Slots: <span id="user-slots">2</span></span>
+              </div>
+              <div class="user-actions">
+                <a href="#profile-section" class="profile-button" id="profile-link">
+                  <i class="fas fa-user"></i>
+                  Profile
+                </a>
+                <a href="#settings" class="profile-button" id="settings-link">
+                  <i class="fas fa-cog"></i>
+                  Settings
+                </a>
+                <a href="/auth/logout" class="logout-button">
+                  <i class="fas fa-sign-out-alt"></i>
+                  Logout
+                </a>
+              </div>
+            </div>
+            <div class="guest-info" id="guest-info" style="display: none;">
+              <div class="guest-message">
+                <i class="fas fa-user-circle"></i>
+                <span>Guest User</span>
+              </div>
+              <div class="guest-actions">
+                <a href="javascript:void(0)" onclick="redirectToLogin()" class="login-button">
+                  <i class="fab fa-discord"></i>
+                  Login with Discord
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================== -->
+  <!-- 04-body-wrapper — Main Wrapper / Layout Containers                        -->
+  <!-- ========================================================================== -->
+  <div class="main-wrapper">
+    <!-- ========================================================================== -->
+    <!-- 05-sidebar — Sidebar Navigation Layout                                    -->
+    <!-- ========================================================================== -->
+    <aside class="sidebar" id="sidebar-navigation" role="navigation" aria-label="Main sidebar navigation">
+      <div class="sidebar-header">
+        <img src="/images/tingleicon.png" alt="Tinglebot Logo" class="bot-logo" />
+        <h1>Tinglebot</h1>
+      </div>
+      <nav class="sidebar-nav" aria-label="Main sidebar navigation">
+        <ul>
+          <li class="active">
+            <a href="#dashboard" data-section="dashboard-section"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+          </li>
+          <li>
+            <a href="#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Discord</span></a>
+          </li>
+          <li>
+            <a href="#users" data-section="users-section"><i class="fas fa-users"></i><span>Users</span></a>
+          </li>
+          <li>
+            <a href="#levels" data-section="levels-section"><i class="fas fa-level-up-alt"></i><span>Levels</span></a>
+          </li>
+          <li>
+            <a href="#calendar" data-section="calendar-section"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a>
+          </li>
+          <li>
+            <a href="#suggestion-box-section" data-section="suggestion-box-section"><i class="fas fa-lightbulb"></i><span>Suggestion Box</span></a>
+          </li>
+          <li>
+            <a href="#member-lore-section" data-section="member-lore-section"><i class="fas fa-scroll"></i><span>Member Lore</span></a>
+          </li>
+          <li>
+            <a href="#gallery-section" data-section="gallery-section"><i class="fas fa-images"></i><span>Gallery</span></a>
+          </li>
+          <li>
+            <a href="#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a>
+          </li>
+          <li>
+            <a href="#relationships-section" data-section="relationships-section"><i class="fas fa-heart"></i><span>Relationships</span></a>
+          </li>
+          <li>
+            <a href="/map"><i class="fas fa-map"></i><span>Map</span></a>
+          </li>
+          <li id="inventories-nav-item" style="display: none;">
+            <a href="/inventories.html"><i class="fas fa-boxes"></i><span>Inventories</span></a>
+          </li>
+          <li>
+            <a href="#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a>
+          </li>
+          <li>
+            <a href="#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a>
+          </li>
+          <li id="admin-area-nav-item" style="display: none;">
+            <a href="#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ========================================================================== -->
+    <!-- 06-main-content — Dashboard, Panels, and Primary UI Content               -->
+    <!-- ========================================================================== -->
+    <main class="main-content" id="main-content" role="main" tabindex="-1">
+      <section id="dashboard-section">
+        <div class="dashboard-header">
+          <h1>Dashboard</h1>
+          <div class="dashboard-divider"></div>
+          <section class="dashboard-welcome-box">
+            <p class="dashboard-welcome">
+              Welcome to the dashboard for Tinglebot! Use this page to view, explore, and manage your bot's data models.
+              Click any card below to browse the data for that model.
+            </p>
+          </section>
+        </div>
+
+        <!-- Character of the Week Section -->
+        <section id="character-of-week-section" class="character-of-week-section">
+          <div class="character-of-week-header">
+            <div class="character-of-week-header-info">
+              <h2><i class="fas fa-star"></i> Character of the Week</h2>
+              <p>Featured character spotlight • Resets every Sunday at midnight</p>
+            </div>
+            
+          </div>
+          <div id="character-of-week-content" class="character-of-week-content">
+            <!-- Character of the week content will be dynamically loaded here -->
+          </div>
+        </section>
+
+        <!-- Dashboard Countdown Section -->
+        <section id="countdown-section" class="countdown-section">
+          <div class="countdown-header">
+            <h2><i class="fas fa-clock"></i> System Countdown</h2>
+            <p>Time until next scheduled events</p>
+          </div>
+          
+          <div class="countdown-grid">
+            <!-- Daily Reset Countdown -->
+            <div class="countdown-card primary">
+              <div class="countdown-icon">
+                <i class="fas fa-sun"></i>
+              </div>
+              <div class="countdown-content">
+                <h3>Daily Reset</h3>
+                <div class="countdown-timer" id="daily-reset-timer">
+                  <span class="time-unit">
+                    <span class="time-value" id="daily-reset-hours">--</span>
+                    <span class="time-label">Hours</span>
+                  </span>
+                  <span class="time-separator">:</span>
+                  <span class="time-unit">
+                    <span class="time-value" id="daily-reset-minutes">--</span>
+                    <span class="time-label">Minutes</span>
+                  </span>
+                  <span class="time-separator">:</span>
+                  <span class="time-unit">
+                    <span class="time-value" id="daily-reset-seconds">--</span>
+                    <span class="time-label">Seconds</span>
+                  </span>
+                </div>
+                <p class="countdown-description">Weather updates, stamina recovery, daily rolls reset</p>
+              </div>
+            </div>
+
+            <!-- Blood Moon Countdown -->
+            <div class="countdown-card warning">
+              <div class="countdown-icon">
+                <i class="fas fa-moon"></i>
+              </div>
+              <div class="countdown-content">
+                <h3>Blood Moon</h3>
+                <div class="countdown-timer" id="blood-moon-timer">
+                  <span class="time-unit">
+                    <span class="time-value" id="blood-moon-days">--</span>
+                    <span class="time-label">Days</span>
+                  </span>
+                  <span class="time-separator">:</span>
+                  <span class="time-unit">
+                    <span class="time-value" id="blood-moon-hours">--</span>
+                    <span class="time-label">Hours</span>
+                  </span>
+                </div>
+                <p class="countdown-description">Next Blood Moon (26-day cycle) - Channel renaming, Blood Moon announcements</p>
+              </div>
+            </div>
+
+            <!-- Blight Roll Call Countdown -->
+            <div class="countdown-card danger">
+              <div class="countdown-icon">
+                <i class="fas fa-dice-d20"></i>
+              </div>
+              <div class="countdown-content">
+                <h3>Blight Roll Call</h3>
+                <div class="countdown-timer" id="blight-roll-timer">
+                  <span class="time-unit">
+                    <span class="time-value" id="blight-roll-hours">--</span>
+                    <span class="time-label">Hours</span>
+                  </span>
+                  <span class="time-separator">:</span>
+                  <span class="time-unit">
+                    <span class="time-value" id="blight-roll-minutes">--</span>
+                    <span class="time-label">Minutes</span>
+                  </span>
+                  <span class="time-separator">:</span>
+                  <span class="time-unit">
+                    <span class="time-value" id="blight-roll-seconds">--</span>
+                    <span class="time-label">Seconds</span>
+                  </span>
+                </div>
+                <p class="countdown-description">Blight roll submissions and missed rolls check</p>
+              </div>
+            </div>
+
+            <!-- Midnight Cleanup Countdown -->
+            <div class="countdown-card info">
+              <div class="countdown-icon">
+                <i class="fas fa-broom"></i>
+              </div>
+              <div class="countdown-content">
+                <h3>Midnight Cleanup</h3>
+                <div class="countdown-timer" id="cleanup-timer">
+                  <span class="time-unit">
+                    <span class="time-value" id="cleanup-hours">--</span>
+                    <span class="time-label">Hours</span>
+                  </span>
+                  <span class="time-separator">:</span>
+                  <span class="time-unit">
+                    <span class="time-value" id="cleanup-minutes">--</span>
+                    <span class="time-label">Minutes</span>
+                  </span>
+                  <span class="time-separator">:</span>
+                  <span class="time-unit">
+                    <span class="time-value" id="cleanup-seconds">--</span>
+                    <span class="time-label">Seconds</span>
+                  </span>
+                </div>
+                <p class="countdown-description">Jail releases, debuff expiry, request cleanup</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Weather Section -->
+        <section id="weather-section" class="weather-section">
+          <div class="weather-header">
+            <div class="weather-header-info">
+              <h2>Today's Weather</h2>
+            </div>
+          </div>
+          <!-- Weather content will be dynamically loaded here -->
+        </section>
+
+        <!-- Recent Quests Section -->
+        <section id="recent-quests-section" class="recent-quests-section">
+          <div class="recent-quests-header">
+            <div class="recent-quests-header-info">
+              <h2><i class="fas fa-scroll"></i> <span id="quest-month-title">Recent Quests</span></h2>
+            </div>
+          </div>
+          <div id="recent-quests-container" class="recent-quests-grid">
+            <div class="loading-state">
+              <div class="loading-spinner"></div>
+              <p>Loading recent quests...</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="dashboard-section-card dashboard-links-section">
+          <span class="dashboard-links-icon"><i class="fas fa-link" aria-hidden="true"></i></span>
+          <span class="dashboard-links-label">Links</span>
+        </div>
+
+        <div class="dashboard-links-divider"></div>
+
+        <section class="model-grid">
+          <button type="button" class="model-card" data-model="character">
+            <i class="fas fa-user" aria-hidden="true"></i><span>Characters</span>
+          </button>
+          <button type="button" class="model-card" data-model="monster">
+            <i class="fas fa-dragon" aria-hidden="true"></i><span>Monsters</span>
+          </button>
+          <button type="button" class="model-card" data-model="pet">
+            <i class="fas fa-paw" aria-hidden="true"></i><span>Pets</span>
+          </button>
+          <button type="button" class="model-card" data-model="mount">
+            <i class="fas fa-horse" aria-hidden="true"></i><span>Mounts</span>
+          </button>
+          <button type="button" class="model-card" data-model="vending">
+            <i class="fas fa-store" aria-hidden="true"></i><span>Vending</span>
+          </button>
+          <button type="button" class="model-card" data-model="item">
+            <i class="fas fa-box" aria-hidden="true"></i><span>Items</span>
+          </button>
+          <button type="button" class="model-card" data-model="starterGear">
+            <i class="fas fa-hiking" aria-hidden="true"></i><span>Starter Gear</span>
+          </button>
+          <button type="button" class="model-card" data-model="village">
+            <i class="fas fa-home" aria-hidden="true"></i><span>Villages</span>
+          </button>
+          <button type="button" class="model-card" data-model="villageShops">
+            <i class="fas fa-store-alt" aria-hidden="true"></i><span>Village Shops</span>
+          </button>
+          <button type="button" class="model-card" data-model="relic">
+            <i class="fas fa-gem" aria-hidden="true"></i><span>Relics</span>
+          </button>
+          <button type="button" class="model-card" data-model="quest">
+            <i class="fas fa-scroll" aria-hidden="true"></i><span>Quests</span>
+          </button>
+          <button type="button" class="model-card" data-model="helpwantedquest">
+            <i class="fas fa-clipboard-list" aria-hidden="true"></i><span>Help Wanted Quests</span>
+          </button>
+          <button type="button" class="model-card" data-model="inventory">
+            <i class="fas fa-shopping-bag" aria-hidden="true"></i><span>Inventories</span>
+          </button>
+        </section>
+      </section>
+
+      <!-- Model Details Page -->
+      <div id="model-details-page" class="model-details-page" style="display: none;">
+        <div class="model-details-header">
+          <button class="back-button" aria-label="Back to dashboard">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+          </button>
+          <h2 id="model-details-title">Model Details</h2>
+        </div>
+        <div id="model-details-data" class="model-details-content">
+          <!-- Character Filters Bar (only shown for character model) -->
+          <div class="character-filters" style="display:none;">
+            <input type="text" id="character-search-input" placeholder="Search characters..." />
+            <select id="filter-job">
+              <option value="all">All Jobs</option>
+            </select>
+            <select id="filter-race">
+              <option value="all">All Races</option>
+            </select>
+            <select id="filter-village">
+              <option value="all">All Villages</option>
+            </select>
+            <select id="sort-by">
+              <option value="name-asc">Name (A-Z)</option>
+              <option value="name-desc">Name (Z-A)</option>
+              <option value="job-asc">Job (A-Z)</option>
+              <option value="job-desc">Job (Z-A)</option>
+              <option value="race-asc">Race (A-Z)</option>
+              <option value="race-desc">Race (Z-A)</option>
+            </select>
+            <button id="clear-filters">Clear</button>
+          </div>
+          
+          <!-- Village Shop Results Info -->
+          <div class="village-shop-results-info" style="display:none;">
+            <p>Loading village shop items...</p>
+          </div>
+          
+          <!-- Village Shop Search Filter Bar -->
+          <div class="village-shop-search-filters" style="display:none;">
+            <div class="search-filter-bar">
+              <div class="search-filter-control search-input">
+                <input type="text" id="village-shop-search-input" placeholder="Search village shop items...">
+              </div>
+              <div class="search-filter-control">
+                <select id="village-shop-filter-category">
+                  <option value="all">All Categories</option>
+                </select>
+              </div>
+              <div class="search-filter-control">
+                <select id="village-shop-filter-type">
+                  <option value="all">All Types</option>
+                </select>
+              </div>
+              <div class="search-filter-control">
+                <select id="village-shop-sort-by">
+                  <option value="name-asc">Name (A-Z)</option>
+                  <option value="name-desc">Name (Z-A)</option>
+                  <option value="price-asc">Price (Low-High)</option>
+                  <option value="price-desc">Price (High-Low)</option>
+                  <option value="stock-asc">Stock (Low-High)</option>
+                  <option value="stock-desc">Stock (High-Low)</option>
+                </select>
+              </div>
+              <div class="search-filter-control">
+                <select id="village-shop-items-per-page">
+                  <option value="12">12 per page</option>
+                  <option value="24">24 per page</option>
+                  <option value="48">48 per page</option>
+                  <option value="all">All items</option>
+                </select>
+              </div>
+              <button id="village-shop-clear-filters" class="clear-filters-btn">Clear Filters</button>
+            </div>
+          </div>
+          
+          <div id="village-shops-container" class="village-shops-grid"></div>
+          
+          <div id="inventory-loading-state" class="loading-state" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading inventory data...</p>
+          </div>
+          <div id="inventory-error-state" class="error-state" style="display: none;">
+            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <p>Failed to load inventory data</p>
+            <button class="retry-button" onclick="loadInventory()">Retry</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats Section -->
+      <section id="stats-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1>Stats</h1>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div class="stats-card-wide">
+          <h3>Character Stats</h3>
+          <div id="stats-total-characters" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; padding: 2rem;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--accent-color);"></i>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 1rem;">Loading character statistics...</p>
+          </div>
+        </div>
+        <div class="stats-card-wide">
+          <h3>Characters per Village</h3>
+          <div class="chart-container">
+            <canvas id="villageDistributionChart"></canvas>
+          </div>
+        </div>
+        <div class="stats-card-wide">
+          <h3>Characters per Race</h3>
+          <div class="chart-container">
+            <canvas id="raceDistributionChart"></canvas>
+          </div>
+        </div>
+        <div class="stats-card-wide">
+          <h3>Characters per Job</h3>
+          <div class="chart-container">
+            <canvas id="jobDistributionChart"></canvas>
+          </div>
+        </div>
+
+        <!-- HWQ Stats Section -->
+        <div class="stats-card-wide hwq-stats-section">
+          <h3><i class="fas fa-clipboard-list"></i> Help Wanted Quest Statistics</h3>
+          <div id="hwq-stats-overview"></div>
+        </div>
+
+        <div class="stats-card-wide">
+          <h3>Help Wanted Quests per Type</h3>
+          <div class="chart-container" style="position: relative; min-height: 300px; display: flex; align-items: center; justify-content: center;">
+            <div class="chart-loading" style="position: absolute; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-color);"></i>
+              <p style="color: var(--text-secondary); margin: 0;">Loading chart...</p>
+            </div>
+            <canvas id="hwqTypeChart"></canvas>
+          </div>
+        </div>
+
+        <div class="stats-card-wide">
+          <h3>Top Help Wanted Quest Requesters (NPCs)</h3>
+          <div class="chart-container" style="position: relative; min-height: 300px; display: flex; align-items: center; justify-content: center;">
+            <div class="chart-loading" style="position: absolute; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-color);"></i>
+              <p style="color: var(--text-secondary); margin: 0;">Loading chart...</p>
+            </div>
+            <canvas id="hwqNPCChart"></canvas>
+          </div>
+        </div>
+
+        <div class="stats-card-wide">
+          <h3><i class="fas fa-trophy"></i> Top Help Wanted Quest Completers</h3>
+          <div id="hwq-top-completers" style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-color);"></i>
+              <p style="color: var(--text-secondary); margin: 0;">Loading leaderboard...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Profile Section -->
+      <section id="profile-section" style="display:none;">
+        <div class="dashboard-header">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <h1>Profile</h1>
+            <button id="export-all-user-data-btn" class="btn-primary" style="
+              padding: 0.75rem 1.5rem;
+              background: #4CAF50;
+              color: white;
+              border: none;
+              border-radius: 0.5rem;
+              cursor: pointer;
+              font-size: 1rem;
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              transition: all 0.2s;
+              font-weight: 500;
+            " onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4CAF50'" title="Export all your characters and data">
+              <i class="fas fa-file-download"></i>
+              Export All Data
+            </button>
+          </div>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div class="profile-container">
+          <div class="profile-card">
+            <div class="profile-header">
+              <div class="profile-avatar-container">
+                <img src="/images/ankleicon.png" alt="Profile Avatar" class="profile-avatar" id="profile-avatar" />
+                <div class="profile-status online">
+                  <span class="status-dot"></span>
+                </div>
+              </div>
+              <div class="profile-info">
+                <h2 class="profile-name" id="profile-name">Loading...</h2>
+                <div class="profile-nickname-section" style="margin-top: 0.75rem;">
+                  <div class="profile-nickname-display" id="profile-nickname-display" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="profile-nickname-label" style="color: var(--text-secondary); font-size: 0.9rem;">Display Name:</span>
+                    <span class="profile-nickname-value" id="profile-nickname-value" style="color: var(--text-color); font-weight: 500;">Not set</span>
+                    <button id="edit-nickname-btn" class="edit-nickname-btn" style="
+                      padding: 0.25rem 0.5rem;
+                      background: var(--primary-color);
+                      color: white;
+                      border: none;
+                      border-radius: 0.25rem;
+                      cursor: pointer;
+                      font-size: 0.8rem;
+                      display: flex;
+                      align-items: center;
+                      gap: 0.25rem;
+                      transition: background 0.2s;
+                    " title="Edit display name">
+                      <i class="fas fa-edit"></i>
+                      Edit
+                    </button>
+                  </div>
+                  <div class="profile-nickname-edit" id="profile-nickname-edit" style="display: none; gap: 0.5rem; align-items: center;">
+                    <input 
+                      type="text" 
+                      id="profile-nickname-input" 
+                      placeholder="Enter your display name"
+                      maxlength="50"
+                      style="
+                        padding: 0.5rem;
+                        border: 1px solid var(--border-color);
+                        border-radius: 0.25rem;
+                        background: var(--input-bg);
+                        color: var(--text-color);
+                        font-size: 0.9rem;
+                        flex: 1;
+                      "
+                    />
+                    <button id="save-nickname-btn" class="save-nickname-btn" style="
+                      padding: 0.5rem 0.75rem;
+                      background: #4CAF50;
+                      color: white;
+                      border: none;
+                      border-radius: 0.25rem;
+                      cursor: pointer;
+                      font-size: 0.9rem;
+                      display: flex;
+                      align-items: center;
+                      gap: 0.25rem;
+                      transition: background 0.2s;
+                    ">
+                      <i class="fas fa-save"></i>
+                      Save
+                    </button>
+                    <button id="cancel-nickname-btn" class="cancel-nickname-btn" style="
+                      padding: 0.5rem 0.75rem;
+                      background: var(--card-bg);
+                      color: var(--text-color);
+                      border: 1px solid var(--border-color);
+                      border-radius: 0.25rem;
+                      cursor: pointer;
+                      font-size: 0.9rem;
+                      display: flex;
+                      align-items: center;
+                      gap: 0.25rem;
+                      transition: background 0.2s;
+                    ">
+                      <i class="fas fa-times"></i>
+                      Cancel
+                    </button>
+                  </div>
+                  <small style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem; display: block;">
+                    Your display name will be shown instead of your username across the dashboard
+                  </small>
+                </div>
+              </div>
+            </div>
+            <div class="profile-stats">
+              <div class="stat-item">
+                <span class="stat-label">Tokens</span>
+                <span class="stat-value" id="profile-tokens">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Character Slots</span>
+                <span class="stat-value" id="profile-slots">2</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Level</span>
+                <span class="stat-value" id="profile-level">1</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Member Since</span>
+                <span class="stat-value" id="profile-joined">Loading...</span>
+              </div>
+            </div>
+            
+            <div id="profile-additional-info" class="profile-additional-info" style="margin-top: 1.5rem;">
+              <div class="profile-stats">
+                <div class="stat-item">
+                  <span class="stat-label">Total XP</span>
+                  <span class="stat-value" id="profile-xp">0</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Birthday</span>
+                  <span class="stat-value" id="profile-birthday">Not Set</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Status</span>
+                  <span class="stat-value" id="profile-status">Active</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Help Wanted</span>
+                  <span class="stat-value" id="profile-help-wanted">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Help Wanted Quests Section -->
+          <div class="profile-help-wanted-section" style="margin-top: 2rem;">
+            <div class="profile-help-wanted-header">
+              <h3><i class="fas fa-hands-helping"></i> Help Wanted Quests</h3>
+              <div class="profile-help-wanted-count" id="profile-help-wanted-total">
+                <span id="help-wanted-total-count">0</span> total completions
+              </div>
+            </div>
+            <div class="profile-help-wanted-container" id="profile-help-wanted-container">
+              <div class="profile-help-wanted-loading" id="profile-help-wanted-loading">
+                <div class="loading-spinner"></div>
+                <p>Loading your help wanted completions...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quest Participation Section -->
+          <div class="profile-quests-section">
+            <div class="profile-quests-header">
+              <h3><i class="fas fa-scroll"></i> Quest Activity</h3>
+              <div class="profile-quests-count" id="profile-quests-total">
+                <span id="quests-total-count">0</span> tracked quests
+              </div>
+            </div>
+            <div class="profile-quests-container" id="profile-quests-container">
+              <div class="profile-quests-loading" id="profile-quests-loading">
+                <div class="loading-spinner"></div>
+                <p>Loading your quest history...</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- User Characters Section -->
+          <div class="profile-characters-section">
+            <div class="profile-characters-header">
+              <h3>My Characters</h3>
+              <div class="profile-characters-count" id="profile-characters-count">
+                <span id="characters-count">0</span> characters
+              </div>
+            </div>
+            <div class="profile-characters-container" id="profile-characters-container">
+              <div class="profile-characters-loading" id="profile-characters-loading">
+                <div class="loading-spinner"></div>
+                <p>Loading your characters...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Admin Area Section -->
+      <section id="admin-area-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1><i class="fas fa-shield-alt"></i> Admin Area</h1>
+          <div class="dashboard-divider"></div>
+          <section class="dashboard-welcome-box">
+            <p class="dashboard-welcome">
+              Welcome to the Admin Area! This section is only accessible to users with admin privileges on the Discord server.
+            </p>
+          </section>
+        </div>
+
+        <!-- Admin Tools Grid -->
+        <div class="admin-tools-grid">
+          <!-- Database Editor -->
+          <div class="admin-tool-card">
+            <div class="admin-tool-header">
+              <i class="fas fa-database"></i>
+              <h3>Database Editor</h3>
+            </div>
+            <div class="admin-tool-content">
+              <p>Edit database records directly</p>
+              <div class="admin-tool-actions">
+                <button class="admin-action-btn primary" id="database-editor-btn">
+                  <i class="fas fa-table"></i>
+                  Open Database Editor
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Village Shops Management -->
+          <div class="admin-tool-card">
+            <div class="admin-tool-header">
+              <i class="fas fa-store"></i>
+              <h3>Village Shops Management</h3>
+            </div>
+            <div class="admin-tool-content">
+              <p>Manage village shop items, stock, and pricing</p>
+              <div class="admin-tool-actions">
+                <button class="admin-action-btn primary" id="village-shops-manager-btn">
+                  <i class="fas fa-shopping-cart"></i>
+                  Manage Village Shops
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Database Editor Section -->
+        <div id="database-editor-section" style="display: none;">
+          <div class="database-editor-header">
+            <button class="back-button" id="back-to-admin-btn">
+              <i class="fas fa-arrow-left"></i>
+              Back to Admin Tools
+            </button>
+            <h2><i class="fas fa-database"></i> Database Editor</h2>
+          </div>
+
+          <!-- Model Selection -->
+          <div class="db-editor-controls">
+            <div class="model-selector-container">
+              <label for="model-selector">Select Model:</label>
+              <select id="model-selector">
+                <option value="">-- Choose a model --</option>
+              </select>
+            </div>
+
+            <div class="search-container">
+              <input type="text" id="db-search-input" placeholder="Search records...">
+              <button id="db-search-btn" class="search-btn">
+                <i class="fas fa-search"></i>
+              </button>
+            </div>
+
+            <button id="create-record-btn" class="create-btn" style="display: none;">
+              <i class="fas fa-plus"></i>
+              Create New
+            </button>
+          </div>
+
+          <!-- Records Table -->
+          <div id="records-container" style="display: none;">
+            <div class="records-table-wrapper">
+              <table id="records-table" class="db-records-table">
+                <thead id="records-table-head">
+                  <!-- Dynamic headers will be inserted here -->
+                </thead>
+                <tbody id="records-table-body">
+                  <!-- Dynamic rows will be inserted here -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-controls">
+              <button id="prev-page-btn" class="pagination-btn">
+                <i class="fas fa-chevron-left"></i>
+                Previous
+              </button>
+              <span id="pagination-info">Page 1 of 1</span>
+              <button id="next-page-btn" class="pagination-btn">
+                Next
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div id="empty-state" class="empty-state">
+            <i class="fas fa-database"></i>
+            <p>Select a model to view and edit records</p>
+          </div>
+        </div>
+
+        <!-- Record Edit Modal -->
+        <div id="record-edit-modal" class="modal" style="display: none;">
+          <div class="modal-content db-editor-modal">
+            <div class="modal-header">
+              <h3 id="modal-title">Edit Record</h3>
+              <button class="modal-close" id="modal-close-btn">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="modal-body" id="modal-body">
+              <form id="record-form">
+                <!-- Dynamic form fields will be inserted here -->
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button id="modal-cancel-btn" class="btn-secondary">Cancel</button>
+              <button id="modal-delete-btn" class="btn-danger" style="display: none;">
+                <i class="fas fa-trash"></i>
+                Delete
+              </button>
+              <button id="modal-save-btn" class="btn-primary">
+                <i class="fas fa-save"></i>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Village Shops Management Section -->
+        <div id="village-shops-management-section" style="display: none;">
+          <div class="database-editor-header">
+            <button class="back-button" id="back-to-admin-from-shops-btn">
+              <i class="fas fa-arrow-left"></i>
+              Back to Admin Tools
+            </button>
+            <h2><i class="fas fa-store"></i> Village Shops Management</h2>
+          </div>
+
+          <!-- Village Shops Controls -->
+          <div class="db-editor-controls">
+            <div class="model-selector-container">
+              <label for="shops-category-filter">Filter by Category:</label>
+              <select id="shops-category-filter">
+                <option value="">All Categories</option>
+                <option value="Weapons">Weapons</option>
+                <option value="Armor">Armor</option>
+                <option value="Tools">Tools</option>
+                <option value="Materials">Materials</option>
+                <option value="Food">Food</option>
+                <option value="Misc">Misc</option>
+              </select>
+            </div>
+
+            <div class="search-container">
+              <input type="text" id="shops-search-input" placeholder="Search village shop items...">
+              <button id="shops-search-btn" class="search-btn">
+                <i class="fas fa-search"></i>
+              </button>
+            </div>
+
+            <button id="add-shop-item-btn" class="create-btn">
+              <i class="fas fa-plus"></i>
+              Add Shop Item
+            </button>
+          </div>
+
+          <!-- Village Shops Table -->
+          <div id="village-shops-container">
+            <div class="records-table-wrapper">
+              <table id="village-shops-table" class="db-records-table">
+                <thead id="village-shops-table-head">
+                  <!-- Dynamic headers will be inserted here -->
+                </thead>
+                <tbody id="village-shops-table-body">
+                  <!-- Dynamic rows will be inserted here -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-controls">
+              <button id="shops-prev-page-btn" class="pagination-btn">
+                <i class="fas fa-chevron-left"></i>
+                Previous
+              </button>
+              <span id="shops-pagination-info">Page 1 of 1</span>
+              <button id="shops-next-page-btn" class="pagination-btn">
+                Next
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div id="shops-empty-state" class="empty-state">
+            <i class="fas fa-store"></i>
+            <p>No village shop items found</p>
+          </div>
+        </div>
+
+        <!-- Village Shop Item Edit Modal -->
+        <div id="shop-item-edit-modal" class="modal" style="display: none;">
+          <div class="modal-content shop-item-modal">
+            <div class="modal-header">
+              <h3 id="shop-modal-title">Edit Shop Item</h3>
+              <button class="modal-close" id="shop-modal-close-btn">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="modal-body" id="shop-modal-body">
+              <form id="shop-item-form">
+                <div class="form-group">
+                  <label for="shop-item-name">Item Name:</label>
+                  <input type="text" id="shop-item-name" name="itemName" required placeholder="Start typing to search items..." autocomplete="off">
+                  <div id="item-suggestions" class="item-suggestions" style="display: none;"></div>
+                </div>
+
+                <div class="form-group">
+                  <label for="shop-item-stock">Stock:</label>
+                  <input type="number" id="shop-item-stock" name="stock" min="0" required placeholder="Enter stock quantity">
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button id="shop-modal-cancel-btn" class="btn-secondary">Cancel</button>
+              <button id="shop-modal-delete-btn" class="btn-danger" style="display: none;">
+                <i class="fas fa-trash"></i>
+                Delete
+              </button>
+              <button id="shop-modal-save-btn" class="btn-primary">
+                <i class="fas fa-save"></i>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Guilds Section -->
+      <section id="guilds-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1>Discord</h1>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div class="guilds-container">
+          <div class="guild-card">
+            <div class="guild-header">
+              <div class="guild-icon-container">
+                <img src="/images/tingleicon.png" alt="Guild Icon" class="guild-icon" id="guild-icon" />
+                <div class="guild-status online">
+                  <span class="status-dot"></span>
+                </div>
+              </div>
+              <div class="guild-info">
+                <h2 class="guild-name" id="guild-name">Loading...</h2>
+                <p class="guild-description" id="guild-description">Loading guild information...</p>
+              </div>
+            </div>
+            <div class="guild-stats">
+              <div class="stat-item">
+                <span class="stat-label">Residents</span>
+                <span class="stat-value" id="guild-members">Loading...</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Inactive</span>
+                <span class="stat-value" id="guild-inactive">Loading...</span>
+              </div>
+            </div>
+            <div class="guild-actions">
+              <button class="guild-action-button primary" id="join-guild-btn">
+                <i class="fas fa-sign-in-alt"></i>
+                <span>Join Server</span>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Live Server Activity Section -->
+          <div class="discord-activity-section">
+            <div class="discord-section-header">
+              <h3><i class="fas fa-chart-line"></i> Live Server Activity</h3>
+            </div>
+            <div class="activity-stats-grid">
+              <div class="activity-stat-card">
+                <div class="activity-stat-icon online">
+                  <i class="fas fa-circle"></i>
+                </div>
+                <div class="activity-stat-info">
+                  <span class="activity-stat-label">Online Now</span>
+                  <span class="activity-stat-value" id="online-count">--</span>
+                </div>
+              </div>
+              <div class="activity-stat-card">
+                <div class="activity-stat-icon voice">
+                  <i class="fas fa-microphone"></i>
+                </div>
+                <div class="activity-stat-info">
+                  <span class="activity-stat-label">In Voice</span>
+                  <span class="activity-stat-value" id="voice-count">--</span>
+                </div>
+              </div>
+              <div class="activity-stat-card">
+                <div class="activity-stat-icon messages">
+                  <i class="fas fa-comment"></i>
+                </div>
+                <div class="activity-stat-info">
+                  <span class="activity-stat-label">Messages Today</span>
+                  <span class="activity-stat-value" id="messages-today">--</span>
+                </div>
+              </div>
+              <div class="activity-stat-card">
+                <div class="activity-stat-icon boost">
+                  <i class="fas fa-rocket"></i>
+                </div>
+                <div class="activity-stat-info">
+                  <span class="activity-stat-label">Server Boosts</span>
+                  <span class="activity-stat-value" id="boost-count">--</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Server Stats Section -->
+          <div class="discord-stats-section">
+            <div class="discord-section-header">
+              <h3><i class="fas fa-info-circle"></i> Server Information</h3>
+            </div>
+            <div class="server-stats-grid">
+              <div class="server-stat-item">
+                <i class="fas fa-hashtag"></i>
+                <div class="server-stat-content">
+                  <span class="server-stat-label">Text Channels</span>
+                  <span class="server-stat-value" id="text-channels-count">--</span>
+                </div>
+              </div>
+              <div class="server-stat-item">
+                <i class="fas fa-volume-up"></i>
+                <div class="server-stat-content">
+                  <span class="server-stat-label">Voice Channels</span>
+                  <span class="server-stat-value" id="voice-channels-count">--</span>
+                </div>
+              </div>
+              <div class="server-stat-item">
+                <i class="fas fa-shield-alt"></i>
+                <div class="server-stat-content">
+                  <span class="server-stat-label">Roles</span>
+                  <span class="server-stat-value" id="roles-count">--</span>
+                </div>
+              </div>
+              <div class="server-stat-item">
+                <i class="fas fa-calendar-plus"></i>
+                <div class="server-stat-content">
+                  <span class="server-stat-label">Server Age</span>
+                  <span class="server-stat-value" id="server-age">--</span>
+                </div>
+              </div>
+              <div class="server-stat-item">
+                <i class="fas fa-user-plus"></i>
+                <div class="server-stat-content">
+                  <span class="server-stat-label">Latest Member</span>
+                  <span class="server-stat-value" id="latest-member">--</span>
+                </div>
+              </div>
+              <div class="server-stat-item">
+                <i class="fas fa-crown"></i>
+                <div class="server-stat-content">
+                  <span class="server-stat-label">Server Owner</span>
+                  <span class="server-stat-value" id="server-owner">--</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Role Distribution Section -->
+          <div class="discord-roles-section">
+            <div class="discord-section-header">
+              <h3><i class="fas fa-users-cog"></i> Role Distribution</h3>
+            </div>
+            <div class="roles-chart-container">
+              <canvas id="roles-chart" width="800" height="600"></canvas>
+            </div>
+            <div id="roles-list" class="roles-legend">
+              <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading role distribution...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Announcements Section -->
+          <div class="discord-announcements-section">
+            <div class="discord-section-header">
+              <h3><i class="fas fa-bullhorn"></i> Recent Announcements</h3>
+            </div>
+            <div class="announcements-list" id="announcements-list">
+              <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading announcements...</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Announcement Modal -->
+      <div class="announcement-modal" id="announcement-modal">
+        <div class="announcement-modal-content">
+          <div class="announcement-modal-header">
+            <div class="announcement-modal-author">
+              <img src="/images/tingleicon.png" alt="Author" class="announcement-modal-avatar" id="modal-author-avatar">
+              <div class="announcement-modal-author-info">
+                <h3 id="modal-author-name">Author</h3>
+                <p class="announcement-modal-time" id="modal-timestamp">Just now</p>
+              </div>
+            </div>
+            <button class="announcement-modal-close" id="close-announcement-modal">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="announcement-modal-body" id="modal-announcement-content">
+            <!-- Full announcement content will be inserted here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Users Section -->
+      <section id="users-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1>User Lookup</h1>
+          <div class="dashboard-divider"></div>
+        </div>
+        
+        <!-- Search Interface -->
+        <div class="users-search-container">
+          <div class="users-search-header">
+            <h3><i class="fas fa-search"></i> Find Users</h3>
+            <p>Search for users by username or Discord ID</p>
+          </div>
+          
+          <div class="users-search-form">
+            <div class="search-input-group">
+              <input 
+                type="text" 
+                id="user-search-input" 
+                class="user-search-input" 
+                placeholder="Enter username or Discord ID..."
+                minlength="2"
+              />
+              <button id="user-search-btn" class="user-search-btn">
+                <i class="fas fa-search"></i>
+                <span>Search</span>
+              </button>
+            </div>
+            <div class="search-info">
+              <span class="search-debounce-info">Search will trigger automatically after typing stops</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Container -->
+        <div class="users-results-container">
+          <!-- Loading State -->
+          <div id="users-loading" class="users-loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading users...</p>
+          </div>
+
+          <!-- Search Results -->
+          <div id="users-search-results" class="users-search-results" style="display: none;">
+            <div class="users-results-header">
+              <h3><i class="fas fa-search"></i> Search Results</h3>
+              <button id="back-to-all-users" class="back-to-all-btn">
+                <i class="fas fa-arrow-left"></i>
+                <span>Back to All Users</span>
+              </button>
+            </div>
+            <div id="users-search-list" class="users-grid">
+              <!-- Search results will be populated here -->
+            </div>
+          </div>
+
+          <!-- All Users -->
+          <div id="users-all-container" class="users-all-container">
+            <div class="users-all-header">
+              <h3><i class="fas fa-users"></i> All Users</h3>
+              <div class="users-stats">
+                <span class="users-count">Total Users: <span id="total-users-count">0</span></span>
+              </div>
+            </div>
+            
+            <!-- Pagination Controls -->
+            <div class="users-pagination">
+              <button id="users-prev-page" class="pagination-btn" disabled>
+                <i class="fas fa-chevron-left"></i>
+                <span>Previous</span>
+              </button>
+              <div class="pagination-info">
+                <span>Page <span id="current-page">1</span> of <span id="total-pages">1</span></span>
+              </div>
+              <button id="users-next-page" class="pagination-btn">
+                <span>Next</span>
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+
+            <!-- Users Grid -->
+            <div id="users-grid" class="users-grid">
+              <!-- Users will be populated here -->
+            </div>
+          </div>
+
+          <!-- No Results State -->
+          <div id="users-no-results" class="users-no-results" style="display: none;">
+            <div class="no-results-icon">
+              <i class="fas fa-search"></i>
+            </div>
+            <h3>No Users Found</h3>
+            <p>Try adjusting your search terms or browse all users instead.</p>
+            <button id="browse-all-users" class="browse-all-btn">
+              <i class="fas fa-users"></i>
+              <span>Browse All Users</span>
+            </button>
+          </div>
+
+          <!-- Error State -->
+          <div id="users-error" class="users-error" style="display: none;">
+            <div class="error-icon">
+              <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3>Something went wrong</h3>
+            <p id="users-error-message">An error occurred while loading users.</p>
+            <button id="users-retry-btn" class="retry-btn">
+              <i class="fas fa-redo"></i>
+              <span>Try Again</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Levels Section -->
+      <section id="levels-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1><i class="fas fa-level-up-alt"></i> Levels & Progression</h1>
+          <div class="dashboard-divider"></div>
+          <p class="dashboard-welcome">
+            Track your server activity level, view the leaderboard, and exchange your earned levels for tokens!
+          </p>
+        </div>
+
+        <!-- Guest Message -->
+        <div id="levels-guest-message" class="guest-message" style="display: none;">
+          <div class="levels-guest-message-content">
+            <i class="fas fa-level-up-alt"></i>
+            <h2>Login Required</h2>
+            <p>Please log in with Discord to view your level progression and exchange levels for tokens.</p>
+            <button class="login-button" onclick="redirectToLogin()">
+              <i class="fab fa-discord"></i>
+              Login with Discord
+            </button>
+          </div>
+        </div>
+
+        <!-- Levels Content (only shown when logged in) -->
+        <div id="levels-content" class="levels-content" style="display: none;">
+          
+          <!-- Levels Tabs -->
+          <div class="levels-tabs">
+            <button class="levels-tab active" data-tab="rank">
+              <i class="fas fa-user"></i>
+              <span>My Rank</span>
+            </button>
+            <button class="levels-tab" data-tab="leaderboard">
+              <i class="fas fa-trophy"></i>
+              <span>Leaderboard</span>
+            </button>
+            <button class="levels-tab" data-tab="blupee-leaderboard">
+              <i class="fas fa-rabbit"></i>
+              <span>Blupee Hunters</span>
+            </button>
+            <button class="levels-tab" data-tab="exchange">
+              <i class="fas fa-exchange-alt"></i>
+              <span>Exchange</span>
+            </button>
+          </div>
+
+          <!-- Rank Tab -->
+          <div class="levels-tab-content active" id="rank-tab">
+            <div class="level-rank-container">
+              <!-- User Level Card -->
+              <div class="level-card">
+                <div class="level-card-header">
+                  <div class="level-card-icon">
+                    <i class="fas fa-star"></i>
+                  </div>
+                  <div class="level-card-info">
+                    <h3>Your Level</h3>
+                    <p class="level-number" id="user-level">Loading...</p>
+                  </div>
+                </div>
+                <div class="level-card-body">
+                  <div class="level-stat">
+                    <span class="level-stat-label">Rank</span>
+                    <span class="level-stat-value" id="user-rank">-</span>
+                  </div>
+                  <div class="level-stat">
+                    <span class="level-stat-label">Total XP</span>
+                    <span class="level-stat-value" id="user-xp">-</span>
+                  </div>
+                  <div class="level-stat">
+                    <span class="level-stat-label">Messages</span>
+                    <span class="level-stat-value" id="user-messages">-</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Progress Card -->
+              <div class="level-card">
+                <div class="level-card-header">
+                  <div class="level-card-icon">
+                    <i class="fas fa-chart-line"></i>
+                  </div>
+                  <div class="level-card-info">
+                    <h3>Progress to Next Level</h3>
+                    <p class="level-next" id="next-level-text">Level 2</p>
+                  </div>
+                </div>
+                <div class="level-card-body">
+                  <div class="level-progress-bar-container">
+                    <div class="level-progress-bar">
+                      <div class="level-progress-fill" id="level-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="level-progress-text">
+                      <span id="level-progress-percentage">0%</span>
+                      <span id="level-progress-amount">0 / 0 XP</span>
+                    </div>
+                  </div>
+                  <div class="level-import-info" id="level-import-info" style="display: none;">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Imported from MEE6 (Level <span id="imported-level">-</span>)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Exchange Preview Card -->
+              <div class="level-card">
+                <div class="level-card-header">
+                  <div class="level-card-icon">
+                    <i class="fas fa-coins"></i>
+                  </div>
+                  <div class="level-card-info">
+                    <h3>Exchange Preview</h3>
+                    <p class="level-subtitle">Convert levels to tokens</p>
+                  </div>
+                </div>
+                <div class="level-card-body">
+                  <div class="level-stat">
+                    <span class="level-stat-label">Exchangeable Levels</span>
+                    <span class="level-stat-value highlight" id="exchangeable-levels">-</span>
+                  </div>
+                  <div class="level-stat">
+                    <span class="level-stat-label">Potential Tokens</span>
+                    <span class="level-stat-value highlight" id="potential-tokens">-</span>
+                  </div>
+                  <button class="level-exchange-preview-btn" onclick="levelsModule.switchTab('exchange')">
+                    <i class="fas fa-exchange-alt"></i>
+                    Go to Exchange
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Leaderboard Tab -->
+          <div class="levels-tab-content" id="leaderboard-tab">
+            <div class="leaderboard-container">
+              <div class="leaderboard-header">
+                <h3><i class="fas fa-trophy"></i> Top Yappers</h3>
+                <div class="leaderboard-controls">
+                  <select id="leaderboard-limit" onchange="levelsModule.changeLeaderboardLimit(this.value)">
+                    <option value="10" selected>Top 10</option>
+                    <option value="25">Top 25</option>
+                    <option value="50">Top 50</option>
+                  </select>
+                </div>
+              </div>
+              <div class="leaderboard-list" id="leaderboard-list">
+                <!-- Leaderboard entries will be loaded here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Blupee Leaderboard Tab -->
+          <div class="levels-tab-content" id="blupee-leaderboard-tab">
+            <div class="leaderboard-container">
+              <div class="leaderboard-header">
+                <h3><i class="fas fa-rabbit"></i> Top Blupee Hunters</h3>
+                <div class="leaderboard-controls">
+                  <select id="blupee-leaderboard-limit" onchange="levelsModule.changeBlupeeLeaderboardLimit(this.value)">
+                    <option value="10" selected>Top 10</option>
+                    <option value="25">Top 25</option>
+                    <option value="50">Top 50</option>
+                  </select>
+                </div>
+              </div>
+              <div class="leaderboard-list" id="blupee-leaderboard-list">
+                <!-- Blupee leaderboard entries will be loaded here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Exchange Tab -->
+          <div class="levels-tab-content" id="exchange-tab">
+            <div class="exchange-container">
+              <div class="exchange-header">
+                <h3><i class="fas fa-exchange-alt"></i> Exchange Levels for Tokens</h3>
+                <p>Convert your earned levels into tokens to spend in the village shops!</p>
+              </div>
+              
+              <div class="exchange-info-cards">
+                <div class="exchange-info-card">
+                  <div class="exchange-info-icon">
+                    <i class="fas fa-level-up-alt"></i>
+                  </div>
+                  <div class="exchange-info-content">
+                    <h4>Current Level</h4>
+                    <p class="exchange-info-value" id="exchange-current-level">-</p>
+                  </div>
+                </div>
+                
+                <div class="exchange-info-card">
+                  <div class="exchange-info-icon">
+                    <i class="fas fa-history"></i>
+                  </div>
+                  <div class="exchange-info-content">
+                    <h4>Last Exchanged Level</h4>
+                    <p class="exchange-info-value" id="exchange-last-level">-</p>
+                  </div>
+                </div>
+                
+                <div class="exchange-info-card highlight">
+                  <div class="exchange-info-icon">
+                    <i class="fas fa-arrow-circle-up"></i>
+                  </div>
+                  <div class="exchange-info-content">
+                    <h4>Exchangeable Levels</h4>
+                    <p class="exchange-info-value" id="exchange-available-levels">-</p>
+                  </div>
+                </div>
+                
+                <div class="exchange-info-card highlight">
+                  <div class="exchange-info-icon">
+                    <i class="fas fa-coins"></i>
+                  </div>
+                  <div class="exchange-info-content">
+                    <h4>Tokens You'll Receive</h4>
+                    <p class="exchange-info-value" id="exchange-tokens-receive">-</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="exchange-rate-info">
+                <i class="fas fa-info-circle"></i>
+                <span>Exchange Rate: <strong>1 Level = 100 Tokens</strong></span>
+              </div>
+
+              <div class="exchange-action">
+                <button class="exchange-btn" id="exchange-btn" onclick="levelsModule.performExchange()" disabled>
+                  <i class="fas fa-exchange-alt"></i>
+                  <span>Exchange Levels</span>
+                </button>
+                <p class="exchange-note" id="exchange-note">Level up more to exchange levels for tokens!</p>
+              </div>
+
+              <div class="exchange-history">
+                <h4><i class="fas fa-history"></i> Exchange History</h4>
+                <div class="exchange-history-stats">
+                  <div class="exchange-stat">
+                    <span class="exchange-stat-label">Total Levels Exchanged</span>
+                    <span class="exchange-stat-value" id="total-levels-exchanged">-</span>
+                  </div>
+                  <div class="exchange-stat">
+                    <span class="exchange-stat-label">Current Token Balance</span>
+                    <span class="exchange-stat-value" id="current-token-balance">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Loading State -->
+        <div id="levels-loading" class="loading-state" style="display: none;">
+          <div class="loading-spinner"></div>
+          <p>Loading level data...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="levels-error" class="error-state" style="display: none;">
+          <i class="fas fa-exclamation-circle"></i>
+          <p>Failed to load level data</p>
+          <button class="retry-button" onclick="levelsModule.loadLevelData()">Retry</button>
+        </div>
+
+        <!-- User Details Modal -->
+        <div id="user-details-modal" class="user-details-modal">
+          <div class="user-details-modal-content">
+            <div class="user-details-modal-header">
+              <button class="user-details-modal-close" onclick="levelsModule.closeUserDetailsModal()">
+                <i class="fas fa-times"></i>
+              </button>
+              <div class="user-details-modal-avatar">
+                <img id="user-details-avatar" src="/images/ankleicon.png" alt="User Avatar">
+              </div>
+              <div class="user-details-modal-user-info">
+                <h3 class="user-details-modal-username" id="user-details-username">Username</h3>
+                <p class="user-details-modal-level" id="user-details-level-header">Level 0</p>
+              </div>
+            </div>
+            <div class="user-details-modal-body">
+              <!-- Rank Badge -->
+              <div class="user-details-rank-badge" id="user-details-rank-badge">
+                <i class="fas fa-medal"></i>
+                <span id="user-details-rank-text">Rank #0</span>
+              </div>
+
+              <!-- Statistics Section -->
+              <div class="user-details-section">
+                <h4 class="user-details-section-title">
+                  <i class="fas fa-chart-bar"></i>
+                  Statistics
+                </h4>
+                <div class="user-details-stats-grid">
+                  <div class="user-details-stat-card">
+                    <p class="user-details-stat-label">Current Level</p>
+                    <p class="user-details-stat-value highlight" id="user-details-level">0</p>
+                  </div>
+                  <div class="user-details-stat-card">
+                    <p class="user-details-stat-label">Total XP</p>
+                    <p class="user-details-stat-value" id="user-details-xp">0</p>
+                  </div>
+                  <div class="user-details-stat-card">
+                    <p class="user-details-stat-label">Total Messages</p>
+                    <p class="user-details-stat-value" id="user-details-messages">0</p>
+                  </div>
+                  <div class="user-details-stat-card">
+                    <p class="user-details-stat-label">Server Rank</p>
+                    <p class="user-details-stat-value" id="user-details-rank">0</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Progress Section -->
+              <div class="user-details-section">
+                <h4 class="user-details-section-title">
+                  <i class="fas fa-chart-line"></i>
+                  Progress to Next Level
+                </h4>
+                <div class="user-details-progress-section">
+                  <div class="user-details-progress-header">
+                    <span class="user-details-progress-label">Current Progress</span>
+                    <span class="user-details-progress-next-level" id="user-details-next-level">Level 0</span>
+                  </div>
+                  <div class="user-details-progress-bar">
+                    <div class="user-details-progress-fill" id="user-details-progress-fill" style="width: 0%;"></div>
+                  </div>
+                  <div class="user-details-progress-text">
+                    <span id="user-details-progress-percentage">0%</span>
+                    <span id="user-details-progress-amount">0 / 0 XP</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Exchange Confirmation Modal -->
+        <div id="exchange-modal" class="exchange-modal">
+          <div class="exchange-modal-content">
+            <div class="exchange-modal-header">
+              <div class="exchange-modal-icon">
+                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+              </div>
+              <h3>Confirm Exchange</h3>
+            </div>
+            <div class="exchange-modal-body">
+              <p>Are you sure you want to exchange your levels for tokens? <strong>This action cannot be undone.</strong></p>
+              <div class="exchange-modal-details">
+                <div class="exchange-modal-detail">
+                  <span class="exchange-modal-detail-label">Levels to Exchange:</span>
+                  <span class="exchange-modal-detail-value" id="modal-levels-to-exchange">-</span>
+                </div>
+                <div class="exchange-modal-detail">
+                  <span class="exchange-modal-detail-label">Tokens to Receive:</span>
+                  <span class="exchange-modal-detail-value highlight" id="modal-tokens-to-receive">-</span>
+                </div>
+              </div>
+              <div class="exchange-modal-warning">
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                <span>Your level progress will be reset, but you'll keep your current level.</span>
+              </div>
+            </div>
+            <div class="exchange-modal-actions">
+              <button class="exchange-modal-btn exchange-modal-btn-cancel" onclick="levelsModule.closeExchangeModal()">
+                <i class="fas fa-times"></i>
+                <span>Cancel</span>
+              </button>
+              <button class="exchange-modal-btn exchange-modal-btn-confirm" onclick="levelsModule.confirmExchange()">
+                <i class="fas fa-check"></i>
+                <span>Confirm Exchange</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Calendar Section -->
+      <section id="calendar-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1>Calendar</h1>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div class="calendar-container">
+          <!-- Calendar Overview -->
+          <div class="calendar-overview">
+            <div class="calendar-stats">
+              <div class="calendar-stat-item">
+                <span class="calendar-stat-label">Today's Date</span>
+                <span class="stat-value" id="today-date">Loading...</span>
+                <span class="stat-subtitle">Real-world calendar</span>
+              </div>
+              <div class="calendar-stat-item">
+                <span class="calendar-stat-label">Hyrulean Date</span>
+                <span class="stat-value" id="hyrulean-month">Loading...</span>
+                <span class="stat-subtitle">In World calendar of Hyrule</span>
+              </div>
+              <div class="calendar-stat-item">
+                <span class="calendar-stat-label">Blood Moon Cycle</span>
+                <span class="stat-value" id="blood-moon-cycle">Loading...</span>
+                <span class="stat-subtitle">26-day lunar cycle</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Calendar Tabs -->
+          <div class="calendar-tabs">
+            <button class="calendar-tab active" data-tab="monthly">
+              <i class="fas fa-calendar-alt"></i>
+              <span>Monthly View</span>
+            </button>
+            <button class="calendar-tab" data-tab="birthdays">
+              <i class="fas fa-birthday-cake"></i>
+              <span>Birthdays</span>
+            </button>
+            <button class="calendar-tab" data-tab="hyrulean">
+              <i class="fas fa-moon"></i>
+              <span>Hyrulean Calendar</span>
+            </button>
+            <button class="calendar-tab" data-tab="bloodmoon">
+              <i class="fas fa-moon"></i>
+              <span>Blood Moon</span>
+            </button>
+          </div>
+
+          <!-- Calendar Content -->
+          <div class="calendar-content">
+            <!-- Monthly View Tab -->
+            <div class="calendar-tab-content active" id="monthly-tab">
+              <div class="monthly-calendar-container">
+                <div class="calendar-header">
+                  <div class="calendar-navigation">
+                    <button class="calendar-nav-btn" id="prev-month">
+                      <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <div class="calendar-title">
+                      <h3 id="current-month-year">December 2024</h3>
+                      <p id="current-hyrulean-date">Loading...</p>
+                    </div>
+                    <button class="calendar-nav-btn" id="next-month">
+                      <i class="fas fa-chevron-right"></i>
+                    </button>
+                  </div>
+                  <div class="calendar-controls">
+                    <button class="calendar-control-btn" id="today-btn">
+                      <i class="fas fa-home"></i>
+                      Today
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="calendar-grid">
+                  <div class="calendar-weekdays">
+                    <div class="weekday">Sun</div>
+                    <div class="weekday">Mon</div>
+                    <div class="weekday">Tue</div>
+                    <div class="weekday">Wed</div>
+                    <div class="weekday">Thu</div>
+                    <div class="weekday">Fri</div>
+                    <div class="weekday">Sat</div>
+                  </div>
+                  <div class="calendar-days" id="calendar-days">
+                    <!-- Calendar days will be dynamically generated here -->
+                  </div>
+                </div>
+                
+                <div class="calendar-events" id="calendar-events">
+                  <h4>Events This Month</h4>
+                  <div class="events-list">
+                    <!-- Events will be dynamically loaded here -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Birthdays Tab -->
+            <div class="calendar-tab-content" id="birthdays-tab">
+              <div class="birthdays-container">
+                <div class="birthdays-header">
+                  <h3><i class="fas fa-birthday-cake"></i> Upcoming Birthdays</h3>
+                  <p>Celebrate with your fellow adventurers</p>
+                </div>
+                <div id="birthdays-list" class="birthdays-list">
+                  <!-- Birthdays will be dynamically loaded here -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Hyrulean Calendar Tab -->
+            <div class="calendar-tab-content" id="hyrulean-tab">
+              <div class="hyrulean-container">
+                <div class="hyrulean-header">
+                  <h3><i class="fas fa-calendar-alt"></i> Hyrulean Calendar</h3>
+                  <p>In World calendar of Hyrule</p>
+                </div>
+                <div class="hyrulean-calendar-grid" id="hyrulean-calendar">
+                  <!-- Hyrulean calendar will be dynamically loaded here -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Blood Moon Tab -->
+            <div class="calendar-tab-content" id="bloodmoon-tab">
+              <div class="bloodmoon-container">
+                <div class="bloodmoon-header">
+                  <h3><i class="fas fa-moon"></i> Blood Moon Cycle</h3>
+                  <p>Track the ominous Blood Moon</p>
+                </div>
+                <div class="bloodmoon-info" id="bloodmoon-info">
+                  <!-- Blood moon info will be dynamically loaded here -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Relationships Section -->
+      <section id="relationships-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1><i class="fas fa-heart"></i> Relationships</h1>
+          <div class="dashboard-divider"></div>
+          <p class="dashboard-welcome">
+            Manage relationships between your characters and other characters in the world.
+          </p>
+        </div>
+
+        <!-- Guest Message -->
+        <div id="relationships-guest-message" class="guest-message" style="display: none;">
+          <div class="relationship-guest-message-content">
+            <i class="fas fa-heart"></i>
+            <h2>Login Required</h2>
+            <p>Please log in with Discord to manage character relationships.</p>
+                    <button class="login-button" onclick="redirectToLogin()">
+          <i class="fab fa-discord"></i>
+          Login with Discord
+        </button>
+          </div>
+        </div>
+
+        <!-- Character Selection -->
+        <div id="relationships-character-selection" class="relationships-character-selection" style="display: none;">
+          <div class="character-selection-header">
+            <h2>Select a Character</h2>
+            <p>Choose which character to manage relationships for</p>
+            <div class="character-selection-actions">
+              <button class="view-all-relationships-btn" onclick="console.log('Button clicked'); console.log('relationshipsModule:', typeof relationshipsModule); console.log('relationshipsModule keys:', Object.keys(relationshipsModule || {})); console.log('showAllRelationships:', typeof relationshipsModule?.showAllRelationships); console.log('showAllRelationships function:', relationshipsModule?.showAllRelationships); try { if (relationshipsModule && typeof relationshipsModule.showAllRelationships === 'function') { console.log('Calling showAllRelationships...'); relationshipsModule.showAllRelationships(); console.log('showAllRelationships called successfully'); } else { console.error('relationshipsModule or showAllRelationships not available'); } } catch (error) { console.error('Error calling showAllRelationships:', error); }">
+                <i class="fas fa-globe"></i>
+                View All Characters' Relationships
+              </button>
+            </div>
+          </div>
+          <div id="relationships-character-grid" class="relationship-character-grid">
+            <!-- Character cards will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Relationships Management -->
+        <div id="relationships-management" class="relationships-management" style="display: none;">
+          <div class="relationships-header">
+            <div class="relationships-header-main">
+              <div class="selected-character-info">
+                <img id="relationships-character-avatar" src="/images/ankleicon.png" alt="Character Avatar" class="relationships-character-avatar" />
+                <div class="selected-character-details">
+                  <h2 id="relationships-character-name">Character Name</h2>
+                  <div id="relationships-character-details" class="relationships-character-details">
+                    <span id="relationships-character-race-job">Race • Job</span>
+                    <span id="relationships-character-village">Village</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="relationships-header-actions">
+              <button class="back-to-characters" onclick="relationshipsModule.backToCharacterSelection()">
+                <i class="fas fa-arrow-left"></i>
+                Back to Characters
+              </button>
+              <button class="add-relationship-btn" onclick="relationshipsModule.showAddRelationshipModal()">
+                <i class="fas fa-plus"></i>
+                Add Relationship
+              </button>
+            </div>
+          </div>
+
+          <div id="relationships-list" class="relationships-list">
+            <!-- Relationships will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="relationships-loading" class="loading-state" style="display: none;">
+          <div class="loading-spinner"></div>
+          <p>Loading relationships...</p>
+        </div>
+
+        <!-- All Relationships View -->
+        <div id="relationships-all-view" class="relationships-all-view" style="display: none;">
+          <div class="relationships-all-header">
+            <div class="relationships-all-header-main">
+              <h2><i class="fas fa-globe"></i> All Characters' Relationships</h2>
+              <p>View relationships between all characters in the world</p>
+            </div>
+            <div class="relationships-all-header-actions">
+              <button class="back-to-my-characters-btn" onclick="relationshipsModule.backToCharacterSelection()">
+                <i class="fas fa-users"></i>
+                Back to My Characters
+              </button>
+              <button class="view-relationship-web-btn" onclick="relationshipsModule.showRelationshipWeb()">
+                <i class="fas fa-project-diagram"></i>
+                View Relationship Web
+              </button>
+              <button class="back-to-list-btn" onclick="relationshipsModule.backToRelationshipList()">
+                <i class="fas fa-list"></i>
+                Back to List
+              </button>
+            </div>
+          </div>
+          <div id="relationships-all-list" class="relationships-all-list">
+            <!-- All relationships will be loaded here -->
+          </div>
+          <div class="relationship-web-view" style="display: none;">
+            <div class="relationship-web-header">
+              <div class="header-left">
+                <h3><i class="fas fa-project-diagram"></i> Relationship Web</h3>
+              </div>
+              <div class="header-right">
+              </div>
+              <div class="relationship-web-header-actions" id="web-controls">
+                <div class="control-group">
+                  <label class="toggle-isolated-btn">
+                    <input type="checkbox" id="show-isolated-characters" checked>
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">Show Isolated Characters</span>
+                  </label>
+                  <button class="web-control-btn" onclick="relationshipsModule.spreadOutCharacters()" title="Spread Out">
+                    <i class="fas fa-expand-arrows-alt"></i>
+                    Spread Out
+                  </button>
+                  <button class="web-control-btn" onclick="relationshipsModule.toggleRelationshipAttraction()" title="Toggle Attraction">
+                    <i class="fas fa-magnet"></i>
+                    Attraction
+                  </button>
+                  <button class="web-control-btn" onclick="relationshipsModule.toggleLayoutFreeze()" title="Freeze Layout">
+                    <i class="fas fa-lock"></i>
+                    Freeze
+                  </button>
+                  <button class="web-control-btn" onclick="relationshipsModule.toggleUserCharacters()" title="My Characters">
+                    <i class="fas fa-user"></i>
+                    My Characters
+                  </button>
+                  <button class="web-control-btn" onclick="relationshipsModule.toggleRelationshipLines()" title="Toggle Relationship Lines">
+                    <i class="fas fa-project-diagram"></i>
+                    Hide Lines
+                  </button>
+                  <button class="web-control-btn" onclick="relationshipsModule.toggleNodeLabels()" title="Toggle Character Names">
+                    <i class="fas fa-tag"></i>
+                    Hide Names
+                  </button>
+                  <button class="web-control-btn" onclick="relationshipsModule.resetZoom()" title="Reset Zoom">
+                    <i class="fas fa-search"></i>
+                    Reset Zoom
+                  </button>
+                  <button class="web-control-btn" onclick="relationshipsModule.centerView()" title="Center View">
+                    <i class="fas fa-crosshairs"></i>
+                    Center View
+                  </button>
+                  <button class="relationship-web-back-btn" onclick="relationshipsModule.toggleFullscreen()" title="Exit Fullscreen">
+                    <i class="fas fa-compress"></i>
+                    Exit Fullscreen
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="relationship-web-legend">
+              <div class="legend-header">
+                <span class="legend-title">Legend</span>
+              </div>
+              <div class="legend-content" id="legend-content">
+                <div class="legend-row">
+                  <span class="legend-label">Relationships:</span>
+                  <div class="legend-items">
+                    <span class="legend-item"><span class="legend-color lovers"></span>Lovers</span>
+                    <span class="legend-item"><span class="legend-color crush"></span>Crush</span>
+                    <span class="legend-item"><span class="legend-color close-friend"></span>Close Friend</span>
+                    <span class="legend-item"><span class="legend-color friend"></span>Friend</span>
+                    <span class="legend-item"><span class="legend-color acquaintance"></span>Acquaintance</span>
+                    <span class="legend-item"><span class="legend-color dislike"></span>Dislike</span>
+                    <span class="legend-item"><span class="legend-color hate"></span>Hate</span>
+                    <span class="legend-item"><span class="legend-color neutral"></span>Neutral</span>
+                    <span class="legend-item"><span class="legend-color family"></span>Family</span>
+                    <span class="legend-item"><span class="legend-color rival"></span>Rival</span>
+                    <span class="legend-item"><span class="legend-color admire"></span>Admire</span>
+                    <span class="legend-item"><span class="legend-color other"></span>Other</span>
+                  </div>
+                </div>
+                <div class="legend-row">
+                  <span class="legend-label">Nodes:</span>
+                  <div class="legend-items">
+                    <span class="legend-item"><span class="legend-color user-character"></span>My Characters</span>
+                    <span class="legend-item"><span class="legend-color connected"></span>Has Relationships</span>
+                    <span class="legend-item"><span class="legend-color isolated"></span>No Relationships</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="relationship-web-container">
+              <button class="fullscreen-btn-overlay" onclick="relationshipsModule.toggleFullscreen()" title="Toggle Fullscreen">
+                <i class="fas fa-expand"></i>
+                FULLSCREEN
+              </button>
+              <canvas id="relationship-web-canvas"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="relationships-error" class="error-state" style="display: none;">
+          <i class="fas fa-exclamation-circle"></i>
+          <p>Failed to load relationships</p>
+          <button class="retry-button" onclick="relationshipsModule.loadRelationships()">Retry</button>
+        </div>
+      </section>
+
+
+      <!-- Suggestion Box Section -->
+      <section id="suggestion-box-section" class="section" style="display:none;">
+        <div class="dashboard-header">
+          <h1><i class="fas fa-lightbulb"></i> Suggestion Box</h1>
+          <div class="dashboard-divider"></div>
+          <p class="dashboard-welcome">
+            Have an idea to improve the server? Want to see more XYZ? Think there's a problem you're too shy to send in FAQs or to admin? Use this suggestion box! 
+            <br><br>
+            <em>Login with Discord to submit your suggestions and help improve our community.</em>
+          </p>
+        </div>
+
+        <div class="suggestion-box-container">
+          <div class="suggestion-form-wrapper">
+            <form id="suggestion-form" class="suggestion-form">
+                          <div class="form-group">
+                            <label for="suggestion-category">Category</label>
+                            <select id="suggestion-category" name="category" required>
+                              <option value="">Select a category</option>
+                              <option value="features">New Features</option>
+                              <option value="improvements">Server Improvements</option>
+                              <option value="mechanics">Game Mechanics</option>
+                              <option value="jobs">Job System</option>
+                              <option value="mounts">Mounts & Pets</option>
+                              <option value="exploration">Exploration & Expeditions</option>
+                              <option value="events">Event Suggestions</option>
+                              <option value="content">Content Ideas</option>
+                              <option value="chat">Chat & Channels</option>
+                              <option value="moderation">Moderation & Rules</option>
+                              <option value="bugs">Bug Reports</option>
+                              <option value="accessibility">Accessibility</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+
+                          <div class="form-group">
+                            <label for="suggestion-title">Title</label>
+                            <input type="text" id="suggestion-title" name="title" placeholder="Brief description of your idea or issue" required maxlength="100" autocomplete="off" inputmode="text">
+                          </div>
+
+                          <div class="form-group">
+                            <label for="suggestion-description">Description</label>
+                            <textarea id="suggestion-description" name="description" placeholder="Detailed explanation of your idea, suggestion, or issue..." required rows="4" maxlength="1000" inputmode="text"></textarea>
+                            <div class="char-count">
+                              <span id="char-count">0</span>/1000 characters
+                            </div>
+                          </div>
+
+
+
+                                        <div class="form-actions">
+                            <button type="submit" class="submit-suggestion-btn" aria-label="Submit suggestion">
+                              <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                              <span class="btn-text">Submit Suggestion</span>
+                            </button>
+                            <button type="reset" class="reset-form-btn" aria-label="Reset suggestion form">
+                              <i class="fas fa-undo" aria-hidden="true"></i>
+                              <span class="btn-text">Reset Form</span>
+                            </button>
+                          </div>
+            </form>
+          </div>
+
+          <div class="suggestion-info">
+            <div class="info-card">
+              <h3><i class="fas fa-info-circle"></i> How It Works</h3>
+              <ul>
+                <li>All suggestions are submitted anonymously</li>
+                <li>You must be logged in with Discord to submit</li>
+                <li>You must be a member of the Discord server</li>
+                <li>We review every suggestion carefully</li>
+                <li>Popular ideas may be implemented in future updates</li>
+                <li>You can submit multiple suggestions</li>
+                <li>Perfect for server improvements, new features, or reporting issues</li>
+              </ul>
+            </div>
+
+            <div class="info-card">
+              <h3><i class="fas fa-lightbulb"></i> Tips for Great Suggestions</h3>
+              <ul>
+                <li>Be specific and detailed about your idea</li>
+                <li>Explain the problem you're solving or improvement you want</li>
+                <li>Consider how it benefits the server community</li>
+                <li>No links or URLs are allowed in suggestions</li>
+                <li>All suggestions remain completely anonymous</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Success Message Modal -->
+        <div id="suggestion-success" class="suggestion-modal">
+          <div class="modal-content">
+            <button class="modal-close" aria-label="Close success message">
+              <i class="fas fa-times"></i>
+            </button>
+            <div class="modal-body">
+              <i class="fas fa-check-circle"></i>
+              <h3>Submitted Successfully!</h3>
+              <p>Your anonymous suggestion has been submitted successfully! We'll review it and respond in the server.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Message Modal -->
+        <div id="suggestion-error" class="suggestion-error-modal" style="display: none;">
+          <div class="modal-content">
+            <button class="modal-close" aria-label="Close error message">
+              <i class="fas fa-times"></i>
+            </button>
+            <div class="modal-body">
+              <i class="fas fa-exclamation-triangle"></i>
+              <h3>Submission Error</h3>
+              <p>There was an error submitting your suggestion. Please try again.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Member Lore Submission Section -->
+      <section id="member-lore-section" class="section" style="display:none;">
+        <div class="dashboard-header">
+          <h1><i class="fas fa-scroll"></i> Member Lore Submission</h1>
+          <div class="dashboard-divider"></div>
+          <p class="memberlore-welcome">
+            Fill this out to submit your own lore for the Roots of the Wild world! Please keep these things in mind:
+            <br><br>
+            <strong>1.</strong> Please have your lore concise and to the point for ease of reading and adding to the website.
+            <br>
+            <strong>2.</strong> Submit lore that is open enough for other members to not use if they choose not to.
+            <br>
+            <strong>3.</strong> Alternatively, submit lore that you'd be willing to have others build upon and/or mods have to change a bit.
+            <br>
+            <strong>4.</strong> Mods may deny lore that veers too heavily into something we'd want to review on a case by case basis.
+            <br><br>
+            <em>Login with Discord to submit your lore and help expand the Roots of the Wild universe.</em>
+          </p>
+        </div>
+
+        <div class="lore-box-container">
+          <div class="lore-form-wrapper">
+            <form id="lore-form" class="lore-form">
+              <div class="form-group">
+                <label for="lore-member-name">Member Name</label>
+                <input type="text" id="lore-member-name" name="memberName" placeholder="Your Discord username or character name" required maxlength="50" autocomplete="off" inputmode="text">
+              </div>
+
+              <div class="form-group">
+                <label for="lore-topic">What overall topic does your lore pertain to?</label>
+                <input type="text" id="lore-topic" name="topic" placeholder="Ex; Sheikah, blacksmiths, the outer rings of Vhintl, etc." required maxlength="100" autocomplete="off" inputmode="text">
+                <small style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.25rem;">Brief answers here please, just for people perusing the site to quickly see topics of interest.</small>
+              </div>
+
+              <div class="form-group">
+                <label for="lore-description">Lore Description</label>
+                <textarea id="lore-description" name="description" placeholder="Here you can write the full overview of the lore. Please restrict it to no more than 3 paragraphs - less is better! Further details can be included in character's backstories." required rows="6" maxlength="1500" inputmode="text"></textarea>
+                <div class="lore-char-count">
+                  <span id="lore-char-count">0</span>/1500 characters
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="submit-lore-btn" aria-label="Submit lore">
+                  <i class="fas fa-scroll" aria-hidden="true"></i>
+                  <span class="btn-text">Submit Lore</span>
+                </button>
+                <button type="reset" class="reset-form-btn" aria-label="Reset lore form">
+                  <i class="fas fa-undo" aria-hidden="true"></i>
+                  <span class="btn-text">Reset Form</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="lore-info">
+            <div class="info-card">
+              <h3><i class="fas fa-info-circle"></i> How It Works</h3>
+              <ul>
+                <li>All lore submissions are reviewed by moderators</li>
+                <li>You must be logged in with Discord to submit</li>
+                <li>You must be a member of the Discord server</li>
+                <li>Lore should be concise and well-written</li>
+                <li>Keep lore open for others to use or build upon</li>
+                <li>Mods may request changes or deny inappropriate content</li>
+                <li>Help expand the Roots of the Wild universe</li>
+              </ul>
+            </div>
+
+            <div class="info-card">
+              <h3><i class="fas fa-scroll"></i> Tips for Great Lore</h3>
+              <ul>
+                <li>Keep it concise - 3 paragraphs maximum</li>
+                <li>Make it open for others to use or ignore</li>
+                <li>Be willing to let others build upon your ideas</li>
+                <li>Focus on world-building and atmosphere</li>
+                <li>Avoid overly specific or restrictive lore</li>
+                <li>Consider how it fits with existing lore</li>
+                <li>Write in a style that matches the world's tone</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Success Message Modal -->
+        <div id="lore-success" class="lore-modal">
+          <div class="modal-content">
+            <button class="modal-close" aria-label="Close success message">
+              <i class="fas fa-times"></i>
+            </button>
+            <div class="modal-body">
+              <i class="fas fa-scroll"></i>
+              <h3>Submitted Successfully!</h3>
+              <p>Your lore has been submitted for review! We'll review it and respond in the server.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Message Modal -->
+        <div id="lore-error" class="lore-modal" style="display: none;">
+          <div class="modal-overlay"></div>
+          <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">
+              <h3>Submission Error</h3>
+              <button class="modal-close" aria-label="Close error message">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="modal-icon">
+                <i class="fas fa-exclamation-triangle" style="color: #e74c3c;"></i>
+              </div>
+              <p>There was an error submitting your lore. Please try again.</p>
+            </div>
+            <div class="modal-footer">
+              <button class="modal-ok-btn" style="background: #e74c3c;">OK</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Gallery Section -->
+      <section id="gallery-section" class="section" style="display:none;">
+        <div class="dashboard-header">
+          <h1><i class="fas fa-images"></i> Gallery</h1>
+          <div class="dashboard-divider"></div>
+          <p class="dashboard-welcome">
+            Browse approved art and writing submissions from the community.
+          </p>
+        </div>
+
+        <div class="gallery-container">
+          <!-- Filter Controls -->
+          <div class="gallery-filters"></div>
+
+          <!-- Gallery Sections -->
+          <div class="gallery-sections" id="gallery-sections">
+            <div class="gallery-loading">
+              <i class="fas fa-spinner fa-spin"></i>
+              <p>Loading gallery...</p>
+            </div>
+          </div>
+
+          <!-- Pagination -->
+          <div class="gallery-pagination" id="gallery-pagination" style="display: none;">
+            <button id="prev-page" class="btn btn-secondary" disabled>
+              <i class="fas fa-chevron-left"></i> Previous
+            </button>
+            <span id="page-info">Page 1 of 1</span>
+            <button id="next-page" class="btn btn-secondary" disabled>
+              Next <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Section -->
+      <section id="settings-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1><i class="fas fa-cog"></i> Settings</h1>
+          <div class="dashboard-divider"></div>
+          <p class="dashboard-welcome">
+            Customize your dashboard experience with these personal preferences and settings.
+          </p>
+        </div>
+
+        <div class="settings-container">
+          <!-- Theme & Appearance -->
+          <div class="settings-category">
+            <div class="settings-category-header">
+              <h2><i class="fas fa-palette"></i> Theme & Appearance</h2>
+              <p>Customize the look and feel of your dashboard</p>
+            </div>
+            <div class="settings-grid">
+              <div class="setting-item">
+                <label for="theme-select">Theme</label>
+                <select id="theme-select" class="setting-input">
+                  <option value="auto">Auto (System Preference)</option>
+                  <option value="light">Light Mode</option>
+                  <option value="dark" selected>Dark Mode</option>
+                  <option value="rudania">Rudania (Dark Red)</option>
+                  <option value="inariko">Inariko (Dark Blue)</option>
+                  <option value="vhintl">Vhintl (Dark Green)</option>
+                </select>
+                <small>Choose your preferred color scheme and village theme</small>
+              </div>
+              <div class="setting-item">
+                <label for="font-size">Font Size</label>
+                <select id="font-size" class="setting-input">
+                  <option value="small">Small</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="large">Large</option>
+                  <option value="extra-large">Extra Large</option>
+                </select>
+                <small>Adjust text size for better readability</small>
+              </div>
+              <div class="setting-item">
+                <label for="high-contrast">High Contrast Mode</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="high-contrast" class="toggle-input">
+                  <span class="toggle-slider"></span>
+                </div>
+                <small>Enhanced contrast for better accessibility</small>
+              </div>
+            </div>
+            
+            <!-- Theme Preview -->
+            <div class="theme-preview">
+              <h3>Theme Preview</h3>
+              <div class="theme-preview-grid">
+                <div class="theme-preview-card" data-theme="light">
+                  <div class="preview-header">
+                    <div class="preview-dot light"></div>
+                    <span>Light</span>
+                  </div>
+                  <div class="preview-content">
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                  </div>
+                </div>
+                <div class="theme-preview-card" data-theme="dark">
+                  <div class="preview-header">
+                    <div class="preview-dot dark"></div>
+                    <span>Dark</span>
+                  </div>
+                  <div class="preview-content">
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                  </div>
+                </div>
+                <div class="theme-preview-card" data-theme="rudania">
+                  <div class="preview-header">
+                    <div class="preview-dot rudania"></div>
+                    <span>Rudania</span>
+                  </div>
+                  <div class="preview-content">
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                  </div>
+                </div>
+                <div class="theme-preview-card" data-theme="inariko">
+                  <div class="preview-header">
+                    <div class="preview-dot inariko"></div>
+                    <span>Inariko</span>
+                  </div>
+                  <div class="preview-content">
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                  </div>
+                </div>
+                <div class="theme-preview-card" data-theme="vhintl">
+                  <div class="preview-header">
+                    <div class="preview-dot vhintl"></div>
+                    <span>Vhintl</span>
+                  </div>
+                  <div class="preview-content">
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                    <div class="preview-item"></div>
+                  </div>
+                </div>
+              </div>
+              <small>Click on a theme preview to apply it instantly</small>
+            </div>
+          </div>
+
+          <!-- Performance & Animation -->
+          <div class="settings-category">
+            <div class="settings-category-header">
+              <h2><i class="fas fa-tachometer-alt"></i> Performance & Animation</h2>
+              <p>Optimize performance and customize animations</p>
+            </div>
+            <div class="settings-grid">
+              <div class="setting-item">
+                <label for="image-quality">Image Quality</label>
+                <select id="image-quality" class="setting-input">
+                  <option value="high">High Quality</option>
+                  <option value="medium" selected>Medium Quality</option>
+                  <option value="low">Low Quality (Faster Loading)</option>
+                </select>
+                <small>Balance between image quality and loading speed</small>
+              </div>
+              <div class="setting-item">
+                <label for="animation-speed">Animation Speed</label>
+                <select id="animation-speed" class="setting-input">
+                  <option value="fast">Fast</option>
+                  <option value="normal" selected>Normal</option>
+                  <option value="slow">Slow</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+                <small>Control animation speed or disable them entirely</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Data Display -->
+          <div class="settings-category">
+            <div class="settings-category-header">
+              <h2><i class="fas fa-chart-bar"></i> Data Display</h2>
+              <p>Customize how data is formatted and displayed</p>
+            </div>
+            <div class="settings-grid">
+              <div class="setting-item">
+                <label for="date-format">Date Format</label>
+                <select id="date-format" class="setting-input">
+                  <option value="MM/DD/YYYY">MM/DD/YYYY (US)</option>
+                  <option value="DD/MM/YYYY">DD/MM/YYYY (EU)</option>
+                  <option value="YYYY-MM-DD">YYYY-MM-DD (ISO)</option>
+                  <option value="DD MMM YYYY">DD MMM YYYY (Readable)</option>
+                </select>
+                <small>Choose your preferred date format</small>
+              </div>
+              <div class="setting-item">
+                <label for="timezone">Time Zone</label>
+                <select id="timezone" class="setting-input">
+                  <option value="auto">Auto (Browser Default)</option>
+                  <option value="UTC">UTC</option>
+                  <option value="America/New_York">Eastern Time</option>
+                  <option value="America/Chicago">Central Time</option>
+                  <option value="America/Denver">Mountain Time</option>
+                  <option value="America/Los_Angeles">Pacific Time</option>
+                  <option value="Europe/London">London</option>
+                  <option value="Europe/Paris">Paris</option>
+                  <option value="Asia/Tokyo">Tokyo</option>
+                </select>
+                <small>Set your preferred timezone for displaying times</small>
+              </div>
+              <div class="setting-item">
+                <label for="currency-format">Currency Format</label>
+                <select id="currency-format" class="setting-input">
+                  <option value="USD">$1,234.56 (USD)</option>
+                  <option value="EUR">€1.234,56 (EUR)</option>
+                  <option value="GBP">£1,234.56 (GBP)</option>
+                  <option value="JPY">¥1,235 (JPY)</option>
+                </select>
+                <small>Format for displaying item prices and economy values</small>
+              </div>
+              <div class="setting-item">
+                <label for="number-format">Number Formatting</label>
+                <select id="number-format" class="setting-input">
+                  <option value="comma">1,234,567 (Comma Separated)</option>
+                  <option value="space">1 234 567 (Space Separated)</option>
+                  <option value="period">1.234.567 (Period Separated)</option>
+                  <option value="compact">1.2M (Compact)</option>
+                </select>
+                <small>How to display large numbers</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- List Preferences -->
+          <div class="settings-category">
+            <div class="settings-category-header">
+              <h2><i class="fas fa-list"></i> List Preferences</h2>
+              <p>Customize how lists and data tables are displayed</p>
+            </div>
+            <div class="settings-grid">
+              <div class="setting-item">
+                <label for="items-per-page">Items Per Page</label>
+                <select id="items-per-page" class="setting-input">
+                  <option value="12">12 items</option>
+                  <option value="24" selected>24 items</option>
+                  <option value="48">48 items</option>
+                  <option value="96">96 items</option>
+                  <option value="all">Show All</option>
+                </select>
+                <small>Number of items to display per page in lists</small>
+              </div>
+              <div class="setting-item">
+                <label for="default-sort">Default Sort Order</label>
+                <select id="default-sort" class="setting-input">
+                  <option value="name-asc">Name (A-Z)</option>
+                  <option value="name-desc">Name (Z-A)</option>
+                  <option value="date-asc">Date (Oldest First)</option>
+                  <option value="date-desc" selected>Date (Newest First)</option>
+                  <option value="rarity-asc">Rarity (Low to High)</option>
+                  <option value="rarity-desc">Rarity (High to Low)</option>
+                </select>
+                <small>Default sorting for characters, items, and other lists</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notifications -->
+          <div class="settings-category">
+            <div class="settings-category-header">
+              <h2><i class="fas fa-bell"></i> Notifications</h2>
+              <p>Configure bot event notifications and alerts</p>
+            </div>
+            <div class="settings-grid">
+              <div class="setting-item">
+                <label for="blood-moon-alerts">Blood Moon Alerts</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="blood-moon-alerts" class="toggle-input">
+                  <span class="toggle-slider"></span>
+                </div>
+                <small>Get notified at midnight the day before Blood Moon starts at 8pm</small>
+              </div>
+              <div class="setting-item">
+                <label for="daily-reset-reminders">Daily Reset Reminders</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="daily-reset-reminders" class="toggle-input">
+                  <span class="toggle-slider"></span>
+                </div>
+                <small>Get notified at 8am EST when daily stamina resets</small>
+              </div>
+              <div class="setting-item">
+                <label for="weather-notifications">Weather Notifications</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="weather-notifications" class="toggle-input">
+                  <span class="toggle-slider"></span>
+                </div>
+                <small>Notify about special weather events</small>
+              </div>
+              <div class="setting-item">
+                <label for="character-week-updates">Character of the Week</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="character-week-updates" class="toggle-input">
+                  <span class="toggle-slider"></span>
+                </div>
+                <small>Get notified when Character of the Week changes</small>
+              </div>
+            </div>
+            <div class="notification-dm-warning">
+              <i class="fas fa-info-circle"></i>
+              <div>
+                <strong>Important:</strong> Discord DMs must be enabled to receive notifications. 
+                If you don't receive a confirmation message when enabling these settings, the bot cannot send you DMs. 
+                This usually happens if:
+                <ul>
+                  <li>You have DMs disabled in your Discord privacy settings</li>
+                  <li>You've blocked DMs from this server</li>
+                  <li>You're not in the Roots of the Wild server</li>
+                </ul>
+                To fix: Go to Server Settings → Privacy Settings → Enable "Allow direct messages from server members"
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="settings-actions">
+            <button id="save-settings" class="settings-btn primary">
+              <i class="fas fa-save"></i>
+              Save Settings
+            </button>
+            <button id="reset-settings" class="settings-btn secondary">
+              <i class="fas fa-undo"></i>
+              Reset to Defaults
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Inventory Section -->
+
+
+  <!-- Footer -->
+  <footer class="main-footer" role="contentinfo">
+    <div class="footer-content">
+      <div class="footer-section">
+        <h4>Tinglebot Dashboard</h4>
+        <p>Manage, explore, and analyze your Tinglebot data models, stats, and more.</p>
+      </div>
+      <div class="footer-section">
+        <h4>Quick Links</h4>
+        <ul>
+          <li><a href="/">Dashboard</a></li>
+          <li><a href="/login">Login</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="/privacy">Privacy Policy</a></li>
+          <li><a href="/contact">Contact Us</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2025 Tinglebot Dashboard. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Back to Top Button -->
+  <button id="backToTop" class="back-to-top" aria-label="Back to top">
+    <i class="fas fa-arrow-up" aria-hidden="true"></i>
+  </button>
+
+  <!-- All Scripts Loaded at Bottom for Performance -->
+  <script type="module" src="js/ui.js"></script>
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/characters.js"></script>
+  <script type="module" src="js/items.js"></script>
+  <script type="module" src="js/inventory.js"></script>
+  <script type="module" src="js/stats.js"></script>
+  <script type="module" src="js/weather.js"></script>
+  <script type="module" src="js/weatherStats.js"></script>
+  <script type="module" src="js/guilds.js"></script>
+  <script type="module" src="js/calendar.js"></script>
+  <script type="module" src="js/index.js?v=20251114"></script>
+  <script src="js/databaseEditor.js"></script>
+  <script src="js/villageShopsAdmin.js"></script>
+  <script src="js/countdown.js"></script>
+  <script src="js/debug.js"></script>
+  <script type="module" src="js/characterOfWeek.js"></script>
+  <script type="module" src="js/monsters.js"></script>
+  <script type="module" src="js/users.js"></script>
+      <script src="js/relationships.js?v=1.0.1"></script>
+  <script src="js/blupee.js"></script>
+      <script type="module" src="js/suggestions.js"></script>
+      <script type="module" src="js/memberLore.js"></script>
+      <script type="module" src="js/settings.js"></script>
+      <script type="module" src="js/levels.js"></script>
+      <script type="module" src="js/gallery.js"></script>
+  
+  <!-- Performance and Error Handling Script -->
+  <script src="js/performance.js"></script>
+</body>
+</html>

@@ -267,6 +267,122 @@ function convertCmToFeetInches(heightInCm) {
 
 
 // ============================================================================
+// Vending Validation Functions
+// ------------------- Validate Vending Item -------------------
+// Validates that a vending item has required fields and pricing information.
+function validateVendingItem(item, vendorType) {
+    const errors = [];
+    
+    if (!item || !item.itemName) {
+        errors.push('Item name is required');
+    }
+    
+    if (!item.slot) {
+        errors.push('Slot is required');
+    }
+    
+    if (!item.stockQty || item.stockQty <= 0) {
+        errors.push('Stock quantity must be greater than 0');
+    }
+    
+    // Price validation
+    const pricingErrors = validateVendingPrices(item);
+    if (pricingErrors.length > 0) {
+        errors.push(...pricingErrors);
+    }
+    
+    return {
+        valid: errors.length === 0,
+        errors: errors
+    };
+}
+
+// ------------------- Validate Vending Prices -------------------
+// Validates that at least one price is set for a vending item.
+function validateVendingPrices(item) {
+    const errors = [];
+    
+    if (!item) {
+        errors.push('Item is required');
+        return errors;
+    }
+    
+    const hasTokenPrice = item.tokenPrice !== null && item.tokenPrice !== undefined && item.tokenPrice !== 0 && item.tokenPrice !== 'N/A';
+    const hasArtPrice = item.artPrice !== null && item.artPrice !== undefined && item.artPrice !== '' && item.artPrice !== 'N/A';
+    const hasOtherPrice = item.otherPrice !== null && item.otherPrice !== undefined && item.otherPrice !== '' && item.otherPrice !== 'N/A';
+    const hasBarterOpen = item.barterOpen === true || item.tradesOpen === true;
+    
+    if (!hasTokenPrice && !hasArtPrice && !hasOtherPrice && !hasBarterOpen) {
+        errors.push('At least one price type must be set (token price, art price, other price, or barter must be open)');
+    }
+    
+    return errors;
+}
+
+// ------------------- Validate Vending Location -------------------
+// Validates that vendor and buyer location rules are followed based on job type.
+function validateVendingLocation(vendor, buyer) {
+    if (!vendor || !buyer) {
+        return {
+            valid: false,
+            error: 'Vendor and buyer information required'
+        };
+    }
+    
+    const vendorJob = vendor.job?.toLowerCase();
+    const vendorCurrentVillage = vendor.currentVillage?.toLowerCase();
+    const vendorHomeVillage = vendor.homeVillage?.toLowerCase();
+    const buyerCurrentVillage = buyer.currentVillage?.toLowerCase();
+    
+    // Shopkeeper restrictions
+    if (vendorJob === 'shopkeeper') {
+        const vendorInHomeVillage = vendorCurrentVillage === vendorHomeVillage;
+        const buyerInVendorHome = buyerCurrentVillage === vendorHomeVillage;
+        
+        // Shopkeepers can only sell when:
+        // 1. Vendor is in home village (selling to anyone)
+        // 2. Buyer is in vendor's home village (visiting vendor's shop)
+        if (!vendorInHomeVillage && !buyerInVendorHome) {
+            return {
+                valid: false,
+                error: 'Shopkeepers can only sell when they are in their home village or when buyers visit their home village',
+                vendorLocation: vendor.currentVillage,
+                buyerLocation: buyer.currentVillage,
+                vendorHome: vendor.homeVillage
+            };
+        }
+        
+        // If vendor is outside home village, block sale (they can't sell while traveling)
+        if (!vendorInHomeVillage) {
+            return {
+                valid: false,
+                error: 'Shopkeepers cannot sell while traveling outside their home village',
+                vendorLocation: vendor.currentVillage,
+                vendorHome: vendor.homeVillage
+            };
+        }
+    }
+    // Merchant restrictions
+    else if (vendorJob === 'merchant') {
+        // Merchants can sell anywhere, but buyer must be in same village as vendor
+        if (vendorCurrentVillage !== buyerCurrentVillage) {
+            return {
+                valid: false,
+                error: 'You must be in the same village as the merchant to make a purchase',
+                vendorLocation: vendor.currentVillage,
+                buyerLocation: buyer.currentVillage
+            };
+        }
+    }
+    
+    // If we get here, location is valid
+    return {
+        valid: true,
+        error: null
+    };
+}
+
+// ============================================================================
 // Module Exports
 // ------------------- Exporting all validation functions -------------------
 module.exports = {
@@ -284,5 +400,8 @@ module.exports = {
     getRaceValueByName,
     isValidImageUrl,
     convertCmToFeetInches,
-    characterExistsNotOwned
+    characterExistsNotOwned,
+    validateVendingItem,
+    validateVendingPrices,
+    validateVendingLocation
 };
