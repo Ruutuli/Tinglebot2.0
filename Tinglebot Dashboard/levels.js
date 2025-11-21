@@ -1,6 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const User = require('../../models/UserModel');
+const User = require('../models/UserModel');
 const { getUserLevelInfo, createProgressBar, getLeaderboard } = require('../../modules/levelingModule');
 const { connectToTinglebot } = require('../../database/db');
 

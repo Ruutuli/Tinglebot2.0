@@ -5,7 +5,9 @@ const { Schema } = mongoose;
 // Define Discovery Schema for the discoveries array
 const DiscoverySchema = new Schema({
   type: { type: String, required: true },
-  number: { type: String, required: false }
+  number: { type: String, required: false },
+  discoveredBy: { type: String, default: '' }, // Discord ID of discoverer
+  discoveredAt: { type: Date, default: Date.now }
 });
 
 // Define Quadrant Schema with an array of discoveries
@@ -13,17 +15,95 @@ const QuadrantSchema = new Schema({
   quadrantId: { type: String, required: true }, // e.g., Q1, Q2, etc.
   status: { type: String, enum: ['inaccessible', 'unexplored', 'explored', 'secured'], default: 'unexplored' },
   blighted: { type: Boolean, default: false }, // Boolean field for blighted status
-  discoveries: [DiscoverySchema] // Array of objects using the DiscoverySchema
+  discoveries: [DiscoverySchema], // Array of objects using the DiscoverySchema
+  exploredBy: { type: String, default: '' }, // Discord ID of explorer
+  exploredAt: { type: Date, default: null }
 });
 
-// Define Square Schema, including image URL
+// Define Square Schema, including image URL and map coordinates
 const SquareSchema = new Schema({
   squareId: { type: String, required: true, unique: true }, // e.g., A1, B2, etc.
   region: { type: String, required: true },
   status: { type: String, enum: ['inaccessible', 'explorable'], required: true },
   quadrants: [QuadrantSchema],
-  image: { type: String, required: true } // Field to store image URL
+  image: { type: String, required: true }, // Field to store image URL
+  
+  // Interactive map coordinates
+  mapCoordinates: {
+    center: {
+      lat: { type: Number, default: 0 },
+      lng: { type: Number, default: 0 }
+    },
+    bounds: {
+      north: { type: Number, default: 0 },
+      south: { type: Number, default: 0 },
+      east: { type: Number, default: 0 },
+      west: { type: Number, default: 0 }
+    }
+  },
+  
+  // Map display properties
+  displayProperties: {
+    visible: { type: Boolean, default: true },
+    opacity: { type: Number, default: 1, min: 0, max: 1 },
+    zIndex: { type: Number, default: 0 }
+  },
+  
+  // Metadata
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
+
+// Update timestamp before saving
+SquareSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
+
+// Static methods for map functionality
+SquareSchema.statics.getVisibleSquares = function() {
+  return this.find({ 'displayProperties.visible': true }).sort({ 'displayProperties.zIndex': 1, squareId: 1 });
+};
+
+SquareSchema.statics.getByRegion = function(region) {
+  return this.find({ region: region, 'displayProperties.visible': true }).sort({ squareId: 1 });
+};
+
+SquareSchema.statics.getExploredSquares = function() {
+  return this.find({ 
+    'quadrants.status': { $in: ['explored', 'secured'] },
+    'displayProperties.visible': true 
+  }).sort({ squareId: 1 });
+};
+
+SquareSchema.statics.getBlightedSquares = function() {
+  return this.find({ 
+    'quadrants.blighted': true,
+    'displayProperties.visible': true 
+  }).sort({ squareId: 1 });
+};
+
+// Instance methods
+SquareSchema.methods.getTotalDiscoveries = function() {
+  let total = 0;
+  this.quadrants.forEach(quadrant => {
+    total += quadrant.discoveries.length;
+  });
+  return total;
+};
+
+SquareSchema.methods.getExplorationProgress = function() {
+  const totalQuadrants = this.quadrants.length;
+  const exploredQuadrants = this.quadrants.filter(q => 
+    q.status === 'explored' || q.status === 'secured'
+  ).length;
+  
+  return {
+    explored: exploredQuadrants,
+    total: totalQuadrants,
+    percentage: totalQuadrants > 0 ? Math.round((exploredQuadrants / totalQuadrants) * 100) : 0
+  };
+};
 
 // Export as 'exploringMap' collection
 module.exports = mongoose.model('Square', SquareSchema, 'exploringMap');

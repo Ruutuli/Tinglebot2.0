@@ -21,7 +21,7 @@ const { extractSpreadsheetId } = require('./googleSheetsUtils');
 // ============================================================================
 // Database Models
 // ------------------- Importing database models -------------------
-const generalCategories = require('../models/GeneralItemCategories');
+const generalCategories = require('../../models/GeneralItemCategories');
 
 // Initialize database connection function
 function initializeDbConnection(dbConnectFn) {

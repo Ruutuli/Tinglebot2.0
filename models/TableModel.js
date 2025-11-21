@@ -17,4 +17,3 @@ TableSchema.pre('save', function (next) {
 
 // ------------------- Export the model -------------------
 module.exports = mongoose.model('Table', TableSchema);
-

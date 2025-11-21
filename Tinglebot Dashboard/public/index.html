@@ -217,6 +217,9 @@
           <li>
             <a href="#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a>
           </li>
+          <li>
+            <a href="#vending-section" data-section="vending-section"><i class="fas fa-store"></i><span>Vending</span></a>
+          </li>
           <li id="admin-area-nav-item" style="display: none;">
             <a href="#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a>
           </li>
@@ -786,6 +789,41 @@
               </div>
             </div>
           </div>
+
+          <!-- Vending Management Section -->
+          <div class="profile-vending-section" style="margin-top: 2rem;">
+            <div class="profile-vending-header">
+              <h3><i class="fas fa-store"></i> Vending Shops</h3>
+              <div style="display: flex; align-items: center; gap: 1rem;">
+                <div class="profile-vending-info" id="profile-vending-info" style="display: none;">
+                  <span id="vending-characters-count">0</span> vendor characters
+                </div>
+                <button id="manage-vending-shops-btn" class="btn-primary" style="
+                  padding: 0.5rem 1rem;
+                  background: var(--primary-color);
+                  color: white;
+                  border: none;
+                  border-radius: 0.5rem;
+                  cursor: pointer;
+                  font-size: 0.9rem;
+                  display: flex;
+                  align-items: center;
+                  gap: 0.5rem;
+                  transition: background 0.2s;
+                  font-weight: 500;
+                " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'" title="Open full vending management page">
+                  <i class="fas fa-cog"></i>
+                  Manage Shops
+                </button>
+              </div>
+            </div>
+            <div class="profile-vending-container" id="profile-vending-container">
+              <div class="profile-vending-loading" id="profile-vending-loading">
+                <div class="loading-spinner"></div>
+                <p>Loading your vending shops...</p>
+              </div>
+            </div>
+          </div>
           
           <!-- User Characters Section -->
           <div class="profile-characters-section">
@@ -800,6 +838,30 @@
                 <div class="loading-spinner"></div>
                 <p>Loading your characters...</p>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vending Management Section -->
+      <section id="vending-section" style="display:none;">
+        <div class="dashboard-header">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <h1><i class="fas fa-store"></i> Vending Shop Management</h1>
+          </div>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div class="vending-management-container">
+          <div class="vending-header-info" style="margin-bottom: 2rem; padding: 1.5rem; background: var(--card-bg); border-radius: 0.5rem; border: 1px solid var(--border-color);">
+            <h2 style="margin: 0 0 0.5rem 0; color: var(--text-color);">Manage Your Vending Shops</h2>
+            <p style="margin: 0; color: var(--text-secondary);">
+              Manage inventory, prices, and settings for all your vendor characters. Add items, update stock quantities, set prices, and organize your shop slots.
+            </p>
+          </div>
+          <div class="vending-shops-container" id="vending-shops-container">
+            <div class="vending-shops-loading" id="vending-shops-loading">
+              <div class="loading-spinner"></div>
+              <p>Loading your vending shops...</p>
             </div>
           </div>
         </div>

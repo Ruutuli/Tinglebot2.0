@@ -692,6 +692,8 @@ function setupSidebarNavigation() {
         showDashboardSection();
       } else if (sectionId === 'profile-section') {
         showProfileSection();
+      } else if (sectionId === 'vending-section') {
+        showVendingSection();
       } else if (sectionId === 'guilds-section') {
         showGuildSection();
       } else if (sectionId === 'calendar-section') {
@@ -737,6 +739,8 @@ function setupSidebarNavigation() {
         showDashboardSection();
       } else if (section === 'profile-section') {
         showProfileSection();
+      } else if (section === 'vending-section') {
+        showVendingSection();
       } else if (section === 'guilds-section') {
         showGuildSection();
       } else if (section === 'calendar-section') {
@@ -801,6 +805,8 @@ function setupSidebarNavigation() {
       showDashboardSection();
     } else if (hashValue === 'profile-section') {
       showProfileSection();
+    } else if (hashValue === 'vending' || hashValue === 'vending-section') {
+      showVendingSection();
     } else if (hashValue === 'guilds-section') {
       showGuildSection();
     } else if (hashValue === 'calendar-section') {
@@ -1246,6 +1252,62 @@ function showDashboardSection() {
 // ------------------- Profile Navigation -------------------
 // Handles profile page navigation specifically
 // ============================================================================
+// ------------------- Function: showVendingSection -------------------
+// Shows the vending management section
+function showVendingSection() {
+  // Scroll to top when showing vending section
+  scrollToTop();
+  
+  // Hide all main content sections
+  const mainContent = document.querySelector('.main-content');
+  const sections = mainContent.querySelectorAll('section, #model-details-page');
+  
+  sections.forEach(section => {
+    section.style.display = 'none';
+  });
+  
+  // Show the vending section
+  const vendingSection = document.getElementById('vending-section');
+  if (vendingSection) {
+    vendingSection.style.display = 'block';
+    
+    // Load vending shops
+    import('./profile.js?v=20251114').then(profileModule => {
+      if (profileModule.loadVendingShops) {
+        // Load vending shops into the vending section container
+        profileModule.loadVendingShops({
+          containerId: 'vending-shops-container',
+          loadingId: 'vending-shops-loading',
+          infoId: 'vending-header-info',
+          countId: 'vending-characters-count-full'
+        });
+      }
+    }).catch(err => {
+      console.error('[index.js]: Error loading vending module:', err);
+    });
+  }
+  
+  // Update active state in sidebar
+  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+  sidebarLinks.forEach(link => {
+    const linkSection = link.getAttribute('data-section');
+    const listItem = link.closest('li');
+    if (listItem) {
+      if (linkSection === 'vending-section') {
+        listItem.classList.add('active');
+      } else {
+        listItem.classList.remove('active');
+      }
+    }
+  });
+  
+  // Update breadcrumb
+  const breadcrumb = document.querySelector('.breadcrumb');
+  if (breadcrumb) {
+    breadcrumb.textContent = 'Vending Management';
+  }
+}
+
 function showProfileSection() {
   // Scroll to top when showing profile section
   scrollToTop();

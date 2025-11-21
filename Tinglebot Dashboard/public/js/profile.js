@@ -98,6 +98,9 @@ async function loadProfileData() {
 
     // Load quest activity overview
     await loadQuestOverview();
+
+    // Load vending shops
+    await loadVendingShops();
     
   } catch (error) {
     console.error('[profile.js]: ❌ Error loading profile data:', error);
@@ -2104,6 +2107,18 @@ function setupProfileEventListeners() {
     exportAllBtn.addEventListener('click', handleExportAllUserData);
   }
   
+  // Manage vending shops button
+  const manageVendingBtn = document.getElementById('manage-vending-shops-btn');
+  if (manageVendingBtn) {
+    manageVendingBtn.addEventListener('click', () => {
+      window.location.hash = '#vending';
+      const navEvent = new CustomEvent('navigateToSection', { 
+        detail: { section: 'vending-section' } 
+      });
+      document.dispatchEvent(navEvent);
+    });
+  }
+  
   // Nickname editing buttons
   const editNicknameBtn = document.getElementById('edit-nickname-btn');
   const saveNicknameBtn = document.getElementById('save-nickname-btn');
@@ -2578,6 +2593,725 @@ function formatCharacterIconUrl(icon) {
 }
 
 // ============================================================================
+// ------------------- Section: Vending Management -------------------
+// Handles vending shop inventory management
+// ============================================================================
+
+// ------------------- Function: loadVendingShops -------------------
+// Loads and displays all vendor characters and their inventories
+// Accepts optional container IDs for use in different sections
+async function loadVendingShops(options = {}) {
+  try {
+    const containerId = options.containerId || 'profile-vending-container';
+    const loadingId = options.loadingId || 'profile-vending-loading';
+    const infoId = options.infoId || 'profile-vending-info';
+    const countId = options.countId || 'vending-characters-count';
+    
+    const vendingContainer = document.getElementById(containerId);
+    const vendingLoading = document.getElementById(loadingId);
+    const vendingInfo = document.getElementById(infoId);
+    const vendingCharactersCount = document.getElementById(countId);
+
+    if (!vendingContainer) {
+      console.warn(`[profile.js] ⚠️ Vending container (${containerId}) not found in DOM`);
+      return;
+    }
+    
+    // Create loading element if it doesn't exist
+    let loadingElement = vendingLoading;
+    if (!loadingElement && vendingContainer) {
+      loadingElement = document.createElement('div');
+      loadingElement.id = loadingId;
+      loadingElement.className = 'profile-vending-loading';
+      loadingElement.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); gap: 1rem;';
+      loadingElement.innerHTML = '<div class="loading-spinner"></div><p>Loading your vending shops...</p>';
+    }
+
+    if (loadingElement) {
+      loadingElement.style.display = 'flex';
+      vendingContainer.innerHTML = '';
+      vendingContainer.appendChild(loadingElement);
+    } else {
+      vendingContainer.innerHTML = '<div class="loading-spinner"></div><p>Loading your vending shops...</p>';
+    }
+
+    // Get user's characters
+    const response = await fetch('/api/user/characters', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const { data: characters } = await response.json();
+
+    // Filter vendor characters (shopkeeper or merchant)
+    const vendorCharacters = characters.filter(char => 
+      char.vendorType && (char.vendorType.toLowerCase() === 'shopkeeper' || char.vendorType.toLowerCase() === 'merchant')
+    );
+
+    if (loadingElement) {
+      loadingElement.style.display = 'none';
+    }
+
+    if (vendorCharacters.length === 0) {
+      vendingContainer.innerHTML = `
+        <div class="profile-no-vending">
+          <i class="fas fa-store-slash"></i>
+          <h4>No Vending Shops</h4>
+          <p>You don't have any characters set up as vendors. Characters need to be Shopkeepers or Merchants to manage vending shops.</p>
+        </div>
+      `;
+      if (vendingInfo) {
+        vendingInfo.style.display = 'none';
+      }
+      return;
+    }
+
+    // Update count
+    if (vendingCharactersCount) {
+      vendingCharactersCount.textContent = vendorCharacters.length;
+    }
+    if (vendingInfo) {
+      vendingInfo.style.display = 'block';
+    }
+
+    // Create vendor cards
+    const vendorGrid = document.createElement('div');
+    vendorGrid.className = 'profile-vending-grid';
+    vendorGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 1.5rem; margin-top: 1rem;';
+
+    for (const character of vendorCharacters) {
+      const vendorCard = await createVendorCard(character);
+      vendorGrid.appendChild(vendorCard);
+    }
+
+    vendingContainer.appendChild(vendorGrid);
+
+  } catch (error) {
+    console.error('[profile.js]: ❌ Error loading vending shops:', error);
+    const vendingContainer = document.getElementById('profile-vending-container');
+    if (vendingContainer) {
+      vendingContainer.innerHTML = `
+        <div class="profile-no-vending">
+          <i class="fas fa-exclamation-triangle"></i>
+          <h4>Error Loading Vending Shops</h4>
+          <p>Failed to load your vending shops. Please try refreshing the page.</p>
+        </div>
+      `;
+    }
+  }
+}
+
+// ------------------- Function: createVendorCard -------------------
+// Creates a card displaying vendor character and their inventory
+async function createVendorCard(character) {
+  const card = document.createElement('div');
+  card.className = 'profile-vendor-card';
+  card.style.cssText = `
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  `;
+
+  // Calculate slot info
+  const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+  const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+  const baseSlots = baseSlotLimits[character.vendorType?.toLowerCase()] || 0;
+  const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+  const totalSlots = baseSlots + extraSlots;
+
+  // Fetch vending inventory
+  let inventoryData = null;
+  let usedSlots = 0;
+  try {
+    const inventoryResponse = await fetch(`/api/characters/${character._id}/vending`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (inventoryResponse.ok) {
+      const data = await inventoryResponse.json();
+      inventoryData = data;
+      usedSlots = data.character.slots.used || 0;
+    }
+  } catch (error) {
+    console.error(`[profile.js]: Error fetching inventory for ${character.name}:`, error);
+  }
+
+  const availableSlots = totalSlots - usedSlots;
+  const iconUrl = formatCharacterIconUrl(character.icon);
+
+  card.innerHTML = `
+    <div class="vendor-card-header" style="display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+      <img src="${iconUrl}" alt="${character.name}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color);" onerror="this.src='/images/ankleicon.png'">
+      <div style="flex: 1;">
+        <h4 style="margin: 0 0 0.25rem 0; color: var(--text-color); font-size: 1.2rem;">${character.name}</h4>
+        <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+          ${capitalize(character.vendorType || 'Vendor')} • ${capitalize(character.shopPouch || 'No')} Pouch
+        </p>
+      </div>
+    </div>
+    <div class="vendor-card-stats" style="display: flex; gap: 1rem; padding: 0.75rem 0;">
+      <div style="flex: 1; text-align: center; padding: 0.5rem; background: var(--input-bg); border-radius: 0.25rem;">
+        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Vending Points</div>
+        <div style="font-size: 1.2rem; font-weight: 600; color: var(--text-color);">${(character.vendingPoints || 0).toLocaleString()}</div>
+      </div>
+      <div style="flex: 1; text-align: center; padding: 0.5rem; background: var(--input-bg); border-radius: 0.25rem;">
+        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Slots</div>
+        <div style="font-size: 1.2rem; font-weight: 600; color: var(--text-color);">
+          ${usedSlots}/${totalSlots}
+        </div>
+        <div style="font-size: 0.75rem; color: ${availableSlots > 0 ? 'var(--success-color)' : 'var(--error-color)'}; margin-top: 0.25rem;">
+          ${availableSlots} available
+        </div>
+      </div>
+    </div>
+    <div class="vendor-card-inventory" style="max-height: 300px; overflow-y: auto;">
+      <div id="vendor-inventory-${character._id}" style="display: flex; flex-direction: column; gap: 0.5rem;">
+        ${inventoryData && inventoryData.items.length > 0 ? 
+          inventoryData.items.map(item => `
+            <div class="vendor-item" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--input-bg); border-radius: 0.25rem; border: 1px solid var(--border-color);">
+              <div style="flex: 1;">
+                <div style="font-weight: 500; color: var(--text-color); margin-bottom: 0.25rem;">${escapeHtmlAttribute(item.itemName)}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                  Stock: ${item.stockQty} 
+                  ${item.tokenPrice !== null && item.tokenPrice !== undefined ? `• ${item.tokenPrice} tokens` : ''}
+                  ${item.artPrice ? `• ${escapeHtmlAttribute(item.artPrice)} art` : ''}
+                  ${item.otherPrice ? `• ${escapeHtmlAttribute(item.otherPrice)}` : ''}
+                </div>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="edit-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
+                  padding: 0.5rem;
+                  background: var(--primary-color);
+                  color: white;
+                  border: none;
+                  border-radius: 0.25rem;
+                  cursor: pointer;
+                  font-size: 0.9rem;
+                  transition: background 0.2s;
+                " title="Edit item">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="delete-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
+                  padding: 0.5rem;
+                  background: var(--error-color);
+                  color: white;
+                  border: none;
+                  border-radius: 0.25rem;
+                  cursor: pointer;
+                  font-size: 0.9rem;
+                  transition: background 0.2s;
+                " title="Delete item">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          `).join('') : 
+          '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No items in inventory</div>'
+        }
+      </div>
+    </div>
+    <div class="vendor-card-actions" style="display: flex; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+      <button class="add-vendor-item-btn" data-character-id="${character._id}" style="
+        flex: 1;
+        padding: 0.75rem;
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'">
+        <i class="fas fa-plus"></i>
+        Add Item
+      </button>
+      <button class="manage-vendor-btn" data-character-id="${character._id}" style="
+        padding: 0.75rem 1rem;
+        background: var(--card-bg);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--card-bg)'">
+        <i class="fas fa-cog"></i>
+        Manage
+      </button>
+    </div>
+  `;
+
+  // Add event listeners
+  const addBtn = card.querySelector('.add-vendor-item-btn');
+  addBtn?.addEventListener('click', () => showAddVendorItemModal(character));
+
+  const editButtons = card.querySelectorAll('.edit-vendor-item-btn');
+  editButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const characterId = btn.dataset.characterId;
+      const itemId = btn.dataset.itemId;
+      const item = inventoryData.items.find(i => i._id === itemId);
+      if (item) {
+        await showEditVendorItemModal(character, item);
+      }
+    });
+  });
+
+  const deleteButtons = card.querySelectorAll('.delete-vendor-item-btn');
+  deleteButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const characterId = btn.dataset.characterId;
+      const itemId = btn.dataset.itemId;
+      if (confirm('Are you sure you want to delete this item from your vending inventory?')) {
+        await deleteVendorItem(characterId, itemId);
+      }
+    });
+  });
+
+  return card;
+}
+
+// ------------------- Function: showAddVendorItemModal -------------------
+// Shows a modal to add a new item to vending inventory
+function showAddVendorItemModal(character) {
+  const modal = document.createElement('div');
+  modal.className = 'character-modal';
+  modal.style.zIndex = '10001';
+
+  const modalContent = document.createElement('div');
+  modalContent.className = 'character-modal-content';
+  modalContent.style.maxWidth = '600px';
+
+  modalContent.innerHTML = `
+    <div class="character-modal-header">
+      <h2 style="margin: 0; color: var(--text-color); font-size: 1.5rem;">
+        <i class="fas fa-plus"></i> Add Item to ${character.name}'s Shop
+      </h2>
+      <button class="close-modal">&times;</button>
+    </div>
+    <div class="character-modal-body">
+      <form id="add-vendor-item-form" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <div class="form-group">
+          <label for="item-name" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Item Name *
+          </label>
+          <input type="text" id="item-name" name="itemName" required
+            placeholder="Enter item name"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="stock-qty" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Stock Quantity *
+          </label>
+          <input type="number" id="stock-qty" name="stockQty" required min="1"
+            placeholder="Enter stock quantity"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="token-price" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Token Price
+          </label>
+          <input type="number" id="token-price" name="tokenPrice" min="0" step="0.01"
+            placeholder="Enter token price (optional)"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="art-price" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Art Price
+          </label>
+          <input type="text" id="art-price" name="artPrice"
+            placeholder="Enter art price (optional)"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="other-price" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Other Price
+          </label>
+          <input type="text" id="other-price" name="otherPrice"
+            placeholder="Enter other price (optional)"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="slot" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Slot Number (Optional)
+          </label>
+          <input type="text" id="slot" name="slot"
+            placeholder="Enter slot number (optional)"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="barter-open" name="barterOpen" style="width: 18px; height: 18px; cursor: pointer;">
+            <span style="font-weight: 500; color: var(--text-color);">Barter/Trades Open</span>
+          </label>
+        </div>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+          <button type="button" class="cancel-add-vendor-item-btn" style="
+            padding: 0.75rem 1.5rem;
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+          ">Cancel</button>
+          <button type="submit" style="
+            padding: 0.75rem 1.5rem;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+          ">
+            <i class="fas fa-plus"></i>
+            Add Item
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+
+  // Handle form submission
+  const form = modal.querySelector('#add-vendor-item-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await addVendorItem(character._id, form, modal);
+  });
+
+  // Handle close
+  const closeBtn = modal.querySelector('.close-modal');
+  const cancelBtn = modal.querySelector('.cancel-add-vendor-item-btn');
+  const closeModal = () => {
+    modal.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+    }, 300);
+  };
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  // Close on Escape
+  const handleEscape = (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      document.removeEventListener('keydown', handleEscape);
+    }
+  };
+  document.addEventListener('keydown', handleEscape);
+}
+
+// ------------------- Function: showEditVendorItemModal -------------------
+// Shows a modal to edit an existing vending item
+function showEditVendorItemModal(character, item) {
+  const modal = document.createElement('div');
+  modal.className = 'character-modal';
+  modal.style.zIndex = '10001';
+
+  const modalContent = document.createElement('div');
+  modalContent.className = 'character-modal-content';
+  modalContent.style.maxWidth = '600px';
+
+  modalContent.innerHTML = `
+    <div class="character-modal-header">
+      <h2 style="margin: 0; color: var(--text-color); font-size: 1.5rem;">
+        <i class="fas fa-edit"></i> Edit Item: ${escapeHtmlAttribute(item.itemName)}
+      </h2>
+      <button class="close-modal">&times;</button>
+    </div>
+    <div class="character-modal-body">
+      <form id="edit-vendor-item-form" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <div class="form-group">
+          <label for="edit-stock-qty" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Stock Quantity *
+          </label>
+          <input type="number" id="edit-stock-qty" name="stockQty" required min="1" value="${item.stockQty || 1}"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="edit-token-price" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Token Price
+          </label>
+          <input type="number" id="edit-token-price" name="tokenPrice" min="0" step="0.01" value="${item.tokenPrice || ''}"
+            placeholder="Enter token price (optional)"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="edit-art-price" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Art Price
+          </label>
+          <input type="text" id="edit-art-price" name="artPrice" value="${item.artPrice || ''}"
+            placeholder="Enter art price (optional)"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="edit-other-price" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Other Price
+          </label>
+          <input type="text" id="edit-other-price" name="otherPrice" value="${item.otherPrice || ''}"
+            placeholder="Enter other price (optional)"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label for="edit-slot" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Slot Number (Optional)
+          </label>
+          <input type="text" id="edit-slot" name="slot" value="${item.slot || ''}"
+            placeholder="Enter slot number (optional)"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="edit-barter-open" name="barterOpen" ${item.barterOpen ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <span style="font-weight: 500; color: var(--text-color);">Barter/Trades Open</span>
+          </label>
+        </div>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+          <button type="button" class="cancel-edit-vendor-item-btn" style="
+            padding: 0.75rem 1.5rem;
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+          ">Cancel</button>
+          <button type="submit" style="
+            padding: 0.75rem 1.5rem;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+          ">
+            <i class="fas fa-save"></i>
+            Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+
+  // Handle form submission
+  const form = modal.querySelector('#edit-vendor-item-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await updateVendorItem(character._id, item._id, form, modal);
+  });
+
+  // Handle close
+  const closeBtn = modal.querySelector('.close-modal');
+  const cancelBtn = modal.querySelector('.cancel-edit-vendor-item-btn');
+  const closeModal = () => {
+    modal.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+    }, 300);
+  };
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  // Close on Escape
+  const handleEscape = (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      document.removeEventListener('keydown', handleEscape);
+    }
+  };
+  document.addEventListener('keydown', handleEscape);
+}
+
+// ------------------- Function: addVendorItem -------------------
+// Adds a new item to vending inventory
+async function addVendorItem(characterId, form, modal) {
+  try {
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalHTML = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+
+    const formData = {
+      itemName: form.itemName.value.trim(),
+      stockQty: parseInt(form.stockQty.value),
+      tokenPrice: form.tokenPrice.value ? parseFloat(form.tokenPrice.value) : null,
+      artPrice: form.artPrice.value.trim() || null,
+      otherPrice: form.otherPrice.value.trim() || null,
+      barterOpen: form.barterOpen.checked,
+      slot: form.slot.value.trim() || null
+    };
+
+    const response = await fetch(`/api/characters/${characterId}/vending/items`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify(formData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to add item');
+    }
+
+    showProfileMessage('Item added to vending inventory!', 'success');
+    
+    // Close modal
+    modal.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+    }, 300);
+
+    // Reload vending shops
+    await loadVendingShops();
+
+  } catch (error) {
+    console.error('[profile.js]: ❌ Error adding vending item:', error);
+    showProfileMessage(error.message || 'Failed to add item', 'error');
+    
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fas fa-plus"></i> Add Item';
+  }
+}
+
+// ------------------- Function: updateVendorItem -------------------
+// Updates an existing vending item
+async function updateVendorItem(characterId, itemId, form, modal) {
+  try {
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalHTML = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    const formData = {
+      stockQty: parseInt(form.stockQty.value),
+      tokenPrice: form.tokenPrice.value ? parseFloat(form.tokenPrice.value) : null,
+      artPrice: form.artPrice.value.trim() || null,
+      otherPrice: form.otherPrice.value.trim() || null,
+      barterOpen: form.barterOpen.checked,
+      slot: form.slot.value.trim() || null
+    };
+
+    const response = await fetch(`/api/characters/${characterId}/vending/items/${itemId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify(formData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update item');
+    }
+
+    showProfileMessage('Item updated successfully!', 'success');
+    
+    // Close modal
+    modal.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+    }, 300);
+
+    // Reload vending shops
+    await loadVendingShops();
+
+  } catch (error) {
+    console.error('[profile.js]: ❌ Error updating vending item:', error);
+    showProfileMessage(error.message || 'Failed to update item', 'error');
+    
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+  }
+}
+
+// ------------------- Function: deleteVendorItem -------------------
+// Deletes a vending item
+async function deleteVendorItem(characterId, itemId) {
+  try {
+    const response = await fetch(`/api/characters/${characterId}/vending/items/${itemId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete item');
+    }
+
+    showProfileMessage('Item deleted successfully!', 'success');
+    
+    // Reload vending shops
+    await loadVendingShops();
+
+  } catch (error) {
+    console.error('[profile.js]: ❌ Error deleting vending item:', error);
+    showProfileMessage(error.message || 'Failed to delete item', 'error');
+  }
+}
+
+// ============================================================================
 // ------------------- Section: Public API -------------------
 // Exports functions for use in other modules
 // ============================================================================
@@ -2585,5 +3319,6 @@ function formatCharacterIconUrl(icon) {
 export {
   initProfilePage,
   loadProfileData,
-  updateProfileDisplay
+  updateProfileDisplay,
+  loadVendingShops
 }; 

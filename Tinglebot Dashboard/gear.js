@@ -16,7 +16,7 @@ const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getChar
 
 // ------------------- Database Models -------------------
 // Import the Item model for fetching item details.
-const ItemModel = require('../../models/ItemModel.js');
+const ItemModel = require('../models/ItemModel.js');
 
 
 // ------------------- Embeds -------------------
