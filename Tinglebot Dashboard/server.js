@@ -6811,13 +6811,11 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
     const pouchSize = pouchSizes[pouchType.toLowerCase()];
     const updateData = {
       vendingSetup: {
-        shopLink,
         pouchType: pouchType.toLowerCase(),
         shopImage: shopImage || null,
         setupDate: new Date()
       },
       vendingPoints: vendingPoints || 0,
-      shopLink, // Legacy field
       shopPouch: pouchType.toLowerCase(),
       pouchSize: pouchSize,
       vendorType: vendorType,
