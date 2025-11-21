@@ -2651,9 +2651,13 @@ async function loadVendingShops(options = {}) {
     const { data: characters } = await response.json();
 
     // Filter vendor characters (shopkeeper or merchant)
-    const vendorCharacters = characters.filter(char => 
-      char.vendorType && (char.vendorType.toLowerCase() === 'shopkeeper' || char.vendorType.toLowerCase() === 'merchant')
-    );
+    // Check both job and vendorType fields to catch characters that haven't completed setup yet
+    const vendorCharacters = characters.filter(char => {
+      const job = char.job?.toLowerCase();
+      const vendorType = char.vendorType?.toLowerCase();
+      return (job === 'shopkeeper' || job === 'merchant') || 
+             (vendorType === 'shopkeeper' || vendorType === 'merchant');
+    });
 
     if (loadingElement) {
       loadingElement.style.display = 'none';
