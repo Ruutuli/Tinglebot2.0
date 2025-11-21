@@ -11,6 +11,7 @@ const {
  connectToInventories,
  connectToTinglebot
 } = require("../database/db");
+const dbConfig = require("../config/database");
 
 // ------------------- Database Services -------------------
 const {
@@ -4723,7 +4724,11 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
     const totalSlots = calculateAvailableSlots(character);
 
     // Get used slots with their items
-    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+    if (!dbConfig.vending) {
+      return await interaction.respond([]);
+    }
+    
+    const vendingClient = new MongoClient(dbConfig.vending);
     await vendingClient.connect();
     const vendCollection = vendingClient.db('vendingInventories').collection(characterName.toLowerCase());
     const items = await vendCollection.find({}).toArray();
@@ -4848,12 +4853,12 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
     if (focusedName === 'vendorcharacter') {
       const characters = await fetchAllCharacters();
       
-      // Filter for only characters with vendor types (vendor/merchant/shopkeeper) and completed setup
+      // Filter for only characters with vendor types (vendor/merchant/shopkeeper) in either vendorType or job
       const vendorCharacters = characters.filter(character => {
         const vendorType = character.vendorType?.toLowerCase();
-        return (vendorType === 'vendor' || vendorType === 'merchant' || vendorType === 'shopkeeper') && 
-               character.vendingSetup?.shopLink && 
-               character.vendingSync;
+        const job = character.job?.toLowerCase();
+        const validVendorTypes = ['vendor', 'merchant', 'shopkeeper'];
+        return validVendorTypes.includes(vendorType) || validVendorTypes.includes(job);
                 });
                 
                 const choices = vendorCharacters.map(char => ({
@@ -4894,7 +4899,12 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
       }
 
       // Get items from character's vending inventory
-      const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+      if (!dbConfig.vending) {
+        await interaction.respond([]);
+        return;
+      }
+      
+      const vendingClient = new MongoClient(dbConfig.vending);
       await vendingClient.connect();
       const vendCollection = vendingClient.db('vendingInventories').collection(targetCharacter.toLowerCase());
       const vendingItems = await vendCollection.find({}).toArray();
