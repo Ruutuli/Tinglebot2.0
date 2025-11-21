@@ -78,16 +78,20 @@ const googleSheets = require('./googleSheetsUtils');
 // ------------------- Section: App Configuration -------------------
 const app = express();
 const PORT = process.env.PORT || 5001;
+logger.debug('PORT environment variable: ' + (process.env.PORT || 'not set, using default 5001'), null, 'server.js');
+logger.debug('Server will listen on port: ' + PORT, null, 'server.js');
 
 // ------------------- Section: Session & Authentication Configuration -------------------
 // Session configuration for Discord OAuth
-const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';
+// Check if running on Railway (any truthy value) or explicitly in production
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 const domain = process.env.DOMAIN || (isProduction ? 'tinglebot.xyz' : 'localhost');
 
 // Force localhost for development if running on localhost
-const isLocalhost = process.env.FORCE_LOCALHOST === 'true' || 
-                   process.env.NODE_ENV === 'development' ||
-                   process.env.USE_LOCALHOST === 'true';
+// Don't force localhost if we're on Railway (even if NODE_ENV is development)
+const isLocalhost = (process.env.FORCE_LOCALHOST === 'true' || 
+                   (process.env.NODE_ENV === 'development' && !process.env.RAILWAY_ENVIRONMENT) ||
+                   process.env.USE_LOCALHOST === 'true');
 
 logger.info('Environment Detection:', 'server.js');
 logger.debug('NODE_ENV: ' + process.env.NODE_ENV, null, 'server.js');
