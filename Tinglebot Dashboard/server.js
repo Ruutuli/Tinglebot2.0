@@ -188,50 +188,55 @@ logger.debug('domain: ' + domain, null, 'server.js');
 logger.debug('callbackURL: ' + callbackURL, null, 'server.js');
 logger.debug('DISCORD_CALLBACK_URL env: ' + process.env.DISCORD_CALLBACK_URL, null, 'server.js');
 
-
-
-passport.use(new DiscordStrategy({
-  clientID: process.env.DISCORD_CLIENT_ID,
-  clientSecret: process.env.DISCORD_CLIENT_SECRET,
-  callbackURL: callbackURL,
-  scope: ['identify', 'email']
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    // Find or create user in database
-    let user = await User.findOne({ discordId: profile.id });
-    
-    if (!user) {
-      // Create new user
-      user = new User({
-        discordId: profile.id,
-        username: profile.username,
-        email: profile.email,
-        avatar: profile.avatar,
-        discriminator: profile.discriminator,
-        tokens: 0,
-        tokenTracker: '',
-        blightedcharacter: false,
-        characterSlot: 2,
-        status: 'active',
-        statusChangedAt: new Date()
-      });
-      await user.save();
-    } else {
-      // Update existing user's Discord info
-      user.username = profile.username;
-      user.email = profile.email;
-      user.avatar = profile.avatar;
-      user.discriminator = profile.discriminator;
-      user.status = 'active';
-      user.statusChangedAt = new Date();
-      await user.save();
+// Only configure Discord OAuth if credentials are provided
+if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
+  passport.use(new DiscordStrategy({
+    clientID: process.env.DISCORD_CLIENT_ID,
+    clientSecret: process.env.DISCORD_CLIENT_SECRET,
+    callbackURL: callbackURL,
+    scope: ['identify', 'email']
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      // Find or create user in database
+      let user = await User.findOne({ discordId: profile.id });
+      
+      if (!user) {
+        // Create new user
+        user = new User({
+          discordId: profile.id,
+          username: profile.username,
+          email: profile.email,
+          avatar: profile.avatar,
+          discriminator: profile.discriminator,
+          tokens: 0,
+          tokenTracker: '',
+          blightedcharacter: false,
+          characterSlot: 2,
+          status: 'active',
+          statusChangedAt: new Date()
+        });
+        await user.save();
+      } else {
+        // Update existing user's Discord info
+        user.username = profile.username;
+        user.email = profile.email;
+        user.avatar = profile.avatar;
+        user.discriminator = profile.discriminator;
+        user.status = 'active';
+        user.statusChangedAt = new Date();
+        await user.save();
+      }
+      
+      return done(null, user);
+    } catch (error) {
+      return done(error, null);
     }
-    
-    return done(null, user);
-  } catch (error) {
-    return done(error, null);
-  }
-}));
+  }));
+  logger.success('Discord OAuth strategy configured', 'server.js');
+} else {
+  logger.warn('Discord OAuth credentials not found. Discord OAuth authentication will be unavailable.', 'server.js');
+  logger.warn('Please set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET environment variables to enable OAuth.', 'server.js');
+}
 
 // Database connection options
 const connectionOptions = {
@@ -1000,6 +1005,12 @@ app.get('/auth/debug', (req, res) => {
 // ------------------- Function: initiateDiscordAuth -------------------
 // Initiates Discord OAuth flow
 app.get('/auth/discord', (req, res, next) => {
+  // Check if Discord OAuth is configured
+  if (!process.env.DISCORD_CLIENT_ID || !process.env.DISCORD_CLIENT_SECRET) {
+    logger.error('Discord OAuth not configured. Missing DISCORD_CLIENT_ID or DISCORD_CLIENT_SECRET', 'server.js');
+    return res.status(503).send('Discord OAuth is not configured. Please contact the administrator.');
+  }
+  
   // Store the return URL in session if provided
   if (req.query.returnTo) {
     req.session.returnTo = req.query.returnTo;
@@ -1027,6 +1038,14 @@ app.get('/auth/discord', (req, res, next) => {
 // ------------------- Function: handleDiscordCallback -------------------
 // Handles Discord OAuth callback
 app.get('/auth/discord/callback', 
+  (req, res, next) => {
+    // Check if Discord OAuth is configured
+    if (!process.env.DISCORD_CLIENT_ID || !process.env.DISCORD_CLIENT_SECRET) {
+      logger.error('Discord OAuth not configured. Missing DISCORD_CLIENT_ID or DISCORD_CLIENT_SECRET', 'server.js');
+      return res.redirect('/login?error=oauth_not_configured');
+    }
+    next();
+  },
   passport.authenticate('discord', { 
     failureRedirect: '/login',
     failureFlash: true 
