@@ -2953,19 +2953,56 @@ function showVendingSetupModal(character) {
       </div>
       <form id="vending-setup-form" style="display: flex; flex-direction: column; gap: 1.5rem;">
         <div>
-          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 500;">
-            Google Sheets URL <span style="color: var(--error-color);">*</span>
-          </label>
-          <input 
-            type="url" 
-            id="setup-shop-link" 
-            name="shopLink" 
-            required
-            placeholder="https://docs.google.com/spreadsheets/d/..."
-            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
-          />
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <label style="display: block; color: var(--text-color); font-weight: 500;">
+              Vending Inventory Items <span style="color: var(--error-color);">*</span>
+            </label>
+            <button 
+              type="button" 
+              id="add-vending-row-btn"
+              style="
+                padding: 0.5rem 1rem;
+                background: var(--primary-color);
+                color: white;
+                border: none;
+                border-radius: 0.25rem;
+                cursor: pointer;
+                font-size: 0.85rem;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+              "
+              onmouseover="this.style.background='var(--primary-hover)'" 
+              onmouseout="this.style.background='var(--primary-color)'"
+            >
+              <i class="fas fa-plus"></i> Add Row
+            </button>
+          </div>
+          <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 0.5rem; max-height: 400px; overflow-y: auto;">
+            <table id="vending-setup-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+              <thead style="position: sticky; top: 0; background: var(--card-bg); z-index: 10;">
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Character Name</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Item Name *</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Stock Qty *</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Cost Each</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Points Spent</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Bought From</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Token Price</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Art Price</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Other Price</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Trades Open?</th>
+                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Date</th>
+                  <th style="padding: 0.75rem; text-align: center; color: var(--text-color); font-weight: 600; background: var(--card-bg); width: 50px;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="vending-setup-tbody">
+                <!-- Rows will be added here -->
+              </tbody>
+            </table>
+          </div>
           <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">
-            Paste the URL of your Google Sheet containing your vending inventory data.
+            Fill out the table with your vending inventory items. Character Name will default to ${escapeHtmlAttribute(character.name)} if left empty.
           </p>
         </div>
         <div>
@@ -3008,14 +3045,6 @@ function showVendingSetupModal(character) {
             placeholder="https://..."
             style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
           />
-        </div>
-        <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem;">
-          <p style="margin: 0 0 0.5rem 0; color: var(--text-color); font-weight: 500; font-size: 0.9rem;">
-            Expected Sheet Format:
-          </p>
-          <p style="margin: 0; color: var(--text-secondary); font-size: 0.85rem; font-family: monospace; white-space: pre-wrap;">
-CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? | DATE
-          </p>
         </div>
         <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
           <button 
@@ -3063,6 +3092,169 @@ CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM 
   modal.appendChild(modalContent);
   document.body.appendChild(modal);
 
+  // Add initial row
+  addVendingSetupRow(character.name);
+
+  // Add row button handler
+  const addRowBtn = document.getElementById('add-vending-row-btn');
+  addRowBtn.addEventListener('click', () => {
+    addVendingSetupRow(character.name);
+  });
+
+  // Function to add a new row to the table
+  function addVendingSetupRow(defaultCharacterName) {
+    const tbody = document.getElementById('vending-setup-tbody');
+    const row = document.createElement('tr');
+    row.style.borderBottom = '1px solid var(--border-color)';
+    row.innerHTML = `
+      <td style="padding: 0.5rem;">
+        <input 
+          type="text" 
+          class="vending-row-input" 
+          data-field="characterName"
+          value="${escapeHtmlAttribute(defaultCharacterName)}"
+          placeholder="${escapeHtmlAttribute(defaultCharacterName)}"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="text" 
+          class="vending-row-input" 
+          data-field="itemName"
+          required
+          placeholder="Item name"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="number" 
+          class="vending-row-input" 
+          data-field="stockQty"
+          required
+          min="1"
+          value="1"
+          placeholder="1"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="number" 
+          class="vending-row-input" 
+          data-field="costEach"
+          min="0"
+          step="0.01"
+          value="0"
+          placeholder="0"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="number" 
+          class="vending-row-input" 
+          data-field="pointsSpent"
+          min="0"
+          step="0.01"
+          value="0"
+          placeholder="0"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="text" 
+          class="vending-row-input" 
+          data-field="boughtFrom"
+          placeholder="Village name"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="number" 
+          class="vending-row-input" 
+          data-field="tokenPrice"
+          min="0"
+          step="0.01"
+          value="0"
+          placeholder="0"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="text" 
+          class="vending-row-input" 
+          data-field="artPrice"
+          placeholder="N/A"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="text" 
+          class="vending-row-input" 
+          data-field="otherPrice"
+          placeholder="N/A"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem;">
+        <select 
+          class="vending-row-input" 
+          data-field="tradesOpen"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        >
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </td>
+      <td style="padding: 0.5rem;">
+        <input 
+          type="date" 
+          class="vending-row-input" 
+          data-field="date"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
+        />
+      </td>
+      <td style="padding: 0.5rem; text-align: center;">
+        <button 
+          type="button" 
+          class="remove-vending-row-btn"
+          style="
+            padding: 0.5rem;
+            background: var(--error-color);
+            color: white;
+            border: none;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            width: 100%;
+          "
+          onmouseover="this.style.background='var(--error-hover)'" 
+          onmouseout="this.style.background='var(--error-color)'"
+          title="Remove row"
+        >
+          <i class="fas fa-trash"></i>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(row);
+
+    // Add remove button handler
+    const removeBtn = row.querySelector('.remove-vending-row-btn');
+    removeBtn.addEventListener('click', () => {
+      if (tbody.children.length > 1) {
+        row.remove();
+      } else {
+        alert('You must have at least one row');
+      }
+    });
+  }
+
   // Close modal handlers
   const closeButtons = modal.querySelectorAll('.close-modal');
   closeButtons.forEach(btn => {
@@ -3083,7 +3275,46 @@ CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const shopLink = document.getElementById('setup-shop-link').value;
+    // Collect table data
+    const tbody = document.getElementById('vending-setup-tbody');
+    const rows = tbody.querySelectorAll('tr');
+    const items = [];
+
+    for (const row of rows) {
+      const inputs = row.querySelectorAll('.vending-row-input');
+      const rowData = {};
+      
+      inputs.forEach(input => {
+        const field = input.dataset.field;
+        if (input.type === 'number') {
+          rowData[field] = parseFloat(input.value) || 0;
+        } else if (input.type === 'checkbox') {
+          rowData[field] = input.checked;
+        } else if (input.tagName === 'SELECT') {
+          rowData[field] = input.value === 'true';
+        } else {
+          rowData[field] = input.value.trim();
+        }
+      });
+
+      // Validate required fields
+      if (!rowData.itemName || !rowData.stockQty || rowData.stockQty <= 0) {
+        continue; // Skip invalid rows
+      }
+
+      // Use character name from input or default
+      if (!rowData.characterName) {
+        rowData.characterName = character.name;
+      }
+
+      items.push(rowData);
+    }
+
+    if (items.length === 0) {
+      alert('Please add at least one valid item (Item Name and Stock Qty are required)');
+      return;
+    }
+
     const pouchType = document.getElementById('setup-pouch-type').value;
     const vendingPoints = parseInt(document.getElementById('setup-vending-points').value) || 0;
     const shopImage = document.getElementById('setup-shop-image').value || null;
@@ -3101,7 +3332,7 @@ CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM 
         },
         credentials: 'include',
         body: JSON.stringify({
-          shopLink,
+          items,
           pouchType,
           vendingPoints,
           shopImage

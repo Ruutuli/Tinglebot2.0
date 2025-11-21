@@ -6698,6 +6698,216 @@ app.get('/api/characters/list', async (req, res) => {
   }
 });
 
+// ------------------- Function: setupVendingShop -------------------
+// One-time setup endpoint to import vending data from old method
+app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const userId = req.user.discordId;
+    const { items, pouchType, vendingPoints, shopImage } = req.body;
+
+    // Validate required fields
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required' });
+    }
+    if (!pouchType) {
+      return res.status(400).json({ error: 'Pouch type is required' });
+    }
+
+    // Validate pouch type
+    const validPouchTypes = ['none', 'bronze', 'silver', 'gold'];
+    if (!validPouchTypes.includes(pouchType.toLowerCase())) {
+      return res.status(400).json({ error: 'Invalid pouch type. Must be: none, bronze, silver, or gold' });
+    }
+
+    // Find character (check both regular and mod characters)
+    let character = await Character.findById(characterId);
+    if (!character) {
+      character = await ModCharacter.findById(characterId);
+    }
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Verify character belongs to user
+    if (character.userId !== userId) {
+      return res.status(403).json({ error: 'You do not have permission to set up this character' });
+    }
+
+    // Check if already set up (one-time only)
+    if (character.vendingSetup?.shopLink || character.shopLink) {
+      return res.status(400).json({ error: 'This character has already been set up. Setup can only be done once.' });
+    }
+
+    // Validate job
+    const job = character.job?.toLowerCase();
+    if (job !== 'shopkeeper' && job !== 'merchant') {
+      return res.status(400).json({ error: 'Character must be a Shopkeeper or Merchant to set up vending' });
+    }
+
+    // Validate Google Sheets URL
+    const { isValidGoogleSheetsUrl, extractSpreadsheetId, authorizeSheets, readSheetData } = googleSheets;
+    if (!isValidGoogleSheetsUrl(shopLink)) {
+      return res.status(400).json({ error: 'Invalid Google Sheets URL' });
+    }
+
+    // Parse sheet data for setup (custom format)
+    let parsedRows = [];
+    try {
+      const spreadsheetId = extractSpreadsheetId(shopLink);
+      const auth = await authorizeSheets();
+      
+      // Read the sheet - try to read from first sheet or a specific range
+      // Format: CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? | DATE
+      const sheetData = await readSheetData(auth, spreadsheetId, 'A1:K') || [];
+      
+      if (!Array.isArray(sheetData) || sheetData.length < 2) {
+        return res.status(400).json({ error: 'Sheet must have at least a header row and one data row' });
+      }
+
+      // Parse header row to find column indices
+      const headers = sheetData[0].map(h => (h || '').trim().toUpperCase());
+      const charNameIdx = headers.findIndex(h => h.includes('CHARACTER') || h.includes('NAME'));
+      const itemNameIdx = headers.findIndex(h => h.includes('ITEM'));
+      const stockQtyIdx = headers.findIndex(h => h.includes('STOCK') || h.includes('QTY'));
+      const costEachIdx = headers.findIndex(h => h.includes('COST EACH'));
+      const pointsSpentIdx = headers.findIndex(h => h.includes('POINTS SPENT'));
+      const boughtFromIdx = headers.findIndex(h => h.includes('BOUGHT FROM'));
+      const tokenPriceIdx = headers.findIndex(h => h.includes('TOKEN PRICE'));
+      const artPriceIdx = headers.findIndex(h => h.includes('ART PRICE'));
+      const otherPriceIdx = headers.findIndex(h => h.includes('OTHER PRICE'));
+      const tradesOpenIdx = headers.findIndex(h => h.includes('TRADES OPEN') || h.includes('TRADES'));
+      const dateIdx = headers.findIndex(h => h.includes('DATE'));
+
+      // Validate required columns
+      if (itemNameIdx === -1 || stockQtyIdx === -1) {
+        return res.status(400).json({ error: 'Sheet must have ITEM NAME and STOCK QTY columns' });
+      }
+
+      // Parse data rows (skip header row)
+      for (let i = 1; i < sheetData.length; i++) {
+        const row = sheetData[i];
+        if (!row || !row[itemNameIdx]) continue; // Skip empty rows
+
+        const itemName = row[itemNameIdx]?.trim();
+        const stockQty = parseInt(row[stockQtyIdx]) || 0;
+        
+        if (!itemName || stockQty <= 0) continue; // Skip rows without item name or with zero stock
+
+        parsedRows.push({
+          characterName: charNameIdx >= 0 ? row[charNameIdx]?.trim() : character.name,
+          itemName: itemName,
+          stockQty: stockQty,
+          costEach: costEachIdx >= 0 ? parseFloat(row[costEachIdx]) || 0 : 0,
+          pointsSpent: pointsSpentIdx >= 0 ? parseFloat(row[pointsSpentIdx]) || 0 : 0,
+          boughtFrom: boughtFromIdx >= 0 ? row[boughtFromIdx]?.trim() : null,
+          tokenPrice: tokenPriceIdx >= 0 ? (row[tokenPriceIdx]?.trim() || '0') : '0',
+          artPrice: artPriceIdx >= 0 ? (row[artPriceIdx]?.trim() || 'N/A') : 'N/A',
+          otherPrice: otherPriceIdx >= 0 ? (row[otherPriceIdx]?.trim() || 'N/A') : 'N/A',
+          tradesOpen: tradesOpenIdx >= 0 ? row[tradesOpenIdx] : false,
+          date: dateIdx >= 0 ? row[dateIdx] : null,
+          slot: null // No slot in this format
+        });
+      }
+    } catch (error) {
+      console.error('[server.js]: Error parsing setup sheet:', error);
+      return res.status(400).json({ error: `Failed to parse sheet data: ${error.message}` });
+    }
+
+    if (parsedRows.length === 0) {
+      return res.status(400).json({ error: 'No valid items found in the sheet' });
+    }
+
+    // Set pouch size based on pouch type
+    const pouchSizes = {
+      none: 0,
+      bronze: 15,
+      silver: 30,
+      gold: 50
+    };
+
+    // Set vendor type based on job
+    const vendorType = job === 'shopkeeper' ? 'shopkeeper' : 'merchant';
+
+    // Initialize vending inventory model
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const VendingInventory = await initializeVendingInventoryModel(character.name);
+
+    // Import items from sheet
+    const importedItems = [];
+    const errors = [];
+
+    for (const row of parsedRows) {
+      try {
+        // Find item by name
+        const item = await Item.findOne({ itemName: row.itemName });
+        if (!item) {
+          errors.push(`Item "${row.itemName}" not found in database`);
+          continue;
+        }
+
+        // Parse boolean for tradesOpen
+        const tradesOpen = typeof row.tradesOpen === 'string' 
+          ? (row.tradesOpen.toLowerCase() === 'true' || row.tradesOpen.toLowerCase() === 'yes')
+          : Boolean(row.tradesOpen);
+
+        // Create vending inventory entry
+        const vendingItem = new VendingInventory({
+          characterName: character.name,
+          itemName: row.itemName,
+          itemId: item._id,
+          stockQty: parseInt(row.stockQty) || 1,
+          costEach: parseFloat(row.costEach) || 0,
+          pointsSpent: parseFloat(row.pointsSpent) || 0,
+          boughtFrom: row.boughtFrom || null,
+          tokenPrice: typeof row.tokenPrice === 'string' ? parseFloat(row.tokenPrice.replace(/[^0-9.-]/g, '')) || 0 : parseFloat(row.tokenPrice) || 0,
+          artPrice: row.artPrice || 'N/A',
+          otherPrice: row.otherPrice || 'N/A',
+          tradesOpen: tradesOpen,
+          slot: row.slot || null,
+          date: row.date ? new Date(row.date) : new Date()
+        });
+
+        await vendingItem.save();
+        importedItems.push(row.itemName);
+      } catch (error) {
+        console.error(`[server.js]: Error importing item "${row.itemName}":`, error);
+        errors.push(`Failed to import "${row.itemName}": ${error.message}`);
+      }
+    }
+
+    // Update character's vending setup
+    const pouchSize = pouchSizes[pouchType.toLowerCase()];
+    const updateData = {
+      vendingSetup: {
+        shopLink,
+        pouchType: pouchType.toLowerCase(),
+        shopImage: shopImage || null,
+        setupDate: new Date()
+      },
+      vendingPoints: vendingPoints || 0,
+      shopLink, // Legacy field
+      shopPouch: pouchType.toLowerCase(),
+      pouchSize: pouchSize,
+      vendorType: vendorType,
+      vendingSync: false
+    };
+
+    await (character.constructor === Character ? Character : ModCharacter).findByIdAndUpdate(characterId, updateData);
+
+    res.json({
+      success: true,
+      message: `Successfully set up vending shop for ${character.name}`,
+      imported: importedItems.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error setting up vending shop:', error);
+    res.status(500).json({ error: 'Failed to set up vending shop', details: error.message });
+  }
+});
+
 // ------------------- Function: getInventorySummary -------------------
 // Returns inventory summary (counts) for all characters
 app.get('/api/inventory/summary', async (req, res) => {
