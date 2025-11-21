@@ -2757,6 +2757,9 @@ async function createVendorCard(character) {
 
   const availableSlots = totalSlots - usedSlots;
   const iconUrl = formatCharacterIconUrl(character.icon);
+  
+  // Check if character is already set up
+  const isSetup = character.vendingSetup?.shopLink || character.shopLink;
 
   card.innerHTML = `
     <div class="vendor-card-header" style="display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
@@ -2764,7 +2767,7 @@ async function createVendorCard(character) {
       <div style="flex: 1;">
         <h4 style="margin: 0 0 0.25rem 0; color: var(--text-color); font-size: 1.2rem;">${character.name}</h4>
         <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
-          ${capitalize(character.vendorType || 'Vendor')} • ${capitalize(character.shopPouch || 'No')} Pouch
+          ${capitalize(character.vendorType || character.job || 'Vendor')} • ${capitalize(character.shopPouch || character.vendingSetup?.pouchType || 'No')} Pouch
         </p>
       </div>
     </div>
@@ -2830,6 +2833,27 @@ async function createVendorCard(character) {
       </div>
     </div>
     <div class="vendor-card-actions" style="display: flex; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+      ${!isSetup ? `
+      <button class="setup-vendor-btn" data-character-id="${character._id}" data-character-name="${escapeHtmlAttribute(character.name)}" style="
+        flex: 1;
+        padding: 0.75rem;
+        background: var(--success-color);
+        color: white;
+        border: none;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      " onmouseover="this.style.background='var(--success-hover)'" onmouseout="this.style.background='var(--success-color)'">
+        <i class="fas fa-magic"></i>
+        Setup (One-Time)
+      </button>
+      ` : `
       <button class="add-vendor-item-btn" data-character-id="${character._id}" style="
         flex: 1;
         padding: 0.75rem;
@@ -2866,10 +2890,14 @@ async function createVendorCard(character) {
         <i class="fas fa-cog"></i>
         Manage
       </button>
+      `}
     </div>
   `;
 
   // Add event listeners
+  const setupBtn = card.querySelector('.setup-vendor-btn');
+  setupBtn?.addEventListener('click', () => showVendingSetupModal(character));
+
   const addBtn = card.querySelector('.add-vendor-item-btn');
   addBtn?.addEventListener('click', () => showAddVendorItemModal(character));
 
@@ -2897,6 +2925,209 @@ async function createVendorCard(character) {
   });
 
   return card;
+}
+
+// ------------------- Function: showVendingSetupModal -------------------
+// Shows a modal to set up vending shop for the first time (one-time import from old method)
+function showVendingSetupModal(character) {
+  const modal = document.createElement('div');
+  modal.className = 'character-modal';
+  modal.style.zIndex = '10001';
+
+  const modalContent = document.createElement('div');
+  modalContent.className = 'character-modal-content';
+  modalContent.style.maxWidth = '700px';
+
+  modalContent.innerHTML = `
+    <div class="character-modal-header">
+      <h2 style="margin: 0; color: var(--text-color); font-size: 1.5rem;">
+        <i class="fas fa-magic"></i> Setup Vending Shop: ${escapeHtmlAttribute(character.name)}
+      </h2>
+      <button class="close-modal">&times;</button>
+    </div>
+    <div class="character-modal-body">
+      <div style="background: var(--warning-bg, #fff3cd); border: 1px solid var(--warning-border, #ffc107); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem;">
+        <p style="margin: 0; color: var(--warning-text, #856404); font-size: 0.9rem;">
+          <strong>⚠️ One-Time Setup:</strong> This can only be done once! This will import your existing vending data from the old method.
+        </p>
+      </div>
+      <form id="vending-setup-form" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <div>
+          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 500;">
+            Google Sheets URL <span style="color: var(--error-color);">*</span>
+          </label>
+          <input 
+            type="url" 
+            id="setup-shop-link" 
+            name="shopLink" 
+            required
+            placeholder="https://docs.google.com/spreadsheets/d/..."
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
+          />
+          <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">
+            Paste the URL of your Google Sheet containing your vending inventory data.
+          </p>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 500;">
+            Pouch Type <span style="color: var(--error-color);">*</span>
+          </label>
+          <select 
+            id="setup-pouch-type" 
+            name="pouchType" 
+            required
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
+          >
+            <option value="none">None (0 slots)</option>
+            <option value="bronze">Bronze (15 slots) - 1,000 tokens</option>
+            <option value="silver">Silver (30 slots) - 5,000 tokens</option>
+            <option value="gold">Gold (50 slots) - 10,000 tokens</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 500;">
+            Vending Points (Current)
+          </label>
+          <input 
+            type="number" 
+            id="setup-vending-points" 
+            name="vendingPoints" 
+            min="0"
+            value="${character.vendingPoints || 0}"
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
+          />
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 500;">
+            Shop Banner Image URL (Optional)
+          </label>
+          <input 
+            type="url" 
+            id="setup-shop-image" 
+            name="shopImage" 
+            placeholder="https://..."
+            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
+          />
+        </div>
+        <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem;">
+          <p style="margin: 0 0 0.5rem 0; color: var(--text-color); font-weight: 500; font-size: 0.9rem;">
+            Expected Sheet Format:
+          </p>
+          <p style="margin: 0; color: var(--text-secondary); font-size: 0.85rem; font-family: monospace; white-space: pre-wrap;">
+CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? | DATE
+          </p>
+        </div>
+        <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+          <button 
+            type="submit" 
+            style="
+              flex: 1;
+              padding: 0.75rem;
+              background: var(--success-color);
+              color: white;
+              border: none;
+              border-radius: 0.5rem;
+              cursor: pointer;
+              font-size: 1rem;
+              font-weight: 500;
+              transition: background 0.2s;
+            "
+            onmouseover="this.style.background='var(--success-hover)'" 
+            onmouseout="this.style.background='var(--success-color)'"
+          >
+            <i class="fas fa-magic"></i> Setup & Import
+          </button>
+          <button 
+            type="button" 
+            class="close-modal"
+            style="
+              padding: 0.75rem 1.5rem;
+              background: var(--card-bg);
+              color: var(--text-color);
+              border: 1px solid var(--border-color);
+              border-radius: 0.5rem;
+              cursor: pointer;
+              font-size: 1rem;
+              transition: background 0.2s;
+            "
+            onmouseover="this.style.background='var(--input-bg)'" 
+            onmouseout="this.style.background='var(--card-bg)'"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+
+  // Close modal handlers
+  const closeButtons = modal.querySelectorAll('.close-modal');
+  closeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+  });
+
+  // Close on outside click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
+    }
+  });
+
+  // Form submission
+  const form = modal.querySelector('#vending-setup-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const shopLink = document.getElementById('setup-shop-link').value;
+    const pouchType = document.getElementById('setup-pouch-type').value;
+    const vendingPoints = parseInt(document.getElementById('setup-vending-points').value) || 0;
+    const shopImage = document.getElementById('setup-shop-image').value || null;
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Setting up...';
+
+    try {
+      const response = await fetch(`/api/characters/${character._id}/vending/setup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          shopLink,
+          pouchType,
+          vendingPoints,
+          shopImage
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to set up vending shop');
+      }
+
+      // Success - close modal and reload
+      alert('✅ Vending shop set up successfully! Your inventory has been imported.');
+      document.body.removeChild(modal);
+      
+      // Reload vending shops
+      const containerId = document.getElementById('vending-shops-container') ? 'vending-shops-container' : 'profile-vending-container';
+      await loadVendingShops({ containerId });
+    } catch (error) {
+      console.error('[profile.js]: Error setting up vending:', error);
+      alert(`❌ Error: ${error.message}`);
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    }
+  });
 }
 
 // ------------------- Function: showAddVendorItemModal -------------------
