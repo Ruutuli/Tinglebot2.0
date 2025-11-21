@@ -177,10 +177,11 @@ passport.deserializeUser(async (discordId, done) => {
   }
 });
 
-// Discord OAuth Strategy - Force localhost for development
-const callbackURL = (isProduction && !isLocalhost)
-  ? `https://${domain}/auth/discord/callback`
-  : `http://localhost:5001/auth/discord/callback`;
+// Discord OAuth Strategy - Use environment variable if set, otherwise construct based on environment
+const callbackURL = process.env.DISCORD_CALLBACK_URL || 
+  ((isProduction && !isLocalhost)
+    ? `https://${domain}/auth/discord/callback`
+    : `http://localhost:5001/auth/discord/callback`);
 
 logger.info('Discord OAuth Configuration:', 'server.js');
 logger.debug('isProduction: ' + isProduction, null, 'server.js');
