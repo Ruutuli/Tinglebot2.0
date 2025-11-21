@@ -1434,9 +1434,119 @@ async function handleViewShop(interaction) {
   
 // ------------------- handleVendingSetup -------------------
 async function handleVendingSetup(interaction) {
-    return interaction.reply({
-        content: `Set up vending here! https://tinglebot.xyz/#vending-section`
-    });
+    try {
+        const userId = interaction.user.id;
+        
+        // Fetch all user's characters
+        const characters = await Character.find({ userId }).lean();
+        
+        // Filter for vendor characters (Shopkeeper or Merchant)
+        const vendorCharacters = characters.filter(char => {
+            const job = char.job?.toLowerCase();
+            const vendorType = char.vendorType?.toLowerCase();
+            return (job === 'shopkeeper' || job === 'merchant') || 
+                   (vendorType === 'shopkeeper' || vendorType === 'merchant');
+        });
+        
+        // Create embed
+        const embed = new EmbedBuilder()
+            .setTitle('🎪 Vending Shop Setup')
+            .setDescription('Set up and manage your vending shops on the dashboard!')
+            .setColor('#00FF00')
+            .setImage(DEFAULT_IMAGE_URL)
+            .setTimestamp();
+        
+        if (vendorCharacters.length === 0) {
+            embed.addFields({
+                name: '⚠️ No Vendor Characters',
+                value: 'You don\'t have any characters set up as Shopkeepers or Merchants. Characters need to be Shopkeepers or Merchants to manage vending shops.',
+                inline: false
+            });
+        } else {
+            // Group characters by setup status
+            const setupCharacters = [];
+            const notSetupCharacters = [];
+            
+            vendorCharacters.forEach(char => {
+                const isSetup = char.vendingSetup?.shopLink || char.shopLink;
+                const vendorType = char.vendorType || char.job || 'Unknown';
+                const pouchType = char.vendingSetup?.pouchType || char.shopPouch || 'None';
+                const vendingPoints = char.vendingPoints || 0;
+                
+                const charInfo = {
+                    name: char.name,
+                    vendorType: capitalizeFirstLetter(vendorType),
+                    pouchType: capitalizeFirstLetter(pouchType),
+                    vendingPoints,
+                    isSetup
+                };
+                
+                if (isSetup) {
+                    setupCharacters.push(charInfo);
+                } else {
+                    notSetupCharacters.push(charInfo);
+                }
+            });
+            
+            // Add setup characters
+            if (setupCharacters.length > 0) {
+                let setupValue = '';
+                setupCharacters.forEach(char => {
+                    setupValue += `**${char.name}** (${char.vendorType})\n`;
+                    setupValue += `• Pouch: ${char.pouchType}\n`;
+                    setupValue += `• Points: ${char.vendingPoints}\n`;
+                    setupValue += `• Status: ✅ Set Up\n\n`;
+                });
+                embed.addFields({
+                    name: `✅ Set Up Shops (${setupCharacters.length})`,
+                    value: setupValue || 'None',
+                    inline: false
+                });
+            }
+            
+            // Add not setup characters
+            if (notSetupCharacters.length > 0) {
+                let notSetupValue = '';
+                notSetupCharacters.forEach(char => {
+                    notSetupValue += `**${char.name}** (${char.vendorType})\n`;
+                    notSetupValue += `• Status: ⚠️ Not Set Up\n\n`;
+                });
+                embed.addFields({
+                    name: `⚠️ Needs Setup (${notSetupCharacters.length})`,
+                    value: notSetupValue || 'None',
+                    inline: false
+                });
+            }
+        }
+        
+        // Add dashboard link
+        embed.addFields({
+            name: '🔗 Dashboard Link',
+            value: `[Click here to set up vending!](https://tinglebot.xyz/#vending-section)`,
+            inline: false
+        });
+        
+        // Create button to open dashboard
+        const dashboardButton = new ButtonBuilder()
+            .setLabel('Open Vending Dashboard')
+            .setStyle(ButtonStyle.Link)
+            .setURL('https://tinglebot.xyz/#vending-section')
+            .setEmoji('🖥️');
+        
+        const buttonRow = new ActionRowBuilder()
+            .addComponents(dashboardButton);
+        
+        return interaction.reply({
+            embeds: [embed],
+            components: [buttonRow]
+        });
+    } catch (error) {
+        console.error('[handleVendingSetup]: Error:', error);
+        return interaction.reply({
+            content: '❌ An error occurred while fetching your vendor characters. Please try again later.',
+            ephemeral: true
+        });
+    }
 }
   
 // ------------------- handleVendingSync -------------------
