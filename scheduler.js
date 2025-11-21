@@ -234,7 +234,7 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
   if (weather._id) {
    await Weather.updateOne(
     { _id: weather._id },
-    { $set: { postedToDiscord: true } }
+    { $set: { postedToDiscord: true, postedAt: new Date() } }
    );
    logger.info('WEATHER', `Marked weather as posted for ${village}`);
   }
