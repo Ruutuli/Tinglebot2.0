@@ -2846,10 +2846,9 @@ async function createVendorCard(character) {
               </div>
             </div>
           `).join('') : 
-          (inventoryData && inventoryData.items && inventoryData.items.length === 0 ? 
+          inventoryData && inventoryData.items && inventoryData.items.length === 0 ? 
             '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i><div>No items in vending inventory</div></div>' :
             '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>Loading inventory...</div>'
-          )
         }
       </div>
     </div>
@@ -4228,7 +4227,7 @@ async function showManageVendorModal(character) {
                     <td style="padding: 1rem 0.75rem; border-right: 1px solid var(--border-color);">
                       <input type="number" class="manage-token-price" data-item-id="${itemIdStr}" 
                         value="${item.tokenPrice !== null && item.tokenPrice !== undefined ? item.tokenPrice : ''}" 
-                        placeholder="0" min="0" step="0.01"
+                        placeholder="0" min="0" step="1"
                         style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem; transition: all 0.2s;"
                         onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 2px rgba(0,123,255,0.1)'"
                         onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'">
@@ -4295,78 +4294,21 @@ async function showManageVendorModal(character) {
           transition: background 0.2s;
         ">Close</button>
         <button type="button" id="save-shop-image-btn" style="
-                          padding: 0.5rem 1rem;
-                          background: var(--error-color);
-                          color: white;
-                          border: none;
-                          border-radius: 0.25rem;
-                          cursor: pointer;
-                          font-size: 0.85rem;
-                          transition: background 0.2s;
-                          display: flex;
-                          align-items: center;
-                          gap: 0.25rem;
-                        " title="Delete item" onmouseover="this.style.background='var(--error-hover)'" onmouseout="this.style.background='var(--error-color)'">
-                          <i class="fas fa-trash"></i> Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                `;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-        ` : `
-          <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-            <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-            <p style="margin: 0; font-size: 1rem;">No items in vending inventory</p>
-            <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Use the "Add Item from Inventory" button to add items.</p>
-          </div>
-        `}
-      </div>
-
-      <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
-        <button type="button" class="cancel-manage-vendor-btn" style="
           padding: 0.75rem 1.5rem;
-          background: var(--card-bg);
-          color: var(--text-color);
-          border: 1px solid var(--border-color);
+          background: var(--primary-color);
+          color: white;
+          border: none;
           border-radius: 0.5rem;
           cursor: pointer;
           font-size: 1rem;
           transition: background 0.2s;
-        ">Close</button>
-        <button type="button" id="save-shop-image-btn" style="
-                          padding: 0.5rem 1rem;
-                          background: var(--error-color);
-                          color: white;
-                          border: none;
-                          border-radius: 0.25rem;
-                          cursor: pointer;
-                          font-size: 0.85rem;
-                          transition: background 0.2s;
-                          display: flex;
-                          align-items: center;
-                          gap: 0.25rem;
-                        " title="Delete item" onmouseover="this.style.background='var(--error-hover)'" onmouseout="this.style.background='var(--error-color)'">
-                          <i class="fas fa-trash"></i> Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                `;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-        ` : `
-          <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-            <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-            <p style="margin: 0; font-size: 1rem;">No items in vending inventory</p>
-            <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Use the "Add Item from Inventory" button to add items.</p>
-          </div>
-        `}
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        ">
+          <i class="fas fa-save"></i>
+          Save Shop Banner
+        </button>
       </div>
 
       <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
@@ -4467,25 +4409,8 @@ async function showManageVendorModal(character) {
       const span = checkbox.nextElementSibling;
       if (span) {
         span.textContent = checkbox.checked ? 'Yes' : 'No';
-      }
-    });
-  });
-
-  // Handle delete buttons
-  const deleteButtons = modal.querySelectorAll('.manage-delete-item-btn');
-  deleteButtons.forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const itemId = btn.dataset.itemId;
-      if (confirm('Are you sure you want to delete this item from your vending inventory?')) {
-        await deleteVendorItem(character._id, itemId);
-        // Reload the manage modal
-        modal.style.animation = 'fadeOut 0.3s ease forwards';
-        setTimeout(() => {
-          if (modal.parentNode) {
-            modal.parentNode.removeChild(modal);
-          }
-          showManageVendorModal(character);
-        }, 300);
+        span.style.color = checkbox.checked ? 'var(--success-color)' : 'var(--text-secondary)';
+        span.style.fontWeight = checkbox.checked ? '600' : '500';
       }
     });
   });
@@ -4636,7 +4561,7 @@ async function showEditVendorItemModal(character, item) {
           <label for="edit-token-price" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
             Token Price
           </label>
-          <input type="number" id="edit-token-price" name="tokenPrice" min="0" step="0.01" value="${item.tokenPrice || ''}"
+          <input type="number" id="edit-token-price" name="tokenPrice" min="0" step="1" value="${item.tokenPrice || ''}"
             placeholder="Enter token price (optional)"
             style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
         </div>
@@ -4682,8 +4607,8 @@ async function showEditVendorItemModal(character, item) {
         <div class="form-group">
           <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
             <input type="checkbox" id="edit-barter-open" name="barterOpen" ${item.barterOpen ? 'checked' : ''} 
-              style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary-color); border: 2px solid var(--border-color); border-radius: 4px; transition: all 0.2s;"
-              onchange="this.style.borderColor = this.checked ? 'var(--primary-color)' : 'var(--border-color)'; this.style.backgroundColor = this.checked ? 'var(--primary-color)' : 'transparent';">
+              style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--primary-color); border: 2px solid ${item.barterOpen ? 'var(--primary-color)' : 'var(--border-color)'}; border-radius: 4px; background-color: ${item.barterOpen ? 'var(--primary-color)' : 'transparent'}; transition: all 0.2s; box-shadow: ${item.barterOpen ? '0 0 0 2px rgba(0,123,255,0.2)' : 'none'};"
+              onchange="const isChecked = this.checked; this.style.borderColor = isChecked ? 'var(--primary-color)' : 'var(--border-color)'; this.style.backgroundColor = isChecked ? 'var(--primary-color)' : 'transparent'; this.style.boxShadow = isChecked ? '0 0 0 2px rgba(0,123,255,0.2)' : 'none';">
             <span style="font-weight: 500; color: var(--text-color);">Barter/Trades Open</span>
           </label>
         </div>
@@ -4762,6 +4687,51 @@ async function addVendorItem(characterId, form, modal) {
   try {
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalHTML = submitBtn.innerHTML;
+    
+    // Validate slot availability before submitting
+    const slotInput = form.slot;
+    if (!slotInput.value.trim()) {
+      throw new Error('Please select a slot for this item');
+    }
+    
+    // Check if slot is available by fetching current vending inventory
+    try {
+      const vendingResponse = await fetch(`/api/characters/${characterId}/vending`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (vendingResponse.ok) {
+        const vendingData = await vendingResponse.json();
+        const items = vendingData?.items || [];
+        const selectedSlot = slotInput.value.trim();
+        
+        // Check if slot is already occupied
+        const slotOccupied = items.some(item => item.slot === selectedSlot);
+        if (slotOccupied) {
+          throw new Error(`Slot ${selectedSlot} is already occupied. Please select a different slot.`);
+        }
+        
+        // Check total slots available
+        const totalSlots = vendingData.character?.slots?.total || 0;
+        const usedSlots = items.length;
+        const availableSlots = totalSlots - usedSlots;
+        
+        if (availableSlots <= 0) {
+          throw new Error(`You have no available slots. You have used all ${totalSlots} slots.`);
+        }
+      }
+    } catch (validationError) {
+      if (validationError.message.includes('Slot') || validationError.message.includes('slots')) {
+        throw validationError;
+      }
+      // If it's a network error, continue anyway - server will validate
+      console.warn('[profile.js]: Could not validate slots client-side:', validationError);
+    }
+    
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
 
