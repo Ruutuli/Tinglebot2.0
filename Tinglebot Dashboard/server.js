@@ -1022,17 +1022,24 @@ app.get('/auth/discord/callback',
     logger.debug('session exists: ' + !!req.session, null, 'server.js');
     logger.debug('session keys: ' + Object.keys(req.session || {}), null, 'server.js');
     
-    if (returnTo) {
-      // Clear the returnTo from session
-      delete req.session.returnTo;
-      // Redirect to the original page
-      logger.debug('Redirecting to: ' + returnTo + '?login=success', null, 'server.js');
-      res.redirect(returnTo + '?login=success');
-    } else {
-      // Default redirect to dashboard
-      logger.debug('Redirecting to default: /?login=success', null, 'server.js');
-      res.redirect('/?login=success');
+    // Normalize returnTo - handle empty string, '/', or undefined
+    let finalReturnTo = returnTo;
+    if (!finalReturnTo || finalReturnTo === '/' || finalReturnTo.trim() === '') {
+      finalReturnTo = '/dashboard';
     }
+    
+    // Clear the returnTo from session
+    if (req.session.returnTo) {
+      delete req.session.returnTo;
+    }
+    
+    // Build redirect URL - check if returnTo already has query params
+    const separator = finalReturnTo.includes('?') ? '&' : '?';
+    const redirectUrl = finalReturnTo + separator + 'login=success';
+    
+    // Redirect to the destination
+    logger.debug('Redirecting to: ' + redirectUrl, null, 'server.js');
+    res.redirect(redirectUrl);
   }
 );
 

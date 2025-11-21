@@ -147,7 +147,7 @@ function handleDiscordLogin(event) {
   button.style.pointerEvents = 'none';
   
   // Get return URL from session storage or default to dashboard
-  const returnTo = sessionStorage.getItem('returnTo') || '/';
+  const returnTo = sessionStorage.getItem('returnTo') || '/dashboard';
   
   // Redirect to Discord OAuth with return URL
   window.location.href = `/auth/discord?returnTo=${encodeURIComponent(returnTo)}`;
