@@ -2047,39 +2047,39 @@ async function handleVendingViewVillage(interaction, villageKey) {
       });
     }
 
+    // Get current month name
+    const now = new Date();
+    const monthName = now.toLocaleString('default', { month: 'long' });
+
     // ----- Determine per-village settings -----
     const villageSettings = {
       rudania: {
         emoji: '<:rudania:899492917452890142>',
-        color: '#d93e3e',
-        image: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_red_bottom.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20red.png'
+        color: '#d93e3e'
       },
       inariko: {
         emoji: '<:inariko:899493009073274920>',
-        color: '#3e7ed9',
-        image: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_blue_bottom.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20blue.png'
+        color: '#3e7ed9'
       },
       vhintl: {
         emoji: '<:vhintl:899492879205007450>',
-        color: '#3ed96a',
-        image: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_green_bottom.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20GREEN.png'
+        color: '#3ed96a'
       },
       limited: {
         emoji: '🎁',
-        color: '#00d6d6',
-        image: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20border_cyan_bottom.png'
+        color: '#00d6d6'
       }
     };
 
     const settings = villageSettings[villageKey] || {
       emoji: '🏘️',
-      color: '#f4c542',
-      image: null
+      color: '#f4c542'
     };
 
     const embed = new EmbedBuilder()
-      .setTitle(`${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)}`)
-      .setColor(settings.color);
+      .setTitle(`${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`)
+      .setColor(settings.color)
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
     if (villageKey === 'limited') {
       embed.setDescription(
@@ -2094,10 +2094,6 @@ async function handleVendingViewVillage(interaction, villageKey) {
           `${i.emoji || '📦'} **${i.itemName}**\n  > **Cost:** ${i.points} pts\n  > **Type:** ${i.vendingType}`
         ).join('\n\n') || '*No items found*'
       );
-    }
-
-    if (settings.image) {
-      embed.setImage(settings.image);
     }
 
     return interaction.update({

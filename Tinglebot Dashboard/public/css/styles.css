@@ -596,6 +596,7 @@ h4 { font-size: 1.25rem; }
   .main-footer {
     margin-left: calc(-1 * var(--main-padding) - var(--sidebar-width));
     padding-left: calc(var(--main-padding) + var(--sidebar-width));
+    margin-top: 2rem;
   }
   
   .main-wrapper.sidebar-collapsed .main-footer {
