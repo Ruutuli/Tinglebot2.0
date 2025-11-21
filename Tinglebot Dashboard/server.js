@@ -19,7 +19,7 @@ const DiscordStrategy = require('passport-discord').Strategy;
 const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
 const { getDiscordGateway } = require('./utils/discordGateway');
-const MessageTracking = require('../models/MessageTrackingModel');
+const MessageTracking = require('./models/MessageTrackingModel');
 const compression = require('compression');
 const multer = require('multer');
 const fs = require('fs').promises;
@@ -409,19 +409,27 @@ app.use(helmet({
       "script-src-attr": ["'unsafe-inline'"]
     }
   },
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  // Explicitly disable HSTS in helmet - we'll set it conditionally ourselves
+  hsts: false
 }));
 
 // Additional security headers
 // HSTS only enabled in production when HTTPS is confirmed working
 // Railway will provision SSL automatically, but don't set HSTS until certificate is valid
+// IMPORTANT: HSTS is set per-request to ensure we only set it when HTTPS is actually working
+// Using shorter max-age initially (3600 = 1 hour) to allow easier recovery from SSL issues
 if (isProduction && !isLocalhost) {
   app.use((req, res, next) => {
-    // Only set HSTS if we're actually getting HTTPS requests
-    // Railway provides HTTPS, so if x-forwarded-proto is https, we can set HSTS
-    if (req.headers['x-forwarded-proto'] === 'https' || req.secure) {
-      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    // Only set HSTS if we're actually getting HTTPS requests via Railway's proxy
+    // Railway sets x-forwarded-proto when SSL is provisioned and working
+    const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.secure;
+    if (isHttps) {
+      // Use shorter max-age (1 hour) initially - can increase after confirming SSL is stable
+      // This makes it easier to recover if SSL certificate provisioning is delayed
+      res.setHeader('Strict-Transport-Security', 'max-age=3600; includeSubDomains');
     }
+    // Don't set HSTS header at all if not HTTPS - let browser use default behavior
     next();
   });
 }
@@ -546,12 +554,17 @@ async function uploadPinImageToGCS(file, pinId) {
 }
 
 // HTTPS redirect middleware (only in production)
-if (isProduction) {
+// Only redirect if we're sure Railway proxy is working (x-forwarded-proto is set)
+// If x-forwarded-proto is missing, Railway might still be provisioning SSL
+if (isProduction && !isLocalhost) {
   app.use((req, res, next) => {
     const xfProto = req.headers["x-forwarded-proto"];
-    if (xfProto && xfProto !== "https") {
+    // Only redirect if x-forwarded-proto is explicitly set to 'http'
+    // If it's missing, allow the request through (Railway might still be setting up SSL)
+    if (xfProto === "http") {
       return res.redirect(301, `https://${req.headers.host}${req.url}`);
     }
+    // If x-forwarded-proto is 'https' or not set, continue normally
     next();
   });
 }
@@ -7613,8 +7626,9 @@ app.use((req, res, next) => {
   
   // Strict Transport Security (HTTPS only) - only set if actually using HTTPS
   // Don't set HSTS if Railway hasn't provisioned SSL certificate yet
+  // Using shorter max-age (1 hour) initially for easier recovery from SSL issues
   if (isProduction && !isLocalhost && (req.secure || req.headers['x-forwarded-proto'] === 'https')) {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Strict-Transport-Security', 'max-age=3600; includeSubDomains');
   }
   
   // Referrer Policy
