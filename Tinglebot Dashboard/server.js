@@ -6698,6 +6698,104 @@ app.get('/api/characters/list', async (req, res) => {
   }
 });
 
+// ------------------- Function: getVendingInventory -------------------
+// Returns vending inventory for a character from vendingInventories collection
+app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const userId = req.user.discordId;
+
+    // Find character (check both regular and mod characters)
+    let character = await Character.findById(characterId);
+    if (!character) {
+      character = await ModCharacter.findById(characterId);
+    }
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Verify character belongs to user
+    if (character.userId !== userId) {
+      return res.status(403).json({ error: 'You do not have permission to view this character' });
+    }
+
+    // Connect to tinglebot database using native MongoDB client
+    await connectToTinglebot();
+    const tinglebotDb = mongoose.connection.db;
+    
+    // Try to get items from vendingInventories collection in tinglebot database
+    let items = [];
+    try {
+      const vendingInventoriesCollection = tinglebotDb.collection('vendingInventories');
+      const vendingInventoryDoc = await vendingInventoriesCollection.findOne({ 
+        characterId: new ObjectId(characterId) 
+      });
+      
+      if (vendingInventoryDoc && vendingInventoryDoc.items && Array.isArray(vendingInventoryDoc.items)) {
+        items = vendingInventoryDoc.items;
+      }
+    } catch (vendingInvError) {
+      console.warn('[server.js]: Could not read from vendingInventories collection, trying vending database:', vendingInvError.message);
+    }
+
+    // If no items found in vendingInventories, try vending database
+    if (items.length === 0) {
+      try {
+        const { initializeVendingInventoryModel } = require('./models/VendingModel');
+        const VendingInventory = await initializeVendingInventoryModel(character.name);
+        const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
+        items = vendingItems;
+      } catch (vendingDbError) {
+        console.warn('[server.js]: Could not read from vending database:', vendingDbError.message);
+      }
+    }
+
+    // Calculate slot usage - count items, not cumulative slotsUsed
+    const usedSlots = items.length;
+
+    // Calculate total slots
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+    const vendorType = character.vendorType?.toLowerCase() || character.job?.toLowerCase() || 'shopkeeper';
+    const pouchType = character.shopPouch?.toLowerCase() || character.vendingSetup?.pouchType?.toLowerCase() || 'none';
+    const baseSlots = baseSlotLimits[vendorType] || 0;
+    const pouchSlots = pouchCapacities[pouchType] || 0;
+    const totalSlots = baseSlots + pouchSlots;
+
+    res.json({
+      character: {
+        _id: character._id,
+        name: character.name,
+        vendorType: vendorType,
+        pouchType: pouchType,
+        vendingPoints: character.vendingPoints || 0,
+        slots: {
+          total: totalSlots,
+          used: usedSlots,
+          available: totalSlots - usedSlots
+        }
+      },
+      items: items.map(item => ({
+        _id: item._id || item._id?.toString(),
+        itemName: item.itemName,
+        itemId: item.itemId || item.itemId?.toString(),
+        stockQty: item.stockQty,
+        tokenPrice: item.tokenPrice,
+        artPrice: item.artPrice,
+        otherPrice: item.otherPrice,
+        tradesOpen: item.tradesOpen,
+        slot: item.slot,
+        slotsUsed: item.slotsUsed,
+        date: item.date
+      }))
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error fetching vending inventory:', error);
+    res.status(500).json({ error: 'Failed to fetch vending inventory', details: error.message });
+  }
+});
+
 // ------------------- Function: setupVendingShop -------------------
 // One-time setup endpoint to import vending data from old method
 app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, res) => {
@@ -6736,7 +6834,7 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
     }
 
     // Check if already set up (one-time only)
-    if (character.vendingSetup?.shopLink || character.shopLink) {
+    if (character.vendingSetup?.setupDate) {
       return res.status(400).json({ error: 'This character has already been set up. Setup can only be done once.' });
     }
 
@@ -6764,30 +6862,127 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
     const { initializeVendingInventoryModel } = require('./models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
-    // Import items from sheet
-    const importedItems = [];
-    const errors = [];
+    // First, validate all items before saving any
+    const validationErrors = [];
+    const validItems = [];
 
     for (const row of parsedRows) {
       try {
         // Find item by name
         const item = await Item.findOne({ itemName: row.itemName });
         if (!item) {
-          errors.push(`Item "${row.itemName}" not found in database`);
+          validationErrors.push(`Item "${row.itemName}" not found in database`);
           continue;
         }
 
+        // Validate stack size
+        const stockQty = parseInt(row.stockQty) || 1;
+        const isStackable = item.stackable || false;
+        const maxStackSize = item.maxStackSize || 10;
+
+        if (!isStackable && stockQty > 1) {
+          validationErrors.push(`Item "${row.itemName}" is not stackable. Stock quantity must be 1, but ${stockQty} was provided.`);
+          continue;
+        }
+
+        if (isStackable && stockQty > maxStackSize) {
+          validationErrors.push(`Item "${row.itemName}" has a maximum stack size of ${maxStackSize}, but ${stockQty} was provided.`);
+          continue;
+        }
+
+        // Item is valid, add to validItems array
+        validItems.push({ row, item, stockQty });
+      } catch (error) {
+        console.error(`[server.js]: Error validating item "${row.itemName}":`, error);
+        validationErrors.push(`Failed to validate "${row.itemName}": ${error.message}`);
+      }
+    }
+
+    // If there are validation errors, return early without saving anything
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        error: 'Validation errors occurred. No items were saved.',
+        errors: validationErrors
+      });
+    }
+
+    // All items validated successfully - now save them
+    // First, get existing slots to avoid conflicts
+    const existingItems = await VendingInventory.find({ characterName: character.name });
+    const usedSlots = new Set(existingItems.map(item => item.slot).filter(Boolean));
+    
+    // Calculate total available slots
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+    const baseSlots = baseSlotLimits[vendorType] || 0;
+    const pouchSlots = pouchCapacities[pouchType.toLowerCase()] || 0;
+    const totalSlots = baseSlots + pouchSlots;
+
+    const importedItems = [];
+    const errors = [];
+    let currentSlot = 1;
+
+    for (const { row, item, stockQty } of validItems) {
+      try {
         // Parse boolean for tradesOpen
         const tradesOpen = typeof row.tradesOpen === 'string' 
           ? (row.tradesOpen.toLowerCase() === 'true' || row.tradesOpen.toLowerCase() === 'yes')
           : Boolean(row.tradesOpen);
+
+        // Calculate slots needed for this item (for slotsUsed field)
+        const isStackable = item.stackable || false;
+        const maxStackSize = item.maxStackSize || 10;
+        let slotsUsed = 1;
+        if (isStackable) {
+          slotsUsed = Math.ceil(stockQty / maxStackSize);
+        } else {
+          slotsUsed = stockQty;
+        }
+
+        // Auto-assign slot if none specified
+        let assignedSlot = row.slot ? row.slot.trim() : null;
+        if (!assignedSlot || assignedSlot === '') {
+          // Find first available slot
+          let slotFound = false;
+          for (let i = currentSlot; i <= totalSlots; i++) {
+            const slotName = `Slot ${i}`;
+            if (!usedSlots.has(slotName)) {
+              assignedSlot = slotName;
+              usedSlots.add(slotName);
+              currentSlot = i + 1;
+              slotFound = true;
+              break;
+            }
+          }
+          if (!slotFound) {
+            errors.push(`No available slots for "${row.itemName}". You have used all ${totalSlots} slots.`);
+            continue;
+          }
+        } else {
+          // Validate manually specified slot
+          const slotNumber = parseInt(assignedSlot.replace(/[^0-9]/g, ''));
+          if (isNaN(slotNumber) || slotNumber < 1 || slotNumber > totalSlots) {
+            errors.push(`Invalid slot number "${assignedSlot}" for "${row.itemName}". You have ${totalSlots} total slots available.`);
+            continue;
+          }
+          // Normalize slot format
+          if (!assignedSlot.startsWith('Slot ')) {
+            assignedSlot = `Slot ${slotNumber}`;
+          }
+          // Check if slot is already used
+          if (usedSlots.has(assignedSlot)) {
+            errors.push(`Slot "${assignedSlot}" is already occupied. Cannot add "${row.itemName}" to the same slot.`);
+            continue;
+          }
+          usedSlots.add(assignedSlot);
+        }
 
         // Create vending inventory entry
         const vendingItem = new VendingInventory({
           characterName: character.name,
           itemName: row.itemName,
           itemId: item._id,
-          stockQty: parseInt(row.stockQty) || 1,
+          stockQty: stockQty,
           costEach: parseFloat(row.costEach) || 0,
           pointsSpent: parseFloat(row.pointsSpent) || 0,
           boughtFrom: row.boughtFrom || null,
@@ -6795,8 +6990,9 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
           artPrice: row.artPrice || 'N/A',
           otherPrice: row.otherPrice || 'N/A',
           tradesOpen: tradesOpen,
-          slot: row.slot || null,
-          date: row.date ? (row.date instanceof Date ? row.date : new Date(row.date)) : new Date()
+          slot: assignedSlot,
+          date: row.date ? (row.date instanceof Date ? row.date : new Date(row.date)) : new Date(),
+          slotsUsed: slotsUsed
         });
 
         await vendingItem.save();
@@ -6807,7 +7003,38 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
       }
     }
 
-    // Update character's vending setup
+    // If there are errors during saving, rollback by deleting saved items
+    if (errors.length > 0) {
+      // Delete any items that were saved before the error
+      try {
+        for (const itemName of importedItems) {
+          await VendingInventory.deleteOne({ 
+            characterName: character.name, 
+            itemName: itemName 
+          });
+        }
+      } catch (rollbackError) {
+        console.error('[server.js]: Error rolling back saved items:', rollbackError);
+      }
+
+      return res.status(500).json({
+        error: 'Error saving items. No items were saved.',
+        errors: errors
+      });
+    }
+
+    // Only mark setup as complete if there are no errors
+    if (errors.length > 0) {
+      // If there are errors, don't mark setup as complete
+      // Return error response with validation errors
+      return res.status(400).json({
+        error: 'Validation errors occurred. Setup was not completed.',
+        errors: errors,
+        imported: importedItems.length
+      });
+    }
+
+    // All items saved successfully - mark setup as complete
     const pouchSize = pouchSizes[pouchType.toLowerCase()];
     const updateData = {
       vendingSetup: {
@@ -6824,15 +7051,472 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
 
     await (character.constructor === Character ? Character : ModCharacter).findByIdAndUpdate(characterId, updateData);
 
+    // Add entry to vendingInventories collection in main database
+    try {
+      // Ensure mongoose connection is ready
+      await connectToTinglebot();
+      
+      // Define schema for vendingInventories if not already defined
+      const VendingInventoriesSchema = new mongoose.Schema({
+        characterId: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
+        characterName: { type: String, required: true },
+        userId: { type: String, required: true },
+        pouchType: { type: String, required: true },
+        pouchSize: { type: Number, required: true },
+        vendorType: { type: String, required: true },
+        vendingPoints: { type: Number, default: 0 },
+        shopImage: { type: String },
+        setupDate: { type: Date, default: Date.now },
+        itemCount: { type: Number, default: 0 }
+      }, { collection: 'vendingInventories', timestamps: true });
+
+      // Get or create model
+      let VendingInventories;
+      try {
+        VendingInventories = mongoose.model('VendingInventories', VendingInventoriesSchema);
+      } catch (error) {
+        // Model already exists, retrieve it
+        VendingInventories = mongoose.model('VendingInventories');
+      }
+
+      // Create or update entry in vendingInventories
+      await VendingInventories.findOneAndUpdate(
+        { characterId: characterId },
+        {
+          characterId: characterId,
+          characterName: character.name,
+          userId: userId,
+          pouchType: pouchType.toLowerCase(),
+          pouchSize: pouchSize,
+          vendorType: vendorType,
+          vendingPoints: vendingPoints || 0,
+          shopImage: shopImage || null,
+          setupDate: new Date(),
+          itemCount: importedItems.length
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log(`[server.js]: ✅ Added entry to vendingInventories for character ${character.name}`);
+    } catch (vendingInvError) {
+      console.error('[server.js]: ⚠️ Error adding to vendingInventories collection:', vendingInvError);
+      // Don't fail the request if this fails, just log it
+    }
+
     res.json({
       success: true,
       message: `Successfully set up vending shop for ${character.name}`,
-      imported: importedItems.length,
-      errors: errors.length > 0 ? errors : undefined
+      imported: importedItems.length
     });
   } catch (error) {
     console.error('[server.js]: ❌ Error setting up vending shop:', error);
     res.status(500).json({ error: 'Failed to set up vending shop', details: error.message });
+  }
+});
+
+// ------------------- Function: addVendingItem -------------------
+// Adds an item to vending inventory and removes it from character inventory
+app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const userId = req.user.discordId;
+    const { itemName, stockQty, tokenPrice, artPrice, otherPrice, barterOpen, slot } = req.body;
+
+    // Validate required fields
+    if (!itemName || !stockQty) {
+      return res.status(400).json({ error: 'Item name and stock quantity are required' });
+    }
+
+    // Find character (check both regular and mod characters)
+    let character = await Character.findById(characterId);
+    if (!character) {
+      character = await ModCharacter.findById(characterId);
+    }
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Verify character belongs to user
+    if (character.userId !== userId) {
+      return res.status(403).json({ error: 'You do not have permission to modify this character' });
+    }
+
+    // Check if character has vending setup
+    if (!character.vendingSetup?.setupDate) {
+      return res.status(400).json({ error: 'Character must set up vending shop first' });
+    }
+
+    // Find item in database to get maxStackSize
+    const item = await Item.findOne({ itemName: itemName.trim() });
+    if (!item) {
+      return res.status(400).json({ error: `Item "${itemName}" not found in database` });
+    }
+
+    // Validate stack size
+    const stockQtyNum = parseInt(stockQty);
+    const isStackable = item.stackable || false;
+    const maxStackSize = item.maxStackSize || 10;
+
+    if (!isStackable && stockQtyNum > 1) {
+      return res.status(400).json({ 
+        error: `Item "${itemName}" is not stackable. Stock quantity must be 1, but ${stockQtyNum} was provided.` 
+      });
+    }
+
+    if (isStackable && stockQtyNum > maxStackSize) {
+      return res.status(400).json({ 
+        error: `Item "${itemName}" has a maximum stack size of ${maxStackSize}, but ${stockQtyNum} was provided.` 
+      });
+    }
+
+    // Check if character has enough items in inventory
+    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+    const inventoryItem = await inventoryCollection.findOne({
+      characterId: character._id,
+      itemName: { $regex: new RegExp(`^${itemName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
+
+    if (!inventoryItem || inventoryItem.quantity < stockQtyNum) {
+      return res.status(400).json({ 
+        error: `Not enough ${itemName} in inventory. Available: ${inventoryItem?.quantity || 0}, Requested: ${stockQtyNum}` 
+      });
+    }
+
+    // Remove items from character inventory
+    const newQuantity = inventoryItem.quantity - stockQtyNum;
+    if (newQuantity <= 0) {
+      // Remove the item entirely
+      await inventoryCollection.deleteOne({
+        characterId: character._id,
+        itemName: inventoryItem.itemName
+      });
+    } else {
+      // Update quantity
+      await inventoryCollection.updateOne(
+        { characterId: character._id, itemName: inventoryItem.itemName },
+        { $inc: { quantity: -stockQtyNum } }
+      );
+    }
+
+    // Initialize vending inventory model
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const VendingInventory = await initializeVendingInventoryModel(character.name);
+
+    // Calculate slots used
+    let slotsUsed = 1;
+    if (isStackable) {
+      slotsUsed = Math.ceil(stockQtyNum / maxStackSize);
+    } else {
+      slotsUsed = stockQtyNum;
+    }
+
+    // Check if item already exists in vending inventory (same slot or no slot)
+    const existingItem = slot 
+      ? await VendingInventory.findOne({ characterName: character.name, itemName: itemName.trim(), slot: slot })
+      : await VendingInventory.findOne({ characterName: character.name, itemName: itemName.trim(), slot: { $exists: false } });
+
+    if (existingItem) {
+      // Update existing item
+      await VendingInventory.updateOne(
+        { _id: existingItem._id },
+        {
+          $inc: { stockQty: stockQtyNum },
+          $set: {
+            tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : existingItem.tokenPrice,
+            artPrice: artPrice && artPrice.trim() !== '' ? artPrice : existingItem.artPrice,
+            otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : existingItem.otherPrice,
+            barterOpen: barterOpen !== undefined ? barterOpen : existingItem.barterOpen,
+            tradesOpen: barterOpen !== undefined ? barterOpen : existingItem.tradesOpen,
+            slotsUsed: slotsUsed
+          }
+        }
+      );
+    } else {
+      // Create new vending item
+      await VendingInventory.create({
+        characterName: character.name,
+        itemName: itemName.trim(),
+        itemId: item._id,
+        stockQty: stockQtyNum,
+        costEach: 0,
+        pointsSpent: 0,
+        boughtFrom: character.currentVillage || 'Unknown',
+        tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
+        artPrice: artPrice && artPrice.trim() !== '' ? artPrice : null,
+        otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : null,
+        tradesOpen: barterOpen || false,
+        barterOpen: barterOpen || false,
+        slot: slot && slot.trim() !== '' ? slot.trim() : null,
+        date: new Date(),
+        slotsUsed: slotsUsed,
+        isPersonalItem: true,
+        source: 'personal_inventory'
+      });
+    }
+
+    console.log(`[server.js]: ✅ Added ${stockQtyNum}x ${itemName} to ${character.name}'s vending shop and removed from inventory`);
+
+    res.json({
+      success: true,
+      message: `Successfully added ${stockQtyNum}x ${itemName} to vending shop`,
+      item: {
+        itemName: itemName.trim(),
+        stockQty: stockQtyNum,
+        removedFromInventory: true
+      }
+    });
+
+  } catch (error) {
+    console.error('[server.js]: ❌ Error adding vending item:', error);
+    res.status(500).json({ 
+      error: 'Failed to add item to vending shop', 
+      details: error.message 
+    });
+  }
+});
+
+// ------------------- Function: updateVendingItem -------------------
+// Updates an existing vending item
+app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, async (req, res) => {
+  try {
+    const { characterId, itemId } = req.params;
+    const userId = req.user.discordId;
+    const { stockQty, tokenPrice, artPrice, otherPrice, barterOpen, slot } = req.body;
+
+    // Find character (check both regular and mod characters)
+    let character = await Character.findById(characterId);
+    if (!character) {
+      character = await ModCharacter.findById(characterId);
+    }
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Verify character belongs to user
+    if (character.userId !== userId) {
+      return res.status(403).json({ error: 'You do not have permission to modify this character' });
+    }
+
+    // Check if character has vending setup
+    if (!character.vendingSetup?.setupDate) {
+      return res.status(400).json({ error: 'Character must set up vending shop first' });
+    }
+
+    // Initialize vending inventory model
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const VendingInventory = await initializeVendingInventoryModel(character.name);
+
+    // Find the item - handle both ObjectId and string formats
+    let vendingItem;
+    try {
+      // Try as ObjectId first if it's a valid ObjectId format
+      if (itemId && typeof itemId === 'string' && itemId.match(/^[0-9a-fA-F]{24}$/)) {
+        try {
+          vendingItem = await VendingInventory.findById(itemId);
+        } catch (idError) {
+          // If findById fails, try findOne with ObjectId
+          vendingItem = await VendingInventory.findOne({ _id: new ObjectId(itemId) });
+        }
+      }
+      
+      // If not found, try as string or other formats
+      if (!vendingItem) {
+        try {
+          vendingItem = await VendingInventory.findOne({ _id: itemId });
+        } catch (strError) {
+          // Try with ObjectId conversion
+          try {
+            vendingItem = await VendingInventory.findOne({ _id: new ObjectId(itemId) });
+          } catch (objIdError) {
+            console.error('[server.js]: All attempts to find item failed:', objIdError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[server.js]: Error finding vending item:', error);
+      return res.status(500).json({ error: 'Error searching for vending item', details: error.message, itemId: itemId });
+    }
+
+    if (!vendingItem) {
+      return res.status(404).json({ error: 'Vending item not found', itemId: itemId });
+    }
+
+    // Find item in database to validate stack size if stockQty is being updated
+    if (stockQty !== undefined) {
+      const item = await Item.findOne({ itemName: vendingItem.itemName });
+      if (item) {
+        const stockQtyNum = parseInt(stockQty);
+        const isStackable = item.stackable || false;
+        const maxStackSize = item.maxStackSize || 10;
+
+        if (!isStackable && stockQtyNum > 1) {
+          return res.status(400).json({ 
+            error: `Item "${vendingItem.itemName}" is not stackable. Stock quantity must be 1, but ${stockQtyNum} was provided.` 
+          });
+        }
+
+        if (isStackable && stockQtyNum > maxStackSize) {
+          return res.status(400).json({ 
+            error: `Item "${vendingItem.itemName}" has a maximum stack size of ${maxStackSize}, but ${stockQtyNum} was provided.` 
+          });
+        }
+
+        // Calculate slots used
+        let slotsUsed = 1;
+        if (isStackable) {
+          slotsUsed = Math.ceil(stockQtyNum / maxStackSize);
+        } else {
+          slotsUsed = stockQtyNum;
+        }
+        vendingItem.slotsUsed = slotsUsed;
+      }
+      vendingItem.stockQty = parseInt(stockQty);
+    }
+
+    // Update other fields
+    if (tokenPrice !== undefined) {
+      vendingItem.tokenPrice = tokenPrice !== null ? parseFloat(tokenPrice) : null;
+    }
+    if (artPrice !== undefined) {
+      vendingItem.artPrice = artPrice && artPrice.trim() !== '' ? artPrice.trim() : null;
+    }
+    if (otherPrice !== undefined) {
+      vendingItem.otherPrice = otherPrice && otherPrice.trim() !== '' ? otherPrice.trim() : null;
+    }
+    if (barterOpen !== undefined) {
+      vendingItem.tradesOpen = Boolean(barterOpen);
+      vendingItem.barterOpen = Boolean(barterOpen);
+    }
+    if (slot !== undefined) {
+      vendingItem.slot = slot && slot.trim() !== '' ? slot.trim() : null;
+    }
+
+    await vendingItem.save();
+
+    res.json({
+      success: true,
+      message: 'Vending item updated successfully',
+      item: vendingItem
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error updating vending item:', error);
+    res.status(500).json({ error: 'Failed to update vending item', details: error.message });
+  }
+});
+
+// ------------------- Function: deleteVendingItem -------------------
+// Deletes a vending item
+app.delete('/api/characters/:characterId/vending/items/:itemId', requireAuth, async (req, res) => {
+  try {
+    const { characterId, itemId } = req.params;
+    const userId = req.user.discordId;
+
+    // Find character (check both regular and mod characters)
+    let character = await Character.findById(characterId);
+    if (!character) {
+      character = await ModCharacter.findById(characterId);
+    }
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Verify character belongs to user
+    if (character.userId !== userId) {
+      return res.status(403).json({ error: 'You do not have permission to modify this character' });
+    }
+
+    // Check if character has vending setup
+    if (!character.vendingSetup?.setupDate) {
+      return res.status(400).json({ error: 'Character must set up vending shop first' });
+    }
+
+    // Initialize vending inventory model
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const VendingInventory = await initializeVendingInventoryModel(character.name);
+
+    // Find and delete the item
+    let deleteResult;
+    try {
+      deleteResult = await VendingInventory.findByIdAndDelete(itemId);
+    } catch (error) {
+      // Try finding by string ID if ObjectId fails
+      deleteResult = await VendingInventory.findOneAndDelete({ _id: itemId });
+    }
+
+    if (!deleteResult) {
+      return res.status(404).json({ error: 'Vending item not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Vending item deleted successfully'
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error deleting vending item:', error);
+    res.status(500).json({ error: 'Failed to delete vending item', details: error.message });
+  }
+});
+
+// ------------------- Function: updateShopImage -------------------
+// Updates the shop banner image for a character
+app.patch('/api/characters/:characterId/vending/shop-image', requireAuth, async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const userId = req.user.discordId;
+    const { shopImage } = req.body;
+
+    // Find character (check both regular and mod characters)
+    let character = await Character.findById(characterId);
+    if (!character) {
+      character = await ModCharacter.findById(characterId);
+    }
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Verify character belongs to user
+    if (character.userId !== userId) {
+      return res.status(403).json({ error: 'You do not have permission to modify this character' });
+    }
+
+    // Check if character has vending setup
+    if (!character.vendingSetup?.setupDate) {
+      return res.status(400).json({ error: 'Character must set up vending shop first' });
+    }
+
+    // Update shop image
+    const updateData = {
+      'vendingSetup.shopImage': shopImage || null
+    };
+
+    await (character.constructor === Character ? Character : ModCharacter).findByIdAndUpdate(characterId, updateData);
+
+    // Also update in vendingInventories collection
+    try {
+      await connectToTinglebot();
+      const tinglebotDb = mongoose.connection.db;
+      const vendingInventoriesCollection = tinglebotDb.collection('vendingInventories');
+      await vendingInventoriesCollection.updateOne(
+        { characterId: new ObjectId(characterId) },
+        { $set: { shopImage: shopImage || null } },
+        { upsert: false }
+      );
+    } catch (vendingInvError) {
+      console.warn('[server.js]: Could not update shopImage in vendingInventories collection:', vendingInvError.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'Shop banner image updated successfully',
+      shopImage: shopImage || null
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error updating shop banner image:', error);
+    res.status(500).json({ error: 'Failed to update shop banner image', details: error.message });
   }
 });
 

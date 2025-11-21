@@ -1552,12 +1552,6 @@ function showCharacterModal(character) {
               Inventory
             </a>
           ` : ''}
-          ${character.shopLink ? `
-            <a href="${character.shopLink}" target="_blank">
-              <i class="fas fa-store"></i>
-              Shop
-            </a>
-          ` : ''}
         </div>
       </div>
     </div>
@@ -2111,11 +2105,18 @@ function setupProfileEventListeners() {
   const manageVendingBtn = document.getElementById('manage-vending-shops-btn');
   if (manageVendingBtn) {
     manageVendingBtn.addEventListener('click', () => {
-      window.location.hash = '#vending';
-      const navEvent = new CustomEvent('navigateToSection', { 
-        detail: { section: 'vending-section' } 
-      });
-      document.dispatchEvent(navEvent);
+      // Find and click the vending section sidebar link to trigger navigation
+      const vendingLink = document.querySelector('.sidebar-nav a[data-section="vending-section"]');
+      if (vendingLink) {
+        vendingLink.click();
+      } else {
+        // Fallback: set hash and trigger navigation manually
+        window.location.hash = '#vending-section';
+        window.history.pushState({ section: 'vending-section' }, '', '#vending-section');
+        // Dispatch event that index.js might listen to, or try to call showVendingSection
+        const event = new Event('hashchange');
+        window.dispatchEvent(event);
+      }
     });
   }
   
@@ -2750,8 +2751,15 @@ async function createVendorCard(character) {
       const data = await inventoryResponse.json();
       inventoryData = data;
       usedSlots = data.character.slots.used || 0;
+    } else if (inventoryResponse.status === 404) {
+      // Character hasn't set up vending yet - this is expected, don't log as error
+      // Just use default values (inventoryData stays null, usedSlots stays 0)
+    } else {
+      // Other error status - log it
+      console.warn(`[profile.js]: Failed to fetch inventory for ${character.name}: ${inventoryResponse.status} ${inventoryResponse.statusText}`);
     }
   } catch (error) {
+    // Network or other errors
     console.error(`[profile.js]: Error fetching inventory for ${character.name}:`, error);
   }
 
@@ -2759,7 +2767,7 @@ async function createVendorCard(character) {
   const iconUrl = formatCharacterIconUrl(character.icon);
   
   // Check if character is already set up
-  const isSetup = character.vendingSetup?.shopLink || character.shopLink;
+  const isSetup = character.vendingSetup?.setupDate;
 
   card.innerHTML = `
     <div class="vendor-card-header" style="display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
@@ -2788,16 +2796,26 @@ async function createVendorCard(character) {
     </div>
     <div class="vendor-card-inventory" style="max-height: 300px; overflow-y: auto;">
       <div id="vendor-inventory-${character._id}" style="display: flex; flex-direction: column; gap: 0.5rem;">
-        ${inventoryData && inventoryData.items.length > 0 ? 
-          inventoryData.items.map(item => `
+        ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
+          inventoryData.items.sort((a, b) => {
+            // Sort by slot number if available
+            const slotA = a.slot ? parseInt(a.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+            const slotB = b.slot ? parseInt(b.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+            return slotA - slotB;
+          }).map(item => `
             <div class="vendor-item" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--input-bg); border-radius: 0.25rem; border: 1px solid var(--border-color);">
               <div style="flex: 1;">
-                <div style="font-weight: 500; color: var(--text-color); margin-bottom: 0.25rem;">${escapeHtmlAttribute(item.itemName)}</div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                  Stock: ${item.stockQty} 
-                  ${item.tokenPrice !== null && item.tokenPrice !== undefined ? `• ${item.tokenPrice} tokens` : ''}
-                  ${item.artPrice ? `• ${escapeHtmlAttribute(item.artPrice)} art` : ''}
-                  ${item.otherPrice ? `• ${escapeHtmlAttribute(item.otherPrice)}` : ''}
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+                  <span style="font-weight: 700; color: white; font-size: 0.8rem; background: var(--primary-color); padding: 0.3rem 0.6rem; border-radius: 0.25rem; min-width: 50px; text-align: center;">
+                    ${item.slot || 'No Slot'}
+                  </span>
+                  <span style="font-weight: 600; color: var(--text-color); font-size: 0.95rem;">${escapeHtmlAttribute(item.itemName)}</span>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                  Stock: <strong style="color: var(--text-color);">${item.stockQty}</strong>
+                  ${item.tokenPrice !== null && item.tokenPrice !== undefined ? ` • <strong style="color: var(--primary-color);">${item.tokenPrice}</strong> tokens` : ''}
+                  ${item.artPrice && item.artPrice !== 'N/A' ? ` • ${escapeHtmlAttribute(item.artPrice)} art` : ''}
+                  ${item.otherPrice && item.otherPrice !== 'N/A' ? ` • ${escapeHtmlAttribute(item.otherPrice)}` : ''}
                 </div>
               </div>
               <div style="display: flex; gap: 0.5rem;">
@@ -2828,7 +2846,10 @@ async function createVendorCard(character) {
               </div>
             </div>
           `).join('') : 
-          '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No items in inventory</div>'
+          (inventoryData && inventoryData.items && inventoryData.items.length === 0 ? 
+            '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i><div>No items in vending inventory</div></div>' :
+            '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>Loading inventory...</div>'
+          )
         }
       </div>
     </div>
@@ -2871,7 +2892,7 @@ async function createVendorCard(character) {
         gap: 0.5rem;
       " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'">
         <i class="fas fa-plus"></i>
-        Add Item
+        Add Item from Inventory
       </button>
       <button class="manage-vendor-btn" data-character-id="${character._id}" style="
         padding: 0.75rem 1rem;
@@ -2886,9 +2907,14 @@ async function createVendorCard(character) {
         align-items: center;
         justify-content: center;
         gap: 0.5rem;
-      " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--card-bg)'">
+        position: relative;
+      " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--card-bg)'" title="${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 'Items: ' + inventoryData.items.map(i => `${i.itemName} (${i.slot || 'No Slot'})`).join(', ') : 'No items in inventory'}">
         <i class="fas fa-cog"></i>
         Manage
+        ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
+          `<span style="margin-left: 0.25rem; background: var(--primary-color); color: white; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">${inventoryData.items.length}</span>` : 
+          ''
+        }
       </button>
       `}
     </div>
@@ -2900,6 +2926,12 @@ async function createVendorCard(character) {
 
   const addBtn = card.querySelector('.add-vendor-item-btn');
   addBtn?.addEventListener('click', () => showAddVendorItemModal(character));
+
+  const manageBtn = card.querySelector('.manage-vendor-btn');
+  manageBtn?.addEventListener('click', () => {
+    // Open manage vendor modal for editing existing items
+    showManageVendorModal(character);
+  });
 
   const editButtons = card.querySelectorAll('.edit-vendor-item-btn');
   editButtons.forEach(btn => {
@@ -2927,6 +2959,103 @@ async function createVendorCard(character) {
   return card;
 }
 
+// ------------------- Function: showValidationErrorsModal -------------------
+// Shows a nice modal displaying validation errors
+function showValidationErrorsModal(errors, title, type = 'error') {
+  const modal = document.createElement('div');
+  modal.className = 'character-modal';
+  modal.style.zIndex = '10002';
+
+  const modalContent = document.createElement('div');
+  modalContent.className = 'character-modal-content';
+  modalContent.style.maxWidth = '600px';
+
+  const isSuccess = type === 'success';
+  const icon = isSuccess ? 'fa-check-circle' : 'fa-exclamation-triangle';
+  const iconColor = isSuccess ? '#4CAF50' : '#ff9800';
+  const borderColor = isSuccess ? '#4CAF50' : '#ff9800';
+
+  modalContent.innerHTML = `
+    <div class="character-modal-header">
+      <h2 style="margin: 0; color: var(--text-color); font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+        <i class="fas ${icon}" style="color: ${iconColor};"></i> ${escapeHtmlAttribute(title)}
+      </h2>
+      <button class="close-modal">&times;</button>
+    </div>
+    <div class="character-modal-body">
+      ${isSuccess ? `
+        <div style="padding: 1rem; background: #e8f5e9; border: 1px solid ${borderColor}; border-radius: 0.5rem; color: #2e7d32; margin-bottom: 1rem;">
+          <p style="margin: 0; font-size: 1rem;">${escapeHtmlAttribute(errors.length > 0 ? errors[0] : title)}</p>
+        </div>
+      ` : errors.length > 0 ? `
+        <div style="margin-bottom: 1rem;">
+          <p style="color: var(--text-color); margin-bottom: 0.75rem; font-weight: 500;">Please fix the following issues:</p>
+          <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-color); line-height: 1.8;">
+            ${errors.map(error => `<li style="margin-bottom: 0.5rem;">${escapeHtmlAttribute(error)}</li>`).join('')}
+          </ul>
+        </div>
+      ` : `
+        <div style="padding: 1rem; background: #fff3cd; border: 1px solid ${borderColor}; border-radius: 0.5rem; color: #856404;">
+          <p style="margin: 0;">${escapeHtmlAttribute(title)}</p>
+        </div>
+      `}
+      <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+        <button 
+          class="close-validation-modal"
+          style="
+            padding: 0.75rem 2rem;
+            background: ${isSuccess ? '#4CAF50' : '#ff9800'};
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background 0.2s;
+          "
+          onmouseover="this.style.background='${isSuccess ? '#45a049' : '#e68900'}'"
+          onmouseout="this.style.background='${isSuccess ? '#4CAF50' : '#ff9800'}'"
+        >
+          ${isSuccess ? 'Continue' : 'Close'}
+        </button>
+      </div>
+    </div>
+  `;
+
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+
+  // Close handlers
+  const closeModal = () => {
+    modal.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+    }, 300);
+  };
+
+  const closeBtn = modal.querySelector('.close-modal');
+  const closeValidationBtn = modal.querySelector('.close-validation-modal');
+  closeBtn?.addEventListener('click', closeModal);
+  closeValidationBtn?.addEventListener('click', closeModal);
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeModal();
+    }
+  });
+
+  // Close on Escape key
+  const handleEscape = (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      document.removeEventListener('keydown', handleEscape);
+    }
+  };
+  document.addEventListener('keydown', handleEscape);
+}
+
 // ------------------- Function: showVendingSetupModal -------------------
 // Shows a modal to set up vending shop for the first time (one-time import from old method)
 function showVendingSetupModal(character) {
@@ -2947,55 +3076,91 @@ function showVendingSetupModal(character) {
       </h2>
       <button class="close-modal">&times;</button>
     </div>
-    <div class="character-modal-body">
+    <div class="character-modal-body" style="padding: 1.5rem;">
       <div style="background: var(--warning-bg, #fff3cd); border: 1px solid var(--warning-border, #ffc107); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem;">
-        <p style="margin: 0; color: var(--warning-text, #856404); font-size: 0.9rem;">
+        <p style="margin: 0; color: var(--warning-text, #856404); font-size: 0.9rem; line-height: 1.5;">
           <strong>⚠️ One-Time Setup:</strong> This can only be done once! This will import your existing vending data from the old method.
         </p>
       </div>
-      <form id="vending-setup-form" style="display: flex; flex-direction: column; gap: 1.5rem;">
-        <div>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <label style="display: block; color: var(--text-color); font-weight: 500;">
-              Vending Inventory Items <span style="color: var(--error-color);">*</span>
-            </label>
+      <form id="vending-setup-form" style="display: flex; flex-direction: column; gap: 2rem;">
+        <!-- Step 1: Pouch Type Selection -->
+        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+            <span style="background: var(--primary-color); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">1</span>
+            Select Pouch Type
+          </h3>
+          <label style="display: block; margin-bottom: 0.75rem; color: var(--text-color); font-weight: 600; font-size: 0.95rem;">
+            Pouch Type <span style="color: var(--error-color); font-weight: 700;">*</span>
+          </label>
+          <select 
+            id="setup-pouch-type" 
+            name="pouchType" 
+            required
+            style="width: 100%; padding: 0.85rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.95rem; cursor: pointer; font-weight: 500; transition: all 0.2s;"
+            onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+            onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+          >
+            <option value="">-- Select Pouch Type First --</option>
+            <option value="none">None (0 slots)</option>
+            <option value="bronze">Bronze (15 slots) - 1,000 tokens</option>
+            <option value="silver">Silver (30 slots) - 5,000 tokens</option>
+            <option value="gold">Gold (50 slots) - 10,000 tokens</option>
+          </select>
+          <div id="max-slots-display" style="margin-top: 1rem; padding: 1.25rem; background: linear-gradient(135deg, var(--input-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--primary-color); border-radius: 0.5rem; color: var(--text-color); font-size: 0.9rem; display: none; box-shadow: 0 2px 8px rgba(0,123,255,0.1);">
+            <div style="margin-bottom: 0.75rem;"><strong style="color: var(--primary-color); font-size: 1rem;">Starting Shop Slots:</strong></div>
+            <div style="margin-left: 1rem; margin-bottom: 0.75rem; color: var(--text-color); font-size: 0.9rem; line-height: 2;">
+              <div style="padding: 0.25rem 0;">• Shopkeeper: <strong style="color: var(--primary-color);">5 slots</strong></div>
+              <div style="padding: 0.25rem 0;">• Merchant: <strong style="color: var(--primary-color);">3 slots</strong></div>
+            </div>
+            <div style="padding-top: 0.75rem; border-top: 2px solid var(--border-color); font-weight: 600;"><strong style="color: var(--text-color);">Total Max Slots Available:</strong> <span id="max-slots-value" style="color: var(--primary-color); font-size: 1.3rem; font-weight: 700;">0</span></div>
+          </div>
+        </div>
+
+        <!-- Step 2: Add Inventory Items -->
+        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0; color: var(--text-color); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+              <span style="background: var(--primary-color); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">2</span>
+              Add Inventory Items <span style="color: var(--error-color); font-size: 0.9rem; font-weight: 700;">*</span>
+            </h3>
             <button 
               type="button" 
               id="add-vending-row-btn"
+              disabled
               style="
-                padding: 0.5rem 1rem;
-                background: var(--primary-color);
-                color: white;
-                border: none;
-                border-radius: 0.25rem;
-                cursor: pointer;
-                font-size: 0.85rem;
+                padding: 0.6rem 1.2rem;
+                background: var(--input-bg);
+                color: var(--text-secondary);
+                border: 2px solid var(--border-color);
+                border-radius: 0.5rem;
+                cursor: not-allowed;
+                font-size: 0.9rem;
                 display: flex;
                 align-items: center;
                 gap: 0.5rem;
+                opacity: 0.5;
+                font-weight: 500;
+                transition: all 0.2s;
               "
-              onmouseover="this.style.background='var(--primary-hover)'" 
-              onmouseout="this.style.background='var(--primary-color)'"
             >
               <i class="fas fa-plus"></i> Add Row
             </button>
           </div>
-          <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 0.5rem; max-height: 400px; overflow-y: auto;">
-            <table id="vending-setup-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-              <thead style="position: sticky; top: 0; background: var(--card-bg); z-index: 10;">
-                <tr style="border-bottom: 2px solid var(--border-color);">
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Character Name</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Item Name *</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Stock Qty *</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Cost Each</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Points Spent</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Bought From</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Token Price</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Art Price</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Other Price</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Trades Open?</th>
-                  <th style="padding: 0.75rem; text-align: left; color: var(--text-color); font-weight: 600; background: var(--card-bg);">Date</th>
-                  <th style="padding: 0.75rem; text-align: center; color: var(--text-color); font-weight: 600; background: var(--card-bg); width: 50px;">Action</th>
+          <div id="pouch-required-message" style="padding: 1.25rem; background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); border: 2px solid #ffc107; border-radius: 0.5rem; color: #856404; font-size: 0.95rem; margin-bottom: 1rem; line-height: 1.6; font-weight: 500; box-shadow: 0 2px 4px rgba(255,193,7,0.2);">
+            <strong style="font-size: 1rem;">⚠️ Please select a Pouch Type first</strong> to enable adding items. The system needs to know your maximum slot capacity.
+          </div>
+          <div id="vending-items-container" style="overflow-x: auto; border: 2px solid var(--border-color); border-radius: 0.5rem; min-height: 350px; max-height: 450px; overflow-y: auto; opacity: 0.5; pointer-events: none; background: var(--input-bg); box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);">
+            <table id="vending-setup-table" style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+              <thead style="position: sticky; top: 0; background: var(--card-bg); z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.15);">
+                <tr style="border-bottom: 3px solid var(--border-color);">
+                  <th style="padding: 1.25rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Character</th>
+                  <th style="padding: 1.25rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Item Name <span style="color: var(--error-color); font-weight: 700;">*</span></th>
+                  <th style="padding: 1.25rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Stock Qty <span style="color: var(--error-color); font-weight: 700;">*</span></th>
+                  <th style="padding: 1.25rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Token Price</th>
+                  <th style="padding: 1.25rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Art Price</th>
+                  <th style="padding: 1.25rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Other Price</th>
+                  <th style="padding: 1.25rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Trades Open?</th>
+                  <th style="padding: 1.25rem 0.75rem; text-align: center; color: var(--text-color); font-weight: 700; background: var(--card-bg); width: 60px; font-size: 0.95rem;">Action</th>
                 </tr>
               </thead>
               <tbody id="vending-setup-tbody">
@@ -3003,68 +3168,72 @@ function showVendingSetupModal(character) {
               </tbody>
             </table>
           </div>
-          <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">
-            Fill out the table with your vending inventory items. Character Name will default to ${escapeHtmlAttribute(character.name)} if left empty.
+          <p style="margin: 1rem 0 0 0; color: var(--text-color); font-size: 0.9rem; line-height: 1.6; padding: 0.75rem; background: rgba(0,123,255,0.05); border-radius: 0.25rem; border-left: 3px solid var(--primary-color);">
+            <i class="fas fa-info-circle" style="margin-right: 0.5rem; color: var(--primary-color);"></i>
+            Fill out the table with your vending inventory items. Character Name will default to <strong style="color: var(--primary-color);">${escapeHtmlAttribute(character.name)}</strong> if left empty. Token prices must be <strong>whole numbers only</strong>.
           </p>
         </div>
-        <div>
-          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 500;">
-            Pouch Type <span style="color: var(--error-color);">*</span>
-          </label>
-          <select 
-            id="setup-pouch-type" 
-            name="pouchType" 
-            required
-            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
-          >
-            <option value="none">None (0 slots)</option>
-            <option value="bronze">Bronze (15 slots) - 1,000 tokens</option>
-            <option value="silver">Silver (30 slots) - 5,000 tokens</option>
-            <option value="gold">Gold (50 slots) - 10,000 tokens</option>
-          </select>
+
+        <!-- Step 3: Additional Settings -->
+        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+            <span style="background: var(--primary-color); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">3</span>
+            Additional Settings
+          </h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <div>
+              <label style="display: block; margin-bottom: 0.75rem; color: var(--text-color); font-weight: 600; font-size: 0.95rem;">
+                Vending Points (Current)
+              </label>
+              <input 
+                type="number" 
+                id="setup-vending-points" 
+                name="vendingPoints" 
+                min="0"
+                value="${character.vendingPoints || 0}"
+                style="width: 100%; padding: 0.85rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.95rem; font-weight: 500; transition: all 0.2s;"
+                onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+                onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+              />
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 0.75rem; color: var(--text-color); font-weight: 600; font-size: 0.95rem;">
+                Shop Banner Image URL <span style="color: var(--text-secondary); font-weight: normal; font-size: 0.85rem;">(Optional)</span>
+              </label>
+              <input 
+                type="url" 
+                id="setup-shop-image" 
+                name="shopImage" 
+                placeholder="https://..."
+                style="width: 100%; padding: 0.85rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.95rem; font-weight: 500; transition: all 0.2s;"
+                onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+                onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+              />
+            </div>
+          </div>
         </div>
-        <div>
-          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 500;">
-            Vending Points (Current)
-          </label>
-          <input 
-            type="number" 
-            id="setup-vending-points" 
-            name="vendingPoints" 
-            min="0"
-            value="${character.vendingPoints || 0}"
-            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
-          />
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 500;">
-            Shop Banner Image URL (Optional)
-          </label>
-          <input 
-            type="url" 
-            id="setup-shop-image" 
-            name="shopImage" 
-            placeholder="https://..."
-            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem;"
-          />
-        </div>
-        <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+        <div style="display: flex; gap: 1rem; margin-top: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
           <button 
             type="submit" 
             style="
               flex: 1;
-              padding: 0.75rem;
+              padding: 1rem;
               background: var(--success-color);
               color: white;
               border: none;
               border-radius: 0.5rem;
               cursor: pointer;
               font-size: 1rem;
-              font-weight: 500;
-              transition: background 0.2s;
+              font-weight: 600;
+              transition: all 0.2s;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 0.5rem;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             "
-            onmouseover="this.style.background='var(--success-hover)'" 
-            onmouseout="this.style.background='var(--success-color)'"
+            onmouseover="this.style.background='var(--success-hover)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'" 
+            onmouseout="this.style.background='var(--success-color)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'"
           >
             <i class="fas fa-magic"></i> Setup & Import
           </button>
@@ -3072,17 +3241,18 @@ function showVendingSetupModal(character) {
             type="button" 
             class="close-modal"
             style="
-              padding: 0.75rem 1.5rem;
+              padding: 1rem 2rem;
               background: var(--card-bg);
               color: var(--text-color);
               border: 1px solid var(--border-color);
               border-radius: 0.5rem;
               cursor: pointer;
               font-size: 1rem;
-              transition: background 0.2s;
+              font-weight: 500;
+              transition: all 0.2s;
             "
-            onmouseover="this.style.background='var(--input-bg)'" 
-            onmouseout="this.style.background='var(--card-bg)'"
+            onmouseover="this.style.background='var(--input-bg)'; this.style.borderColor='var(--primary-color)'" 
+            onmouseout="this.style.background='var(--card-bg)'; this.style.borderColor='var(--border-color)'"
           >
             Cancel
           </button>
@@ -3094,160 +3264,363 @@ function showVendingSetupModal(character) {
   modal.appendChild(modalContent);
   document.body.appendChild(modal);
 
-  // Add initial row
-  addVendingSetupRow(character.name);
+  // Fetch all items for autocomplete
+  let allItems = [];
+  (async () => {
+    try {
+      const response = await fetch('/api/items', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const items = await response.json();
+        allItems = items.map(item => item.itemName).filter(Boolean).sort();
+      }
+    } catch (error) {
+      console.error('[profile.js]: Error fetching items for autocomplete:', error);
+    }
+  })();
+
+  // Calculate and display slots based on pouch type
+  const pouchTypeSelect = document.getElementById('setup-pouch-type');
+  const maxSlotsDisplay = document.getElementById('max-slots-display');
+  const maxSlotsValue = document.getElementById('max-slots-value');
+  const addRowBtn = document.getElementById('add-vending-row-btn');
+  const pouchRequiredMessage = document.getElementById('pouch-required-message');
+  const vendingItemsContainer = document.getElementById('vending-items-container');
+
+  // Determine base slots based on character job/vendorType
+  const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+  const job = character.job?.toLowerCase() || character.vendorType?.toLowerCase() || '';
+  const baseSlots = baseSlotLimits[job] || 0;
+
+  // Function to update slots display and enable/disable form
+  function updateSlotsDisplay() {
+    if (!pouchTypeSelect) {
+      console.error('[profile.js]: pouchTypeSelect not found');
+      return;
+    }
+    
+    const selectedPouch = pouchTypeSelect.value || '';
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+    const pouchSlots = pouchCapacities[selectedPouch] || 0;
+    const totalSlots = baseSlots + pouchSlots;
+
+    // Enable if any pouch is selected (including "none")
+    if (selectedPouch && selectedPouch.trim() !== '') {
+      // Show slots display
+      maxSlotsDisplay.style.display = 'block';
+      maxSlotsValue.textContent = `${totalSlots} (${baseSlots} base + ${pouchSlots} pouch)`;
+      
+      // Enable form
+      addRowBtn.disabled = false;
+      addRowBtn.style.background = 'var(--primary-color)';
+      addRowBtn.style.color = 'white';
+      addRowBtn.style.border = '2px solid var(--primary-color)';
+      addRowBtn.style.cursor = 'pointer';
+      addRowBtn.style.opacity = '1';
+      addRowBtn.style.fontWeight = '600';
+      addRowBtn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+      addRowBtn.onmouseover = () => {
+        addRowBtn.style.background = 'var(--primary-hover)';
+        addRowBtn.style.transform = 'translateY(-1px)';
+        addRowBtn.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+      };
+      addRowBtn.onmouseout = () => {
+        addRowBtn.style.background = 'var(--primary-color)';
+        addRowBtn.style.transform = 'translateY(0)';
+        addRowBtn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+      };
+      
+      // Hide warning message and enable table
+      pouchRequiredMessage.style.display = 'none';
+      vendingItemsContainer.style.opacity = '1';
+      vendingItemsContainer.style.pointerEvents = 'auto';
+      vendingItemsContainer.style.borderColor = 'var(--primary-color)';
+      vendingItemsContainer.style.boxShadow = '0 0 0 2px rgba(0,123,255,0.1)';
+    } else {
+      // Hide slots display
+      maxSlotsDisplay.style.display = 'none';
+      
+      // Disable form
+      addRowBtn.disabled = true;
+      addRowBtn.style.background = 'var(--input-bg)';
+      addRowBtn.style.color = 'var(--text-secondary)';
+      addRowBtn.style.border = '2px solid var(--border-color)';
+      addRowBtn.style.cursor = 'not-allowed';
+      addRowBtn.style.opacity = '0.5';
+      addRowBtn.style.fontWeight = '500';
+      addRowBtn.style.boxShadow = 'none';
+      addRowBtn.onmouseover = null;
+      addRowBtn.onmouseout = null;
+      
+      // Show warning message and disable table
+      pouchRequiredMessage.style.display = 'block';
+      vendingItemsContainer.style.opacity = '0.4';
+      vendingItemsContainer.style.pointerEvents = 'none';
+      vendingItemsContainer.style.borderColor = 'var(--border-color)';
+      vendingItemsContainer.style.boxShadow = 'none';
+    }
+  }
+
+  // Add event listener for pouch type change
+  if (pouchTypeSelect) {
+    pouchTypeSelect.addEventListener('change', function() {
+      console.log('[profile.js]: Pouch type changed to:', pouchTypeSelect.value);
+      updateSlotsDisplay();
+    });
+    
+    // Also listen for input event (some browsers fire this instead)
+    pouchTypeSelect.addEventListener('input', function() {
+      console.log('[profile.js]: Pouch type input changed to:', pouchTypeSelect.value);
+      updateSlotsDisplay();
+    });
+  }
+
+  // Set initial state (form should be disabled until pouch is selected)
+  updateSlotsDisplay();
 
   // Add row button handler
-  const addRowBtn = document.getElementById('add-vending-row-btn');
   addRowBtn.addEventListener('click', () => {
-    addVendingSetupRow(character.name);
+    addVendingSetupRow(character.name, allItems);
   });
 
   // Function to add a new row to the table
-  function addVendingSetupRow(defaultCharacterName) {
+  function addVendingSetupRow(defaultCharacterName, itemsList = []) {
     const tbody = document.getElementById('vending-setup-tbody');
     const row = document.createElement('tr');
-    row.style.borderBottom = '1px solid var(--border-color)';
-    row.innerHTML = `
-      <td style="padding: 0.5rem;">
-        <input 
-          type="text" 
-          class="vending-row-input" 
-          data-field="characterName"
-          value="${escapeHtmlAttribute(defaultCharacterName)}"
-          placeholder="${escapeHtmlAttribute(defaultCharacterName)}"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="text" 
-          class="vending-row-input" 
-          data-field="itemName"
-          required
-          placeholder="Item name"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="number" 
-          class="vending-row-input" 
-          data-field="stockQty"
-          required
-          min="1"
-          value="1"
-          placeholder="1"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="number" 
-          class="vending-row-input" 
-          data-field="costEach"
-          min="0"
-          step="0.01"
-          value="0"
-          placeholder="0"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="number" 
-          class="vending-row-input" 
-          data-field="pointsSpent"
-          min="0"
-          step="0.01"
-          value="0"
-          placeholder="0"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="text" 
-          class="vending-row-input" 
-          data-field="boughtFrom"
-          placeholder="Village name"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="number" 
-          class="vending-row-input" 
-          data-field="tokenPrice"
-          min="0"
-          step="0.01"
-          value="0"
-          placeholder="0"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="text" 
-          class="vending-row-input" 
-          data-field="artPrice"
-          placeholder="N/A"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="text" 
-          class="vending-row-input" 
-          data-field="otherPrice"
-          placeholder="N/A"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem;">
-        <select 
-          class="vending-row-input" 
-          data-field="tradesOpen"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        >
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-      </td>
-      <td style="padding: 0.5rem;">
-        <input 
-          type="date" 
-          class="vending-row-input" 
-          data-field="date"
-          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.85rem;"
-        />
-      </td>
-      <td style="padding: 0.5rem; text-align: center;">
-        <button 
-          type="button" 
-          class="remove-vending-row-btn"
-          style="
-            padding: 0.5rem;
-            background: var(--error-color);
-            color: white;
-            border: none;
-            border-radius: 0.25rem;
-            cursor: pointer;
-            font-size: 0.85rem;
-            width: 100%;
-          "
-          onmouseover="this.style.background='var(--error-hover)'" 
-          onmouseout="this.style.background='var(--error-color)'"
-          title="Remove row"
-        >
-          <i class="fas fa-trash"></i>
-        </button>
-      </td>
+    row.style.borderBottom = '2px solid var(--border-color)';
+    row.style.backgroundColor = 'var(--card-bg)';
+    
+    // Character name cell
+    const charNameCell = document.createElement('td');
+    charNameCell.style.padding = '0.5rem';
+    const charNameInput = document.createElement('input');
+    charNameInput.type = 'text';
+    charNameInput.className = 'vending-row-input';
+    charNameInput.dataset.field = 'characterName';
+    charNameInput.value = defaultCharacterName;
+    charNameInput.placeholder = defaultCharacterName;
+    charNameInput.style.cssText = 'width: 100%; padding: 0.6rem; border: 2px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem; font-weight: 500; transition: all 0.2s;';
+    charNameInput.onfocus = function() { this.style.borderColor = 'var(--primary-color)'; this.style.boxShadow = '0 0 0 2px rgba(0,123,255,0.1)'; };
+    charNameInput.onblur = function() { this.style.borderColor = 'var(--border-color)'; this.style.boxShadow = 'none'; };
+    charNameCell.appendChild(charNameInput);
+    row.appendChild(charNameCell);
+    
+    // Item name cell with autocomplete
+    const itemNameCell = document.createElement('td');
+    itemNameCell.style.padding = '0.5rem';
+    itemNameCell.style.position = 'relative';
+    
+    const itemNameContainer = document.createElement('div');
+    itemNameContainer.style.position = 'relative';
+    
+    const itemNameInput = document.createElement('input');
+    itemNameInput.type = 'text';
+    itemNameInput.className = 'vending-row-input';
+    itemNameInput.dataset.field = 'itemName';
+    itemNameInput.required = true;
+    itemNameInput.placeholder = 'Search items...';
+    itemNameInput.autocomplete = 'off';
+    itemNameInput.style.cssText = 'width: 100%; padding: 0.6rem; border: 2px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem; font-weight: 500; transition: all 0.2s;';
+    itemNameInput.onfocus = function() { this.style.borderColor = 'var(--primary-color)'; this.style.boxShadow = '0 0 0 2px rgba(0,123,255,0.1)'; };
+    itemNameInput.onblur = function() { this.style.borderColor = 'var(--border-color)'; this.style.boxShadow = 'none'; };
+    
+    const itemDropdown = document.createElement('div');
+    itemDropdown.className = 'vending-item-autocomplete';
+    itemDropdown.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 400px;
+      overflow-y: auto;
+      background: var(--card-bg);
+      border: 2px solid var(--border-color);
+      border-radius: 0.5rem;
+      margin-top: 2px;
+      z-index: 10000;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     `;
-    tbody.appendChild(row);
-
-    // Add remove button handler
-    const removeBtn = row.querySelector('.remove-vending-row-btn');
+    
+    itemNameContainer.appendChild(itemNameInput);
+    itemNameContainer.appendChild(itemDropdown);
+    itemNameCell.appendChild(itemNameContainer);
+    row.appendChild(itemNameCell);
+    
+    // Autocomplete functionality - uses allItems which will be updated when items load
+    const filterItems = (searchTerm, itemsToSearch) => {
+      if (!searchTerm) {
+        // When no search term, show first 100 items to give a good starting point
+        return itemsToSearch.slice(0, 100);
+      }
+      const term = searchTerm.toLowerCase();
+      // When searching, show all matching results (no limit)
+      return itemsToSearch.filter(item => item.toLowerCase().includes(term));
+    };
+    
+    const renderDropdown = (items) => {
+      itemDropdown.innerHTML = '';
+      if (items.length === 0) {
+        itemDropdown.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">No items found</div>';
+        itemDropdown.style.display = 'block';
+        return;
+      }
+      
+      items.forEach(item => {
+        const option = document.createElement('div');
+        option.textContent = item;
+        option.style.cssText = `
+          padding: 0.75rem;
+          cursor: pointer;
+          transition: all 0.2s;
+          color: var(--text-color);
+          font-size: 0.9rem;
+          font-weight: 500;
+          border-bottom: 1px solid var(--border-color);
+        `;
+        
+        option.addEventListener('mouseenter', () => {
+          option.style.background = 'var(--primary-color)';
+          option.style.color = 'white';
+          option.style.fontWeight = '600';
+        });
+        
+        option.addEventListener('mouseleave', () => {
+          option.style.background = 'transparent';
+          option.style.color = 'var(--text-color)';
+          option.style.fontWeight = '500';
+        });
+        
+        option.addEventListener('click', () => {
+          itemNameInput.value = item;
+          itemDropdown.style.display = 'none';
+          itemNameInput.dispatchEvent(new Event('input'));
+        });
+        
+        itemDropdown.appendChild(option);
+      });
+      
+      itemDropdown.style.display = 'block';
+    };
+    
+    itemNameInput.addEventListener('input', (e) => {
+      // Use allItems if available (will be updated when items load), otherwise use itemsList
+      const currentItems = allItems.length > 0 ? allItems : itemsList;
+      const results = filterItems(e.target.value, currentItems);
+      if (e.target.value.trim() && currentItems.length > 0) {
+        renderDropdown(results);
+      } else {
+        itemDropdown.style.display = 'none';
+      }
+    });
+    
+    itemNameInput.addEventListener('focus', () => {
+      const currentItems = allItems.length > 0 ? allItems : itemsList;
+      if (currentItems.length > 0 && itemNameInput.value.trim()) {
+        const results = filterItems(itemNameInput.value, currentItems);
+        renderDropdown(results);
+      } else if (currentItems.length > 0) {
+        // Show first 100 items when focusing on empty input
+        renderDropdown(currentItems.slice(0, 100));
+      }
+    });
+    
+    // Close dropdown when clicking outside
+    const closeDropdown = (e) => {
+      if (!itemNameContainer.contains(e.target)) {
+        itemDropdown.style.display = 'none';
+        document.removeEventListener('click', closeDropdown);
+      }
+    };
+    
+    itemNameInput.addEventListener('focus', () => {
+      setTimeout(() => document.addEventListener('click', closeDropdown), 100);
+    });
+    
+    // Add remaining cells
+    const cells = [
+      { field: 'stockQty', type: 'number', required: true, min: 1, value: 1, placeholder: '1' },
+      { field: 'tokenPrice', type: 'number', min: 0, step: 1, value: 0, placeholder: '0' },
+      { field: 'artPrice', type: 'text', placeholder: 'N/A' },
+      { field: 'otherPrice', type: 'text', placeholder: 'N/A' },
+      { field: 'tradesOpen', type: 'select', options: [{ value: 'false', text: 'No' }, { value: 'true', text: 'Yes' }] }
+    ];
+    
+    cells.forEach(cellData => {
+      const cell = document.createElement('td');
+      cell.style.padding = '0.75rem';
+      cell.style.borderRight = '1px solid var(--border-color)';
+      
+      if (cellData.type === 'select') {
+        const select = document.createElement('select');
+        select.className = 'vending-row-input';
+        select.dataset.field = cellData.field;
+        select.style.cssText = 'width: 100%; padding: 0.6rem; border: 2px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: all 0.2s;';
+        select.onfocus = function() { this.style.borderColor = 'var(--primary-color)'; this.style.boxShadow = '0 0 0 2px rgba(0,123,255,0.1)'; };
+        select.onblur = function() { this.style.borderColor = 'var(--border-color)'; this.style.boxShadow = 'none'; };
+        cellData.options.forEach(opt => {
+          const option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.text;
+          select.appendChild(option);
+        });
+        cell.appendChild(select);
+      } else {
+        const input = document.createElement('input');
+        input.type = cellData.type;
+        input.className = 'vending-row-input';
+        input.dataset.field = cellData.field;
+        if (cellData.required) input.required = true;
+        if (cellData.min !== undefined) input.min = cellData.min;
+        if (cellData.step !== undefined) input.step = cellData.step;
+        if (cellData.value !== undefined) input.value = cellData.value;
+        if (cellData.placeholder) input.placeholder = cellData.placeholder;
+        input.style.cssText = 'width: 100%; padding: 0.6rem; border: 2px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem; font-weight: 500; transition: all 0.2s;';
+        input.onfocus = function() { this.style.borderColor = 'var(--primary-color)'; this.style.boxShadow = '0 0 0 2px rgba(0,123,255,0.1)'; };
+        input.onblur = function() { this.style.borderColor = 'var(--border-color)'; this.style.boxShadow = 'none'; };
+        cell.appendChild(input);
+      }
+      
+      row.appendChild(cell);
+    });
+    
+    // Action cell with remove button
+    const actionCell = document.createElement('td');
+    actionCell.style.padding = '0.5rem';
+    actionCell.style.textAlign = 'center';
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'remove-vending-row-btn';
+    removeBtn.innerHTML = '<i class="fas fa-trash"></i>';
+    removeBtn.style.cssText = `
+      padding: 0.6rem;
+      background: var(--error-color);
+      color: white;
+      border: 2px solid var(--error-color);
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      width: 100%;
+      font-weight: 600;
+      transition: all 0.2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    `;
+    removeBtn.onmouseover = () => {
+      removeBtn.style.background = 'var(--error-hover)';
+      removeBtn.style.borderColor = 'var(--error-hover)';
+      removeBtn.style.transform = 'translateY(-1px)';
+      removeBtn.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+    };
+    removeBtn.onmouseout = () => {
+      removeBtn.style.background = 'var(--error-color)';
+      removeBtn.style.borderColor = 'var(--error-color)';
+      removeBtn.style.transform = 'translateY(0)';
+      removeBtn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    };
+    removeBtn.title = 'Remove row';
     removeBtn.addEventListener('click', () => {
       if (tbody.children.length > 1) {
         row.remove();
@@ -3255,6 +3628,10 @@ function showVendingSetupModal(character) {
         alert('You must have at least one row');
       }
     });
+    actionCell.appendChild(removeBtn);
+    row.appendChild(actionCell);
+    
+    tbody.appendChild(row);
   }
 
   // Close modal handlers
@@ -3346,11 +3723,27 @@ function showVendingSetupModal(character) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to set up vending shop');
+        // Display all errors if they exist
+        let errorMessage = data.error || 'Failed to set up vending shop';
+        if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+          errorMessage = errorMessage + '\n\nValidation errors:\n' + data.errors.join('\n');
+        }
+        throw new Error(errorMessage);
       }
 
-      // Success - close modal and reload
-      alert('✅ Vending shop set up successfully! Your inventory has been imported.');
+      // Check if there were any validation errors (but setup still succeeded)
+      if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+        // Show validation errors in a nice modal
+        showValidationErrorsModal(data.errors, 'Setup completed with some errors');
+        // Don't close the setup modal, let user fix errors
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+        return;
+      } else {
+        // Success - close modal and reload
+        showValidationErrorsModal([], 'Vending shop set up successfully! Your inventory has been imported.', 'success');
+      }
+      
       document.body.removeChild(modal);
       
       // Reload vending shops
@@ -3358,7 +3751,20 @@ function showVendingSetupModal(character) {
       await loadVendingShops({ containerId });
     } catch (error) {
       console.error('[profile.js]: Error setting up vending:', error);
-      alert(`❌ Error: ${error.message}`);
+      // Parse error message for validation errors
+      const errorMessage = error.message || 'An unknown error occurred';
+      const errorLines = errorMessage.split('\n');
+      
+      // Check if error message contains validation errors
+      const validationIndex = errorLines.findIndex(line => line.includes('Validation errors:'));
+      if (validationIndex >= 0) {
+        // Extract validation errors (everything after "Validation errors:")
+        const errors = errorLines.slice(validationIndex + 1).filter(line => line.trim().length > 0);
+        showValidationErrorsModal(errors, 'Validation Errors');
+      } else {
+        // Single error message
+        showValidationErrorsModal([errorMessage], 'Error');
+      }
       submitBtn.disabled = false;
       submitBtn.innerHTML = originalText;
     }
@@ -3366,8 +3772,8 @@ function showVendingSetupModal(character) {
 }
 
 // ------------------- Function: showAddVendorItemModal -------------------
-// Shows a modal to add a new item to vending inventory
-function showAddVendorItemModal(character) {
+// Shows a modal to add a new item to vending inventory from user's inventory
+async function showAddVendorItemModal(character) {
   const modal = document.createElement('div');
   modal.className = 'character-modal';
   modal.style.zIndex = '10001';
@@ -3376,10 +3782,114 @@ function showAddVendorItemModal(character) {
   modalContent.className = 'character-modal-content';
   modalContent.style.maxWidth = '600px';
 
+  // Fetch character's inventory (like inventory.js does) and item details
+  let inventoryItems = [];
+  // Fetch current vending inventory to see occupied slots
+  let occupiedSlots = new Map(); // Map of slot -> itemName
+  let totalSlots = 0;
+  
+  try {
+    // Calculate total slots
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+    const baseSlots = baseSlotLimits[character.vendorType?.toLowerCase()] || 0;
+    const pouchSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+    totalSlots = baseSlots + pouchSlots;
+    
+    // Fetch current vending inventory
+    try {
+      const vendingResponse = await fetch(`/api/characters/${character._id}/vending`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (vendingResponse.ok) {
+        const vendingData = await vendingResponse.json();
+        if (vendingData.items && Array.isArray(vendingData.items)) {
+          vendingData.items.forEach(item => {
+            if (item.slot) {
+              occupiedSlots.set(item.slot, item.itemName);
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('[profile.js]: Error fetching vending inventory for slot info:', error);
+    }
+    
+    const inventoryResponse = await fetch(`/api/inventory/characters?characters=${encodeURIComponent(character.name)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (inventoryResponse.ok) {
+      const inventoryData = await inventoryResponse.json();
+      // Get items from this specific character's inventory
+      if (inventoryData.data && Array.isArray(inventoryData.data)) {
+        // Combine items with the same name (like inventory.js does)
+        const combinedItems = inventoryData.data.reduce((acc, item) => {
+          const existing = acc.find(i => i.itemName === item.itemName);
+          if (existing) {
+            existing.quantity += item.quantity || 0;
+          } else {
+            acc.push({
+              itemName: item.itemName,
+              quantity: item.quantity || 0
+            });
+          }
+          return acc;
+        }, []);
+        
+        // Fetch item details (including maxStackSize) for all items
+        const itemNames = combinedItems.map(item => item.itemName);
+        const itemsResponse = await fetch('/api/items', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+        
+        let itemsData = [];
+        if (itemsResponse.ok) {
+          itemsData = await itemsResponse.json();
+        }
+        
+        // Create a map of item details
+        const itemsMap = new Map();
+        itemsData.forEach(item => {
+          itemsMap.set(item.itemName, item);
+        });
+        
+        // Combine inventory items with item details
+        inventoryItems = combinedItems
+          .filter(item => item.quantity > 0)
+          .map(item => {
+            const itemDetails = itemsMap.get(item.itemName);
+            return {
+              itemName: item.itemName,
+              quantity: item.quantity,
+              maxStackSize: itemDetails?.maxStackSize || 10,
+              stackable: itemDetails?.stackable || false
+            };
+          })
+          .sort((a, b) => a.itemName.localeCompare(b.itemName));
+      }
+    }
+  } catch (error) {
+    console.error('[profile.js]: Error fetching character inventory:', error);
+  }
+
   modalContent.innerHTML = `
     <div class="character-modal-header">
       <h2 style="margin: 0; color: var(--text-color); font-size: 1.5rem;">
-        <i class="fas fa-plus"></i> Add Item to ${character.name}'s Shop
+        <i class="fas fa-plus"></i> Add Item from Inventory to ${escapeHtmlAttribute(character.name)}'s Shop
       </h2>
       <button class="close-modal">&times;</button>
     </div>
@@ -3387,11 +3897,29 @@ function showAddVendorItemModal(character) {
       <form id="add-vendor-item-form" style="display: flex; flex-direction: column; gap: 1.5rem;">
         <div class="form-group">
           <label for="item-name" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
-            Item Name *
+            Item from Inventory *
           </label>
-          <input type="text" id="item-name" name="itemName" required
-            placeholder="Enter item name"
+          ${inventoryItems.length > 0 ? `
+          <select id="item-name" name="itemName" required
             style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+            <option value="">-- Select an item from your inventory --</option>
+            ${inventoryItems.map(item => `
+              <option value="${escapeHtmlAttribute(item.itemName)}" 
+                      data-quantity="${item.quantity}" 
+                      data-max-stack="${item.maxStackSize || 10}"
+                      data-stackable="${item.stackable || false}">
+                ${escapeHtmlAttribute(item.itemName)} (Available: ${item.quantity}${item.stackable ? `, Max Stack: ${item.maxStackSize || 10}` : ', Not Stackable'})
+              </option>
+            `).join('')}
+          </select>
+          <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">
+            Only items you own can be added to your vending shop.
+          </p>
+          ` : `
+          <div style="padding: 1rem; background: var(--warning-bg, #fff3cd); border: 1px solid var(--warning-border, #ffc107); border-radius: 0.5rem; color: var(--warning-text, #856404);">
+            <strong>⚠️ No items in inventory:</strong> You don't have any items in your inventory to add to the vending shop.
+          </div>
+          `}
         </div>
         <div class="form-group">
           <label for="stock-qty" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
@@ -3405,8 +3933,8 @@ function showAddVendorItemModal(character) {
           <label for="token-price" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
             Token Price
           </label>
-          <input type="number" id="token-price" name="tokenPrice" min="0" step="0.01"
-            placeholder="Enter token price (optional)"
+          <input type="number" id="token-price" name="tokenPrice" min="0" step="1"
+            placeholder="Enter token price (whole numbers only)"
             style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
         </div>
         <div class="form-group">
@@ -3427,11 +3955,25 @@ function showAddVendorItemModal(character) {
         </div>
         <div class="form-group">
           <label for="slot" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
-            Slot Number (Optional)
+            Slot Number <span style="color: var(--error-color);">*</span>
           </label>
-          <input type="text" id="slot" name="slot"
-            placeholder="Enter slot number (optional)"
-            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+          <select id="slot" name="slot" required
+            style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem; font-weight: 500; cursor: pointer; transition: all 0.2s;"
+            onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+            onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'">
+            <option value="">-- Select a slot --</option>
+            ${Array.from({ length: totalSlots }, (_, i) => {
+              const slotNum = i + 1;
+              const slotName = `Slot ${slotNum}`;
+              const occupiedItem = occupiedSlots.get(slotName);
+              return `<option value="${slotName}" ${occupiedItem ? 'disabled style="color: var(--error-color); background: rgba(255,0,0,0.1);"' : ''}>
+                ${slotName}${occupiedItem ? ` - Occupied by ${escapeHtmlAttribute(occupiedItem)}` : ' - Available'}
+              </option>`;
+            }).join('')}
+          </select>
+          <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">
+            Select which slot this item will occupy. Occupied slots are disabled.
+          </p>
         </div>
         <div class="form-group">
           <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
@@ -3450,21 +3992,22 @@ function showAddVendorItemModal(character) {
             font-size: 1rem;
             transition: background 0.2s;
           ">Cancel</button>
-          <button type="submit" style="
+          <button type="submit" ${inventoryItems.length === 0 ? 'disabled' : ''} style="
             padding: 0.75rem 1.5rem;
-            background: var(--primary-color);
-            color: white;
+            background: ${inventoryItems.length === 0 ? 'var(--input-bg)' : 'var(--primary-color)'};
+            color: ${inventoryItems.length === 0 ? 'var(--text-secondary)' : 'white'};
             border: none;
             border-radius: 0.5rem;
-            cursor: pointer;
+            cursor: ${inventoryItems.length === 0 ? 'not-allowed' : 'pointer'};
             font-size: 1rem;
             transition: background 0.2s;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            opacity: ${inventoryItems.length === 0 ? '0.6' : '1'};
           ">
             <i class="fas fa-plus"></i>
-            Add Item
+            Add Item from Inventory
           </button>
         </div>
       </form>
@@ -3474,10 +4017,82 @@ function showAddVendorItemModal(character) {
   modal.appendChild(modalContent);
   document.body.appendChild(modal);
 
+  // Handle item selection to update stock quantity max
+  if (inventoryItems.length > 0) {
+    const itemSelect = modal.querySelector('#item-name');
+    const stockQtyInput = modal.querySelector('#stock-qty');
+    
+    itemSelect.addEventListener('change', (e) => {
+      const selectedOption = e.target.options[e.target.selectedIndex];
+      if (!selectedOption || !selectedOption.value) return;
+      
+      const availableQuantity = parseInt(selectedOption.dataset.quantity) || 1;
+      const maxStackSize = parseInt(selectedOption.dataset.maxStack) || 10;
+      const isStackable = selectedOption.dataset.stackable === 'true';
+      
+      // For non-stackable items, max is 1; for stackable, it's the minimum of available quantity and maxStackSize
+      const maxQuantity = isStackable ? Math.min(availableQuantity, maxStackSize) : 1;
+      
+      stockQtyInput.max = maxQuantity;
+      stockQtyInput.min = 1;
+      stockQtyInput.value = '';
+      stockQtyInput.placeholder = isStackable 
+        ? `Enter stock quantity (max: ${maxQuantity}, max stack: ${maxStackSize})`
+        : 'Enter stock quantity (max: 1, not stackable)';
+      
+      // Update the label to show available quantity and stack info
+      const label = stockQtyInput.previousElementSibling;
+      if (label && label.tagName === 'LABEL') {
+        const stackInfo = isStackable 
+          ? `(Available: ${availableQuantity}, Max Stack: ${maxStackSize}, Max to Add: ${maxQuantity})`
+          : `(Available: ${availableQuantity}, Not Stackable, Max: 1)`;
+        label.innerHTML = `Stock Quantity * <span style="color: var(--text-secondary); font-weight: normal; font-size: 0.85rem;">${stackInfo}</span>`;
+      }
+    });
+  }
+
   // Handle form submission
   const form = modal.querySelector('#add-vendor-item-form');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (inventoryItems.length === 0) return;
+    
+    // Validate stock quantity doesn't exceed available quantity or max stack size
+    const itemSelect = form.querySelector('#item-name');
+    const stockQtyInput = form.querySelector('#stock-qty');
+    if (itemSelect && stockQtyInput) {
+      const selectedOption = itemSelect.options[itemSelect.selectedIndex];
+      if (!selectedOption || !selectedOption.value) {
+        showProfileMessage('Please select an item from inventory', 'error');
+        return;
+      }
+      
+      const availableQuantity = parseInt(selectedOption.dataset.quantity) || 1;
+      const maxStackSize = parseInt(selectedOption.dataset.maxStack) || 10;
+      const isStackable = selectedOption.dataset.stackable === 'true';
+      const requestedQty = parseInt(stockQtyInput.value);
+      
+      if (isNaN(requestedQty) || requestedQty < 1) {
+        showProfileMessage('Stock quantity must be at least 1', 'error');
+        return;
+      }
+      
+      if (!isStackable && requestedQty > 1) {
+        showProfileMessage('This item is not stackable. Stock quantity must be 1.', 'error');
+        return;
+      }
+      
+      if (isStackable && requestedQty > maxStackSize) {
+        showProfileMessage(`This item has a maximum stack size of ${maxStackSize}. Stock quantity cannot exceed this.`, 'error');
+        return;
+      }
+      
+      if (requestedQty > availableQuantity) {
+        showProfileMessage(`Stock quantity cannot exceed available quantity (${availableQuantity})`, 'error');
+        return;
+      }
+    }
+    
     await addVendorItem(character._id, form, modal);
   });
 
@@ -3508,9 +4123,451 @@ function showAddVendorItemModal(character) {
   document.addEventListener('keydown', handleEscape);
 }
 
+// ------------------- Function: showManageVendorModal -------------------
+// Shows a modal to manage existing vending items (edit/delete) and shop banner
+async function showManageVendorModal(character) {
+  const modal = document.createElement('div');
+  modal.className = 'character-modal';
+  modal.style.zIndex = '10001';
+
+  const modalContent = document.createElement('div');
+  modalContent.className = 'character-modal-content';
+  modalContent.style.maxWidth = '95vw';
+  modalContent.style.maxHeight = '90vh';
+  modalContent.style.overflow = 'auto';
+
+  // Fetch current vending inventory
+  let inventoryData = null;
+  try {
+    const vendingResponse = await fetch(`/api/characters/${character._id}/vending`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (vendingResponse.ok) {
+      inventoryData = await vendingResponse.json();
+    } else {
+      showProfileMessage('Failed to load vending inventory', 'error');
+      return;
+    }
+  } catch (error) {
+    console.error('[profile.js]: Error fetching vending inventory:', error);
+    showProfileMessage('Failed to load vending inventory', 'error');
+    return;
+  }
+
+  const items = inventoryData?.items || [];
+  const shopImage = character.vendingSetup?.shopImage || character.shopImage || '';
+
+  modalContent.innerHTML = `
+    <div class="character-modal-header">
+      <h2 style="margin: 0; color: var(--text-color); font-size: 1.5rem;">
+        <i class="fas fa-cog"></i> Manage Vending Shop: ${escapeHtmlAttribute(character.name)}
+      </h2>
+      <button class="close-modal">&times;</button>
+    </div>
+    <div class="character-modal-body" style="padding: 1.5rem;">
+      <!-- Shop Banner Image Section -->
+      <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+          <i class="fas fa-image" style="color: var(--primary-color);"></i>
+          Shop Banner Image
+        </h3>
+        <label for="manage-shop-image" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+          Shop Banner Image URL (Optional)
+        </label>
+        <input type="url" id="manage-shop-image" name="shopImage" value="${escapeHtmlAttribute(shopImage)}"
+          placeholder="https://example.com/image.png"
+          style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 0.95rem; transition: all 0.2s;"
+          onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+          onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'">
+        <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">
+          Enter a URL for your shop banner image. This will be displayed when others view your shop.
+        </p>
+      </div>
+
+      <!-- Existing Items Section -->
+      <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+          <i class="fas fa-boxes" style="color: var(--primary-color);"></i>
+          Existing Items (${items.length})
+        </h3>
+        ${items.length > 0 ? `
+          <div style="overflow-x: auto; border: 2px solid var(--border-color); border-radius: 0.5rem; max-height: 500px; overflow-y: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+              <thead style="position: sticky; top: 0; background: var(--card-bg); z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.15);">
+                <tr style="border-bottom: 3px solid var(--border-color);">
+                  <th style="padding: 1rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Slot</th>
+                  <th style="padding: 1rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Item Name</th>
+                  <th style="padding: 1rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Stock</th>
+                  <th style="padding: 1rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Token Price</th>
+                  <th style="padding: 1rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Art Price</th>
+                  <th style="padding: 1rem 0.75rem; text-align: left; color: var(--text-color); font-weight: 700; background: var(--card-bg); white-space: nowrap; font-size: 0.95rem; border-right: 1px solid var(--border-color);">Trades Open</th>
+                  <th style="padding: 1rem 0.75rem; text-align: center; color: var(--text-color); font-weight: 700; background: var(--card-bg); width: 150px; font-size: 0.95rem;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.sort((a, b) => {
+                  const slotA = a.slot ? parseInt(a.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+                  const slotB = b.slot ? parseInt(b.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+                  return slotA - slotB;
+                }).map(item => {
+                  const itemIdStr = typeof item._id === 'object' && item._id.toString ? item._id.toString() : String(item._id);
+                  return `
+                  <tr class="manage-item-row" data-item-id="${itemIdStr}" style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 1rem 0.75rem; border-right: 1px solid var(--border-color);">
+                      <span style="font-weight: 700; color: white; font-size: 0.8rem; background: var(--primary-color); padding: 0.3rem 0.6rem; border-radius: 0.25rem;">
+                        ${item.slot || 'No Slot'}
+                      </span>
+                    </td>
+                    <td style="padding: 1rem 0.75rem; border-right: 1px solid var(--border-color); font-weight: 600; color: var(--text-color);">${escapeHtmlAttribute(item.itemName)}</td>
+                    <td style="padding: 1rem 0.75rem; border-right: 1px solid var(--border-color); color: var(--text-color);">${item.stockQty || 1}</td>
+                    <td style="padding: 1rem 0.75rem; border-right: 1px solid var(--border-color);">
+                      <input type="number" class="manage-token-price" data-item-id="${itemIdStr}" 
+                        value="${item.tokenPrice !== null && item.tokenPrice !== undefined ? item.tokenPrice : ''}" 
+                        placeholder="0" min="0" step="0.01"
+                        style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem; transition: all 0.2s;"
+                        onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 2px rgba(0,123,255,0.1)'"
+                        onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'">
+                    </td>
+                    <td style="padding: 1rem 0.75rem; border-right: 1px solid var(--border-color);">
+                      <input type="text" class="manage-art-price" data-item-id="${itemIdStr}" 
+                        value="${item.artPrice && item.artPrice !== 'N/A' ? escapeHtmlAttribute(item.artPrice) : ''}" 
+                        placeholder="N/A"
+                        style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: 0.25rem; background: var(--input-bg); color: var(--text-color); font-size: 0.9rem; transition: all 0.2s;"
+                        onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 2px rgba(0,123,255,0.1)'"
+                        onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'">
+                    </td>
+                    <td style="padding: 1rem 0.75rem; border-right: 1px solid var(--border-color);">
+                      <label style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                        <input type="checkbox" class="manage-trades-open" data-item-id="${itemIdStr}" ${item.tradesOpen ? 'checked' : ''} 
+                          style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--primary-color); border: 2px solid ${item.tradesOpen ? 'var(--primary-color)' : 'var(--border-color)'}; border-radius: 4px; background-color: ${item.tradesOpen ? 'var(--primary-color)' : 'transparent'}; transition: all 0.2s; box-shadow: ${item.tradesOpen ? '0 0 0 2px rgba(0,123,255,0.2)' : 'none'};"
+                          onchange="const isChecked = this.checked; this.style.borderColor = isChecked ? 'var(--primary-color)' : 'var(--border-color)'; this.style.backgroundColor = isChecked ? 'var(--primary-color)' : 'transparent'; this.style.boxShadow = isChecked ? '0 0 0 2px rgba(0,123,255,0.2)' : 'none'; const span = this.nextElementSibling; if (span) span.textContent = isChecked ? 'Yes' : 'No'; span.style.color = isChecked ? 'var(--success-color)' : 'var(--text-secondary)'; span.style.fontWeight = isChecked ? '600' : '500';">
+                        <span style="font-weight: ${item.tradesOpen ? '600' : '500'}; color: ${item.tradesOpen ? 'var(--success-color)' : 'var(--text-secondary)'}; font-size: 0.9rem; min-width: 30px;">${item.tradesOpen ? 'Yes' : 'No'}</span>
+                      </label>
+                    </td>
+                    <td style="padding: 1rem 0.75rem; text-align: center;">
+                      <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                        <button class="manage-save-item-btn" data-item-id="${itemIdStr}" style="
+                          padding: 0.5rem 1rem;
+                          background: var(--success-color);
+                          color: white;
+                          border: none;
+                          border-radius: 0.25rem;
+                          cursor: pointer;
+                          font-size: 0.85rem;
+                          transition: background 0.2s;
+                          display: flex;
+                          align-items: center;
+                          gap: 0.25rem;
+                        " title="Save changes" onmouseover="this.style.background='var(--success-hover)'" onmouseout="this.style.background='var(--success-color)'">
+                          <i class="fas fa-save"></i> Save
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+            <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+            <p style="margin: 0; font-size: 1rem;">No items in vending inventory</p>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Use the "Add Item from Inventory" button to add items.</p>
+          </div>
+        `}
+      </div>
+
+      <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+        <button type="button" class="cancel-manage-vendor-btn" style="
+          padding: 0.75rem 1.5rem;
+          background: var(--card-bg);
+          color: var(--text-color);
+          border: 1px solid var(--border-color);
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 1rem;
+          transition: background 0.2s;
+        ">Close</button>
+        <button type="button" id="save-shop-image-btn" style="
+                          padding: 0.5rem 1rem;
+                          background: var(--error-color);
+                          color: white;
+                          border: none;
+                          border-radius: 0.25rem;
+                          cursor: pointer;
+                          font-size: 0.85rem;
+                          transition: background 0.2s;
+                          display: flex;
+                          align-items: center;
+                          gap: 0.25rem;
+                        " title="Delete item" onmouseover="this.style.background='var(--error-hover)'" onmouseout="this.style.background='var(--error-color)'">
+                          <i class="fas fa-trash"></i> Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+            <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+            <p style="margin: 0; font-size: 1rem;">No items in vending inventory</p>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Use the "Add Item from Inventory" button to add items.</p>
+          </div>
+        `}
+      </div>
+
+      <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+        <button type="button" class="cancel-manage-vendor-btn" style="
+          padding: 0.75rem 1.5rem;
+          background: var(--card-bg);
+          color: var(--text-color);
+          border: 1px solid var(--border-color);
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 1rem;
+          transition: background 0.2s;
+        ">Close</button>
+        <button type="button" id="save-shop-image-btn" style="
+                          padding: 0.5rem 1rem;
+                          background: var(--error-color);
+                          color: white;
+                          border: none;
+                          border-radius: 0.25rem;
+                          cursor: pointer;
+                          font-size: 0.85rem;
+                          transition: background 0.2s;
+                          display: flex;
+                          align-items: center;
+                          gap: 0.25rem;
+                        " title="Delete item" onmouseover="this.style.background='var(--error-hover)'" onmouseout="this.style.background='var(--error-color)'">
+                          <i class="fas fa-trash"></i> Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+            <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+            <p style="margin: 0; font-size: 1rem;">No items in vending inventory</p>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Use the "Add Item from Inventory" button to add items.</p>
+          </div>
+        `}
+      </div>
+
+      <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+        <button type="button" class="cancel-manage-vendor-btn" style="
+          padding: 0.75rem 1.5rem;
+          background: var(--card-bg);
+          color: var(--text-color);
+          border: 1px solid var(--border-color);
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 1rem;
+          transition: background 0.2s;
+        ">Close</button>
+        <button type="button" id="save-shop-image-btn" style="
+          padding: 0.75rem 1.5rem;
+          background: var(--primary-color);
+          color: white;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 1rem;
+          transition: background 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        ">
+          <i class="fas fa-save"></i>
+          Save Shop Banner
+        </button>
+      </div>
+    </div>
+  `;
+
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+
+  // Handle save buttons for inline editing
+  const saveButtons = modal.querySelectorAll('.manage-save-item-btn');
+  saveButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const itemId = btn.dataset.itemId;
+      const row = btn.closest('.manage-item-row');
+      const tokenPriceInput = row.querySelector('.manage-token-price');
+      const artPriceInput = row.querySelector('.manage-art-price');
+      const tradesOpenCheckbox = row.querySelector('.manage-trades-open');
+      
+      const formData = {
+        tokenPrice: tokenPriceInput.value ? parseFloat(tokenPriceInput.value) : null,
+        artPrice: artPriceInput.value.trim() || null,
+        barterOpen: tradesOpenCheckbox.checked
+      };
+
+      try {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        const itemIdStr = typeof itemId === 'object' && itemId.toString ? itemId.toString() : String(itemId);
+        const response = await fetch(`/api/characters/${character._id}/vending/items/${itemIdStr}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+          throw new Error(errorData.error || `Failed to update item (${response.status})`);
+        }
+
+        showProfileMessage('Item updated successfully!', 'success');
+        
+        // Update the trades open text
+        const tradesOpenSpan = tradesOpenCheckbox.nextElementSibling;
+        if (tradesOpenSpan) {
+          tradesOpenSpan.textContent = tradesOpenCheckbox.checked ? 'Yes' : 'No';
+        }
+        
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Save';
+        
+        // Reload vending shops to reflect changes
+        await loadVendingShops();
+      } catch (error) {
+        console.error('[profile.js]: ❌ Error updating vending item:', error);
+        showProfileMessage(error.message || 'Failed to update item', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Save';
+      }
+    });
+  });
+  
+  // Update trades open text when checkbox changes
+  const tradesOpenCheckboxes = modal.querySelectorAll('.manage-trades-open');
+  tradesOpenCheckboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      const span = checkbox.nextElementSibling;
+      if (span) {
+        span.textContent = checkbox.checked ? 'Yes' : 'No';
+      }
+    });
+  });
+
+  // Handle delete buttons
+  const deleteButtons = modal.querySelectorAll('.manage-delete-item-btn');
+  deleteButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const itemId = btn.dataset.itemId;
+      if (confirm('Are you sure you want to delete this item from your vending inventory?')) {
+        await deleteVendorItem(character._id, itemId);
+        // Reload the manage modal
+        modal.style.animation = 'fadeOut 0.3s ease forwards';
+        setTimeout(() => {
+          if (modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+          }
+          showManageVendorModal(character);
+        }, 300);
+      }
+    });
+  });
+
+  // Handle save shop banner
+  const saveShopImageBtn = modal.querySelector('#save-shop-image-btn');
+  saveShopImageBtn.addEventListener('click', async () => {
+    const shopImageInput = modal.querySelector('#manage-shop-image');
+    const shopImageUrl = shopImageInput.value.trim();
+
+    try {
+      saveShopImageBtn.disabled = true;
+      saveShopImageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+      const response = await fetch(`/api/characters/${character._id}/vending/shop-image`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ shopImage: shopImageUrl || null })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save shop banner');
+      }
+
+      showProfileMessage('Shop banner saved successfully!', 'success');
+      
+      // Reload vending shops to reflect changes
+      await loadVendingShops();
+      
+      // Update the modal with new data
+      setTimeout(() => {
+        modal.style.animation = 'fadeOut 0.3s ease forwards';
+        setTimeout(() => {
+          if (modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+          }
+          showManageVendorModal(character);
+        }, 300);
+      }, 500);
+
+    } catch (error) {
+      console.error('[profile.js]: ❌ Error saving shop banner:', error);
+      showProfileMessage(error.message || 'Failed to save shop banner', 'error');
+      saveShopImageBtn.disabled = false;
+      saveShopImageBtn.innerHTML = '<i class="fas fa-save"></i> Save Shop Banner';
+    }
+  });
+
+  // Handle close
+  const closeBtn = modal.querySelector('.close-modal');
+  const cancelBtn = modal.querySelector('.cancel-manage-vendor-btn');
+  const closeModal = () => {
+    modal.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+    }, 300);
+  };
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  // Close on Escape
+  const handleEscape = (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      document.removeEventListener('keydown', handleEscape);
+    }
+  };
+  document.addEventListener('keydown', handleEscape);
+}
+
 // ------------------- Function: showEditVendorItemModal -------------------
 // Shows a modal to edit an existing vending item
-function showEditVendorItemModal(character, item) {
+async function showEditVendorItemModal(character, item) {
   const modal = document.createElement('div');
   modal.className = 'character-modal';
   modal.style.zIndex = '10001';
@@ -3518,6 +4575,46 @@ function showEditVendorItemModal(character, item) {
   const modalContent = document.createElement('div');
   modalContent.className = 'character-modal-content';
   modalContent.style.maxWidth = '600px';
+
+  // Fetch current vending inventory to see occupied slots
+  let occupiedSlots = new Map(); // Map of slot -> itemName
+  let totalSlots = 0;
+  
+  try {
+    // Calculate total slots
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+    const baseSlots = baseSlotLimits[character.vendorType?.toLowerCase()] || 0;
+    const pouchSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+    totalSlots = baseSlots + pouchSlots;
+    
+    // Fetch current vending inventory
+    try {
+      const vendingResponse = await fetch(`/api/characters/${character._id}/vending`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (vendingResponse.ok) {
+        const vendingData = await vendingResponse.json();
+        if (vendingData.items && Array.isArray(vendingData.items)) {
+          vendingData.items.forEach(vendingItem => {
+            // Don't mark the current item's slot as occupied (since we're editing it)
+            if (vendingItem.slot && vendingItem._id !== item._id) {
+              occupiedSlots.set(vendingItem.slot, vendingItem.itemName);
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('[profile.js]: Error fetching vending inventory for slot info:', error);
+    }
+  } catch (error) {
+    console.error('[profile.js]: Error calculating slots:', error);
+  }
 
   modalContent.innerHTML = `
     <div class="character-modal-header">
@@ -3561,15 +4658,32 @@ function showEditVendorItemModal(character, item) {
         </div>
         <div class="form-group">
           <label for="edit-slot" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
-            Slot Number (Optional)
+            Slot Number <span style="color: var(--error-color);">*</span>
           </label>
-          <input type="text" id="edit-slot" name="slot" value="${item.slot || ''}"
-            placeholder="Enter slot number (optional)"
-            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+          <select id="edit-slot" name="slot" required
+            style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem; font-weight: 500; cursor: pointer; transition: all 0.2s;"
+            onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+            onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'">
+            <option value="">-- Select a slot --</option>
+            ${Array.from({ length: totalSlots }, (_, i) => {
+              const slotNum = i + 1;
+              const slotName = `Slot ${slotNum}`;
+              const occupiedItem = occupiedSlots.get(slotName);
+              const isCurrentSlot = item.slot === slotName;
+              return `<option value="${slotName}" ${occupiedItem && !isCurrentSlot ? 'disabled style="color: var(--error-color); background: rgba(255,0,0,0.1);"' : ''} ${isCurrentSlot ? 'selected' : ''}>
+                ${slotName}${occupiedItem && !isCurrentSlot ? ` - Occupied by ${escapeHtmlAttribute(occupiedItem)}` : isCurrentSlot ? ' - Current Slot' : ' - Available'}
+              </option>`;
+            }).join('')}
+          </select>
+          <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">
+            Select which slot this item will occupy. Occupied slots are disabled.
+          </p>
         </div>
         <div class="form-group">
           <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-            <input type="checkbox" id="edit-barter-open" name="barterOpen" ${item.barterOpen ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <input type="checkbox" id="edit-barter-open" name="barterOpen" ${item.barterOpen ? 'checked' : ''} 
+              style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary-color); border: 2px solid var(--border-color); border-radius: 4px; transition: all 0.2s;"
+              onchange="this.style.borderColor = this.checked ? 'var(--primary-color)' : 'var(--border-color)'; this.style.backgroundColor = this.checked ? 'var(--primary-color)' : 'transparent';">
             <span style="font-weight: 500; color: var(--text-color);">Barter/Trades Open</span>
           </label>
         </div>
@@ -3694,7 +4808,7 @@ async function addVendorItem(characterId, form, modal) {
     
     const submitBtn = form.querySelector('button[type="submit"]');
     submitBtn.disabled = false;
-    submitBtn.innerHTML = '<i class="fas fa-plus"></i> Add Item';
+    submitBtn.innerHTML = '<i class="fas fa-plus"></i> Add Item from Inventory';
   }
 }
 
@@ -3707,16 +4821,20 @@ async function updateVendorItem(characterId, itemId, form, modal) {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
+    // Ensure itemId is a string
+    const itemIdStr = typeof itemId === 'object' && itemId.toString ? itemId.toString() : String(itemId);
+    
+    const barterOpenCheckbox = form.querySelector('#edit-barter-open') || form.querySelector('input[name="barterOpen"]');
     const formData = {
       stockQty: parseInt(form.stockQty.value),
       tokenPrice: form.tokenPrice.value ? parseFloat(form.tokenPrice.value) : null,
       artPrice: form.artPrice.value.trim() || null,
       otherPrice: form.otherPrice.value.trim() || null,
-      barterOpen: form.barterOpen.checked,
+      barterOpen: barterOpenCheckbox ? barterOpenCheckbox.checked : false,
       slot: form.slot.value.trim() || null
     };
 
-    const response = await fetch(`/api/characters/${characterId}/vending/items/${itemId}`, {
+    const response = await fetch(`/api/characters/${characterId}/vending/items/${itemIdStr}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json'
@@ -3726,8 +4844,8 @@ async function updateVendorItem(characterId, itemId, form, modal) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to update item');
+      const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+      throw new Error(errorData.error || `Failed to update item (${response.status})`);
     }
 
     showProfileMessage('Item updated successfully!', 'success');
