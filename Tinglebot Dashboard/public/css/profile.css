@@ -1237,6 +1237,123 @@ form button[type="submit"]:disabled {
   font-size: 1.2rem;
 }
 
+/* ============================================================================
+   Vending Management Section Styles
+============================================================================ */
+
+.profile-vending-section {
+  margin-top: 2rem;
+  background: var(--card-bg);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.profile-vending-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.profile-vending-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-vending-header h3 i {
+  color: var(--primary-color);
+}
+
+.profile-vending-info {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.profile-vending-info span {
+  font-size: 1.2rem;
+  color: var(--primary-color);
+  font-weight: 700;
+}
+
+.profile-vending-container {
+  min-height: 150px;
+}
+
+.profile-vending-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--text-secondary);
+  gap: 1rem;
+}
+
+.profile-no-vending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.profile-no-vending i {
+  font-size: 3rem;
+  color: var(--text-tertiary);
+  margin-bottom: 1rem;
+}
+
+.profile-no-vending h4 {
+  margin: 0 0 0.5rem;
+  color: var(--text-color);
+  font-size: 1.2rem;
+}
+
+.profile-vending-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.profile-vendor-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.profile-vendor-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .profile-vending-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .profile-vending-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
 .quests-dashboard {
   display: flex;
   flex-direction: column;

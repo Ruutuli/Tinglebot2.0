@@ -17,7 +17,7 @@ const Bottleneck = require('bottleneck');
 const { google } = require('googleapis');
 
 // Internal Models
-const Character = require('../models/CharacterModel');
+const Character = require('../../models/CharacterModel');
 
 // ============================================================================
 // ------------------- Constants -------------------

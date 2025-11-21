@@ -17,8 +17,8 @@ const Bottleneck = require('bottleneck');
 const { google } = require('googleapis');
 
 // Internal Models
-const Character = require('./models/CharacterModel');
-const TempData = require('./models/TempDataModel');
+const Character = require('../models/CharacterModel');
+const TempData = require('../models/TempDataModel');
 
 // Utilities
 const logger = require('./utils/logger');

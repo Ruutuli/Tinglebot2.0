@@ -1536,7 +1536,19 @@ async function handleVendingSetup(interaction) {
         vendingPoints: points
     });
 
-    // Create sync button
+    // Get dashboard URL from environment or construct from callback URL
+    const callbackURL = process.env.DISCORD_CALLBACK_URL || '';
+    const dashboardBaseURL = callbackURL.replace('/auth/discord/callback', '') || 'https://dashboard.tinglebot.com';
+    const dashboardVendingURL = `${dashboardBaseURL}/#vending`;
+
+    // Create dashboard button to manage shop
+    const dashboardButton = new ButtonBuilder()
+        .setLabel('Manage Shop on Dashboard')
+        .setStyle(ButtonStyle.Link)
+        .setURL(dashboardVendingURL)
+        .setEmoji('🖥️');
+
+    // Create sync button (legacy - keep for backwards compatibility)
     const syncButton = new ButtonBuilder()
         .setCustomId(`vending_sync_now_${characterName}_${userId}`)
         .setLabel('Sync Shop Now')
@@ -1549,12 +1561,23 @@ async function handleVendingSetup(interaction) {
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('⏰');
 
-    const row = new ActionRowBuilder()
+    // Primary row with dashboard button
+    const primaryRow = new ActionRowBuilder()
+        .addComponents(dashboardButton);
+
+    // Secondary row with legacy sync buttons
+    const secondaryRow = new ActionRowBuilder()
         .addComponents(syncButton, laterButton);
+
+    // Update embed description to mention dashboard
+    successEmbed.setDescription(
+        (successEmbed.data.description || '') + 
+        `\n\n🖥️ **Manage your shop on the dashboard:** [Click here to open vending management](${dashboardVendingURL})`
+    );
 
     await interaction.reply({
         embeds: [successEmbed],
-        components: [row]
+        components: [primaryRow, secondaryRow]
     });
 }
   

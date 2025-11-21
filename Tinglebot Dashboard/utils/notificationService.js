@@ -3,7 +3,7 @@
  * Purpose: Sends Discord DMs to users based on their notification preferences
  * ============================================================================ */
 
-const User = require('../models/UserModel');
+const User = require('../../models/UserModel');
 const logger = require('./logger');
 
 /**

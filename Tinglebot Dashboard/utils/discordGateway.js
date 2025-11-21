@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const MessageTracking = require('../models/MessageTrackingModel');
+const MessageTracking = require('../../models/MessageTrackingModel');
 const logger = require('./logger');
 
 class DiscordGateway {
@@ -61,6 +61,13 @@ class DiscordGateway {
     };
     
     try {
+      // Ensure database connection is ready before saving
+      const mongoose = require('mongoose');
+      if (mongoose.connection.readyState !== 1) {
+        // Connection not ready, skip tracking this message
+        return;
+      }
+      
       await MessageTracking.create(messageData);
     } catch (error) {
       // Ignore duplicate key errors (message already tracked)

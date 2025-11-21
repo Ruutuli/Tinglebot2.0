@@ -78,23 +78,16 @@ const googleSheets = require('./googleSheetsUtils');
 // ------------------- Section: App Configuration -------------------
 const app = express();
 const PORT = process.env.PORT || 5001;
-logger.debug('PORT environment variable: ' + (process.env.PORT || 'not set, using default 5001'), null, 'server.js');
-logger.debug('Server will listen on port: ' + PORT, null, 'server.js');
 
 // ------------------- Section: Session & Authentication Configuration -------------------
 // Session configuration for Discord OAuth
-// Check if running on Railway (any truthy value) or explicitly in production
-const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';
 const domain = process.env.DOMAIN || (isProduction ? 'tinglebot.xyz' : 'localhost');
 
 // Force localhost for development if running on localhost
-// Don't force localhost if we're on Railway (even if NODE_ENV is development)
-// Also check if explicitly set to use localhost
-const isLocalhost = (process.env.FORCE_LOCALHOST === 'true' || 
-                   process.env.USE_LOCALHOST === 'true' ||
-                   (process.env.NODE_ENV === 'development' && !process.env.RAILWAY_ENVIRONMENT) ||
-                   process.env.PORT === '5001' ||
-                   (!process.env.RAILWAY_ENVIRONMENT && !process.env.PORT));
+const isLocalhost = process.env.FORCE_LOCALHOST === 'true' || 
+                   process.env.NODE_ENV === 'development' ||
+                   process.env.USE_LOCALHOST === 'true';
 
 logger.info('Environment Detection:', 'server.js');
 logger.debug('NODE_ENV: ' + process.env.NODE_ENV, null, 'server.js');
@@ -146,11 +139,11 @@ app.use(session({
   saveUninitialized: true, // Allow saving uninitialized sessions
   store: sessionStore,
   cookie: {
-    secure: isProduction && !isLocalhost, // true in production HTTPS, false for localhost
+    secure: false, // Always false for localhost development
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: isLocalhost ? 'lax' : 'lax', // Use lax for both localhost and production
-    domain: isLocalhost ? undefined : undefined // Explicitly undefined for localhost, no domain restriction
+    sameSite: 'lax',
+    domain: undefined // No domain restriction for localhost
   },
   name: 'tinglebot.sid'
 }));
@@ -185,11 +178,9 @@ passport.deserializeUser(async (discordId, done) => {
 });
 
 // Discord OAuth Strategy - Force localhost for development
-// Use environment variable if set, otherwise determine based on environment
-const callbackURL = process.env.DISCORD_CALLBACK_URL || 
-  ((isProduction && !isLocalhost)
-    ? `https://${domain}/auth/discord/callback`
-    : `http://localhost:5001/auth/discord/callback`);
+const callbackURL = (isProduction && !isLocalhost)
+  ? `https://${domain}/auth/discord/callback`
+  : `http://localhost:5001/auth/discord/callback`;
 
 logger.info('Discord OAuth Configuration:', 'server.js');
 logger.debug('isProduction: ' + isProduction, null, 'server.js');
@@ -197,55 +188,50 @@ logger.debug('domain: ' + domain, null, 'server.js');
 logger.debug('callbackURL: ' + callbackURL, null, 'server.js');
 logger.debug('DISCORD_CALLBACK_URL env: ' + process.env.DISCORD_CALLBACK_URL, null, 'server.js');
 
-// Only configure Discord OAuth if credentials are provided
-if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
-  passport.use(new DiscordStrategy({
-    clientID: process.env.DISCORD_CLIENT_ID,
-    clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: callbackURL,
-    scope: ['identify', 'email']
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      // Find or create user in database
-      let user = await User.findOne({ discordId: profile.id });
-      
-      if (!user) {
-        // Create new user
-        user = new User({
-          discordId: profile.id,
-          username: profile.username,
-          email: profile.email,
-          avatar: profile.avatar,
-          discriminator: profile.discriminator,
-          tokens: 0,
-          tokenTracker: '',
-          blightedcharacter: false,
-          characterSlot: 2,
-          status: 'active',
-          statusChangedAt: new Date()
-        });
-        await user.save();
-      } else {
-        // Update existing user's Discord info
-        user.username = profile.username;
-        user.email = profile.email;
-        user.avatar = profile.avatar;
-        user.discriminator = profile.discriminator;
-        user.status = 'active';
-        user.statusChangedAt = new Date();
-        await user.save();
-      }
-      
-      return done(null, user);
-    } catch (error) {
-      return done(error, null);
+
+
+passport.use(new DiscordStrategy({
+  clientID: process.env.DISCORD_CLIENT_ID,
+  clientSecret: process.env.DISCORD_CLIENT_SECRET,
+  callbackURL: callbackURL,
+  scope: ['identify', 'email']
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Find or create user in database
+    let user = await User.findOne({ discordId: profile.id });
+    
+    if (!user) {
+      // Create new user
+      user = new User({
+        discordId: profile.id,
+        username: profile.username,
+        email: profile.email,
+        avatar: profile.avatar,
+        discriminator: profile.discriminator,
+        tokens: 0,
+        tokenTracker: '',
+        blightedcharacter: false,
+        characterSlot: 2,
+        status: 'active',
+        statusChangedAt: new Date()
+      });
+      await user.save();
+    } else {
+      // Update existing user's Discord info
+      user.username = profile.username;
+      user.email = profile.email;
+      user.avatar = profile.avatar;
+      user.discriminator = profile.discriminator;
+      user.status = 'active';
+      user.statusChangedAt = new Date();
+      await user.save();
     }
-  }));
-  logger.success('Discord OAuth strategy configured', 'server.js');
-} else {
-  logger.warn('Discord OAuth credentials not found. Discord OAuth authentication will be unavailable.', 'server.js');
-  logger.warn('Please set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET environment variables to enable OAuth.', 'server.js');
-}
+    
+    return done(null, user);
+  } catch (error) {
+    return done(error, null);
+  }
+}));
 
 // Database connection options
 const connectionOptions = {
@@ -423,30 +409,11 @@ app.use(helmet({
       "script-src-attr": ["'unsafe-inline'"]
     }
   },
-  crossOriginEmbedderPolicy: false,
-  // Explicitly disable HSTS in helmet - we'll set it conditionally ourselves
-  hsts: false
+  crossOriginEmbedderPolicy: false
 }));
 
 // Additional security headers
-// HSTS only enabled in production when HTTPS is confirmed working
-// Railway will provision SSL automatically, but don't set HSTS until certificate is valid
-// IMPORTANT: HSTS is set per-request to ensure we only set it when HTTPS is actually working
-// Using shorter max-age initially (3600 = 1 hour) to allow easier recovery from SSL issues
-if (isProduction && !isLocalhost) {
-  app.use((req, res, next) => {
-    // Only set HSTS if we're actually getting HTTPS requests via Railway's proxy
-    // Railway sets x-forwarded-proto when SSL is provisioned and working
-    const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.secure;
-    if (isHttps) {
-      // Use shorter max-age (1 hour) initially - can increase after confirming SSL is stable
-      // This makes it easier to recover if SSL certificate provisioning is delayed
-      res.setHeader('Strict-Transport-Security', 'max-age=3600; includeSubDomains');
-    }
-    // Don't set HSTS header at all if not HTTPS - let browser use default behavior
-    next();
-  });
-}
+app.use(helmet.hsts({ maxAge: 31536000, includeSubDomains: true }));
 app.use(helmet.noSniff());
 app.use(helmet.frameguard({ action: "deny" }));
 app.use(helmet.referrerPolicy({ policy: "no-referrer-when-downgrade" }));
@@ -568,17 +535,12 @@ async function uploadPinImageToGCS(file, pinId) {
 }
 
 // HTTPS redirect middleware (only in production)
-// Only redirect if we're sure Railway proxy is working (x-forwarded-proto is set)
-// If x-forwarded-proto is missing, Railway might still be provisioning SSL
-if (isProduction && !isLocalhost) {
+if (isProduction) {
   app.use((req, res, next) => {
     const xfProto = req.headers["x-forwarded-proto"];
-    // Only redirect if x-forwarded-proto is explicitly set to 'http'
-    // If it's missing, allow the request through (Railway might still be setting up SSL)
-    if (xfProto === "http") {
+    if (xfProto && xfProto !== "https") {
       return res.redirect(301, `https://${req.headers.host}${req.url}`);
     }
-    // If x-forwarded-proto is 'https' or not set, continue normally
     next();
   });
 }
@@ -1014,12 +976,6 @@ app.get('/auth/debug', (req, res) => {
 // ------------------- Function: initiateDiscordAuth -------------------
 // Initiates Discord OAuth flow
 app.get('/auth/discord', (req, res, next) => {
-  // Check if Discord OAuth is configured
-  if (!process.env.DISCORD_CLIENT_ID || !process.env.DISCORD_CLIENT_SECRET) {
-    logger.error('Discord OAuth not configured. Missing DISCORD_CLIENT_ID or DISCORD_CLIENT_SECRET', 'server.js');
-    return res.status(503).send('Discord OAuth is not configured. Please contact the administrator.');
-  }
-  
   // Store the return URL in session if provided
   if (req.query.returnTo) {
     req.session.returnTo = req.query.returnTo;
@@ -1047,38 +1003,20 @@ app.get('/auth/discord', (req, res, next) => {
 // ------------------- Function: handleDiscordCallback -------------------
 // Handles Discord OAuth callback
 app.get('/auth/discord/callback', 
-  (req, res, next) => {
-    // Check if Discord OAuth is configured
-    if (!process.env.DISCORD_CLIENT_ID || !process.env.DISCORD_CLIENT_SECRET) {
-      logger.error('Discord OAuth not configured. Missing DISCORD_CLIENT_ID or DISCORD_CLIENT_SECRET', 'server.js');
-      return res.redirect('/login?error=oauth_not_configured');
-    }
-    next();
-  },
   passport.authenticate('discord', { 
-    failureRedirect: '/login?error=authentication_failed'
+    failureRedirect: '/login',
+    failureFlash: true 
   }), 
   (req, res) => {
     logger.success(`User authenticated: ${req.user?.username} (${req.user?.discordId})`, 'server.js');
     
     // Check if there's a returnTo parameter in the session or query
-    let returnTo = req.session.returnTo || req.query.returnTo;
-    
-    // If running on localhost, ensure returnTo stays on localhost
-    if (isLocalhost && returnTo) {
-      // Remove any protocol and domain from returnTo to keep it relative
-      returnTo = returnTo.replace(/^https?:\/\/[^\/]+/, '');
-      // Ensure it starts with /
-      if (!returnTo.startsWith('/')) {
-        returnTo = '/' + returnTo;
-      }
-    }
+    const returnTo = req.session.returnTo || req.query.returnTo;
     
     logger.debug('Discord callback redirect:', null, 'server.js');
     logger.debug('returnTo from session: ' + req.session.returnTo, null, 'server.js');
     logger.debug('returnTo from query: ' + req.query.returnTo, null, 'server.js');
     logger.debug('final returnTo: ' + returnTo, null, 'server.js');
-    logger.debug('isLocalhost: ' + isLocalhost, null, 'server.js');
     logger.debug('session ID: ' + req.session.id, null, 'server.js');
     logger.debug('passport user: ' + req.session.passport?.user, null, 'server.js');
     logger.debug('session exists: ' + !!req.session, null, 'server.js');
@@ -1087,11 +1025,11 @@ app.get('/auth/discord/callback',
     if (returnTo) {
       // Clear the returnTo from session
       delete req.session.returnTo;
-      // Redirect to the original page (relative URL to stay on same host)
+      // Redirect to the original page
       logger.debug('Redirecting to: ' + returnTo + '?login=success', null, 'server.js');
       res.redirect(returnTo + '?login=success');
     } else {
-      // Default redirect to dashboard (relative URL to stay on same host)
+      // Default redirect to dashboard
       logger.debug('Redirecting to default: /?login=success', null, 'server.js');
       res.redirect('/?login=success');
     }
@@ -7662,11 +7600,9 @@ app.use((req, res, next) => {
   // Enable XSS protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
   
-  // Strict Transport Security (HTTPS only) - only set if actually using HTTPS
-  // Don't set HSTS if Railway hasn't provisioned SSL certificate yet
-  // Using shorter max-age (1 hour) initially for easier recovery from SSL issues
-  if (isProduction && !isLocalhost && (req.secure || req.headers['x-forwarded-proto'] === 'https')) {
-    res.setHeader('Strict-Transport-Security', 'max-age=3600; includeSubDomains');
+  // Strict Transport Security (HTTPS only)
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
   
   // Referrer Policy
