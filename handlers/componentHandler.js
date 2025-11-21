@@ -969,6 +969,13 @@ async function handleRuuGameRoll(interaction) {
           return;
         }
         
+        // CRITICAL: Reload session state right before rolling to get latest winner status
+        // This prevents race conditions where someone wins between the initial check and the roll
+        const latestSession = await RuuGame.findById(session._id);
+        if (latestSession) {
+          session = latestSession;
+        }
+        
         // Final check: ensure session is still valid before rolling
         if (session.status === 'finished' || (session.winner && session.winner !== null)) {
           await interaction.editReply({
@@ -977,6 +984,19 @@ async function handleRuuGameRoll(interaction) {
           });
           return;
         }
+        
+        // Double-check that the player still exists in the updated session
+        const currentPlayer = session.players.find(p => p.discordId === userId);
+        if (!currentPlayer) {
+          await interaction.editReply({
+            content: '❌ You are no longer in this game.',
+            components: []
+          });
+          return;
+        }
+        
+        // Update player reference to use the latest session's player data
+        player = currentPlayer;
         
         // Roll the dice
         const roll = Math.floor(Math.random() * GAME_CONFIG.DICE_SIDES) + 1;
@@ -1339,7 +1359,10 @@ async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCha
   if (session.winner) {
     console.log(`[createRuuGameEmbed] Adding winner field - Winner: ${session.winner}, Winning Score: ${session.winningScore}, Prize Character: ${prizeCharacter?.name || 'None'}, Prize Claimed: ${session.prizeClaimed}`);
     const winner = session.players.find(p => p.discordId === session.winner);
-    let winnerValue = `**${winner.username}** rolled a perfect **${session.winningScore}**!`;
+    
+    // Handle case where winner isn't in players array (shouldn't happen, but safety check)
+    const winnerUsername = winner?.username || `User <@${session.winner}>`;
+    let winnerValue = `**${winnerUsername}** rolled a perfect **${session.winningScore}**!`;
     
     // Add prize information if we have character details
     if (prizeCharacter && session.prizeClaimed) {
