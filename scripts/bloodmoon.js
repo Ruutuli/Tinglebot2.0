@@ -104,8 +104,12 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     }
 
     // Determine the correct date for the Blood Moon announcement
+    // Use EST timezone to match the scheduler
     const now = new Date();
-    const today = normalizeDate(now);
+    const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const today = normalizeDate(estTime);
+    
+    logger.info('BLOODMOON', `Checking announcement for channel ${channelId} - EST date: ${today.toDateString()} (${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')})`);
     
     // SAFETY CHECK: Only send announcements if today is specifically the DAY BEFORE a Blood Moon
     // (not during the actual Blood Moon period)
@@ -117,10 +121,14 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
       const currentBloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
       const dayBefore = new Date(currentBloodMoonDate);
       dayBefore.setDate(currentBloodMoonDate.getDate() - 1);
+      const normalizedDayBefore = normalizeDate(dayBefore);
       
-      if (today.getTime() === dayBefore.getTime()) {
+      logger.info('BLOODMOON', `Comparing: Today ${today.toDateString()} (${today.getTime()}) vs Day Before ${normalizedDayBefore.toDateString()} (${normalizedDayBefore.getTime()}) for Blood Moon ${realDate}`);
+      
+      if (today.getTime() === normalizedDayBefore.getTime()) {
         isDayBeforeBloodMoon = true;
         bloodMoonDate = currentBloodMoonDate;
+        logger.info('BLOODMOON', `Match found! Today is the day before Blood Moon ${realDate}`);
         break;
       }
     }

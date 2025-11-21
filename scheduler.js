@@ -2028,9 +2028,13 @@ async function handleBloodMoonStart(client) {
   // Check if today is specifically the day BEFORE a Blood Moon (not the actual day or day after)
   const now = new Date();
   const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  // Normalize date by stripping time components
   const today = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
   
+  logger.info('BLOODMOON', `Current EST date: ${today.toDateString()} (${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')})`);
+  
   let isDayBeforeBloodMoon = false;
+  let matchedBloodMoonDate = null;
   
   for (const { realDate } of bloodmoonDates) {
     const [month, day] = realDate.split('-').map(Number);
@@ -2038,8 +2042,15 @@ async function handleBloodMoonStart(client) {
     const dayBefore = new Date(bloodMoonDate);
     dayBefore.setDate(bloodMoonDate.getDate() - 1);
     
-    if (today.getTime() === dayBefore.getTime()) {
+    // Normalize both dates for comparison
+    const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const normalizedDayBefore = new Date(dayBefore.getFullYear(), dayBefore.getMonth(), dayBefore.getDate());
+    
+    logger.info('BLOODMOON', `Checking: Blood Moon date ${realDate} (${bloodMoonDate.toDateString()}), Day before: ${normalizedDayBefore.toDateString()}, Today: ${normalizedToday.toDateString()}`);
+    
+    if (normalizedToday.getTime() === normalizedDayBefore.getTime()) {
       isDayBeforeBloodMoon = true;
+      matchedBloodMoonDate = bloodMoonDate;
       logger.info('BLOODMOON', `Today is the day before Blood Moon (${bloodMoonDate.toDateString()})`);
       break;
     }
