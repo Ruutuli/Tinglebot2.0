@@ -893,7 +893,7 @@ async function createRaidThread(interaction, raid) {
     const threadMessage = [
       `💀 A raid has been initiated against **${raid.monster.name} (Tier ${raid.monster.tier})**!`,
       `\n${roleMention} — come help defend your home!`,
-      `\nUse </raid:1392945628002259014> to join the fight!`,
+      `\nUse </raid:1433351189269053455> to join the fight!`,
       `\n\n**Raid ID:** \`\`\`${raid.raidId}\`\`\``,
       `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`
     ].join('');
@@ -944,7 +944,7 @@ function createRaidEmbed(raid, monsterImage) {
     .setDescription(
       `**${raid.monster.name} has been spotted in ${villageName}!**\n` +
       `*It's a Tier ${raid.monster.tier} monster! Protect the village!*\n\n` +
-      `</raid:1392945628002259014> to join or continue the raid!\n` +
+      `</raid:1433351189269053455> to join or continue the raid!\n` +
       `</item:1379838613067530385> to heal during the raid!\n\n` +
       `⏰ **You have ${totalMinutes} minutes to complete this raid!**`
     )
@@ -1121,7 +1121,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       const threadMessage = [
         `💀 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
         `\n${roleMention} — come help defend your home!`,
-        `\nUse </raid:1392945628002259014> to join the fight!`,
+        `\nUse </raid:1433351189269053455> to join the fight!`,
         `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
         `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`
       ].join('');
@@ -1150,7 +1150,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       const raidInfoMessage = [
         `💀 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
         `\n${roleMention} — come help defend your home!`,
-        `\nUse </raid:1392945628002259014> to join the fight!`,
+        `\nUse </raid:1433351189269053455> to join the fight!`,
         `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
         `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`,
         `\n\n*Note: No thread was created in this channel. Use the raid ID to participate!*`

@@ -1051,8 +1051,7 @@ app.get('/auth/discord/callback',
     next();
   },
   passport.authenticate('discord', { 
-    failureRedirect: '/login',
-    failureFlash: true 
+    failureRedirect: '/login?error=authentication_failed'
   }), 
   (req, res) => {
     logger.success(`User authenticated: ${req.user?.username} (${req.user?.discordId})`, 'server.js');
