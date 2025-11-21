@@ -15,20 +15,20 @@ const {
  readSheetData,
  safeAppendDataToSheet,
 } = require("../utils/googleSheetsUtils");
-const dbConfig = require('../../config/database');
+const dbConfig = require('../config/database');
 
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
 const inventoryUtils = require("../utils/inventoryUtils");
 
 // ------------------- Models -------------------
-const Character = require("../../models/CharacterModel");
-const ModCharacter = require("../../models/ModCharacterModel");
-const Monster = require("../../models/MonsterModel");
-const Quest = require("../../models/QuestModel");
-const RelicModel = require("../../models/RelicModel");
-const User = require("../../models/UserModel");
-const Pet = require("../../models/PetModel");
-const generalCategories = require("../../models/GeneralItemCategories");
+const Character = require("../models/CharacterModel");
+const ModCharacter = require("../models/ModCharacterModel");
+const Monster = require("../models/MonsterModel");
+const Quest = require("../models/QuestModel");
+const RelicModel = require("../models/RelicModel");
+const User = require("../models/UserModel");
+const Pet = require("../models/PetModel");
+const generalCategories = require("../models/GeneralItemCategories");
 
 // ============================================================================
 // ------------------- Database Connection Functions -------------------
@@ -2143,7 +2143,7 @@ inventoryUtils.initializeInventoryUtils({
 const recordBlightRoll = async (characterId, characterName, userId, rollValue, previousStage, newStage, notes = '') => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('../../models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
     
     const rollRecord = new BlightRollHistory({
       characterId,
@@ -2168,7 +2168,7 @@ const recordBlightRoll = async (characterId, characterName, userId, rollValue, p
 const getCharacterBlightHistory = async (characterId, limit = 10) => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('../../models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
     
     return await BlightRollHistory.find({ characterId })
       .sort({ timestamp: -1 })
@@ -2186,7 +2186,7 @@ const getCharacterBlightHistory = async (characterId, limit = 10) => {
 const getUserBlightHistory = async (userId, limit = 20) => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('../../models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
     
     return await BlightRollHistory.find({ userId })
       .sort({ timestamp: -1 })
