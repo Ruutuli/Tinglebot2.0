@@ -3975,10 +3975,13 @@ async function showAddVendorItemModal(character) {
           </p>
         </div>
         <div class="form-group">
-          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-            <input type="checkbox" id="barter-open" name="barterOpen" style="width: 18px; height: 18px; cursor: pointer;">
-            <span style="font-weight: 500; color: var(--text-color);">Barter/Trades Open</span>
+          <label for="barter-open" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Barter/Trades Open
           </label>
+          <select id="barter-open" name="barterOpen" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
           <button type="button" class="cancel-add-vendor-item-btn" style="
@@ -4310,35 +4313,6 @@ async function showManageVendorModal(character) {
           Save Shop Banner
         </button>
       </div>
-
-      <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
-        <button type="button" class="cancel-manage-vendor-btn" style="
-          padding: 0.75rem 1.5rem;
-          background: var(--card-bg);
-          color: var(--text-color);
-          border: 1px solid var(--border-color);
-          border-radius: 0.5rem;
-          cursor: pointer;
-          font-size: 1rem;
-          transition: background 0.2s;
-        ">Close</button>
-        <button type="button" id="save-shop-image-btn" style="
-          padding: 0.75rem 1.5rem;
-          background: var(--primary-color);
-          color: white;
-          border: none;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          font-size: 1rem;
-          transition: background 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        ">
-          <i class="fas fa-save"></i>
-          Save Shop Banner
-        </button>
-      </div>
     </div>
   `;
 
@@ -4605,12 +4579,13 @@ async function showEditVendorItemModal(character, item) {
           </p>
         </div>
         <div class="form-group">
-          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-            <input type="checkbox" id="edit-barter-open" name="barterOpen" ${item.barterOpen ? 'checked' : ''} 
-              style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--primary-color); border: 2px solid ${item.barterOpen ? 'var(--primary-color)' : 'var(--border-color)'}; border-radius: 4px; background-color: ${item.barterOpen ? 'var(--primary-color)' : 'transparent'}; transition: all 0.2s; box-shadow: ${item.barterOpen ? '0 0 0 2px rgba(0,123,255,0.2)' : 'none'};"
-              onchange="const isChecked = this.checked; this.style.borderColor = isChecked ? 'var(--primary-color)' : 'var(--border-color)'; this.style.backgroundColor = isChecked ? 'var(--primary-color)' : 'transparent'; this.style.boxShadow = isChecked ? '0 0 0 2px rgba(0,123,255,0.2)' : 'none';">
-            <span style="font-weight: 500; color: var(--text-color);">Barter/Trades Open</span>
+          <label for="edit-barter-open" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">
+            Barter/Trades Open
           </label>
+          <select id="edit-barter-open" name="barterOpen" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
+            <option value="false" ${!item.barterOpen ? 'selected' : ''}>No</option>
+            <option value="true" ${item.barterOpen ? 'selected' : ''}>Yes</option>
+          </select>
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
           <button type="button" class="cancel-edit-vendor-item-btn" style="
@@ -4741,7 +4716,7 @@ async function addVendorItem(characterId, form, modal) {
       tokenPrice: form.tokenPrice.value ? parseFloat(form.tokenPrice.value) : null,
       artPrice: form.artPrice.value.trim() || null,
       otherPrice: form.otherPrice.value.trim() || null,
-      barterOpen: form.barterOpen.checked,
+      barterOpen: form.barterOpen.value === 'true',
       slot: form.slot.value.trim() || null
     };
 
@@ -4794,13 +4769,13 @@ async function updateVendorItem(characterId, itemId, form, modal) {
     // Ensure itemId is a string
     const itemIdStr = typeof itemId === 'object' && itemId.toString ? itemId.toString() : String(itemId);
     
-    const barterOpenCheckbox = form.querySelector('#edit-barter-open') || form.querySelector('input[name="barterOpen"]');
+    const barterOpenSelect = form.querySelector('#edit-barter-open') || form.querySelector('select[name="barterOpen"]');
     const formData = {
       stockQty: parseInt(form.stockQty.value),
       tokenPrice: form.tokenPrice.value ? parseFloat(form.tokenPrice.value) : null,
       artPrice: form.artPrice.value.trim() || null,
       otherPrice: form.otherPrice.value.trim() || null,
-      barterOpen: barterOpenCheckbox ? barterOpenCheckbox.checked : false,
+      barterOpen: barterOpenSelect ? barterOpenSelect.value === 'true' : false,
       slot: form.slot.value.trim() || null
     };
 
