@@ -464,7 +464,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: 'Want to join in?',
-        value: 'Use </raid:1392945628002259014> to join!',
+        value: 'Use </raid:1433351189269053455> to join!',
         inline: false
       },
 

@@ -84,42 +84,77 @@ class CountdownManager {
   }
 
   getNextBloodMoonDate() {
+    // Get current time
     const now = new Date();
-    const currentDate = now.toLocaleString("en-US", { timeZone: "America/New_York" });
-    const currentDateStr = new Date(currentDate).toISOString().slice(5, 10); // MM-DD format
+    
+    // Get EST date components using Intl.DateTimeFormat for accurate timezone handling
+    const estFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    
+    const estParts = estFormatter.formatToParts(now);
+    const estYear = parseInt(estParts.find(p => p.type === 'year').value);
+    const estMonth = parseInt(estParts.find(p => p.type === 'month').value);
+    const estDay = parseInt(estParts.find(p => p.type === 'day').value);
+    const estHour = parseInt(estParts.find(p => p.type === 'hour').value);
+    
+    // Get current date in MM-DD format (EST)
+    const currentDateStr = `${String(estMonth).padStart(2, '0')}-${String(estDay).padStart(2, '0')}`;
     
     // Find the next Blood Moon date
     let nextBloodMoon = null;
     
     // First, check if there's a Blood Moon today
     const todayBloodMoon = this.bloodmoonDates.find(bm => bm.realDate === currentDateStr);
-    if (todayBloodMoon) {
-      // If it's Blood Moon today, set it to 8 PM today
-      const today = new Date(currentDate);
-      today.setHours(20, 0, 0, 0);
-      return today;
+    if (todayBloodMoon && estHour < 20) {
+      // 8 PM hasn't passed yet, return today at 8 PM EST
+      const today8PM = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      today8PM.setHours(20, 0, 0, 0);
+      return today8PM;
     }
     
-    // Find the next Blood Moon date
+    // Find the next Blood Moon date in the current year by comparing date strings
+    // This avoids timezone issues
+    let foundIndex = -1;
     for (let i = 0; i < this.bloodmoonDates.length; i++) {
       const bloodMoon = this.bloodmoonDates[i];
-      const bloodMoonDate = new Date(`${new Date().getFullYear()}-${bloodMoon.realDate}`);
+      const [bmMonth, bmDay] = bloodMoon.realDate.split('-').map(Number);
       
-      // If this Blood Moon date is in the future, it's our next one
-      if (bloodMoonDate > new Date(currentDate)) {
-        bloodMoonDate.setHours(20, 0, 0, 0); // Set to 8 PM
-        nextBloodMoon = bloodMoonDate;
+      // Compare dates: if month/day is greater than current, or same month but day is greater
+      // or if it's today but we're past 8 PM
+      const isAfter = (bmMonth > estMonth) || 
+                      (bmMonth === estMonth && bmDay > estDay) ||
+                      (bmMonth === estMonth && bmDay === estDay && estHour >= 20);
+      
+      if (isAfter) {
+        foundIndex = i;
         break;
       }
     }
     
-    // If no Blood Moon found this year, get the first one next year
-    if (!nextBloodMoon) {
-      const nextYear = new Date().getFullYear() + 1;
+    if (foundIndex >= 0) {
+      const bloodMoon = this.bloodmoonDates[foundIndex];
+      const [month, day] = bloodMoon.realDate.split('-').map(Number);
+      // Create date for this Blood Moon at 8 PM EST
+      const bmDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      bmDate.setFullYear(estYear, month - 1, day);
+      bmDate.setHours(20, 0, 0, 0);
+      nextBloodMoon = bmDate;
+    } else {
+      // If no Blood Moon found this year, get the first one next year
+      const nextYear = estYear + 1;
       const firstBloodMoon = this.bloodmoonDates[0];
-      const nextYearBloodMoon = new Date(`${nextYear}-${firstBloodMoon.realDate}`);
-      nextYearBloodMoon.setHours(20, 0, 0, 0);
-      nextBloodMoon = nextYearBloodMoon;
+      const [month, day] = firstBloodMoon.realDate.split('-').map(Number);
+      const bmDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      bmDate.setFullYear(nextYear, month - 1, day);
+      bmDate.setHours(20, 0, 0, 0);
+      nextBloodMoon = bmDate;
     }
     
     return nextBloodMoon;
@@ -127,7 +162,9 @@ class CountdownManager {
 
   getTimeUntilNext(targetTime, isDaily = true) {
     const now = new Date();
-    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    // Get EST time by using toLocaleString and parsing it back
+    const estString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+    const estNow = new Date(estString);
     
     let targetDate;
     
@@ -135,7 +172,7 @@ class CountdownManager {
       // Parse target time (HH:MM format)
       const [targetHour, targetMinute] = targetTime.split(':').map(Number);
       
-      // Set target time to today
+      // Set target time to today in EST
       targetDate = new Date(estNow);
       targetDate.setHours(targetHour, targetMinute, 0, 0);
       
@@ -146,9 +183,32 @@ class CountdownManager {
     } else {
       // For non-daily events (like Blood Moon), use the calculated date
       targetDate = this.getNextBloodMoonDate();
+      
+      // Ensure targetDate is in the future - if not, recalculate
+      if (targetDate <= estNow) {
+        // This shouldn't happen, but if it does, find the next one
+        targetDate = this.getNextBloodMoonDate();
+      }
     }
     
-    const timeDiff = targetDate - estNow;
+    const timeDiff = targetDate.getTime() - estNow.getTime();
+    
+    // Ensure timeDiff is not negative
+    if (timeDiff < 0) {
+      // If negative, something went wrong - recalculate for Blood Moon
+      if (!isDaily) {
+        targetDate = this.getNextBloodMoonDate();
+        const newTimeDiff = targetDate.getTime() - estNow.getTime();
+        if (newTimeDiff >= 0) {
+          const hours = Math.floor(newTimeDiff / (1000 * 60 * 60));
+          const minutes = Math.floor((newTimeDiff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((newTimeDiff % (1000 * 60)) / 1000);
+          return { hours, minutes, seconds, targetDate };
+        }
+      }
+      // If still negative or not Blood Moon, return zeros
+      return { hours: 0, minutes: 0, seconds: 0, targetDate };
+    }
     
     const hours = Math.floor(timeDiff / (1000 * 60 * 60));
     const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
@@ -164,8 +224,33 @@ class CountdownManager {
       // For Blood Moon, calculate days and hours instead of hours, minutes, seconds
       if (event.id === 'blood-moon') {
         const totalHours = hours + (minutes / 60) + (seconds / 3600);
-        const days = Math.floor(totalHours / 24);
-        const remainingHours = Math.floor(totalHours % 24);
+        
+        // Ensure totalHours is not negative (safeguard against calculation errors)
+        if (totalHours < 0) {
+          // If negative, recalculate the next Blood Moon date
+          const targetDate = this.getNextBloodMoonDate();
+          const now = new Date();
+          const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+          const timeDiff = targetDate.getTime() - estNow.getTime();
+          
+          if (timeDiff > 0) {
+            const correctedHours = Math.floor(timeDiff / (1000 * 60 * 60));
+            const correctedMinutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+            const correctedSeconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+            const correctedTotalHours = correctedHours + (correctedMinutes / 60) + (correctedSeconds / 3600);
+            const days = Math.max(0, Math.floor(correctedTotalHours / 24));
+            const remainingHours = Math.max(0, Math.floor(correctedTotalHours % 24));
+            
+            const daysEl = document.getElementById('blood-moon-days');
+            const hoursEl = document.getElementById('blood-moon-hours');
+            if (daysEl) daysEl.textContent = days.toString().padStart(2, '0');
+            if (hoursEl) hoursEl.textContent = remainingHours.toString().padStart(2, '0');
+            return;
+          }
+        }
+        
+        const days = Math.max(0, Math.floor(totalHours / 24));
+        const remainingHours = Math.max(0, Math.floor(totalHours % 24));
         
         // Update timer elements for Blood Moon
         const daysEl = document.getElementById('blood-moon-days');
