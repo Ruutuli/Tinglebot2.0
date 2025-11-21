@@ -615,18 +615,21 @@ async function openEditModal(recordId) {
     
     await generateForm(record);
     
-    // Hide loading modal before showing the form
+    // Hide loading modal and show edit modal
     hideLoadingModal();
     
     const modal = document.getElementById('record-edit-modal');
-    modal.removeAttribute('style');
-    modal.classList.remove('hidden');
-    modal.classList.add('show');
-    
-    // Scroll modal content to top
-    const modalBody = document.getElementById('modal-body');
-    if (modalBody) {
-      modalBody.scrollTop = 0;
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('show');
+      
+      // Scroll modal content to top
+      const modalBody = document.getElementById('modal-body');
+      if (modalBody) {
+        modalBody.scrollTop = 0;
+      }
+    } else {
+      console.error('[databaseEditor.js]: ❌ Modal element not found');
     }
     
   } catch (error) {
@@ -653,18 +656,21 @@ async function openCreateModal() {
     
     await generateForm({});
     
-    // Hide loading modal before showing the form
+    // Hide loading modal and show create modal
     hideLoadingModal();
     
     const modal = document.getElementById('record-edit-modal');
-    modal.removeAttribute('style');
-    modal.classList.remove('hidden');
-    modal.classList.add('show');
-    
-    // Scroll modal content to top
-    const modalBody = document.getElementById('modal-body');
-    if (modalBody) {
-      modalBody.scrollTop = 0;
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('show');
+      
+      // Scroll modal content to top
+      const modalBody = document.getElementById('modal-body');
+      if (modalBody) {
+        modalBody.scrollTop = 0;
+      }
+    } else {
+      console.error('[databaseEditor.js]: ❌ Modal element not found');
     }
     
   } catch (error) {
@@ -675,7 +681,7 @@ async function openCreateModal() {
 }
 
 // ------------------- dbEditorCloseModal -------------------
-// Hide database editor modal by managing CSS classes
+// Close the database editor modal and clean up
 //
 function dbEditorCloseModal(e) {
   if (e) {
@@ -683,40 +689,34 @@ function dbEditorCloseModal(e) {
     e.stopPropagation();
   }
   
-  
-  // Make sure to hide loading modal if it's still showing
+  // Hide loading modal if still showing
   hideLoadingModal();
   
+  // Close main modal
   const modal = document.getElementById('record-edit-modal');
-  
   if (modal) {
-    modal.removeAttribute('style');
     modal.classList.remove('show');
     modal.classList.add('hidden');
-    
   } else {
     console.error('[databaseEditor.js]: ❌ Modal element not found');
   }
   
+  // Reset state
   editingRecordId = null;
   
-  // Cleanup any floating search panels
-  const searchPanels = document.querySelectorAll('.item-search-panel');
-  searchPanels.forEach(panel => {
-    if (panel.parentNode) {
-      panel.parentNode.removeChild(panel);
+  // Cleanup floating search panels
+  document.querySelectorAll('.item-search-panel, .item-search-backdrop').forEach(element => {
+    if (element.parentNode) {
+      element.parentNode.removeChild(element);
     }
   });
   
-  const searchBackdrops = document.querySelectorAll('.item-search-backdrop');
-  searchBackdrops.forEach(backdrop => {
-    if (backdrop.parentNode) {
-      backdrop.parentNode.removeChild(backdrop);
-    }
-  });
-  
+  // Reset form
   const form = document.getElementById('record-form');
-  if (form) form.reset();
+  if (form) {
+    form.reset();
+    form.innerHTML = ''; // Clear dynamic content
+  }
 }
 
 // ============================================================================
@@ -2281,7 +2281,7 @@ async function createInputForField(fieldName, fieldInfo, value) {
   }
   
   if (fieldName.toLowerCase().includes('image')) {
-    return createImageInput(value);
+    return createImageInput(fieldName, value);
   }
   
   // Check if field should use autocomplete
@@ -3443,11 +3443,13 @@ function createBuffEditor(fieldName, value) {
 // ------------------- createImageInput -------------------
 // Create URL input with image preview for image fields
 //
-function createImageInput(value) {
+function createImageInput(fieldName, value) {
   const container = document.createElement('div');
   
   const input = document.createElement('input');
   input.type = 'url';
+  input.id = `field-${fieldName}`;
+  input.name = fieldName;
   input.value = value !== undefined && value !== null ? value : '';
   input.placeholder = 'Enter image URL...';
   input.style.marginBottom = '0.5rem';

@@ -89,9 +89,12 @@ const domain = process.env.DOMAIN || (isProduction ? 'tinglebot.xyz' : 'localhos
 
 // Force localhost for development if running on localhost
 // Don't force localhost if we're on Railway (even if NODE_ENV is development)
+// Also check if explicitly set to use localhost
 const isLocalhost = (process.env.FORCE_LOCALHOST === 'true' || 
+                   process.env.USE_LOCALHOST === 'true' ||
                    (process.env.NODE_ENV === 'development' && !process.env.RAILWAY_ENVIRONMENT) ||
-                   process.env.USE_LOCALHOST === 'true');
+                   process.env.PORT === '5001' ||
+                   (!process.env.RAILWAY_ENVIRONMENT && !process.env.PORT));
 
 logger.info('Environment Detection:', 'server.js');
 logger.debug('NODE_ENV: ' + process.env.NODE_ENV, null, 'server.js');
@@ -146,8 +149,8 @@ app.use(session({
     secure: isProduction && !isLocalhost, // true in production HTTPS, false for localhost
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax',
-    domain: undefined // No domain restriction for localhost
+    sameSite: isLocalhost ? 'lax' : 'lax', // Use lax for both localhost and production
+    domain: isLocalhost ? undefined : undefined // Explicitly undefined for localhost, no domain restriction
   },
   name: 'tinglebot.sid'
 }));
@@ -182,9 +185,11 @@ passport.deserializeUser(async (discordId, done) => {
 });
 
 // Discord OAuth Strategy - Force localhost for development
-const callbackURL = (isProduction && !isLocalhost)
-  ? `https://${domain}/auth/discord/callback`
-  : `http://localhost:5001/auth/discord/callback`;
+// Use environment variable if set, otherwise determine based on environment
+const callbackURL = process.env.DISCORD_CALLBACK_URL || 
+  ((isProduction && !isLocalhost)
+    ? `https://${domain}/auth/discord/callback`
+    : `http://localhost:5001/auth/discord/callback`);
 
 logger.info('Discord OAuth Configuration:', 'server.js');
 logger.debug('isProduction: ' + isProduction, null, 'server.js');
@@ -1057,12 +1062,23 @@ app.get('/auth/discord/callback',
     logger.success(`User authenticated: ${req.user?.username} (${req.user?.discordId})`, 'server.js');
     
     // Check if there's a returnTo parameter in the session or query
-    const returnTo = req.session.returnTo || req.query.returnTo;
+    let returnTo = req.session.returnTo || req.query.returnTo;
+    
+    // If running on localhost, ensure returnTo stays on localhost
+    if (isLocalhost && returnTo) {
+      // Remove any protocol and domain from returnTo to keep it relative
+      returnTo = returnTo.replace(/^https?:\/\/[^\/]+/, '');
+      // Ensure it starts with /
+      if (!returnTo.startsWith('/')) {
+        returnTo = '/' + returnTo;
+      }
+    }
     
     logger.debug('Discord callback redirect:', null, 'server.js');
     logger.debug('returnTo from session: ' + req.session.returnTo, null, 'server.js');
     logger.debug('returnTo from query: ' + req.query.returnTo, null, 'server.js');
     logger.debug('final returnTo: ' + returnTo, null, 'server.js');
+    logger.debug('isLocalhost: ' + isLocalhost, null, 'server.js');
     logger.debug('session ID: ' + req.session.id, null, 'server.js');
     logger.debug('passport user: ' + req.session.passport?.user, null, 'server.js');
     logger.debug('session exists: ' + !!req.session, null, 'server.js');
@@ -1071,11 +1087,11 @@ app.get('/auth/discord/callback',
     if (returnTo) {
       // Clear the returnTo from session
       delete req.session.returnTo;
-      // Redirect to the original page
+      // Redirect to the original page (relative URL to stay on same host)
       logger.debug('Redirecting to: ' + returnTo + '?login=success', null, 'server.js');
       res.redirect(returnTo + '?login=success');
     } else {
-      // Default redirect to dashboard
+      // Default redirect to dashboard (relative URL to stay on same host)
       logger.debug('Redirecting to default: /?login=success', null, 'server.js');
       res.redirect('/?login=success');
     }

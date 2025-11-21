@@ -4156,136 +4156,8 @@ html {
 /* Village Shops Admin Styles - Using Database Editor Styling */
 /* ============================================================================ */
 
-/* Database Editor Header - Consistent Styling */
-.database-editor-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--glass-divider);
-}
-
-.database-editor-header h2 {
-  color: var(--text-primary);
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* Database Editor Controls Styling */
-.db-editor-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  align-items: center;
-  margin-bottom: 2rem;
-  padding: 1.5rem;
-  background: var(--card-background);
-  border: 1px solid var(--border-color);
-  border-radius: var(--card-radius);
-  box-shadow: var(--card-shadow);
-}
-
-.model-selector-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 200px;
-}
-
-.model-selector-container label {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.model-selector-container select {
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--input-radius);
-  background: var(--input-background);
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.model-selector-container select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
-}
-
-.search-container {
-  display: flex;
-  gap: 0.5rem;
-  flex: 1;
-  min-width: 300px;
-}
-
-.search-container input {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--input-radius);
-  background: var(--input-background);
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-}
-
-.search-container input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
-}
-
-.search-btn {
-  padding: 0.75rem 1rem;
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: var(--input-radius);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.search-btn:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
-}
-
-.create-btn {
-  padding: 0.75rem 1.5rem;
-  background: var(--success-color);
-  color: white;
-  border: none;
-  border-radius: var(--input-radius);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.create-btn:hover {
-  background: #2e7d32;
-  transform: translateY(-1px);
-}
+/* Database Editor Styles - All handled in databaseEditor.css */
+/* These styles are now in databaseEditor.css for better organization and consistency */
 
 /* Database Editor Table Styles - Applied to Village Shops */
 .db-records-table {
@@ -4708,6 +4580,7 @@ html {
   max-height: 90vh !important;
   overflow-y: auto !important;
 }
+
 
 @keyframes modalSlideIn {
   from {
