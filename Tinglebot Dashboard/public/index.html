@@ -921,12 +921,12 @@
         </div>
 
         <!-- Record Edit Modal -->
-        <div id="record-edit-modal" class="modal" style="display: none;">
-          <div class="modal-content db-editor-modal">
+        <div id="record-edit-modal" class="hidden">
+          <div class="db-editor-modal">
             <div class="modal-header">
               <h3 id="modal-title">Edit Record</h3>
-              <button class="modal-close" id="modal-close-btn">
-                <i class="fas fa-times"></i>
+              <button class="modal-close" id="modal-close-btn" aria-label="Close modal">
+                <i class="fas fa-times" aria-hidden="true"></i>
               </button>
             </div>
             <div class="modal-body" id="modal-body">
@@ -935,13 +935,13 @@
               </form>
             </div>
             <div class="modal-footer">
-              <button id="modal-cancel-btn" class="btn-secondary">Cancel</button>
-              <button id="modal-delete-btn" class="btn-danger" style="display: none;">
-                <i class="fas fa-trash"></i>
+              <button id="modal-cancel-btn" class="btn-secondary" type="button">Cancel</button>
+              <button id="modal-delete-btn" class="btn-danger" type="button" style="display: none;">
+                <i class="fas fa-trash" aria-hidden="true"></i>
                 Delete
               </button>
-              <button id="modal-save-btn" class="btn-primary">
-                <i class="fas fa-save"></i>
+              <button id="modal-save-btn" class="btn-primary" type="button">
+                <i class="fas fa-save" aria-hidden="true"></i>
                 Save
               </button>
             </div>
