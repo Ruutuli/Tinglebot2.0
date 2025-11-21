@@ -165,24 +165,7 @@ const data = new SlashCommandBuilder()
     option.setName('charactername')
       .setDescription('The name of the character')
       .setRequired(true)
-      .setAutocomplete(true))
-  .addStringOption(option =>
-    option.setName('weather')
-      .setDescription('The special weather type')
-      .setRequired(true)
-      .addChoices(
-        { name: 'Avalanche', value: 'Avalanche' },
-        { name: 'Blight Rain', value: 'Blight Rain' },
-        { name: 'Drought', value: 'Drought' },
-        { name: 'Fairy Circle', value: 'Fairy Circle' },
-        { name: 'Flood', value: 'Flood' },
-        { name: 'Flower Bloom', value: 'Flower Bloom' },
-        { name: 'Jubilee', value: 'Jubilee' },
-        { name: 'Meteor Shower', value: 'Meteor Shower' },
-        { name: 'Muggy', value: 'Muggy' },
-        { name: 'Rock Slide', value: 'Rock Slide' }
-      )
-  );
+      .setAutocomplete(true));
 
 // ------------------- Execute Function -------------------
 async function execute(interaction) {
@@ -197,8 +180,6 @@ async function execute(interaction) {
     
     const userId = interaction.user.id;
     const characterName = interaction.options.getString('charactername');
-    const weatherType = interaction.options.getString('weather');
-    const weatherLabel = capitalizeWords(weatherType);
     
     // Fetch character
     let character = await fetchCharacterByNameAndUserId(characterName, userId);
@@ -221,13 +202,22 @@ async function execute(interaction) {
       return interaction.editReply({ embeds: [syncCheck.embed] });
     }
     
-    // Verify current weather matches
+    // Get current weather and check for special weather
     const currentWeather = await getWeatherWithoutGeneration(character.currentVillage);
-    if (!currentWeather || currentWeather.label !== weatherLabel) {
+    if (!currentWeather) {
       return interaction.editReply({
-        content: `❌ **${weatherLabel}** is not the current weather in **${character.currentVillage}**. Check the weather with \`/helpwanted\` or \`/travel\`.`
+        content: `❌ Unable to retrieve weather information for **${character.currentVillage}**.`
       });
     }
+    
+    // Check if there's special weather active
+    if (!currentWeather.special || !currentWeather.special.label) {
+      return interaction.editReply({
+        content: `❌ There is no special weather currently active in **${character.currentVillage}**. Check the weather with \`/helpwanted\` or \`/travel\`.`
+      });
+    }
+    
+    const weatherLabel = currentWeather.special.label;
     
     // Check stamina
     if (character.stats.stamina < 10) {
