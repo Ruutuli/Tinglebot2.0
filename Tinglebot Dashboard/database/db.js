@@ -78,6 +78,11 @@ async function connectToTinglebot() {
   if (!tinglebotDbConnection || mongoose.connection.readyState === 0) {
    mongoose.set("strictQuery", false);
    const uri = dbConfig.tinglebot;
+   if (!uri) {
+     const error = new Error('Tinglebot database URI is not configured. Please set MONGODB_TINGLEBOT_URI_PROD, MONGODB_TINGLEBOT_URI, or MONGODB_URI environment variable.');
+     handleError(error, "database/db.js");
+     throw error;
+   }
    try {
     tinglebotDbConnection = await mongoose.connect(uri, {
      serverSelectionTimeoutMS: 30000,

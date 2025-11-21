@@ -2,10 +2,24 @@
 // ------------------- Error Handling -------------------
 // Global error capturing and logging for web dashboard.
 // ============================================================================
-const dbConfig = require('../config/database');
 
 // ------------------- Standard Libraries -------------------
 const ERROR_LOG_CHANNEL_ID = process.env.CONSOLE_LOG_CHANNEL;
+
+// ------------------- Lazy Load Database Config -------------------
+// Load database config lazily to avoid startup errors if env vars aren't set
+let dbConfig = null;
+function getDbConfig() {
+  if (!dbConfig) {
+    try {
+      dbConfig = require('../config/database');
+    } catch (error) {
+      console.warn('Warning: Could not load database config:', error.message);
+      dbConfig = { tinglebot: null, inventories: null, vending: null };
+    }
+  }
+  return dbConfig;
+}
 
 // ------------------- Variables -------------------
 let trelloLogger = null;
@@ -40,7 +54,8 @@ async function handleError(error, source = "Unknown Source", context = {}) {
     if (host) extraInfo += `• Host: ${host}\n`;
     if (port) extraInfo += `• Port: ${port}\n`;
     if (process.env.MONGODB_TINGLEBOT_URI) extraInfo += `• Tinglebot URI: ${redact(process.env.MONGODB_TINGLEBOT_URI)}\n`;
-    if (dbConfig.inventories) extraInfo += `• Inventories URI: ${redact(dbConfig.inventories)}\n`;
+    const config = getDbConfig();
+    if (config.inventories) extraInfo += `• Inventories URI: ${redact(config.inventories)}\n`;
     if (process.env.NODE_ENV) extraInfo += `• Node Env: ${process.env.NODE_ENV}\n`;
     if (context.options) extraInfo += `• Command Options: ${JSON.stringify(context.options)}\n`;
   }

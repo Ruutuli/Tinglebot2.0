@@ -5,8 +5,13 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Helper function to get MongoDB URI
+// Checks multiple environment variable name patterns for flexibility
 const getMongoUri = (type) => {
-  return process.env[`MONGODB_${type}_URI_PROD`] || process.env.MONGODB_URI;
+  // Try production-specific variable first, then generic, then fallback
+  return process.env[`MONGODB_${type}_URI_PROD`] 
+      || process.env[`MONGODB_${type}_URI`]
+      || process.env.MONGODB_URI
+      || null;
 };
 
 const dbConfig = {
@@ -15,9 +20,21 @@ const dbConfig = {
   vending: getMongoUri('VENDING')
 };
 
-// Validate configuration
-if (!dbConfig.tinglebot || !dbConfig.inventories || !dbConfig.vending) {
-  throw new Error('Database configuration is incomplete');
+// Validate configuration - only require tinglebot, others are optional
+// Don't throw error at module load - let connection functions handle missing URIs
+if (!dbConfig.tinglebot) {
+  console.error('Warning: Database configuration is incomplete. Tinglebot database URI not found.');
+  console.error('Please set one of: MONGODB_TINGLEBOT_URI_PROD, MONGODB_TINGLEBOT_URI, or MONGODB_URI');
+  // Don't throw - allow server to start and handle connection errors gracefully
+}
+
+// Warn about missing optional databases but don't fail
+if (!dbConfig.inventories) {
+  console.warn('Warning: MONGODB_INVENTORIES_URI_PROD not set. Inventories database features will be unavailable.');
+}
+
+if (!dbConfig.vending) {
+  console.warn('Warning: MONGODB_VENDING_URI_PROD not set. Vending database features will be unavailable.');
 }
 
 module.exports = dbConfig; 
