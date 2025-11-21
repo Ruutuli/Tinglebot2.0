@@ -4848,16 +4848,16 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
     if (focusedName === 'vendorcharacter') {
       const characters = await fetchAllCharacters();
       
-      // Filter for only characters with vending jobs and completed setup
+      // Filter for only characters with vendor types (vendor/merchant/shopkeeper) and completed setup
       const vendorCharacters = characters.filter(character => {
-        const job = character.job?.toLowerCase();
-        return (job === 'shopkeeper' || job === 'merchant') && 
+        const vendorType = character.vendorType?.toLowerCase();
+        return (vendorType === 'vendor' || vendorType === 'merchant' || vendorType === 'shopkeeper') && 
                character.vendingSetup?.shopLink && 
                character.vendingSync;
                 });
                 
                 const choices = vendorCharacters.map(char => ({
-        name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.job}`,
+        name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.vendorType || char.job || 'Vendor'}`,
                   value: char.name
                 }));
                 
