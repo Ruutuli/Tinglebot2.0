@@ -6746,78 +6746,8 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
       return res.status(400).json({ error: 'Character must be a Shopkeeper or Merchant to set up vending' });
     }
 
-    // Validate Google Sheets URL
-    const { isValidGoogleSheetsUrl, extractSpreadsheetId, authorizeSheets, readSheetData } = googleSheets;
-    if (!isValidGoogleSheetsUrl(shopLink)) {
-      return res.status(400).json({ error: 'Invalid Google Sheets URL' });
-    }
-
-    // Parse sheet data for setup (custom format)
-    let parsedRows = [];
-    try {
-      const spreadsheetId = extractSpreadsheetId(shopLink);
-      const auth = await authorizeSheets();
-      
-      // Read the sheet - try to read from first sheet or a specific range
-      // Format: CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? | DATE
-      const sheetData = await readSheetData(auth, spreadsheetId, 'A1:K') || [];
-      
-      if (!Array.isArray(sheetData) || sheetData.length < 2) {
-        return res.status(400).json({ error: 'Sheet must have at least a header row and one data row' });
-      }
-
-      // Parse header row to find column indices
-      const headers = sheetData[0].map(h => (h || '').trim().toUpperCase());
-      const charNameIdx = headers.findIndex(h => h.includes('CHARACTER') || h.includes('NAME'));
-      const itemNameIdx = headers.findIndex(h => h.includes('ITEM'));
-      const stockQtyIdx = headers.findIndex(h => h.includes('STOCK') || h.includes('QTY'));
-      const costEachIdx = headers.findIndex(h => h.includes('COST EACH'));
-      const pointsSpentIdx = headers.findIndex(h => h.includes('POINTS SPENT'));
-      const boughtFromIdx = headers.findIndex(h => h.includes('BOUGHT FROM'));
-      const tokenPriceIdx = headers.findIndex(h => h.includes('TOKEN PRICE'));
-      const artPriceIdx = headers.findIndex(h => h.includes('ART PRICE'));
-      const otherPriceIdx = headers.findIndex(h => h.includes('OTHER PRICE'));
-      const tradesOpenIdx = headers.findIndex(h => h.includes('TRADES OPEN') || h.includes('TRADES'));
-      const dateIdx = headers.findIndex(h => h.includes('DATE'));
-
-      // Validate required columns
-      if (itemNameIdx === -1 || stockQtyIdx === -1) {
-        return res.status(400).json({ error: 'Sheet must have ITEM NAME and STOCK QTY columns' });
-      }
-
-      // Parse data rows (skip header row)
-      for (let i = 1; i < sheetData.length; i++) {
-        const row = sheetData[i];
-        if (!row || !row[itemNameIdx]) continue; // Skip empty rows
-
-        const itemName = row[itemNameIdx]?.trim();
-        const stockQty = parseInt(row[stockQtyIdx]) || 0;
-        
-        if (!itemName || stockQty <= 0) continue; // Skip rows without item name or with zero stock
-
-        parsedRows.push({
-          characterName: charNameIdx >= 0 ? row[charNameIdx]?.trim() : character.name,
-          itemName: itemName,
-          stockQty: stockQty,
-          costEach: costEachIdx >= 0 ? parseFloat(row[costEachIdx]) || 0 : 0,
-          pointsSpent: pointsSpentIdx >= 0 ? parseFloat(row[pointsSpentIdx]) || 0 : 0,
-          boughtFrom: boughtFromIdx >= 0 ? row[boughtFromIdx]?.trim() : null,
-          tokenPrice: tokenPriceIdx >= 0 ? (row[tokenPriceIdx]?.trim() || '0') : '0',
-          artPrice: artPriceIdx >= 0 ? (row[artPriceIdx]?.trim() || 'N/A') : 'N/A',
-          otherPrice: otherPriceIdx >= 0 ? (row[otherPriceIdx]?.trim() || 'N/A') : 'N/A',
-          tradesOpen: tradesOpenIdx >= 0 ? row[tradesOpenIdx] : false,
-          date: dateIdx >= 0 ? row[dateIdx] : null,
-          slot: null // No slot in this format
-        });
-      }
-    } catch (error) {
-      console.error('[server.js]: Error parsing setup sheet:', error);
-      return res.status(400).json({ error: `Failed to parse sheet data: ${error.message}` });
-    }
-
-    if (parsedRows.length === 0) {
-      return res.status(400).json({ error: 'No valid items found in the sheet' });
-    }
+    // Use items directly from request body
+    const parsedRows = items;
 
     // Set pouch size based on pouch type
     const pouchSizes = {
