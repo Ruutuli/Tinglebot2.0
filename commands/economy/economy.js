@@ -46,7 +46,8 @@ const {
  createGiftEmbed,
  createTradeEmbed,
  createTransferEmbed,
- updateBoostRequestEmbed
+ updateBoostRequestEmbed,
+ createEquippedItemErrorEmbed
 } = require("../../embeds/embeds.js");
 const { hasPerk } = require("../../modules/jobsModule");
 const TempData = require('../../models/TempDataModel');
