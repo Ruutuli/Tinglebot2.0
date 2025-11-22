@@ -2055,10 +2055,12 @@ app.get('/api/calendar', async (req, res) => {
       birthday: { $exists: true, $ne: '' },
       name: { $nin: ['Tingle', 'Tingle test', 'John'] }
     }, { name: 1, birthday: 1, icon: 1 }).lean();
-    const calendarBirthdays = allBirthdays.map(c => {
-      const mmdd = c.birthday.slice(-5);
-      return { name: c.name, birthday: mmdd, icon: c.icon };
-    });
+    const calendarBirthdays = allBirthdays
+      .filter(c => c.birthday && typeof c.birthday === 'string' && c.birthday.length >= 5)
+      .map(c => {
+        const mmdd = c.birthday.slice(-5);
+        return { name: c.name, birthday: mmdd, icon: c.icon };
+      });
     
     // Get current date info
     const today = new Date();
