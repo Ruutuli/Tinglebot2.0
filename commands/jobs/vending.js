@@ -66,8 +66,8 @@ const command = new SlashCommandBuilder()
 
  .addSubcommand((sub) =>
   sub
-   .setName("add")
-   .setDescription("Add items to your shop")
+   .setName("restock")
+   .setDescription("Restock items to your shop from monthly vending stock")
    .addStringOption((opt) =>
     opt
      .setName("charactername")
@@ -234,6 +234,7 @@ const command = new SlashCommandBuilder()
      .setName("fulfillmentid")
      .setDescription("The barter request ID")
      .setRequired(true)
+     .setAutocomplete(true)
    )
  )
 
@@ -260,7 +261,7 @@ async function execute(interaction) {
 
  // Apply vending boosts where applicable
  if (
-  ["collect_points", "add", "barter", "accept"].includes(subcommand) &&
+  ["collect_points", "restock", "barter", "accept"].includes(subcommand) &&
   characterName
  ) {
   try {
@@ -325,7 +326,7 @@ async function execute(interaction) {
   case "collect_points":
    return await executeVendingWithBoost(interaction);
 
-  case "add":
+  case "restock":
    return await handleRestockWithBoost(interaction);
 
   default:

@@ -1564,7 +1564,7 @@ async function getOrCreateToken(userId, tokenTrackerLink = "") {
 }
 
 // ------------------- updateTokenBalance -------------------
-async function updateTokenBalance(userId, change) {
+async function updateTokenBalance(userId, change, transactionMetadata = null) {
  try {
   if (isNaN(change)) {
    throw new Error(
@@ -1585,6 +1585,28 @@ async function updateTokenBalance(userId, change) {
   }
   user.tokens = newBalance;
   await user.save();
+  
+  // Log transaction to TokenTransactionModel if metadata is provided
+  if (transactionMetadata) {
+    try {
+      const TokenTransaction = require('../models/TokenTransactionModel');
+      const transactionType = change >= 0 ? 'earned' : 'spent';
+      await TokenTransaction.createTransaction({
+        userId: userId,
+        amount: Math.abs(change),
+        type: transactionType,
+        category: transactionMetadata.category || '',
+        description: transactionMetadata.description || '',
+        link: transactionMetadata.link || '',
+        balanceBefore: currentBalance,
+        balanceAfter: newBalance
+      });
+    } catch (logError) {
+      // Log error but don't fail the transaction
+      console.error('[tokenService.js]: ⚠️ Error logging token transaction:', logError);
+    }
+  }
+  
   return newBalance;
  } catch (error) {
   handleError(error, "tokenService.js");
@@ -1757,6 +1779,25 @@ async function appendEarnedTokens(
    valueInputOption: "USER_ENTERED",
    resource: { values: [newRow] },
   });
+  
+  // Also log to TokenTransactionModel
+  try {
+    const TokenTransaction = require('../models/TokenTransactionModel');
+    const currentBalance = user.tokens || 0;
+    await TokenTransaction.createTransaction({
+      userId: userId,
+      amount: amount,
+      type: 'earned',
+      category: category || '',
+      description: fileName || '',
+      link: fileUrl || '',
+      balanceBefore: currentBalance,
+      balanceAfter: currentBalance + amount
+    });
+  } catch (logError) {
+    // Log error but don't fail the transaction
+    console.error('[tokenService.js]: ⚠️ Error logging earned token transaction:', logError);
+  }
  } catch (error) {
   handleError(error, "tokenService.js");
   console.error(
@@ -1780,6 +1821,25 @@ async function appendSpentTokens(userId, purchaseName, amount, link = "") {
   const auth = await authorizeSheets();
   const newRow = [purchaseName, link, "", "spent", `-${amount}`];
   await safeAppendDataToSheet(tokenTrackerLink, user, "loggedTracker!B7:F", [newRow]);
+  
+  // Also log to TokenTransactionModel
+  try {
+    const TokenTransaction = require('../models/TokenTransactionModel');
+    const currentBalance = user.tokens || 0;
+    await TokenTransaction.createTransaction({
+      userId: userId,
+      amount: amount,
+      type: 'spent',
+      category: '',
+      description: purchaseName || '',
+      link: link || '',
+      balanceBefore: currentBalance,
+      balanceAfter: currentBalance - amount
+    });
+  } catch (logError) {
+    // Log error but don't fail the transaction
+    console.error('[tokenService.js]: ⚠️ Error logging spent token transaction:', logError);
+  }
  } catch (error) {
   handleError(error, "tokenService.js");
   console.error(

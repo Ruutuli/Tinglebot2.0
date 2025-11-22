@@ -583,7 +583,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   canManageInventory = Boolean(isAdminUser);
 
   if (!authState) {
-    window.location.href = '/login?returnTo=/inventories.html';
+    window.location.href = '/login?returnTo=/inventories';
     return;
   }
 
@@ -725,7 +725,7 @@ async function loadInventories(showLoader = true) {
     const response = await fetch('/api/inventories/me', { credentials: 'include' });
 
     if (response.status === 401) {
-      window.location.href = '/login?returnTo=/inventories.html';
+      window.location.href = '/login?returnTo=/inventories';
       return;
     }
 

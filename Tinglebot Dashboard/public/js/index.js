@@ -655,6 +655,51 @@ function showSection(sectionId) {
 // ============================================================================
 function setupSidebarNavigation() {
   
+  // ============================================================================
+  // ------------------- Dropdown Toggle Functionality -------------------
+  // Handles dropdown menu toggles in sidebar navigation
+  // ============================================================================
+  const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
+  
+  dropdownToggles.forEach(toggle => {
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const dropdown = toggle.closest('.nav-dropdown');
+      const isActive = dropdown.classList.contains('active');
+      
+      // Close all other dropdowns
+      document.querySelectorAll('.nav-dropdown').forEach(item => {
+        if (item !== dropdown) {
+          item.classList.remove('active');
+          item.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'false');
+        }
+      });
+      
+      // Toggle current dropdown
+      if (isActive) {
+        dropdown.classList.remove('active');
+        toggle.setAttribute('aria-expanded', 'false');
+      } else {
+        dropdown.classList.add('active');
+        toggle.setAttribute('aria-expanded', 'true');
+      }
+      
+      closeMobileSidebar();
+    });
+  });
+  
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.nav-dropdown')) {
+      document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+        dropdown.classList.remove('active');
+        dropdown.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'false');
+      });
+    }
+  });
+  
   const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
   
   sidebarLinks.forEach(link => {
@@ -672,6 +717,21 @@ function setupSidebarNavigation() {
       
       // Close mobile sidebar if open
       closeMobileSidebar();
+      
+      // If link is inside a dropdown, open that dropdown
+      const dropdown = link.closest('.nav-dropdown');
+      if (dropdown) {
+        // Close all other dropdowns
+        document.querySelectorAll('.nav-dropdown').forEach(item => {
+          if (item !== dropdown) {
+            item.classList.remove('active');
+            item.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'false');
+          }
+        });
+        // Open the parent dropdown
+        dropdown.classList.add('active');
+        dropdown.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'true');
+      }
       
       // Update URL
       const newUrl = sectionId === 'dashboard-section' ? '/' : `#${sectionId}`;
@@ -694,6 +754,8 @@ function setupSidebarNavigation() {
         showProfileSection();
       } else if (sectionId === 'vending-section') {
         showVendingSection();
+      } else if (sectionId === 'tokens-section') {
+        showTokensSection();
       } else if (sectionId === 'guilds-section') {
         showGuildSection();
       } else if (sectionId === 'calendar-section') {
@@ -778,6 +840,51 @@ function setupSidebarNavigation() {
     }
   });
   
+  // ============================================================================
+  // ------------------- Helper: Open Dropdown for Section -------------------
+  // Opens the parent dropdown if a section is inside one
+  // ============================================================================
+  function openDropdownForSection(sectionId) {
+    if (!sectionId) return;
+    
+    // Map sections to dropdown categories
+    const sectionToDropdown = {
+      // User Area dropdown
+      'profile-section': 'User Area',
+      'settings-section': 'User Area',
+      'vending-section': 'User Area',
+      'tokens-section': 'User Area',
+      'stats-section': 'User Area',
+      // Community dropdown
+      'guilds-section': 'Community',
+      'users-section': 'Community',
+      'member-lore-section': 'Community',
+      'gallery-section': 'Community',
+      'relationships-section': 'Community',
+      'suggestion-box-section': 'Community',
+      // Game Features dropdown
+      'calendar-section': 'Game Features',
+      'levels-section': 'Game Features',
+      // Admin Area dropdown
+      'admin-area-section': 'Admin Area'
+    };
+    
+    const dropdownName = sectionToDropdown[sectionId];
+    if (dropdownName) {
+      const dropdowns = document.querySelectorAll('.nav-dropdown');
+      dropdowns.forEach(dropdown => {
+        const toggle = dropdown.querySelector('.nav-dropdown-toggle');
+        if (toggle) {
+          const span = toggle.querySelector('span');
+          if (span && span.textContent.trim() === dropdownName) {
+            dropdown.classList.add('active');
+            toggle.setAttribute('aria-expanded', 'true');
+          }
+        }
+      });
+    }
+  }
+  
   // Handle initial URL on page load
   const hash = window.location.hash;
   if (hash) {
@@ -789,6 +896,7 @@ function setupSidebarNavigation() {
     // Check for admin area sub-sections
     if (hashValue === 'admin-area-section/database-editor') {
       showAdminAreaSection();
+      openDropdownForSection('admin-area-section');
       // Small delay to ensure admin area is loaded before opening database editor
       setTimeout(() => {
         if (window.openDatabaseEditor) {
@@ -801,32 +909,45 @@ function setupSidebarNavigation() {
       loadModelByName(hashValue);
     } else if (hashValue === 'stats-section') {
       showStatsSection();
+      openDropdownForSection('stats-section');
     } else if (hashValue === 'dashboard-section') {
       showDashboardSection();
     } else if (hashValue === 'profile-section') {
       showProfileSection();
+      openDropdownForSection('profile-section');
     } else if (hashValue === 'vending' || hashValue === 'vending-section') {
       showVendingSection();
+      openDropdownForSection('vending-section');
     } else if (hashValue === 'guilds-section') {
       showGuildSection();
+      openDropdownForSection('guilds-section');
     } else if (hashValue === 'calendar-section') {
       showCalendarSection();
+      openDropdownForSection('calendar-section');
     } else if (hashValue === 'users-section') {
       showUsersSection();
+      openDropdownForSection('users-section');
     } else if (hashValue === 'relationships-section') {
       relationshipsModule.showRelationshipsSection();
+      openDropdownForSection('relationships-section');
     } else if (hashValue === 'admin-area-section') {
       showAdminAreaSection();
+      openDropdownForSection('admin-area-section');
     } else if (hashValue === 'settings-section') {
       showSettingsSection();
+      openDropdownForSection('settings-section');
     } else if (hashValue === 'levels-section') {
       showLevelsSection();
+      openDropdownForSection('levels-section');
     } else if (hashValue === 'suggestion-box-section') {
       showSuggestionBoxSection();
+      openDropdownForSection('suggestion-box-section');
     } else if (hashValue === 'member-lore-section') {
       showMemberLoreSection();
+      openDropdownForSection('member-lore-section');
     } else {
       showSection(hashValue);
+      openDropdownForSection(hashValue);
     }
   }
   
@@ -1305,6 +1426,54 @@ function showVendingSection() {
   const breadcrumb = document.querySelector('.breadcrumb');
   if (breadcrumb) {
     breadcrumb.textContent = 'Vending Management';
+  }
+}
+
+function showTokensSection() {
+  // Scroll to top when showing tokens section
+  scrollToTop();
+  
+  // Hide all main content sections
+  const mainContent = document.querySelector('.main-content');
+  const sections = mainContent.querySelectorAll('section, #model-details-page');
+  
+  sections.forEach(section => {
+    section.style.display = 'none';
+  });
+  
+  // Show the tokens section
+  const tokensSection = document.getElementById('tokens-section');
+  if (tokensSection) {
+    tokensSection.style.display = 'block';
+    
+    // Load tokens section
+    import('./tokens.js').then(tokensModule => {
+      if (tokensModule.loadTokensSection) {
+        tokensModule.loadTokensSection();
+      }
+    }).catch(err => {
+      console.error('[index.js]: Error loading tokens module:', err);
+    });
+  }
+  
+  // Update active state in sidebar
+  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+  sidebarLinks.forEach(link => {
+    const linkSection = link.getAttribute('data-section');
+    const listItem = link.closest('li');
+    if (listItem) {
+      if (linkSection === 'tokens-section') {
+        listItem.classList.add('active');
+      } else {
+        listItem.classList.remove('active');
+      }
+    }
+  });
+  
+  // Update breadcrumb
+  const breadcrumb = document.querySelector('.breadcrumb');
+  if (breadcrumb) {
+    breadcrumb.textContent = 'Token Tracking';
   }
 }
 

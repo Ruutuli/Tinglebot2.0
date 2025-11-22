@@ -2710,8 +2710,29 @@ async function handleTrade(interaction) {
   try {
     await interaction.deferReply();
 
+    // ------------------- Clean Item Names from Copy-Paste -------------------
+    // Remove emoji prefixes and quantity information from item names if users copy-paste autocomplete text
+    // Handles formats like: "📦 Fairy - Qty: 1", "Fairy (Qty: 1)", "Job Voucher - Qty: 2"
+    const cleanItemName = (name) => {
+      if (!name) return name;
+      return name
+        // Remove emoji prefixes (📦, 🔨, 🔮, etc.) - common emojis used in autocomplete
+        .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '')
+        // Remove quantity in parentheses format: "(Qty: 1)" or "(Qty:1)"
+        .replace(/\s*\(Qty:\s*\d+\s*\)/gi, '')
+        // Remove quantity in dash format: " - Qty: 1" or "- Qty:1"
+        .replace(/\s*-\s*Qty:\s*\d+\s*$/i, '')
+        .trim();
+    };
+
+    const cleanedItemArrayRaw = [
+      { name: cleanItemName(item1), quantity: quantity1 },
+      { name: cleanItemName(item2), quantity: quantity2 },
+      { name: cleanItemName(item3), quantity: quantity3 },
+    ].filter((item) => item.name);
+
     // ------------------- Validate Item Existence -------------------
-    const itemNamesToCheck = [item1, item2, item3].filter(Boolean);
+    const itemNamesToCheck = cleanedItemArrayRaw.map(item => item.name);
     const missingItems = [];
     for (const name of itemNamesToCheck) {
       // Handle items with + in their names by using exact match instead of regex
@@ -2745,17 +2766,6 @@ async function handleTrade(interaction) {
       });
       return;
     }
-
-    // ------------------- Clean Item Names from Copy-Paste -------------------
-    // Remove quantity information from item names if users copy-paste autocomplete text
-    const cleanedItemArrayRaw = [
-      { name: item1, quantity: quantity1 },
-      { name: item2, quantity: quantity2 },
-      { name: item3, quantity: quantity3 },
-    ].filter((item) => item.name).map(item => ({
-      name: item.name.replace(/\s*\(Qty:\s*\d+\)/i, '').trim(),
-      quantity: item.quantity
-    }));
 
     // ------------------- Validate Trade Quantities -------------------
     for (const { quantity } of cleanedItemArrayRaw) {

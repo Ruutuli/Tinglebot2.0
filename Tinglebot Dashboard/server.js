@@ -74,6 +74,7 @@ const logger = require('./utils/logger');
 
 // Import Google Sheets utilities
 const googleSheets = require('./googleSheetsUtils');
+const { google } = require('googleapis');
 
 // ------------------- Section: App Configuration -------------------
 const app = express();
@@ -580,6 +581,14 @@ app.get('/map', (req, res) => {
 
 app.get('/map.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'map.html'));
+});
+
+app.get('/inventories', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'inventories.html'));
+});
+
+app.get('/inventories.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'inventories.html'));
 });
 
 // Health check endpoint
@@ -10263,6 +10272,333 @@ app.get('/api/levels/leaderboard', async (req, res) => {
   }
 });
 
+// ------------------- Section: Token Transaction API Routes -------------------
+
+// Helper function to read transactions from Google Sheets
+async function readTransactionsFromGoogleSheets(userId, tokenTrackerUrl) {
+  try {
+    if (!tokenTrackerUrl || !googleSheets.isValidGoogleSheetsUrl(tokenTrackerUrl)) {
+      console.log(`[server.js]: ⚠️ Invalid or missing token tracker URL for user ${userId}`);
+      return [];
+    }
+    
+    console.log(`[server.js]: 📊 Reading Google Sheets for user ${userId}`);
+    const auth = await googleSheets.authorizeSheets();
+    const spreadsheetId = googleSheets.extractSpreadsheetId(tokenTrackerUrl);
+    console.log(`[server.js]: 📊 Spreadsheet ID: ${spreadsheetId}`);
+    
+    // Get the actual sheet name to handle any spacing issues
+    // Use Google Sheets API to find the sheet by title
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+    const loggedTrackerSheet = spreadsheet.data.sheets.find(sheet => 
+      sheet.properties.title.trim().toLowerCase() === 'loggedtracker'
+    );
+    
+    if (!loggedTrackerSheet) {
+      console.warn(`[server.js]: ⚠️ Sheet 'loggedTracker' not found for user ${userId}`);
+      return [];
+    }
+    
+    const actualSheetName = loggedTrackerSheet.properties.title;
+    const range = `${actualSheetName}!B7:F`;
+    console.log(`[server.js]: 📊 Reading range: ${range}`);
+    const sheetData = await googleSheets.readSheetData(auth, spreadsheetId, range);
+    console.log(`[server.js]: 📊 Sheet data rows: ${sheetData?.length || 0}`);
+    
+    // Validate headers
+    if (!sheetData || sheetData.length < 2) {
+      console.log(`[server.js]: ⚠️ No data rows found (only ${sheetData?.length || 0} rows)`);
+      return []; // No data rows
+    }
+    
+    // Parse transactions from sheet data (skip header row)
+    const transactions = [];
+    let runningBalance = 0; // We'll need to calculate this
+    
+    // First pass: calculate balances
+    sheetData.slice(1).forEach((row) => {
+      if (row.length < 5) return;
+      const amount = parseInt(row[4]);
+      if (isNaN(amount)) return;
+      
+      if (row[3] === "earned") {
+        runningBalance += amount;
+      } else if (row[3] === "spent") {
+        runningBalance -= Math.abs(amount);
+      }
+    });
+    
+    // Reset and create transactions with proper balances
+    runningBalance = 0;
+    sheetData.slice(1).forEach((row, idx) => {
+      if (row.length < 5) return;
+      const amount = parseInt(row[4]);
+      if (isNaN(amount)) return;
+      
+      const type = row[3]?.toLowerCase();
+      if (type !== 'earned' && type !== 'spent') return;
+      
+      const balanceBefore = runningBalance;
+      if (type === "earned") {
+        runningBalance += amount;
+      } else {
+        runningBalance -= Math.abs(amount);
+      }
+      
+      transactions.push({
+        _id: `sheet_${userId}_${idx}`, // Temporary ID for sheet transactions
+        userId: userId,
+        amount: type === 'earned' ? amount : -Math.abs(amount),
+        type: type,
+        category: row[2] || '',
+        description: row[0] || '',
+        link: row[1] || '',
+        balanceBefore: balanceBefore,
+        balanceAfter: runningBalance,
+        timestamp: new Date(), // We don't have timestamp in sheet, use current
+        dayKey: new Date().toISOString().split('T')[0],
+        source: 'google_sheets' // Mark as from Google Sheets
+      });
+    });
+    
+    console.log(`[server.js]: ✅ Parsed ${transactions.length} transactions from Google Sheets`);
+    if (transactions.length > 0) {
+      console.log(`[server.js]: 📋 Sample transaction:`, {
+        type: transactions[0].type,
+        amount: transactions[0].amount,
+        description: transactions[0].description,
+        category: transactions[0].category
+      });
+    }
+    
+    // Return in reverse order (newest first)
+    return transactions.reverse();
+  } catch (error) {
+    console.error(`[server.js]: Error reading token transactions from Google Sheets for user ${userId}:`, error);
+    return []; // Return empty array on error
+  }
+}
+
+// Get user's token transaction summary
+app.get('/api/tokens/summary', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findOne({ discordId: req.user.discordId });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Get summary from TokenTransaction model
+    let dbSummary = { totalEarned: 0, totalSpent: 0, netTokens: 0, earnedCount: 0, spentCount: 0, totalTransactions: 0 };
+    try {
+      dbSummary = await TokenTransaction.getUserTransactionSummary(req.user.discordId);
+    } catch (error) {
+      console.warn('[server.js]: Error getting token summary from database, using defaults:', error.message);
+    }
+    
+    // Also read from Google Sheets if available
+    let sheetTransactions = [];
+    if (user.tokenTracker) {
+      sheetTransactions = await readTransactionsFromGoogleSheets(req.user.discordId, user.tokenTracker);
+      
+      // Calculate totals from Google Sheets
+      const sheetEarned = sheetTransactions
+        .filter(t => t.type === 'earned')
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      const sheetSpent = sheetTransactions
+        .filter(t => t.type === 'spent')
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      
+      // Merge with database summary (prefer database for newer transactions)
+      dbSummary.totalEarned = Math.max(dbSummary.totalEarned, sheetEarned);
+      dbSummary.totalSpent = Math.max(dbSummary.totalSpent, sheetSpent);
+      dbSummary.totalTransactions = dbSummary.totalTransactions + sheetTransactions.length;
+      dbSummary.earnedCount += sheetTransactions.filter(t => t.type === 'earned').length;
+      dbSummary.spentCount += sheetTransactions.filter(t => t.type === 'spent').length;
+      dbSummary.netTokens = dbSummary.totalEarned - dbSummary.totalSpent;
+    }
+    
+    res.json({
+      success: true,
+      currentBalance: user.tokens || 0,
+      totalEarned: dbSummary.totalEarned,
+      totalSpent: dbSummary.totalSpent,
+      netTokens: dbSummary.netTokens,
+      earnedCount: dbSummary.earnedCount,
+      spentCount: dbSummary.spentCount,
+      totalTransactions: dbSummary.totalTransactions,
+      firstTransactionDate: dbSummary.firstTransactionDate,
+      lastTransactionDate: dbSummary.lastTransactionDate,
+      hasTokenTracker: !!user.tokenTracker
+    });
+  } catch (error) {
+    console.error('[server.js]: Error fetching token summary:', error);
+    res.status(500).json({ error: 'Failed to fetch token summary' });
+  }
+});
+
+// Get user's token transactions
+app.get('/api/tokens/transactions', requireAuth, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = parseInt(req.query.skip) || 0;
+    const type = req.query.type; // 'earned', 'spent', or undefined (all)
+    
+    console.log(`[server.js]: 🔍 Fetching token transactions for user ${req.user.discordId}`, {
+      limit,
+      skip,
+      type: type || 'all'
+    });
+    
+    const user = await User.findOne({ discordId: req.user.discordId });
+    if (!user) {
+      console.warn(`[server.js]: ⚠️ User not found: ${req.user.discordId}`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Get transactions from database
+    const query = { userId: req.user.discordId };
+    if (type && (type === 'earned' || type === 'spent')) {
+      query.type = type;
+    }
+    
+    let dbTransactions = [];
+    let dbTotal = 0;
+    try {
+      dbTransactions = await TokenTransaction.find(query)
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .skip(skip)
+        .lean();
+      dbTotal = await TokenTransaction.countDocuments(query);
+      console.log(`[server.js]: ✅ Database transactions found: ${dbTransactions.length} (total: ${dbTotal})`);
+    } catch (error) {
+      console.error('[server.js]: ❌ Error getting transactions from database:', error);
+    }
+    
+    // Also read from Google Sheets if available and we need more data
+    let sheetTransactions = [];
+    if (user.tokenTracker && (dbTransactions.length < limit || skip === 0)) {
+      console.log(`[server.js]: 📊 Reading from Google Sheets tracker: ${user.tokenTracker ? 'yes' : 'no'}`);
+      try {
+        sheetTransactions = await readTransactionsFromGoogleSheets(req.user.discordId, user.tokenTracker);
+        console.log(`[server.js]: ✅ Google Sheets transactions found: ${sheetTransactions.length}`);
+        
+        // Filter by type if needed
+        if (type && (type === 'earned' || type === 'spent')) {
+          sheetTransactions = sheetTransactions.filter(t => t.type === type);
+          console.log(`[server.js]: 📊 Filtered to ${type}: ${sheetTransactions.length} transactions`);
+        }
+        
+        // Merge with database transactions
+        // Create a map of database transaction IDs to avoid duplicates
+        const dbTransactionMap = new Map();
+        dbTransactions.forEach(t => {
+          // Use a combination of description, amount, and type as key for deduplication
+          const key = `${t.description}_${t.amount}_${t.type}_${t.timestamp?.toISOString()}`;
+          dbTransactionMap.set(key, t);
+        });
+        
+        // Add sheet transactions that don't duplicate database ones
+        const mergedTransactions = [...dbTransactions];
+        sheetTransactions.forEach(sheetTx => {
+          const key = `${sheetTx.description}_${sheetTx.amount}_${sheetTx.type}_${sheetTx.timestamp?.toISOString()}`;
+          if (!dbTransactionMap.has(key)) {
+            mergedTransactions.push(sheetTx);
+          }
+        });
+        
+        // Sort by timestamp (newest first) and limit
+        mergedTransactions.sort((a, b) => {
+          const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return dateB - dateA;
+        });
+        
+        const allTransactions = mergedTransactions.slice(skip, skip + limit);
+        const totalTransactions = mergedTransactions.length;
+        
+        console.log(`[server.js]: ✅ Returning merged transactions: ${allTransactions.length} (total: ${totalTransactions})`);
+        return res.json({
+          success: true,
+          transactions: allTransactions,
+          total: totalTransactions,
+          limit: limit,
+          skip: skip,
+          hasMore: (skip + limit) < totalTransactions,
+          sources: {
+            database: dbTransactions.length,
+            googleSheets: sheetTransactions.length,
+            total: totalTransactions
+          }
+        });
+      } catch (sheetError) {
+        console.error('[server.js]: ❌ Error reading from Google Sheets:', sheetError);
+        // Continue with database transactions only
+      }
+    }
+    
+    // Return database transactions only
+    console.log(`[server.js]: ✅ Returning database-only transactions: ${dbTransactions.length} (total: ${dbTotal})`);
+    res.json({
+      success: true,
+      transactions: dbTransactions,
+      total: dbTotal,
+      limit: limit,
+      skip: skip,
+      hasMore: (skip + limit) < dbTotal,
+      sources: {
+        database: dbTransactions.length,
+        googleSheets: 0,
+        total: dbTotal
+      }
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error fetching token transactions:', error);
+    res.status(500).json({ error: 'Failed to fetch token transactions', details: error.message });
+  }
+});
+
+// Get global token statistics (admin only)
+app.get('/api/tokens/global-stats', requireAuth, async (req, res) => {
+  try {
+    // Check if user is admin
+    const guildId = process.env.PROD_GUILD_ID;
+    let isAdmin = false;
+    
+    if (guildId) {
+      const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
+        headers: {
+          'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const memberData = await response.json();
+        const roles = memberData.roles || [];
+        const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
+        isAdmin = ADMIN_ROLE_ID && roles.includes(ADMIN_ROLE_ID);
+      }
+    }
+    
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const stats = await TokenTransaction.getGlobalTokenStats();
+    
+    res.json({
+      success: true,
+      ...stats
+    });
+  } catch (error) {
+    console.error('[server.js]: Error fetching global token stats:', error);
+    res.status(500).json({ error: 'Failed to fetch global token stats' });
+  }
+});
+
 // ------------------- Endpoint: Blupee Leaderboard -------------------
 app.get('/api/levels/blupee-leaderboard', async (req, res) => {
   try {
@@ -10644,6 +10980,7 @@ const RuuGame = require('./models/RuuGameModel');
 const TableModel = require('./models/TableModel');
 const TableRoll = require('./models/TableRollModel');
 const TempData = require('./models/TempDataModel');
+const TokenTransaction = require('./models/TokenTransactionModel');
 // Note: Raid, StealStats, and BlightRollHistory are imported at the top of the file
 
 // ------------------- Model Registry -------------------
@@ -10675,6 +11012,7 @@ const MODEL_REGISTRY = {
   'TableModel': TableModel,
   'TableRoll': TableRoll,
   'TempData': TempData,
+  'TokenTransaction': TokenTransaction,
   'User': User,
   'VendingRequest': VendingRequest,
   'Village': Village,

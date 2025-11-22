@@ -93,6 +93,271 @@ async function getVendingModel(characterName) {
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const MONTHLY_VENDING_POINTS = 500;
 const VIEW_SHOP_IMAGE_URL = DEFAULT_IMAGE_URL;
+const FULFILLMENT_REQUEST_TTL_DAYS = 7; // Request expires after 7 days
+const MAX_RETRY_ATTEMPTS = 3;
+const INITIAL_RETRY_DELAY_MS = 100; // Initial delay for exponential backoff
+
+// ============================================================================
+// ------------------- Transaction & Atomic Operation Helpers -------------------
+// These functions provide transaction safety, atomic operations, and retry logic
+// ============================================================================
+
+// ------------------- runWithTransaction -------------------
+// Wraps operations in a MongoDB transaction with retry logic
+async function runWithTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+      const result = await fn(session);
+      await session.commitTransaction();
+      return result;
+    } catch (error) {
+      await session.abortTransaction();
+      lastError = error;
+      
+      // Retry on transient errors (WriteConflict, TransientTransactionError)
+      if (attempt < maxRetries - 1 && (
+        error.hasErrorLabel('TransientTransactionError') ||
+        error.hasErrorLabel('UnknownTransactionCommitResult') ||
+        error.code === 112 // WriteConflict
+      )) {
+        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[vendingHandler.js]: Transaction conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+  throw lastError;
+}
+
+// ------------------- retryOperation -------------------
+// Retries an operation with exponential backoff
+async function retryOperation(fn, maxRetries = MAX_RETRY_ATTEMPTS, operationName = 'operation') {
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      
+      // Retry on transient errors
+      if (attempt < maxRetries - 1 && (
+        error.code === 11000 || // Duplicate key
+        error.name === 'MongoNetworkError' ||
+        error.name === 'MongoTimeoutError' ||
+        (error.message && error.message.includes('connection'))
+      )) {
+        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[vendingHandler.js]: ${operationName} failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+// ------------------- atomicUpdateTokenBalance -------------------
+// Atomically updates token balance with validation
+async function atomicUpdateTokenBalance(userId, change, session = null) {
+  const User = require('../models/UserModel');
+  const options = session ? { session } : {};
+  
+  // For negative changes, ensure sufficient balance
+  if (change < 0) {
+    const result = await User.findOneAndUpdate(
+      { 
+        discordId: userId,
+        $expr: { $gte: [{ $ifNull: ['$tokens', 0] }, -change] } // Ensure balance won't go negative
+      },
+      { 
+        $inc: { tokens: change }
+      },
+      { 
+        new: true,
+        ...options
+      }
+    );
+    
+    if (!result) {
+      // Try to get current balance for error message
+      const currentUser = await User.findOne({ discordId: userId }, null, options);
+      const currentBalance = currentUser?.tokens || 0;
+      throw new Error(`Insufficient tokens for user ${userId}. Required: ${-change}, Available: ${currentBalance}`);
+    }
+    
+    return result.tokens || 0;
+  } else {
+    // For positive changes, allow upsert
+    const result = await User.findOneAndUpdate(
+      { discordId: userId },
+      { 
+        $inc: { tokens: change },
+        $setOnInsert: { tokens: change, tokenTracker: '', tokensSynced: false }
+      },
+      { 
+        new: true, 
+        upsert: true, 
+        setDefaultsOnInsert: true,
+        ...options
+      }
+    );
+    
+    return result.tokens || 0;
+  }
+}
+
+// ------------------- atomicUpdateStockQuantity -------------------
+// Atomically updates stock quantity with validation
+async function atomicUpdateStockQuantity(VendingInventory, itemId, quantityChange, requiredQuantity, session = null) {
+  const options = session ? { session } : {};
+  
+  const result = await VendingInventory.findOneAndUpdate(
+    { 
+      _id: itemId,
+      stockQty: { $gte: requiredQuantity } // Ensure sufficient stock
+    },
+    { 
+      $inc: { stockQty: quantityChange }
+    },
+    { 
+      new: true,
+      ...options
+    }
+  );
+  
+  if (!result) {
+    throw new Error(`Insufficient stock. Required: ${requiredQuantity}, but stock check failed.`);
+  }
+  
+  // Delete if stock reaches zero or below
+  if (result.stockQty <= 0) {
+    await VendingInventory.deleteOne({ _id: itemId }, options);
+  }
+  
+  return result;
+}
+
+// ------------------- validateFulfillmentRequest -------------------
+// Re-validates all conditions before fulfillment
+async function validateFulfillmentRequest(request, buyer, vendor, VendingInventory) {
+  const errors = [];
+  
+  // Check if request is expired
+  if (request.expiresAt && new Date() > request.expiresAt) {
+    errors.push('Request has expired');
+  }
+  
+  // Check if request is already processed
+  if (request.status === 'completed' || request.status === 'processing') {
+    errors.push(`Request is already ${request.status}`);
+  }
+  
+  // Check if characters still exist
+  if (!buyer) {
+    errors.push('Buyer character not found');
+  }
+  if (!vendor) {
+    errors.push('Vendor character not found');
+  }
+  
+  // Check if item still exists in vendor inventory
+  const stockItem = await VendingInventory.findOne({ itemName: request.itemName });
+  if (!stockItem) {
+    errors.push(`Item "${request.itemName}" no longer available in vendor inventory`);
+  } else if (stockItem.stockQty < request.quantity) {
+    errors.push(`Insufficient stock. Available: ${stockItem.stockQty}, Required: ${request.quantity}`);
+  }
+  
+  // Re-validate location restrictions
+  const { validateVendingLocation } = require('../utils/validation');
+  const locationValidation = validateVendingLocation(vendor, buyer);
+  if (!locationValidation.valid) {
+    errors.push(locationValidation.error);
+  }
+  
+  // For token payments, check balance
+  if (request.paymentMethod === 'tokens') {
+    const buyerTokens = await getTokenBalance(request.buyerId);
+    let requiredTokens;
+    
+    if (request.isVendorSelfPurchase && request.originalSellPrice) {
+      requiredTokens = request.originalSellPrice * request.quantity;
+    } else if (request.originalTokenPrice) {
+      requiredTokens = request.originalTokenPrice * request.quantity;
+    } else {
+      // Fallback: calculate from current stock item
+      requiredTokens = stockItem?.tokenPrice * request.quantity || 0;
+    }
+    
+    if (buyerTokens < requiredTokens) {
+      errors.push(`Insufficient tokens. Required: ${requiredTokens}, Available: ${buyerTokens}`);
+    }
+  }
+  
+  // Check for price changes
+  if (request.paymentMethod === 'tokens' && stockItem) {
+    if (request.isVendorSelfPurchase) {
+      const ItemModel = require('../models/ItemModel');
+      const itemDetails = await ItemModel.findOne({ itemName: request.itemName });
+      const currentSellPrice = itemDetails?.sellPrice || 0;
+      if (request.originalSellPrice && currentSellPrice !== request.originalSellPrice) {
+        errors.push(`Item price has changed. Original: ${request.originalSellPrice}, Current: ${currentSellPrice}`);
+      }
+    } else {
+      if (request.originalTokenPrice && stockItem.tokenPrice !== request.originalTokenPrice) {
+        errors.push(`Item price has changed. Original: ${request.originalTokenPrice}, Current: ${stockItem.tokenPrice}`);
+      }
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors,
+    stockItem
+  };
+}
+
+// ------------------- markRequestAsProcessing -------------------
+// Atomically marks request as processing to prevent duplicate processing
+async function markRequestAsProcessing(fulfillmentId, session = null) {
+  const options = session ? { session } : {};
+  
+  const result = await VendingRequest.findOneAndUpdate(
+    { 
+      fulfillmentId,
+      status: 'pending', // Only update if still pending
+      $or: [
+        { expiresAt: { $exists: false } },
+        { expiresAt: { $gt: new Date() } }
+      ]
+    },
+    { 
+      $set: { 
+        status: 'processing',
+        processedAt: new Date()
+      },
+      $inc: { version: 1 }
+    },
+    { 
+      new: true,
+      ...options
+    }
+  );
+  
+  if (!result) {
+    throw new Error('Request is not available for processing (already processed, expired, or not found)');
+  }
+  
+  return result;
+}
 
 // ============================================================================
 // ------------------- Handler Functions (Exported) -------------------
@@ -238,30 +503,30 @@ async function handleRestock(interaction) {
     await interaction.deferReply();
 
     // ------------------- Window Restriction Check -------------------
-    // Credit collection and restock are only available from 1st to 5th of each month
-    const now = new Date();
-    const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const estDate = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
-    const currentDay = estDate.getDate();
-    const currentMonth = estDate.getMonth() + 1;
-    const currentYear = estDate.getFullYear();
+    // TEMPORARILY DISABLED FOR TESTING - Credit collection and restock are only available from 1st to 5th of each month
+    // const now = new Date();
+    // const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    // const estDate = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
+    // const currentDay = estDate.getDate();
+    // const currentMonth = estDate.getMonth() + 1;
+    // const currentYear = estDate.getFullYear();
 
     // Check if outside restock window (1st-5th)
-    if (currentDay < 1 || currentDay > 5) {
-      const nextWindowStart = new Date(currentYear, currentMonth, 1);
-      if (currentMonth === 12) {
-        nextWindowStart.setFullYear(currentYear + 1);
-        nextWindowStart.setMonth(0);
-      } else {
-        nextWindowStart.setMonth(currentMonth);
-      }
-      const nextWindowEnd = new Date(nextWindowStart);
-      nextWindowEnd.setDate(5);
+    // if (currentDay < 1 || currentDay > 5) {
+    //   const nextWindowStart = new Date(currentYear, currentMonth, 1);
+    //   if (currentMonth === 12) {
+    //     nextWindowStart.setFullYear(currentYear + 1);
+    //     nextWindowStart.setMonth(0);
+    //   } else {
+    //     nextWindowStart.setMonth(currentMonth);
+    //   }
+    //   const nextWindowEnd = new Date(nextWindowStart);
+    //   nextWindowEnd.setDate(5);
 
-      return interaction.editReply({
-        content: `❌ **Outside Restock Window**\n\nVending restock is only available from the **1st to the 5th** of each month.\n\n**Current date:** ${estDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n**Next restock window:** ${nextWindowStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${nextWindowEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
-      });
-    }
+    //   return interaction.editReply({
+    //     content: `❌ **Outside Restock Window**\n\nVending restock is only available from the **1st to the 5th** of each month.\n\n**Current date:** ${estDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n**Next restock window:** ${nextWindowStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${nextWindowEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+    //   });
+    // }
 
     // ------------------- Input Parsing -------------------
     const characterName = interaction.options.getString('charactername');
@@ -337,8 +602,25 @@ async function handleRestock(interaction) {
     }
 
     // ------------------- Slot Assignment -------------------
+    // Get all items to check which slots are actually occupied
+    const allItems = await vendCollection.find({}).toArray();
+    const occupiedSlots = new Set();
+    
+    // Track all occupied slots (including items that might be in the same slot as the item we're adding)
+    allItems.forEach(item => {
+      if (item.slot) {
+        occupiedSlots.add(item.slot);
+      }
+    });
+    
     let newSlot;
     if (manualSlot) {
+      // Validate manual slot number
+      const slotNumber = parseInt(manualSlot.replace(/[^0-9]/g, ''));
+      if (isNaN(slotNumber) || slotNumber < 1 || slotNumber > totalSlots) {
+        return interaction.editReply(`❌ Invalid slot number. You have ${totalSlots} total slots available (1-${totalSlots}).`);
+      }
+      
       // Check if slot is already taken by a different item
       const existingItem = await vendCollection.findOne({ 
         slot: manualSlot,
@@ -349,28 +631,40 @@ async function handleRestock(interaction) {
       }
       newSlot = manualSlot;
     } else {
-      // Find first available slot
-      const usedSlots = await vendCollection.distinct('slot');
+      // Find first available slot by checking all slots sequentially
       for (let i = 1; i <= totalSlots; i++) {
         const slotName = `Slot ${i}`;
-        if (!usedSlots.includes(slotName)) {
+        // Check if this slot is occupied by any item (not just the one we're adding)
+        const slotOccupied = await vendCollection.findOne({ slot: slotName });
+        if (!slotOccupied) {
           newSlot = slotName;
           break;
         }
       }
       if (!newSlot) {
-        return interaction.editReply(`❌ No available slots. You have used all ${totalSlots} slots.`);
+        // Get list of all occupied slots for the error message
+        const occupiedList = Array.from(occupiedSlots).sort((a, b) => {
+          const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0;
+          const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
+          return numA - numB;
+        });
+        return interaction.editReply(
+          `❌ **No available slots.**\n\n` +
+          `You have used all ${totalSlots} slots.\n` +
+          `Occupied slots: ${occupiedList.join(', ')}\n\n` +
+          `Please remove an item from your shop first, or specify a slot that already contains this item to stack it.`
+        );
       }
     }
 
-    // Double check slot uniqueness before proceeding
-    const slotConflict = await vendCollection.findOne({
+    // Final validation: Double check slot is available right before transaction
+    const finalSlotCheck = await vendCollection.findOne({
       slot: newSlot,
       itemName: { $ne: itemName }
     });
 
-    if (slotConflict) {
-      return interaction.editReply(`❌ Slot conflict detected: Slot ${newSlot} is already occupied by ${slotConflict.itemName}. Please try again with a different slot.`);
+    if (finalSlotCheck) {
+      return interaction.editReply(`❌ Slot conflict detected: Slot ${newSlot} is already occupied by ${finalSlotCheck.itemName}. Please try again with a different slot.`);
     }
 
     // ------------------- Stack Size Validation -------------------
@@ -422,61 +716,92 @@ async function handleRestock(interaction) {
       }
     }
 
-    // ------------------- Update Inventory -------------------
-    if (existingItem) {
-      // Update existing item
-      await vendCollection.updateOne(
-        { _id: existingItem._id },
-        {
-          $inc: { stockQty: stockQty, pointsSpent: totalCost },
-          $set: { 
-            date: new Date(), 
-            boughtFrom: character.currentVillage,
-            // Update prices if provided
-            tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : existingItem.tokenPrice,
-            artPrice: artPrice && artPrice.trim() !== '' ? artPrice : existingItem.artPrice,
-            otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : existingItem.otherPrice,
-            barterOpen: barterOpen !== undefined ? barterOpen : existingItem.barterOpen,
-            tradesOpen: barterOpen !== undefined ? barterOpen : existingItem.tradesOpen // Legacy compatibility
+    // ------------------- Update Inventory and Points (Transaction) -------------------
+    // Wrap critical operations in transaction for atomicity
+    await runWithTransaction(async (session) => {
+      // Re-validate points before deduction (race condition protection)
+      const currentCharacter = await Character.findById(character._id, null, { session });
+      if (!currentCharacter || currentCharacter.vendingPoints < totalCost) {
+        throw new Error(`Insufficient vending points. Required: ${totalCost}, Available: ${currentCharacter?.vendingPoints || 0}`);
+      }
+
+      // Update inventory
+      if (existingItem) {
+        // Atomically update existing item with stock validation
+        const updateResult = await vendCollection.findOneAndUpdate(
+          { 
+            _id: existingItem._id,
+            stockQty: { $exists: true } // Ensure item still exists
+          },
+          {
+            $inc: { stockQty: stockQty, pointsSpent: totalCost },
+            $set: { 
+              date: new Date(), 
+              boughtFrom: character.currentVillage,
+              // Update prices if provided
+              tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : existingItem.tokenPrice,
+              artPrice: artPrice && artPrice.trim() !== '' ? artPrice : existingItem.artPrice,
+              otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : existingItem.otherPrice,
+              barterOpen: barterOpen !== undefined ? barterOpen : existingItem.barterOpen,
+              tradesOpen: barterOpen !== undefined ? barterOpen : existingItem.tradesOpen // Legacy compatibility
+            }
+          },
+          { 
+            returnDocument: 'after',
+            session 
           }
+        );
+
+        if (!updateResult.value) {
+          throw new Error('Item no longer exists in inventory');
+        }
+
+        // Check if stock reached zero and delete if needed
+        if (updateResult.value.stockQty <= 0) {
+          await vendCollection.deleteOne({ _id: existingItem._id }, { session });
+        }
+      } else {
+        // Insert new item with new fields
+        await vendCollection.insertOne({
+          characterName: characterName,
+          itemName,
+          itemId: itemDetails ? itemDetails._id : null,
+          stockQty,
+          costEach: pointCost,
+          pointsSpent: totalCost,
+          tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
+          artPrice: artPrice && artPrice.trim() !== '' ? artPrice : null,
+          otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : null,
+          barterOpen: barterOpen,
+          tradesOpen: barterOpen, // Legacy compatibility
+          boughtFrom: character.currentVillage,
+          slot: newSlot,
+          date: new Date(),
+          // New fields for tracking
+          isPersonalItem: false, // Items from vending stock are not personal
+          source: 'vending_stock', // Source is vending stock
+          isCustomItem: isCustomItem, // True if item doesn't exist in ItemModel
+          customItemData: isCustomItem ? { name: itemName } : null
+        }, { session });
+      }
+
+      // Atomically update character points
+      const pointUpdateResult = await Character.findOneAndUpdate(
+        { 
+          _id: character._id,
+          vendingPoints: { $gte: totalCost } // Ensure sufficient points
+        },
+        { $inc: { vendingPoints: -totalCost } },
+        { 
+          new: true,
+          session 
         }
       );
 
-      // Check if stock reached zero and delete if needed
-      const updatedItem = await vendCollection.findOne({ _id: existingItem._id });
-      if (updatedItem.stockQty <= 0) {
-        await vendCollection.deleteOne({ _id: existingItem._id });
+      if (!pointUpdateResult) {
+        throw new Error(`Insufficient vending points. Points may have changed during transaction.`);
       }
-    } else {
-      // Insert new item with new fields
-      await vendCollection.insertOne({
-        characterName: characterName,
-        itemName,
-        itemId: itemDetails ? itemDetails._id : null,
-        stockQty,
-        costEach: pointCost,
-        pointsSpent: totalCost,
-        tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
-        artPrice: artPrice && artPrice.trim() !== '' ? artPrice : null,
-        otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : null,
-        barterOpen: barterOpen,
-        tradesOpen: barterOpen, // Legacy compatibility
-        boughtFrom: character.currentVillage,
-        slot: newSlot,
-        date: new Date(),
-        // New fields for tracking
-        isPersonalItem: false, // Items from vending stock are not personal
-        source: 'vending_stock', // Source is vending stock
-        isCustomItem: isCustomItem, // True if item doesn't exist in ItemModel
-        customItemData: isCustomItem ? { name: itemName } : null
-      });
-    }
-
-    // ------------------- Update Character Points -------------------
-    await Character.updateOne(
-      { _id: character._id },
-      { $inc: { vendingPoints: -totalCost } }
-    );
+    });
 
     // ------------------- Update Google Sheets -------------------
     const shopLink = character.shopLink || character.vendingSetup?.shopLink;
@@ -572,9 +897,44 @@ async function handleVendingBarter(interaction) {
         return interaction.editReply("⚠️ Your character could not be found. Please create one first.");
       }
   
+      // ------------------- Debug Logging -------------------
+      console.log(`[handleVendingBarter] Looking for vendor: "${targetShopName}"`);
       const shopOwner = await fetchCharacterByName(targetShopName);
-      if (!shopOwner || !shopOwner.vendingSetup?.shopLink) {
+      
+      if (!shopOwner) {
+        console.log(`[handleVendingBarter] ❌ Character "${targetShopName}" not found in database`);
         return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
+      }
+      
+      console.log(`[handleVendingBarter] ✅ Character found: "${shopOwner.name}" (ID: ${shopOwner._id})`);
+      console.log(`[handleVendingBarter] shopLink: ${shopOwner.shopLink || 'NOT SET'}`);
+      console.log(`[handleVendingBarter] vendingSetup exists: ${!!shopOwner.vendingSetup}`);
+      console.log(`[handleVendingBarter] vendingSetup.shopLink: ${shopOwner.vendingSetup?.shopLink || 'NOT SET'}`);
+      
+      // Check both shopLink locations (consistent with rest of codebase)
+      const shopLink = shopOwner.shopLink || shopOwner.vendingSetup?.shopLink;
+      
+      // Check if vending inventory exists even if shopLink is not set
+      let hasVendingInventory = false;
+      let inventoryCount = 0;
+      try {
+        const VendingInventory = await getVendingModel(targetShopName);
+        inventoryCount = await VendingInventory.countDocuments({});
+        hasVendingInventory = inventoryCount > 0;
+        console.log(`[handleVendingBarter] Vending inventory items found: ${inventoryCount}`);
+      } catch (inventoryError) {
+        console.error(`[handleVendingBarter] Error checking inventory: ${inventoryError.message}`);
+        console.error(`[handleVendingBarter] Stack: ${inventoryError.stack}`);
+      }
+      
+      // Allow vending if inventory exists, even without shopLink
+      if (!shopLink && !hasVendingInventory) {
+        console.log(`[handleVendingBarter] ❌ No shopLink and no inventory found for "${targetShopName}"`);
+        return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
+      }
+      
+      if (!shopLink && hasVendingInventory) {
+        console.log(`[handleVendingBarter] ⚠️ No shopLink but inventory exists (${inventoryCount} items) - proceeding anyway`);
       }
 
       // ------------------- Merchant vs Shopkeeper Location Validation -------------------
@@ -759,6 +1119,19 @@ async function handleVendingBarter(interaction) {
   
       // ------------------- Create Barter Request -------------------
       const fulfillmentId = generateUniqueId('V');
+      
+      // Store original prices for validation
+      let originalTokenPrice = null;
+      let originalSellPrice = null;
+      if (paymentType === 'tokens') {
+        if (isVendorSelfPurchase) {
+          const itemDetails = await ItemModel.findOne({ itemName: requestedItemName });
+          originalSellPrice = itemDetails?.sellPrice || null;
+        } else {
+          originalTokenPrice = requestedItem.tokenPrice || null;
+        }
+      }
+      
       const barterData = {
         fulfillmentId,
         userCharacterName: buyer.name,
@@ -771,10 +1144,17 @@ async function handleVendingBarter(interaction) {
         buyerId,
         buyerUsername: buyerName,
         date: new Date(),
+        // Transaction safety fields
+        status: 'pending',
+        expiresAt: new Date(Date.now() + FULFILLMENT_REQUEST_TTL_DAYS * 24 * 60 * 60 * 1000),
+        version: 0,
         // Store if this is a vendor self-purchase
         isVendorSelfPurchase: isVendorSelfPurchase,
-        // Store sell price if vendor self-purchase
-        sellPrice: isVendorSelfPurchase ? (await ItemModel.findOne({ itemName: requestedItemName }))?.sellPrice : null
+        // Store original prices for validation
+        originalTokenPrice: originalTokenPrice,
+        originalSellPrice: originalSellPrice,
+        // Legacy field for backward compatibility
+        sellPrice: isVendorSelfPurchase ? originalSellPrice : null
       };
   
       // Save to both MongoDB model and temporary storage
@@ -785,23 +1165,77 @@ async function handleVendingBarter(interaction) {
       await saveVendingRequestToStorage(fulfillmentId, barterData);
   
       // ------------------- Confirmation Embed -------------------
-      const embed = new EmbedBuilder()
-        .setTitle(`🔄 Barter Request Created`)
-        .setDescription(`**${buyer.name}** has requested to barter with **${shopOwner.name}**.\n\n**Vendor Instructions:**\nPlease use \`/vending accept\` with the fulfillment ID below to complete this trade.`)
-        .addFields(
-          { name: '📦 Requested Item', value: `\`${requestedItemName} x${quantity}\``, inline: true },
-          { name: '💱 Payment Method', value: paymentType.charAt(0).toUpperCase() + paymentType.slice(1), inline: true }
-        );
-
-      if (paymentType === 'barter') {
-        embed.addFields({ name: '🔄 Offered Item', value: `\`${offeredItemName}\``, inline: true });
-      }
-      if (notes) {
-        embed.addFields({ name: '📝 Notes', value: notes, inline: false });
+      // Format payment method with emoji
+      const paymentDisplay = paymentType === 'tokens' ? '💰 Tokens' : paymentType === 'art' ? '🎨 Art' : '🔄 Barter';
+      
+      // Calculate and format price information
+      let priceInfo = '';
+      if (paymentType === 'tokens') {
+        let perItemPrice, totalPrice;
+        if (isVendorSelfPurchase) {
+          // For vendor self-purchase, we already have itemDetails from earlier validation
+          const itemDetails = await ItemModel.findOne({ itemName: requestedItemName });
+          perItemPrice = itemDetails?.sellPrice || 0;
+          totalPrice = perItemPrice * quantity;
+        } else {
+          perItemPrice = requestedItem.tokenPrice;
+          totalPrice = perItemPrice * quantity;
+        }
+        priceInfo = `**${totalPrice} tokens** (${perItemPrice} per item)`;
+      } else if (paymentType === 'art' && requestedItem.artPrice) {
+        priceInfo = requestedItem.artPrice;
+      } else if (paymentType === 'barter') {
+        priceInfo = `Trading: **${offeredItemName}**`;
       }
       
-      embed.addFields({ name: '🪪 Fulfillment ID', value: `\`${fulfillmentId}\``, inline: false })
-        .setFooter({ text: `Buyer: ${buyerName}` })
+      const embed = new EmbedBuilder()
+        .setTitle(`🔄 Barter Request Created`)
+        .setDescription(
+          `**${buyer.name}** has requested to purchase from **${shopOwner.name}'s** shop.\n\n` +
+          `**📋 Vendor Instructions:**\n` +
+          `Use \`/vending accept\` with the fulfillment ID below to complete this transaction.`
+        )
+        .addFields(
+          { 
+            name: '📦 Requested Item', 
+            value: `**${requestedItemName}** × ${quantity}`, 
+            inline: true 
+          },
+          { 
+            name: '💱 Payment Method', 
+            value: paymentDisplay, 
+            inline: true 
+          },
+          { 
+            name: '💵 Price', 
+            value: priceInfo || 'To be determined', 
+            inline: true 
+          }
+        );
+
+      if (paymentType === 'barter' && offeredItemName) {
+        embed.addFields({ 
+          name: '🔄 Offered in Trade', 
+          value: `**${offeredItemName}**`, 
+          inline: false 
+        });
+      }
+      
+      if (notes) {
+        embed.addFields({ 
+          name: '📝 Additional Notes', 
+          value: notes, 
+          inline: false 
+        });
+      }
+      
+      embed.addFields({ 
+          name: '🪪 Fulfillment ID', 
+          value: `\`${fulfillmentId}\``, 
+          inline: false 
+        })
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+        .setFooter({ text: `Buyer: ${buyerName} • Request ID: ${fulfillmentId}` })
         .setColor('#3498db')
         .setTimestamp();
   
@@ -817,6 +1251,8 @@ async function handleVendingBarter(interaction) {
   
 // ------------------- handleFulfill -------------------
 async function handleFulfill(interaction) {
+    let rollbackActions = []; // Track actions for rollback
+    
     try {
       await interaction.deferReply();
   
@@ -826,14 +1262,14 @@ async function handleFulfill(interaction) {
       }
   
       // ------------------- Fetch Barter Request -------------------
-      const request = await VendingRequest.findOne({ fulfillmentId });
+      let request = await VendingRequest.findOne({ fulfillmentId });
       if (!request) {
         // Try to get from temporary storage as fallback
         const tempRequest = await retrieveVendingRequestFromStorage(fulfillmentId);
         if (!tempRequest) {
           return interaction.editReply(`⚠️ No pending barter request found with ID **${fulfillmentId}**.`);
         }
-        // Convert temp request to match MongoDB format
+        // Convert temp request to match MongoDB format (legacy support)
         request = {
           userCharacterName: tempRequest.userCharacterName,
           vendorCharacterName: tempRequest.vendorCharacterName,
@@ -843,8 +1279,20 @@ async function handleFulfill(interaction) {
           offeredItem: tempRequest.offeredItem,
           notes: tempRequest.notes,
           buyerId: tempRequest.buyerId,
-          buyerUsername: tempRequest.buyerUsername
+          buyerUsername: tempRequest.buyerUsername,
+          status: 'pending', // Legacy requests default to pending
+          expiresAt: new Date(Date.now() + FULFILLMENT_REQUEST_TTL_DAYS * 24 * 60 * 60 * 1000)
         };
+      }
+
+      // Check if request is expired
+      if (request.expiresAt && new Date() > request.expiresAt) {
+        // Mark as expired
+        await VendingRequest.updateOne(
+          { fulfillmentId },
+          { $set: { status: 'expired' } }
+        ).catch(() => {}); // Ignore errors on legacy requests
+        return interaction.editReply(`⚠️ This request has expired. Please create a new request.`);
       }
   
       const {
@@ -870,52 +1318,156 @@ async function handleFulfill(interaction) {
       // ------------------- Check if Vendor Self-Purchase -------------------
       const isVendorSelfPurchase = buyer.userId === vendor.userId || request.isVendorSelfPurchase;
 
-      // ------------------- Validate Vendor Inventory -------------------
+      // ------------------- Get Vending Inventory Model -------------------
       const VendingInventory = await getVendingModel(vendor.name);
-      const stockItem = await VendingInventory.findOne({
-        itemName: itemName
-      });
 
-      if (!stockItem || stockItem.stockQty < quantity) {
-        return interaction.editReply(`⚠️ ${vendor.name} does not have enough stock of **${itemName}** to fulfill this request.`);
+      // ------------------- Mark Request as Processing (Atomic) -------------------
+      // This prevents duplicate processing
+      let processingRequest;
+      try {
+        processingRequest = await markRequestAsProcessing(fulfillmentId);
+      } catch (error) {
+        if (error.message.includes('not available for processing')) {
+          return interaction.editReply(`⚠️ This request cannot be processed. It may have already been processed, expired, or been cancelled.`);
+        }
+        throw error;
       }
 
-      // ------------------- Handle Token Payment -------------------
-      if (paymentMethod === 'tokens') {
-        let totalCost;
-        
-        if (isVendorSelfPurchase) {
-          // Vendor buying from own shop - use ROTW SELL price
-          const itemDetails = await ItemModel.findOne({ itemName: itemName });
-          if (!itemDetails) {
-            return interaction.editReply(`❌ Could not find item details for ${itemName}. Vendors cannot purchase custom items from their own shop.`);
+      // ------------------- Re-validate All Conditions -------------------
+      const validation = await validateFulfillmentRequest(processingRequest, buyer, vendor, VendingInventory);
+      if (!validation.valid) {
+        // Reset status to pending if validation fails
+        await VendingRequest.updateOne(
+          { fulfillmentId },
+          { $set: { status: 'pending' } }
+        ).catch(() => {});
+        return interaction.editReply(`❌ **Validation Failed**\n\n${validation.errors.join('\n')}`);
+      }
+
+      const stockItem = validation.stockItem;
+
+      // ------------------- Process Transaction -------------------
+      // Wrap all critical database operations in a transaction
+      await runWithTransaction(async (session) => {
+        // ------------------- Handle Token Payment -------------------
+        let totalCost = null;
+        let perItemPrice = null;
+        let buyerTokenBalance = null;
+        let vendorTokenBalance = null;
+
+        if (paymentMethod === 'tokens') {
+          if (isVendorSelfPurchase) {
+            // Vendor buying from own shop - use ROTW SELL price
+            const itemDetails = await ItemModel.findOne({ itemName: itemName });
+            if (!itemDetails) {
+              throw new Error(`Could not find item details for ${itemName}. Vendors cannot purchase custom items from their own shop.`);
+            }
+
+            const sellPrice = itemDetails.sellPrice || request.originalSellPrice || request.sellPrice || 0;
+            if (sellPrice <= 0) {
+              throw new Error(`This item has no sell price set. Vendors cannot purchase items without a sell price from their own shop.`);
+            }
+
+            perItemPrice = sellPrice;
+            totalCost = sellPrice * quantity;
+          } else {
+            // Normal buyer - use shop's token price
+            if (!stockItem.tokenPrice || stockItem.tokenPrice === null) {
+              throw new Error(`This item is not available for token purchase.`);
+            }
+            perItemPrice = stockItem.tokenPrice;
+            totalCost = stockItem.tokenPrice * quantity;
           }
 
-          const sellPrice = itemDetails.sellPrice || request.sellPrice || 0;
-          if (sellPrice <= 0) {
-            return interaction.editReply(`❌ This item has no sell price set. Vendors cannot purchase items without a sell price from their own shop.`);
-          }
+          // Atomically transfer tokens
+          buyerTokenBalance = await atomicUpdateTokenBalance(buyerId, -totalCost, session);
+          rollbackActions.push({ type: 'token', userId: buyerId, amount: totalCost });
+          
+          vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, session);
+          rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost });
+        }
 
-          totalCost = sellPrice * quantity;
+        // ------------------- Atomically Update Stock -------------------
+        await atomicUpdateStockQuantity(VendingInventory, stockItem._id, -quantity, quantity, session);
+        rollbackActions.push({ type: 'stock', itemId: stockItem._id, quantity: quantity, VendingInventory });
+
+        // ------------------- Add to Buyer's Inventory -------------------
+        const buyerInventory = await getInventoryCollection(buyer.name);
+        let itemDetails;
+        if (itemName.includes('+')) {
+          itemDetails = await ItemModel.findOne({ itemName: itemName });
         } else {
-          // Normal buyer - use shop's token price
-          if (!stockItem.tokenPrice || stockItem.tokenPrice === null) {
-            return interaction.editReply(`❌ This item is not available for token purchase.`);
-          }
-          totalCost = stockItem.tokenPrice * quantity;
+          itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } });
         }
-
-        const buyerTokens = await getTokenBalance(buyerId);
         
-        if (buyerTokens < totalCost) {
-          return interaction.editReply(`❌ Buyer does not have enough tokens. Required: ${totalCost}, Available: ${buyerTokens}`);
+        if (itemDetails) {
+          await buyerInventory.insertOne({
+            characterId: buyer._id,
+            itemName: itemDetails.itemName,
+            itemId: itemDetails._id,
+            quantity: quantity,
+            category: Array.isArray(itemDetails.category) ? itemDetails.category.join(', ') : itemDetails.category,
+            type: Array.isArray(itemDetails.type) ? itemDetails.type.join(', ') : itemDetails.type,
+            subtype: Array.isArray(itemDetails.subtype) ? itemDetails.subtype.join(', ') : itemDetails.subtype,
+            location: buyer.currentVillage || 'Unknown',
+            date: new Date(),
+            obtain: 'Bought',
+          }, { session });
+          rollbackActions.push({ type: 'inventory', buyerInventory, itemName: itemDetails.itemName, quantity });
+        } else {
+          // fallback: insert minimal record if item details not found
+          await buyerInventory.insertOne({
+            characterId: buyer._id,
+            itemName: itemName,
+            quantity: quantity,
+            date: new Date(),
+            obtain: 'Bought',
+          }, { session });
+          rollbackActions.push({ type: 'inventory', buyerInventory, itemName: itemName, quantity });
         }
 
-        // Transfer tokens from buyer to vendor
-        // Note: If vendor self-purchase, tokens go from vendor to vendor (effectively just deducted)
-        await updateTokenBalance(buyerId, -totalCost);
-        await updateTokenBalance(vendor.userId, totalCost);
+        // If this was a barter, remove the offered item from buyer's inventory
+        if (paymentMethod === 'barter' && offeredItem) {
+          const offeredItemDoc = await buyerInventory.findOne({ 'inventory.name': offeredItem }, { session });
+          if (offeredItemDoc) {
+            await buyerInventory.updateOne(
+              { 'inventory.name': offeredItem },
+              { $inc: { 'inventory.$.quantity': -1 } },
+              { session }
+            );
+            rollbackActions.push({ type: 'barter', buyerInventory, itemName: offeredItem });
+          }
+        }
 
+        // ------------------- Mark Request as Completed -------------------
+        await VendingRequest.updateOne(
+          { fulfillmentId },
+          { 
+            $set: { 
+              status: 'completed',
+              processedAt: new Date()
+            }
+          },
+          { session }
+        );
+
+        // Store values for use outside transaction
+        request._transactionData = {
+          totalCost,
+          perItemPrice,
+          buyerTokenBalance,
+          vendorTokenBalance
+        };
+      });
+
+      // Extract transaction data
+      const { totalCost, perItemPrice } = request._transactionData || {};
+
+      // ------------------- Update Google Sheets (Non-critical, don't fail transaction) -------------------
+      // These operations happen after the transaction commits
+      // If they fail, the transaction is already complete, so we just log the error
+      
+      if (paymentMethod === 'tokens' && totalCost !== null) {
         // Log token transaction in buyer's token tracker
         const buyerUser = await User.findOne({ discordId: buyerId });
         if (buyerUser && buyerUser.tokenTracker) {
@@ -931,10 +1483,15 @@ async function handleFulfill(interaction) {
               "spent",
               `-${totalCost}`
             ];
-            await safeAppendDataToSheet(buyerUser.tokenTracker, buyerUser, "loggedTracker!B7:F", [buyerTokenRow], undefined, { skipValidation: true });
+            await retryOperation(
+              () => safeAppendDataToSheet(buyerUser.tokenTracker, buyerUser, "loggedTracker!B7:F", [buyerTokenRow], undefined, { skipValidation: true }),
+              2,
+              'buyer token tracker update'
+            );
             console.log(`[vendingHandler.js]: ✅ Logged token transaction to buyer's tracker for user ${buyerId}`);
           } catch (buyerSheetError) {
             console.error(`[vendingHandler.js]: ❌ Error logging to buyer's token tracker:`, buyerSheetError.message);
+            // Don't fail the transaction - this is just logging
           }
         }
 
@@ -945,7 +1502,7 @@ async function handleFulfill(interaction) {
             const spreadsheetId = extractSpreadsheetId(vendorShopLink);
             const auth = await authorizeSheets();
             const paymentNote = isVendorSelfPurchase 
-              ? `Self-purchase (ROTW SELL price: ${totalCost / quantity} per item)`
+              ? `Self-purchase (ROTW SELL price: ${perItemPrice} per item)`
               : 'Token Payment';
             const tokenTransactionRow = [
               [
@@ -959,14 +1516,18 @@ async function handleFulfill(interaction) {
                 new Date().toLocaleDateString('en-US') // Date
               ]
             ];
-            await appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', tokenTransactionRow);
+            await retryOperation(
+              () => appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', tokenTransactionRow),
+              2,
+              'vendor token transaction log'
+            );
           } catch (sheetError) {
             console.error('[handleFulfill]: Error logging token transaction:', sheetError.message);
+            // Don't fail the transaction - this is just logging
           }
         }
       }
   
-      // ------------------- Update Google Sheets -------------------
       // Update vendor's vendingShop sheet
       const vendorShopLink = vendor.shopLink || vendor.vendingSetup?.shopLink;
       if (vendorShopLink) {
@@ -1002,7 +1563,11 @@ async function handleFulfill(interaction) {
               new Date().toLocaleDateString('en-US') // Current Date in column L
             ];
             
-            await writeSheetData(auth, spreadsheetId, `vendingShop!A${row}:L${row}`, [updateData]);
+            await retryOperation(
+              () => writeSheetData(auth, spreadsheetId, `vendingShop!A${row}:L${row}`, [updateData]),
+              2,
+              'vendor sheet stock update'
+            );
 
             // Add transaction log to vendor's vendingShop sheet with negative quantity
             const transactionRow = [
@@ -1017,10 +1582,15 @@ async function handleFulfill(interaction) {
                 new Date().toLocaleDateString('en-US') // Date in column L
               ]
             ];
-            await appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', transactionRow);
+            await retryOperation(
+              () => appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', transactionRow),
+              2,
+              'vendor transaction log'
+            );
           }
         } catch (sheetError) {
           console.error('[handleFulfill]: Error updating vendor sheet:', sheetError.message);
+          // Don't fail the transaction - this is just logging
         }
       }
 
@@ -1063,7 +1633,11 @@ async function handleFulfill(interaction) {
           ];
           
           if (buyer?.name && buyer?.inventory && buyer?.userId) {
-            await safeAppendDataToSheet(buyer.inventory, buyer, range, purchaseRow, undefined, { skipValidation: true });
+            await retryOperation(
+              () => safeAppendDataToSheet(buyer.inventory, buyer, range, purchaseRow, undefined, { skipValidation: true }),
+              2,
+              'buyer inventory sheet update'
+            );
           } else {
             console.error('[handleFulfill]: Invalid buyer object:', {
               buyer: buyer.name,
@@ -1072,102 +1646,148 @@ async function handleFulfill(interaction) {
           }
         } catch (sheetError) {
           console.error('[handleFulfill]: Error updating buyer sheet:', sheetError.message);
+          // Don't fail the transaction - this is just logging
         }
       } else {
         console.error('[handleFulfill]: No inventory link for buyer:', buyer.name);
       }
-  
-      // ------------------- Transfer Item -------------------
-      // Update vending inventory
-      await VendingInventory.updateOne(
-        { _id: stockItem._id },
-        { $inc: { stockQty: -quantity } }
-      );
 
-      // Add check for zero stock and delete if needed
-      const updatedItem = await VendingInventory.findOne({ _id: stockItem._id });
-      if (updatedItem.stockQty <= 0) {
-        await VendingInventory.deleteOne({ _id: stockItem._id });
-      }
-
-      // Add to buyer's inventory
-      const buyerInventory = await getInventoryCollection(buyer.name);
-      // Fetch item details for full inventory record
-      let itemDetails;
-      if (itemName.includes('+')) {
-        itemDetails = await ItemModel.findOne({ itemName: itemName });
-      } else {
-        itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } });
-      }
-      if (itemDetails) {
-        await buyerInventory.insertOne({
-          characterId: buyer._id,
-          itemName: itemDetails.itemName,
-          itemId: itemDetails._id,
-          quantity: quantity,
-          category: Array.isArray(itemDetails.category) ? itemDetails.category.join(', ') : itemDetails.category,
-          type: Array.isArray(itemDetails.type) ? itemDetails.type.join(', ') : itemDetails.type,
-          subtype: Array.isArray(itemDetails.subtype) ? itemDetails.subtype.join(', ') : itemDetails.subtype,
-          location: buyer.currentVillage || 'Unknown',
-          date: new Date(),
-          obtain: 'Bought',
-        });
-      } else {
-        // fallback: insert minimal record if item details not found
-        await buyerInventory.insertOne({
-          characterId: buyer._id,
-          itemName: itemName,
-          quantity: quantity,
-          date: new Date(),
-          obtain: 'Bought',
-        });
-      }
-
-      // If this was a barter, remove the offered item from buyer's inventory
-      if (paymentMethod === 'barter' && offeredItem) {
-        await buyerInventory.updateOne(
-          { 'inventory.name': offeredItem },
-          { $inc: { 'inventory.$.quantity': -1 } }
-        );
-      }
-  
-      // ------------------- Delete Fulfillment Request -------------------
-      // Delete from both MongoDB and temporary storage
-      await VendingRequest.deleteOne({ fulfillmentId });
-      await deleteVendingRequestFromStorage(fulfillmentId);
+      // ------------------- Delete from Temporary Storage (Cleanup) -------------------
+      // Delete from temporary storage for backward compatibility
+      await deleteVendingRequestFromStorage(fulfillmentId).catch(() => {
+        // Ignore errors - temporary storage is just for backward compatibility
+      });
       
       // ------------------- Confirmation Embed -------------------
+      // Format payment method with emoji
+      const paymentDisplay = paymentMethod === 'tokens' ? '💰 Tokens' : 
+                            paymentMethod === 'art' ? '🎨 Art' : '🔄 Barter';
+      
+      // Format price information
+      let priceInfo = '';
+      if (paymentMethod === 'tokens' && totalCost !== null && perItemPrice !== null) {
+        priceInfo = `**${totalCost} tokens** (${perItemPrice} per item)`;
+      } else if (paymentMethod === 'art' && stockItem.artPrice) {
+        priceInfo = stockItem.artPrice;
+      } else if (paymentMethod === 'barter' && offeredItem) {
+        priceInfo = `Trading: **${offeredItem}**`;
+      }
+      
       const embed = new EmbedBuilder()
         .setTitle(`✅ Barter Fulfilled`)
-        .setDescription(`**${vendor.name}** has fulfilled a barter request for **${buyer.name}**.`)
+        .setDescription(
+          `**${vendor.name}** has successfully fulfilled a barter request for **${buyer.name}**.\n\n` +
+          `The transaction has been completed and items have been transferred.`
+        )
         .addFields(
-          { name: '📦 Item', value: `\`${itemName} x${quantity}\``, inline: true },
-          { name: '👤 Buyer', value: buyer.name, inline: true },
-          { name: '🧾 Vendor', value: vendor.name, inline: true },
-          { name: '💱 Payment', value: paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1), inline: true }
+          { 
+            name: '📦 Item', 
+            value: `**${itemName}** × ${quantity}`, 
+            inline: true 
+          },
+          { 
+            name: '👤 Buyer', 
+            value: buyer.name, 
+            inline: true 
+          },
+          { 
+            name: '🧾 Vendor', 
+            value: vendor.name, 
+            inline: true 
+          },
+          { 
+            name: '💱 Payment Method', 
+            value: paymentDisplay, 
+            inline: true 
+          },
+          { 
+            name: '💵 Price', 
+            value: priceInfo || 'N/A', 
+            inline: true 
+          }
         );
 
-      if (paymentMethod === 'tokens') {
-        embed.addFields({ name: '💰 Tokens', value: `${stockItem.tokenPrice * quantity} tokens`, inline: true });
-      }
-
       if (paymentMethod === 'barter' && offeredItem) {
-        embed.addFields({ name: '🔄 Offered', value: offeredItem, inline: true });
+        embed.addFields({ 
+          name: '🔄 Traded Item', 
+          value: `**${offeredItem}**`, 
+          inline: false 
+        });
       }
 
       if (notes) {
-        embed.addFields({ name: '📝 Notes', value: notes, inline: false });
+        embed.addFields({ 
+          name: '📝 Additional Notes', 
+          value: notes, 
+          inline: false 
+        });
       }
 
-      embed.setColor(0x00cc99)
+      embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+        .setColor(0x00cc99)
+        .setFooter({ text: `Transaction completed successfully` })
         .setTimestamp();
   
       await interaction.editReply({ embeds: [embed] });
   
     } catch (error) {
       console.error("[handleFulfill]:", error);
+      
+      // Attempt rollback if we have rollback actions
+      if (rollbackActions.length > 0) {
+        console.error("[handleFulfill]: Attempting rollback...");
+        try {
+          for (const action of rollbackActions.reverse()) {
+            if (action.type === 'token') {
+              await atomicUpdateTokenBalance(action.userId, action.amount).catch(e => 
+                console.error(`[handleFulfill]: Rollback failed for token ${action.userId}:`, e.message)
+              );
+            } else if (action.type === 'stock') {
+              await action.VendingInventory.updateOne(
+                { _id: action.itemId },
+                { $inc: { stockQty: action.quantity } }
+              ).catch(e => 
+                console.error(`[handleFulfill]: Rollback failed for stock ${action.itemId}:`, e.message)
+              );
+            } else if (action.type === 'inventory') {
+              await action.buyerInventory.deleteOne({
+                itemName: action.itemName,
+                quantity: action.quantity
+              }).catch(e => 
+                console.error(`[handleFulfill]: Rollback failed for inventory:`, e.message)
+              );
+            }
+          }
+        } catch (rollbackError) {
+          console.error("[handleFulfill]: Rollback error:", rollbackError);
+        }
+      }
+
+      // Reset request status if it was marked as processing
+      const fulfillmentId = interaction?.options?.getString("fulfillmentid");
+      if (fulfillmentId) {
+        await VendingRequest.updateOne(
+          { fulfillmentId },
+          { $set: { status: 'pending' } }
+        ).catch(() => {}); // Ignore errors
+      }
+
+      // Provide user-friendly error message
+      let errorMessage = "❌ An error occurred while fulfilling the barter. Please try again later.";
+      if (error.message) {
+        if (error.message.includes('Insufficient')) {
+          errorMessage = `❌ **${error.message}**\n\nPlease check your balance and try again.`;
+        } else if (error.message.includes('not available')) {
+          errorMessage = `❌ **${error.message}**\n\nThe item may have been removed or is no longer available.`;
+        } else if (error.message.includes('Validation Failed') || error.message.includes('Validation')) {
+          errorMessage = `❌ **${error.message}**`;
+        } else if (error.message.includes('not available for processing')) {
+          errorMessage = `❌ **This request cannot be processed.**\n\nIt may have already been processed, expired, or been cancelled.`;
+        }
+      }
+
       await interaction.editReply({
-        content: "❌ An error occurred while fulfilling the barter. Please try again later."
+        content: errorMessage
       });
     }
 }
@@ -2121,6 +2741,31 @@ async function handleVendingViewVillage(interaction, villageKey) {
   }
 }
 
+// ------------------- cleanupExpiredVendingRequests -------------------
+// Cleans up expired vending requests (should be called periodically)
+async function cleanupExpiredVendingRequests() {
+  try {
+    const expiredCount = await VendingRequest.updateMany(
+      {
+        status: { $in: ['pending', 'processing'] },
+        expiresAt: { $lt: new Date() }
+      },
+      {
+        $set: { status: 'expired' }
+      }
+    );
+    
+    if (expiredCount.modifiedCount > 0) {
+      console.log(`[vendingHandler.js]: Cleaned up ${expiredCount.modifiedCount} expired vending requests`);
+    }
+    
+    return expiredCount.modifiedCount;
+  } catch (error) {
+    console.error('[vendingHandler.js]: Error cleaning up expired requests:', error);
+    return 0;
+  }
+}
+
 // ============================================================================
 // ------------------- Helper Functions (Private) -------------------
 // These support the above handlers internally. Not exported.
@@ -2360,5 +3005,6 @@ module.exports = {
     viewVendingStock,
     handleVendingViewVillage,
     handleSyncButton,
-    handleAddPersonalItem
+    handleAddPersonalItem,
+    cleanupExpiredVendingRequests
 };

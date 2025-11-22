@@ -86,49 +86,59 @@
       <nav class="sidebar-nav" aria-label="Main sidebar navigation">
         <ul>
           <li>
-            <a href="/" data-section="dashboard-section"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+            <a href="/#dashboard" data-section="dashboard-section"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
           </li>
-          <li>
-            <a href="/#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Discord</span></a>
+          
+          <!-- Community Dropdown -->
+          <li class="nav-dropdown">
+            <a href="javascript:void(0)" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-users"></i><span>Community</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Discord</span></a></li>
+              <li><a href="/#gallery-section" data-section="gallery-section"><i class="fas fa-images"></i><span>Gallery</span></a></li>
+              <li><a href="/#member-lore-section" data-section="member-lore-section"><i class="fas fa-scroll"></i><span>Member Lore</span></a></li>
+              <li><a href="/#relationships-section" data-section="relationships-section"><i class="fas fa-heart"></i><span>Relationships</span></a></li>
+              <li><a href="/#suggestion-box-section" data-section="suggestion-box-section"><i class="fas fa-lightbulb"></i><span>Suggestion Box</span></a></li>
+              <li><a href="/#users" data-section="users-section"><i class="fas fa-users"></i><span>Users</span></a></li>
+            </ul>
           </li>
-          <li>
-            <a href="/#users" data-section="users-section"><i class="fas fa-users"></i><span>Users</span></a>
+          
+          <!-- Game Features Dropdown -->
+          <li class="nav-dropdown">
+            <a href="javascript:void(0)" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-gamepad"></i><span>Game Features</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#calendar" data-section="calendar-section"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a></li>
+              <li><a href="/#levels" data-section="levels-section"><i class="fas fa-level-up-alt"></i><span>Levels</span></a></li>
+              <li><a href="/map"><i class="fas fa-map"></i><span>Map</span></a></li>
+            </ul>
           </li>
-          <li>
-            <a href="/#levels" data-section="levels-section"><i class="fas fa-level-up-alt"></i><span>Levels</span></a>
+          
+          <!-- User Area Dropdown -->
+          <li class="nav-dropdown">
+            <a href="javascript:void(0)" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-user-circle"></i><span>User Area</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li class="active" id="inventories-nav-item"><a href="/inventories"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
+              <li><a href="/#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a></li>
+              <li><a href="/#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+              <li><a href="/#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a></li>
+              <li><a href="/#tokens-section" data-section="tokens-section"><i class="fas fa-coins"></i><span>Tokens</span></a></li>
+              <li><a href="/#vending-section" data-section="vending-section"><i class="fas fa-store"></i><span>Vending</span></a></li>
+            </ul>
           </li>
-          <li>
-            <a href="/#calendar" data-section="calendar-section"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a>
-          </li>
-          <li>
-            <a href="/#suggestion-box-section" data-section="suggestion-box-section"><i class="fas fa-lightbulb"></i><span>Suggestion Box</span></a>
-          </li>
-          <li>
-            <a href="/#member-lore-section" data-section="member-lore-section"><i class="fas fa-scroll"></i><span>Member Lore</span></a>
-          </li>
-          <li>
-            <a href="/#gallery-section" data-section="gallery-section"><i class="fas fa-images"></i><span>Gallery</span></a>
-          </li>
-          <li>
-            <a href="/#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a>
-          </li>
-          <li>
-            <a href="/#relationships-section" data-section="relationships-section"><i class="fas fa-heart"></i><span>Relationships</span></a>
-          </li>
-          <li>
-            <a href="/map"><i class="fas fa-map"></i><span>Map</span></a>
-          </li>
-          <li class="active" id="inventories-nav-item">
-            <a href="/inventories.html"><i class="fas fa-boxes"></i><span>Inventories</span></a>
-          </li>
-          <li>
-            <a href="/#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a>
-          </li>
-          <li>
-            <a href="/#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a>
-          </li>
-          <li id="admin-area-nav-item" style="display: none;">
-            <a href="/#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a>
+          
+          <!-- Admin Area (Conditional) -->
+          <li id="admin-area-nav-item" class="nav-dropdown" style="display: none;">
+            <a href="javascript:void(0)" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-shield-alt"></i><span>Admin Area</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a></li>
+            </ul>
           </li>
         </ul>
       </nav>
@@ -365,6 +375,65 @@
 
   <script type="module" src="js/auth.js"></script>
   <script type="module" src="js/inventories.js"></script>
+  <script>
+    // ============================================================================
+    // ------------------- Dropdown Toggle Functionality -------------------
+    // Handles dropdown menu toggles in sidebar navigation
+    // ============================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
+      
+      dropdownToggles.forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const dropdown = toggle.closest('.nav-dropdown');
+          const isActive = dropdown.classList.contains('active');
+          
+          // Close all other dropdowns
+          document.querySelectorAll('.nav-dropdown').forEach(item => {
+            if (item !== dropdown) {
+              item.classList.remove('active');
+              item.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'false');
+            }
+          });
+          
+          // Toggle current dropdown
+          if (isActive) {
+            dropdown.classList.remove('active');
+            toggle.setAttribute('aria-expanded', 'false');
+          } else {
+            dropdown.classList.add('active');
+            toggle.setAttribute('aria-expanded', 'true');
+          }
+        });
+      });
+      
+      // Close dropdowns when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.nav-dropdown')) {
+          document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+            dropdown.classList.remove('active');
+            dropdown.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'false');
+          });
+        }
+      });
+      
+      // Open User Area dropdown on inventories page since that's where Inventories link is
+      const inventoriesLink = document.querySelector('#inventories-nav-item');
+      if (inventoriesLink) {
+        const userAreaDropdown = inventoriesLink.closest('.nav-dropdown');
+        if (userAreaDropdown) {
+          const toggle = userAreaDropdown.querySelector('.nav-dropdown-toggle');
+          if (toggle) {
+            userAreaDropdown.classList.add('active');
+            toggle.setAttribute('aria-expanded', 'true');
+          }
+        }
+      }
+    });
+  </script>
 </body>
 </html>
 
