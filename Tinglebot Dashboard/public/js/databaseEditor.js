@@ -923,7 +923,15 @@ function sanitizeMap(fieldName, value) {
 function validateRequiredFields(formData, schema) {
   const errors = [];
   
+  // Fields to exclude from required validation
+  const excludedFields = ['pronouns', 'race', 'homeVillage', 'job', 'jobVoucher'];
+  
   for (const [fieldName, fieldInfo] of Object.entries(schema)) {
+    // Skip validation for excluded fields
+    if (excludedFields.includes(fieldName)) {
+      continue;
+    }
+    
     if (fieldInfo.required && (!formData[fieldName] || formData[fieldName] === '')) {
       errors.push(`${getFieldDisplayName(fieldName)} is required`);
     }

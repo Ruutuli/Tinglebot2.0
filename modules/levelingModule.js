@@ -54,11 +54,8 @@ async function handleXP(message) {
       xpSource = `message_${bonusConfig.name.toLowerCase().replace(/\s+/g, '_')}`;
     }
     
-    // Add XP to user
-    const result = await user.addXP(finalXP, xpSource);
-    
-    // Update message tracking
-    await user.updateMessageTime();
+    // Add XP to user and update message tracking in a single save operation
+    const result = await user.addXP(finalXP, xpSource, true);
     
     // Log XP gain
     logger.leveling.xp(message.author.tag, finalXP, result.newLevel);
