@@ -24,6 +24,7 @@ const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule'
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords, formatDateTime } = require('../../modules/formattingModule');
 const { applyCraftingBoost, applyCraftingStaminaBoost, applyCraftingMaterialBoost, applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
+const { clearBoostAfterUse } = require('./boosting');
 const { info, success, error } = require('../../utils/logger');
 
 // ------------------- Utility Functions -------------------
@@ -522,11 +523,10 @@ module.exports = {
       // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
       // ------------------- Clear Boost After Use -------------------
-      if (freshCharacter.boostedBy) {
-        info('CRFT', `Clearing boost for ${freshCharacter.name} after use`);
-        freshCharacter.boostedBy = null;
-        await freshCharacter.save();
-      }
+      await clearBoostAfterUse(freshCharacter, {
+        client: interaction.client,
+        context: 'crafting'
+      });
 
       await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
       await interaction.followUp({ embeds: [embed], ephemeral: false });

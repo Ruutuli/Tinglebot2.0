@@ -8,6 +8,7 @@ const { SlashCommandBuilder } = require("discord.js");
 
 // ------------------- Boost Integration -------------------
 const { applyVendingBoost } = require("../../modules/boostIntegration");
+const { clearBoostAfterUse } = require("./boosting");
 
 // ------------------- Command Handlers -------------------
 const {
@@ -381,8 +382,10 @@ async function handleRestockWithBoost(interaction) {
     const result = await handleRestock(interaction);
 
     // Clear boost after use
-    character.boostedBy = null;
-    await character.save();
+    await clearBoostAfterUse(character, {
+      client: interaction.client,
+      context: 'vending restock'
+    });
 
     return result;
    }
@@ -409,8 +412,10 @@ async function handleVendingBarterWithBoost(interaction) {
     const result = await handleVendingBarter(interaction);
 
     // Clear boost after use
-    character.boostedBy = null;
-    await character.save();
+    await clearBoostAfterUse(character, {
+      client: interaction.client,
+      context: 'vending barter'
+    });
 
     return result;
    }
@@ -453,8 +458,10 @@ async function handlePouchUpgradeWithBoost(interaction) {
     const result = await handlePouchUpgrade(interaction);
 
     // Clear boost after use
-    character.boostedBy = null;
-    await character.save();
+    await clearBoostAfterUse(character, {
+      client: interaction.client,
+      context: 'vending pouch upgrade'
+    });
 
     return result;
    }

@@ -37,6 +37,7 @@ const { checkInventorySync } = require("../../utils/characterUtils");
 
 // ------------------- Boost Integration -------------------
 const { applyTravelBoost } = require("../../modules/boostIntegration");
+const { clearBoostAfterUse } = require("./boosting");
 
 // ------------------- Database Models -------------------
 const ItemModel = require("../../models/ItemModel");
@@ -554,12 +555,11 @@ const command = {
     });
 
     // ------------------- Clear Boost After Use -------------------
-    if (courierCharacter && courierCharacter.boostedBy) {
-     console.log(
-      `[deliver.js] Clearing boost for ${courierCharacter.name} after delivery request`
-     );
-     courierCharacter.boostedBy = null;
-     await courierCharacter.save();
+    if (courierCharacter) {
+      await clearBoostAfterUse(courierCharacter, {
+        client: interaction.client,
+        context: 'delivery request'
+      });
     }
 
     // ------------------- Deactivate Job Voucher -------------------
@@ -672,12 +672,11 @@ const command = {
     });
 
     // ------------------- Clear Boost After Use -------------------
-    if (courier && courier.boostedBy) {
-     console.log(
-      `[deliver.js] Clearing boost for ${courier.name} after delivery accept`
-     );
-     courier.boostedBy = null;
-     await courier.save();
+    if (courier) {
+      await clearBoostAfterUse(courier, {
+        client: interaction.client,
+        context: 'delivery accept'
+      });
     }
    } catch (error) {
     console.error("Error in deliver accept:", error);
@@ -774,12 +773,11 @@ const command = {
     });
 
     // ------------------- Clear Boost After Use -------------------
-    if (courier && courier.boostedBy) {
-     console.log(
-      `[deliver.js] Clearing boost for ${courier.name} after delivery fulfill`
-     );
-     courier.boostedBy = null;
-     await courier.save();
+    if (courier) {
+      await clearBoostAfterUse(courier, {
+        client: interaction.client,
+        context: 'delivery fulfill'
+      });
     }
    } catch (error) {
     console.error("Error in deliver fulfill:", error);

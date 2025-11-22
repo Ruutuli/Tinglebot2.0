@@ -222,20 +222,15 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     const characterDamage = characterHeartsBefore - (outcome.playerHearts?.current || character.currentHearts);
     let finalDamage = characterDamage;
     
-    // Check if character has Entertainer boost and apply damage reduction BEFORE saving to database
+    // Apply boost damage reduction using unified boost system BEFORE saving to database
     if (character.boostedBy && characterDamage > 0) {
-      const { fetchCharacterByName } = require('../database/db');
-      const boosterChar = await fetchCharacterByName(character.boostedBy);
+      const { applyLootingDamageBoost } = require('./boostIntegration');
+      const monsterTier = monster.tier || 5;
+      finalDamage = await applyLootingDamageBoost(character.name, characterDamage, monsterTier);
+      const damageReduction = characterDamage - finalDamage;
       
-      if (boosterChar && boosterChar.job?.toLowerCase() === 'entertainer') {
-        const monsterTier = monster.tier || 5;
-        const { applyEntertainerLootingBoost } = require('./boostingModule');
-        finalDamage = applyEntertainerLootingBoost(characterDamage, monsterTier);
-        const damageReduction = characterDamage - finalDamage;
-        
-        if (damageReduction > 0) {
-          console.log(`[raidModule.js]: 🎭 Entertainer boost - Requiem of Spirit (Tier ${monsterTier}) reduces raid damage from ${characterDamage} to ${finalDamage} (-${damageReduction} hearts)`);
-        }
+      if (damageReduction > 0) {
+        console.log(`[raidModule.js]: 🎭 Boost applied - damage reduced from ${characterDamage} to ${finalDamage} (-${damageReduction} hearts) for ${character.name}`);
       }
     }
 
@@ -745,33 +740,11 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           // ------------------- Clear Boost After Raid Turn -------------------
           // Similar to loot.js - clear boost after damage/encounter
           if (character.boostedBy) {
-            const logger = require('../utils/logger');
-            logger.info('BOOST', `Clearing boost for ${character.name} after raid turn`);
-            try {
-              // Mark active boost as fulfilled in TempData and update embed
-              const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../commands/jobs/boosting.js');
-              const { updateBoostRequestEmbed } = require('../embeds/embeds.js');
-              const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-              if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
-                activeBoost.status = 'fulfilled';
-                activeBoost.fulfilledAt = Date.now();
-                await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-                // If interaction/client provided, update the request embed status to fulfilled
-                if (interaction?.client) {
-                  try {
-                    await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
-                    // Update the 'Boost Applied' embed if we have its reference
-                    await updateBoostAppliedMessage(interaction.client, activeBoost);
-                  } catch (embedErr) {
-                    logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);
-                  }
-                }
-              }
-            } catch (e) {
-              logger.error('BOOST', `Failed to mark boost fulfilled while clearing for ${character.name}: ${e.message}`);
-            }
-            character.boostedBy = null;
-            await character.save();
+            const { clearBoostAfterUse } = require('../commands/jobs/boosting.js');
+            await clearBoostAfterUse(character, {
+              client: interaction?.client,
+              context: 'raid turn'
+            });
             console.log(`[raidModule.js]: 🎭 Boost cleared for ${character.name} after raid turn`);
           }
           

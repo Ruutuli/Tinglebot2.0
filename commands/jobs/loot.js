@@ -125,35 +125,12 @@ async function updateCharacterLootTimestamp(character, shouldClearBoost = true, 
   character.lastLootedAt = new Date().toISOString();
   
   // ------------------- Clear Boost After Use -------------------
-  if (character.boostedBy && shouldClearBoost) {
-    logger.info('BOOST', `Clearing boost for ${character.name}`);
-    try {
-      // Mark active boost as fulfilled in TempData and update embed
-      const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('./boosting.js');
-      const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
-      const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-      if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
-        activeBoost.status = 'fulfilled';
-        activeBoost.fulfilledAt = Date.now();
-        await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-        // If client provided, update the request embed status to fulfilled
-        if (client) {
-          try {
-            await updateBoostRequestEmbed(client, activeBoost, 'fulfilled');
-            // Update the 'Boost Applied' embed if we have its reference
-            await updateBoostAppliedMessage(client, activeBoost);
-          } catch (embedErr) {
-            logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);
-          }
-        }
-      }
-    } catch (e) {
-      logger.error('BOOST', `Failed to mark boost fulfilled while clearing for ${character.name}: ${e.message}`);
-    }
-    character.boostedBy = null;
-  } else if (character.boostedBy && !shouldClearBoost) {
-    logger.info('BOOST', `Boost preserved for ${character.name}`);
-  }
+  const { clearBoostAfterUse } = require('./boosting.js');
+  await clearBoostAfterUse(character, {
+    client: client,
+    shouldClearBoost: shouldClearBoost,
+    context: 'looting'
+  });
   
   await character.save();
 }
@@ -701,22 +678,11 @@ module.exports = {
        }
 
        // Mark boost as fulfilled and clear boostedBy after successful raid trigger
-       try {
-         const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-         if (activeBoost && activeBoost.status === 'accepted') {
-           activeBoost.status = 'fulfilled';
-           activeBoost.fulfilledAt = Date.now();
-           await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-           await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
-         }
-       } catch (e) {
-         logger.error('BOOST', `Failed to mark boost fulfilled (Blood Moon): ${e.message}`);
-       }
-       if (character.boostedBy) {
-         logger.info('BOOST', `Clearing boost for ${character.name} after Blood Moon raid trigger`);
-         character.boostedBy = null;
-         await character.save();
-       }
+       const { clearBoostAfterUse } = require('./boosting.js');
+       await clearBoostAfterUse(character, {
+         client: interaction.client,
+         context: 'looting (Blood Moon raid trigger)'
+       });
 
        // Deactivate Job Voucher AFTER successful raid trigger
        if (character.jobVoucher && !voucherCheck?.skipVoucher) {
@@ -898,22 +864,11 @@ async function handleBloodMoonRerolls(
     }
 
     // Mark boost as fulfilled and clear boostedBy after successful raid trigger (reroll)
-    try {
-      const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-      if (activeBoost && activeBoost.status === 'accepted') {
-        activeBoost.status = 'fulfilled';
-        activeBoost.fulfilledAt = Date.now();
-        await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-        await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
-      }
-    } catch (e) {
-      logger.error('BOOST', `Failed to mark boost fulfilled (Blood Moon reroll): ${e.message}`);
-    }
-    if (character.boostedBy) {
-      logger.info('BOOST', `Clearing boost for ${character.name} after Blood Moon raid trigger (reroll)`);
-      character.boostedBy = null;
-      await character.save();
-    }
+    const { clearBoostAfterUse } = require('./boosting.js');
+    await clearBoostAfterUse(character, {
+      client: interaction.client,
+      context: 'looting (Blood Moon raid trigger reroll)'
+    });
 
     // Deactivate Job Voucher AFTER successful raid trigger
     if (character.jobVoucher) {

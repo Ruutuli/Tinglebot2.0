@@ -30,7 +30,7 @@ const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { getBoostInfo, addBoostFlavorText, buildFooterText } = require('../../embeds/embeds');
 const { getActiveBuffEffects } = require('../../modules/elixirModule');
 const logger = require('../../utils/logger');
-const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData } = require('../jobs/boosting');
+const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, clearBoostAfterUse } = require('../jobs/boosting');
 
 // Add StealStats model
 const StealStats = require('../../models/StealStatsModel');
@@ -1814,22 +1814,10 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
-          // Mark any active Stealing boost as fulfilled to prevent re-application
-          try {
-            const active = await retrieveBoostingRequestFromTempDataByCharacter(thiefCharacter.name);
-            if (active && active.status === 'accepted' && active.category === 'Stealing') {
-              active.status = 'fulfilled';
-              active.fulfilledAt = Date.now();
-              await saveBoostingRequestToTempData(active.boostRequestId, active);
-              logger.info('BOOST', `✅ Marked stealing boost as fulfilled for ${thiefCharacter.name}`);
-            }
-          } catch (e) {
-            logger.error('BOOST', `Failed to mark stealing boost fulfilled for ${thiefCharacter.name}`, e);
-          }
-          logger.info('BOOST', `🧪 Clearing boost for ${thiefCharacter.name} (before save) | boostedBy: ${thiefCharacter.boostedBy || 'none'}`);
-          thiefCharacter.boostedBy = null;
-          await thiefCharacter.save();
-          logger.success('BOOST', `🧪 Boost cleared for ${thiefCharacter.name}`);
+          await clearBoostAfterUse(thiefCharacter, {
+            client: interaction?.client,
+            context: 'stealing (success)'
+          });
         }
         
         // Always deactivate job voucher after any attempt
@@ -1914,22 +1902,10 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
         
         // ------------------- Clear Boost After Use -------------------
         if (thiefCharacter.boostedBy) {
-          // Mark any active Stealing boost as fulfilled to prevent re-application
-          try {
-            const active = await retrieveBoostingRequestFromTempDataByCharacter(thiefCharacter.name);
-            if (active && active.status === 'accepted' && active.category === 'Stealing') {
-              active.status = 'fulfilled';
-              active.fulfilledAt = Date.now();
-              await saveBoostingRequestToTempData(active.boostRequestId, active);
-              logger.info('BOOST', `✅ Marked stealing boost as fulfilled for ${thiefCharacter.name}`);
-            }
-          } catch (e) {
-            logger.error('BOOST', `Failed to mark stealing boost fulfilled for ${thiefCharacter.name}`, e);
-          }
-          logger.info('BOOST', `🧪 Clearing boost for ${thiefCharacter.name} (before save) | boostedBy: ${thiefCharacter.boostedBy || 'none'}`);
-          thiefCharacter.boostedBy = null;
-          await thiefCharacter.save();
-          logger.success('BOOST', `🧪 Boost cleared for ${thiefCharacter.name}`);
+          await clearBoostAfterUse(thiefCharacter, {
+            client: interaction?.client,
+            context: 'stealing (failure)'
+          });
         }
         
         // Always deactivate job voucher after any attempt

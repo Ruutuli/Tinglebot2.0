@@ -31,6 +31,7 @@ const { capitalizeWords } = require('../../modules/formattingModule.js');
 const logger = require('../../utils/logger.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { applyGatheringBoost } = require('../../modules/boostIntegration');
+const { clearBoostAfterUse } = require('./boosting');
 
 // ============================================================================
 // ------------------- Utilities -------------------
@@ -739,8 +740,10 @@ module.exports = {
                   entertainerBonusForEmbed = bonusItem;
 
                   // Clear used boost to match normal gathering behavior
-                  character.boostedBy = null;
-                  await character.save();
+                  await clearBoostAfterUse(character, {
+                    client: interaction.client,
+                    context: 'gathering (encounter bonus)'
+                  });
                 }
               }
             }
@@ -1096,10 +1099,10 @@ module.exports = {
         await safeReply({ content, embeds: [embed] });
         
         // ------------------- Clear Boost After Use ------------------
-        if (character.boostedBy) {
-  
-          character.boostedBy = null;
-        }
+        await clearBoostAfterUse(character, {
+          client: interaction.client,
+          context: 'gathering'
+        });
         
         // ------------------- Update Last Gather Timestamp ------------------
         character.lastGatheredAt = new Date().toISOString();
