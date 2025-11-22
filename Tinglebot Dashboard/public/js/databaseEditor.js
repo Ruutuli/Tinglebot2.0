@@ -5505,7 +5505,8 @@ async function handleSaveRecord() {
     recordData.locations = buildLocationArray(recordData, 'locations');
   }
   
-  if (recordData.hasOwnProperty('job')) {
+  // Only convert job to array for Monster model (Character/ModCharacter use job as string)
+  if (recordData.hasOwnProperty('job') && currentModel === 'Monster') {
     recordData.job = buildJobArray(recordData, 'job');
   }
   
