@@ -4729,11 +4729,9 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
       return await interaction.respond([]);
     }
     
-    const vendingClient = new MongoClient(dbConfig.vending);
-    await vendingClient.connect();
-    const vendCollection = vendingClient.db('vendingInventories').collection(characterName.toLowerCase());
-    const items = await vendCollection.find({}).toArray();
-    await vendingClient.close();
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
+    const VendingInventory = await initializeVendingInventoryModel(characterName);
+    const items = await VendingInventory.find({}).lean();
 
     // Create a map of slot => item info (only slots with items)
     const slotMap = new Map();
@@ -4968,11 +4966,9 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         return;
       }
       
-      const vendingClient = new MongoClient(dbConfig.vending);
-      await vendingClient.connect();
-      const vendCollection = vendingClient.db('vendingInventories').collection(targetCharacter.toLowerCase());
-      const vendingItems = await vendCollection.find({}).toArray();
-      await vendingClient.close();
+      const { initializeVendingInventoryModel } = require('../models/VendingModel');
+      const VendingInventory = await initializeVendingInventoryModel(targetCharacter);
+      const vendingItems = await VendingInventory.find({}).lean();
 
       // Filter and format items
       const filteredItems = vendingItems.filter(item =>

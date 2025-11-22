@@ -18,7 +18,6 @@ const { capitalizeWords } = require("../../modules/formattingModule");
 const {
  addItemInventoryDatabase,
  removeItemInventoryDatabase,
- addItemToVendingInventory,
 } = require("../../utils/inventoryUtils");
 const { generateUniqueId } = require("../../utils/uniqueIdUtils");
 const {

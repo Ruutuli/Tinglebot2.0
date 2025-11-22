@@ -794,36 +794,6 @@ async function removeInitialItemIfSynced(characterId) {
   }
 }
 
-// ---- Function: addItemToVendingInventory ----
-// Adds item to vending machine inventory
-const addItemToVendingInventory = async (collectionName, item) => {
-  try {
-    if (!dbFunctions.connectToInventories) {
-      throw new Error("Required database functions not initialized");
-    }
-
-    const inventoriesConnection = await dbFunctions.connectToInventories();
-    const db = inventoriesConnection.useDb('vendingInventories');
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
-    
-    const inventoryCollection = db.collection(collectionName);
-    const existingItem = await inventoryCollection.findOne({
-      characterName: item.characterName,
-      itemName: item.itemName,
-    });
-    if (existingItem) {
-      await inventoryCollection.updateOne(
-        { characterName: item.characterName, itemName: item.itemName },
-        { $inc: { stockQty: item.stockQty } }
-      );
-    } else {
-      await inventoryCollection.insertOne(item);
-    }
-  } catch (error) {
-    handleError(error, "inventoryUtils.js");
-    throw error;
-  }
-};
 
 // ---- Function: refundJobVoucher ----
 // Handles refunding a job voucher to a character's inventory and logs it to Google Sheets
@@ -951,7 +921,6 @@ module.exports = {
   createRemovedItemDatabase,
   addItemsToDatabase,
   removeInitialItemIfSynced,
-  addItemToVendingInventory,
   logMaterialsToGoogleSheets,
   refundJobVoucher,
   SOURCE_TYPES,
