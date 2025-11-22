@@ -126,8 +126,8 @@ const command = new SlashCommandBuilder()
    )
    .addStringOption((opt) =>
     opt
-     .setName("itemname")
-     .setDescription("Item to edit (required for item editing)")
+     .setName("slot")
+     .setDescription("Slot to edit (required for item editing)")
      .setAutocomplete(true)
    )
    .addAttachmentOption((opt) =>
@@ -214,6 +214,11 @@ const command = new SlashCommandBuilder()
       { name: "🎨 Art", value: "art" },
       { name: "🔄 Barter", value: "barter" }
      )
+   )
+   .addStringOption((opt) =>
+    opt
+     .setName("artlink")
+     .setDescription("Link to your art submission (required when payment type is Art)")
    )
    .addStringOption((opt) =>
     opt

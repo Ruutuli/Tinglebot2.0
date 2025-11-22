@@ -556,12 +556,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 await handleVendorItemAutocomplete(interaction, focusedOption);
               } else if (vendingSubcommand === "barter") {
                 await handleVendingBarterAutocomplete(interaction, focusedOption);
-              } else if (vendingSubcommand === "edit") {
-                await handleVendingBarterAutocomplete(interaction, focusedOption);
               }
             }
             // Handle slot autocomplete
-            else if (focusedOption.name === "slot" && vendingSubcommand === "restock") {
+            else if (focusedOption.name === "slot" && (vendingSubcommand === "restock" || vendingSubcommand === "edit")) {
               await handleSlotAutocomplete(interaction, focusedOption);
             }
             // Handle vendorcharacter autocomplete
@@ -2082,8 +2080,9 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
       );
     }
 
-    // Only show limited items if in stock
-    if (stockList?.limitedItems && interaction.commandName === "vending" && interaction.options.getSubcommand() === "add") {
+    // Only show limited items if in stock - for both "add" and "restock" subcommands
+    const vendingSubcommand = interaction.options.getSubcommand();
+    if (stockList?.limitedItems && interaction.commandName === "vending" && (vendingSubcommand === "add" || vendingSubcommand === "restock")) {
       limitedItems = stockList.limitedItems
         .filter(item =>
           item.itemName?.toLowerCase().includes(searchQuery) &&
@@ -4612,7 +4611,9 @@ function calculateAvailableSlots(character) {
   const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
   const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
   const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
-  const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+  // Check both shopPouch and vendingSetup.pouchType (dashboard method)
+  const pouchType = character.shopPouch?.toLowerCase() || character.vendingSetup?.pouchType?.toLowerCase();
+  const extraSlots = pouchCapacities[pouchType] || 0;
   return baseSlots + extraSlots;
 }
 
@@ -4683,8 +4684,9 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
       );
     }
 
-    // Only show limited items if in stock
-    if (stockList?.limitedItems && interaction.commandName === "vending" && interaction.options.getSubcommand() === "add") {
+    // Only show limited items if in stock - for both "add" and "restock" subcommands
+    const vendingSubcommand = interaction.options.getSubcommand();
+    if (stockList?.limitedItems && interaction.commandName === "vending" && (vendingSubcommand === "add" || vendingSubcommand === "restock")) {
       limitedItems = stockList.limitedItems
         .filter(item =>
           item.itemName?.toLowerCase().includes(searchQuery) &&
@@ -4759,21 +4761,36 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
       }
     }
 
-    // Generate slot options - only show slots that have items
+    // Calculate total available slots
+    const totalSlots = calculateAvailableSlots(character);
+
+    // Generate slot options - show ALL slots, including empty ones
     const slotChoices = [];
-    for (const [slotName, slotInfo] of slotMap.entries()) {
-      let fullness;
-      if (slotInfo.qty === null) {
-        fullness = `🚫 Conflict`;
-      } else if (slotInfo.stackable) {
-        fullness = `${Math.min(slotInfo.qty, slotInfo.maxStackSize)}/${slotInfo.maxStackSize}`;
+    for (let i = 1; i <= totalSlots; i++) {
+      const slotName = `Slot ${i}`;
+      const slotInfo = slotMap.get(slotName);
+      
+      if (slotInfo) {
+        // Slot has an item
+        let fullness;
+        if (slotInfo.qty === null) {
+          fullness = `🚫 Conflict`;
+        } else if (slotInfo.stackable) {
+          fullness = `${Math.min(slotInfo.qty, slotInfo.maxStackSize)}/${slotInfo.maxStackSize}`;
+        } else {
+          fullness = `${slotInfo.qty}/1`;
+        }
+        slotChoices.push({
+          name: `${slotName} – ${slotInfo.itemName} – ${fullness}`,
+          value: slotName
+        });
       } else {
-        fullness = `${slotInfo.qty}/1`;
+        // Slot is empty
+        slotChoices.push({
+          name: `${slotName} – Empty`,
+          value: slotName
+        });
       }
-      slotChoices.push({
-        name: `${slotName} – ${slotInfo.itemName} – ${fullness}`,
-        value: slotName
-      });
     }
     
     // Sort slots by slot number for better UX
@@ -4811,9 +4828,13 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
           else if (slotNum.startsWith(searchQuery)) {
             score = 500;
           }
-          // Item name starts with query
+          // Item name starts with query (including "empty")
           else if (itemName.toLowerCase().startsWith(searchQuery)) {
             score = 300;
+          }
+          // Match "empty" slots
+          else if (itemName.toLowerCase() === 'empty' && (searchQuery === 'empty' || searchQuery === 'e')) {
+            score = 250;
           }
           // Slot number contains query
           else if (slotNum.includes(searchQuery)) {
@@ -4999,17 +5020,17 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
 
 // ------------------- Function: handleVendingViewAutocomplete -------------------
 // Provides autocomplete suggestions for viewing a vendor's shop
+// Shows all vendors (shopkeeper/merchant) in the system
 async function handleVendingViewAutocomplete(interaction, focusedOption) {
   try {
     // Fetch all characters from the database
     const characters = await fetchAllCharacters();
 
-    // Filter for only characters with vending jobs and completed setup
+    // Filter for all characters with vending jobs (shopkeeper or merchant)
+    // This shows all vendors in the system regardless of setup status
     const vendorCharacters = characters.filter(character => {
       const job = character.job?.toLowerCase();
-      return (job === 'shopkeeper' || job === 'merchant') && 
-             character.vendingSetup?.shopLink && 
-             character.vendingSync;
+      return job === 'shopkeeper' || job === 'merchant';
     });
 
     // Map characters to autocomplete choices with formatted display
@@ -5024,10 +5045,10 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
       choice.name.toLowerCase().includes(searchQuery)
     );
 
-    await interaction.respond(filteredChoices.slice(0, 25));
+    await safeRespondWithValidation(interaction, filteredChoices.slice(0, 25));
   } catch (error) {
     console.error("[handleVendingViewAutocomplete]: Error:", error);
-    await interaction.respond([]);
+    await safeAutocompleteResponse(interaction, []);
   }
 }
 
@@ -5048,8 +5069,10 @@ async function handleVendingAcceptFulfillmentIdAutocomplete(interaction, focused
     }
     
     // Find all pending vending requests where the vendor is one of the user's characters
+    // Exclude completed, expired, and failed requests
     const pendingRequests = await VendingRequest.find({
-      vendorCharacterName: { $in: vendorCharacterNames }
+      vendorCharacterName: { $in: vendorCharacterNames },
+      status: { $in: ['pending', 'processing'] } // Only show pending or processing requests
     }).sort({ date: -1 }).limit(50); // Get most recent 50 requests
     
     // Filter and format requests based on search query
