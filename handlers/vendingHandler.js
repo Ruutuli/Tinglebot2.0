@@ -129,6 +129,137 @@ const FULFILLMENT_REQUEST_TTL_DAYS = 7; // Request expires after 7 days
 const MAX_RETRY_ATTEMPTS = 3;
 const INITIAL_RETRY_DELAY_MS = 100; // Initial delay for exponential backoff
 
+// ------------------- Embed Color Constants -------------------
+const EMBED_COLORS = {
+  SUCCESS: '#00FF00',
+  ERROR: '#FF0000',
+  WARNING: '#FFA500',
+  INFO: '#3498db',
+  BARTER: '#3498db',
+  FULFILL: '#00cc99',
+  SHOP: '#00FF00',
+  STOCK: {
+    rudania: '#d93e3e',
+    inariko: '#3e7ed9',
+    vhintl: '#3ed96a',
+    limited: '#00d6d6'
+  }
+};
+
+// ============================================================================
+// ------------------- Embed Helper Functions -------------------
+// ============================================================================
+
+// ------------------- createVendingEmbed -------------------
+// Main helper for creating standardized vending embeds
+function createVendingEmbed(type, options = {}) {
+  const {
+    title,
+    description,
+    fields = [],
+    color,
+    thumbnail,
+    footer,
+    character,
+    timestamp = true
+  } = options;
+
+  // Determine color based on type
+  let embedColor = color;
+  if (!embedColor) {
+    switch (type) {
+      case 'success':
+        embedColor = EMBED_COLORS.SUCCESS;
+        break;
+      case 'error':
+        embedColor = EMBED_COLORS.ERROR;
+        break;
+      case 'warning':
+        embedColor = EMBED_COLORS.WARNING;
+        break;
+      case 'info':
+        embedColor = EMBED_COLORS.INFO;
+        break;
+      case 'barter':
+        embedColor = EMBED_COLORS.BARTER;
+        break;
+      case 'fulfill':
+        embedColor = EMBED_COLORS.FULFILL;
+        break;
+      case 'shop':
+        embedColor = EMBED_COLORS.SHOP;
+        break;
+      default:
+        embedColor = EMBED_COLORS.INFO;
+    }
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(embedColor)
+    .setImage(DEFAULT_IMAGE_URL);
+
+  if (title) embed.setTitle(title);
+  if (description) embed.setDescription(description);
+  if (thumbnail) embed.setThumbnail(thumbnail);
+  if (timestamp) embed.setTimestamp();
+  if (footer) embed.setFooter({ text: footer });
+
+  // Add character author info if provided
+  if (character && character.name) {
+    embed.setAuthor({
+      name: `${character.name}${character.job ? ` the ${character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase()}` : ''}`,
+      iconURL: character.icon || undefined
+    });
+  }
+
+  // Add fields
+  if (fields && fields.length > 0) {
+    embed.addFields(fields);
+  }
+
+  return embed;
+}
+
+// ------------------- createErrorEmbed -------------------
+// Shorthand for creating error embeds
+function createErrorEmbed(title, description, fields = []) {
+  return createVendingEmbed('error', {
+    title: title || '❌ Error',
+    description,
+    fields
+  });
+}
+
+// ------------------- createSuccessEmbed -------------------
+// Shorthand for creating success embeds
+function createSuccessEmbed(title, description, fields = []) {
+  return createVendingEmbed('success', {
+    title: title || '✅ Success',
+    description,
+    fields
+  });
+}
+
+// ------------------- createInfoEmbed -------------------
+// Shorthand for creating info embeds
+function createInfoEmbed(title, description, fields = []) {
+  return createVendingEmbed('info', {
+    title: title || 'ℹ️ Information',
+    description,
+    fields
+  });
+}
+
+// ------------------- createWarningEmbed -------------------
+// Shorthand for creating warning embeds
+function createWarningEmbed(title, description, fields = []) {
+  return createVendingEmbed('warning', {
+    title: title || '⚠️ Warning',
+    description,
+    fields
+  });
+}
+
 // ============================================================================
 // ------------------- Transaction & Atomic Operation Helpers -------------------
 // These functions provide transaction safety, atomic operations, and retry logic
@@ -136,6 +267,7 @@ const INITIAL_RETRY_DELAY_MS = 100; // Initial delay for exponential backoff
 
 // ------------------- runWithTransaction -------------------
 // Wraps operations in a MongoDB transaction with retry logic
+// Uses mongoose connection (for Character and other mongoose models)
 async function runWithTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
   let lastError;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -157,6 +289,86 @@ async function runWithTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
       )) {
         const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
         console.warn(`[vendingHandler.js]: Transaction conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+  throw lastError;
+}
+
+// ------------------- runWithVendingTransaction -------------------
+// Wraps operations in a MongoDB transaction using the vending database client
+// Use this for operations that need to use vendCollection with transactions
+async function runWithVendingTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
+  // Ensure vending client is connected
+  if (!vendingClient) {
+    await connectToVendingDatabase();
+  }
+  
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const session = vendingClient.startSession();
+    try {
+      session.startTransaction();
+      const result = await fn(session);
+      await session.commitTransaction();
+      return result;
+    } catch (error) {
+      await session.abortTransaction();
+      lastError = error;
+      
+      // Retry on transient errors (WriteConflict, TransientTransactionError)
+      if (attempt < maxRetries - 1 && (
+        error.hasErrorLabel('TransientTransactionError') ||
+        error.hasErrorLabel('UnknownTransactionCommitResult') ||
+        error.code === 112 // WriteConflict
+      )) {
+        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[vendingHandler.js]: Vending transaction conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+  throw lastError;
+}
+
+// ------------------- runWithHybridTransaction -------------------
+// Wraps operations that need both mongoose models and vending collections
+// Uses the vending client session, and gets vendCollection from that client
+async function runWithHybridTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
+  // Ensure vending client is connected
+  if (!vendingClient) {
+    await connectToVendingDatabase();
+  }
+  
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const session = vendingClient.startSession();
+    try {
+      session.startTransaction();
+      const result = await fn(session);
+      await session.commitTransaction();
+      return result;
+    } catch (error) {
+      await session.abortTransaction();
+      lastError = error;
+      
+      // Retry on transient errors (WriteConflict, TransientTransactionError)
+      if (attempt < maxRetries - 1 && (
+        error.hasErrorLabel('TransientTransactionError') ||
+        error.hasErrorLabel('UnknownTransactionCommitResult') ||
+        error.code === 112 // WriteConflict
+      )) {
+        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[vendingHandler.js]: Hybrid transaction conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -397,16 +609,25 @@ async function markRequestAsProcessing(fulfillmentId, session = null) {
 // and include error handling + DB updates where relevant.
 // ============================================================================
 
+// ------------------- Vending Database Connection (Singleton) -------------------
+let vendingClient = null;
+let vendingDb = null;
+
 // ------------------- Connect to vending database -------------------
 async function connectToVendingDatabase() {
-  const client = new MongoClient(dbConfig.vending, {});
-  try {
-    await client.connect();
-    return client.db("vendingInventories");
-  } catch (error) {
-    handleError(error, 'vendingHandler.js');
-    throw error;
+  if (!vendingClient || !vendingDb) {
+    vendingClient = new MongoClient(dbConfig.vending, {});
+    try {
+      await vendingClient.connect();
+      vendingDb = vendingClient.db("vendingInventories");
+    } catch (error) {
+      handleError(error, 'vendingHandler.js');
+      vendingClient = null;
+      vendingDb = null;
+      throw error;
+    }
   }
+  return vendingDb;
 }
 
 // ------------------- Get Vending Collection -------------------
@@ -433,9 +654,15 @@ async function handleCollectPoints(interaction) {
       character = await fetchCharacterByName(characterName);
     } catch (error) {
       if (error.message === "Character not found") {
-        return interaction.reply({
-          content: `❌ **Character Not Found**\n\nCould not find a character named "${characterName}". Please check:\n• The spelling of your character's name\n• That the character exists in the system\n• That you're using the correct character name\n\nIf you're sure the name is correct, try:\n1. Running \`/vending setup\` to register your character\n2. Contacting a moderator if the issue persists`
-        });
+        const embed = createErrorEmbed(
+          '❌ Character Not Found',
+          `Could not find a character named "${characterName}".`,
+          [
+            { name: '🔍 What to Check', value: '• The spelling of your character\'s name\n• That the character exists in the system\n• That you\'re using the correct character name', inline: false },
+            { name: '💡 Next Steps', value: '1. Running `/vending setup` to register your character\n2. Contacting a moderator if the issue persists', inline: false }
+          ]
+        );
+        return interaction.reply({ embeds: [embed] });
       }
       throw error; // Re-throw other errors
     }
@@ -470,17 +697,28 @@ async function handleCollectPoints(interaction) {
     const alreadyClaimed = character.lastCollectedMonth === currentMonth;
 
     if (alreadyClaimed) {
-      return interaction.reply({
-        content: `⚠️ **Already Claimed**\n\n${characterName} has already claimed vending points for this month.\n\nNext claim available: **${new Date(currentYear, currentMonth, 1).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}**`
-      });
+      const embed = createWarningEmbed(
+        '⚠️ Already Claimed',
+        `${characterName} has already claimed vending points for this month.`,
+        [
+          { name: '📅 Next Claim Available', value: new Date(currentYear, currentMonth, 1).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), inline: false }
+        ]
+      );
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ------------------- Job Validation -------------------
     const job = character.job?.toLowerCase();
     if (job !== 'shopkeeper' && job !== 'merchant') {
-      return interaction.reply({
-        content: `❌ **Invalid Vendor Type**\n\n${character.name} must be a **Shopkeeper** or **Merchant** to collect vending points.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`
-      });
+      const embed = createErrorEmbed(
+        '❌ Invalid Vendor Type',
+        `${character.name} must be a **Shopkeeper** or **Merchant** to collect vending points.`,
+        [
+          { name: '💼 Current Job', value: character.job || 'None', inline: true },
+          { name: '💡 To Become a Vendor', value: '1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run `/vending setup` to initialize your shop\n3. Run `/vending sync` to sync your inventory', inline: false }
+        ]
+      );
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ------------------- Setup Validation -------------------
@@ -502,9 +740,14 @@ async function handleCollectPoints(interaction) {
     if (!character.vendingSetup?.setupDate) {
         console.log('[vendingHandler.js] [handleCollectPoints] ❌ Setup validation failed for character:', character.name);
         console.log('[vendingHandler.js] [handleCollectPoints] Reason: vendingSetup?.setupDate =', character.vendingSetup?.setupDate);
-        return interaction.reply({
-            content: `❌ **Setup Required**\n\nYou must complete vending setup before collecting points.\n\nPlease run \`/vending setup\` to:\n1. Initialize your shop\n2. Set up your vending sheet\n3. Configure your shop settings`
-        });
+        const embed = createErrorEmbed(
+          '❌ Setup Required',
+          'You must complete vending setup before collecting points.',
+          [
+            { name: '⚙️ Setup Steps', value: 'Please run `/vending setup` to:\n1. Initialize your shop\n2. Set up your vending sheet\n3. Configure your shop settings', inline: false }
+          ]
+        );
+        return interaction.reply({ embeds: [embed] });
     }
 
     // Note: vendingSync check removed - sync is no longer used
@@ -519,24 +762,37 @@ async function handleCollectPoints(interaction) {
     });
 
     // ------------------- Embed Response -------------------
-    const embed = new EmbedBuilder()
-      .setTitle(`🪙 Vending Points Awarded`)
-      .setDescription(`${characterName} received **${pointsAwarded}** vending points.`)
-      .setFooter({ text: `Claimed: ${now.toLocaleDateString()}` });
-
+    const fields = [];
     if (character.vendingSheetUrl) {
-      embed.addFields({
+      fields.push({
         name: '📎 Shop Sheet',
-        value: `[View Sheet](${character.vendingSheetUrl})`
+        value: `[View Sheet](${character.vendingSheetUrl})`,
+        inline: false
       });
+    }
+
+    const embed = createSuccessEmbed(
+      '🪙 Vending Points Awarded',
+      `${characterName} received **${pointsAwarded}** vending points.`,
+      fields
+    ).setFooter({ text: `Claimed: ${now.toLocaleDateString()}` });
+
+    if (character.icon) {
+      embed.setThumbnail(character.icon);
     }
 
     return interaction.reply({ embeds: [embed] });
   } catch (error) {
     console.error('[handleCollectPoints]: Error', error);
-    return interaction.reply({
-      content: `❌ **System Error**\n\nAn unexpected error occurred while processing your request.\n\nPlease try again in a few minutes. If the problem persists, contact a moderator with the following details:\n• Command: \`/vending collect_points\`\n• Character: ${interaction.options.getString('charactername')}\n• Time: ${new Date().toLocaleString()}`
-    });
+    const embed = createErrorEmbed(
+      '❌ System Error',
+      'An unexpected error occurred while processing your request.',
+      [
+        { name: '📋 Error Details', value: `Command: \`/vending collect_points\`\nCharacter: ${interaction.options.getString('charactername')}\nTime: ${new Date().toLocaleString()}`, inline: false },
+        { name: '💡 Next Steps', value: 'Please try again in a few minutes. If the problem persists, contact a moderator.', inline: false }
+      ]
+    );
+    return interaction.reply({ embeds: [embed] });
   }
 }
 
@@ -586,7 +842,11 @@ async function handleRestock(interaction) {
 
     // Validate stock quantity
     if (!stockQty || stockQty <= 0) {
-      return interaction.editReply("❌ Please provide a valid stock quantity greater than 0.");
+      const embed = createErrorEmbed(
+        '❌ Invalid Quantity',
+        'Please provide a valid stock quantity greater than 0.'
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Character Validation -------------------
@@ -599,7 +859,15 @@ async function handleRestock(interaction) {
     if (character.job?.toLowerCase() === 'shopkeeper') {
       // Block buying stock from other village town halls
       if (character.currentVillage.toLowerCase() !== character.homeVillage.toLowerCase()) {
-        return interaction.editReply('❌ Shopkeepers can only buy stock from their home village town hall.');
+        const embed = createErrorEmbed(
+          '❌ Location Restriction',
+          'Shopkeepers can only buy stock from their home village town hall.',
+          [
+            { name: '🏘️ Current Location', value: character.currentVillage, inline: true },
+            { name: '🏠 Home Village', value: character.homeVillage, inline: true }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
     }
 
@@ -614,7 +882,15 @@ async function handleRestock(interaction) {
     if (manualSlot) {
       const slotNumber = parseInt(manualSlot.replace(/[^0-9]/g, ''));
       if (isNaN(slotNumber) || slotNumber < 1 || slotNumber > totalSlots) {
-        return interaction.editReply(`❌ Invalid slot number. You have ${totalSlots} total slots available.`);
+        const embed = createErrorEmbed(
+          '❌ Invalid Slot Number',
+          `Invalid slot number. You have ${totalSlots} total slots available.`,
+          [
+            { name: '📦 Available Slots', value: `1-${totalSlots}`, inline: true },
+            { name: '🎯 Requested Slot', value: manualSlot, inline: true }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
     }
 
@@ -624,18 +900,44 @@ async function handleRestock(interaction) {
     // ------------------- Stock Validation -------------------
     const stockList = await getCurrentVendingStockList();
     if (!stockList?.stockList) {
-      return interaction.editReply("❌ Failed to fetch current vending stock list.");
+      const embed = createErrorEmbed(
+        '❌ Stock List Error',
+        'Failed to fetch current vending stock list.',
+        [
+          { name: '💡 Next Steps', value: 'Please try again in a few moments. If the problem persists, contact support.', inline: false }
+        ]
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     const normalizedVillage = character.currentVillage.toLowerCase().trim();
     const villageStock = stockList.stockList[normalizedVillage] || [];
-    const itemDoc = villageStock.find(item => 
+    const limitedItems = stockList.limitedItems || [];
+    
+    // First check village stock (Merchant/Shopkeeper items)
+    let itemDoc = villageStock.find(item => 
       item.itemName.toLowerCase() === itemName.toLowerCase() && 
-      item.vendingType.toLowerCase() === character.job.toLowerCase()
+      item.vendingType?.toLowerCase() === character.job.toLowerCase()
     );
+    
+    // If not found in village stock, check Limited items (available to both Shopkeepers and Merchants)
+    if (!itemDoc) {
+      itemDoc = limitedItems.find(item => 
+        item.itemName.toLowerCase() === itemName.toLowerCase()
+      );
+    }
 
     if (!itemDoc) {
-      return interaction.editReply(`❌ Item "${itemName}" not found in ${character.currentVillage}'s stock for ${character.job}s.`);
+      const embed = createErrorEmbed(
+        '❌ Item Not Found',
+        `Item "${itemName}" not found in ${character.currentVillage}'s stock for ${character.job}s or in Limited items.`,
+        [
+          { name: '🔍 Item Name', value: itemName, inline: true },
+          { name: '🏘️ Village', value: character.currentVillage, inline: true },
+          { name: '💼 Job Type', value: character.job, inline: true }
+        ]
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Point Cost Calculation -------------------
@@ -643,7 +945,16 @@ async function handleRestock(interaction) {
     const totalCost = pointCost * stockQty;
 
     if (character.vendingPoints < totalCost) {
-      return interaction.editReply(`❌ Not enough vending points. You need ${totalCost} points (${pointCost} per item × ${stockQty} items).`);
+      const embed = createErrorEmbed(
+        '❌ Insufficient Points',
+        'Not enough vending points to complete this purchase.',
+        [
+          { name: '💰 Required', value: `${totalCost} points`, inline: true },
+          { name: '💎 Available', value: `${character.vendingPoints} points`, inline: true },
+          { name: '📊 Cost Breakdown', value: `${pointCost} per item × ${stockQty} items`, inline: false }
+        ]
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Get Item Details -------------------
@@ -685,22 +996,31 @@ async function handleRestock(interaction) {
     
     // Check if shop is at capacity
     if (currentSlotsUsed >= totalSlots && slotsNeededForNewItem > 0) {
-      return interaction.editReply(
-        `❌ **Shop is at capacity.**\n\n` +
-        `You have used all ${totalSlots} slots (${currentSlotsUsed}/${totalSlots} slots used).\n\n` +
-        `Please remove items from your shop to free up space before restocking.`
+      const embed = createErrorEmbed(
+        '❌ Shop is at Capacity',
+        'You have used all available slots in your shop.',
+        [
+          { name: '📦 Slot Usage', value: `${currentSlotsUsed}/${totalSlots} slots used`, inline: true },
+          { name: '💡 Solution', value: 'Please remove items from your shop to free up space before restocking.', inline: false }
+        ]
       );
+      return interaction.editReply({ embeds: [embed] });
     }
     
     // Check if adding this item would exceed capacity
     if (currentSlotsUsed + slotsNeededForNewItem > totalSlots) {
       const availableSlots = totalSlots - currentSlotsUsed;
-      return interaction.editReply(
-        `❌ **Not enough space.**\n\n` +
-        `This item requires ${slotsNeededForNewItem} slot(s), but you only have ${availableSlots} slot(s) available.\n` +
-        `Current usage: ${currentSlotsUsed}/${totalSlots} slots\n\n` +
-        `Please remove items from your shop to free up space.`
+      const embed = createErrorEmbed(
+        '❌ Not Enough Space',
+        'This item requires more slots than you have available.',
+        [
+          { name: '📦 Slots Required', value: `${slotsNeededForNewItem} slot(s)`, inline: true },
+          { name: '📊 Available Slots', value: `${availableSlots} slot(s)`, inline: true },
+          { name: '📈 Current Usage', value: `${currentSlotsUsed}/${totalSlots} slots`, inline: false },
+          { name: '💡 Solution', value: 'Please remove items from your shop to free up space.', inline: false }
+        ]
       );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Slot Assignment -------------------
@@ -720,7 +1040,15 @@ async function handleRestock(interaction) {
       // Validate manual slot number
       const slotNumber = parseInt(manualSlot.replace(/[^0-9]/g, ''));
       if (isNaN(slotNumber) || slotNumber < 1 || slotNumber > totalSlots) {
-        return interaction.editReply(`❌ Invalid slot number. You have ${totalSlots} total slots available (1-${totalSlots}).`);
+        const embed = createErrorEmbed(
+          '❌ Invalid Slot Number',
+          `Invalid slot number. You have ${totalSlots} total slots available.`,
+          [
+            { name: '📦 Available Slots', value: `1-${totalSlots}`, inline: true },
+            { name: '🎯 Requested Slot', value: manualSlot, inline: true }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
       
       // Check if slot is already taken by a different item
@@ -729,7 +1057,16 @@ async function handleRestock(interaction) {
         itemName: { $ne: itemName } // Only check for different items
       });
       if (existingItem) {
-        return interaction.editReply(`❌ Slot ${manualSlot} is already occupied by ${existingItem.itemName}. Please choose a different slot.`);
+        const embed = createErrorEmbed(
+          '❌ Slot Already Occupied',
+          `Slot ${manualSlot} is already occupied by another item.`,
+          [
+            { name: '🎯 Slot', value: manualSlot, inline: true },
+            { name: '📦 Occupied By', value: existingItem.itemName, inline: true },
+            { name: '💡 Solution', value: 'Please choose a different slot.', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
       newSlot = manualSlot;
     } else {
@@ -750,12 +1087,16 @@ async function handleRestock(interaction) {
           const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
           return numA - numB;
         });
-        return interaction.editReply(
-          `❌ **No available slots.**\n\n` +
-          `You have used all ${totalSlots} slots.\n` +
-          `Occupied slots: ${occupiedList.join(', ')}\n\n` +
-          `Please remove an item from your shop first, or specify a slot that already contains this item to stack it.`
+        const embed = createErrorEmbed(
+          '❌ No Available Slots',
+          'You have used all available slots in your shop.',
+          [
+            { name: '📦 Total Slots', value: `${totalSlots} slots`, inline: true },
+            { name: '📋 Occupied Slots', value: occupiedList.join(', ') || 'None', inline: false },
+            { name: '💡 Solution', value: 'Please remove an item from your shop first, or specify a slot that already contains this item to stack it.', inline: false }
+          ]
         );
+        return interaction.editReply({ embeds: [embed] });
       }
     }
 
@@ -766,7 +1107,16 @@ async function handleRestock(interaction) {
     });
 
     if (finalSlotCheck) {
-      return interaction.editReply(`❌ Slot conflict detected: Slot ${newSlot} is already occupied by ${finalSlotCheck.itemName}. Please try again with a different slot.`);
+      const embed = createErrorEmbed(
+        '❌ Slot Conflict',
+        `Slot ${newSlot} is already occupied by another item.`,
+        [
+          { name: '🎯 Slot', value: newSlot, inline: true },
+          { name: '📦 Occupied By', value: finalSlotCheck.itemName, inline: true },
+          { name: '💡 Solution', value: 'Please try again with a different slot.', inline: false }
+        ]
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Price Validation -------------------
@@ -780,9 +1130,15 @@ async function handleRestock(interaction) {
 
     const priceValidation = validateVendingPrices(priceItem);
     if (priceValidation.length > 0) {
-      return interaction.editReply({
-        content: `❌ **Price Validation Failed**\n\n${priceValidation.join('\n')}\n\nPlease set at least one of the following:\n• **Token Price** (number)\n• **Art Price** (description)\n• **Other Price** (description)\n• **Barter Open** (true/false)`
-      });
+      const embed = createErrorEmbed(
+        '❌ Price Validation Failed',
+        'Please set at least one pricing option.',
+        [
+          { name: '⚠️ Validation Errors', value: priceValidation.join('\n'), inline: false },
+          { name: '💰 Pricing Options', value: '• **Token Price** (number)\n• **Art Price** (description)\n• **Other Price** (description)\n• **Barter Open** (true/false)', inline: false }
+        ]
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Stack Size Validation -------------------
@@ -799,17 +1155,31 @@ async function handleRestock(interaction) {
       const isStackable = itemDetails.stackable;
 
       if (!isStackable && stockQty > 1) {
-        return interaction.editReply(`❌ ${itemName} is not stackable. You can only add 1 at a time.`);
+        const embed = createErrorEmbed(
+          '❌ Item Not Stackable',
+          `${itemName} is not stackable. You can only add 1 at a time.`,
+          [
+            { name: '📦 Item', value: itemName, inline: true },
+            { name: '📊 Requested Quantity', value: stockQty.toString(), inline: true }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
 
       if (existingItem) {
         const newTotal = existingItem.stockQty + stockQty;
         if (isStackable && newTotal > maxStackSize && existingItem.slot === newSlot) {
-          return interaction.editReply(
-            `❌ Cannot add ${stockQty} more ${itemName} to this slot. This would exceed the maximum stack size of ${maxStackSize} per slot. ` +
-            `Current stack: ${existingItem.stockQty}, Maximum allowed: ${maxStackSize}\n\n` +
-            `Note: Stackable items can occupy multiple slots (10 per slot). Choose a different slot to add more.`
+          const embed = createErrorEmbed(
+            '❌ Stack Size Exceeded',
+            `Cannot add ${stockQty} more ${itemName} to this slot. This would exceed the maximum stack size.`,
+            [
+              { name: '📦 Item', value: itemName, inline: true },
+              { name: '📊 Current Stack', value: `${existingItem.stockQty}`, inline: true },
+              { name: '📈 Maximum Allowed', value: `${maxStackSize} per slot`, inline: true },
+              { name: '💡 Note', value: 'Stackable items can occupy multiple slots (10 per slot). Choose a different slot to add more.', inline: false }
+            ]
           );
+          return interaction.editReply({ embeds: [embed] });
         }
       }
       // For stackable items exceeding maxStackSize, they will use multiple slots
@@ -817,18 +1187,26 @@ async function handleRestock(interaction) {
     }
 
     // ------------------- Update Inventory and Points (Transaction) -------------------
-    // Wrap critical operations in transaction for atomicity
-    await runWithTransaction(async (session) => {
-      // Re-validate points before deduction (race condition protection)
-      const currentCharacter = await Character.findById(character._id, null, { session });
-      if (!currentCharacter || currentCharacter.vendingPoints < totalCost) {
-        throw new Error(`Insufficient vending points. Required: ${totalCost}, Available: ${currentCharacter?.vendingPoints || 0}`);
-      }
+    // Note: We need to handle two different clients (mongoose for Character, native client for vendCollection)
+    // Since they use different clients, we can't use a single transaction, so we do them separately
+    // with validation to minimize race conditions
+    
+    // First, validate Character points using mongoose
+    const currentCharacter = await Character.findById(character._id);
+    if (!currentCharacter || currentCharacter.vendingPoints < totalCost) {
+      throw new Error(`Insufficient vending points. Required: ${totalCost}, Available: ${currentCharacter?.vendingPoints || 0}`);
+    }
 
+    // Update vendCollection using vending client transaction
+    await runWithVendingTransaction(async (session) => {
+      // Get vendCollection from the same client used for the session
+      const db = await connectToVendingDatabase();
+      const vendCollectionWithSession = db.collection(characterName.toLowerCase());
+      
       // Update inventory
       if (existingItem) {
         // Atomically update existing item with stock validation
-        const updateResult = await vendCollection.findOneAndUpdate(
+        const updateResult = await vendCollectionWithSession.findOneAndUpdate(
           { 
             _id: existingItem._id,
             stockQty: { $exists: true } // Ensure item still exists
@@ -858,11 +1236,11 @@ async function handleRestock(interaction) {
 
         // Check if stock reached zero and delete if needed
         if (updateResult.value.stockQty <= 0) {
-          await vendCollection.deleteOne({ _id: existingItem._id }, { session });
+          await vendCollectionWithSession.deleteOne({ _id: existingItem._id }, { session });
         }
       } else {
         // Insert new item with new fields
-        await vendCollection.insertOne({
+        await vendCollectionWithSession.insertOne({
           characterName: characterName,
           itemName,
           itemId: itemDetails ? itemDetails._id : null,
@@ -884,8 +1262,10 @@ async function handleRestock(interaction) {
           customItemData: isCustomItem ? { name: itemName } : null
         }, { session });
       }
+    });
 
-      // Atomically update character points
+    // Atomically update character points using mongoose transaction
+    await runWithTransaction(async (session) => {
       const pointUpdateResult = await Character.findOneAndUpdate(
         { 
           _id: character._id,
@@ -939,32 +1319,49 @@ async function handleRestock(interaction) {
     }
 
     // ------------------- Success Response -------------------
-    const successEmbed = new EmbedBuilder()
-      .setColor('#00FF00')
-      .setTitle('✅ Item Added to Shop')
-      .setDescription(`Successfully added ${stockQty}x ${itemName} to your shop in ${newSlot}.`)
-      .setAuthor({ 
-        name: `${character.name} the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`, 
-        iconURL: character.icon 
-      })
-      .setThumbnail(itemDetails.image || 'https://via.placeholder.com/150')
-      .addFields(
-        { name: '👤 Character', value: character.name, inline: true },
-        { name: '🏘️ Location', value: character.currentVillage, inline: true },
-        { name: '🛍️ Shop Type', value: character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'N/A', inline: true },
-        { name: '📦 Item', value: `${itemDetails.emoji || '📦'} ${itemName}`, inline: true },
-        { name: '🎯 Slot', value: newSlot, inline: true },
-        { name: '💰 Prices', value: `Token: ${tokenPrice}\nArt: ${artPrice}\nOther: ${otherPrice}`, inline: true },
-        { name: '🪙 Points Spent', value: `${totalCost} points`, inline: true },
-        { name: '💎 Remaining Points', value: `${character.vendingPoints - totalCost} points`, inline: true }
-      )
-      .setFooter({ text: `Added to shop on ${new Date().toLocaleDateString()}` });
+    const priceDisplay = [];
+    if (tokenPrice !== null && tokenPrice !== undefined) priceDisplay.push(`Token: ${tokenPrice}`);
+    if (artPrice && artPrice.trim()) priceDisplay.push(`Art: ${artPrice}`);
+    if (otherPrice && otherPrice.trim()) priceDisplay.push(`Other: ${otherPrice}`);
+    if (barterOpen) priceDisplay.push('Barter: Open');
+
+    const fields = [
+      { name: '👤 Character', value: character.name, inline: true },
+      { name: '🏘️ Location', value: character.currentVillage, inline: true },
+      { name: '🛍️ Shop Type', value: character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'N/A', inline: true },
+      { name: '📦 Item', value: `${itemDetails?.emoji || '📦'} ${itemName}`, inline: true },
+      { name: '🎯 Slot', value: newSlot, inline: true },
+      { name: '💰 Prices', value: priceDisplay.join('\n') || 'None set', inline: true },
+      { name: '🪙 Points Spent', value: `${totalCost} points`, inline: true },
+      { name: '💎 Remaining Points', value: `${character.vendingPoints - totalCost} points`, inline: true }
+    ];
+
+    const successEmbed = createSuccessEmbed(
+      '✅ Item Added to Shop',
+      `Successfully added ${stockQty}x ${itemName} to your shop in ${newSlot}.`,
+      fields
+    )
+    .setAuthor({ 
+      name: `${character.name} the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`, 
+      iconURL: character.icon 
+    })
+    .setThumbnail(itemDetails?.image || 'https://via.placeholder.com/150')
+    .setFooter({ text: `Added to shop on ${new Date().toLocaleDateString()}` });
 
     await interaction.editReply({ embeds: [successEmbed] });
 
   } catch (error) {
     console.error('[handleRestock]: Error:', error);
-    await interaction.editReply('❌ An error occurred while adding items to your shop.');
+    const errorMessage = error.message || 'Unknown error occurred';
+    const embed = createErrorEmbed(
+      '❌ Restock Error',
+      'An error occurred while adding items to your shop.',
+      [
+        { name: '⚠️ Error Details', value: errorMessage, inline: false },
+        { name: '💡 Next Steps', value: 'Please check your inputs and try again. If the problem persists, contact support.', inline: false }
+      ]
+    );
+    await interaction.editReply({ embeds: [embed] });
   }
 }
 
@@ -984,17 +1381,39 @@ async function handleVendingBarter(interaction) {
   
       // ------------------- Validate Inputs -------------------
       if (!targetShopName || !requestedItemName || !quantity || !paymentType) {
-        return interaction.editReply("⚠️ Please provide all required options: `vendorcharacter`, `itemname`, `quantity`, and `payment_type`.");
+        const embed = createWarningEmbed(
+          '⚠️ Missing Required Options',
+          'Please provide all required options to create a barter request.',
+          [
+            { name: '📋 Required Options', value: '• `vendorcharacter`\n• `itemname`\n• `quantity`\n• `payment_type`', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
 
       // Validate offer for barter payment type
       if (paymentType === 'barter' && !offeredItemName) {
-        return interaction.editReply("⚠️ Please provide an item to offer when using barter payment type.");
+        const embed = createWarningEmbed(
+          '⚠️ Missing Barter Offer',
+          'Please provide an item to offer when using barter payment type.',
+          [
+            { name: '💡 Payment Type', value: 'Barter', inline: true },
+            { name: '📦 Required', value: 'An item to offer in exchange', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
   
       const buyer = await fetchCharacterByNameAndUserId(interaction.options.getString('charactername'), buyerId);
       if (!buyer) {
-        return interaction.editReply("⚠️ Your character could not be found. Please create one first.");
+        const embed = createWarningEmbed(
+          '⚠️ Character Not Found',
+          'Your character could not be found. Please create one first.',
+          [
+            { name: '💡 Next Steps', value: 'Use character creation commands to set up your character before making purchases.', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
   
       // ------------------- Debug Logging -------------------
@@ -1003,7 +1422,15 @@ async function handleVendingBarter(interaction) {
       
       if (!shopOwner) {
         console.log(`[handleVendingBarter] ❌ Character "${targetShopName}" not found in database`);
-        return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
+        const embed = createWarningEmbed(
+          '⚠️ Shop Not Found',
+          `No vending shop found under the name **${targetShopName}**.`,
+          [
+            { name: '🔍 Shop Name', value: targetShopName, inline: true },
+            { name: '💡 Tip', value: 'Make sure the shop name is spelled correctly and the vendor has set up their shop.', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
       
       console.log(`[handleVendingBarter] ✅ Character found: "${shopOwner.name}" (ID: ${shopOwner._id})`);
@@ -1030,7 +1457,15 @@ async function handleVendingBarter(interaction) {
       // Allow vending if inventory exists, even without shopLink
       if (!shopLink && !hasVendingInventory) {
         console.log(`[handleVendingBarter] ❌ No shopLink and no inventory found for "${targetShopName}"`);
-        return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
+        const embed = createWarningEmbed(
+          '⚠️ Shop Not Found',
+          `No vending shop found under the name **${targetShopName}**.`,
+          [
+            { name: '🔍 Shop Name', value: targetShopName, inline: true },
+            { name: '💡 Tip', value: 'Make sure the shop name is spelled correctly and the vendor has set up their shop.', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
       
       if (!shopLink && hasVendingInventory) {
@@ -1041,21 +1476,17 @@ async function handleVendingBarter(interaction) {
       const locationValidation = validateVendingLocation(shopOwner, buyer);
       
       if (!locationValidation.valid) {
-        const errorEmbed = new EmbedBuilder()
-          .setColor(0xFF0000)
-          .setTitle('❌ Location Restriction')
-          .setDescription(locationValidation.error)
-          .addFields(
-            { name: '👤 Vendor', value: shopOwner.name, inline: true },
-            { name: '🏘️ Vendor Location', value: shopOwner.currentVillage || 'Unknown', inline: true },
-            { name: '🏠 Vendor Home', value: shopOwner.homeVillage || 'Unknown', inline: true },
-            { name: '👤 Buyer', value: buyer.name, inline: true },
-            { name: '🏘️ Buyer Location', value: buyer.currentVillage || 'Unknown', inline: true },
-            { name: '💼 Vendor Job', value: shopOwner.job || 'Unknown', inline: true }
-          );
+        const fields = [
+          { name: '👤 Vendor', value: shopOwner.name, inline: true },
+          { name: '🏘️ Vendor Location', value: shopOwner.currentVillage || 'Unknown', inline: true },
+          { name: '🏠 Vendor Home', value: shopOwner.homeVillage || 'Unknown', inline: true },
+          { name: '👤 Buyer', value: buyer.name, inline: true },
+          { name: '🏘️ Buyer Location', value: buyer.currentVillage || 'Unknown', inline: true },
+          { name: '💼 Vendor Job', value: shopOwner.job || 'Unknown', inline: true }
+        ];
 
         if (locationValidation.vendorLocation || locationValidation.buyerLocation) {
-          errorEmbed.addFields({
+          fields.push({
             name: '💡 Travel Tip',
             value: locationValidation.vendorJob === 'shopkeeper' 
               ? `Shopkeepers can only sell when they are in their home village (${shopOwner.homeVillage}). Please wait for ${shopOwner.name} to return home.`
@@ -1064,10 +1495,11 @@ async function handleVendingBarter(interaction) {
           });
         }
 
-        errorEmbed
-          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-          .setFooter({ text: 'Village restriction active' })
-          .setTimestamp();
+        const errorEmbed = createErrorEmbed(
+          '❌ Location Restriction',
+          locationValidation.error,
+          fields
+        ).setFooter({ text: 'Village restriction active' });
 
         return interaction.editReply({ embeds: [errorEmbed] });
       }
@@ -1077,7 +1509,16 @@ async function handleVendingBarter(interaction) {
       const vendorUser = await User.findOne({ discordId: shopOwner.userId });
 
       if (!buyerUser || !vendorUser) {
-        return interaction.editReply("❌ Could not find user data for either buyer or vendor.");
+        const embed = createErrorEmbed(
+          '❌ User Data Not Found',
+          'Could not find user data for either buyer or vendor.',
+          [
+            { name: '👤 Buyer', value: buyerName, inline: true },
+            { name: '👤 Vendor', value: shopOwner.name, inline: true },
+            { name: '💡 Solution', value: 'Please ensure both users have accounts set up in the system.', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
 
       // Get vendor's Discord username
@@ -1089,11 +1530,15 @@ async function handleVendingBarter(interaction) {
         if (!buyerUser.tokensSynced) unsyncedUsers.push(buyerName);
         if (!vendorUser.tokensSynced) unsyncedUsers.push(vendorUsername);
         
-        return interaction.editReply(
-          `❌ Cannot proceed with barter. Token trackers need to be synced for:\n` +
-          unsyncedUsers.map(name => `• ${name}`).join('\n') + '\n\n' +
-          `Please use \`/token sync\` to sync your token tracker first.`
+        const embed = createErrorEmbed(
+          '❌ Token Tracker Not Synced',
+          'Cannot proceed with barter. Token trackers need to be synced.',
+          [
+            { name: '👥 Users Needing Sync', value: unsyncedUsers.map(name => `• ${name}`).join('\n'), inline: false },
+            { name: '💡 Solution', value: 'Please use `/token sync` to sync your token tracker first.', inline: false }
+          ]
         );
+        return interaction.editReply({ embeds: [embed] });
       }
   
       // Use VendingModel to check shop inventory
@@ -1113,7 +1558,16 @@ async function handleVendingBarter(interaction) {
             item.tokenPrice !== null
           );
           if (!requestedItem) {
-            return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for token purchase in ${targetShopName}'s shop.`);
+            const embed = createWarningEmbed(
+              '⚠️ Item Not Available for Token Purchase',
+              `The item **${requestedItemName}** is not available for token purchase in ${targetShopName}'s shop.`,
+              [
+                { name: '📦 Item', value: requestedItemName, inline: true },
+                { name: '🏪 Shop', value: targetShopName, inline: true },
+                { name: '💰 Payment Method', value: 'Tokens', inline: true }
+              ]
+            );
+            return interaction.editReply({ embeds: [embed] });
           }
           break;
         case 'art':
@@ -1124,7 +1578,16 @@ async function handleVendingBarter(interaction) {
             item.artPrice !== null
           );
           if (!requestedItem) {
-            return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for art purchase in ${targetShopName}'s shop.`);
+            const embed = createWarningEmbed(
+              '⚠️ Item Not Available for Art Purchase',
+              `The item **${requestedItemName}** is not available for art purchase in ${targetShopName}'s shop.`,
+              [
+                { name: '📦 Item', value: requestedItemName, inline: true },
+                { name: '🏪 Shop', value: targetShopName, inline: true },
+                { name: '💰 Payment Method', value: 'Art', inline: true }
+              ]
+            );
+            return interaction.editReply({ embeds: [embed] });
           }
           break;
         case 'barter':
@@ -1132,17 +1595,43 @@ async function handleVendingBarter(interaction) {
             item.barterOpen === true
           );
           if (!requestedItem) {
-            return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for barter in ${targetShopName}'s shop.`);
+            const embed = createWarningEmbed(
+              '⚠️ Item Not Available for Barter',
+              `The item **${requestedItemName}** is not available for barter in ${targetShopName}'s shop.`,
+              [
+                { name: '📦 Item', value: requestedItemName, inline: true },
+                { name: '🏪 Shop', value: targetShopName, inline: true },
+                { name: '💰 Payment Method', value: 'Barter', inline: true }
+              ]
+            );
+            return interaction.editReply({ embeds: [embed] });
           }
           break;
       }
 
       if (!requestedItem) {
-        return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available in ${targetShopName}'s shop.`);
+        const embed = createWarningEmbed(
+          '⚠️ Item Not Available',
+          `The item **${requestedItemName}** is not available in ${targetShopName}'s shop.`,
+          [
+            { name: '📦 Item', value: requestedItemName, inline: true },
+            { name: '🏪 Shop', value: targetShopName, inline: true }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
 
       if (requestedItem.stockQty < quantity) {
-        return interaction.editReply(`⚠️ ${targetShopName} only has ${requestedItem.stockQty} ${requestedItemName} in stock.`);
+        const embed = createWarningEmbed(
+          '⚠️ Insufficient Stock',
+          `${targetShopName} only has limited stock available.`,
+          [
+            { name: '📦 Item', value: requestedItemName, inline: true },
+            { name: '📊 Available Stock', value: `${requestedItem.stockQty}`, inline: true },
+            { name: '📋 Requested Quantity', value: `${quantity}`, inline: true }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
   
       // ------------------- Vendor Self-Purchase Check -------------------
@@ -1152,33 +1641,60 @@ async function handleVendingBarter(interaction) {
       if (isVendorSelfPurchase) {
         // Vendor buying from own shop - must use tokens and ROTW SELL price
         if (paymentType !== 'tokens') {
-          return interaction.editReply(
-            `❌ **Self-Purchase Restriction**\n\n` +
-            `Vendors purchasing from their own shop must use **token payment** and pay the **ROTW SELL price** (not the shop's token price).\n\n` +
-            `Please select **Tokens** as your payment method.`
+          const embed = createErrorEmbed(
+            '❌ Self-Purchase Restriction',
+            'Vendors purchasing from their own shop must use token payment and pay the ROTW SELL price.',
+            [
+              { name: '💰 Required Payment', value: 'Tokens', inline: true },
+              { name: '💵 Price Type', value: 'ROTW SELL price (not shop token price)', inline: false },
+              { name: '💡 Solution', value: 'Please select **Tokens** as your payment method.', inline: false }
+            ]
           );
+          return interaction.editReply({ embeds: [embed] });
         }
 
         // Get item details to find sell price
         const itemDetails = await ItemModel.findOne({ itemName: requestedItemName });
         if (!itemDetails) {
-          return interaction.editReply(`❌ Could not find item details for ${requestedItemName}. Vendors cannot purchase custom items from their own shop.`);
+          const embed = createErrorEmbed(
+            '❌ Item Details Not Found',
+            `Could not find item details for ${requestedItemName}.`,
+            [
+              { name: '📦 Item', value: requestedItemName, inline: true },
+              { name: '⚠️ Restriction', value: 'Vendors cannot purchase custom items from their own shop.', inline: false }
+            ]
+          );
+          return interaction.editReply({ embeds: [embed] });
         }
 
         const sellPrice = itemDetails.sellPrice || 0;
         if (sellPrice <= 0) {
-          return interaction.editReply(`❌ This item has no sell price set. Vendors cannot purchase items without a sell price from their own shop.`);
+          const embed = createErrorEmbed(
+            '❌ No Sell Price Set',
+            'This item has no sell price set. Vendors cannot purchase items without a sell price from their own shop.',
+            [
+              { name: '📦 Item', value: requestedItemName, inline: true },
+              { name: '💵 Sell Price', value: 'Not set', inline: true }
+            ]
+          );
+          return interaction.editReply({ embeds: [embed] });
         }
 
         const totalCost = sellPrice * quantity;
         const userTokens = await getTokenBalance(buyerId);
         if (userTokens < totalCost) {
-          return interaction.editReply(
-            `⚠️ **Insufficient Tokens**\n\n` +
-            `You need **${totalCost} tokens** to purchase ${quantity}x ${requestedItemName} from your own shop (ROTW SELL price: ${sellPrice} per item).\n\n` +
-            `Your balance: **${userTokens} tokens**\n` +
-            `Shortage: **${totalCost - userTokens} tokens**`
+          const embed = createWarningEmbed(
+            '⚠️ Insufficient Tokens',
+            'You need more tokens to purchase this item from your own shop.',
+            [
+              { name: '💰 Required', value: `${totalCost} tokens`, inline: true },
+              { name: '💎 Your Balance', value: `${userTokens} tokens`, inline: true },
+              { name: '📊 Shortage', value: `${totalCost - userTokens} tokens`, inline: true },
+              { name: '💵 Price Per Item', value: `${sellPrice} tokens (ROTW SELL price)`, inline: false },
+              { name: '📦 Purchase', value: `${quantity}x ${requestedItemName}`, inline: false }
+            ]
           );
+          return interaction.editReply({ embeds: [embed] });
         }
       } else {
         // Normal buyer - use shop's pricing
@@ -1186,24 +1702,58 @@ async function handleVendingBarter(interaction) {
         switch (paymentType) {
           case 'tokens':
             if (!requestedItem.tokenPrice || requestedItem.tokenPrice === null) {
-              return interaction.editReply(`⚠️ ${requestedItemName} is not available for token purchase.`);
+              const embed = createWarningEmbed(
+                '⚠️ Token Purchase Not Available',
+                `${requestedItemName} is not available for token purchase.`,
+                [
+                  { name: '📦 Item', value: requestedItemName, inline: true },
+                  { name: '💰 Payment Method', value: 'Tokens', inline: true }
+                ]
+              );
+              return interaction.editReply({ embeds: [embed] });
             }
             const totalCost = requestedItem.tokenPrice * quantity;
             const userTokens = await getTokenBalance(buyerId);
             if (userTokens < totalCost) {
-              return interaction.editReply(`⚠️ You don't have enough tokens. Required: ${totalCost}, Your balance: ${userTokens}`);
+              const embed = createWarningEmbed(
+                '⚠️ Insufficient Tokens',
+                'You don\'t have enough tokens to complete this purchase.',
+                [
+                  { name: '💰 Required', value: `${totalCost} tokens`, inline: true },
+                  { name: '💎 Your Balance', value: `${userTokens} tokens`, inline: true },
+                  { name: '📊 Shortage', value: `${totalCost - userTokens} tokens`, inline: true }
+                ]
+              );
+              return interaction.editReply({ embeds: [embed] });
             }
             break;
 
           case 'art':
             if (!requestedItem.artPrice || requestedItem.artPrice === 'N/A' || requestedItem.artPrice === '' || requestedItem.artPrice === null) {
-              return interaction.editReply(`⚠️ ${requestedItemName} is not available for art purchase.`);
+              const embed = createWarningEmbed(
+                '⚠️ Art Purchase Not Available',
+                `${requestedItemName} is not available for art purchase.`,
+                [
+                  { name: '📦 Item', value: requestedItemName, inline: true },
+                  { name: '💰 Payment Method', value: 'Art', inline: true }
+                ]
+              );
+              return interaction.editReply({ embeds: [embed] });
             }
             break;
 
           case 'barter':
             if (!requestedItem.barterOpen && !requestedItem.tradesOpen) {
-              return interaction.editReply(`⚠️ ${targetShopName} is not accepting barters for ${requestedItemName}.`);
+              const embed = createWarningEmbed(
+                '⚠️ Barter Not Accepted',
+                `${targetShopName} is not accepting barters for ${requestedItemName}.`,
+                [
+                  { name: '📦 Item', value: requestedItemName, inline: true },
+                  { name: '🏪 Shop', value: targetShopName, inline: true },
+                  { name: '💰 Payment Method', value: 'Barter', inline: true }
+                ]
+              );
+              return interaction.editReply({ embeds: [embed] });
             }
             // Check if buyer has the offered item
             const buyerInventory = await connectToInventories(buyer);
@@ -1211,7 +1761,15 @@ async function handleVendingBarter(interaction) {
               item.name.toLowerCase() === offeredItemName.toLowerCase()
             );
             if (!offeredItem || offeredItem.quantity < 1) {
-              return interaction.reply(`⚠️ You don't have **${offeredItemName}** in your inventory.`);
+              const embed = createWarningEmbed(
+                '⚠️ Item Not in Inventory',
+                `You don't have **${offeredItemName}** in your inventory.`,
+                [
+                  { name: '📦 Required Item', value: offeredItemName, inline: true },
+                  { name: '👤 Character', value: buyer.name, inline: true }
+                ]
+              );
+              return interaction.reply({ embeds: [embed] });
             }
             break;
         }
@@ -1288,33 +1846,26 @@ async function handleVendingBarter(interaction) {
         priceInfo = `Trading: **${offeredItemName}**`;
       }
       
-      const embed = new EmbedBuilder()
-        .setTitle(`🔄 Barter Request Created`)
-        .setDescription(
-          `**${buyer.name}** has requested to purchase from **${shopOwner.name}'s** shop.\n\n` +
-          `**📋 Vendor Instructions:**\n` +
-          `Use \`/vending accept\` with the fulfillment ID below to complete this transaction.`
-        )
-        .addFields(
-          { 
-            name: '📦 Requested Item', 
-            value: `**${requestedItemName}** × ${quantity}`, 
-            inline: true 
-          },
-          { 
-            name: '💱 Payment Method', 
-            value: paymentDisplay, 
-            inline: true 
-          },
-          { 
-            name: '💵 Price', 
-            value: priceInfo || 'To be determined', 
-            inline: true 
-          }
-        );
+      const fields = [
+        { 
+          name: '📦 Requested Item', 
+          value: `**${requestedItemName}** × ${quantity}`, 
+          inline: true 
+        },
+        { 
+          name: '💱 Payment Method', 
+          value: paymentDisplay, 
+          inline: true 
+        },
+        { 
+          name: '💵 Price', 
+          value: priceInfo || 'To be determined', 
+          inline: true 
+        }
+      ];
 
       if (paymentType === 'barter' && offeredItemName) {
-        embed.addFields({ 
+        fields.push({ 
           name: '🔄 Offered in Trade', 
           value: `**${offeredItemName}**`, 
           inline: false 
@@ -1322,30 +1873,38 @@ async function handleVendingBarter(interaction) {
       }
       
       if (notes) {
-        embed.addFields({ 
+        fields.push({ 
           name: '📝 Additional Notes', 
           value: notes, 
           inline: false 
         });
       }
       
-      embed.addFields({ 
-          name: '🪪 Fulfillment ID', 
-          value: `\`${fulfillmentId}\``, 
-          inline: false 
-        })
-        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-        .setFooter({ text: `Buyer: ${buyerName} • Request ID: ${fulfillmentId}` })
-        .setColor('#3498db')
-        .setTimestamp();
+      fields.push({ 
+        name: '🪪 Fulfillment ID', 
+        value: `\`${fulfillmentId}\``, 
+        inline: false 
+      });
+
+      const embed = createVendingEmbed('barter', {
+        title: '🔄 Barter Request Created',
+        description: `**${buyer.name}** has requested to purchase from **${shopOwner.name}'s** shop.\n\n**📋 Vendor Instructions:**\nUse \`/vending accept\` with the fulfillment ID below to complete this transaction.`,
+        fields,
+        footer: `Buyer: ${buyerName} • Request ID: ${fulfillmentId}`
+      });
   
       await interaction.editReply({ embeds: [embed] });
   
     } catch (error) {
       console.error("[handleVendingBarter]:", error);
-      await interaction.editReply({
-        content: "❌ An error occurred while processing the barter request. Please try again later."
-      });
+      const embed = createErrorEmbed(
+        '❌ Barter Request Error',
+        'An error occurred while processing the barter request.',
+        [
+          { name: '💡 Next Steps', value: 'Please try again later. If the problem persists, contact support.', inline: false }
+        ]
+      );
+      await interaction.editReply({ embeds: [embed] });
     }
 }
   
@@ -1358,7 +1917,14 @@ async function handleFulfill(interaction) {
   
       const fulfillmentId = interaction.options.getString("fulfillmentid");
       if (!fulfillmentId) {
-        return interaction.editReply("⚠️ Please provide a valid `fulfillmentid`.");
+        const embed = createWarningEmbed(
+          '⚠️ Missing Fulfillment ID',
+          'Please provide a valid `fulfillmentid`.',
+          [
+            { name: '💡 Usage', value: 'Use the fulfillment ID from the barter request to complete the transaction.', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
   
       // ------------------- Fetch Barter Request -------------------
@@ -1367,7 +1933,15 @@ async function handleFulfill(interaction) {
         // Try to get from temporary storage as fallback
         const tempRequest = await retrieveVendingRequestFromStorage(fulfillmentId);
         if (!tempRequest) {
-          return interaction.editReply(`⚠️ No pending barter request found with ID **${fulfillmentId}**.`);
+          const embed = createWarningEmbed(
+            '⚠️ Request Not Found',
+            `No pending barter request found with ID **${fulfillmentId}**.`,
+            [
+              { name: '🪪 Fulfillment ID', value: fulfillmentId, inline: true },
+              { name: '💡 Tip', value: 'Make sure the ID is correct and the request hasn\'t expired or been fulfilled.', inline: false }
+            ]
+          );
+          return interaction.editReply({ embeds: [embed] });
         }
         // Convert temp request to match MongoDB format (legacy support)
         request = {
@@ -1392,7 +1966,14 @@ async function handleFulfill(interaction) {
           { fulfillmentId },
           { $set: { status: 'expired' } }
         ).catch(() => {}); // Ignore errors on legacy requests
-        return interaction.editReply(`⚠️ This request has expired. Please create a new request.`);
+        const embed = createWarningEmbed(
+          '⚠️ Request Expired',
+          'This request has expired.',
+          [
+            { name: '💡 Solution', value: 'Please create a new request.', inline: false }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
   
       const {
@@ -1412,7 +1993,15 @@ async function handleFulfill(interaction) {
       const vendor = await fetchCharacterByName(vendorCharacterName);
 
       if (!buyer || !vendor) {
-        return interaction.editReply("❌ Buyer or vendor character could not be found.");
+        const embed = createErrorEmbed(
+          '❌ Character Not Found',
+          'Buyer or vendor character could not be found.',
+          [
+            { name: '👤 Buyer', value: userCharacterName || 'Unknown', inline: true },
+            { name: '👤 Vendor', value: vendorCharacterName || 'Unknown', inline: true }
+          ]
+        );
+        return interaction.editReply({ embeds: [embed] });
       }
 
       // ------------------- Check if Vendor Self-Purchase -------------------
@@ -1773,42 +2362,36 @@ async function handleFulfill(interaction) {
         priceInfo = `Trading: **${offeredItem}**`;
       }
       
-      const embed = new EmbedBuilder()
-        .setTitle(`✅ Barter Fulfilled`)
-        .setDescription(
-          `**${vendor.name}** has successfully fulfilled a barter request for **${buyer.name}**.\n\n` +
-          `The transaction has been completed and items have been transferred.`
-        )
-        .addFields(
-          { 
-            name: '📦 Item', 
-            value: `**${itemName}** × ${quantity}`, 
-            inline: true 
-          },
-          { 
-            name: '👤 Buyer', 
-            value: buyer.name, 
-            inline: true 
-          },
-          { 
-            name: '🧾 Vendor', 
-            value: vendor.name, 
-            inline: true 
-          },
-          { 
-            name: '💱 Payment Method', 
-            value: paymentDisplay, 
-            inline: true 
-          },
-          { 
-            name: '💵 Price', 
-            value: priceInfo || 'N/A', 
-            inline: true 
-          }
-        );
+      const fields = [
+        { 
+          name: '📦 Item', 
+          value: `**${itemName}** × ${quantity}`, 
+          inline: true 
+        },
+        { 
+          name: '👤 Buyer', 
+          value: buyer.name, 
+          inline: true 
+        },
+        { 
+          name: '🧾 Vendor', 
+          value: vendor.name, 
+          inline: true 
+        },
+        { 
+          name: '💱 Payment Method', 
+          value: paymentDisplay, 
+          inline: true 
+        },
+        { 
+          name: '💵 Price', 
+          value: priceInfo || 'N/A', 
+          inline: true 
+        }
+      ];
 
       if (paymentMethod === 'barter' && offeredItem) {
-        embed.addFields({ 
+        fields.push({ 
           name: '🔄 Traded Item', 
           value: `**${offeredItem}**`, 
           inline: false 
@@ -1816,17 +2399,19 @@ async function handleFulfill(interaction) {
       }
 
       if (notes) {
-        embed.addFields({ 
+        fields.push({ 
           name: '📝 Additional Notes', 
           value: notes, 
           inline: false 
         });
       }
 
-      embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-        .setColor(0x00cc99)
-        .setFooter({ text: `Transaction completed successfully` })
-        .setTimestamp();
+      const embed = createVendingEmbed('fulfill', {
+        title: '✅ Barter Fulfilled',
+        description: `**${vendor.name}** has successfully fulfilled a barter request for **${buyer.name}**.\n\nThe transaction has been completed and items have been transferred.`,
+        fields,
+        footer: 'Transaction completed successfully'
+      });
   
       await interaction.editReply({ embeds: [embed] });
   
@@ -1873,22 +2458,36 @@ async function handleFulfill(interaction) {
       }
 
       // Provide user-friendly error message
-      let errorMessage = "❌ An error occurred while fulfilling the barter. Please try again later.";
+      let errorTitle = '❌ Fulfillment Error';
+      let errorDescription = 'An error occurred while fulfilling the barter.';
+      let errorFields = [];
+      
       if (error.message) {
         if (error.message.includes('Insufficient')) {
-          errorMessage = `❌ **${error.message}**\n\nPlease check your balance and try again.`;
+          errorTitle = '❌ Insufficient Balance';
+          errorDescription = error.message;
+          errorFields = [{ name: '💡 Solution', value: 'Please check your balance and try again.', inline: false }];
         } else if (error.message.includes('not available')) {
-          errorMessage = `❌ **${error.message}**\n\nThe item may have been removed or is no longer available.`;
+          errorTitle = '❌ Item Not Available';
+          errorDescription = error.message;
+          errorFields = [{ name: '💡 Note', value: 'The item may have been removed or is no longer available.', inline: false }];
         } else if (error.message.includes('Validation Failed') || error.message.includes('Validation')) {
-          errorMessage = `❌ **${error.message}**`;
+          errorTitle = '❌ Validation Error';
+          errorDescription = error.message;
         } else if (error.message.includes('not available for processing')) {
-          errorMessage = `❌ **This request cannot be processed.**\n\nIt may have already been processed, expired, or been cancelled.`;
+          errorTitle = '❌ Request Cannot Be Processed';
+          errorDescription = 'This request cannot be processed.';
+          errorFields = [{ name: '💡 Possible Reasons', value: 'It may have already been processed, expired, or been cancelled.', inline: false }];
+        } else {
+          errorDescription = error.message;
+          errorFields = [{ name: '💡 Next Steps', value: 'Please try again later. If the problem persists, contact support.', inline: false }];
         }
+      } else {
+        errorFields = [{ name: '💡 Next Steps', value: 'Please try again later. If the problem persists, contact support.', inline: false }];
       }
 
-      await interaction.editReply({
-        content: errorMessage
-      });
+      const embed = createErrorEmbed(errorTitle, errorDescription, errorFields);
+      await interaction.editReply({ embeds: [embed] });
     }
 }
   
@@ -1904,12 +2503,24 @@ async function handlePouchUpgrade(interaction) {
     // ------------------- Character Validation -------------------
     const character = await fetchCharacterByName(characterName);
     if (!character || character.userId !== userId) {
-      return interaction.editReply("❌ Character not found or doesn't belong to you.");
+      const embed = createErrorEmbed(
+        '❌ Character Not Found',
+        'Character not found or doesn\'t belong to you.'
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Job Validation -------------------
     if (character.job?.toLowerCase() !== 'shopkeeper' && character.job?.toLowerCase() !== 'merchant') {
-      return interaction.editReply("❌ Only Shopkeepers and Merchants can upgrade their shop pouches.");
+      const embed = createErrorEmbed(
+        '❌ Invalid Job Type',
+        'Only Shopkeepers and Merchants can upgrade their shop pouches.',
+        [
+          { name: '💼 Current Job', value: character.job || 'None', inline: true },
+          { name: '✅ Required Jobs', value: 'Shopkeeper or Merchant', inline: true }
+        ]
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Shop Setup Validation -------------------
@@ -1931,10 +2542,14 @@ async function handlePouchUpgrade(interaction) {
     if (!character.vendingSetup?.setupDate) {
       console.log('[vendingHandler.js] [handlePouchUpgrade] ❌ Setup validation failed for character:', character.name);
       console.log('[vendingHandler.js] [handlePouchUpgrade] Reason: vendingSetup?.setupDate =', character.vendingSetup?.setupDate);
-      return interaction.editReply(
-        `❌ ${characterName} doesn't have a shop set up yet.\n\n` +
-        `Please set up your shop first using \`/vending setup\` before upgrading your pouch.`
+      const embed = createErrorEmbed(
+        '❌ Shop Setup Required',
+        `${characterName} doesn't have a shop set up yet.`,
+        [
+          { name: '⚙️ Setup Steps', value: 'Please set up your shop first using `/vending setup` before upgrading your pouch.', inline: false }
+        ]
       );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Pouch Upgrade Validation -------------------
@@ -1951,19 +2566,30 @@ async function handlePouchUpgrade(interaction) {
 
     // Check if trying to downgrade or select same tier
     if (newTier <= currentTier) {
-      return interaction.editReply(
-        `❌ Cannot downgrade or select the same pouch tier.\n` +
-        `Current tier: ${currentPouch.toUpperCase()}\n` +
-        `Selected tier: ${newPouchType.toUpperCase()}`
+      const embed = createErrorEmbed(
+        '❌ Invalid Upgrade Path',
+        'Cannot downgrade or select the same pouch tier.',
+        [
+          { name: '📦 Current Tier', value: `${currentPouch.toUpperCase()} (${pouchTiers[currentPouch].slots} slots)`, inline: true },
+          { name: '📦 Selected Tier', value: `${newPouchType.toUpperCase()} (${pouchTiers[newPouchType].slots} slots)`, inline: true }
+        ]
       );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // Check if skipping tiers
     if (newTier - currentTier > 1) {
       const requiredTier = Object.keys(pouchTiers)[currentTier + 1];
-      return interaction.editReply(
-        `❌ You must upgrade to ${requiredTier.toUpperCase()} first before upgrading to ${newPouchType.toUpperCase()}.`
+      const embed = createErrorEmbed(
+        '❌ Cannot Skip Tiers',
+        `You must upgrade to ${requiredTier.toUpperCase()} first before upgrading to ${newPouchType.toUpperCase()}.`,
+        [
+          { name: '📦 Current Tier', value: `${currentPouch.toUpperCase()}`, inline: true },
+          { name: '📦 Required Next', value: `${requiredTier.toUpperCase()}`, inline: true },
+          { name: '📦 Target Tier', value: `${newPouchType.toUpperCase()}`, inline: true }
+        ]
       );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Token Balance Check -------------------
@@ -1971,11 +2597,16 @@ async function handlePouchUpgrade(interaction) {
     const upgradeCost = pouchTiers[newPouchType].cost;
 
     if (userTokens < upgradeCost) {
-      return interaction.editReply(
-        `❌ Not enough tokens for this upgrade.\n` +
-        `Required: ${upgradeCost} tokens\n` +
-        `Your balance: ${userTokens} tokens`
+      const embed = createErrorEmbed(
+        '❌ Insufficient Tokens',
+        'Not enough tokens for this upgrade.',
+        [
+          { name: '💰 Required', value: `${upgradeCost} tokens`, inline: true },
+          { name: '💎 Your Balance', value: `${userTokens} tokens`, inline: true },
+          { name: '📊 Shortage', value: `${upgradeCost - userTokens} tokens`, inline: true }
+        ]
       );
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ------------------- Confirm Upgrade -------------------
@@ -1992,18 +2623,19 @@ async function handlePouchUpgrade(interaction) {
     const row = new ActionRowBuilder()
       .addComponents(confirmButton, cancelButton);
 
-    const confirmEmbed = new EmbedBuilder()
-      .setColor('#FFD700')
-      .setTitle('🛍️ Confirm Pouch Upgrade')
-      .setDescription(`Are you sure you want to upgrade ${characterName}'s shop pouch?`)
-      .addFields(
-        { name: 'Current Pouch', value: `${currentPouch.toUpperCase()} (${pouchTiers[currentPouch].slots} slots)`, inline: true },
-        { name: 'New Pouch', value: `${newPouchType.toUpperCase()} (${pouchTiers[newPouchType].slots} slots)`, inline: true },
-        { name: 'Upgrade Cost', value: `${upgradeCost} tokens`, inline: true },
-        { name: 'Your Balance', value: `${userTokens} tokens`, inline: true },
-        { name: 'Balance After', value: `${userTokens - upgradeCost} tokens`, inline: true }
-      )
-      .setFooter({ text: 'Click Confirm to proceed with the upgrade' });
+    const confirmEmbed = createVendingEmbed('info', {
+      title: '🛍️ Confirm Pouch Upgrade',
+      description: `Are you sure you want to upgrade ${characterName}'s shop pouch?`,
+      color: '#FFD700',
+      fields: [
+        { name: '📦 Current Pouch', value: `${currentPouch.toUpperCase()} (${pouchTiers[currentPouch].slots} slots)`, inline: true },
+        { name: '📦 New Pouch', value: `${newPouchType.toUpperCase()} (${pouchTiers[newPouchType].slots} slots)`, inline: true },
+        { name: '💰 Upgrade Cost', value: `${upgradeCost} tokens`, inline: true },
+        { name: '💎 Your Balance', value: `${userTokens} tokens`, inline: true },
+        { name: '💵 Balance After', value: `${userTokens - upgradeCost} tokens`, inline: true }
+      ],
+      footer: 'Click Confirm to proceed with the upgrade'
+    });
 
     await interaction.editReply({
       embeds: [confirmEmbed],
@@ -2012,7 +2644,14 @@ async function handlePouchUpgrade(interaction) {
 
   } catch (error) {
     console.error('[handlePouchUpgrade]: Error:', error);
-    await interaction.editReply('❌ An error occurred while processing the pouch upgrade.');
+    const embed = createErrorEmbed(
+      '❌ Pouch Upgrade Error',
+      'An error occurred while processing the pouch upgrade.',
+      [
+        { name: '💡 Next Steps', value: 'Please try again. If the problem persists, contact support.', inline: false }
+      ]
+    );
+    await interaction.editReply({ embeds: [embed] });
   }
 }
 
@@ -2025,9 +2664,12 @@ async function handlePouchUpgradeConfirm(interaction) {
     // ------------------- Character Validation -------------------
     const character = await fetchCharacterByName(characterName);
     if (!character || character.userId !== userId) {
+      const embed = createErrorEmbed(
+        '❌ Character Not Found',
+        'Character not found or doesn\'t belong to you.'
+      );
       return interaction.update({
-        content: "❌ Character not found or doesn't belong to you.",
-        embeds: [],
+        embeds: [embed],
         components: []
       });
     }
@@ -2051,9 +2693,15 @@ async function handlePouchUpgradeConfirm(interaction) {
     if (!character.vendingSetup?.setupDate) {
       console.log('[vendingHandler.js] [handlePouchUpgradeConfirm] ❌ Setup validation failed for character:', character.name);
       console.log('[vendingHandler.js] [handlePouchUpgradeConfirm] Reason: vendingSetup?.setupDate =', character.vendingSetup?.setupDate);
+      const embed = createErrorEmbed(
+        '❌ Shop Setup Required',
+        `${characterName} doesn't have a shop set up yet.`,
+        [
+          { name: '⚙️ Setup Steps', value: 'Please set up your shop first using `/vending setup` before upgrading your pouch.', inline: false }
+        ]
+      );
       return interaction.update({
-        content: `❌ ${characterName} doesn't have a shop set up yet. Please set up your shop first using \`/vending setup\` before upgrading your pouch.`,
-        embeds: [],
+        embeds: [embed],
         components: []
       });
     }
@@ -2072,9 +2720,15 @@ async function handlePouchUpgradeConfirm(interaction) {
 
     // Double check upgrade validity
     if (newTier <= currentTier || newTier - currentTier > 1) {
+      const embed = createErrorEmbed(
+        '❌ Invalid Upgrade Path',
+        'Invalid upgrade path. Please try the upgrade command again.',
+        [
+          { name: '💡 Tip', value: 'You can only upgrade one tier at a time.', inline: false }
+        ]
+      );
       return interaction.update({
-        content: "❌ Invalid upgrade path. Please try the upgrade command again.",
-        embeds: [],
+        embeds: [embed],
         components: []
       });
     }
@@ -2084,9 +2738,16 @@ async function handlePouchUpgradeConfirm(interaction) {
     const upgradeCost = pouchTiers[newPouchType].cost;
 
     if (userTokens < upgradeCost) {
+      const embed = createErrorEmbed(
+        '❌ Insufficient Tokens',
+        'Not enough tokens for this upgrade. Your balance has changed since the initial check.',
+        [
+          { name: '💰 Required', value: `${upgradeCost} tokens`, inline: true },
+          { name: '💎 Your Balance', value: `${userTokens} tokens`, inline: true }
+        ]
+      );
       return interaction.update({
-        content: "❌ Not enough tokens for this upgrade. Your balance has changed since the initial check.",
-        embeds: [],
+        embeds: [embed],
         components: []
       });
     }
@@ -2107,16 +2768,20 @@ async function handlePouchUpgradeConfirm(interaction) {
     );
 
     // ------------------- Success Response -------------------
-    const successEmbed = new EmbedBuilder()
-      .setColor('#00FF00')
-      .setTitle('✅ Pouch Upgrade Successful!')
-      .setDescription(`${characterName}'s shop pouch has been upgraded!`)
-      .addFields(
-        { name: 'New Pouch Tier', value: newPouchType.toUpperCase(), inline: true },
-        { name: 'New Slot Capacity', value: `${pouchTiers[newPouchType].slots} slots`, inline: true },
-        { name: 'Tokens Spent', value: `${upgradeCost} tokens`, inline: true },
-        { name: 'Remaining Tokens', value: `${userTokens - upgradeCost} tokens`, inline: true }
-      );
+    const successEmbed = createSuccessEmbed(
+      '✅ Pouch Upgrade Successful!',
+      `${characterName}'s shop pouch has been upgraded!`,
+      [
+        { name: '📦 New Pouch Tier', value: newPouchType.toUpperCase(), inline: true },
+        { name: '📊 New Slot Capacity', value: `${pouchTiers[newPouchType].slots} slots`, inline: true },
+        { name: '💰 Tokens Spent', value: `${upgradeCost} tokens`, inline: true },
+        { name: '💎 Remaining Tokens', value: `${userTokens - upgradeCost} tokens`, inline: true }
+      ]
+    );
+    
+    if (character.icon) {
+      successEmbed.setThumbnail(character.icon);
+    }
 
     await interaction.update({
       embeds: [successEmbed],
@@ -2125,9 +2790,15 @@ async function handlePouchUpgradeConfirm(interaction) {
 
   } catch (error) {
     console.error('[handlePouchUpgradeConfirm]: Error:', error);
+    const embed = createErrorEmbed(
+      '❌ Upgrade Error',
+      'An error occurred while processing the upgrade.',
+      [
+        { name: '💡 Next Steps', value: 'Please try again. If the problem persists, contact support.', inline: false }
+      ]
+    );
     await interaction.update({
-      content: '❌ An error occurred while processing the upgrade. Please try again.',
-      embeds: [],
+      embeds: [embed],
       components: []
     });
   }
@@ -2136,23 +2807,29 @@ async function handlePouchUpgradeConfirm(interaction) {
 // ------------------- handlePouchUpgradeCancel -------------------
 async function handlePouchUpgradeCancel(interaction) {
   try {
+    const embed = createInfoEmbed(
+      'ℹ️ Pouch Upgrade Cancelled',
+      'Pouch upgrade has been cancelled.'
+    );
     await interaction.update({
-      content: '❌ Pouch upgrade cancelled.',
-      embeds: [],
+      embeds: [embed],
       components: []
     });
   } catch (error) {
     console.error('[handlePouchUpgradeCancel]: Error:', error);
+    const errorEmbed = createErrorEmbed(
+      '❌ Cancellation Error',
+      'An error occurred while cancelling the upgrade.'
+    );
     try {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: '❌ An error occurred while cancelling the upgrade.',
+          embeds: [errorEmbed],
           ephemeral: true
         });
       } else {
         await interaction.update({
-          content: '❌ An error occurred while cancelling the upgrade.',
-          embeds: [],
+          embeds: [errorEmbed],
           components: []
         });
       }
@@ -2167,17 +2844,24 @@ async function handleViewShop(interaction) {
   try {
     const characterName = interaction.options.getString('charactername');
     if (!characterName) {
-      return await interaction.reply({
-        content: '❌ Please provide a character name.'
-      });
+      const embed = createErrorEmbed(
+        '❌ Missing Character Name',
+        'Please provide a character name.'
+      );
+      return await interaction.reply({ embeds: [embed] });
     }
 
     // Get character from database
     const character = await Character.findOne({ name: characterName });
     if (!character) {
-      return await interaction.reply({
-        content: `❌ Character ${characterName} not found.`
-      });
+      const embed = createErrorEmbed(
+        '❌ Character Not Found',
+        `Character ${characterName} not found.`,
+        [
+          { name: '🔍 Character Name', value: characterName, inline: true }
+        ]
+      );
+      return await interaction.reply({ embeds: [embed] });
     }
 
     // Get the vending model for this character
@@ -2190,18 +2874,27 @@ async function handleViewShop(interaction) {
     const availableItems = items.filter(item => item.stockQty > 0);
 
     if (!availableItems || availableItems.length === 0) {
-      return await interaction.reply({
-        content: `⚠️ No items currently available in ${characterName}'s vending inventory.`
-      });
+      const embed = createWarningEmbed(
+        '⚠️ No Items Available',
+        `No items currently available in ${characterName}'s vending inventory.`,
+        [
+          { name: '🏪 Shop', value: characterName, inline: true }
+        ]
+      );
+      return await interaction.reply({ embeds: [embed] });
     }
 
     // Create shop embed
-    const shopEmbed = new EmbedBuilder()
-      .setTitle(`${characterName}'s Shop`)
-      .setDescription(`Welcome to ${characterName}'s shop!`)
-      .setColor('#00FF00')
-      .setImage(character.shopImage || VIEW_SHOP_IMAGE_URL)
-      .setTimestamp();
+    const shopImage = character.shopImage || character.vendingSetup?.shopImage || VIEW_SHOP_IMAGE_URL;
+    const shopEmbed = createVendingEmbed('shop', {
+      title: `${characterName}'s Shop`,
+      description: `Welcome to ${characterName}'s shop!`,
+      character: character
+    });
+    
+    // Set shop image (not border) as the main image, border will be added by helper
+    // For shop view, we want the shop image, so we'll override the border
+    shopEmbed.setImage(shopImage);
 
     // Add vending points to embed
     shopEmbed.addFields({
@@ -2226,9 +2919,14 @@ async function handleViewShop(interaction) {
 
   } catch (error) {
     console.error(`[handleViewShop]: Error viewing shop:`, error);
-    await interaction.reply({
-      content: `❌ Error viewing shop: ${error.message}`
-    });
+    const embed = createErrorEmbed(
+      '❌ Shop View Error',
+      'An error occurred while viewing the shop.',
+      [
+        { name: '⚠️ Error Details', value: error.message || 'Unknown error', inline: false }
+      ]
+    );
+    await interaction.reply({ embeds: [embed] });
   }
 }
   
@@ -2249,12 +2947,10 @@ async function handleVendingSetup(interaction) {
         });
         
         // Create embed
-        const embed = new EmbedBuilder()
-            .setTitle('🎪 Vending Shop Setup')
-            .setDescription('Set up and manage your vending shops on the dashboard!')
-            .setColor('#00FF00')
-            .setImage(DEFAULT_IMAGE_URL)
-            .setTimestamp();
+        const embed = createVendingEmbed('shop', {
+            title: '🎪 Vending Shop Setup',
+            description: 'Set up and manage your vending shops on the dashboard!'
+        });
         
         if (vendorCharacters.length === 0) {
             embed.addFields({
@@ -2748,7 +3444,12 @@ async function handleEditShop(interaction) {
 
         await Character.updateOne(
           { name: characterName },
-          { $set: { shopImage: imageUrl } }
+          { 
+            $set: { 
+              shopImage: imageUrl,
+              'vendingSetup.shopImage': imageUrl
+            } 
+          }
         );
 
         await interaction.editReply({
@@ -2875,15 +3576,21 @@ async function viewVendingStock(interaction) {
     }
 
     if (!result || !result.stockList || Object.keys(result.stockList).length === 0) {
-      return interaction.editReply({
-        content: `📭 No vending stock available for **${monthName}**, even after regeneration.`
-      });
+      const embed = createInfoEmbed(
+        '📭 No Vending Stock Available',
+        `No vending stock available for **${monthName}**, even after regeneration.`,
+        [
+          { name: '📅 Month', value: monthName, inline: true }
+        ]
+      );
+      return interaction.editReply({ embeds: [embed] });
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle(`📊 Vending Stock — ${monthName}`)
-      .setDescription(`Click a button below to view vending stock by village or see limited items.`)
-      .setColor('#88cc88');
+    const embed = createVendingEmbed('info', {
+      title: `📊 Vending Stock — ${monthName}`,
+      description: `Click a button below to view vending stock by village or see limited items.`,
+      color: '#88cc88'
+    });
 
     // Styled buttons with emojis
     const villageRow = new ActionRowBuilder().addComponents(
@@ -2921,9 +3628,14 @@ async function viewVendingStock(interaction) {
 
   } catch (err) {
     console.error('[viewVendingStock]: Error loading vending_stock:', err);
-    return interaction.editReply({
-      content: `❌ An error occurred while retrieving vending stock.`
-    });
+    const embed = createErrorEmbed(
+      '❌ Vending Stock Error',
+      'An error occurred while retrieving vending stock.',
+      [
+        { name: '💡 Next Steps', value: 'Please try again later. If the problem persists, contact support.', inline: false }
+      ]
+    );
+    return interaction.editReply({ embeds: [embed] });
   }
 }
 
@@ -2935,9 +3647,15 @@ async function handleVendingViewVillage(interaction, villageKey) {
     const limitedItems = result?.limitedItems || [];
 
     if (!stockList[villageKey] && villageKey !== 'limited') {
+      const embed = createErrorEmbed(
+        '❌ No Stock Found',
+        `No vending stock found for **${villageKey}**.`,
+        [
+          { name: '🏘️ Village', value: villageKey, inline: true }
+        ]
+      );
       return interaction.update({
-        content: `❌ No vending stock found for **${villageKey}**.`,
-        embeds: [],
+        embeds: [embed],
         components: interaction.message.components
       });
     }
@@ -2971,10 +3689,10 @@ async function handleVendingViewVillage(interaction, villageKey) {
       color: '#f4c542'
     };
 
-    const embed = new EmbedBuilder()
-      .setTitle(`${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`)
-      .setColor(settings.color)
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+    const embed = createVendingEmbed('info', {
+      title: `${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
+      color: settings.color
+    });
 
     if (villageKey === 'limited') {
       embed.setDescription(
@@ -3008,9 +3726,15 @@ async function handleVendingViewVillage(interaction, villageKey) {
 
   } catch (err) {
     console.error(`[handleVendingViewVillage]: ${err.message}`);
+    const embed = createErrorEmbed(
+      '❌ Failed to Load Vending Data',
+      'An error occurred while loading vending data.',
+      [
+        { name: '💡 Next Steps', value: 'Please try again later.', inline: false }
+      ]
+    );
     return interaction.update({
-      content: `❌ Failed to load vending data.`,
-      embeds: [],
+      embeds: [embed],
       components: interaction.message.components
     });
   }
@@ -3086,18 +3810,18 @@ function parsePriceInputs(inputs) {
 
 // ------------------- generateFulfillEmbed -------------------
 function generateFulfillEmbed(request) {
-    return new EmbedBuilder()
-      .setTitle(`📦 Barter Request`)
-      .setDescription(`**${request.userCharacterName}** requested \`${request.itemName} x${request.quantity}\``)
-      .addFields(
-        { name: 'Vendor', value: request.vendorCharacterName, inline: true },
-        { name: 'Payment Method', value: request.paymentMethod, inline: true },
-        { name: 'Notes', value: request.notes || '—', inline: false },
-        { name: 'Fulfillment ID', value: request.fulfillmentId, inline: false }
-      )
-      .setColor('#f5a623')
-      .setFooter({ text: `Requested by ${request.buyerUsername}` })
-      .setTimestamp();
+    return createVendingEmbed('barter', {
+      title: '📦 Barter Request',
+      description: `**${request.userCharacterName}** requested \`${request.itemName} x${request.quantity}\``,
+      color: '#f5a623',
+      fields: [
+        { name: '🧾 Vendor', value: request.vendorCharacterName, inline: true },
+        { name: '💱 Payment Method', value: request.paymentMethod, inline: true },
+        { name: '📝 Notes', value: request.notes || '—', inline: false },
+        { name: '🪪 Fulfillment ID', value: request.fulfillmentId, inline: false }
+      ],
+      footer: `Requested by ${request.buyerUsername}`
+    });
 }
 
 // ------------------- handleSyncButton -------------------
