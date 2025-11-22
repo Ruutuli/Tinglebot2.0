@@ -1902,9 +1902,13 @@ async function handleChangeJob(interaction) {
    changedAt: now,
   });
 
-  // ------------------- Reset Vending on Invalid Job -------------------
-  const nonVendor = !["merchant", "shopkeeper"].includes(newJob.toLowerCase());
-  if (nonVendor) {
+  // ------------------- Update Vendor Type on Job Change -------------------
+  const isVendorJob = ["merchant", "shopkeeper"].includes(newJob.toLowerCase());
+  if (isVendorJob) {
+    // Update vendorType to match the new job
+    character.vendorType = newJob.toLowerCase();
+  } else {
+    // ------------------- Reset Vending on Invalid Job -------------------
     console.log('[handleChangeJob] Resetting vending data (non-vendor job)');
     try {
       const vendingUri = process.env.NODE_ENV === 'production' 
@@ -1927,7 +1931,7 @@ async function handleChangeJob(interaction) {
       character.shopLink = null;
       character.shopPouch = null;
       character.pouchSize = 0;
-      character.vendingType = null;
+      character.vendorType = null;
 
       await vendingClient.close();
 

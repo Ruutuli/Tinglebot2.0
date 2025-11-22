@@ -6740,12 +6740,17 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
     // Get items from vending database using VendingInventory model
     let items = [];
     try {
-      const { initializeVendingInventoryModel } = require('../../models/VendingModel');
+      const { initializeVendingInventoryModel } = require('./models/VendingModel');
       const VendingInventory = await initializeVendingInventoryModel(character.name);
       const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
       items = vendingItems;
+      console.log(`[server.js]: ✅ Found ${items.length} vending items for ${character.name}`);
+      if (items.length > 0) {
+        console.log(`[server.js]: Sample item:`, JSON.stringify(items[0], null, 2));
+      }
     } catch (vendingDbError) {
       console.warn('[server.js]: Could not read from vending database:', vendingDbError.message);
+      console.error('[server.js]: Vending DB error stack:', vendingDbError.stack);
     }
 
     // Calculate slot usage - count items, not cumulative slotsUsed
@@ -6781,7 +6786,8 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
         tokenPrice: item.tokenPrice,
         artPrice: item.artPrice,
         otherPrice: item.otherPrice,
-        tradesOpen: item.tradesOpen,
+        tradesOpen: item.tradesOpen || item.barterOpen || false,
+        barterOpen: item.barterOpen !== undefined ? item.barterOpen : (item.tradesOpen || false),
         slot: item.slot,
         slotsUsed: item.slotsUsed,
         date: item.date
@@ -7190,8 +7196,8 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
         tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
         artPrice: artPrice && artPrice.trim() !== '' ? artPrice : null,
         otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : null,
-        tradesOpen: barterOpen || false,
-        barterOpen: barterOpen || false,
+            tradesOpen: barterOpen !== undefined ? barterOpen : false,
+            barterOpen: barterOpen !== undefined ? barterOpen : false,
         slot: slot && slot.trim() !== '' ? slot.trim() : null,
         date: new Date(),
         slotsUsed: slotsUsed,
@@ -7201,6 +7207,7 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
     }
 
     console.log(`[server.js]: ✅ Added ${stockQtyNum}x ${itemName} to ${character.name}'s vending shop and removed from inventory`);
+    console.log(`[server.js]: Barter open value: ${barterOpen}, tradesOpen: ${barterOpen || false}`);
 
     res.json({
       success: true,

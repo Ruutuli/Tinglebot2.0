@@ -15,7 +15,8 @@ const vendingInventorySchema = new Schema({
   tokenPrice: { type: Number, default: 0 }, // Price in tokens
   artPrice: { type: String, default: 'N/A' }, // Price in art
   otherPrice: { type: String, default: 'N/A' }, // Other price type
-  tradesOpen: { type: Boolean, default: false }, // Whether trades are open
+  tradesOpen: { type: Boolean, default: false }, // Whether trades are open (legacy field)
+  barterOpen: { type: Boolean, default: false }, // Whether barter/trades are open
   slot: { type: String }, // Slot number
   date: { type: Date, default: Date.now }, // Date added to inventory
   slotsUsed: { type: Number, default: 1 } // Number of slots this item takes up

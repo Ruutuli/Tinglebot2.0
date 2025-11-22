@@ -662,6 +662,16 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       // ------------------- Update character job and save -------------------
       character.job = updatedJob;
       character.jobPerk = newPerks.join(' / ');
+      
+      // Update vendorType if changing to/from vendor job
+      const isVendorJob = ["merchant", "shopkeeper"].includes(updatedJob.toLowerCase());
+      if (isVendorJob) {
+        character.vendorType = updatedJob.toLowerCase();
+      } else if (character.vendorType) {
+        // Clear vendorType if no longer a vendor
+        character.vendorType = null;
+      }
+      
       await character.save();
   
       const embed = createCharacterEmbed(character);

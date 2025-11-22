@@ -2731,7 +2731,8 @@ async function createVendorCard(character) {
   // Calculate slot info
   const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
   const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
-  const baseSlots = baseSlotLimits[character.vendorType?.toLowerCase()] || 0;
+  const vendorType = character.vendorType?.toLowerCase() || character.job?.toLowerCase();
+  const baseSlots = baseSlotLimits[vendorType] || 0;
   const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
   const totalSlots = baseSlots + extraSlots;
 
@@ -4687,13 +4688,20 @@ async function addVendorItem(characterId, form, modal) {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
 
+    // Get barter open value from select element
+    const barterOpenSelect = form.querySelector('#barter-open') || form.querySelector('select[name="barterOpen"]') || form.barterOpen;
+    const barterOpenValue = barterOpenSelect ? barterOpenSelect.value : 'false';
+    const barterOpenBool = barterOpenValue === 'true';
+    
+    console.log('[profile.js]: Adding vending item with barterOpen:', barterOpenBool, 'from value:', barterOpenValue);
+    
     const formData = {
       itemName: form.itemName.value.trim(),
       stockQty: parseInt(form.stockQty.value),
       tokenPrice: form.tokenPrice.value ? parseFloat(form.tokenPrice.value) : null,
       artPrice: form.artPrice.value.trim() || null,
       otherPrice: form.otherPrice.value.trim() || null,
-      barterOpen: form.barterOpen.value === 'true',
+      barterOpen: barterOpenBool,
       slot: form.slot.value.trim() || null
     };
 
