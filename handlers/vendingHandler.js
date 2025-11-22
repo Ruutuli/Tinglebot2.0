@@ -417,22 +417,22 @@ async function handleCollectPoints(interaction) {
     const currentMonth = estDate.getMonth() + 1;
     const currentYear = estDate.getFullYear();
 
-    // Check if outside collection window (1st-5th)
-    if (currentDay < 1 || currentDay > 5) {
-      const nextWindowStart = new Date(currentYear, currentMonth, 1);
-      if (currentMonth === 12) {
-        nextWindowStart.setFullYear(currentYear + 1);
-        nextWindowStart.setMonth(0);
-      } else {
-        nextWindowStart.setMonth(currentMonth);
-      }
-      const nextWindowEnd = new Date(nextWindowStart);
-      nextWindowEnd.setDate(5);
+    // TEMPORARILY DISABLED FOR TESTING - Check if outside collection window (1st-5th)
+    // if (currentDay < 1 || currentDay > 5) {
+    //   const nextWindowStart = new Date(currentYear, currentMonth, 1);
+    //   if (currentMonth === 12) {
+    //     nextWindowStart.setFullYear(currentYear + 1);
+    //     nextWindowStart.setMonth(0);
+    //   } else {
+    //     nextWindowStart.setMonth(currentMonth);
+    //   }
+    //   const nextWindowEnd = new Date(nextWindowStart);
+    //   nextWindowEnd.setDate(5);
 
-      return interaction.reply({
-        content: `❌ **Outside Collection Window**\n\nVending credit collection is only available from the **1st to the 5th** of each month.\n\n**Current date:** ${estDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n**Next collection window:** ${nextWindowStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${nextWindowEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
-      });
-    }
+    //   return interaction.reply({
+    //     content: `❌ **Outside Collection Window**\n\nVending credit collection is only available from the **1st to the 5th** of each month.\n\n**Current date:** ${estDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n**Next collection window:** ${nextWindowStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${nextWindowEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+    //   });
+    // }
 
     // ------------------- Claim Check -------------------
     const alreadyClaimed = character.lastCollectedMonth === currentMonth;
