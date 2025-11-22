@@ -1776,7 +1776,7 @@ async function handleComponentInteraction(interaction) {
       return await handlePouchUpgradeConfirm(interaction);
     }
 
-    if (interaction.customId.startsWith('cancel_pouch_upgrade_')) {
+    if (interaction.customId === 'cancel_pouch_upgrade' || interaction.customId.startsWith('cancel_pouch_upgrade_')) {
       return await handlePouchUpgradeCancel(interaction);
     }
 
