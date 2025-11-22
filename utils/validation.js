@@ -329,7 +329,8 @@ function validateVendingLocation(vendor, buyer) {
         };
     }
     
-    const vendorJob = vendor.job?.toLowerCase();
+    // Check both job and vendorType (vendorType takes precedence if set, but fall back to job)
+    const vendorJob = (vendor.vendorType?.toLowerCase() || vendor.job?.toLowerCase());
     const vendorCurrentVillage = vendor.currentVillage?.toLowerCase();
     const vendorHomeVillage = vendor.homeVillage?.toLowerCase();
     const buyerCurrentVillage = buyer.currentVillage?.toLowerCase();
