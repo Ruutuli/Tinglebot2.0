@@ -133,33 +133,63 @@ userSchema.statics.getTopUsers = async function(limit = 10) {
 };
 
 // ------------------- Instance methods for leveling -------------------
-userSchema.methods.addXP = async function(amount, source = 'message') {
-  // Initialize leveling object if it doesn't exist
-  if (!this.leveling) {
-    this.leveling = {
-      xp: 0,
-      level: 1,
-      lastMessageTime: null,
-      totalMessages: 0,
-      xpHistory: []
-    };
+userSchema.methods.addXP = async function(amount, source = 'message', updateMessageTime = false) {
+  const maxRetries = 3;
+  let retries = 0;
+  
+  while (retries < maxRetries) {
+    try {
+      // Reload the document if retrying to get the latest version
+      if (retries > 0) {
+        const freshDoc = await this.constructor.findById(this._id);
+        if (freshDoc) {
+          // Update the current document with fresh data
+          this.set(freshDoc.toObject());
+        }
+      }
+      
+      // Initialize leveling object if it doesn't exist
+      if (!this.leveling) {
+        this.leveling = {
+          xp: 0,
+          level: 1,
+          lastMessageTime: null,
+          totalMessages: 0,
+          xpHistory: []
+        };
+      }
+      
+      this.leveling.xp += amount;
+      this.leveling.xpHistory.push({ amount, source, timestamp: new Date() });
+      
+      // Keep only last 50 XP gains for performance
+      if (this.leveling.xpHistory.length > 50) {
+        this.leveling.xpHistory = this.leveling.xpHistory.slice(-50);
+      }
+      
+      // Check for level up
+      const newLevel = this.calculateLevel();
+      const leveledUp = newLevel > this.leveling.level;
+      this.leveling.level = newLevel;
+      
+      // Optionally update message time in the same save operation
+      if (updateMessageTime) {
+        this.leveling.lastMessageTime = new Date();
+        this.leveling.totalMessages++;
+      }
+      
+      await this.save();
+      return { leveledUp, newLevel, oldLevel: this.leveling.level - (leveledUp ? 1 : 0) };
+    } catch (error) {
+      // Retry on version errors (concurrent modification)
+      if (error.name === 'VersionError' && retries < maxRetries - 1) {
+        retries++;
+        continue;
+      }
+      // Re-throw if not a version error or max retries reached
+      throw error;
+    }
   }
-  
-  this.leveling.xp += amount;
-  this.leveling.xpHistory.push({ amount, source, timestamp: new Date() });
-  
-  // Keep only last 50 XP gains for performance
-  if (this.leveling.xpHistory.length > 50) {
-    this.leveling.xpHistory = this.leveling.xpHistory.slice(-50);
-  }
-  
-  // Check for level up
-  const newLevel = this.calculateLevel();
-  const leveledUp = newLevel > this.leveling.level;
-  this.leveling.level = newLevel;
-  
-  await this.save();
-  return { leveledUp, newLevel, oldLevel: this.leveling.level - (leveledUp ? 1 : 0) };
 };
 
 userSchema.methods.calculateLevel = function() {
