@@ -66,6 +66,7 @@ const characterSchema = new Schema({
   shopPouch: { type: String, default: '' },
   pouchSize: { type: Number, default: 0 },
   shopLink: { type: String, default: '' },
+  shopImage: { type: String, default: '' },
   lastCollectedMonth: { type: Number, default: 0 },
   vendingSetup: {
     shopLink: { type: String },

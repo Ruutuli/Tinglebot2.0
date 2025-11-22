@@ -380,22 +380,39 @@
     // ------------------- Dropdown Toggle Functionality -------------------
     // Handles dropdown menu toggles in sidebar navigation
     // ============================================================================
-    document.addEventListener('DOMContentLoaded', () => {
+    function initializeDropdownToggles() {
       const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
       
+      if (dropdownToggles.length === 0) {
+        // Retry if elements aren't ready yet
+        setTimeout(initializeDropdownToggles, 100);
+        return;
+      }
+      
       dropdownToggles.forEach(toggle => {
+        // Use once option to avoid duplicate listeners, or check if already has listener
+        if (toggle.dataset.listenerAttached) {
+          return;
+        }
+        toggle.dataset.listenerAttached = 'true';
+        
         toggle.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
           
           const dropdown = toggle.closest('.nav-dropdown');
+          if (!dropdown) return;
+          
           const isActive = dropdown.classList.contains('active');
           
           // Close all other dropdowns
           document.querySelectorAll('.nav-dropdown').forEach(item => {
             if (item !== dropdown) {
               item.classList.remove('active');
-              item.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'false');
+              const otherToggle = item.querySelector('.nav-dropdown-toggle');
+              if (otherToggle) {
+                otherToggle.setAttribute('aria-expanded', 'false');
+              }
             }
           });
           
@@ -410,15 +427,21 @@
         });
       });
       
-      // Close dropdowns when clicking outside
-      document.addEventListener('click', (e) => {
-        if (!e.target.closest('.nav-dropdown')) {
-          document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
-            dropdown.classList.remove('active');
-            dropdown.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'false');
-          });
-        }
-      });
+      // Close dropdowns when clicking outside (only attach once)
+      if (!document.dropdownOutsideClickHandler) {
+        document.dropdownOutsideClickHandler = (e) => {
+          if (!e.target.closest('.nav-dropdown')) {
+            document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+              dropdown.classList.remove('active');
+              const toggle = dropdown.querySelector('.nav-dropdown-toggle');
+              if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+              }
+            });
+          }
+        };
+        document.addEventListener('click', document.dropdownOutsideClickHandler);
+      }
       
       // Open User Area dropdown on inventories page since that's where Inventories link is
       const inventoriesLink = document.querySelector('#inventories-nav-item');
@@ -432,7 +455,15 @@
           }
         }
       }
-    });
+    }
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeDropdownToggles);
+    } else {
+      // DOM is already ready
+      initializeDropdownToggles();
+    }
   </script>
 </body>
 </html>

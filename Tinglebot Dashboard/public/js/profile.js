@@ -2831,18 +2831,6 @@ async function createVendorCard(character) {
                 " title="Edit item">
                   <i class="fas fa-edit"></i>
                 </button>
-                <button class="delete-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
-                  padding: 0.5rem;
-                  background: var(--error-color);
-                  color: white;
-                  border: none;
-                  border-radius: 0.25rem;
-                  cursor: pointer;
-                  font-size: 0.9rem;
-                  transition: background 0.2s;
-                " title="Delete item">
-                  <i class="fas fa-trash"></i>
-                </button>
               </div>
             </div>
           `).join('') : 
@@ -2940,17 +2928,6 @@ async function createVendorCard(character) {
       const item = inventoryData.items.find(i => i._id === itemId);
       if (item) {
         await showEditVendorItemModal(character, item);
-      }
-    });
-  });
-
-  const deleteButtons = card.querySelectorAll('.delete-vendor-item-btn');
-  deleteButtons.forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const characterId = btn.dataset.characterId;
-      const itemId = btn.dataset.itemId;
-      if (confirm('Are you sure you want to delete this item from your vending inventory?')) {
-        await deleteVendorItem(characterId, itemId);
       }
     });
   });
