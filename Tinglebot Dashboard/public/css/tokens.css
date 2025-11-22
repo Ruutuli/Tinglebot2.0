@@ -1,0 +1,343 @@
+/* ============================================================================
+   Layout: Tokens Section
+============================================================================ */
+
+.tokens-management-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.tokens-header-info {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.tokens-header-info h2 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-color);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.tokens-header-info p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.tokens-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.token-summary-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  padding: 1.5rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.token-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================================================
+   Tokens Transactions List
+============================================================================ */
+
+.tokens-transactions-container {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  padding: 1.5rem;
+}
+
+.tokens-transactions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.tokens-transactions-header h3 {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.tokens-filters {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tokens-filter-btn {
+  padding: 0.5rem 1rem;
+  background: var(--secondary-color);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.tokens-filter-btn:hover:not(.active) {
+  background: var(--secondary-hover);
+  transform: translateY(-1px);
+}
+
+.tokens-filter-btn.active {
+  background: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(0, 163, 218, 0.3);
+}
+
+.tokens-transactions-list {
+  min-height: 200px;
+}
+
+.token-transaction-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.token-transaction-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--border-color);
+  transition: width 0.2s ease;
+}
+
+.token-transaction-item.type-earned::before {
+  background: #10b981;
+}
+
+.token-transaction-item.type-spent::before {
+  background: #ef4444;
+}
+
+.token-transaction-item:hover {
+  background: var(--hover-bg);
+  border-color: var(--primary-color);
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.token-transaction-item:hover::before {
+  width: 5px;
+}
+
+.token-transaction-content {
+  flex: 1;
+  padding-left: 1rem;
+}
+
+.token-transaction-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.token-transaction-type-badge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.token-transaction-type-badge.earned {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.token-transaction-type-badge.spent {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.token-transaction-category {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: 0.25rem;
+}
+
+.token-transaction-description {
+  margin: 0;
+  color: var(--text-color);
+  font-weight: 500;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 0.25rem;
+}
+
+.token-transaction-date {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.token-transaction-amount {
+  text-align: right;
+  padding-left: 1rem;
+}
+
+.token-transaction-amount-value {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.token-transaction-amount-value.earned {
+  color: #10b981;
+}
+
+.token-transaction-amount-value.spent {
+  color: #ef4444;
+}
+
+.token-transaction-balance {
+  margin: 0.25rem 0 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.token-transaction-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: color 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.token-transaction-link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
+.tokens-transactions-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--text-secondary);
+}
+
+/* ============================================================================
+   Tokens Pagination
+============================================================================ */
+
+.tokens-pagination {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.tokens-pagination .pagination {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tokens-pagination .pagination-button {
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.tokens-pagination .pagination-button.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+  font-weight: 600;
+}
+
+.tokens-pagination .pagination-ellipsis {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ============================================================================
+   Mobile Responsive
+============================================================================ */
+
+@media (max-width: 768px) {
+  .tokens-transactions-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .tokens-filters {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .token-transaction-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .token-transaction-amount {
+    text-align: left;
+    padding-left: 0;
+    width: 100%;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .token-transaction-content {
+    padding-left: 0;
+  }
+}
+

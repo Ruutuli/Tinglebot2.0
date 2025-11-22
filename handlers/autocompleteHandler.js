@@ -66,6 +66,7 @@ const Quest = require("../models/QuestModel");
 const ShopStock = require("../models/VillageShopsModel");
 const TableRoll = require("../models/TableRollModel");
 const TempData = require("../models/TempDataModel");
+const { VendingRequest } = require("../models/VendingModel");
 const { Village } = require("../models/VillageModel");
 const generalCategories = require("../models/GeneralItemCategories");
 
@@ -520,28 +521,18 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
           // ------------------- Vending Command -------------------
           case "vending":
             const vendingSubcommand = interaction.options.getSubcommand(false);
+            
+            // Handle charactername autocomplete for all subcommands
             if (focusedOption.name === "charactername") {
               if (vendingSubcommand === "barter") {
+                // For barter, show user's own characters
                 await handleVendingBarterAutocomplete(interaction, focusedOption);
               } else if (vendingSubcommand === "view") {
+                // For view, show all vendor characters with shops
                 await handleVendingViewAutocomplete(interaction, focusedOption);
-              } else if (vendingSubcommand === "collect_points") {
-                const userId = interaction.user.id;
-                const characters = await fetchCharactersByUserId(userId);
-                
-                // Filter for characters with vending jobs
-                const vendorCharacters = characters.filter(char => {
-                  const job = char.job?.toLowerCase();
-                  return job === 'shopkeeper' || job === 'merchant';
-                });
-                
-                const choices = vendorCharacters.map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
-                
-                await respondWithFilteredChoices(interaction, focusedOption, choices);
-              } else if (vendingSubcommand === "add") {
+              } else if (vendingSubcommand === "collect_points" || vendingSubcommand === "restock" || 
+                         vendingSubcommand === "pouch" || vendingSubcommand === "edit") {
+                // For these commands, show user's own vendor characters
                 const userId = interaction.user.id;
                 const characters = await fetchCharactersByUserId(userId);
                 
@@ -558,18 +549,28 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
               }
-            } else if (focusedOption.name === "itemname" && vendingSubcommand === "add") {
-              await handleVendorItemAutocomplete(interaction, focusedOption);
-            } else if (focusedOption.name === "slot" && vendingSubcommand === "add") {
+            } 
+            // Handle itemname autocomplete
+            else if (focusedOption.name === "itemname") {
+              if (vendingSubcommand === "restock") {
+                await handleVendorItemAutocomplete(interaction, focusedOption);
+              } else if (vendingSubcommand === "barter") {
+                await handleVendingBarterAutocomplete(interaction, focusedOption);
+              } else if (vendingSubcommand === "edit") {
+                await handleVendingBarterAutocomplete(interaction, focusedOption);
+              }
+            }
+            // Handle slot autocomplete
+            else if (focusedOption.name === "slot" && vendingSubcommand === "restock") {
               await handleSlotAutocomplete(interaction, focusedOption);
-            } else if (focusedOption.name === "vendorcharacter" && vendingSubcommand === "barter") {
+            }
+            // Handle vendorcharacter autocomplete
+            else if (focusedOption.name === "vendorcharacter" && vendingSubcommand === "barter") {
               await handleVendingBarterAutocomplete(interaction, focusedOption);
-            } else if (focusedOption.name === "itemname" && vendingSubcommand === "barter") {
-              await handleVendingBarterAutocomplete(interaction, focusedOption);
-            } else if (focusedOption.name === "itemname" && vendingSubcommand === "add") {
-              await handleVendorItemAutocomplete(interaction, focusedOption);
-            } else if (focusedOption.name === "slot" && vendingSubcommand === "add") {
-              await handleSlotAutocomplete(interaction, focusedOption);
+            }
+            // Handle fulfillmentid autocomplete
+            else if (focusedOption.name === "fulfillmentid" && vendingSubcommand === "accept") {
+              await handleVendingAcceptFulfillmentIdAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -4721,8 +4722,6 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) return await interaction.respond([]);
 
-    const totalSlots = calculateAvailableSlots(character);
-
     // Get used slots with their items
     if (!dbConfig.vending) {
       return await interaction.respond([]);
@@ -4734,7 +4733,7 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
     const items = await vendCollection.find({}).toArray();
     await vendingClient.close();
 
-    // Create a map of slot => item info
+    // Create a map of slot => item info (only slots with items)
     const slotMap = new Map();
     for (const item of items) {
       if (!item.slot) continue;
@@ -4760,38 +4759,82 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
       }
     }
 
-    // Generate slot options
+    // Generate slot options - only show slots that have items
     const slotChoices = [];
-    for (let i = 1; i <= totalSlots; i++) {
-      const slotName = `Slot ${i}`;
-      const slotInfo = slotMap.get(slotName);
-      
-      if (slotInfo) {
-        let fullness;
-        if (slotInfo.qty === null) {
-          fullness = `🚫 Conflict`;
-        } else if (slotInfo.stackable) {
-          fullness = `${Math.min(slotInfo.qty, slotInfo.maxStackSize)}/${slotInfo.maxStackSize}`;
+    for (const [slotName, slotInfo] of slotMap.entries()) {
+      let fullness;
+      if (slotInfo.qty === null) {
+        fullness = `🚫 Conflict`;
+      } else if (slotInfo.stackable) {
+        fullness = `${Math.min(slotInfo.qty, slotInfo.maxStackSize)}/${slotInfo.maxStackSize}`;
       } else {
-          fullness = `${slotInfo.qty}/1`;
-        }
-        slotChoices.push({
-          name: `${slotName} – ${slotInfo.itemName} – ${fullness}`,
-          value: slotName
-        });
-      } else {
-        slotChoices.push({
-          name: `${slotName} – (Empty)`,
-          value: slotName
-        });
+        fullness = `${slotInfo.qty}/1`;
       }
+      slotChoices.push({
+        name: `${slotName} – ${slotInfo.itemName} – ${fullness}`,
+        value: slotName
+      });
     }
+    
+    // Sort slots by slot number for better UX
+    slotChoices.sort((a, b) => {
+      const aNum = parseInt(a.value.match(/\d+/)?.[0] || '0', 10);
+      const bNum = parseInt(b.value.match(/\d+/)?.[0] || '0', 10);
+      return aNum - bNum;
+    });
 
-    // Filter based on user input
-    const searchQuery = focusedOption.value.toLowerCase();
-    const filteredSlots = slotChoices
-      .filter(slot => slot.name.toLowerCase().includes(searchQuery))
-      .slice(0, 25);
+    // Enhanced filtering with search functionality for Discord's 25 choice limit
+    const searchQuery = (focusedOption.value || '').toLowerCase().trim();
+    
+    let filteredSlots;
+    if (!searchQuery) {
+      // If no search query, show first 25 slots
+      filteredSlots = slotChoices.slice(0, 25);
+    } else {
+      // Filter slots based on search query
+      // Users can search by: slot number (e.g., "4", "slot 4"), item name, or any part of the display
+      filteredSlots = slotChoices
+        .map(slot => {
+          // Extract slot number and item name for better matching
+          const slotNum = slot.value.match(/\d+/)?.[0] || '';
+          const itemName = slot.name.split('–')[1]?.trim() || '';
+          
+          // Calculate match score for prioritization
+          let score = 0;
+          const lowerName = slot.name.toLowerCase();
+          
+          // Exact slot number match gets highest priority
+          if (slotNum === searchQuery || `slot ${slotNum}` === searchQuery) {
+            score = 1000;
+          }
+          // Slot number starts with query
+          else if (slotNum.startsWith(searchQuery)) {
+            score = 500;
+          }
+          // Item name starts with query
+          else if (itemName.toLowerCase().startsWith(searchQuery)) {
+            score = 300;
+          }
+          // Slot number contains query
+          else if (slotNum.includes(searchQuery)) {
+            score = 200;
+          }
+          // Item name contains query
+          else if (itemName.toLowerCase().includes(searchQuery)) {
+            score = 100;
+          }
+          // Any part of the name contains query
+          else if (lowerName.includes(searchQuery)) {
+            score = 50;
+          }
+          
+          return { slot, score };
+        })
+        .filter(item => item.score > 0) // Only include matches
+        .sort((a, b) => b.score - a.score) // Sort by match score (best matches first)
+        .map(item => item.slot) // Extract just the slot choices
+        .slice(0, 25); // Limit to Discord's 25 choice limit
+    }
 
     await interaction.respond(filteredSlots);
   } catch (error) {
@@ -4985,6 +5028,62 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
   } catch (error) {
     console.error("[handleVendingViewAutocomplete]: Error:", error);
     await interaction.respond([]);
+  }
+}
+
+// ------------------- Function: handleVendingAcceptFulfillmentIdAutocomplete -------------------
+// Provides autocomplete suggestions for fulfillment IDs when accepting vending requests
+async function handleVendingAcceptFulfillmentIdAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    
+    // Get all characters owned by the user (these are potential vendors)
+    const userCharacters = await fetchCharactersByUserId(userId);
+    const vendorCharacterNames = userCharacters.map(char => char.name);
+    
+    if (vendorCharacterNames.length === 0) {
+      await interaction.respond([]);
+      return;
+    }
+    
+    // Find all pending vending requests where the vendor is one of the user's characters
+    const pendingRequests = await VendingRequest.find({
+      vendorCharacterName: { $in: vendorCharacterNames }
+    }).sort({ date: -1 }).limit(50); // Get most recent 50 requests
+    
+    // Filter and format requests based on search query
+    const choices = pendingRequests
+      .filter(request => {
+        // Match against fulfillment ID, item name, buyer name, or buyer username
+        const fulfillmentIdMatch = request.fulfillmentId?.toLowerCase().includes(searchQuery);
+        const itemNameMatch = request.itemName?.toLowerCase().includes(searchQuery);
+        const buyerNameMatch = request.userCharacterName?.toLowerCase().includes(searchQuery);
+        const buyerUsernameMatch = request.buyerUsername?.toLowerCase().includes(searchQuery);
+        
+        return fulfillmentIdMatch || itemNameMatch || buyerNameMatch || buyerUsernameMatch;
+      })
+      .map(request => {
+        // Format: "FulfillmentID | Item xQty | Buyer | Payment"
+        const paymentEmoji = request.paymentMethod === 'tokens' ? '💰' : 
+                            request.paymentMethod === 'art' ? '🎨' : '🔄';
+        const paymentDisplay = request.paymentMethod === 'tokens' ? 'Tokens' : 
+                              request.paymentMethod === 'art' ? 'Art' : 'Barter';
+        
+        return {
+          name: `${request.fulfillmentId} | ${request.itemName} ×${request.quantity} | ${request.userCharacterName} | ${paymentEmoji} ${paymentDisplay}`,
+          value: request.fulfillmentId
+        };
+      });
+    
+    await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+    console.error("[handleVendingAcceptFulfillmentIdAutocomplete]: Error:", error);
+    try {
+      await interaction.respond([]);
+    } catch (e) {
+      // Ignore errors if interaction already expired
+    }
   }
 }
 

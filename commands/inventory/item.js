@@ -116,8 +116,19 @@ module.exports = {
         return;
       }
 
-      // Clean the itemName to remove quantity suffix if present (e.g., "Job Voucher - Qty: 2" -> "Job Voucher")
-      const cleanItemName = itemName.replace(/\s*-\s*Qty:\s*\d+\s*$/i, '').trim();
+      // Clean the itemName to remove emoji prefixes and quantity suffixes
+      // Handles formats like:
+      // - "📦 Fairy - Qty: 1" -> "Fairy"
+      // - "Fairy (Qty: 1)" -> "Fairy"
+      // - "Job Voucher - Qty: 2" -> "Job Voucher"
+      let cleanItemName = itemName
+        // Remove emoji prefixes (📦, 🔨, 🔮, etc.) - common emojis used in autocomplete
+        .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '')
+        // Remove quantity in parentheses format: "(Qty: 1)" or "(Qty:1)"
+        .replace(/\s*\(Qty:\s*\d+\s*\)/gi, '')
+        // Remove quantity in dash format: " - Qty: 1" or "- Qty:1"
+        .replace(/\s*-\s*Qty:\s*\d+\s*$/i, '')
+        .trim();
       
       const item = await fetchItemByName(cleanItemName, {
         commandName: interaction.commandName,

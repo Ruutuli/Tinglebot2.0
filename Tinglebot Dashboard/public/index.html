@@ -76,6 +76,7 @@
   <link rel="stylesheet" href="css/levels.css" />
   <link rel="stylesheet" href="css/map.css" />
   <link rel="stylesheet" href="css/gallery.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
   
   <!-- External Scripts with Integrity -->
   <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
@@ -178,50 +179,57 @@
           <li class="active">
             <a href="#dashboard" data-section="dashboard-section"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
           </li>
-          <li>
-            <a href="#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Discord</span></a>
+          
+          <!-- Community Dropdown -->
+          <li class="nav-dropdown">
+            <a href="javascript:void(0)" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-users"></i><span>Community</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Discord</span></a></li>
+              <li><a href="#gallery-section" data-section="gallery-section"><i class="fas fa-images"></i><span>Gallery</span></a></li>
+              <li><a href="#member-lore-section" data-section="member-lore-section"><i class="fas fa-scroll"></i><span>Member Lore</span></a></li>
+              <li><a href="#relationships-section" data-section="relationships-section"><i class="fas fa-heart"></i><span>Relationships</span></a></li>
+              <li><a href="#suggestion-box-section" data-section="suggestion-box-section"><i class="fas fa-lightbulb"></i><span>Suggestion Box</span></a></li>
+              <li><a href="#users" data-section="users-section"><i class="fas fa-users"></i><span>Users</span></a></li>
+            </ul>
           </li>
-          <li>
-            <a href="#users" data-section="users-section"><i class="fas fa-users"></i><span>Users</span></a>
+          
+          <!-- Game Features Dropdown -->
+          <li class="nav-dropdown">
+            <a href="javascript:void(0)" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-gamepad"></i><span>Game Features</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="#calendar" data-section="calendar-section"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a></li>
+              <li><a href="#levels" data-section="levels-section"><i class="fas fa-level-up-alt"></i><span>Levels</span></a></li>
+              <li><a href="/map"><i class="fas fa-map"></i><span>Map</span></a></li>
+            </ul>
           </li>
-          <li>
-            <a href="#levels" data-section="levels-section"><i class="fas fa-level-up-alt"></i><span>Levels</span></a>
+          
+          <!-- User Area Dropdown -->
+          <li class="nav-dropdown">
+            <a href="javascript:void(0)" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-user-circle"></i><span>User Area</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li id="inventories-nav-item" style="display: none;"><a href="/inventories"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
+              <li><a href="#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a></li>
+              <li><a href="#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+              <li><a href="#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a></li>
+              <li><a href="#tokens-section" data-section="tokens-section"><i class="fas fa-coins"></i><span>Tokens</span></a></li>
+              <li><a href="#vending-section" data-section="vending-section"><i class="fas fa-store"></i><span>Vending</span></a></li>
+            </ul>
           </li>
-          <li>
-            <a href="#calendar" data-section="calendar-section"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a>
-          </li>
-          <li>
-            <a href="#suggestion-box-section" data-section="suggestion-box-section"><i class="fas fa-lightbulb"></i><span>Suggestion Box</span></a>
-          </li>
-          <li>
-            <a href="#member-lore-section" data-section="member-lore-section"><i class="fas fa-scroll"></i><span>Member Lore</span></a>
-          </li>
-          <li>
-            <a href="#gallery-section" data-section="gallery-section"><i class="fas fa-images"></i><span>Gallery</span></a>
-          </li>
-          <li>
-            <a href="#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a>
-          </li>
-          <li>
-            <a href="#relationships-section" data-section="relationships-section"><i class="fas fa-heart"></i><span>Relationships</span></a>
-          </li>
-          <li>
-            <a href="/map"><i class="fas fa-map"></i><span>Map</span></a>
-          </li>
-          <li id="inventories-nav-item" style="display: none;">
-            <a href="/inventories.html"><i class="fas fa-boxes"></i><span>Inventories</span></a>
-          </li>
-          <li>
-            <a href="#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a>
-          </li>
-          <li>
-            <a href="#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a>
-          </li>
-          <li>
-            <a href="#vending-section" data-section="vending-section"><i class="fas fa-store"></i><span>Vending</span></a>
-          </li>
-          <li id="admin-area-nav-item" style="display: none;">
-            <a href="#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a>
+          
+          <!-- Admin Area (Conditional) -->
+          <li id="admin-area-nav-item" class="nav-dropdown" style="display: none;">
+            <a href="javascript:void(0)" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-shield-alt"></i><span>Admin Area</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a></li>
+            </ul>
           </li>
         </ul>
       </nav>
@@ -862,6 +870,50 @@
             <div class="vending-shops-loading" id="vending-shops-loading">
               <div class="loading-spinner"></div>
               <p>Loading your vending shops...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tokens Section -->
+      <section id="tokens-section" style="display:none;">
+        <div class="dashboard-header">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <h1><i class="fas fa-coins"></i> Token Tracking</h1>
+          </div>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div class="tokens-management-container">
+          <div class="tokens-header-info">
+            <h2>Token Transaction History</h2>
+            <p>
+              Track all your token transactions, including earned and spent tokens. View detailed history, statistics, and transaction details.
+            </p>
+          </div>
+          
+          <!-- Token Summary Cards -->
+          <div class="tokens-summary-grid" id="tokens-summary-grid">
+            <!-- Will be populated by JavaScript -->
+          </div>
+          
+          <!-- Token Transactions -->
+          <div class="tokens-transactions-container">
+            <div class="tokens-transactions-header">
+              <h3>Recent Transactions</h3>
+              <div class="tokens-filters">
+                <button class="tokens-filter-btn active" id="filter-all">All</button>
+                <button class="tokens-filter-btn" id="filter-earned">Earned</button>
+                <button class="tokens-filter-btn" id="filter-spent">Spent</button>
+              </div>
+            </div>
+            <div class="tokens-transactions-list" id="tokens-transactions-list">
+              <div class="tokens-transactions-loading" id="tokens-transactions-loading">
+                <div class="loading-spinner"></div>
+                <p>Loading token transactions...</p>
+              </div>
+            </div>
+            <div class="tokens-pagination" id="tokens-pagination" style="display: none; margin-top: 1.5rem; text-align: center;">
+              <!-- Pagination will be added here -->
             </div>
           </div>
         </div>
@@ -2766,6 +2818,7 @@
   <script type="module" src="js/weather.js"></script>
   <script type="module" src="js/weatherStats.js"></script>
   <script type="module" src="js/guilds.js"></script>
+  <script type="module" src="js/tokens.js"></script>
   <script type="module" src="js/calendar.js"></script>
   <script type="module" src="js/index.js?v=20251114"></script>
   <script src="js/databaseEditor.js"></script>
