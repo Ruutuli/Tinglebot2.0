@@ -11367,6 +11367,17 @@ app.put('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Model not found' });
     }
     
+    // Log what we're updating
+    console.log(`[server.js]: 📝 Admin ${req.user.username} updating ${modelName} record:`, id);
+    console.log(`[server.js]: 📝 Update payload:`, JSON.stringify(req.body, null, 2));
+    
+    // Find the record first
+    const record = await Model.findById(id);
+    
+    if (!record) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
     // For Character model, handle currentVillage specially to prevent default function from overriding
     if (modelName === 'Character' && req.body.currentVillage !== undefined) {
       // If currentVillage is explicitly provided (even if empty string), ensure it's saved
@@ -11376,24 +11387,27 @@ app.put('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
       }
     }
     
-    const record = await Model.findByIdAndUpdate(
-      id,
-      req.body,
-      { new: true, runValidators: true, overwrite: false }
-    );
+    // Update all provided fields
+    Object.keys(req.body).forEach(key => {
+      if (key !== '_id' && key !== '__v') {
+        record.set(key, req.body[key]);
+      }
+    });
     
-    if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
-    }
+    // Explicitly save the record to ensure it's persisted
+    await record.save();
     
-    console.log(`[server.js]: ✅ Admin ${req.user.username} updated ${modelName} record:`, id);
+    console.log(`[server.js]: ✅ Successfully updated ${modelName} record:`, id);
     if (modelName === 'Character' && req.body.currentVillage !== undefined) {
       console.log(`[server.js]: Updated currentVillage to:`, record.currentVillage);
     }
     
+    // Return the updated record
+    const updatedRecord = await Model.findById(id).lean();
+    
     res.json({ 
       success: true,
-      record: record.toObject() 
+      record: updatedRecord 
     });
   } catch (error) {
     console.error('[server.js]: ❌ Error updating record:', error);

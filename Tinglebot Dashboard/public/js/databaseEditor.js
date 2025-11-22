@@ -5523,6 +5523,13 @@ async function handleSaveRecord() {
     
     const method = editingRecordId ? 'PUT' : 'POST';
     
+    console.log(`[databaseEditor.js]: 💾 Saving ${currentModel} record:`, {
+      method,
+      url,
+      recordId: editingRecordId,
+      data: recordData
+    });
+    
     const response = await fetchAPI(url, {
       method: method,
       body: JSON.stringify(recordData)
@@ -5530,8 +5537,12 @@ async function handleSaveRecord() {
     
     if (!response.ok) {
       const error = await response.json();
+      console.error('[databaseEditor.js]: ❌ Save failed:', error);
       throw new Error(error.details || error.error || 'Failed to save record');
     }
+    
+    const result = await response.json();
+    console.log(`[databaseEditor.js]: ✅ Successfully saved ${currentModel} record:`, result);
     
     showNotification('Record saved successfully', 'success');
     dbEditorCloseModal();
