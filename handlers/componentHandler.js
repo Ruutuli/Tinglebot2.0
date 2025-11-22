@@ -58,7 +58,7 @@ const {
 
 const { handleModalSubmission } = require('./modalHandler');
 const { syncInventory } = require('../handlers/syncHandler');
-const { handleVendingViewVillage, handleSyncButton } = require('./vendingHandler');
+const { handleVendingViewVillage, handleSyncButton, handlePouchUpgradeConfirm, handlePouchUpgradeCancel } = require('./vendingHandler');
 
 // ------------------- Utility Functions -------------------
 const { 
@@ -1769,6 +1769,15 @@ async function handleComponentInteraction(interaction) {
 
     if (interaction.customId.startsWith('vending_sync_')) {
       return await handleSyncButton(interaction);
+    }
+
+    // Handle pouch upgrade buttons
+    if (interaction.customId.startsWith('confirm_pouch_upgrade_')) {
+      return await handlePouchUpgradeConfirm(interaction);
+    }
+
+    if (interaction.customId.startsWith('cancel_pouch_upgrade_')) {
+      return await handlePouchUpgradeCancel(interaction);
     }
 
   } catch (error) {

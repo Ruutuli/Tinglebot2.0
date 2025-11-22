@@ -86,7 +86,8 @@ const vendingRequestSchema = new Schema({
   originalTokenPrice: { type: Number },
   originalSellPrice: { type: Number }, // For vendor self-purchases
   isVendorSelfPurchase: { type: Boolean, default: false },
-  offeredItem: { type: String } // For barter payments
+  offeredItem: { type: String }, // For barter payments
+  artLink: { type: String } // Discord message link for art payments
 });
 
 // ------------------- Create and export the VendingRequest model -------------------
