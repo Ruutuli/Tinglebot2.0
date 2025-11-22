@@ -1812,6 +1812,14 @@ async function handlePouchUpgrade(interaction) {
       return interaction.editReply("❌ Only Shopkeepers and Merchants can upgrade their shop pouches.");
     }
 
+    // ------------------- Shop Setup Validation -------------------
+    if (!character.vendingSetup?.shopLink && !character.shopLink) {
+      return interaction.editReply(
+        `❌ ${characterName} doesn't have a shop set up yet.\n\n` +
+        `Please set up your shop first using \`/vending setup\` before upgrading your pouch.`
+      );
+    }
+
     // ------------------- Pouch Upgrade Validation -------------------
     const pouchTiers = {
       none: { slots: 0, cost: 0 },
@@ -1907,6 +1915,15 @@ async function handlePouchUpgradeConfirm(interaction) {
       });
     }
 
+    // ------------------- Shop Setup Validation -------------------
+    if (!character.vendingSetup?.shopLink && !character.shopLink) {
+      return interaction.update({
+        content: `❌ ${characterName} doesn't have a shop set up yet. Please set up your shop first using \`/vending setup\` before upgrading your pouch.`,
+        embeds: [],
+        components: []
+      });
+    }
+
     // ------------------- Pouch Upgrade Validation -------------------
     const pouchTiers = {
       none: { slots: 0, cost: 0 },
@@ -1979,6 +1996,35 @@ async function handlePouchUpgradeConfirm(interaction) {
       embeds: [],
       components: []
     });
+  }
+}
+
+// ------------------- handlePouchUpgradeCancel -------------------
+async function handlePouchUpgradeCancel(interaction) {
+  try {
+    await interaction.update({
+      content: '❌ Pouch upgrade cancelled.',
+      embeds: [],
+      components: []
+    });
+  } catch (error) {
+    console.error('[handlePouchUpgradeCancel]: Error:', error);
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ An error occurred while cancelling the upgrade.',
+          ephemeral: true
+        });
+      } else {
+        await interaction.update({
+          content: '❌ An error occurred while cancelling the upgrade.',
+          embeds: [],
+          components: []
+        });
+      }
+    } catch (replyError) {
+      console.error('[handlePouchUpgradeCancel]: Failed to send cancel response:', replyError);
+    }
   }
 }
 
@@ -2999,6 +3045,8 @@ module.exports = {
     handleEditShop,
     handleVendingSync,
     handlePouchUpgrade,
+    handlePouchUpgradeConfirm,
+    handlePouchUpgradeCancel,
     handleVendingSetup,
     handleViewShop,
     handleShopLink,
