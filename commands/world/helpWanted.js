@@ -1048,40 +1048,39 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   let entertainerDamageReduction = 0;
   let entertainerBoostUnused = false;
   if (character.boostedBy && outcome.hearts && outcome.hearts > 0) {
-    const { fetchCharacterByName } = require('../../database/db');
     const { recoverHearts } = require('../../modules/characterStatsModule');
     const { applyLootingDamageBoost } = require('../../modules/boostIntegration');
-    const boosterChar = await fetchCharacterByName(character.boostedBy);
     
-    if (boosterChar && boosterChar.job?.toLowerCase() === 'entertainer') {
-      const originalHeartDamage = outcome.hearts;
-      const monsterTier = monster.tier || 1;
-      const reducedDamage = await applyLootingDamageBoost(character.name, outcome.hearts, monsterTier);
-      entertainerDamageReduction = originalHeartDamage - reducedDamage;
+    const originalHeartDamage = outcome.hearts;
+    const monsterTier = monster.tier || 1;
+    const reducedDamage = await applyLootingDamageBoost(character.name, outcome.hearts, monsterTier);
+    entertainerDamageReduction = originalHeartDamage - reducedDamage;
+    
+    if (entertainerDamageReduction > 0) {
+      const logger = require('../../utils/logger');
+      logger.info('BOOST', `🎭 Boost applied (Tier ${monsterTier}) reduces HWQ damage from ${originalHeartDamage} to ${reducedDamage} (-${entertainerDamageReduction})`);
       
-      if (entertainerDamageReduction > 0) {
-        const logger = require('../../utils/logger');
-        logger.info('BOOST', `🎭 Entertainer boost (Tier ${monsterTier}) reduces HWQ damage from ${originalHeartDamage} to ${reducedDamage} (-${entertainerDamageReduction})`);
-        
-        // Hearts were already removed by getEncounterOutcome - restore them and reapply correct amount
-        await recoverHearts(character._id, originalHeartDamage);
-        logger.info('BOOST', `🔄 Restored ${originalHeartDamage} hearts to reapply with boost`);
-        
-        // Apply the boosted (reduced) damage
-        if (reducedDamage > 0) {
-          const { useHearts } = require('../../modules/characterStatsModule');
-          await useHearts(character._id, reducedDamage);
-          logger.info('BOOST', `💔 Applied boosted damage: ${reducedDamage} hearts`);
-        }
-        
-        // Update outcome to reflect the reduced damage
-        outcome.hearts = reducedDamage;
-        if (reducedDamage === 0) {
-          outcome.result = 'Win!/Loot';
-        } else if (outcome.result && typeof outcome.result === 'string' && outcome.result.includes('HEART(S)')) {
-          outcome.result = outcome.result.replace(/(\d+)\s*HEART\(S\)/i, `${reducedDamage} HEART(S)`);
-        }
+      // Hearts were already removed by getEncounterOutcome - restore them and reapply correct amount
+      await recoverHearts(character._id, originalHeartDamage);
+      logger.info('BOOST', `🔄 Restored ${originalHeartDamage} hearts to reapply with boost`);
+      
+      // Apply the boosted (reduced) damage
+      if (reducedDamage > 0) {
+        const { useHearts } = require('../../modules/characterStatsModule');
+        await useHearts(character._id, reducedDamage);
+        logger.info('BOOST', `💔 Applied boosted damage: ${reducedDamage} hearts`);
       }
+      
+      // Update outcome to reflect the reduced damage
+      outcome.hearts = reducedDamage;
+      if (reducedDamage === 0) {
+        outcome.result = 'Win!/Loot';
+      } else if (outcome.result && typeof outcome.result === 'string' && outcome.result.includes('HEART(S)')) {
+        outcome.result = outcome.result.replace(/(\d+)\s*HEART\(S\)/i, `${reducedDamage} HEART(S)`);
+      }
+    } else {
+      // Boost was active but didn't reduce damage (e.g., not Entertainer or no effect)
+      entertainerBoostUnused = true;
     }
   } else if (character.boostedBy && (!outcome.hearts || outcome.hearts === 0)) {
     entertainerBoostUnused = true;
@@ -1390,33 +1389,11 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       // Reload character to get latest state before checking boost
       const refreshedCharacter = await Character.findById(character._id);
       if (refreshedCharacter && refreshedCharacter.boostedBy && i === 0) {
-        const logger = require('../../utils/logger');
-        logger.info('BOOST', `Clearing boost for ${refreshedCharacter.name} after HWQ monster encounter`);
-        try {
-          // Mark active boost as fulfilled in TempData and update embed
-          const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../jobs/boosting.js');
-          const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
-          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(refreshedCharacter.name);
-          if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
-            activeBoost.status = 'fulfilled';
-            activeBoost.fulfilledAt = Date.now();
-            await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-            // If interaction/client provided, update the request embed status to fulfilled
-            if (interaction?.client) {
-              try {
-                await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
-                // Update the 'Boost Applied' embed if we have its reference
-                await updateBoostAppliedMessage(interaction.client, activeBoost);
-              } catch (embedErr) {
-                logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);
-              }
-            }
-          }
-        } catch (e) {
-          logger.error('BOOST', `Failed to mark boost fulfilled while clearing for ${refreshedCharacter.name}: ${e.message}`);
-        }
-        refreshedCharacter.boostedBy = null;
-        await refreshedCharacter.save();
+        const { clearBoostAfterUse } = require('../jobs/boosting.js');
+        await clearBoostAfterUse(refreshedCharacter, {
+          client: interaction?.client,
+          context: 'HWQ monster encounter'
+        });
         // Update character object reference
         Object.assign(character, refreshedCharacter.toObject ? refreshedCharacter.toObject() : refreshedCharacter);
         console.log(`[helpWanted.js]: 🎭 Boost cleared for ${character.name} after HWQ monster encounter`);

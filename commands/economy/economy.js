@@ -56,7 +56,8 @@ const { applyPriestTokensBoost, applyFortuneTellerTokensBoost } = require("../..
 const {
  retrieveBoostingRequestFromTempDataByCharacter,
  saveBoostingRequestToTempData,
- updateBoostAppliedMessage
+ updateBoostAppliedMessage,
+ clearBoostAfterUse
 } = require("../jobs/boosting");
 const DEFAULT_EMOJI = "🔹";
 
@@ -1459,26 +1460,10 @@ async function handleShopBuy(interaction) {
     await interaction.editReply({ embeds: [purchaseEmbed] });
 
     if (boostFlavorNotes.length > 0 && character.boostedBy) {
-      try {
-        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-        if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
-          activeBoost.status = 'fulfilled';
-          activeBoost.fulfilledAt = Date.now();
-          await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-          if (interaction?.client) {
-            try {
-              await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
-              await updateBoostAppliedMessage(interaction.client, activeBoost);
-            } catch (embedErr) {
-              logger.error('BOOST', `Failed to update boost embeds on fulfillment for ${character.name}: ${embedErr.message}`);
-            }
-          }
-        }
-      } catch (boostErr) {
-        logger.error('BOOST', `Failed to mark buying boost fulfilled for ${character.name}: ${boostErr.message}`);
-      }
-      character.boostedBy = null;
-      await character.save();
+      await clearBoostAfterUse(character, {
+        client: interaction?.client,
+        context: 'economy buy'
+      });
     }
   } catch (error) {
     handleInteractionError(error, interaction, {
@@ -1965,26 +1950,10 @@ if (quantity <= 0) {
   interaction.editReply({ embeds: [saleEmbed] });
 
   if (boostFlavorNotes.length > 0 && character.boostedBy) {
-   try {
-    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-    if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
-     activeBoost.status = 'fulfilled';
-     activeBoost.fulfilledAt = Date.now();
-     await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-     if (interaction?.client) {
-      try {
-       await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
-       await updateBoostAppliedMessage(interaction.client, activeBoost);
-      } catch (embedErr) {
-       logger.error('BOOST', `Failed to update boost embeds on fulfillment for ${character.name}: ${embedErr.message}`);
-      }
-     }
-    }
-   } catch (boostErr) {
-    logger.error('BOOST', `Failed to mark selling boost fulfilled for ${character.name}: ${boostErr.message}`);
-   }
-   character.boostedBy = null;
-   await character.save();
+   await clearBoostAfterUse(character, {
+     client: interaction?.client,
+     context: 'economy sell'
+   });
   }
  } catch (error) {
   handleInteractionError(error, interaction, {

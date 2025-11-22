@@ -1181,28 +1181,11 @@ async function processTravelDay(day, context) {
 
         // ------------------- Clear Boost After Travel -------------------
         if (character.boostedBy) {
-          logger.info('BOOST', `Clearing boost for ${character.name} after successful travel`);
-          try {
-            const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-            if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
-              activeBoost.status = 'fulfilled';
-              activeBoost.fulfilledAt = Date.now();
-              await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
-              if (interaction?.client) {
-                try {
-                  await updateBoostRequestEmbed(interaction.client, activeBoost, 'fulfilled');
-                  await updateBoostAppliedMessage(interaction.client, activeBoost);
-                } catch (embedErr) {
-                  logger.error('BOOST', `Failed to update boost embeds on fulfillment: ${embedErr.message}`);
-                }
-              }
-            }
-          } catch (e) {
-            logger.error('BOOST', `Failed to mark boost fulfilled for ${character.name}: ${e.message}`);
-          }
-          // Clear boostedBy flag on character
-          character.boostedBy = null;
-          await character.save();
+          const { clearBoostAfterUse } = require('../jobs/boosting');
+          await clearBoostAfterUse(character, {
+            client: interaction?.client,
+            context: 'travel'
+          });
         }
       } catch (error) {
         handleInteractionError(error, 'travel.js');

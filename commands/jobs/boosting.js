@@ -2464,6 +2464,84 @@ async function handleBoostCancel(interaction) {
 }
 
 // ============================================================================
+// ------------------- Unified Boost Clearing Function -------------------
+// ============================================================================
+
+/**
+ * Unified function to clear boost after use
+ * Handles TempData updates, embed updates, and character.boostedBy clearing
+ * @param {Object} character - Character document with boostedBy field
+ * @param {Object} options - Options object
+ * @param {Object} options.client - Discord client for embed updates (optional)
+ * @param {boolean} options.shouldClearBoost - Whether to clear the boost (default: true)
+ * @param {string} options.context - Context string for logging (optional)
+ * @returns {Promise<{success: boolean, cleared: boolean, error?: string}>}
+ */
+async function clearBoostAfterUse(character, options = {}) {
+  const { client = null, shouldClearBoost = true, context = '' } = options;
+  
+  if (!character) {
+    logger.error('BOOST', `clearBoostAfterUse: Character is null or undefined${context ? ` (${context})` : ''}`);
+    return { success: false, cleared: false, error: 'Character is null or undefined' };
+  }
+
+  if (!character.boostedBy || !shouldClearBoost) {
+    if (character.boostedBy && !shouldClearBoost) {
+      logger.info('BOOST', `Boost preserved for ${character.name}${context ? ` (${context})` : ''}`);
+    }
+    return { success: true, cleared: false };
+  }
+
+  try {
+    logger.info('BOOST', `Clearing boost for ${character.name}${context ? ` (${context})` : ''}`);
+    
+    // Mark active boost as fulfilled in TempData and update embed
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+    
+    if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
+      activeBoost.status = 'fulfilled';
+      activeBoost.fulfilledAt = Date.now();
+      await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+      
+      // If client provided, update the request embed status to fulfilled
+      if (client) {
+        try {
+          const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
+          await updateBoostRequestEmbed(client, activeBoost, 'fulfilled');
+          // Update the 'Boost Applied' embed if we have its reference
+          await updateBoostAppliedMessage(client, activeBoost);
+        } catch (embedErr) {
+          logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);
+          // Continue with clearing even if embed update fails
+        }
+      }
+    }
+    
+    // Clear the boostedBy field from the character
+    character.boostedBy = null;
+    await character.save();
+    
+    logger.info('BOOST', `✅ Boost cleared for ${character.name}${context ? ` (${context})` : ''}`);
+    return { success: true, cleared: true };
+  } catch (error) {
+    logger.error('BOOST', `Failed to clear boost for ${character.name}${context ? ` (${context})` : ''}: ${error.message}`);
+    
+    // Try to clear boostedBy even if TempData update failed
+    try {
+      if (character.boostedBy) {
+        character.boostedBy = null;
+        await character.save();
+        logger.warn('BOOST', `Cleared boostedBy field despite TempData update failure for ${character.name}`);
+      }
+    } catch (saveError) {
+      logger.error('BOOST', `Failed to clear boostedBy field after error: ${saveError.message}`);
+    }
+    
+    return { success: false, cleared: false, error: error.message };
+  }
+}
+
+// ============================================================================
 // ------------------- Module Exports -------------------
 // ============================================================================
 
@@ -2473,6 +2551,7 @@ module.exports.getRemainingBoostTime = getRemainingBoostTime;
 module.exports.retrieveBoostingRequestFromTempDataByCharacter = retrieveBoostingRequestFromTempDataByCharacter;
 module.exports.saveBoostingRequestToTempData = saveBoostingRequestToTempData;
 module.exports.retrieveBoostingRequestFromTempData = retrieveBoostingRequestFromTempData;
+module.exports.clearBoostAfterUse = clearBoostAfterUse;
 
 // Helper to update the 'Boost Applied' embed when status changes
 module.exports.updateBoostAppliedMessage = async function updateBoostAppliedMessage(client, requestData) {
