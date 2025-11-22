@@ -89,6 +89,38 @@ async function getVendingModel(characterName) {
   return await initializeVendingInventoryModel(characterName);
 }
 
+// ------------------- calculateSlotsUsed -------------------
+// Calculates the total number of slots actually used in a vendor shop
+// Stackable items: ceil(quantity / 10) slots per stack
+// Non-stackable items: 1 slot per item
+async function calculateSlotsUsed(vendCollection) {
+  const allItems = await vendCollection.find({}).toArray();
+  let totalSlotsUsed = 0;
+  
+  for (const item of allItems) {
+    // Get item details to determine if stackable
+    const itemDetails = item.itemId ? await ItemModel.findById(item.itemId) : null;
+    
+    if (itemDetails) {
+      const isStackable = itemDetails.stackable || false;
+      const maxStackSize = itemDetails.maxStackSize || 10;
+      
+      if (isStackable) {
+        // Stackable items: calculate slots needed (max 10 per slot)
+        totalSlotsUsed += Math.ceil((item.stockQty || 0) / maxStackSize);
+      } else {
+        // Non-stackable items: each item takes 1 slot
+        totalSlotsUsed += (item.stockQty || 0);
+      }
+    } else {
+      // Custom items or items without details - treat as non-stackable
+      totalSlotsUsed += (item.stockQty || 0);
+    }
+  }
+  
+  return totalSlotsUsed;
+}
+
 // ------------------- Constants -------------------
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const MONTHLY_VENDING_POINTS = 500;
@@ -452,17 +484,30 @@ async function handleCollectPoints(interaction) {
     }
 
     // ------------------- Setup Validation -------------------
-    if (!character.vendingSetup?.shopLink || !character.shopLink) {
+    // Log setup validation details for debugging
+    console.log('[vendingHandler.js] [handleCollectPoints] Setup Validation Debug:', {
+      characterName: character.name,
+      characterId: character._id?.toString(),
+      hasVendingSetup: !!character.vendingSetup,
+      vendingSetup: character.vendingSetup,
+      hasSetupDate: !!character.vendingSetup?.setupDate,
+      setupDate: character.vendingSetup?.setupDate,
+      validationCheck: {
+        setupDateExists: !!character.vendingSetup?.setupDate,
+        willPass: !!character.vendingSetup?.setupDate,
+        willFail: !character.vendingSetup?.setupDate
+      }
+    });
+
+    if (!character.vendingSetup?.setupDate) {
+        console.log('[vendingHandler.js] [handleCollectPoints] ❌ Setup validation failed for character:', character.name);
+        console.log('[vendingHandler.js] [handleCollectPoints] Reason: vendingSetup?.setupDate =', character.vendingSetup?.setupDate);
         return interaction.reply({
             content: `❌ **Setup Required**\n\nYou must complete vending setup before collecting points.\n\nPlease run \`/vending setup\` to:\n1. Initialize your shop\n2. Set up your vending sheet\n3. Configure your shop settings`
         });
     }
 
-    if (!character.vendingSync) {
-      return interaction.reply({
-        content: `❌ **Sync Required**\n\nYou must sync your vending sheet before collecting points.\n\nPlease run \`/vending sync\` to:\n1. Connect your shop sheet\n2. Update your inventory\n3. Enable point collection`
-      });
-    }
+    // Note: vendingSync check removed - sync is no longer used
 
     // ------------------- Award Points -------------------
     const pointsAwarded = MONTHLY_VENDING_POINTS;
@@ -601,6 +646,63 @@ async function handleRestock(interaction) {
       return interaction.editReply(`❌ Not enough vending points. You need ${totalCost} points (${pointCost} per item × ${stockQty} items).`);
     }
 
+    // ------------------- Get Item Details -------------------
+    // Get item details to check stackable status (allow custom items)
+    const itemDetails = await ItemModel.findOne({ itemName });
+    const isCustomItem = !itemDetails;
+    
+    // ------------------- Calculate Current Slot Usage -------------------
+    // Calculate how many slots are actually used (accounting for stack sizes)
+    const currentSlotsUsed = await calculateSlotsUsed(vendCollection);
+    
+    // Calculate slots needed for the new item
+    // First check if item already exists in shop (might be stacking)
+    const existingItemInShop = await vendCollection.findOne({ itemName });
+    
+    let slotsNeededForNewItem = 0;
+    if (!isCustomItem) {
+      const maxStackSize = itemDetails.maxStackSize || 10;
+      const isStackable = itemDetails.stackable;
+      
+      if (existingItemInShop && isStackable) {
+        // If stackable and item exists, calculate additional slots needed
+        const currentSlotsUsedForItem = Math.ceil(existingItemInShop.stockQty / maxStackSize);
+        const newTotal = existingItemInShop.stockQty + stockQty;
+        const newSlotsUsedForItem = Math.ceil(newTotal / maxStackSize);
+        slotsNeededForNewItem = newSlotsUsedForItem - currentSlotsUsedForItem;
+      } else {
+        // New item or non-stackable
+        if (isStackable) {
+          slotsNeededForNewItem = Math.ceil(stockQty / maxStackSize);
+        } else {
+          slotsNeededForNewItem = stockQty;
+        }
+      }
+    } else {
+      // Custom item - treat as non-stackable
+      slotsNeededForNewItem = stockQty;
+    }
+    
+    // Check if shop is at capacity
+    if (currentSlotsUsed >= totalSlots && slotsNeededForNewItem > 0) {
+      return interaction.editReply(
+        `❌ **Shop is at capacity.**\n\n` +
+        `You have used all ${totalSlots} slots (${currentSlotsUsed}/${totalSlots} slots used).\n\n` +
+        `Please remove items from your shop to free up space before restocking.`
+      );
+    }
+    
+    // Check if adding this item would exceed capacity
+    if (currentSlotsUsed + slotsNeededForNewItem > totalSlots) {
+      const availableSlots = totalSlots - currentSlotsUsed;
+      return interaction.editReply(
+        `❌ **Not enough space.**\n\n` +
+        `This item requires ${slotsNeededForNewItem} slot(s), but you only have ${availableSlots} slot(s) available.\n` +
+        `Current usage: ${currentSlotsUsed}/${totalSlots} slots\n\n` +
+        `Please remove items from your shop to free up space.`
+      );
+    }
+
     // ------------------- Slot Assignment -------------------
     // Get all items to check which slots are actually occupied
     const allItems = await vendCollection.find({}).toArray();
@@ -667,12 +769,6 @@ async function handleRestock(interaction) {
       return interaction.editReply(`❌ Slot conflict detected: Slot ${newSlot} is already occupied by ${finalSlotCheck.itemName}. Please try again with a different slot.`);
     }
 
-    // ------------------- Stack Size Validation -------------------
-    const existingItem = await vendCollection.findOne({
-      itemName,
-      slot: newSlot
-    });
-
     // ------------------- Price Validation -------------------
     // At least one price must be set before items can be sold
     const priceItem = {
@@ -689,10 +785,15 @@ async function handleRestock(interaction) {
       });
     }
 
-    // Get item details to check stackable status (allow custom items)
-    const itemDetails = await ItemModel.findOne({ itemName });
-    const isCustomItem = !itemDetails;
+    // ------------------- Stack Size Validation -------------------
+    // Get existing item for transaction update and validation (if it exists)
+    const existingItem = await vendCollection.findOne({
+      itemName,
+      slot: newSlot
+    });
     
+    // Item details already fetched above for slot calculation
+    // Additional validation for stackable items
     if (!isCustomItem) {
       const maxStackSize = itemDetails.maxStackSize || 10;
       const isStackable = itemDetails.stackable;
@@ -703,17 +804,16 @@ async function handleRestock(interaction) {
 
       if (existingItem) {
         const newTotal = existingItem.stockQty + stockQty;
-        if (newTotal > maxStackSize) {
+        if (isStackable && newTotal > maxStackSize && existingItem.slot === newSlot) {
           return interaction.editReply(
-            `❌ Cannot add ${stockQty} more ${itemName}. This would exceed the maximum stack size of ${maxStackSize}. ` +
-            `Current stack: ${existingItem.stockQty}, Maximum allowed: ${maxStackSize}`
+            `❌ Cannot add ${stockQty} more ${itemName} to this slot. This would exceed the maximum stack size of ${maxStackSize} per slot. ` +
+            `Current stack: ${existingItem.stockQty}, Maximum allowed: ${maxStackSize}\n\n` +
+            `Note: Stackable items can occupy multiple slots (10 per slot). Choose a different slot to add more.`
           );
         }
-      } else if (stockQty > maxStackSize) {
-        return interaction.editReply(
-          `❌ Cannot add ${stockQty} ${itemName}. Maximum stack size is ${maxStackSize}.`
-        );
       }
+      // For stackable items exceeding maxStackSize, they will use multiple slots
+      // This is already validated in the slot capacity check above
     }
 
     // ------------------- Update Inventory and Points (Transaction) -------------------
@@ -1813,7 +1913,24 @@ async function handlePouchUpgrade(interaction) {
     }
 
     // ------------------- Shop Setup Validation -------------------
-    if (!character.vendingSetup?.shopLink && !character.shopLink) {
+    // Log setup validation details for debugging
+    console.log('[vendingHandler.js] [handlePouchUpgrade] Setup Validation Debug:', {
+      characterName: character.name,
+      characterId: character._id?.toString(),
+      hasVendingSetup: !!character.vendingSetup,
+      vendingSetup: character.vendingSetup,
+      hasSetupDate: !!character.vendingSetup?.setupDate,
+      setupDate: character.vendingSetup?.setupDate,
+      validationCheck: {
+        setupDateExists: !!character.vendingSetup?.setupDate,
+        willPass: !!character.vendingSetup?.setupDate,
+        willFail: !character.vendingSetup?.setupDate
+      }
+    });
+
+    if (!character.vendingSetup?.setupDate) {
+      console.log('[vendingHandler.js] [handlePouchUpgrade] ❌ Setup validation failed for character:', character.name);
+      console.log('[vendingHandler.js] [handlePouchUpgrade] Reason: vendingSetup?.setupDate =', character.vendingSetup?.setupDate);
       return interaction.editReply(
         `❌ ${characterName} doesn't have a shop set up yet.\n\n` +
         `Please set up your shop first using \`/vending setup\` before upgrading your pouch.`
@@ -1916,7 +2033,24 @@ async function handlePouchUpgradeConfirm(interaction) {
     }
 
     // ------------------- Shop Setup Validation -------------------
-    if (!character.vendingSetup?.shopLink && !character.shopLink) {
+    // Log setup validation details for debugging
+    console.log('[vendingHandler.js] [handlePouchUpgradeConfirm] Setup Validation Debug:', {
+      characterName: character.name,
+      characterId: character._id?.toString(),
+      hasVendingSetup: !!character.vendingSetup,
+      vendingSetup: character.vendingSetup,
+      hasSetupDate: !!character.vendingSetup?.setupDate,
+      setupDate: character.vendingSetup?.setupDate,
+      validationCheck: {
+        setupDateExists: !!character.vendingSetup?.setupDate,
+        willPass: !!character.vendingSetup?.setupDate,
+        willFail: !character.vendingSetup?.setupDate
+      }
+    });
+
+    if (!character.vendingSetup?.setupDate) {
+      console.log('[vendingHandler.js] [handlePouchUpgradeConfirm] ❌ Setup validation failed for character:', character.name);
+      console.log('[vendingHandler.js] [handlePouchUpgradeConfirm] Reason: vendingSetup?.setupDate =', character.vendingSetup?.setupDate);
       return interaction.update({
         content: `❌ ${characterName} doesn't have a shop set up yet. Please set up your shop first using \`/vending setup\` before upgrading your pouch.`,
         embeds: [],
@@ -2134,7 +2268,7 @@ async function handleVendingSetup(interaction) {
             const notSetupCharacters = [];
             
             vendorCharacters.forEach(char => {
-                const isSetup = char.vendingSetup?.shopLink || char.shopLink;
+                const isSetup = !!char.vendingSetup?.setupDate;
                 const vendorType = char.vendorType || char.job || 'Unknown';
                 const pouchType = char.vendingSetup?.pouchType || char.shopPouch || 'None';
                 const vendingPoints = char.vendingPoints || 0;
@@ -2224,10 +2358,32 @@ async function handleVendingSync(interaction, characterName) {
       throw new Error(`Character ${characterName} not found`);
     }
 
-    // Check both possible locations for the shop link
+    // Log sync attempt details for debugging
+    console.log('[vendingHandler.js] [handleVendingSync] Sync Attempt Debug:', {
+      characterName: character.name,
+      characterId: character._id?.toString(),
+      hasVendingSetup: !!character.vendingSetup,
+      vendingSetup: character.vendingSetup,
+      hasSetupDate: !!character.vendingSetup?.setupDate,
+      setupDate: character.vendingSetup?.setupDate,
+      hasShopLink: !!character.shopLink,
+      shopLink: character.shopLink,
+      hasVendingSetupShopLink: !!character.vendingSetup?.shopLink,
+      vendingSetupShopLink: character.vendingSetup?.shopLink
+    });
+
+    // Check both possible locations for the shop link (legacy support)
+    // Note: shopLink is deprecated, but sync still needs it to parse sheet data
     const shopLink = character.shopLink || character.vendingSetup?.shopLink;
     if (!shopLink) {
+      console.log('[vendingHandler.js] [handleVendingSync] ❌ No shop link found for character:', character.name);
       throw new Error('No shop link found for this character. Please set up your shop first using /vending setup');
+    }
+    
+    // Validate setup exists (new validation)
+    if (!character.vendingSetup?.setupDate) {
+      console.log('[vendingHandler.js] [handleVendingSync] ❌ Setup validation failed - no setupDate for character:', character.name);
+      throw new Error('Shop setup not completed. Please complete setup using /vending setup');
     }
 
     // Get the vending model for this character
@@ -2250,32 +2406,70 @@ async function handleVendingSync(interaction, characterName) {
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
-    // Track used slots
+    // Track used slots (by slot name for assignment)
     const usedSlots = new Set();
     const slotConflicts = new Map(); // Track slot conflicts
-
+    
+    // Cache items to avoid duplicate lookups
+    const itemCache = new Map();
+    
+    // First pass: Calculate total slots needed from all items (accounting for stack sizes)
     for (const row of parsedRows) {
-      const item = await ItemModel.findOne({ itemName: row.itemName });
+      let item = itemCache.get(row.itemName);
       if (!item) {
-        errors.push(`Item "${row.itemName}" not found in database`);
-        continue;
+        item = await ItemModel.findOne({ itemName: row.itemName });
+        if (!item) {
+          errors.push(`Item "${row.itemName}" not found in database`);
+          continue;
+        }
+        itemCache.set(row.itemName, item);
       }
 
       const isStackable = item.stackable;
       const maxStackSize = item.maxStackSize || 10;
       let stockQty = Number(row.stockQty) || 0;
-      let slotsNeeded = 1;
 
       // Skip items with zero or negative stock
       if (stockQty <= 0) {
         continue;
       }
 
-      if (isStackable) {
-        slotsNeeded = Math.ceil(stockQty / maxStackSize);
-      } else {
-        slotsNeeded = stockQty;
+      // Calculate slots needed based on stackability
+      // Stackable items: ceil(quantity / maxStackSize), max 10 per slot
+      // Non-stackable items: 1 slot per item
+      let slotsNeeded = isStackable 
+        ? Math.ceil(stockQty / maxStackSize)
+        : stockQty;
+      
+      totalSlotsUsed += slotsNeeded;
+    }
+    
+    // Check if total slots used exceeds capacity
+    if (totalSlotsUsed > totalSlots) {
+      errors.push(`Shop capacity exceeded: ${totalSlotsUsed} slots needed, but only ${totalSlots} slots available. Please reduce item quantities.`);
+    }
+
+    // Second pass: Process items and assign slots
+    for (const row of parsedRows) {
+      const item = itemCache.get(row.itemName);
+      if (!item) {
+        // Already logged error above, skip
+        continue;
       }
+
+      const isStackable = item.stackable;
+      const maxStackSize = item.maxStackSize || 10;
+      let stockQty = Number(row.stockQty) || 0;
+
+      // Skip items with zero or negative stock
+      if (stockQty <= 0) {
+        continue;
+      }
+
+      // Calculate slots needed (same logic as first pass)
+      let slotsNeeded = isStackable 
+        ? Math.ceil(stockQty / maxStackSize)
+        : stockQty;
 
       // Auto-assign slot if none specified
       let slot = row.slot;
@@ -2387,7 +2581,24 @@ async function handleEditShop(interaction) {
     }
 
     // Validate character has a shop setup
-    if (!character.vendingSetup?.shopLink && !character.shopLink) {
+    // Log setup validation details for debugging
+    console.log('[vendingHandler.js] [handleEditShop] Setup Validation Debug:', {
+      characterName: character.name,
+      characterId: character._id?.toString(),
+      hasVendingSetup: !!character.vendingSetup,
+      vendingSetup: character.vendingSetup,
+      hasSetupDate: !!character.vendingSetup?.setupDate,
+      setupDate: character.vendingSetup?.setupDate,
+      validationCheck: {
+        setupDateExists: !!character.vendingSetup?.setupDate,
+        willPass: !!character.vendingSetup?.setupDate,
+        willFail: !character.vendingSetup?.setupDate
+      }
+    });
+
+    if (!character.vendingSetup?.setupDate) {
+      console.log('[vendingHandler.js] [handleEditShop] ❌ Setup validation failed for character:', character.name);
+      console.log('[vendingHandler.js] [handleEditShop] Reason: vendingSetup?.setupDate =', character.vendingSetup?.setupDate);
       return interaction.editReply({
         content: `❌ ${characterName} doesn't have a shop set up yet. Use \`/vending setup\` first.`,
         ephemeral: true
@@ -2396,10 +2607,12 @@ async function handleEditShop(interaction) {
 
     switch (action) {
       case 'item': {
+        const slot = interaction.options.getString('slot');
         const itemName = interaction.options.getString('itemname');
-        if (!itemName) {
+        
+        if (!slot && !itemName) {
           return interaction.editReply({
-            content: '❌ Item name is required for item editing.',
+            content: '❌ Slot or item name is required for item editing.',
             ephemeral: true
           });
         }
@@ -2418,13 +2631,26 @@ async function handleEditShop(interaction) {
 
         // Update item in vending inventory
         const VendingInventory = await getVendingModel(characterName);
-        const existingItem = await VendingInventory.findOne({ itemName });
+        let existingItem;
         
-        if (!existingItem) {
-          return interaction.editReply({
-            content: `❌ Item "${itemName}" not found in your shop inventory.`,
-            ephemeral: true
-          });
+        if (slot) {
+          // Find item by slot
+          existingItem = await VendingInventory.findOne({ slot });
+          if (!existingItem) {
+            return interaction.editReply({
+              content: `❌ No item found in slot "${slot}".`,
+              ephemeral: true
+            });
+          }
+        } else {
+          // Find item by name (backward compatibility)
+          existingItem = await VendingInventory.findOne({ itemName });
+          if (!existingItem) {
+            return interaction.editReply({
+              content: `❌ Item "${itemName}" not found in your shop inventory.`,
+              ephemeral: true
+            });
+          }
         }
 
         const updateFields = {};
@@ -2432,8 +2658,9 @@ async function handleEditShop(interaction) {
         if (artPrice) updateFields.artPrice = artPrice;
         if (otherPrice) updateFields.otherPrice = otherPrice;
 
+        // Update using the item's identifier (itemName from existingItem)
         await VendingInventory.updateOne(
-          { itemName },
+          { itemName: existingItem.itemName },
           { $set: updateFields }
         );
 
@@ -2447,8 +2674,10 @@ async function handleEditShop(interaction) {
             // Read current sheet data
             const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
             
-            // Find the row with the item
-            const itemRowIndex = sheetData.findIndex(row => row[2] === itemName);
+            // Find the row with the item (by slot if slot provided, otherwise by item name)
+            const itemRowIndex = slot 
+              ? sheetData.findIndex(row => row[1] === slot) // Column B (index 1) is Slot
+              : sheetData.findIndex(row => row[2] === existingItem.itemName); // Column C (index 2) is Item Name
             if (itemRowIndex !== -1) {
               const row = itemRowIndex + 2; // +2 because sheet data starts at A2
               const updateData = [];
@@ -2480,7 +2709,7 @@ async function handleEditShop(interaction) {
         }
 
         await interaction.editReply({
-          content: `✅ Updated item "${itemName}" in your shop.`,
+          content: `✅ Updated item "${existingItem.itemName}"${slot ? ` in slot "${slot}"` : ''} in your shop.`,
           ephemeral: true
         });
         break;

@@ -54,7 +54,7 @@ const Pet = require('./models/PetModel');
 const Mount = require('./models/MountModel');
 const VillageShops = require('./models/VillageShopsModel');
 const Weather = require('./models/WeatherModel');
-const { VendingRequest } = require('./models/VendingModel');
+const { VendingRequest } = require('../../models/VendingModel');
 const Square = require('./models/mapModel');
 const { Village } = require('./models/VillageModel');
 const Party = require('./models/PartyModel');
@@ -6737,35 +6737,15 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
       return res.status(403).json({ error: 'You do not have permission to view this character' });
     }
 
-    // Connect to tinglebot database using native MongoDB client
-    await connectToTinglebot();
-    const tinglebotDb = mongoose.connection.db;
-    
-    // Try to get items from vendingInventories collection in tinglebot database
+    // Get items from vending database using VendingInventory model
     let items = [];
     try {
-      const vendingInventoriesCollection = tinglebotDb.collection('vendingInventories');
-      const vendingInventoryDoc = await vendingInventoriesCollection.findOne({ 
-        characterId: new ObjectId(characterId) 
-      });
-      
-      if (vendingInventoryDoc && vendingInventoryDoc.items && Array.isArray(vendingInventoryDoc.items)) {
-        items = vendingInventoryDoc.items;
-      }
-    } catch (vendingInvError) {
-      console.warn('[server.js]: Could not read from vendingInventories collection, trying vending database:', vendingInvError.message);
-    }
-
-    // If no items found in vendingInventories, try vending database
-    if (items.length === 0) {
-      try {
-        const { initializeVendingInventoryModel } = require('./models/VendingModel');
-        const VendingInventory = await initializeVendingInventoryModel(character.name);
-        const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
-        items = vendingItems;
-      } catch (vendingDbError) {
-        console.warn('[server.js]: Could not read from vending database:', vendingDbError.message);
-      }
+      const { initializeVendingInventoryModel } = require('../../models/VendingModel');
+      const VendingInventory = await initializeVendingInventoryModel(character.name);
+      const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
+      items = vendingItems;
+    } catch (vendingDbError) {
+      console.warn('[server.js]: Could not read from vending database:', vendingDbError.message);
     }
 
     // Calculate slot usage - count items, not cumulative slotsUsed
@@ -7067,58 +7047,6 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
     };
 
     await (character.constructor === Character ? Character : ModCharacter).findByIdAndUpdate(characterId, updateData);
-
-    // Add entry to vendingInventories collection in main database
-    try {
-      // Ensure mongoose connection is ready
-      await connectToTinglebot();
-      
-      // Define schema for vendingInventories if not already defined
-      const VendingInventoriesSchema = new mongoose.Schema({
-        characterId: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
-        characterName: { type: String, required: true },
-        userId: { type: String, required: true },
-        pouchType: { type: String, required: true },
-        pouchSize: { type: Number, required: true },
-        vendorType: { type: String, required: true },
-        vendingPoints: { type: Number, default: 0 },
-        shopImage: { type: String },
-        setupDate: { type: Date, default: Date.now },
-        itemCount: { type: Number, default: 0 }
-      }, { collection: 'vendingInventories', timestamps: true });
-
-      // Get or create model
-      let VendingInventories;
-      try {
-        VendingInventories = mongoose.model('VendingInventories', VendingInventoriesSchema);
-      } catch (error) {
-        // Model already exists, retrieve it
-        VendingInventories = mongoose.model('VendingInventories');
-      }
-
-      // Create or update entry in vendingInventories
-      await VendingInventories.findOneAndUpdate(
-        { characterId: characterId },
-        {
-          characterId: characterId,
-          characterName: character.name,
-          userId: userId,
-          pouchType: pouchType.toLowerCase(),
-          pouchSize: pouchSize,
-          vendorType: vendorType,
-          vendingPoints: vendingPoints || 0,
-          shopImage: shopImage || null,
-          setupDate: new Date(),
-          itemCount: importedItems.length
-        },
-        { upsert: true, new: true }
-      );
-
-      console.log(`[server.js]: ✅ Added entry to vendingInventories for character ${character.name}`);
-    } catch (vendingInvError) {
-      console.error('[server.js]: ⚠️ Error adding to vendingInventories collection:', vendingInvError);
-      // Don't fail the request if this fails, just log it
-    }
 
     res.json({
       success: true,
@@ -7511,20 +7439,6 @@ app.patch('/api/characters/:characterId/vending/shop-image', requireAuth, async 
     };
 
     await (character.constructor === Character ? Character : ModCharacter).findByIdAndUpdate(characterId, updateData);
-
-    // Also update in vendingInventories collection
-    try {
-      await connectToTinglebot();
-      const tinglebotDb = mongoose.connection.db;
-      const vendingInventoriesCollection = tinglebotDb.collection('vendingInventories');
-      await vendingInventoriesCollection.updateOne(
-        { characterId: new ObjectId(characterId) },
-        { $set: { shopImage: shopImage || null } },
-        { upsert: false }
-      );
-    } catch (vendingInvError) {
-      console.warn('[server.js]: Could not update shopImage in vendingInventories collection:', vendingInvError.message);
-    }
 
     res.json({
       success: true,

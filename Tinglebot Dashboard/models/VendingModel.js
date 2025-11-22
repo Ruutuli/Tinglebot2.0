@@ -64,7 +64,30 @@ const vendingRequestSchema = new Schema({
   notes: { type: String },
   buyerId: { type: String, required: true },
   buyerUsername: { type: String, required: true },
-  date: { type: Date, default: Date.now }
+  date: { type: Date, default: Date.now },
+  // Transaction safety fields
+  status: { 
+    type: String, 
+    enum: ['pending', 'processing', 'completed', 'failed', 'expired'],
+    default: 'pending',
+    index: true
+  },
+  expiresAt: { 
+    type: Date, 
+    default: function() {
+      // Default expiration: 7 days from creation
+      return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    },
+    index: true
+  },
+  processedAt: { type: Date },
+  version: { type: Number, default: 0 }, // For optimistic locking
+  // Store original pricing for validation
+  originalTokenPrice: { type: Number },
+  originalSellPrice: { type: Number }, // For vendor self-purchases
+  isVendorSelfPurchase: { type: Boolean, default: false },
+  offeredItem: { type: String }, // For barter payments
+  artLink: { type: String } // Discord message link for art payments
 });
 
 // ------------------- Create and export the VendingRequest model -------------------
