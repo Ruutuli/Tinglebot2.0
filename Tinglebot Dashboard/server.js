@@ -11367,10 +11367,19 @@ app.put('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Model not found' });
     }
     
+    // For Character model, handle currentVillage specially to prevent default function from overriding
+    if (modelName === 'Character' && req.body.currentVillage !== undefined) {
+      // If currentVillage is explicitly provided (even if empty string), ensure it's saved
+      // Convert empty string to null to allow clearing the field
+      if (req.body.currentVillage === '') {
+        req.body.currentVillage = null;
+      }
+    }
+    
     const record = await Model.findByIdAndUpdate(
       id,
       req.body,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true, overwrite: false }
     );
     
     if (!record) {
@@ -11378,6 +11387,9 @@ app.put('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
     }
     
     console.log(`[server.js]: ✅ Admin ${req.user.username} updated ${modelName} record:`, id);
+    if (modelName === 'Character' && req.body.currentVillage !== undefined) {
+      console.log(`[server.js]: Updated currentVillage to:`, record.currentVillage);
+    }
     
     res.json({ 
       success: true,

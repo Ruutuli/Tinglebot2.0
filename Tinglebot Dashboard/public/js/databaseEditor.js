@@ -3600,6 +3600,8 @@ async function createAutocompleteInput(fieldName, value, modelName) {
   
   const input = document.createElement('input');
   input.type = 'text';
+  input.id = `field-${fieldName}`;
+  input.name = fieldName;
   input.value = value !== undefined && value !== null ? value : '';
   input.placeholder = `Enter or select ${getFieldDisplayName(fieldName)}...`;
   input.autocomplete = 'off';
