@@ -991,7 +991,10 @@ async function handleRestock(interaction) {
         { name: '🪙 Points Spent', value: `${totalCost} points`, inline: true },
         { name: '💎 Remaining Points', value: `${character.vendingPoints - totalCost} points`, inline: true }
       )
-      .setFooter({ text: `Added to shop on ${new Date().toLocaleDateString()}` });
+      .setFooter({ 
+        text: `Added to shop on ${new Date().toLocaleDateString()}`,
+        iconURL: character.icon || undefined
+      });
 
     await interaction.editReply({ embeds: [successEmbed] });
 
@@ -1451,6 +1454,11 @@ async function handleVendingBarter(interaction) {
           `**📋 Vendor Instructions:**\n` +
           `Use \`/vending accept\` with the fulfillment ID below to complete this transaction.`
         )
+        .setAuthor({
+          name: `${buyer.name} → ${shopOwner.name}`,
+          iconURL: buyer.icon || undefined
+        })
+        .setThumbnail(shopOwner.icon || null)
         .addFields(
           { 
             name: '📦 Requested Item', 
@@ -1501,13 +1509,18 @@ async function handleVendingBarter(interaction) {
       }
       
       // Add fulfillment ID at the end
+      // Use shop owner's shop banner if available, otherwise use border image
+      const shopBannerImage = shopOwner.shopImage || shopOwner.vendingSetup?.shopImage || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
       embed.addFields({ 
           name: '🪪 Fulfillment ID', 
           value: `</vending accept:1433351189185171462> fulfillmentid: \`${fulfillmentId}\``, 
           inline: false 
         })
-        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-        .setFooter({ text: `Buyer: ${buyerName} • Request ID: ${fulfillmentId}` })
+        .setImage(shopBannerImage)
+        .setFooter({ 
+          text: `${buyer.name} → ${shopOwner.name} • Request ID: ${fulfillmentId}`,
+          iconURL: shopOwner.icon || undefined
+        })
         .setColor('#3498db')
         .setTimestamp();
   
@@ -1986,6 +1999,11 @@ async function handleFulfill(interaction) {
           `**${vendor.name}** has successfully fulfilled a barter request for **${buyer.name}**.\n\n` +
           `The transaction has been completed and items have been transferred.`
         )
+        .setAuthor({
+          name: `${buyer.name} ← ${vendor.name}`,
+          iconURL: buyer.icon || undefined
+        })
+        .setThumbnail(vendor.icon || null)
         .addFields(
           { 
             name: '📦 Item', 
@@ -2038,9 +2056,14 @@ async function handleFulfill(interaction) {
         });
       }
 
-      embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      // Use vendor's shop banner if available, otherwise use border image
+      const vendorShopBanner = vendor.shopImage || vendor.vendingSetup?.shopImage || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+      embed.setImage(vendorShopBanner)
         .setColor(0x00cc99)
-        .setFooter({ text: `Transaction completed successfully` })
+        .setFooter({ 
+          text: `Transaction completed successfully • ${buyer.name} ← ${vendor.name}`,
+          iconURL: vendor.icon || undefined
+        })
         .setTimestamp();
   
       await interaction.editReply({ 
@@ -2212,6 +2235,11 @@ async function handlePouchUpgrade(interaction) {
       .setColor('#FFD700')
       .setTitle('🛍️ Confirm Pouch Upgrade')
       .setDescription(`Are you sure you want to upgrade **${characterName}'s** shop pouch?`)
+      .setAuthor({
+        name: `${characterName}`,
+        iconURL: character.icon || undefined
+      })
+      .setThumbnail(character.icon || null)
       .addFields(
         { name: '__Current Pouch__', value: `> **${currentPouch.toUpperCase()}** (${pouchTiers[currentPouch].slots} slots)`, inline: true },
         { name: '__New Pouch__', value: `> **${newPouchType.toUpperCase()}** (${pouchTiers[newPouchType].slots} slots)`, inline: true },
@@ -2220,7 +2248,7 @@ async function handlePouchUpgrade(interaction) {
         { name: '__Your Balance__', value: `> 💰 **${userTokens.toLocaleString()} tokens**`, inline: true },
         { name: '__Balance After__', value: `> 💰 **${(userTokens - upgradeCost).toLocaleString()} tokens**`, inline: true }
       )
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setImage(character.shopImage || character.vendingSetup?.shopImage || 'https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: 'Click Confirm to proceed with the upgrade' });
 
     await interaction.editReply({
@@ -2329,6 +2357,11 @@ async function handlePouchUpgradeConfirm(interaction) {
       .setColor('#00FF00')
       .setTitle('✅ Pouch Upgrade Successful!')
       .setDescription(`**${characterName}'s** shop pouch has been successfully upgraded!`)
+      .setAuthor({
+        name: `${characterName}`,
+        iconURL: character.icon || undefined
+      })
+      .setThumbnail(character.icon || null)
       .addFields(
         { name: '__New Pouch Tier__', value: `> **${newPouchType.toUpperCase()}**`, inline: true },
         { name: '__New Slot Capacity__', value: `> **${pouchTiers[newPouchType].slots} slots**`, inline: true },
@@ -2336,8 +2369,11 @@ async function handlePouchUpgradeConfirm(interaction) {
         { name: '__Tokens Spent__', value: `> 💰 **${upgradeCost.toLocaleString()} tokens**`, inline: true },
         { name: '__Remaining Tokens__', value: `> 💰 **${(userTokens - upgradeCost).toLocaleString()} tokens**`, inline: true }
       )
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setFooter({ text: `Upgrade completed successfully!` });
+      .setImage(character.shopImage || character.vendingSetup?.shopImage || 'https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setFooter({ 
+        text: `Upgrade completed successfully!`,
+        iconURL: character.icon || undefined
+      });
 
     await interaction.update({
       embeds: [successEmbed],
@@ -2482,7 +2518,7 @@ async function handleViewShop(interaction) {
         url: character.inventory || undefined
       })
       .setThumbnail(character.icon || null)
-      .setImage(character.vendingSetup?.shopImage || character.shopImage || VIEW_SHOP_IMAGE_URL)
+      .setImage(character.shopImage || character.vendingSetup?.shopImage || VIEW_SHOP_IMAGE_URL)
       .setTimestamp();
 
     // Add vending points to embed
@@ -3031,7 +3067,7 @@ async function handleEditShop(interaction) {
               inline: true
             }
           )
-          .setImage(DEFAULT_IMAGE_URL)
+          .setImage(character.shopImage || character.vendingSetup?.shopImage || DEFAULT_IMAGE_URL)
           .setFooter({ 
             text: `Vending Shop • ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`,
             iconURL: character.icon || undefined
@@ -3081,8 +3117,20 @@ async function handleEditShop(interaction) {
           { $set: { shopImage: imageUrl } }
         );
 
+        const bannerEmbed = new EmbedBuilder()
+          .setColor('#3498db')
+          .setTitle('✅ Shop Banner Updated')
+          .setDescription(`Successfully updated shop banner for **${characterName}**.`)
+          .setImage(imageUrl)
+          .setThumbnail(character.icon || undefined)
+          .setFooter({ 
+            text: `Shop Banner • ${character.currentVillage || 'Unknown Location'}`,
+            iconURL: character.icon || undefined
+          })
+          .setTimestamp();
+
         await interaction.editReply({
-          content: `✅ Updated shop banner for ${characterName}.`,
+          embeds: [bannerEmbed],
           ephemeral: true
         });
         break;
