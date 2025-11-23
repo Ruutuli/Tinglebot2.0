@@ -492,39 +492,116 @@ async function atomicUpdateStockQuantity(VendingInventory, itemId, quantityChang
 // ------------------- validateFulfillmentRequest -------------------
 // Re-validates all conditions before fulfillment
 async function validateFulfillmentRequest(request, buyer, vendor, VendingInventory) {
+  console.log('[vendingHandler.js] [validateFulfillmentRequest] Starting validation...', {
+    fulfillmentId: request.fulfillmentId,
+    status: request.status,
+    itemName: request.itemName,
+    quantity: request.quantity,
+    buyerId: request.buyerId,
+    vendorId: request.vendorId,
+    expiresAt: request.expiresAt,
+    currentTime: new Date()
+  });
+  
   const errors = [];
   
   // Check if request is expired
   if (request.expiresAt && new Date() > request.expiresAt) {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Request expired', {
+      fulfillmentId: request.fulfillmentId,
+      expiresAt: request.expiresAt,
+      currentTime: new Date()
+    });
     errors.push('Request has expired');
   }
   
   // Check if request is already processed
-  if (request.status === 'completed' || request.status === 'processing') {
-    errors.push(`Request is already ${request.status}`);
+  if (request.status === 'completed') {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Request already completed', {
+      fulfillmentId: request.fulfillmentId,
+      status: request.status
+    });
+    errors.push(`❌ This purchase request has already been completed. If you're trying to make another purchase, please create a new request.`);
+  } else if (request.status === 'processing') {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Request already processing', {
+      fulfillmentId: request.fulfillmentId,
+      status: request.status,
+      processedAt: request.processedAt
+    });
+    errors.push(`❌ This purchase request is currently being processed by another action. Please wait a moment and try again, or refresh the request. If this persists, the request may need to be cancelled and recreated.`);
   }
   
   // Check if characters still exist
   if (!buyer) {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Buyer not found', {
+      fulfillmentId: request.fulfillmentId,
+      buyerId: request.buyerId
+    });
     errors.push('Buyer character not found');
+  } else {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ✓ Buyer found', {
+      fulfillmentId: request.fulfillmentId,
+      buyerName: buyer.name,
+      buyerId: buyer._id?.toString()
+    });
   }
   if (!vendor) {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Vendor not found', {
+      fulfillmentId: request.fulfillmentId,
+      vendorId: request.vendorId
+    });
     errors.push('Vendor character not found');
+  } else {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ✓ Vendor found', {
+      fulfillmentId: request.fulfillmentId,
+      vendorName: vendor.name,
+      vendorId: vendor._id?.toString()
+    });
   }
   
   // Check if item still exists in vendor inventory
   const stockItem = await VendingInventory.findOne({ itemName: request.itemName });
   if (!stockItem) {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Item not in vendor inventory', {
+      fulfillmentId: request.fulfillmentId,
+      itemName: request.itemName,
+      vendorName: vendor?.name
+    });
     errors.push(`Item "${request.itemName}" no longer available in vendor inventory`);
   } else if (stockItem.stockQty < request.quantity) {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Insufficient stock', {
+      fulfillmentId: request.fulfillmentId,
+      itemName: request.itemName,
+      available: stockItem.stockQty,
+      required: request.quantity
+    });
     errors.push(`Insufficient stock. Available: ${stockItem.stockQty}, Required: ${request.quantity}`);
+  } else {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ✓ Stock sufficient', {
+      fulfillmentId: request.fulfillmentId,
+      itemName: request.itemName,
+      available: stockItem.stockQty,
+      required: request.quantity
+    });
   }
   
   // Re-validate location restrictions
   const { validateVendingLocation } = require('../utils/validation');
   const locationValidation = validateVendingLocation(vendor, buyer);
   if (!locationValidation.valid) {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Location validation failed', {
+      fulfillmentId: request.fulfillmentId,
+      error: locationValidation.error,
+      vendorLocation: vendor?.currentVillage,
+      buyerLocation: buyer?.currentVillage
+    });
     errors.push(locationValidation.error);
+  } else {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ✓ Location valid', {
+      fulfillmentId: request.fulfillmentId,
+      vendorLocation: vendor?.currentVillage,
+      buyerLocation: buyer?.currentVillage
+    });
   }
   
   // For token payments, check balance
@@ -541,8 +618,30 @@ async function validateFulfillmentRequest(request, buyer, vendor, VendingInvento
       requiredTokens = stockItem?.tokenPrice * request.quantity || 0;
     }
     
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] Token payment check', {
+      fulfillmentId: request.fulfillmentId,
+      buyerId: request.buyerId,
+      buyerTokens,
+      requiredTokens,
+      isVendorSelfPurchase: request.isVendorSelfPurchase,
+      originalSellPrice: request.originalSellPrice,
+      originalTokenPrice: request.originalTokenPrice,
+      stockItemTokenPrice: stockItem?.tokenPrice
+    });
+    
     if (buyerTokens < requiredTokens) {
+      console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Insufficient tokens', {
+        fulfillmentId: request.fulfillmentId,
+        buyerTokens,
+        requiredTokens
+      });
       errors.push(`Insufficient tokens. Required: ${requiredTokens}, Available: ${buyerTokens}`);
+    } else {
+      console.log('[vendingHandler.js] [validateFulfillmentRequest] ✓ Token balance sufficient', {
+        fulfillmentId: request.fulfillmentId,
+        buyerTokens,
+        requiredTokens
+      });
     }
   }
   
@@ -553,14 +652,33 @@ async function validateFulfillmentRequest(request, buyer, vendor, VendingInvento
       const itemDetails = await ItemModel.findOne({ itemName: request.itemName });
       const currentSellPrice = itemDetails?.sellPrice || 0;
       if (request.originalSellPrice && currentSellPrice !== request.originalSellPrice) {
+        console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Price changed (vendor self-purchase)', {
+          fulfillmentId: request.fulfillmentId,
+          itemName: request.itemName,
+          originalPrice: request.originalSellPrice,
+          currentPrice: currentSellPrice
+        });
         errors.push(`Item price has changed. Original: ${request.originalSellPrice}, Current: ${currentSellPrice}`);
       }
     } else {
       if (request.originalTokenPrice && stockItem.tokenPrice !== request.originalTokenPrice) {
+        console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Price changed (token purchase)', {
+          fulfillmentId: request.fulfillmentId,
+          itemName: request.itemName,
+          originalPrice: request.originalTokenPrice,
+          currentPrice: stockItem.tokenPrice
+        });
         errors.push(`Item price has changed. Original: ${request.originalTokenPrice}, Current: ${stockItem.tokenPrice}`);
       }
     }
   }
+  
+  console.log('[vendingHandler.js] [validateFulfillmentRequest] Validation complete', {
+    fulfillmentId: request.fulfillmentId,
+    valid: errors.length === 0,
+    errorCount: errors.length,
+    errors: errors.length > 0 ? errors : 'none'
+  });
   
   return {
     valid: errors.length === 0,
@@ -572,7 +690,28 @@ async function validateFulfillmentRequest(request, buyer, vendor, VendingInvento
 // ------------------- markRequestAsProcessing -------------------
 // Atomically marks request as processing to prevent duplicate processing
 async function markRequestAsProcessing(fulfillmentId, session = null) {
+  console.log('[vendingHandler.js] [markRequestAsProcessing] Attempting to mark request as processing...', {
+    fulfillmentId,
+    hasSession: !!session,
+    currentTime: new Date()
+  });
+  
   const options = session ? { session } : {};
+  
+  // First, check what the current state is
+  const currentRequest = await VendingRequest.findOne({ fulfillmentId });
+  if (currentRequest) {
+    console.log('[vendingHandler.js] [markRequestAsProcessing] Current request state', {
+      fulfillmentId,
+      status: currentRequest.status,
+      expiresAt: currentRequest.expiresAt,
+      processedAt: currentRequest.processedAt,
+      version: currentRequest.version,
+      isExpired: currentRequest.expiresAt ? new Date() > currentRequest.expiresAt : false
+    });
+  } else {
+    console.log('[vendingHandler.js] [markRequestAsProcessing] ❌ Request not found', { fulfillmentId });
+  }
   
   const result = await VendingRequest.findOneAndUpdate(
     { 
@@ -597,8 +736,43 @@ async function markRequestAsProcessing(fulfillmentId, session = null) {
   );
   
   if (!result) {
-    throw new Error('Request is not available for processing (already processed, expired, or not found)');
+    console.log('[vendingHandler.js] [markRequestAsProcessing] ❌ Failed to update request', {
+      fulfillmentId,
+      currentStatus: currentRequest?.status,
+      currentExpiresAt: currentRequest?.expiresAt,
+      isExpired: currentRequest?.expiresAt ? new Date() > currentRequest.expiresAt : null
+    });
+    
+    // Check the actual status to provide a more specific error
+    const request = await VendingRequest.findOne({ fulfillmentId });
+    if (request) {
+      console.log('[vendingHandler.js] [markRequestAsProcessing] Request found with status:', {
+        fulfillmentId,
+        status: request.status,
+        expiresAt: request.expiresAt,
+        processedAt: request.processedAt,
+        version: request.version
+      });
+      
+      if (request.status === 'completed') {
+        throw new Error('This purchase request has already been completed. Please create a new request if you want to make another purchase.');
+      } else if (request.status === 'processing') {
+        throw new Error('This purchase request is currently being processed. Please wait a moment before trying again.');
+      } else if (request.expiresAt && new Date() > request.expiresAt) {
+        throw new Error('This purchase request has expired. Please create a new request to complete your purchase.');
+      }
+    } else {
+      console.log('[vendingHandler.js] [markRequestAsProcessing] ❌ Request not found in database', { fulfillmentId });
+    }
+    throw new Error('This purchase request could not be found or is no longer available. It may have been cancelled, expired, or already processed.');
   }
+  
+  console.log('[vendingHandler.js] [markRequestAsProcessing] ✓ Successfully marked as processing', {
+    fulfillmentId,
+    newStatus: result.status,
+    processedAt: result.processedAt,
+    version: result.version
+  });
   
   return result;
 }
@@ -2048,26 +2222,66 @@ async function handleFulfill(interaction) {
 
       // ------------------- Mark Request as Processing (Atomic) -------------------
       // This prevents duplicate processing
+      console.log('[vendingHandler.js] [handleFulfillBarter] Starting fulfillment process', {
+        fulfillmentId,
+        buyerName: buyer.name,
+        vendorName: vendor.name,
+        itemName: request.itemName,
+        quantity: request.quantity,
+        paymentMethod: request.paymentMethod
+      });
+      
       let processingRequest;
       try {
         processingRequest = await markRequestAsProcessing(fulfillmentId);
       } catch (error) {
-        if (error.message.includes('not available for processing')) {
-          return interaction.editReply(`⚠️ This request cannot be processed. It may have already been processed, expired, or been cancelled.`);
+        console.log('[vendingHandler.js] [handleFulfillBarter] ❌ Error marking request as processing', {
+          fulfillmentId,
+          error: error.message,
+          stack: error.stack
+        });
+        // Use the descriptive error message from markRequestAsProcessing
+        if (error.message.includes('purchase request')) {
+          return interaction.editReply(`❌ ${error.message}`);
         }
-        throw error;
+        // Fallback for any other errors
+        return interaction.editReply(`⚠️ This request cannot be processed. It may have already been processed, expired, or been cancelled.`);
       }
 
       // ------------------- Re-validate All Conditions -------------------
+      console.log('[vendingHandler.js] [handleFulfillBarter] Re-validating request after marking as processing', {
+        fulfillmentId,
+        requestStatus: processingRequest.status
+      });
+      
       const validation = await validateFulfillmentRequest(processingRequest, buyer, vendor, VendingInventory);
       if (!validation.valid) {
+        console.log('[vendingHandler.js] [handleFulfillBarter] ❌ Validation failed after marking as processing', {
+          fulfillmentId,
+          errors: validation.errors,
+          requestStatus: processingRequest.status
+        });
+        
         // Reset status to pending if validation fails
         await VendingRequest.updateOne(
           { fulfillmentId },
           { $set: { status: 'pending' } }
-        ).catch(() => {});
-        return interaction.editReply(`❌ **Validation Failed**\n\n${validation.errors.join('\n')}`);
+        ).catch((resetError) => {
+          console.log('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to reset status to pending', {
+            fulfillmentId,
+            error: resetError.message
+          });
+        });
+        
+        const errorMessage = validation.errors.length === 1 
+          ? `❌ **Validation Failed**\n\n${validation.errors[0]}` 
+          : `❌ **Validation Failed**\n\nThe following issues prevented this purchase from completing:\n\n${validation.errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n')}`;
+        return interaction.editReply(errorMessage);
       }
+      
+      console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Validation passed, proceeding with transaction', {
+        fulfillmentId
+      });
 
       const stockItem = validation.stockItem;
 
@@ -2509,6 +2723,9 @@ async function handleFulfill(interaction) {
           errorFields = [{ name: '💡 Note', value: 'The item may have been removed or is no longer available.', inline: false }];
         } else if (error.message.includes('Validation Failed') || error.message.includes('Validation')) {
           errorTitle = '❌ Validation Error';
+          errorDescription = error.message;
+        } else if (error.message.includes('purchase request')) {
+          errorTitle = '❌ Request Cannot Be Processed';
           errorDescription = error.message;
         } else if (error.message.includes('not available for processing')) {
           errorTitle = '❌ Request Cannot Be Processed';
