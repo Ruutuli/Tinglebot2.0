@@ -224,7 +224,7 @@ const command = new SlashCommandBuilder()
    .addStringOption((opt) =>
     opt
      .setName("offer")
-     .setDescription("What you are offering in return (required for barter)")
+     .setDescription("What you are offering in return (required for barter). Separate multiple items with commas.")
    )
    .addStringOption((opt) =>
     opt.setName("notes").setDescription("Additional notes for the vendor")
