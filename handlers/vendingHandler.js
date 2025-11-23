@@ -2314,15 +2314,20 @@ async function handleFulfill(interaction) {
 
       const stockItem = validation.stockItem;
 
-      // ------------------- Process Transaction -------------------
-      // Wrap all critical database operations in a transaction
-      await runWithTransaction(async (session) => {
+      // ------------------- Process Fulfillment (Multi-Database Operations) -------------------
+      // Note: Cannot use single transaction across multiple MongoDB connections
+      // Using atomic operations with manual rollback on errors
+      // Using outer rollbackActions so outer error handler can access it
+      rollbackActions = [];
+      
+      // Declare variables outside try block for use in error handler
+      let totalCost = null;
+      let perItemPrice = null;
+      let buyerTokenBalance = null;
+      let vendorTokenBalance = null;
+      
+      try {
         // ------------------- Handle Token Payment -------------------
-        let totalCost = null;
-        let perItemPrice = null;
-        let buyerTokenBalance = null;
-        let vendorTokenBalance = null;
-
         if (paymentMethod === 'tokens') {
           if (isVendorSelfPurchase) {
             // Vendor buying from own shop - use ROTW SELL price
@@ -2347,19 +2352,62 @@ async function handleFulfill(interaction) {
             totalCost = stockItem.tokenPrice * quantity;
           }
 
-          // Atomically transfer tokens
-          buyerTokenBalance = await atomicUpdateTokenBalance(buyerId, -totalCost, session);
-          rollbackActions.push({ type: 'token', userId: buyerId, amount: totalCost });
+          // Atomically transfer tokens (uses default mongoose connection)
+          console.log('[vendingHandler.js] [handleFulfillBarter] Transferring tokens...', {
+            fulfillmentId,
+            buyerId,
+            vendorId: vendor.userId,
+            totalCost
+          });
           
-          vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, session);
-          rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost });
+          try {
+            buyerTokenBalance = await atomicUpdateTokenBalance(buyerId, -totalCost);
+            rollbackActions.push({ type: 'token', userId: buyerId, amount: totalCost });
+            
+            vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost);
+            rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost });
+            console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Tokens transferred', {
+              fulfillmentId,
+              buyerBalance: buyerTokenBalance,
+              vendorBalance: vendorTokenBalance
+            });
+          } catch (tokenError) {
+            console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Token transfer failed', {
+              fulfillmentId,
+              error: tokenError.message
+            });
+            throw new Error(`Failed to transfer tokens: ${tokenError.message}`);
+          }
         }
 
-        // ------------------- Atomically Update Stock -------------------
-        await atomicUpdateStockQuantity(VendingInventory, stockItem._id, -quantity, quantity, session);
-        rollbackActions.push({ type: 'stock', itemId: stockItem._id, quantity: quantity, VendingInventory });
+        // ------------------- Atomically Update Stock (Vending Connection) -------------------
+        console.log('[vendingHandler.js] [handleFulfillBarter] Updating stock...', {
+          fulfillmentId,
+          itemId: stockItem._id,
+          quantity
+        });
+        
+        try {
+          // Don't pass session - VendingInventory uses different connection
+          const updatedStock = await atomicUpdateStockQuantity(VendingInventory, stockItem._id, -quantity, quantity);
+          if (!updatedStock) {
+            throw new Error('Failed to update stock - insufficient quantity or item not found');
+          }
+          rollbackActions.push({ type: 'stock', itemId: stockItem._id, quantity: quantity, VendingInventory });
+          stockUpdated = true;
+          console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Stock updated', {
+            fulfillmentId,
+            newStockQty: updatedStock.stockQty
+          });
+        } catch (stockError) {
+          console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Stock update failed', {
+            fulfillmentId,
+            error: stockError.message
+          });
+          throw new Error(`Failed to update stock: ${stockError.message}`);
+        }
 
-        // ------------------- Add to Buyer's Inventory -------------------
+        // ------------------- Add to Buyer's Inventory (Inventories Native Connection) -------------------
         const buyerInventory = await getInventoryCollection(buyer.name);
         let itemDetails;
         if (itemName.includes('+')) {
@@ -2368,46 +2416,76 @@ async function handleFulfill(interaction) {
           itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } });
         }
         
-        if (itemDetails) {
-          await buyerInventory.insertOne({
-            characterId: buyer._id,
-            itemName: itemDetails.itemName,
-            itemId: itemDetails._id,
-            quantity: quantity,
-            category: Array.isArray(itemDetails.category) ? itemDetails.category.join(', ') : itemDetails.category,
-            type: Array.isArray(itemDetails.type) ? itemDetails.type.join(', ') : itemDetails.type,
-            subtype: Array.isArray(itemDetails.subtype) ? itemDetails.subtype.join(', ') : itemDetails.subtype,
-            location: buyer.currentVillage || 'Unknown',
-            date: new Date(),
-            obtain: 'Bought',
-          }, { session });
-          rollbackActions.push({ type: 'inventory', buyerInventory, itemName: itemDetails.itemName, quantity });
-        } else {
-          // fallback: insert minimal record if item details not found
-          await buyerInventory.insertOne({
-            characterId: buyer._id,
-            itemName: itemName,
-            quantity: quantity,
-            date: new Date(),
-            obtain: 'Bought',
-          }, { session });
-          rollbackActions.push({ type: 'inventory', buyerInventory, itemName: itemName, quantity });
+        console.log('[vendingHandler.js] [handleFulfillBarter] Adding item to buyer inventory...', {
+          fulfillmentId,
+          itemName,
+          itemDetailsFound: !!itemDetails
+        });
+        
+        try {
+          // Don't pass session - buyerInventory uses different connection
+          if (itemDetails) {
+            await buyerInventory.insertOne({
+              characterId: buyer._id,
+              itemName: itemDetails.itemName,
+              itemId: itemDetails._id,
+              quantity: quantity,
+              category: Array.isArray(itemDetails.category) ? itemDetails.category.join(', ') : itemDetails.category,
+              type: Array.isArray(itemDetails.type) ? itemDetails.type.join(', ') : itemDetails.type,
+              subtype: Array.isArray(itemDetails.subtype) ? itemDetails.subtype.join(', ') : itemDetails.subtype,
+              location: buyer.currentVillage || 'Unknown',
+              date: new Date(),
+              obtain: 'Bought',
+            });
+            rollbackActions.push({ type: 'inventory', buyerInventory, itemName: itemDetails.itemName, quantity });
+          } else {
+            // fallback: insert minimal record if item details not found
+            await buyerInventory.insertOne({
+              characterId: buyer._id,
+              itemName: itemName,
+              quantity: quantity,
+              date: new Date(),
+              obtain: 'Bought',
+            });
+            rollbackActions.push({ type: 'inventory', buyerInventory, itemName: itemName, quantity });
+          }
+          inventoryInserted = true;
+          console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Item added to buyer inventory', {
+            fulfillmentId
+          });
+        } catch (inventoryError) {
+          console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Inventory insert failed', {
+            fulfillmentId,
+            error: inventoryError.message
+          });
+          throw new Error(`Failed to add item to inventory: ${inventoryError.message}`);
         }
 
         // If this was a barter, remove the offered item from buyer's inventory
         if (paymentMethod === 'barter' && offeredItem) {
-          const offeredItemDoc = await buyerInventory.findOne({ 'inventory.name': offeredItem }, { session });
-          if (offeredItemDoc) {
-            await buyerInventory.updateOne(
-              { 'inventory.name': offeredItem },
-              { $inc: { 'inventory.$.quantity': -1 } },
-              { session }
-            );
-            rollbackActions.push({ type: 'barter', buyerInventory, itemName: offeredItem });
+          try {
+            const offeredItemDoc = await buyerInventory.findOne({ 'inventory.name': offeredItem });
+            if (offeredItemDoc) {
+              await buyerInventory.updateOne(
+                { 'inventory.name': offeredItem },
+                { $inc: { 'inventory.$.quantity': -1 } }
+              );
+              rollbackActions.push({ type: 'barter', buyerInventory, itemName: offeredItem });
+              console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removed from buyer inventory', {
+                fulfillmentId,
+                offeredItem
+              });
+            }
+          } catch (barterError) {
+            console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to remove barter item', {
+              fulfillmentId,
+              error: barterError.message
+            });
+            // Don't fail the transaction for this - barter item removal is secondary
           }
         }
 
-        // ------------------- Mark Request as Completed -------------------
+        // ------------------- Mark Request as Completed (Default Mongoose Connection) -------------------
         await VendingRequest.updateOne(
           { fulfillmentId },
           { 
@@ -2415,21 +2493,80 @@ async function handleFulfill(interaction) {
               status: 'completed',
               processedAt: new Date()
             }
-          },
-          { session }
+          }
         );
+        
+        console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Request marked as completed', {
+          fulfillmentId
+        });
 
-        // Store values for use outside transaction
+        // Store values for use outside
         request._transactionData = {
           totalCost,
           perItemPrice,
           buyerTokenBalance,
           vendorTokenBalance
         };
-      });
+        
+      } catch (error) {
+        // ------------------- Rollback on Error -------------------
+        console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Error during fulfillment, rolling back...', {
+          fulfillmentId,
+          error: error.message,
+          stack: error.stack,
+          rollbackActions: rollbackActions.length
+        });
+        
+        // Perform rollback in reverse order
+        for (const action of rollbackActions.reverse()) {
+          try {
+            if (action.type === 'token') {
+              // Rollback token transfer
+              await atomicUpdateTokenBalance(action.userId, -action.amount);
+              console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Rolled back token transfer', {
+                fulfillmentId,
+                userId: action.userId,
+                amount: -action.amount
+              });
+            } else if (action.type === 'stock') {
+              // Rollback stock update
+              await atomicUpdateStockQuantity(action.VendingInventory, action.itemId, action.quantity, 0);
+              console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Rolled back stock update', {
+                fulfillmentId,
+                itemId: action.itemId,
+                quantity: action.quantity
+              });
+            } else if (action.type === 'inventory') {
+              // Rollback inventory insert - try to remove the item
+              await action.buyerInventory.deleteOne({ itemName: action.itemName, characterId: buyer._id });
+              console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Rolled back inventory insert', {
+                fulfillmentId,
+                itemName: action.itemName
+              });
+            }
+          } catch (rollbackError) {
+            console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to rollback action', {
+              fulfillmentId,
+              actionType: action.type,
+              error: rollbackError.message
+            });
+          }
+        }
+        
+        // Reset request status to pending on error
+        await VendingRequest.updateOne(
+          { fulfillmentId },
+          { $set: { status: 'pending' } }
+        ).catch(() => {});
+        
+        throw error;
+      }
 
-      // Extract transaction data
-      const { totalCost, perItemPrice } = request._transactionData || {};
+      // Use transaction data if available (already set above)
+      if (request._transactionData) {
+        totalCost = request._transactionData.totalCost;
+        perItemPrice = request._transactionData.perItemPrice;
+      }
 
       // ------------------- Update Google Sheets (Non-critical, don't fail transaction) -------------------
       // These operations happen after the transaction commits
