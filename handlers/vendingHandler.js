@@ -1973,11 +1973,18 @@ async function handleVendingBarter(interaction) {
               return interaction.editReply({ embeds: [embed] });
             }
             // Check if buyer has the offered item
-            const buyerInventory = await connectToInventories(buyer);
-            const offeredItem = buyerInventory.inventory.find(item => 
-              item.name.toLowerCase() === offeredItemName.toLowerCase()
+            const buyerInventoryCollection = await getInventoryCollection(buyer.name);
+            const buyerInventoryItems = await buyerInventoryCollection.find({}).toArray();
+            const offeredItem = buyerInventoryItems.find(item => 
+              item.itemName && item.itemName.toLowerCase() === offeredItemName.toLowerCase()
             );
-            if (!offeredItem || offeredItem.quantity < 1) {
+            
+            // Check if buyer has enough quantity
+            const totalQuantity = buyerInventoryItems
+              .filter(item => item.itemName && item.itemName.toLowerCase() === offeredItemName.toLowerCase())
+              .reduce((sum, item) => sum + (item.quantity || 0), 0);
+            
+            if (!offeredItem || totalQuantity < 1) {
               const embed = createWarningEmbed(
                 '⚠️ Item Not in Inventory',
                 `You don't have **${offeredItemName}** in your inventory.`,
