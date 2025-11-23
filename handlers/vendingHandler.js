@@ -1070,16 +1070,50 @@ async function handleRestock(interaction) {
       }
       newSlot = manualSlot;
     } else {
-      // Find first available slot by checking all slots sequentially
-      for (let i = 1; i <= totalSlots; i++) {
-        const slotName = `Slot ${i}`;
-        // Check if this slot is occupied by any item (not just the one we're adding)
-        const slotOccupied = await vendCollection.findOne({ slot: slotName });
-        if (!slotOccupied) {
-          newSlot = slotName;
-          break;
+      // First, check if the same item already exists in any slot that has room for more
+      // This allows stacking items when no specific slot is specified
+      if (!isCustomItem && itemDetails) {
+        const maxStackSize = itemDetails.maxStackSize || 10;
+        const isStackable = itemDetails.stackable;
+        
+        if (isStackable) {
+          // Find existing slots with the same item that have room for the new quantity
+          const existingSlots = await vendCollection.find({ itemName }).toArray();
+          for (const existingSlot of existingSlots) {
+            const newTotal = existingSlot.stockQty + stockQty;
+            if (newTotal <= maxStackSize) {
+              // Found a slot with the same item that has room for all the new items
+              newSlot = existingSlot.slot;
+              break;
+            }
+          }
+          // If no slot has room for all items, check if any slot has partial room
+          // (This allows partial stacking, though multiple slots may be used)
+          if (!newSlot) {
+            for (const existingSlot of existingSlots) {
+              if (existingSlot.stockQty < maxStackSize) {
+                // Found a slot with the same item that has some room (partial stack)
+                newSlot = existingSlot.slot;
+                break;
+              }
+            }
+          }
         }
       }
+      
+      // If no stacking slot found, find first available empty slot
+      if (!newSlot) {
+        for (let i = 1; i <= totalSlots; i++) {
+          const slotName = `Slot ${i}`;
+          // Check if this slot is occupied by any item (not just the one we're adding)
+          const slotOccupied = await vendCollection.findOne({ slot: slotName });
+          if (!slotOccupied) {
+            newSlot = slotName;
+            break;
+          }
+        }
+      }
+      
       if (!newSlot) {
         // Get list of all occupied slots for the error message
         const occupiedList = Array.from(occupiedSlots).sort((a, b) => {
@@ -1893,7 +1927,9 @@ async function handleVendingBarter(interaction) {
         footer: `Buyer: ${buyerName} • Request ID: ${fulfillmentId}`
       });
   
-      await interaction.editReply({ embeds: [embed] });
+      // Tag shop owner if they have a userId
+      const replyContent = shopOwner.userId ? `<@${shopOwner.userId}>` : null;
+      await interaction.editReply({ content: replyContent, embeds: [embed] });
   
     } catch (error) {
       console.error("[handleVendingBarter]:", error);
