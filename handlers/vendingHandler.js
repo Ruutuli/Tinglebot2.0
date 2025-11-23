@@ -1993,7 +1993,7 @@ async function handleVendingBarter(interaction) {
                   { name: '👤 Character', value: buyer.name, inline: true }
                 ]
               );
-              return interaction.reply({ embeds: [embed] });
+              return interaction.editReply({ embeds: [embed] });
             }
             break;
         }
