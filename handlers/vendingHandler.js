@@ -491,7 +491,8 @@ async function atomicUpdateStockQuantity(VendingInventory, itemId, quantityChang
 
 // ------------------- validateFulfillmentRequest -------------------
 // Re-validates all conditions before fulfillment
-async function validateFulfillmentRequest(request, buyer, vendor, VendingInventory) {
+// skipProcessingCheck: set to true when validating after marking as processing to avoid false positives
+async function validateFulfillmentRequest(request, buyer, vendor, VendingInventory, skipProcessingCheck = false) {
   console.log('[vendingHandler.js] [validateFulfillmentRequest] Starting validation...', {
     fulfillmentId: request.fulfillmentId,
     status: request.status,
@@ -516,19 +517,27 @@ async function validateFulfillmentRequest(request, buyer, vendor, VendingInvento
   }
   
   // Check if request is already processed
+  // Skip processing check if we've just marked it as processing ourselves
   if (request.status === 'completed') {
     console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Request already completed', {
       fulfillmentId: request.fulfillmentId,
       status: request.status
     });
     errors.push(`❌ This purchase request has already been completed. If you're trying to make another purchase, please create a new request.`);
-  } else if (request.status === 'processing') {
-    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Request already processing', {
+  } else if (request.status === 'processing' && !skipProcessingCheck) {
+    // Only fail on processing status if we're not the ones processing it
+    // This prevents false positives when we've just marked it as processing
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Request already processing (from another action)', {
       fulfillmentId: request.fulfillmentId,
       status: request.status,
       processedAt: request.processedAt
     });
     errors.push(`❌ This purchase request is currently being processed by another action. Please wait a moment and try again, or refresh the request. If this persists, the request may need to be cancelled and recreated.`);
+  } else if (request.status === 'processing' && skipProcessingCheck) {
+    console.log('[vendingHandler.js] [validateFulfillmentRequest] ✓ Request status is processing (we are processing it)', {
+      fulfillmentId: request.fulfillmentId,
+      status: request.status
+    });
   }
   
   // Check if characters still exist
@@ -2220,17 +2229,36 @@ async function handleFulfill(interaction) {
       // ------------------- Get Vending Inventory Model -------------------
       const VendingInventory = await getVendingModel(vendor.name);
 
-      // ------------------- Mark Request as Processing (Atomic) -------------------
-      // This prevents duplicate processing
+      // ------------------- Initial Validation (Before Marking as Processing) -------------------
+      // Validate conditions first to provide better error messages before atomic lock
       console.log('[vendingHandler.js] [handleFulfillBarter] Starting fulfillment process', {
         fulfillmentId,
         buyerName: buyer.name,
         vendorName: vendor.name,
         itemName: request.itemName,
         quantity: request.quantity,
-        paymentMethod: request.paymentMethod
+        paymentMethod: request.paymentMethod,
+        currentRequestStatus: request.status
       });
       
+      // Do initial validation to catch errors early
+      const initialValidation = await validateFulfillmentRequest(request, buyer, vendor, VendingInventory, false);
+      if (!initialValidation.valid) {
+        console.log('[vendingHandler.js] [handleFulfillBarter] ❌ Initial validation failed', {
+          fulfillmentId,
+          errors: initialValidation.errors,
+          requestStatus: request.status
+        });
+        
+        // Format error message
+        const errorMessage = initialValidation.errors.length === 1 
+          ? `❌ **Validation Failed**\n\n${initialValidation.errors[0]}` 
+          : `❌ **Validation Failed**\n\nThe following issues prevented this purchase from completing:\n\n${initialValidation.errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n')}`;
+        return interaction.editReply(errorMessage);
+      }
+      
+      // ------------------- Mark Request as Processing (Atomic) -------------------
+      // This prevents duplicate processing - only do this after initial validation passes
       let processingRequest;
       try {
         processingRequest = await markRequestAsProcessing(fulfillmentId);
@@ -2254,7 +2282,8 @@ async function handleFulfill(interaction) {
         requestStatus: processingRequest.status
       });
       
-      const validation = await validateFulfillmentRequest(processingRequest, buyer, vendor, VendingInventory);
+      // Pass skipProcessingCheck=true since we just marked it as processing ourselves
+      const validation = await validateFulfillmentRequest(processingRequest, buyer, vendor, VendingInventory, true);
       if (!validation.valid) {
         console.log('[vendingHandler.js] [handleFulfillBarter] ❌ Validation failed after marking as processing', {
           fulfillmentId,
