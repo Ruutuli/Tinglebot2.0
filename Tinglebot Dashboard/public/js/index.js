@@ -686,7 +686,8 @@ function setupSidebarNavigation() {
         toggle.setAttribute('aria-expanded', 'true');
       }
       
-      closeMobileSidebar();
+      // Don't close sidebar when toggling dropdowns - only close when navigating to a page
+      // closeMobileSidebar(); // Removed - sidebar should stay open when expanding/collapsing sections
     });
   });
   

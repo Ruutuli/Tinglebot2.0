@@ -819,12 +819,18 @@ function populateFilters() {
   if (categoryFilter) {
     const categories = new Set();
     (inventoryState.aggregates.items || []).forEach((item) => {
-      (item.categories || []).forEach((category) => categories.add(category));
+      (item.categories || []).forEach((category) => {
+        if (category != null) {
+          categories.add(category);
+        }
+      });
     });
 
     const currentValue = inventoryState.filters.category;
     categoryFilter.innerHTML = '<option value="all">All categories</option>';
     Array.from(categories)
+      .filter((category) => category != null)
+      .map((category) => String(category))
       .sort((a, b) => a.localeCompare(b))
       .forEach((category) => {
         const option = document.createElement('option');
