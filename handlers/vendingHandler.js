@@ -1988,28 +1988,32 @@ async function handleVendingBarter(interaction) {
               );
               return interaction.editReply({ embeds: [embed] });
             }
-            // Check if buyer has the offered item
+            // Check if buyer has all the offered items
             const buyerInventoryCollection = await getInventoryCollection(buyer.name);
             const buyerInventoryItems = await buyerInventoryCollection.find({}).toArray();
-            const offeredItem = buyerInventoryItems.find(item => 
-              item.itemName && item.itemName.toLowerCase() === offeredItemName.toLowerCase()
-            );
             
-            // Check if buyer has enough quantity
-            const totalQuantity = buyerInventoryItems
-              .filter(item => item.itemName && item.itemName.toLowerCase() === offeredItemName.toLowerCase())
-              .reduce((sum, item) => sum + (item.quantity || 0), 0);
-            
-            if (!offeredItem || totalQuantity < 1) {
-              const embed = createWarningEmbed(
-                '⚠️ Item Not in Inventory',
-                `You don't have **${offeredItemName}** in your inventory.`,
-                [
-                  { name: '📦 Required Item', value: offeredItemName, inline: true },
-                  { name: '👤 Character', value: buyer.name, inline: true }
-                ]
+            // Validate each offered item
+            for (const offeredItemName of offeredItems) {
+              const offeredItem = buyerInventoryItems.find(item => 
+                item.itemName && item.itemName.toLowerCase() === offeredItemName.toLowerCase()
               );
-              return interaction.editReply({ embeds: [embed] });
+              
+              // Check if buyer has enough quantity
+              const totalQuantity = buyerInventoryItems
+                .filter(item => item.itemName && item.itemName.toLowerCase() === offeredItemName.toLowerCase())
+                .reduce((sum, item) => sum + (item.quantity || 0), 0);
+              
+              if (!offeredItem || totalQuantity < 1) {
+                const embed = createWarningEmbed(
+                  '⚠️ Item Not in Inventory',
+                  `You don't have **${offeredItemName}** in your inventory.`,
+                  [
+                    { name: '📦 Required Item', value: offeredItemName, inline: true },
+                    { name: '👤 Character', value: buyer.name, inline: true }
+                  ]
+                );
+                return interaction.editReply({ embeds: [embed] });
+              }
             }
             break;
         }
@@ -2084,7 +2088,11 @@ async function handleVendingBarter(interaction) {
       } else if (paymentType === 'art' && requestedItem.artPrice) {
         priceInfo = requestedItem.artPrice;
       } else if (paymentType === 'barter') {
-        priceInfo = `Trading: **${offeredItemName}**`;
+        if (offeredItems.length === 1) {
+          priceInfo = `Trading: **${offeredItems[0]}**`;
+        } else {
+          priceInfo = `Trading: ${offeredItems.map(item => `**${item}**`).join(', ')}`;
+        }
       }
       
       const fields = [
@@ -3375,9 +3383,11 @@ async function handleViewShop(interaction) {
 
     // Add items to embed
     availableItems.forEach(item => {
+      // Check barterOpen with fallback to tradesOpen for backward compatibility
+      const barterOpen = item.barterOpen !== undefined ? item.barterOpen : (item.tradesOpen || false);
       shopEmbed.addFields({
         name: `${item.itemName} (${item.stockQty} in stock)`,
-        value: `Cost: ${item.costEach} points\nToken Price: ${item.tokenPrice || 'N/A'}\nArt Price: ${item.artPrice || 'N/A'}\nOther Price: ${item.otherPrice || 'N/A'}\nBarter Open: ${item.barterOpen ? 'Yes' : 'No'}`,
+        value: `Cost: ${item.costEach} points\nToken Price: ${item.tokenPrice || 'N/A'}\nArt Price: ${item.artPrice || 'N/A'}\nOther Price: ${item.otherPrice || 'N/A'}\nBarter Open: ${barterOpen ? 'Yes' : 'No'}`,
         inline: true
       });
     });
