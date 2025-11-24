@@ -230,6 +230,128 @@ function createErrorEmbed(title, description, fields = []) {
   });
 }
 
+// ------------------- createValidationErrorEmbed -------------------
+// Creates an embed for validation errors with clear explanations and steps to fix
+function createValidationErrorEmbed(errors, fulfillmentId) {
+  const fields = [];
+  
+  // Process each error and create helpful messages
+  errors.forEach((error, idx) => {
+    let errorTitle = `Issue ${idx + 1}`;
+    let errorDescription = error;
+    let steps = [];
+    
+    // Handle price change errors specifically
+    if (error.includes('Item price has changed')) {
+      errorTitle = '💰 Price Changed';
+      const priceMatch = error.match(/Original: ([\d,]+), Current: ([\d,]+)/);
+      if (priceMatch) {
+        const originalPrice = priceMatch[1];
+        const currentPrice = priceMatch[2];
+        errorDescription = `The item's price has changed since you created this purchase request.\n\n**Original Price:** ${originalPrice}\n**Current Price:** ${currentPrice}`;
+        steps = [
+          `1. Cancel this purchase request using \`/vending cancel fulfillmentid: ${fulfillmentId}\``,
+          '2. Check the current price using `/vending viewshop`',
+          '3. Create a new purchase request with the updated price'
+        ];
+      } else {
+        // Fallback if regex doesn't match - still provide helpful message
+        errorDescription = error;
+        steps = [
+          `1. Cancel this purchase request using \`/vending cancel fulfillmentid: ${fulfillmentId}\``,
+          '2. Check the current price using `/vending viewshop`',
+          '3. Create a new purchase request with the updated price'
+        ];
+      }
+    } else if (error.includes('Request has expired')) {
+      errorTitle = '⏰ Request Expired';
+      errorDescription = 'This purchase request has expired and can no longer be fulfilled.';
+      steps = [
+        '1. Create a new purchase request using `/vending purchase`',
+        '2. Complete the purchase within the time limit'
+      ];
+    } else if (error.includes('already been completed')) {
+      errorTitle = '✅ Already Completed';
+      errorDescription = 'This purchase request has already been completed.';
+      steps = [
+        '1. Check your inventory to confirm you received the items',
+        '2. If you need to purchase more, create a new request using `/vending purchase`'
+      ];
+    } else if (error.includes('currently being processed')) {
+      errorTitle = '⏳ Already Processing';
+      errorDescription = 'This purchase request is currently being processed by another action.';
+      steps = [
+        '1. Wait a moment and try again',
+        '2. If the issue persists, cancel and recreate the request'
+      ];
+    } else if (error.includes('no longer available')) {
+      errorTitle = '📦 Item Unavailable';
+      errorDescription = error;
+      steps = [
+        '1. Check the vendor\'s shop using `/vending viewshop`',
+        '2. The item may have been removed or sold out',
+        '3. Contact the vendor if you believe this is an error'
+      ];
+    } else if (error.includes('Insufficient stock')) {
+      errorTitle = '📉 Insufficient Stock';
+      errorDescription = error;
+      steps = [
+        '1. Check the vendor\'s shop using `/vending viewshop`',
+        '2. Reduce the quantity in your purchase request',
+        '3. Or wait for the vendor to restock'
+      ];
+    } else if (error.includes('Insufficient tokens')) {
+      errorTitle = '🪙 Insufficient Tokens';
+      errorDescription = error;
+      steps = [
+        '1. Check your token balance',
+        '2. Earn more tokens or reduce the quantity',
+        '3. Create a new purchase request with sufficient tokens'
+      ];
+    } else if (error.includes('not found')) {
+      errorTitle = '👤 Character Not Found';
+      errorDescription = error;
+      steps = [
+        '1. Verify the character name is correct',
+        '2. The character may have been deleted',
+        '3. Contact support if you believe this is an error'
+      ];
+    } else if (error.includes('Location')) {
+      errorTitle = '📍 Location Restriction';
+      errorDescription = error;
+      steps = [
+        '1. Travel to the same village as the vendor',
+        '2. Use `/travel` to move to the correct location',
+        '3. Then try the purchase again'
+      ];
+    }
+    
+    fields.push({
+      name: errorTitle,
+      value: errorDescription + (steps.length > 0 ? '\n\n**How to Fix:**\n' + steps.join('\n') : ''),
+      inline: false
+    });
+  });
+  
+  return createErrorEmbed(
+    '❌ Validation Failed',
+    'The purchase request could not be completed due to the following issues:',
+    [
+      ...fields,
+      {
+        name: '🆔 Fulfillment ID',
+        value: `\`${fulfillmentId}\``,
+        inline: true
+      },
+      {
+        name: '💡 Command',
+        value: `\`/vending accept fulfillmentid: ${fulfillmentId}\``,
+        inline: true
+      }
+    ]
+  );
+}
+
 // ------------------- createSuccessEmbed -------------------
 // Shorthand for creating success embeds
 function createSuccessEmbed(title, description, fields = []) {
@@ -281,18 +403,42 @@ async function runWithTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
       await session.abortTransaction();
       lastError = error;
       
-      // Retry on transient errors (WriteConflict, TransientTransactionError)
-      if (attempt < maxRetries - 1 && (
-        error.hasErrorLabel('TransientTransactionError') ||
-        error.hasErrorLabel('UnknownTransactionCommitResult') ||
-        error.code === 112 // WriteConflict
-      )) {
+      // Check if this is a retryable error
+      const isRetryable = 
+        error.hasErrorLabel?.('TransientTransactionError') ||
+        error.hasErrorLabel?.('UnknownTransactionCommitResult') ||
+        error.code === 112 || // WriteConflict
+        error.code === 251 || // NoSuchTransaction
+        (error.message && (
+          error.message.includes('would create a conflict') ||
+          error.message.includes('WriteConflict') ||
+          error.message.includes('TransientTransactionError') ||
+          error.message.includes('UnknownTransactionCommitResult')
+        ));
+      
+      // Retry on transient errors
+      if (attempt < maxRetries - 1 && isRetryable) {
         const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-        console.warn(`[vendingHandler.js]: Transaction conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        console.warn(`[vendingHandler.js] [runWithTransaction]: Transaction conflict detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`, {
+          errorCode: error.code,
+          errorMessage: error.message,
+          errorLabels: error.errorLabels || []
+        });
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
-      throw error;
+      
+      // If not retryable or max retries reached, throw with detailed error
+      const errorDetails = {
+        message: error.message,
+        code: error.code,
+        name: error.name,
+        errorLabels: error.errorLabels || [],
+        attempt: attempt + 1,
+        maxRetries
+      };
+      console.error(`[vendingHandler.js] [runWithTransaction]: Transaction failed`, errorDetails);
+      throw new Error(`Transaction failed after ${attempt + 1} attempts: ${error.message} (Code: ${error.code || 'N/A'})`);
     } finally {
       session.endSession();
     }
@@ -409,53 +555,121 @@ async function retryOperation(fn, maxRetries = MAX_RETRY_ATTEMPTS, operationName
 }
 
 // ------------------- atomicUpdateTokenBalance -------------------
-// Atomically updates token balance with validation
-async function atomicUpdateTokenBalance(userId, change, session = null) {
+// Atomically updates token balance with validation and retry logic
+async function atomicUpdateTokenBalance(userId, change, session = null, maxRetries = MAX_RETRY_ATTEMPTS) {
   const User = require('../models/UserModel');
   const options = session ? { session } : {};
   
-  // For negative changes, ensure sufficient balance
-  if (change < 0) {
-    const result = await User.findOneAndUpdate(
-      { 
-        discordId: userId,
-        $expr: { $gte: [{ $ifNull: ['$tokens', 0] }, -change] } // Ensure balance won't go negative
-      },
-      { 
-        $inc: { tokens: change }
-      },
-      { 
-        new: true,
-        ...options
-      }
-    );
-    
-    if (!result) {
-      // Try to get current balance for error message
-      const currentUser = await User.findOne({ discordId: userId }, null, options);
-      const currentBalance = currentUser?.tokens || 0;
-      throw new Error(`Insufficient tokens for user ${userId}. Required: ${-change}, Available: ${currentBalance}`);
+  let lastError;
+  let currentBalance = null;
+  
+  // Get current balance for error messages (only if not in transaction to avoid conflicts)
+  if (!session) {
+    try {
+      const user = await User.findOne({ discordId: userId });
+      currentBalance = user?.tokens || 0;
+    } catch (e) {
+      // Ignore errors when fetching balance for context
     }
-    
-    return result.tokens || 0;
-  } else {
-    // For positive changes, allow upsert
-    const result = await User.findOneAndUpdate(
-      { discordId: userId },
-      { 
-        $inc: { tokens: change },
-        $setOnInsert: { tokens: change, tokenTracker: '', tokensSynced: false }
-      },
-      { 
-        new: true, 
-        upsert: true, 
-        setDefaultsOnInsert: true,
-        ...options
-      }
-    );
-    
-    return result.tokens || 0;
   }
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // For negative changes, ensure sufficient balance
+      if (change < 0) {
+        const result = await User.findOneAndUpdate(
+          { 
+            discordId: userId,
+            $expr: { $gte: [{ $ifNull: ['$tokens', 0] }, -change] } // Ensure balance won't go negative
+          },
+          { 
+            $inc: { tokens: change }
+          },
+          { 
+            new: true,
+            ...options
+          }
+        );
+        
+        if (!result) {
+          // Try to get current balance for error message
+          if (!currentBalance && !session) {
+            const currentUser = await User.findOne({ discordId: userId }, null, options);
+            currentBalance = currentUser?.tokens || 0;
+          }
+          throw new Error(`Insufficient tokens for user ${userId}. Required: ${-change}, Available: ${currentBalance || 'unknown'}`);
+        }
+        
+        return result.tokens || 0;
+      } else {
+        // For positive changes, allow upsert
+        const result = await User.findOneAndUpdate(
+          { discordId: userId },
+          { 
+            $inc: { tokens: change },
+            $setOnInsert: { tokens: change, tokenTracker: '', tokensSynced: false }
+          },
+          { 
+            new: true, 
+            upsert: true, 
+            setDefaultsOnInsert: true,
+            ...options
+          }
+        );
+        
+        return result.tokens || 0;
+      }
+    } catch (error) {
+      lastError = error;
+      
+      // Check if this is a retryable error (write conflict, transient errors)
+      const isRetryable = 
+        error.code === 112 || // WriteConflict
+        error.code === 251 || // NoSuchTransaction
+        error.hasErrorLabel?.('TransientTransactionError') ||
+        (error.message && (
+          error.message.includes('would create a conflict') ||
+          error.message.includes('WriteConflict') ||
+          error.message.includes('TransientTransactionError')
+        ));
+      
+      // Don't retry on insufficient balance errors
+      if (error.message && error.message.includes('Insufficient tokens')) {
+        throw error;
+      }
+      
+      // Retry on transient errors if we have retries left
+      if (attempt < maxRetries - 1 && isRetryable) {
+        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[vendingHandler.js] [atomicUpdateTokenBalance]: Token update conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`, {
+          userId,
+          change,
+          currentBalance: currentBalance || 'unknown',
+          errorCode: error.code,
+          errorMessage: error.message
+        });
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // If not retryable or max retries reached, throw with detailed error
+      const errorDetails = {
+        userId,
+        change,
+        currentBalance: currentBalance || 'unknown',
+        message: error.message,
+        code: error.code,
+        name: error.name,
+        attempt: attempt + 1,
+        maxRetries,
+        inTransaction: !!session
+      };
+      console.error(`[vendingHandler.js] [atomicUpdateTokenBalance]: Token update failed`, errorDetails);
+      throw new Error(`Failed to update token balance for user ${userId}: ${error.message} (Change: ${change}, Current Balance: ${currentBalance || 'unknown'}, Attempt: ${attempt + 1}/${maxRetries}, Code: ${error.code || 'N/A'})`);
+    }
+  }
+  
+  throw lastError || new Error(`Failed to update token balance for user ${userId} after ${maxRetries} attempts`);
 }
 
 // ------------------- atomicUpdateStockQuantity -------------------
@@ -1537,25 +1751,29 @@ async function handleRestock(interaction) {
 
     // ------------------- Success Response -------------------
     const priceDisplay = [];
-    if (tokenPrice !== null && tokenPrice !== undefined) priceDisplay.push(`Token: ${tokenPrice}`);
-    if (artPrice && artPrice.trim()) priceDisplay.push(`Art: ${artPrice}`);
-    if (otherPrice && otherPrice.trim()) priceDisplay.push(`Other: ${otherPrice}`);
-    if (barterOpen) priceDisplay.push('Barter: Open');
+    if (tokenPrice !== null && tokenPrice !== undefined) priceDisplay.push(`**Token:** ${tokenPrice}`);
+    if (artPrice && artPrice.trim()) priceDisplay.push(`**Art:** ${artPrice}`);
+    if (otherPrice && otherPrice.trim()) priceDisplay.push(`**Other:** ${otherPrice}`);
+    if (barterOpen) priceDisplay.push('**Barter:** Open');
+
+    const shopType = character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'N/A';
+    const remainingPoints = character.vendingPoints - totalCost;
 
     const fields = [
       { name: '👤 Character', value: character.name, inline: true },
       { name: '🏘️ Location', value: character.currentVillage, inline: true },
-      { name: '🛍️ Shop Type', value: character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'N/A', inline: true },
-      { name: '📦 Item', value: `${itemDetails?.emoji || '📦'} ${itemName}`, inline: true },
-      { name: '🎯 Slot', value: newSlot, inline: true },
-      { name: '💰 Prices', value: priceDisplay.join('\n') || 'None set', inline: true },
-      { name: '🪙 Points Spent', value: `${totalCost} points`, inline: true },
-      { name: '💎 Remaining Points', value: `${character.vendingPoints - totalCost} points`, inline: true }
+      { name: '🛍️ Shop Type', value: shopType, inline: true },
+      { name: '📦 Item', value: `${itemDetails?.emoji || '📦'} **${itemName}**`, inline: true },
+      { name: '🎯 Slot', value: `**${newSlot}**`, inline: true },
+      { name: '\u200b', value: '\u200b', inline: true },
+      { name: '💰 Pricing', value: priceDisplay.length > 0 ? priceDisplay.join('\n') : '*No prices set*', inline: false },
+      { name: '🪙 Points Spent', value: `**${totalCost}** points`, inline: true },
+      { name: '💎 Remaining Points', value: `**${remainingPoints}** points`, inline: true }
     ];
 
     const successEmbed = createSuccessEmbed(
       '✅ Item Added to Shop',
-      `Successfully added ${stockQty}x ${itemName} to your shop in ${newSlot}.`,
+      `Successfully added **${stockQty}x ${itemName}** to your shop in **${newSlot}**.`,
       fields
     )
     .setAuthor({ 
@@ -2372,11 +2590,9 @@ async function handleFulfill(interaction) {
           requestStatus: request.status
         });
         
-        // Format error message
-        const errorMessage = initialValidation.errors.length === 1 
-          ? `❌ **Validation Failed**\n\n${initialValidation.errors[0]}` 
-          : `❌ **Validation Failed**\n\nThe following issues prevented this purchase from completing:\n\n${initialValidation.errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n')}`;
-        return interaction.editReply(errorMessage);
+        // Format error message as embed
+        const errorEmbed = createValidationErrorEmbed(initialValidation.errors, fulfillmentId);
+        return interaction.editReply({ embeds: [errorEmbed] });
       }
       
       // ------------------- Mark Request as Processing (Atomic) -------------------
@@ -2424,10 +2640,9 @@ async function handleFulfill(interaction) {
           });
         });
         
-        const errorMessage = validation.errors.length === 1 
-          ? `❌ **Validation Failed**\n\n${validation.errors[0]}` 
-          : `❌ **Validation Failed**\n\nThe following issues prevented this purchase from completing:\n\n${validation.errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n')}`;
-        return interaction.editReply(errorMessage);
+        // Format error message as embed
+        const errorEmbed = createValidationErrorEmbed(validation.errors, fulfillmentId);
+        return interaction.editReply({ embeds: [errorEmbed] });
       }
       
       console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Validation passed, proceeding with transaction', {
@@ -2484,23 +2699,76 @@ async function handleFulfill(interaction) {
           
           try {
             // Use transaction to ensure both token updates happen atomically
-            await runWithTransaction(async (session) => {
-              buyerTokenBalance = await atomicUpdateTokenBalance(buyerId, -totalCost, session);
-              rollbackActions.push({ type: 'token', userId: buyerId, amount: totalCost });
+            // If transaction fails, try individual updates with retry logic as fallback
+            try {
+              await runWithTransaction(async (session) => {
+                buyerTokenBalance = await atomicUpdateTokenBalance(buyerId, -totalCost, session);
+                rollbackActions.push({ type: 'token', userId: buyerId, amount: totalCost });
+                
+                vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, session);
+                rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost });
+              });
               
-              vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, session);
-              rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost });
-            });
-            
-            console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Tokens transferred', {
-              fulfillmentId,
-              buyerBalance: buyerTokenBalance,
-              vendorBalance: vendorTokenBalance
-            });
+              console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Tokens transferred (transaction)', {
+                fulfillmentId,
+                buyerBalance: buyerTokenBalance,
+                vendorBalance: vendorTokenBalance
+              });
+            } catch (transactionError) {
+              // Fallback: Try individual updates with retry logic if transaction fails
+              console.warn('[vendingHandler.js] [handleFulfillBarter] ⚠️ Transaction failed, attempting fallback individual updates', {
+                fulfillmentId,
+                error: transactionError.message
+              });
+              
+              // Get current balances before attempting fallback
+              const buyerUser = await User.findOne({ discordId: buyerId });
+              const vendorUser = await User.findOne({ discordId: vendor.userId });
+              const buyerBalanceBefore = buyerUser?.tokens || 0;
+              const vendorBalanceBefore = vendorUser?.tokens || 0;
+              
+              // Attempt buyer update with retry
+              buyerTokenBalance = await atomicUpdateTokenBalance(buyerId, -totalCost, null, MAX_RETRY_ATTEMPTS);
+              rollbackActions.push({ type: 'token', userId: buyerId, amount: totalCost, fallback: true });
+              
+              try {
+                // Attempt vendor update with retry
+                vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, null, MAX_RETRY_ATTEMPTS);
+                rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost, fallback: true });
+                
+                console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Tokens transferred (fallback)', {
+                  fulfillmentId,
+                  buyerBalance: buyerTokenBalance,
+                  vendorBalance: vendorTokenBalance
+                });
+              } catch (vendorError) {
+                // Rollback buyer update if vendor update fails
+                console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Vendor token update failed, rolling back buyer update', {
+                  fulfillmentId,
+                  vendorError: vendorError.message
+                });
+                try {
+                  await atomicUpdateTokenBalance(buyerId, totalCost, null, MAX_RETRY_ATTEMPTS);
+                  console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Buyer token rollback successful', { fulfillmentId });
+                } catch (rollbackError) {
+                  console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Buyer token rollback failed', {
+                    fulfillmentId,
+                    rollbackError: rollbackError.message,
+                    buyerId,
+                    amount: totalCost
+                  });
+                }
+                throw new Error(`Failed to update vendor tokens: ${vendorError.message}. Buyer tokens were rolled back.`);
+              }
+            }
           } catch (tokenError) {
             console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Token transfer failed', {
               fulfillmentId,
-              error: tokenError.message
+              buyerId,
+              vendorId: vendor.userId,
+              totalCost,
+              error: tokenError.message,
+              stack: tokenError.stack
             });
             throw new Error(`Failed to transfer tokens: ${tokenError.message}`);
           }
@@ -3085,31 +3353,77 @@ async function handleFulfill(interaction) {
       
       // Attempt rollback if we have rollback actions
       if (rollbackActions.length > 0) {
-        console.error("[handleFulfill]: Attempting rollback...");
+        console.error("[handleFulfill]: Attempting rollback...", {
+          rollbackActionsCount: rollbackActions.length,
+          fulfillmentId: interaction?.options?.getString("fulfillmentid") || 'unknown'
+        });
         try {
+          // Reverse to undo in opposite order
           for (const action of rollbackActions.reverse()) {
-            if (action.type === 'token') {
-              await atomicUpdateTokenBalance(action.userId, action.amount).catch(e => 
-                console.error(`[handleFulfill]: Rollback failed for token ${action.userId}:`, e.message)
-              );
-            } else if (action.type === 'stock') {
-              await action.VendingInventory.updateOne(
-                { _id: action.itemId },
-                { $inc: { stockQty: action.quantity } }
-              ).catch(e => 
-                console.error(`[handleFulfill]: Rollback failed for stock ${action.itemId}:`, e.message)
-              );
-            } else if (action.type === 'inventory') {
-              await action.buyerInventory.deleteOne({
+            try {
+              if (action.type === 'token') {
+                // Use retry logic for token rollback
+                await atomicUpdateTokenBalance(action.userId, action.amount, null, MAX_RETRY_ATTEMPTS);
+                console.log(`[handleFulfill]: ✓ Rolled back token transfer`, {
+                  userId: action.userId,
+                  amount: action.amount,
+                  fallback: action.fallback || false
+                });
+              } else if (action.type === 'stock') {
+                await action.VendingInventory.updateOne(
+                  { _id: action.itemId },
+                  { $inc: { stockQty: action.quantity } }
+                );
+                console.log(`[handleFulfill]: ✓ Rolled back stock update`, {
+                  itemId: action.itemId,
+                  quantity: action.quantity
+                });
+              } else if (action.type === 'inventory') {
+                await action.buyerInventory.deleteOne({
+                  itemName: action.itemName,
+                  quantity: action.quantity
+                });
+                console.log(`[handleFulfill]: ✓ Rolled back inventory insert`, {
+                  itemName: action.itemName,
+                  quantity: action.quantity
+                });
+              }
+            } catch (rollbackItemError) {
+              // Log detailed error but continue with other rollback actions
+              const errorDetails = {
+                actionType: action.type,
+                userId: action.userId,
+                itemId: action.itemId,
                 itemName: action.itemName,
-                quantity: action.quantity
-              }).catch(e => 
-                console.error(`[handleFulfill]: Rollback failed for inventory:`, e.message)
-              );
+                amount: action.amount,
+                quantity: action.quantity,
+                errorMessage: rollbackItemError.message,
+                errorCode: rollbackItemError.code,
+                errorName: rollbackItemError.name
+              };
+              console.error(`[handleFulfill]: ❌ Rollback failed for ${action.type}`, errorDetails);
+              
+              // If token rollback fails, this is critical - log with high priority
+              if (action.type === 'token') {
+                console.error(`[handleFulfill]: ⚠️ CRITICAL: Token rollback failed - manual intervention may be required`, {
+                  userId: action.userId,
+                  amount: action.amount,
+                  originalError: error.message,
+                  rollbackError: rollbackItemError.message
+                });
+              }
             }
           }
+          console.log("[handleFulfill]: Rollback completed", {
+            totalActions: rollbackActions.length,
+            fulfillmentId: interaction?.options?.getString("fulfillmentid") || 'unknown'
+          });
         } catch (rollbackError) {
-          console.error("[handleFulfill]: Rollback error:", rollbackError);
+          console.error("[handleFulfill]: Rollback error:", {
+            error: rollbackError.message,
+            stack: rollbackError.stack,
+            fulfillmentId: interaction?.options?.getString("fulfillmentid") || 'unknown'
+          });
         }
       }
 

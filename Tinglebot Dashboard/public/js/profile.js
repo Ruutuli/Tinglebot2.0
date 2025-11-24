@@ -2776,7 +2776,7 @@ async function createVendorCard(character) {
       <div style="flex: 1;">
         <h4 style="margin: 0 0 0.15rem 0; color: var(--text-color); font-size: 1.1rem; font-weight: 600;">${character.name}</h4>
         <p style="margin: 0; color: var(--text-secondary); font-size: 0.85rem;">
-          ${capitalize(character.vendorType || character.job || 'Vendor')} • ${usedSlots}/${totalSlots} slots
+          ${capitalize(character.vendorType || character.job || 'Vendor')} • ${capitalize(character.currentVillage || character.homeVillage || 'Unknown')} • ${usedSlots}/${totalSlots} slots
         </p>
       </div>
     </div>
@@ -2934,6 +2934,153 @@ function showValidationErrorsModal(errors, title, type = 'error') {
     }
   };
   document.addEventListener('keydown', handleEscape);
+}
+
+// ------------------- Function: showRestockModal -------------------
+// Shows a custom styled modal for restocking vending items
+function showRestockModal(itemName, costEach) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'character-modal';
+    modal.style.zIndex = '10003';
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'character-modal-content';
+    modalContent.style.maxWidth = '500px';
+
+    modalContent.innerHTML = `
+      <div class="character-modal-header">
+        <h2 style="margin: 0; color: var(--text-color); font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+          <i class="fas fa-shopping-cart" style="color: var(--primary-color);"></i> Restock Item
+        </h2>
+        <button class="close-modal" style="background: transparent; border: none; color: var(--text-color); font-size: 2rem; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s;" onmouseover="this.style.background='var(--input-bg)'; this.style.color='var(--error-color)'" onmouseout="this.style.background='transparent'; this.style.color='var(--text-color)'">&times;</button>
+      </div>
+      <div class="character-modal-body" style="padding: 2rem;">
+        <div style="margin-bottom: 1.5rem;">
+          <div style="background: linear-gradient(135deg, rgba(0,123,255,0.1) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--primary-color); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <i class="fas fa-box" style="color: var(--primary-color); font-size: 1.5rem;"></i>
+              <div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 0.25rem;">Item Name</div>
+                <div style="font-size: 1.25rem; color: var(--text-color); font-weight: 700;">${escapeHtmlAttribute(itemName)}</div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+              <i class="fas fa-coins" style="color: #ffc107; font-size: 1.25rem;"></i>
+              <div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 0.25rem;">Cost Per Item</div>
+                <div style="font-size: 1.1rem; color: var(--text-color); font-weight: 700;">${costEach.toLocaleString()} vending points</div>
+              </div>
+            </div>
+          </div>
+
+          <label style="display: block; margin-bottom: 0.75rem; color: var(--text-color); font-weight: 600; font-size: 0.95rem;">
+            Quantity <span style="color: var(--error-color); font-weight: 700;">*</span>
+          </label>
+          <input 
+            type="number" 
+            id="restock-quantity-input"
+            min="1"
+            value="1"
+            step="1"
+            style="width: 100%; padding: 1rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1.1rem; font-weight: 600; transition: all 0.2s; box-sizing: border-box;"
+            onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+            onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+            oninput="updateRestockTotal()"
+          />
+
+          <div id="restock-total-display" style="margin-top: 1.25rem; padding: 1rem; background: linear-gradient(135deg, rgba(76,175,80,0.1) 0%, rgba(76,175,80,0.05) 100%); border: 2px solid #4CAF50; border-radius: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 0.25rem;">Total Cost</div>
+              <div id="restock-total-amount" style="font-size: 1.5rem; color: #4CAF50; font-weight: 700;">${costEach.toLocaleString()} points</div>
+            </div>
+            <i class="fas fa-calculator" style="color: #4CAF50; font-size: 2rem; opacity: 0.7;"></i>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+          <button 
+            id="restock-cancel-btn"
+            type="button"
+            style="flex: 1; padding: 1rem; background: var(--input-bg); color: var(--text-color); border: 2px solid var(--border-color); border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"
+            onmouseover="this.style.background='var(--error-color)'; this.style.borderColor='var(--error-color)'; this.style.color='white'"
+            onmouseout="this.style.background='var(--input-bg)'; this.style.borderColor='var(--border-color)'; this.style.color='var(--text-color)'"
+          >
+            <i class="fas fa-times"></i> Cancel
+          </button>
+          <button 
+            id="restock-confirm-btn"
+            type="button"
+            style="flex: 1; padding: 1rem; background: var(--primary-color); color: white; border: 2px solid var(--primary-color); border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 2px 8px rgba(0,123,255,0.3);"
+            onmouseover="this.style.background='var(--primary-hover)'; this.style.borderColor='var(--primary-hover)'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,123,255,0.4)'"
+            onmouseout="this.style.background='var(--primary-color)'; this.style.borderColor='var(--primary-color)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,123,255,0.3)'"
+          >
+            <i class="fas fa-check"></i> Confirm Restock
+          </button>
+        </div>
+      </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    // Function to update total cost display
+    window.updateRestockTotal = function() {
+      const quantityInput = document.getElementById('restock-quantity-input');
+      const totalDisplay = document.getElementById('restock-total-amount');
+      const quantity = parseInt(quantityInput.value) || 0;
+      const totalCost = costEach * quantity;
+      totalDisplay.textContent = totalCost.toLocaleString() + ' points';
+    };
+
+    // Focus input on mount
+    const quantityInput = document.getElementById('restock-quantity-input');
+    quantityInput.focus();
+    quantityInput.select();
+
+    // Close handlers
+    const closeModal = () => {
+      document.body.removeChild(modal);
+      delete window.updateRestockTotal;
+      resolve(null);
+    };
+
+    modal.querySelector('.close-modal').addEventListener('click', closeModal);
+    document.getElementById('restock-cancel-btn').addEventListener('click', closeModal);
+
+    // Confirm handler
+    document.getElementById('restock-confirm-btn').addEventListener('click', () => {
+      const quantity = parseInt(quantityInput.value);
+      if (isNaN(quantity) || quantity <= 0) {
+        quantityInput.style.borderColor = 'var(--error-color)';
+        quantityInput.style.boxShadow = '0 0 0 3px rgba(220,53,69,0.1)';
+        setTimeout(() => {
+          quantityInput.style.borderColor = 'var(--border-color)';
+          quantityInput.style.boxShadow = 'none';
+        }, 2000);
+        return;
+      }
+      document.body.removeChild(modal);
+      delete window.updateRestockTotal;
+      resolve(quantity);
+    });
+
+    // Close on escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeModal();
+      }
+    });
+  });
 }
 
 // ------------------- Function: showVendingSetupModal -------------------
@@ -4449,27 +4596,36 @@ export async function loadVendorDashboard(characterId) {
     return;
   }
 
-  // Filter inventory items by job, village, and limited status
-  const characterJob = character.job?.toLowerCase() || '';
-  const characterVillage = (character.currentVillage || character.homeVillage || '').toLowerCase();
+  // Fetch village shop items for restocking (from vending_stock collection)
+  let villageShopItems = [];
+  let limitedItems = [];
+  const characterVillage = character.currentVillage || character.homeVillage;
+  const characterVendorType = character.vendorType?.toLowerCase() || character.job?.toLowerCase() || '';
   
-  const jobItems = characterInventory.filter(item => {
-    const itemJob = item.job?.toLowerCase() || '';
-    return itemJob && itemJob === characterJob;
-  });
-  
-  const villageItems = characterInventory.filter(item => {
-    const itemLocation = item.location?.toLowerCase() || '';
-    return itemLocation && itemLocation === characterVillage;
-  });
-  
-  const limitedItems = characterInventory.filter(item => {
-    const type = typeof item.type === 'string' ? item.type.toLowerCase() : '';
-    const category = typeof item.category === 'string' ? item.category.toLowerCase() : '';
-    const obtain = typeof item.obtain === 'string' ? item.obtain.toLowerCase() : '';
-    const subtype = typeof item.subtype === 'string' ? item.subtype.toLowerCase() : '';
-    return type.includes('limited') || category.includes('limited') || obtain.includes('limited') || subtype.includes('limited');
-  });
+  if (characterVillage) {
+    try {
+      const villageShopResponse = await fetch(`/api/village-shops/${encodeURIComponent(characterVillage)}`, {
+        credentials: 'include'
+      });
+      if (villageShopResponse.ok) {
+        const villageData = await villageShopResponse.json();
+        if (villageData.success) {
+          // Filter items by vendor type (merchant or shopkeeper)
+          const allItems = villageData.items || [];
+          villageShopItems = allItems.filter(item => {
+            if (!item.vendingType) return true; // Include items without type
+            const itemType = item.vendingType.toLowerCase();
+            return itemType === characterVendorType;
+          });
+          limitedItems = villageData.limitedItems || [];
+        }
+      } else {
+        console.warn('[profile.js]: Failed to load village shop items:', villageShopResponse.status);
+      }
+    } catch (error) {
+      console.warn('[profile.js]: Could not load village shop items:', error);
+    }
+  }
 
   // Calculate slot info
   const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
@@ -4489,7 +4645,8 @@ export async function loadVendorDashboard(characterId) {
   const isCurrentMonth = lastCollectedMonth === currentMonth;
 
   const iconUrl = formatCharacterIconUrl(character.icon);
-  const shopImage = character.vendingSetup?.shopImage || character.shopImage || '';
+  const DEFAULT_SHOP_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
+  const shopImage = character.vendingSetup?.shopImage || character.shopImage || DEFAULT_SHOP_IMAGE_URL;
   const isSetup = character.vendingSetup?.setupDate;
 
   // Build dashboard HTML
@@ -4501,7 +4658,7 @@ export async function loadVendorDashboard(characterId) {
         <div style="flex: 1;">
           <h2 style="margin: 0 0 0.5rem 0; color: white; font-size: 2.5rem; font-weight: 700;">${escapeHtmlAttribute(character.name)}</h2>
           <p style="margin: 0; color: rgba(255,255,255,0.9); font-size: 1.2rem;">
-            ${capitalize(character.vendorType || character.job || 'Vendor')} • ${capitalize(character.shopPouch || character.vendingSetup?.pouchType || 'No')} Pouch
+            ${capitalize(character.vendorType || character.job || 'Vendor')} • ${capitalize(character.currentVillage || character.homeVillage || 'Unknown')} • ${capitalize(character.shopPouch || character.vendingSetup?.pouchType || 'No')} Pouch
           </p>
         </div>
       </div>
@@ -4534,11 +4691,10 @@ export async function loadVendorDashboard(characterId) {
         </div>
       </div>
       
-      ${shopImage ? `
-      <div style="margin-top: 1rem; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.3); position: relative; z-index: 1;">
-        <img src="${escapeHtmlAttribute(shopImage)}" alt="Shop Banner" style="width: 100%; max-height: 250px; object-fit: cover;" onerror="this.style.display='none'">
+      <!-- Shop Banner Image -->
+      <div style="margin-top: 1rem; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.3); position: relative; z-index: 1; background: var(--input-bg); border: 2px solid var(--border-color);">
+        <img src="${escapeHtmlAttribute(shopImage)}" alt="Shop Banner" style="width: 100%; max-height: 300px; object-fit: cover; display: block;" onerror="this.src='${DEFAULT_SHOP_IMAGE_URL}'">
       </div>
-      ` : ''}
     </div>
     
     <div style="padding: 0;">
@@ -4554,18 +4710,6 @@ export async function loadVendorDashboard(characterId) {
         <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
           <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Items in Stock</div>
           <div style="font-size: 2rem; font-weight: 700; color: var(--primary-color);">${inventoryData?.items?.length || 0}</div>
-        </div>
-        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Job Items</div>
-          <div style="font-size: 2rem; font-weight: 700; color: var(--text-color);">${jobItems.length}</div>
-        </div>
-        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Village Items</div>
-          <div style="font-size: 2rem; font-weight: 700; color: var(--text-color);">${villageItems.length}</div>
-        </div>
-        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(255,193,7,0.1) 100%); border: 2px solid ${limitedItems.length > 0 ? '#ffc107' : 'var(--border-color)'}; border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Limited Items</div>
-          <div style="font-size: 2rem; font-weight: 700; color: ${limitedItems.length > 0 ? '#ffc107' : 'var(--text-color)'};">${limitedItems.length}</div>
         </div>
       </div>
 
@@ -4644,107 +4788,104 @@ export async function loadVendorDashboard(characterId) {
         </div>
       </div>
 
-      <!-- Available Items Sections -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-        <!-- Job Items -->
-        ${jobItems.length > 0 ? `
-        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-            <i class="fas fa-briefcase" style="color: var(--primary-color);"></i>
-            ${capitalize(character.job || 'Job')} Items (${jobItems.length})
+      <!-- Available Stock for Restocking Section -->
+      ${(villageShopItems.length > 0 || limitedItems.length > 0) ? `
+      <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(16,185,129,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <h3 style="margin: 0; color: var(--text-color); font-size: 1.4rem; display: flex; align-items: center; gap: 0.75rem; font-weight: 700;">
+            <i class="fas fa-store" style="color: var(--success-color); font-size: 1.2rem;"></i>
+            Available Stock in ${capitalize(characterVillage)} (${villageShopItems.length + limitedItems.length})
           </h3>
-          <div style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
-            ${jobItems.slice(0, 10).map(item => `
-              <div style="padding: 0.75rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <div style="font-weight: 600; color: var(--text-color); font-size: 0.95rem;">${escapeHtmlAttribute(item.itemName)}</div>
-                  <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Qty: ${item.quantity || 1}</div>
-                </div>
-                <button class="dashboard-add-from-inventory-btn" data-character-id="${character._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" style="
-                  padding: 0.5rem 1rem;
-                  background: var(--primary-color);
-                  color: white;
-                  border: none;
-                  border-radius: 0.4rem;
-                  cursor: pointer;
-                  font-size: 0.85rem;
-                  font-weight: 500;
-                  transition: background 0.2s;
-                " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'">
-                  <i class="fas fa-plus"></i> Add
-                </button>
-              </div>
-            `).join('')}
-            ${jobItems.length > 10 ? `<div style="text-align: center; padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">+ ${jobItems.length - 10} more items</div>` : ''}
-          </div>
+          <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+            Items available for restocking from village shop
+          </p>
         </div>
-        ` : ''}
-        
-        <!-- Village Items -->
-        ${villageItems.length > 0 ? `
-        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(16,185,129,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-            <i class="fas fa-map-marker-alt" style="color: var(--success-color);"></i>
-            ${capitalize(character.currentVillage || character.homeVillage || 'Village')} Items (${villageItems.length})
-          </h3>
-          <div style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
-            ${villageItems.slice(0, 10).map(item => `
-              <div style="padding: 0.75rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <div style="font-weight: 600; color: var(--text-color); font-size: 0.95rem;">${escapeHtmlAttribute(item.itemName)}</div>
-                  <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Qty: ${item.quantity || 1}</div>
+        ${villageShopItems.length > 0 ? `
+        <div style="margin-bottom: 2rem;">
+          <h4 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.1rem; font-weight: 600;">
+            ${capitalize(characterVendorType || 'Vendor')} Items (${villageShopItems.length})
+          </h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; max-height: 400px; overflow-y: auto;">
+            ${villageShopItems.map(item => `
+              <div style="padding: 1rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid var(--border-color); text-align: center;">
+                <div style="font-weight: 600; color: var(--text-color); font-size: 0.95rem; margin-bottom: 0.5rem;">${escapeHtmlAttribute(item.itemName)}</div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                  ${item.vendingType ? `<span style="background: ${item.vendingType.toLowerCase() === 'merchant' ? 'rgba(0,123,255,0.1)' : 'rgba(16,185,129,0.1)'}; color: ${item.vendingType.toLowerCase() === 'merchant' ? 'var(--primary-color)' : 'var(--success-color)'}; padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-weight: 600; font-size: 0.7rem;">${item.vendingType}</span>` : ''}
                 </div>
-                <button class="dashboard-add-from-inventory-btn" data-character-id="${character._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" style="
-                  padding: 0.5rem 1rem;
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                  <span style="color: var(--primary-color); font-weight: 600;">${item.costEach || 0}</span> points each
+                </div>
+                ${item.costEach > 0 ? `
+                <button class="dashboard-restock-from-shop-btn" data-character-id="${character._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" data-cost-each="${item.costEach || 0}" style="
+                  width: 100%;
+                  padding: 0.5rem;
                   background: var(--success-color);
                   color: white;
                   border: none;
                   border-radius: 0.4rem;
                   cursor: pointer;
                   font-size: 0.85rem;
-                  font-weight: 500;
+                  font-weight: 600;
                   transition: background 0.2s;
                 " onmouseover="this.style.background='var(--success-hover)'" onmouseout="this.style.background='var(--success-color)'">
-                  <i class="fas fa-plus"></i> Add
+                  <i class="fas fa-shopping-cart"></i> Restock
                 </button>
+                ` : `
+                <div style="font-size: 0.75rem; color: var(--text-secondary); font-style: italic;">Not available for restock</div>
+                `}
               </div>
             `).join('')}
-            ${villageItems.length > 10 ? `<div style="text-align: center; padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">+ ${villageItems.length - 10} more items</div>` : ''}
+          </div>
+        </div>
+        ` : ''}
+        ${limitedItems.length > 0 ? `
+        <div>
+          <h4 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fas fa-star" style="color: #ffc107;"></i>
+            Limited Items (${limitedItems.length})
+          </h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; max-height: 400px; overflow-y: auto;">
+            ${limitedItems.map(item => `
+              <div style="padding: 1rem; background: linear-gradient(135deg, var(--input-bg) 0%, rgba(255,193,7,0.1) 100%); border-radius: 0.5rem; border: 2px solid #ffc107; text-align: center;">
+                <div style="font-weight: 600; color: var(--text-color); font-size: 0.95rem; margin-bottom: 0.5rem;">${escapeHtmlAttribute(item.itemName)}</div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                  <span style="background: rgba(255,193,7,0.2); color: #ffc107; padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-weight: 600; font-size: 0.7rem;">Limited</span>
+                  ${item.stock ? `<span style="margin-left: 0.5rem; color: var(--text-secondary);">Stock: ${item.stock}</span>` : ''}
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                  <span style="color: #ffc107; font-weight: 600;">${item.costEach || 0}</span> points each
+                </div>
+                ${item.costEach > 0 ? `
+                <button class="dashboard-restock-from-shop-btn" data-character-id="${character._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" data-cost-each="${item.costEach || 0}" style="
+                  width: 100%;
+                  padding: 0.5rem;
+                  background: #ffc107;
+                  color: #000;
+                  border: none;
+                  border-radius: 0.4rem;
+                  cursor: pointer;
+                  font-size: 0.85rem;
+                  font-weight: 600;
+                  transition: background 0.2s;
+                " onmouseover="this.style.background='#ffb300'" onmouseout="this.style.background='#ffc107'">
+                  <i class="fas fa-shopping-cart"></i> Restock
+                </button>
+                ` : `
+                <div style="font-size: 0.75rem; color: var(--text-secondary); font-style: italic;">Not available for restock</div>
+                `}
+              </div>
+            `).join('')}
           </div>
         </div>
         ` : ''}
       </div>
-
-      <!-- Limited Items -->
-      ${limitedItems.length > 0 ? `
-      <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(255,193,7,0.1) 100%); border: 2px solid #ffc107; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(255,193,7,0.2);">
-        <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-          <i class="fas fa-star" style="color: #ffc107;"></i>
-          Limited Items (${limitedItems.length})
-        </h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
-          ${limitedItems.slice(0, 12).map(item => `
-            <div style="padding: 1rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid #ffc107; text-align: center;">
-              <div style="font-weight: 600; color: var(--text-color); font-size: 0.9rem; margin-bottom: 0.5rem;">${escapeHtmlAttribute(item.itemName)}</div>
-              <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Qty: ${item.quantity || 1}</div>
-              <button class="dashboard-add-from-inventory-btn" data-character-id="${character._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" style="
-                width: 100%;
-                padding: 0.5rem;
-                background: #ffc107;
-                color: #000;
-                border: none;
-                border-radius: 0.4rem;
-                cursor: pointer;
-                font-size: 0.85rem;
-                font-weight: 600;
-                transition: background 0.2s;
-              " onmouseover="this.style.background='#ffb300'" onmouseout="this.style.background='#ffc107'">
-                <i class="fas fa-plus"></i> Add to Shop
-              </button>
-            </div>
-          `).join('')}
+      ` : characterVillage ? `
+      <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+          <i class="fas fa-store" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+          <div style="font-size: 1rem; font-weight: 500;">No stock available in ${capitalize(characterVillage)}</div>
+          <div style="font-size: 0.85rem; margin-top: 0.5rem;">Stock is generated monthly. Check back next month!</div>
         </div>
-        ${limitedItems.length > 12 ? `<div style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.9rem; margin-top: 1rem;">+ ${limitedItems.length - 12} more limited items</div>` : ''}
       </div>
       ` : ''}
 
@@ -4802,6 +4943,27 @@ export async function loadVendorDashboard(characterId) {
                   </div>
                 </div>
                 <div style="display: flex; gap: 0.75rem; margin-left: 1.5rem;">
+                  ${item.costEach > 0 ? `
+                  <button class="dashboard-restock-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" data-cost-each="${item.costEach}" data-slot="${item.slot || ''}" style="
+                    padding: 0.75rem 1.25rem;
+                    background: linear-gradient(135deg, var(--success-color) 0%, #45a049 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 0.5rem;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 0.5rem;
+                    box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3);
+                  " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 10px rgba(76, 175, 80, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 6px rgba(76, 175, 80, 0.3)'" title="Restock item (${item.costEach} points each)">
+                    <i class="fas fa-sync-alt"></i>
+                    Restock
+                  </button>
+                  ` : ''}
                   <button class="dashboard-edit-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
                     padding: 0.75rem 1.25rem;
                     background: linear-gradient(135deg, var(--primary-color) 0%, #0056b3 100%);
@@ -4937,14 +5099,144 @@ export async function loadVendorDashboard(characterId) {
     });
   });
 
-  // Add event listeners for "Add from inventory" buttons
-  const addFromInventoryButtons = dashboardContent.querySelectorAll('.dashboard-add-from-inventory-btn');
-  addFromInventoryButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      // Open the add vendor item modal - it will handle finding the item
-      showAddVendorItemModal(character);
+  // Add event listeners for restock from shop buttons
+  const restockFromShopButtons = dashboardContent.querySelectorAll('.dashboard-restock-from-shop-btn');
+  restockFromShopButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const characterId = btn.dataset.characterId;
+      const itemName = btn.dataset.itemName;
+      const costEach = parseFloat(btn.dataset.costEach) || 0;
+
+      if (costEach <= 0) {
+        alert('This item cannot be restocked (no cost set).');
+        return;
+      }
+
+      // Show custom restock modal
+      const quantity = await showRestockModal(itemName, costEach);
+      if (!quantity) return;
+
+      const totalCost = costEach * quantity;
+
+      // Disable button during request
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restocking...';
+
+      try {
+        // First, check if item exists in vending inventory
+        const inventoryResponse = await fetch(`/api/characters/${characterId}/vending`, {
+          credentials: 'include'
+        });
+        
+        if (!inventoryResponse.ok) {
+          throw new Error('Failed to fetch vending inventory');
+        }
+
+        const inventoryData = await inventoryResponse.json();
+        const existingItem = inventoryData.items?.find(item => item.itemName === itemName);
+
+        if (!existingItem) {
+          alert(`Item "${itemName}" is not in your vending inventory. Please add it first using "Add Item from Inventory".`);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-shopping-cart"></i> Restock';
+          return;
+        }
+
+        // Restock the item
+        const response = await fetch(`/api/characters/${characterId}/vending/restock`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            itemId: existingItem._id,
+            itemName: itemName,
+            quantity: quantity,
+            slot: existingItem.slot || ''
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          alert(`Successfully restocked ${quantity} × ${itemName}!\n\nPoints spent: ${totalCost}`);
+          // Reload dashboard to show updated stock
+          await loadVendorDashboard(characterId);
+        } else {
+          alert(`Failed to restock: ${result.error || 'Unknown error'}`);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-shopping-cart"></i> Restock';
+        }
+      } catch (error) {
+        console.error('[profile.js]: Error restocking item from shop:', error);
+        alert(`Error restocking item: ${error.message}`);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-shopping-cart"></i> Restock';
+      }
     });
   });
+
+  // Add event listeners for restock buttons
+  const restockButtons = dashboardContent.querySelectorAll('.dashboard-restock-item-btn');
+  restockButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const characterId = btn.dataset.characterId;
+      const itemId = btn.dataset.itemId;
+      const itemName = btn.dataset.itemName;
+      const costEach = parseFloat(btn.dataset.costEach) || 0;
+      const slot = btn.dataset.slot || '';
+
+      if (costEach <= 0) {
+        alert('This item cannot be restocked (no cost set).');
+        return;
+      }
+
+      // Show custom restock modal
+      const quantity = await showRestockModal(itemName, costEach);
+      if (!quantity) return;
+
+      const totalCost = costEach * quantity;
+
+      // Disable button during request
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restocking...';
+
+      try {
+        const response = await fetch(`/api/characters/${characterId}/vending/restock`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            itemId: itemId,
+            itemName: itemName,
+            quantity: quantity,
+            slot: slot
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          alert(`Successfully restocked ${quantity} × ${itemName}!\n\nPoints spent: ${totalCost}`);
+          // Reload dashboard to show updated stock
+          await loadVendorDashboard(characterId);
+        } else {
+          alert(`Failed to restock: ${result.error || 'Unknown error'}`);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt"></i> Restock';
+        }
+      } catch (error) {
+        console.error('[profile.js]: Error restocking item:', error);
+        alert(`Error restocking item: ${error.message}`);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Restock';
+      }
+    });
+  });
+
 }
 
 // ------------------- Function: showEditVendorItemModal -------------------

@@ -8,10 +8,16 @@ dotenv.config();
 // Checks multiple environment variable name patterns for flexibility
 const getMongoUri = (type) => {
   // Try production-specific variable first, then generic, then fallback
-  return process.env[`MONGODB_${type}_URI_PROD`] 
+  let uri = process.env[`MONGODB_${type}_URI_PROD`] 
       || process.env[`MONGODB_${type}_URI`]
-      || process.env.MONGODB_URI
-      || null;
+      || process.env.MONGODB_URI;
+  
+  // Fallback for vending database
+  if (!uri && type === 'VENDING') {
+    uri = 'mongodb://tinglebot.4cmc11t.mongodb.net/tinglebot';
+  }
+  
+  return uri || null;
 };
 
 const dbConfig = {

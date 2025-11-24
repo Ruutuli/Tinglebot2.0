@@ -40,7 +40,9 @@ const {
   getCharacterInventoryCollection,
   getTokenBalance,
   getUserById,
-  getOrCreateUser
+  getOrCreateUser,
+  getCurrentVendingStockList,
+  getLimitedItems
 } = require('./database/db');
 
 // Import models
@@ -2354,6 +2356,52 @@ app.get('/api/models/:modelType', async (req, res) => {
           synced: { type: String, unique: true }
         })) : null;
         break;
+      case 'vending':
+        // Vending uses vending_stock collection, handle specially
+        if (!vendingConnection) {
+          console.error(`[server.js]: ❌ Vending connection not initialized`);
+          return res.status(500).json({ error: 'Vending database connection not available' });
+        }
+        // Query vending_stock collection directly
+        try {
+          const db = vendingConnection.db;
+          const stockCollection = db.collection('vending_stock');
+          const currentMonth = new Date().getMonth() + 1;
+          
+          // Get current month's stock
+          const stockData = await stockCollection.findOne({ month: currentMonth });
+          
+          if (!stockData) {
+            return res.json({
+              data: [],
+              pagination: {
+                page: 1,
+                pages: 1,
+                total: 0,
+                limit: 15
+              }
+            });
+          }
+          
+          // Convert ObjectId to string for JSON serialization
+          if (stockData._id && stockData._id.toString) {
+            stockData._id = stockData._id.toString();
+          }
+          
+          // Return the stock data
+          return res.json({
+            data: [stockData],
+            pagination: {
+              page: 1,
+              pages: 1,
+              total: 1,
+              limit: 1
+            }
+          });
+        } catch (error) {
+          console.error(`[server.js]: ❌ Error fetching vending stock:`, error);
+          return res.status(500).json({ error: 'Failed to fetch vending stock', details: error.message });
+        }
       default:
         return res.status(400).json({ error: 'Invalid model type' });
     }
@@ -2364,9 +2412,22 @@ app.get('/api/models/:modelType', async (req, res) => {
     }
 
     // Ensure database connection is available
-    if (mongoose.connection.readyState !== 1) {
-      console.error(`[server.js]: ❌ Database not connected. State: ${mongoose.connection.readyState}`);
-      return res.status(500).json({ error: 'Database connection not available' });
+    // For vending, check vendingConnection; for inventory, check inventoriesConnection; otherwise check main connection
+    if (modelType === 'vending') {
+      if (!vendingConnection || vendingConnection.readyState !== 1) {
+        console.error(`[server.js]: ❌ Vending database not connected. State: ${vendingConnection?.readyState || 'null'}`);
+        return res.status(500).json({ error: 'Vending database connection not available' });
+      }
+    } else if (modelType === 'inventory') {
+      if (!inventoriesConnection || inventoriesConnection.readyState !== 1) {
+        console.error(`[server.js]: ❌ Inventories database not connected. State: ${inventoriesConnection?.readyState || 'null'}`);
+        return res.status(500).json({ error: 'Inventories database connection not available' });
+      }
+    } else {
+      if (mongoose.connection.readyState !== 1) {
+        console.error(`[server.js]: ❌ Database not connected. State: ${mongoose.connection.readyState}`);
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
     }
 
     // For filtered item requests or all=true requests, return all items
@@ -6818,6 +6879,7 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
         itemName: item.itemName,
         itemId: item.itemId || item.itemId?.toString(),
         stockQty: item.stockQty,
+        costEach: item.costEach || 0,
         tokenPrice: item.tokenPrice,
         artPrice: item.artPrice,
         otherPrice: item.otherPrice,
@@ -7260,6 +7322,110 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
       error: 'Failed to add item to vending shop', 
       details: error.message 
     });
+  }
+});
+
+// ------------------- Function: restockVendingItem -------------------
+// Restocks an existing vending item using vending points
+app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const userId = req.user.discordId;
+    const { itemId, itemName, quantity, slot } = req.body;
+
+    if (!itemId || !itemName || !quantity || quantity <= 0) {
+      return res.status(400).json({ error: 'Invalid restock request. Item ID, name, and quantity are required.' });
+    }
+
+    // Find character (check both regular and mod characters)
+    let character = await Character.findById(characterId);
+    if (!character) {
+      character = await ModCharacter.findById(characterId);
+    }
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Verify character belongs to user
+    if (character.userId !== userId) {
+      return res.status(403).json({ error: 'You do not have permission to modify this character' });
+    }
+
+    // Check if character has vending setup
+    if (!character.vendingSetup?.setupDate) {
+      return res.status(400).json({ error: 'Character must set up vending shop first' });
+    }
+
+    // Initialize vending inventory model
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const VendingInventory = await initializeVendingInventoryModel(character.name);
+
+    // Find the existing item
+    let vendingItem;
+    try {
+      if (itemId.match(/^[0-9a-fA-F]{24}$/)) {
+        vendingItem = await VendingInventory.findById(itemId);
+      }
+      if (!vendingItem) {
+        vendingItem = await VendingInventory.findOne({ 
+          characterName: character.name, 
+          itemName: itemName,
+          ...(slot ? { slot: slot } : {})
+        });
+      }
+    } catch (error) {
+      console.error('[server.js]: Error finding vending item:', error);
+      return res.status(500).json({ error: 'Error finding vending item', details: error.message });
+    }
+
+    if (!vendingItem) {
+      return res.status(404).json({ error: 'Vending item not found' });
+    }
+
+    // Check if item has costEach set
+    if (!vendingItem.costEach || vendingItem.costEach <= 0) {
+      return res.status(400).json({ error: 'This item cannot be restocked. No cost per item is set.' });
+    }
+
+    // Calculate total cost
+    const totalCost = vendingItem.costEach * quantity;
+
+    // Check if character has enough vending points
+    if (character.vendingPoints < totalCost) {
+      return res.status(400).json({ 
+        error: `Insufficient vending points. Required: ${totalCost}, Available: ${character.vendingPoints}` 
+      });
+    }
+
+    // Update vending inventory - increment stock and points spent
+    await VendingInventory.findByIdAndUpdate(vendingItem._id, {
+      $inc: { 
+        stockQty: quantity,
+        pointsSpent: totalCost
+      },
+      $set: {
+        date: new Date(),
+        boughtFrom: character.currentVillage || character.homeVillage || 'Unknown'
+      }
+    });
+
+    // Deduct vending points from character
+    character.vendingPoints -= totalCost;
+    await character.save();
+
+    console.log(`[server.js]: ✅ ${character.name} restocked ${quantity} × ${itemName} for ${totalCost} points`);
+
+    res.json({
+      success: true,
+      message: `Successfully restocked ${quantity} × ${itemName}`,
+      totalCost: totalCost,
+      newStockQty: vendingItem.stockQty + quantity,
+      remainingPoints: character.vendingPoints
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error restocking vending item:', error);
+    res.status(500).json({ error: 'Failed to restock item', details: error.message });
   }
 });
 
@@ -10824,6 +10990,59 @@ app.get('/api/user/levels/exchange-status', requireAuth, async (req, res) => {
 });
 
 // ------------------- Section: Village Shops Management API -------------------
+
+// ------------------- Endpoint: Get village shop items for restocking -------------------
+app.get('/api/village-shops/:village', requireAuth, async (req, res) => {
+  try {
+    const { village } = req.params;
+    const normalizedVillage = village.toLowerCase().trim();
+
+    // Get current vending stock list
+    const stockData = await getCurrentVendingStockList();
+    
+    if (!stockData || !stockData.stockList) {
+      return res.json({
+        success: true,
+        items: [],
+        message: 'No vending stock available for this month'
+      });
+    }
+
+    // Get items for the specific village
+    const villageItems = stockData.stockList[normalizedVillage] || [];
+    
+    // Get limited items (available to all villages)
+    const limitedItems = await getLimitedItems();
+
+    res.json({
+      success: true,
+      items: villageItems.map(item => ({
+        itemName: item.itemName,
+        costEach: item.points || item.costEach || 0, // Use 'points' field from stock
+        vendingType: item.vendingType || null, // Merchant or Shopkeeper
+        itemId: item.itemId?.toString() || null,
+        emoji: item.emoji || null
+      })),
+      limitedItems: (limitedItems || []).map(item => ({
+        itemName: item.itemName,
+        costEach: item.points || 0,
+        vendingType: 'Limited',
+        stock: item.stock || 0,
+        itemId: item.itemId?.toString() || null,
+        emoji: item.emoji || null
+      })),
+      village: normalizedVillage,
+      month: stockData.month
+    });
+  } catch (error) {
+    console.error('[server.js]: Error fetching village shop items:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch village shop items',
+      details: error.message 
+    });
+  }
+});
 
 // ------------------- Endpoint: Get all village shop items -------------------
 app.get('/api/admin/village-shops', requireAuth, async (req, res) => {
