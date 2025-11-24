@@ -1771,7 +1771,9 @@ const generateVendingStockList = async () => {
  ];
 
  try {
-  const currentMonth = new Date().getMonth() + 1;
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
   await clearExistingStock();
   const allItems = await fetchAllItems();
   const merchantItems = allItems.filter(

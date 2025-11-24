@@ -2144,6 +2144,7 @@ const generateVendingStockList = async () => {
 
   await stockCollection.insertOne({
    month: currentMonth,
+   year: currentYear,
    stockList,
    limitedItems,
    createdAt: new Date(),
