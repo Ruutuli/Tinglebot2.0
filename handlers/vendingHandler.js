@@ -405,10 +405,11 @@ async function runWithTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
       
       // Check if this is a retryable error
       const isRetryable = 
-        error.hasErrorLabel?.('TransientTransactionError') ||
-        error.hasErrorLabel?.('UnknownTransactionCommitResult') ||
+        error.code === 40 || // ConflictingUpdateOperators
         error.code === 112 || // WriteConflict
         error.code === 251 || // NoSuchTransaction
+        error.hasErrorLabel?.('TransientTransactionError') ||
+        error.hasErrorLabel?.('UnknownTransactionCommitResult') ||
         (error.message && (
           error.message.includes('would create a conflict') ||
           error.message.includes('WriteConflict') ||
@@ -418,8 +419,11 @@ async function runWithTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
       
       // Retry on transient errors
       if (attempt < maxRetries - 1 && isRetryable) {
-        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-        console.warn(`[vendingHandler.js] [runWithTransaction]: Transaction conflict detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`, {
+        // Exponential backoff with jitter to prevent thundering herd
+        const baseDelay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        const jitter = Math.random() * 50; // Add 0-50ms random jitter
+        const delay = baseDelay + jitter;
+        console.warn(`[vendingHandler.js] [runWithTransaction]: Transaction conflict detected, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`, {
           errorCode: error.code,
           errorMessage: error.message,
           errorLabels: error.errorLabels || []
@@ -467,14 +471,19 @@ async function runWithVendingTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
       await session.abortTransaction();
       lastError = error;
       
-      // Retry on transient errors (WriteConflict, TransientTransactionError)
+      // Retry on transient errors (WriteConflict, TransientTransactionError, ConflictingUpdateOperators)
       if (attempt < maxRetries - 1 && (
+        error.code === 40 || // ConflictingUpdateOperators
+        error.code === 112 || // WriteConflict
+        error.code === 251 || // NoSuchTransaction
         error.hasErrorLabel('TransientTransactionError') ||
-        error.hasErrorLabel('UnknownTransactionCommitResult') ||
-        error.code === 112 // WriteConflict
+        error.hasErrorLabel('UnknownTransactionCommitResult')
       )) {
-        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-        console.warn(`[vendingHandler.js]: Vending transaction conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        // Exponential backoff with jitter to prevent thundering herd
+        const baseDelay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        const jitter = Math.random() * 50; // Add 0-50ms random jitter
+        const delay = baseDelay + jitter;
+        console.warn(`[vendingHandler.js]: Vending transaction conflict, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -507,14 +516,19 @@ async function runWithHybridTransaction(fn, maxRetries = MAX_RETRY_ATTEMPTS) {
       await session.abortTransaction();
       lastError = error;
       
-      // Retry on transient errors (WriteConflict, TransientTransactionError)
+      // Retry on transient errors (WriteConflict, TransientTransactionError, ConflictingUpdateOperators)
       if (attempt < maxRetries - 1 && (
+        error.code === 40 || // ConflictingUpdateOperators
+        error.code === 112 || // WriteConflict
+        error.code === 251 || // NoSuchTransaction
         error.hasErrorLabel('TransientTransactionError') ||
-        error.hasErrorLabel('UnknownTransactionCommitResult') ||
-        error.code === 112 // WriteConflict
+        error.hasErrorLabel('UnknownTransactionCommitResult')
       )) {
-        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-        console.warn(`[vendingHandler.js]: Hybrid transaction conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        // Exponential backoff with jitter to prevent thundering herd
+        const baseDelay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        const jitter = Math.random() * 50; // Add 0-50ms random jitter
+        const delay = baseDelay + jitter;
+        console.warn(`[vendingHandler.js]: Hybrid transaction conflict, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -624,6 +638,7 @@ async function atomicUpdateTokenBalance(userId, change, session = null, maxRetri
       
       // Check if this is a retryable error (write conflict, transient errors)
       const isRetryable = 
+        error.code === 40 || // ConflictingUpdateOperators
         error.code === 112 || // WriteConflict
         error.code === 251 || // NoSuchTransaction
         error.hasErrorLabel?.('TransientTransactionError') ||
@@ -640,8 +655,21 @@ async function atomicUpdateTokenBalance(userId, change, session = null, maxRetri
       
       // Retry on transient errors if we have retries left
       if (attempt < maxRetries - 1 && isRetryable) {
-        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-        console.warn(`[vendingHandler.js] [atomicUpdateTokenBalance]: Token update conflict, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`, {
+        // Refresh current balance before retrying (if not in transaction)
+        if (!session) {
+          try {
+            const currentUser = await User.findOne({ discordId: userId });
+            currentBalance = currentUser?.tokens || 0;
+          } catch (e) {
+            // Ignore errors when refreshing balance
+          }
+        }
+        
+        // Exponential backoff with jitter to prevent thundering herd
+        const baseDelay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        const jitter = Math.random() * 50; // Add 0-50ms random jitter
+        const delay = baseDelay + jitter;
+        console.warn(`[vendingHandler.js] [atomicUpdateTokenBalance]: Token update conflict, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`, {
           userId,
           change,
           currentBalance: currentBalance || 'unknown',

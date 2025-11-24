@@ -24,6 +24,7 @@ const limitedItemSchema = new Schema({
 // ------------------- Define the vending stock schema -------------------
 const vendingStockSchema = new Schema({
   month: { type: Number, required: true },
+  year: { type: Number, required: true },
   stockList: {
     type: Map,
     of: [vendingStockItemSchema],

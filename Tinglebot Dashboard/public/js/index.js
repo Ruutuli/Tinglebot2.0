@@ -557,7 +557,7 @@ function handleModelDataError(modelName, contentDiv) {
             await monsters.initializeMonsterPage(data, pagination.page, contentDiv);
             break;
           case 'villageShops':
-            await villageShops.initializeVendingPage(data, pagination.page, contentDiv);
+            await villageShops.initializeVillageShopsPage(data, pagination.page, contentDiv);
             break;
           case 'vending':
             await vending.initializeVendingPage(data, pagination.page, contentDiv);

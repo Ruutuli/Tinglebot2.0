@@ -1724,7 +1724,12 @@ const clearExistingStock = async () => {
  const stockCollection = db.collection("vending_stock");
 
  try {
-  await stockCollection.deleteMany({});
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+  
+  // Clear only the current month/year's stock to preserve historical data
+  await stockCollection.deleteMany({ month: currentMonth, year: currentYear });
  } catch (error) {
   handleError(error, "vendingService.js");
   console.error("[vendingService.js]: ❌ Error clearing vending stock:", error);

@@ -1989,7 +1989,12 @@ const clearExistingStock = async () => {
  const stockCollection = db.collection("vending_stock");
 
  try {
-  await stockCollection.deleteMany({});
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+  
+  // Clear only the current month/year's stock to preserve historical data
+  await stockCollection.deleteMany({ month: currentMonth, year: currentYear });
  } catch (error) {
   handleError(error, "vendingService.js");
   console.error("[vendingService.js]: ❌ Error clearing vending stock:", error);
@@ -2031,7 +2036,9 @@ const generateVendingStockList = async () => {
  ];
 
  try {
-  const currentMonth = new Date().getMonth() + 1;
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
   await clearExistingStock();
   const allItems = await fetchAllItems();
   const merchantItems = allItems.filter(
