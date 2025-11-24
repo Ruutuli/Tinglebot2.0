@@ -1520,7 +1520,7 @@ app.get('/api/stats/characters', async (req, res) => {
     // Also count mod characters per village
     const modCharactersPerVillage = {};
     modCharacters.forEach(char => {
-      if (char.homeVillage) {
+      if (char && char.homeVillage && typeof char.homeVillage === 'string') {
         const village = char.homeVillage.toLowerCase();
         modCharactersPerVillage[village] = (modCharactersPerVillage[village] || 0) + 1;
       }
@@ -1558,27 +1558,26 @@ app.get('/api/stats/characters', async (req, res) => {
     // Also count mod characters per race
     const modCharactersPerRace = {};
     modCharacters.forEach(char => {
-      if (char.race && 
+      if (char && char.race && 
+          typeof char.race === 'string' &&
           char.race !== 'undefined' && 
           char.race !== 'null' && 
           char.race !== 'Unknown' && 
           char.race !== 'unknown' &&
-          char.race.trim && char.race.trim() !== '') {
+          char.race.trim() !== '') {
         modCharactersPerRace[char.race] = (modCharactersPerRace[char.race] || 0) + 1;
       }
     });
     
     const charactersPerRace = {};
     perRaceAgg.forEach(r => {
-      if (r._id && 
+      if (r && r._id && 
+          typeof r._id === 'string' &&
           r._id !== 'undefined' && 
           r._id !== 'null' && 
           r._id !== 'Unknown' && 
           r._id !== 'unknown' &&
-          r._id !== undefined &&
-          r._id !== null &&
-          typeof r._id === 'string' &&
-          r._id.trim && r._id.trim() !== '') {
+          r._id.trim() !== '') {
         charactersPerRace[r._id] = r.count;
       }
     });
@@ -1604,12 +1603,13 @@ app.get('/api/stats/characters', async (req, res) => {
     // Also count mod characters per job
     const modCharactersPerJob = {};
     modCharacters.forEach(char => {
-      if (char.job && 
+      if (char && char.job && 
+          typeof char.job === 'string' &&
           char.job !== 'undefined' && 
           char.job !== 'null' && 
           char.job !== 'Unknown' && 
           char.job !== 'unknown' &&
-          char.job.trim && char.job.trim() !== '') {
+          char.job.trim() !== '') {
         const jobKey = char.job.charAt(0).toUpperCase() + char.job.slice(1).toLowerCase();
         modCharactersPerJob[jobKey] = (modCharactersPerJob[jobKey] || 0) + 1;
       }
@@ -1617,12 +1617,13 @@ app.get('/api/stats/characters', async (req, res) => {
     
     const charactersPerJob = {};
     perJobAgg.forEach(r => {
-      if (r._id && 
+      if (r && r._id && 
+          typeof r._id === 'string' &&
           r._id !== 'undefined' && 
           r._id !== 'null' && 
           r._id !== 'unknown' && 
           r._id !== 'Unknown' &&
-          r._id.trim && r._id.trim() !== '') {
+          r._id.trim() !== '') {
         charactersPerJob[r._id] = r.count;
       }
     });
@@ -1642,20 +1643,27 @@ app.get('/api/stats/characters', async (req, res) => {
     }, { name: 1, birthday: 1 }).lean();
     
     // Add mod character birthdays
-    const modBday = modCharacters.filter(c => c.birthday && c.birthday !== '').map(c => ({
+    const modBday = modCharacters.filter(c => c && c.birthday && typeof c.birthday === 'string' && c.birthday !== '').map(c => ({
       name: c.name,
       birthday: c.birthday
     }));
     
     const allBirthdays = [...allBday, ...modBday];
-    const upcoming = allBirthdays.map(c => {
-      const mmdd = c.birthday.slice(-5);
-      let next = isNaN(Date.parse(`${thisYr}-${mmdd}`))
-        ? null
-        : new Date(`${thisYr}-${mmdd}`);
-      if (next && next < today) next.setFullYear(thisYr + 1);
-      return { name: c.name, birthday: c.birthday, nextBirthday: next };
-    })
+    const upcoming = allBirthdays
+      .filter(c => c && c.birthday && typeof c.birthday === 'string' && c.birthday.length >= 5)
+      .map(c => {
+        try {
+          const mmdd = c.birthday.slice(-5);
+          let next = isNaN(Date.parse(`${thisYr}-${mmdd}`))
+            ? null
+            : new Date(`${thisYr}-${mmdd}`);
+          if (next && next < today) next.setFullYear(thisYr + 1);
+          return { name: c.name, birthday: c.birthday, nextBirthday: next };
+        } catch (error) {
+          console.warn(`[server.js]: ⚠️ Error processing birthday for ${c.name}:`, error.message);
+          return { name: c.name, birthday: c.birthday, nextBirthday: null };
+        }
+      })
       .filter(c => c.nextBirthday && (c.nextBirthday - today) <= (30 * 24 * 60 * 60 * 1000))
       .sort((a, b) => a.nextBirthday - b.nextBirthday);
 
@@ -1674,7 +1682,9 @@ app.get('/api/stats/characters', async (req, res) => {
     // Also count mod characters visiting other villages
     const modVisitingCounts = { rudania: 0, inariko: 0, vhintl: 0 };
     modCharacters.forEach(char => {
-      if (char.currentVillage && char.homeVillage && 
+      if (char && char.currentVillage && char.homeVillage && 
+          typeof char.currentVillage === 'string' &&
+          typeof char.homeVillage === 'string' &&
           villages.includes(char.currentVillage.toLowerCase()) && 
           villages.includes(char.homeVillage.toLowerCase()) &&
           char.currentVillage.toLowerCase() !== char.homeVillage.toLowerCase()) {
@@ -1704,7 +1714,9 @@ app.get('/api/stats/characters', async (req, res) => {
 
     // Add mod characters visiting other villages
     const modVisitingCharacters = modCharacters.filter(char => 
-      char.currentVillage && char.homeVillage && 
+      char && char.currentVillage && char.homeVillage && 
+      typeof char.currentVillage === 'string' &&
+      typeof char.homeVillage === 'string' &&
       villages.includes(char.currentVillage.toLowerCase()) && 
       villages.includes(char.homeVillage.toLowerCase()) &&
       char.currentVillage.toLowerCase() !== char.homeVillage.toLowerCase()
@@ -1717,12 +1729,14 @@ app.get('/api/stats/characters', async (req, res) => {
     // Group visiting characters by current village
     const visitingDetails = { rudania: [], inariko: [], vhintl: [] };
     [...visitingCharacters, ...modVisitingCharacters].forEach(char => {
-      const currentVillage = char.currentVillage.toLowerCase();
-      if (visitingDetails[currentVillage]) {
-        visitingDetails[currentVillage].push({
-          name: char.name,
-          homeVillage: char.homeVillage
-        });
+      if (char && char.currentVillage && typeof char.currentVillage === 'string') {
+        const currentVillage = char.currentVillage.toLowerCase();
+        if (visitingDetails[currentVillage]) {
+          visitingDetails[currentVillage].push({
+            name: char.name || 'Unknown',
+            homeVillage: char.homeVillage || 'Unknown'
+          });
+        }
       }
     });
 
@@ -1753,22 +1767,33 @@ app.get('/api/stats/characters', async (req, res) => {
     ]);
 
     // Get top characters by spirit orbs (from inventory, including mod characters)
-    const regularCharacterNames = regularCharacters.map(c => c.name);
-    const modCharacterNames = modCharacters.map(c => c.name);
-    const allCharacterNames = [...regularCharacterNames, ...modCharacterNames];
-    const spiritOrbCounts = await countSpiritOrbsBatch(allCharacterNames);
-    
-    // Sort characters by spirit orb count and get top 5
-    const charactersWithOrbs = Object.entries(spiritOrbCounts)
-      .filter(([_, count]) => count > 0)
-      .sort(([_, a], [__, b]) => b - a)
-      .slice(0, 5);
-    
-    const mostOrbs = charactersWithOrbs.length > 0 ? {
-      names: charactersWithOrbs.map(([name, _]) => name),
-      values: charactersWithOrbs.map(([_, count]) => count),
-      value: charactersWithOrbs[0][1]
-    } : { names: [], values: [], value: 0 };
+    let mostOrbs = { names: [], values: [], value: 0 };
+    try {
+      const regularCharacterNames = regularCharacters.map(c => c.name).filter(name => name);
+      const modCharacterNames = modCharacters.map(c => c.name).filter(name => name);
+      const allCharacterNames = [...regularCharacterNames, ...modCharacterNames];
+      
+      if (allCharacterNames.length > 0) {
+        const spiritOrbCounts = await countSpiritOrbsBatch(allCharacterNames);
+        
+        // Sort characters by spirit orb count and get top 5
+        const charactersWithOrbs = Object.entries(spiritOrbCounts)
+          .filter(([_, count]) => count > 0)
+          .sort(([_, a], [__, b]) => b - a)
+          .slice(0, 5);
+        
+        if (charactersWithOrbs.length > 0) {
+          mostOrbs = {
+            names: charactersWithOrbs.map(([name, _]) => name),
+            values: charactersWithOrbs.map(([_, count]) => count),
+            value: charactersWithOrbs[0][1]
+          };
+        }
+      }
+    } catch (spiritOrbError) {
+      console.warn('[server.js]: ⚠️ Error counting spirit orbs for stats, using defaults:', spiritOrbError.message);
+      // Continue with default empty values
+    }
 
     // Get special character counts (mod characters are immune to negative effects)
     const [kodCount, blightedCount, debuffedCount, jailedCount] = await Promise.all([
@@ -1809,10 +1834,10 @@ app.get('/api/stats/characters', async (req, res) => {
     
     // Count mod characters by type
     modCharacters.forEach(char => {
-      if (char.modType) {
+      if (char && char.modType) {
         modCharacterStats.modCharactersPerType[char.modType] = (modCharacterStats.modCharactersPerType[char.modType] || 0) + 1;
       }
-      if (char.homeVillage) {
+      if (char && char.homeVillage && typeof char.homeVillage === 'string') {
         const village = char.homeVillage.toLowerCase();
         modCharacterStats.modCharactersPerVillage[village] = (modCharacterStats.modCharactersPerVillage[village] || 0) + 1;
       }
@@ -1842,7 +1867,15 @@ app.get('/api/stats/characters', async (req, res) => {
     });
   } catch (error) {
     logger.error('Error fetching character stats', error, 'server.js');
-    res.status(500).json({ error: 'Failed to fetch character stats' });
+    console.error('[server.js]: Full error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch character stats',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
