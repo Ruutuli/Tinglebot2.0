@@ -285,7 +285,7 @@ function updateUserMenu(userData) {
   userName.textContent = displayName;
   userDiscriminator.textContent = userData.discriminator ? `#${userData.discriminator}` : '';
   userTokens.textContent = userData.tokens || 0;
-  userSlots.textContent = userData.characterSlot || 2;
+  userSlots.textContent = userData.characterSlot !== undefined && userData.characterSlot !== null ? userData.characterSlot : 2;
   
   // Show user info, hide guest info
   userInfo.style.display = 'flex';

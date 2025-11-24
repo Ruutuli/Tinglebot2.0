@@ -10516,6 +10516,107 @@ app.get('/api/tokens/transactions', requireAuth, async (req, res) => {
   }
 });
 
+// Get user's vending transactions
+app.get('/api/vending/transactions', requireAuth, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = parseInt(req.query.skip) || 0;
+    const status = req.query.status; // 'pending', 'completed', 'failed', 'expired', or undefined (all)
+    const role = req.query.role; // 'buyer' or 'vendor' to filter by role
+    
+    console.log(`[server.js]: 🔍 Fetching vending transactions for user ${req.user.discordId}`, {
+      limit,
+      skip,
+      status: status || 'all',
+      role: role || 'all'
+    });
+    
+    const user = await User.findOne({ discordId: req.user.discordId });
+    if (!user) {
+      console.warn(`[server.js]: ⚠️ User not found: ${req.user.discordId}`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Get user's characters
+    const userCharacters = await fetchCharactersByUserId(req.user.discordId);
+    const characterNames = userCharacters.map(char => char.name);
+    
+    // Build query
+    const query = {};
+    
+    // Filter by role (buyer or vendor)
+    if (role === 'buyer') {
+      query.userCharacterName = { $in: characterNames };
+    } else if (role === 'vendor') {
+      query.vendorCharacterName = { $in: characterNames };
+    } else {
+      // Get all transactions where user is either buyer or vendor
+      query.$or = [
+        { userCharacterName: { $in: characterNames } },
+        { vendorCharacterName: { $in: characterNames } }
+      ];
+    }
+    
+    // Filter by status if provided
+    if (status && ['pending', 'processing', 'completed', 'failed', 'expired'].includes(status)) {
+      query.status = status;
+    }
+    
+    // Get transactions from database
+    let transactions = [];
+    let total = 0;
+    try {
+      transactions = await VendingRequest.find(query)
+        .sort({ date: -1 })
+        .limit(limit)
+        .skip(skip)
+        .lean();
+      total = await VendingRequest.countDocuments(query);
+      console.log(`[server.js]: ✅ Database transactions found: ${transactions.length} (total: ${total})`);
+    } catch (error) {
+      console.error('[server.js]: ❌ Error getting transactions from database:', error);
+      return res.status(500).json({ error: 'Failed to fetch transactions from database', details: error.message });
+    }
+    
+    // Format transactions with role information
+    const formattedTransactions = transactions.map(tx => ({
+      _id: tx._id,
+      fulfillmentId: tx.fulfillmentId,
+      userCharacterName: tx.userCharacterName,
+      vendorCharacterName: tx.vendorCharacterName,
+      itemName: tx.itemName,
+      quantity: tx.quantity,
+      paymentMethod: tx.paymentMethod,
+      offeredItem: tx.offeredItem,
+      offeredItems: tx.offeredItems || [],
+      offeredItemsWithQty: tx.offeredItemsWithQty || [],
+      artLink: tx.artLink,
+      notes: tx.notes || '',
+      buyerId: tx.buyerId,
+      buyerUsername: tx.buyerUsername,
+      date: tx.date,
+      processedAt: tx.processedAt,
+      status: tx.status || 'pending',
+      expiresAt: tx.expiresAt,
+      // Determine user's role in this transaction
+      userRole: characterNames.includes(tx.userCharacterName) ? 'buyer' : 'vendor',
+      otherParty: characterNames.includes(tx.userCharacterName) ? tx.vendorCharacterName : tx.userCharacterName
+    }));
+    
+    res.json({
+      success: true,
+      transactions: formattedTransactions,
+      total: total,
+      limit: limit,
+      skip: skip,
+      hasMore: (skip + limit) < total
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error fetching vending transactions:', error);
+    res.status(500).json({ error: 'Failed to fetch vending transactions', details: error.message });
+  }
+});
+
 // Get global token statistics (admin only)
 app.get('/api/tokens/global-stats', requireAuth, async (req, res) => {
   try {

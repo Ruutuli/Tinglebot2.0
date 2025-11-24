@@ -4830,6 +4830,251 @@ async function deleteVendorItem(characterId, itemId) {
 }
 
 // ============================================================================
+// ------------------- Section: Vending Transactions -------------------
+// ============================================================================
+
+let currentVendingFilter = 'all'; // 'all', 'buyer', 'vendor', 'pending', 'completed'
+let currentVendingPage = 1;
+const vendingPageSize = 50;
+
+// ------------------- Function: setupVendingTabs -------------------
+// Sets up tab switching for vending section
+export function setupVendingTabs() {
+  const shopsTab = document.getElementById('vending-shops-tab');
+  const transactionsTab = document.getElementById('vending-transactions-tab');
+  const shopsContent = document.getElementById('vending-shops-tab-content');
+  const transactionsContent = document.getElementById('vending-transactions-tab-content');
+  
+  if (shopsTab && transactionsTab && shopsContent && transactionsContent) {
+    shopsTab.addEventListener('click', () => {
+      shopsTab.classList.add('active');
+      transactionsTab.classList.remove('active');
+      shopsContent.classList.add('active');
+      shopsContent.style.display = 'block';
+      transactionsContent.classList.remove('active');
+      transactionsContent.style.display = 'none';
+    });
+    
+    transactionsTab.addEventListener('click', async () => {
+      transactionsTab.classList.add('active');
+      shopsTab.classList.remove('active');
+      transactionsContent.classList.add('active');
+      transactionsContent.style.display = 'block';
+      shopsContent.classList.remove('active');
+      shopsContent.style.display = 'none';
+      
+      // Load transactions when tab is clicked
+      await loadVendingTransactions();
+      setupVendingFilters();
+    });
+  }
+}
+
+// ------------------- Function: setupVendingFilters -------------------
+// Sets up filter buttons for vending transactions
+function setupVendingFilters() {
+  const filterButtons = document.querySelectorAll('.vending-transactions-filters .tokens-filter-btn');
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      // Remove active class from all buttons
+      filterButtons.forEach(b => b.classList.remove('active'));
+      // Add active class to clicked button
+      btn.classList.add('active');
+      
+      // Determine filter
+      let filter = 'all';
+      if (btn.id === 'vending-filter-buyer') filter = 'buyer';
+      else if (btn.id === 'vending-filter-vendor') filter = 'vendor';
+      else if (btn.id === 'vending-filter-pending') filter = 'pending';
+      else if (btn.id === 'vending-filter-completed') filter = 'completed';
+      
+      // Load transactions with filter
+      currentVendingPage = 1;
+      await loadVendingTransactions(currentVendingPage, filter);
+    });
+  });
+}
+
+// ------------------- Function: loadVendingTransactions -------------------
+// Loads vending transactions from the API
+export async function loadVendingTransactions(page = 1, filter = 'all') {
+  try {
+    currentVendingPage = page;
+    currentVendingFilter = filter;
+
+    const loadingEl = document.getElementById('vending-transactions-loading');
+    const transactionsList = document.getElementById('vending-transactions-list');
+    
+    if (!transactionsList) {
+      console.warn('[profile.js]: Vending transactions list not found');
+      return;
+    }
+
+    if (loadingEl) {
+      loadingEl.style.display = 'flex';
+    }
+
+    const skip = (page - 1) * vendingPageSize;
+    let url = `/api/vending/transactions?limit=${vendingPageSize}&skip=${skip}`;
+    if (filter !== 'all') {
+      if (filter === 'buyer' || filter === 'vendor') {
+        url += `&role=${filter}`;
+      } else {
+        url += `&status=${filter}`;
+      }
+    }
+
+    console.log('[profile.js]: 🔍 Fetching vending transactions from:', url);
+    
+    const response = await fetch(url, {
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to load vending transactions: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('[profile.js]: ✅ Received vending transactions:', data.transactions?.length || 0);
+
+    if (loadingEl) {
+      loadingEl.style.display = 'none';
+    }
+
+    if (data.success && data.transactions) {
+      renderVendingTransactions(data.transactions, data.total || 0, data.hasMore || false);
+    } else {
+      transactionsList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No transactions found.</p>';
+    }
+  } catch (error) {
+    console.error('[profile.js]: ❌ Error loading vending transactions:', error);
+    const loadingEl = document.getElementById('vending-transactions-loading');
+    const transactionsList = document.getElementById('vending-transactions-list');
+    
+    if (loadingEl) {
+      loadingEl.style.display = 'none';
+    }
+    
+    if (transactionsList) {
+      transactionsList.innerHTML = `<p style="color: var(--error-color); text-align: center; padding: 2rem;">Error loading transactions: ${error.message || 'Unknown error'}</p>`;
+    }
+  }
+}
+
+// ------------------- Function: renderVendingTransactions -------------------
+// Renders the vending transactions list
+function renderVendingTransactions(transactions, total, hasMore) {
+  const transactionsList = document.getElementById('vending-transactions-list');
+  const pagination = document.getElementById('vending-pagination');
+  
+  if (!transactionsList) return;
+
+  if (transactions.length === 0) {
+    transactionsList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No transactions found.</p>';
+    if (pagination) pagination.style.display = 'none';
+    return;
+  }
+
+  const transactionsHtml = transactions.map(tx => {
+    const date = new Date(tx.date).toLocaleString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    const statusColor = tx.status === 'completed' ? '#10b981' : 
+                        tx.status === 'pending' ? '#f59e0b' : 
+                        tx.status === 'failed' ? '#ef4444' : 
+                        tx.status === 'expired' ? '#6b7280' : '#6366f1';
+    
+    let paymentInfo = '';
+    if (tx.paymentMethod === 'tokens') {
+      paymentInfo = '💰 Tokens';
+    } else if (tx.paymentMethod === 'art') {
+      paymentInfo = '🎨 Art';
+    } else if (tx.paymentMethod === 'barter') {
+      const items = tx.offeredItemsWithQty && tx.offeredItemsWithQty.length > 0 
+        ? tx.offeredItemsWithQty 
+        : (tx.offeredItems || []).map(item => ({ itemName: item, quantity: 1 }));
+      paymentInfo = items.map(item => item.itemName + ' x' + item.quantity).join(', ');
+    }
+    
+    return `
+      <div class="vending-transaction-item" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <span style="background: ${statusColor}; color: white; padding: 0.25rem 0.75rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
+                ${tx.status}
+              </span>
+              <span style="color: var(--text-secondary); font-size: 0.875rem;">
+                ${tx.userRole === 'buyer' ? '👤 Buying from' : '🏪 Selling to'} ${tx.otherParty}
+              </span>
+            </div>
+            <h4 style="margin: 0; color: var(--text-color); font-size: 1.1rem;">
+              ${tx.itemName} × ${tx.quantity}
+            </h4>
+          </div>
+          <span style="color: var(--text-secondary); font-size: 0.875rem;">${date}</span>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+          <div>
+            <span style="color: var(--text-secondary); font-size: 0.875rem;">Payment Method</span>
+            <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500;">${tx.paymentMethod === 'tokens' ? '💰 Tokens' : tx.paymentMethod === 'art' ? '🎨 Art' : '🔄 Barter'}</p>
+          </div>
+          ${paymentInfo ? `
+          <div>
+            <span style="color: var(--text-secondary); font-size: 0.875rem;">${tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
+            <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500;">${paymentInfo}</p>
+          </div>
+          ` : ''}
+          ${tx.notes ? `
+          <div style="grid-column: 1 / -1;">
+            <span style="color: var(--text-secondary); font-size: 0.875rem;">Notes</span>
+            <p style="margin: 0.25rem 0 0 0; color: var(--text-color);">${tx.notes}</p>
+          </div>
+          ` : ''}
+        </div>
+        
+        ${tx.fulfillmentId ? `
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <span style="color: var(--text-secondary); font-size: 0.75rem; font-family: monospace;">ID: ${tx.fulfillmentId}</span>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  transactionsList.innerHTML = transactionsHtml;
+
+  // Setup pagination
+  if (pagination && (hasMore || currentVendingPage > 1)) {
+    pagination.style.display = 'block';
+    const totalPages = Math.ceil(total / vendingPageSize);
+    
+    let paginationHtml = '<div style="display: flex; justify-content: center; gap: 0.5rem; align-items: center;">';
+    
+    if (currentVendingPage > 1) {
+      paginationHtml += `<button class="tokens-filter-btn" onclick="window.profileModule.loadVendingTransactions(${currentVendingPage - 1}, '${currentVendingFilter}')">Previous</button>`;
+    }
+    
+    paginationHtml += `<span style="color: var(--text-secondary); padding: 0 1rem;">Page ${currentVendingPage} of ${totalPages} (${total} total)</span>`;
+    
+    if (hasMore) {
+      paginationHtml += `<button class="tokens-filter-btn" onclick="window.profileModule.loadVendingTransactions(${currentVendingPage + 1}, '${currentVendingFilter}')">Next</button>`;
+    }
+    
+    paginationHtml += '</div>';
+    pagination.innerHTML = paginationHtml;
+  } else if (pagination) {
+    pagination.style.display = 'none';
+  }
+}
+
+// ============================================================================
 // ------------------- Section: Public API -------------------
 // Exports functions for use in other modules
 // ============================================================================
@@ -4838,5 +5083,7 @@ export {
   initProfilePage,
   loadProfileData,
   updateProfileDisplay,
-  loadVendingShops
+  loadVendingShops,
+  loadVendingTransactions,
+  setupVendingTabs
 }; 

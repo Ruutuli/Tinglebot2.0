@@ -1393,10 +1393,18 @@ function showVendingSection() {
   if (vendingSection) {
     vendingSection.style.display = 'block';
     
-    // Load vending shops
+    // Load vending shops and setup tabs
     import('./profile.js?v=20251114').then(profileModule => {
+      // Make module available globally for pagination callbacks
+      window.profileModule = profileModule;
+      
+      // Setup tabs
+      if (profileModule.setupVendingTabs) {
+        profileModule.setupVendingTabs();
+      }
+      
+      // Load vending shops into the vending section container
       if (profileModule.loadVendingShops) {
-        // Load vending shops into the vending section container
         profileModule.loadVendingShops({
           containerId: 'vending-shops-container',
           loadingId: 'vending-shops-loading',
