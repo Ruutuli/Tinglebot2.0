@@ -1,0 +1,708 @@
+/* ============================================================================ */
+/* Vending Shops Styles                                                         */
+/* Styling for displaying all vendor vending inventories                       */
+/* ============================================================================ */
+
+/* ============================================================================ */
+/* Main Container                                                               */
+/* ============================================================================ */
+
+.vending-shops-container {
+  width: 100%;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+/* ============================================================================ */
+/* Header Section                                                               */
+/* ============================================================================ */
+
+.vending-shops-header {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 2rem 2.5rem;
+  margin-bottom: 2rem;
+  backdrop-filter: blur(var(--frost-blur));
+  box-shadow: var(--section-shadow);
+}
+
+.vending-shops-header h2 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vending-shops-header h2 i {
+  color: var(--accent);
+  font-size: 1.8rem;
+}
+
+.vending-shops-header p {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ============================================================================ */
+/* Results Info                                                                 */
+/* ============================================================================ */
+
+.vending-shops-results-info {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-secondary);
+  border-radius: var(--card-radius);
+  border: 1px solid var(--glass-border);
+}
+
+.vending-shops-results-info p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* ============================================================================ */
+/* Shops Grid                                                                   */
+/* ============================================================================ */
+
+.vending-shops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+  gap: 2rem;
+}
+
+/* ============================================================================ */
+/* Vendor Shop Card                                                             */
+/* ============================================================================ */
+
+.vendor-shop-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 0;
+  backdrop-filter: blur(var(--frost-blur));
+  transition: all 0.3s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.vendor-shop-card:hover {
+  box-shadow: var(--section-shadow);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+/* ============================================================================ */
+/* Shop Banner                                                                  */
+/* ============================================================================ */
+
+.vendor-shop-banner {
+  width: 100%;
+  height: 200px;
+  background: linear-gradient(135deg, var(--botw-blue) 0%, var(--accent) 100%);
+  position: relative;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.vendor-shop-banner[style*="--shop-banner-image"] {
+  background-image: var(--shop-banner-image);
+}
+
+.vendor-shop-banner::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.4) 100%);
+  pointer-events: none;
+}
+
+/* ============================================================================ */
+/* Shop Header                                                                  */
+/* ============================================================================ */
+
+.vendor-shop-header {
+  padding: 1.75rem 1.5rem;
+  margin-bottom: 0;
+  border-bottom: 2px solid var(--glass-border);
+  background: var(--glass-bg);
+  position: relative;
+}
+
+.vendor-shop-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.vendor-character-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 4px solid var(--accent);
+  object-fit: cover;
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+  margin-top: -36px;
+  position: relative;
+  z-index: 2;
+  display: block;
+}
+
+.vendor-shop-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.vendor-shop-header h3 {
+  font-size: 1.75rem;
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.vendor-shop-header h3 i {
+  color: var(--accent);
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.vendor-shop-header .item-count {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  background: var(--bg-secondary);
+  padding: 0.4rem 0.9rem;
+  border-radius: 20px;
+  display: inline-block;
+  width: fit-content;
+  font-weight: 500;
+  border: 1px solid var(--glass-border);
+}
+
+/* ============================================================================ */
+/* Vendor Items Grid                                                            */
+/* ============================================================================ */
+
+.vendor-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.25rem;
+  padding: 2rem 1.5rem;
+  background: var(--glass-bg);
+}
+
+/* ============================================================================ */
+/* Vendor Item Card                                                             */
+/* ============================================================================ */
+
+.vendor-item-card {
+  background: var(--bg-secondary);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 1.25rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vendor-item-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--botw-blue), var(--accent));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.vendor-item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: var(--accent);
+}
+
+.vendor-item-card:hover::before {
+  opacity: 1;
+}
+
+.vendor-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.vendor-item-header h4 {
+  font-size: 1.1rem;
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 700;
+  flex: 1;
+  word-break: break-word;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.vendor-item-header .item-slot {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 500;
+  border: 1px solid var(--glass-border);
+}
+
+.vendor-item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.vendor-item-details .item-stock {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 500;
+}
+
+.vendor-item-details .item-stock i {
+  color: var(--accent);
+  opacity: 0.8;
+  font-size: 1rem;
+}
+
+.vendor-item-details .item-pricing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.vendor-item-details .price-item {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+}
+
+.vendor-item-details .price-item i {
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+/* ============================================================================ */
+/* Error State                                                                  */
+/* ============================================================================ */
+
+.error-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text-secondary);
+}
+
+.error-state i {
+  font-size: 3rem;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  margin-bottom: 1rem;
+}
+
+.error-state p {
+  font-size: 1.1rem;
+  margin: 0.5rem 0;
+}
+
+.error-state-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+}
+
+.retry-button {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--card-radius);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.retry-button:hover {
+  background: var(--botw-dark-blue);
+  transform: translateY(-2px);
+  box-shadow: var(--section-shadow);
+}
+
+/* ============================================================================ */
+/* MOBILE RESPONSIVE DESIGN                                                     */
+/* ============================================================================ */
+
+@media (max-width: 1024px) {
+  .vending-shops-container {
+    padding: 1.5rem;
+  }
+
+  .vending-shops-grid {
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .vendor-items-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .vending-shops-container {
+    padding: 1rem;
+  }
+
+  .vending-shops-header {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .vending-shops-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .vending-shops-header p {
+    font-size: 0.9rem;
+  }
+
+  .vending-shops-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .vendor-shop-banner {
+    height: 150px;
+  }
+
+  .vendor-character-icon {
+    width: 56px;
+    height: 56px;
+    margin-top: -28px;
+  }
+
+  .vendor-shop-header {
+    padding: 1.25rem;
+  }
+
+  .vendor-shop-header h3 {
+    font-size: 1.25rem;
+  }
+
+  .vendor-items-grid {
+    padding: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.875rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .vending-shops-container {
+    padding: 0.75rem;
+  }
+
+  .vending-shops-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .vending-shops-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .vendor-shop-banner {
+    height: 120px;
+  }
+
+  .vendor-character-icon {
+    width: 48px;
+    height: 48px;
+    margin-top: -24px;
+  }
+
+  .vendor-shop-header {
+    padding: 1rem;
+  }
+
+  .vendor-items-grid {
+    padding: 1rem;
+    grid-template-columns: 1fr;
+  }
+
+  .vendor-item-card {
+    padding: 1rem;
+  }
+
+  .vendor-item-header h4 {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .vending-shops-container {
+    padding: 0.5rem;
+  }
+
+  .vending-shops-header {
+    padding: 0.875rem 1rem;
+  }
+
+  .vending-shops-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .vendor-shop-banner {
+    height: 100px;
+  }
+
+  .vendor-character-icon {
+    width: 40px;
+    height: 40px;
+    margin-top: -20px;
+  }
+
+  .vendor-shop-header {
+    padding: 0.875rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .vendor-shop-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .vendor-items-grid {
+    padding: 0.875rem;
+  }
+}
+
+/* ============================================================================ */
+/* Touch-friendly interactions                                                  */
+/* ============================================================================ */
+
+@media (hover: none) and (pointer: coarse) {
+  .vendor-shop-card,
+  .vendor-item-card {
+    min-height: 120px;
+  }
+
+  .vendor-shop-card:active,
+  .vendor-item-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+
+  .retry-button:active {
+    transform: scale(0.98);
+  }
+
+  .vendor-shop-card:hover,
+  .vendor-item-card:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================================ */
+/* Landscape mobile optimizations                                               */
+/* ============================================================================ */
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .vending-shops-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+}
+
+/* ============================================================================ */
+/* High DPI displays                                                            */
+/* ============================================================================ */
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .vendor-shop-card,
+  .vendor-item-card {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ============================================================================ */
+/* Reduced motion for accessibility                                             */
+/* ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .vendor-shop-card,
+  .vendor-item-card,
+  .retry-button {
+    transition: none;
+  }
+
+  .vendor-shop-card:hover,
+  .vendor-item-card:hover,
+  .vendor-shop-card:active,
+  .vendor-item-card:active {
+    transform: none;
+  }
+
+  .vendor-item-card::before {
+    transition: none;
+  }
+}
+
+/* ============================================================================ */
+/* Vending Notification Toast                                                    */
+/* ============================================================================ */
+
+.vending-notification {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  background: var(--glass-bg);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 1.25rem 1.5rem;
+  backdrop-filter: blur(var(--frost-blur));
+  box-shadow: var(--section-shadow);
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 450px;
+  opacity: 0;
+  transform: translateX(400px);
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.vending-notification.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.vending-notification.success {
+  border-color: rgba(16, 185, 129, 0.6);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.1));
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+.vending-notification.error {
+  border-color: rgba(239, 68, 68, 0.6);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1));
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+}
+
+.vending-notification-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.vending-notification.success .vending-notification-icon {
+  color: #10b981;
+}
+
+.vending-notification.error .vending-notification-icon {
+  color: #ef4444;
+}
+
+.vending-notification-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vending-notification-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.vending-notification-message {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.vending-notification-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.vending-notification-close:hover {
+  opacity: 1;
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+@media (max-width: 768px) {
+  .vending-notification {
+    top: 1rem;
+    right: 1rem;
+    left: 1rem;
+    min-width: auto;
+    max-width: none;
+    transform: translateY(-100px);
+  }
+
+  .vending-notification.show {
+    transform: translateY(0);
+  }
+}
+

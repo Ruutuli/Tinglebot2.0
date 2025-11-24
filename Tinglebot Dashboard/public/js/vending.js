@@ -11,6 +11,61 @@ import { capitalize } from './utils.js';
 // Displays vending stock organized by village
 // ============================================================================
 
+// ------------------- Function: convertDiscordEmojiToImage -------------------
+// Converts Discord emoji format <:name:id> to image URL
+function convertDiscordEmojiToImage(emoji) {
+  if (!emoji) return null;
+  
+  // If it's already a URL, return it
+  if (emoji.startsWith('http')) {
+    return emoji;
+  }
+  
+  // If it's a Discord emoji format <:name:id>
+  const match = emoji.match(/<:(?:a:)?(\w+):(\d+)>/);
+  if (match) {
+    const emojiId = match[2];
+    const isAnimated = emoji.startsWith('<a:');
+    const extension = isAnimated ? 'gif' : 'png';
+    return `https://cdn.discordapp.com/emojis/${emojiId}.${extension}`;
+  }
+  
+  // If it's a regular emoji, return null (will use fallback)
+  return null;
+}
+
+// ------------------- Function: fetchAvailableMonths -------------------
+// Fetches all available months from the server
+async function fetchAvailableMonths() {
+  try {
+    const response = await fetch('/api/vending/months');
+    if (response.ok) {
+      const data = await response.json();
+      return data.months || [];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error fetching available months:', error);
+    return [];
+  }
+}
+
+// ------------------- Function: fetchStockByMonth -------------------
+// Fetches stock data for a specific month/year
+async function fetchStockByMonth(month, year) {
+  try {
+    const response = await fetch(`/api/models/vending?month=${month}&year=${year}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.data || [];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error fetching stock by month:', error);
+    return [];
+  }
+}
+
 // ------------------- Function: initializeVendingPage -------------------
 // Initializes the vending stock page with data
 async function initializeVendingPage(data, page, contentDiv) {
@@ -37,49 +92,76 @@ async function initializeVendingPage(data, page, contentDiv) {
     // Get the stock data (should be single item in array)
     const stockData = data[0];
 
+    // Fetch available months for the selector
+    const availableMonths = await fetchAvailableMonths();
+
     // Scroll to top
     scrollToTop();
 
     // Create main container
     const container = document.createElement('div');
     container.className = 'vending-stock-container';
-    container.style.padding = '2rem';
 
-    // Add header with month info
+    // Add header with month info and selector
     const header = document.createElement('div');
     header.className = 'vending-stock-header';
-    header.style.marginBottom = '2rem';
-    header.innerHTML = `
-      <h2 style="font-size: 2rem; margin-bottom: 0.5rem; color: var(--text-primary);">
+    
+    const headerContent = document.createElement('div');
+    headerContent.className = 'header-content';
+    headerContent.innerHTML = `
+      <h2>
         <i class="fas fa-store"></i> Vending Stock
       </h2>
-      <p style="font-size: 1rem; color: var(--text-secondary);">
+      <p>
         ${stockData.year ? `${new Date(stockData.year, (stockData.month || 1) - 1).toLocaleString('default', { month: 'long' })} ${stockData.year}` : `Month ${stockData.month || 'Unknown'}`} • Last Updated: ${stockData.createdAt ? new Date(stockData.createdAt).toLocaleDateString() : 'N/A'}
       </p>
     `;
-    container.appendChild(header);
-
-    // Render village stock sections
-    if (stockData.stockList) {
-      const villages = ['Rudania', 'Inariko', 'Vhintl'];
+    
+    // Add month selector if there are multiple months available
+    if (availableMonths.length > 1) {
+      const monthSelector = document.createElement('div');
+      monthSelector.className = 'month-selector';
       
-      // Handle both Map and plain object formats
-      const stockListObj = stockData.stockList instanceof Map 
-        ? Object.fromEntries(stockData.stockList) 
-        : stockData.stockList;
+      const label = document.createElement('label');
+      label.textContent = 'View Month:';
+      label.setAttribute('for', 'month-select');
       
-      villages.forEach(village => {
-        const villageStock = stockListObj[village];
-        if (villageStock && Array.isArray(villageStock) && villageStock.length > 0) {
-          container.appendChild(renderVillageSection(village, villageStock));
+      const select = document.createElement('select');
+      select.id = 'month-select';
+      
+      // Add options for each available month
+      availableMonths.forEach(monthData => {
+        const option = document.createElement('option');
+        const monthName = new Date(monthData.year, monthData.month - 1).toLocaleString('default', { month: 'long' });
+        option.value = `${monthData.month}-${monthData.year}`;
+        option.textContent = `${monthName} ${monthData.year}`;
+        if (monthData.month === stockData.month && monthData.year === stockData.year) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+      
+      // Add change handler
+      select.addEventListener('change', async (e) => {
+        const [month, year] = e.target.value.split('-').map(Number);
+        const newData = await fetchStockByMonth(month, year);
+        if (newData.length > 0) {
+          await renderVendingStock(newData[0], container, availableMonths);
         }
       });
+      
+      monthSelector.appendChild(label);
+      monthSelector.appendChild(select);
+      header.appendChild(headerContent);
+      header.appendChild(monthSelector);
+    } else {
+      header.appendChild(headerContent);
     }
+    
+    container.appendChild(header);
 
-    // Render limited items section
-    if (stockData.limitedItems && Array.isArray(stockData.limitedItems) && stockData.limitedItems.length > 0) {
-      container.appendChild(renderLimitedItemsSection(stockData.limitedItems));
-    }
+    // Render the stock
+    await renderVendingStock(stockData, container, availableMonths);
 
     contentDiv.appendChild(container);
 
@@ -97,22 +179,51 @@ async function initializeVendingPage(data, page, contentDiv) {
   }
 }
 
+// ------------------- Function: renderVendingStock -------------------
+// Renders the vending stock data
+async function renderVendingStock(stockData, container, availableMonths) {
+  // Remove existing stock sections (keep header)
+  const existingSections = container.querySelectorAll('.vending-village-section, .vending-limited-section');
+  existingSections.forEach(section => section.remove());
+
+  // Render village stock sections
+  if (stockData.stockList) {
+    const villages = ['Rudania', 'Inariko', 'Vhintl'];
+    
+    // Handle both Map and plain object formats
+    const stockListObj = stockData.stockList instanceof Map 
+      ? Object.fromEntries(stockData.stockList) 
+      : stockData.stockList;
+    
+    villages.forEach(village => {
+      const villageStock = stockListObj[village];
+      if (villageStock && Array.isArray(villageStock) && villageStock.length > 0) {
+        container.appendChild(renderVillageSection(village, villageStock));
+      }
+    });
+  }
+
+  // Render limited items section
+  if (stockData.limitedItems && Array.isArray(stockData.limitedItems) && stockData.limitedItems.length > 0) {
+    container.appendChild(renderLimitedItemsSection(stockData.limitedItems));
+  }
+}
+
 // ------------------- Function: renderVillageSection -------------------
 // Renders a village's stock section
 function renderVillageSection(villageName, items) {
   const section = document.createElement('div');
   section.className = 'vending-village-section';
-  section.style.marginBottom = '2.5rem';
+  
+  // Add village-specific class for styling
+  const villageClass = villageName.toLowerCase();
+  section.classList.add(villageClass);
 
   // Village header
   const header = document.createElement('div');
   header.className = 'vending-village-header';
-  header.style.padding = '1rem';
-  header.style.backgroundColor = 'var(--bg-secondary)';
-  header.style.borderRadius = '8px';
-  header.style.marginBottom = '1rem';
   header.innerHTML = `
-    <h3 style="font-size: 1.5rem; margin: 0; color: var(--text-primary);">
+    <h3>
       ${villageName}
     </h3>
   `;
@@ -140,23 +251,14 @@ function renderVillageSection(villageName, items) {
 function renderItemGroup(typeName, items) {
   const group = document.createElement('div');
   group.className = 'vending-item-group';
-  group.style.marginBottom = '1.5rem';
 
-  const groupHeader = document.createElement('div');
-  groupHeader.style.marginBottom = '1rem';
-  groupHeader.innerHTML = `
-    <h4 style="font-size: 1.2rem; color: var(--accent-color); margin: 0;">
-      ${typeName} Items
-    </h4>
-  `;
+  const groupHeader = document.createElement('h4');
+  groupHeader.textContent = `${typeName} Items`;
   group.appendChild(groupHeader);
 
   // Create grid for items
   const grid = document.createElement('div');
   grid.className = 'vending-items-grid';
-  grid.style.display = 'grid';
-  grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
-  grid.style.gap = '1rem';
 
   items.forEach(item => {
     grid.appendChild(renderStockItem(item));
@@ -171,67 +273,39 @@ function renderItemGroup(typeName, items) {
 function renderStockItem(item) {
   const card = document.createElement('div');
   card.className = 'vending-item-card';
-  card.style.padding = '1rem';
-  card.style.backgroundColor = 'var(--bg-secondary)';
-  card.style.borderRadius = '8px';
-  card.style.border = '1px solid var(--border-color)';
-  card.style.transition = 'transform 0.2s, box-shadow 0.2s';
 
-  // Hover effects
-  card.addEventListener('mouseenter', () => {
-    card.style.transform = 'translateY(-2px)';
-    card.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-  });
-  card.addEventListener('mouseleave', () => {
-    card.style.transform = 'translateY(0)';
-    card.style.boxShadow = 'none';
-  });
-
-  // Item emoji/icon
+  // Convert emoji to image URL
+  let imageUrl = null;
   let emojiHtml = '';
+  
   if (item.emoji) {
-    if (item.emoji.startsWith('http')) {
-      emojiHtml = `<img src="${item.emoji}" alt="${item.itemName}" style="width: 32px; height: 32px; margin-right: 0.5rem; vertical-align: middle;">`;
+    imageUrl = convertDiscordEmojiToImage(item.emoji);
+    
+    if (imageUrl) {
+      emojiHtml = `<img src="${imageUrl}" alt="${item.itemName || 'Item'}" class="item-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" />`;
     } else if (!item.emoji.startsWith('<:')) {
-      emojiHtml = `<span style="font-size: 1.5rem; margin-right: 0.5rem;">${item.emoji}</span>`;
-    } else {
-      // Discord emoji format - extract the emoji if possible or use placeholder
-      emojiHtml = `<span style="font-size: 1.5rem; margin-right: 0.5rem;">📦</span>`;
+      // Regular emoji
+      emojiHtml = `<span class="item-emoji" style="display: none;">${item.emoji}</span>`;
     }
   }
-
-  // Item rarity color
-  const rarityColors = {
-    1: '#9d9d9d', // Common
-    2: '#ffffff', // Uncommon
-    3: '#1eff00', // Rare
-    4: '#0070dd', // Epic
-    5: '#a335ee', // Legendary
-    6: '#ff8000', // Artifact
-    7: '#e6cc80', // Heirloom
-    8: '#00ccff', // Mythic
-    9: '#ff69b4', // Unique
-    10: '#ff0000' // Special
-  };
-
-  const rarityColor = rarityColors[item.itemRarity] || '#9d9d9d';
+  
+  // Fallback emoji if image fails
+  const fallbackEmoji = `<span class="item-emoji" style="display: ${imageUrl ? 'none' : 'inline'};">📦</span>`;
 
   card.innerHTML = `
-    <div style="display: flex; align-items: center; margin-bottom: 0.75rem;">
+    <div class="item-header">
       ${emojiHtml}
-      <h5 style="font-size: 1.1rem; margin: 0; color: var(--text-primary); flex: 1;">
+      ${fallbackEmoji}
+      <h5>
         ${item.itemName || 'Unknown Item'}
       </h5>
     </div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-      <span style="color: var(--text-secondary); font-size: 0.9rem;">
+    <div class="item-info">
+      <span class="item-points">
         <i class="fas fa-coins"></i> ${item.points || 0} points
       </span>
-      <span style="padding: 0.25rem 0.5rem; background-color: ${rarityColor}20; color: ${rarityColor}; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">
-        Rarity ${item.itemRarity || 1}
-      </span>
     </div>
-    <div style="color: var(--text-secondary); font-size: 0.85rem;">
+    <div class="item-type">
       <i class="fas fa-tag"></i> ${item.vendingType || 'Unknown'}
     </div>
   `;
@@ -244,19 +318,13 @@ function renderStockItem(item) {
 function renderLimitedItemsSection(items) {
   const section = document.createElement('div');
   section.className = 'vending-limited-section';
-  section.style.marginTop = '3rem';
-  section.style.padding = '1.5rem';
-  section.style.backgroundColor = 'var(--bg-secondary)';
-  section.style.borderRadius = '8px';
-  section.style.border = '2px solid var(--accent-color)';
 
   const header = document.createElement('div');
-  header.style.marginBottom = '1.5rem';
   header.innerHTML = `
-    <h3 style="font-size: 1.5rem; margin: 0; color: var(--accent-color);">
+    <h3>
       <i class="fas fa-star"></i> Limited Items
     </h3>
-    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
+    <p>
       These items have limited stock available
     </p>
   `;
@@ -265,22 +333,15 @@ function renderLimitedItemsSection(items) {
   // Create grid for limited items
   const grid = document.createElement('div');
   grid.className = 'vending-limited-grid';
-  grid.style.display = 'grid';
-  grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(300px, 1fr))';
-  grid.style.gap = '1rem';
 
   items.forEach(item => {
     const card = renderStockItem(item);
     
     // Add stock indicator
     const stockIndicator = document.createElement('div');
-    stockIndicator.style.marginTop = '0.75rem';
-    stockIndicator.style.padding = '0.5rem';
-    stockIndicator.style.backgroundColor = item.stock > 0 ? 'rgba(255, 165, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)';
-    stockIndicator.style.borderRadius = '4px';
-    stockIndicator.style.textAlign = 'center';
+    stockIndicator.className = `stock-indicator ${item.stock > 0 ? 'in-stock' : 'out-of-stock'}`;
     stockIndicator.innerHTML = `
-      <span style="color: ${item.stock > 0 ? '#ffa500' : '#ff0000'}; font-weight: 600; font-size: 0.9rem;">
+      <span>
         ${item.stock > 0 ? `${item.stock} in stock` : 'Out of stock'}
       </span>
     `;
@@ -299,4 +360,3 @@ export {
   renderStockItem,
   renderLimitedItemsSection
 };
-

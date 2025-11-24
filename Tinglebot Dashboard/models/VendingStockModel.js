@@ -1,7 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-const { connectToVending } = require('../database/db');
 
 // ------------------- Define the vending stock item schema -------------------
 const vendingStockItemSchema = new Schema({
@@ -24,7 +23,7 @@ const limitedItemSchema = new Schema({
 // ------------------- Define the vending stock schema -------------------
 const vendingStockSchema = new Schema({
   month: { type: Number, required: true },
-  year: { type: Number, required: true },
+  year: { type: Number, default: null }, // Make year optional for backward compatibility
   stockList: {
     type: Map,
     of: [vendingStockItemSchema],
@@ -41,24 +40,33 @@ const vendingStockSchema = new Schema({
 });
 
 // ------------------- Initialize the VendingStock model -------------------
+// Uses the main tinglebot database connection (default mongoose connection)
+let VendingStock = null;
+
 const initializeVendingStockModel = async () => {
-  const vendingConnection = await connectToVending();
-
-  if (!vendingConnection) {
-    throw new Error(`[VendingStockModel]: Failed to connect to the vending database.`);
+  // Check if model already exists on the default connection
+  if (mongoose.models.VendingStock) {
+    return mongoose.models.VendingStock;
   }
 
-  // Check if model already exists
-  if (vendingConnection.models.VendingStock) {
-    return vendingConnection.models.VendingStock;
-  }
+  // Create model on the default mongoose connection (tinglebot database)
+  VendingStock = mongoose.model('VendingStock', vendingStockSchema);
+  return VendingStock;
+};
 
-  return vendingConnection.model('VendingStock', vendingStockSchema);
+// ------------------- Get the VendingStock model -------------------
+const getVendingStockModel = () => {
+  if (!VendingStock && mongoose.models.VendingStock) {
+    VendingStock = mongoose.models.VendingStock;
+  }
+  return VendingStock || mongoose.model('VendingStock', vendingStockSchema);
 };
 
 // ------------------- Export the model and initialization function -------------------
 module.exports = {
   initializeVendingStockModel,
+  getVendingStockModel,
+  VendingStock: getVendingStockModel,
   vendingStockSchema,
   vendingStockItemSchema,
   limitedItemSchema

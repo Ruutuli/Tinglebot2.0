@@ -88,7 +88,18 @@ const vendingRequestSchema = new Schema({
   originalSellPrice: { type: Number }, // For vendor self-purchases
   isVendorSelfPurchase: { type: Boolean, default: false },
   offeredItem: { type: String }, // For barter payments
-  artLink: { type: String } // Discord message link for art payments
+  artLink: { type: String }, // Discord message link for art payments
+  // Transaction type: 'purchase' (buyer buying from vendor), 'vendor_purchase' (vendor buying with points), 'vendor_move' (vendor moving from inventory)
+  transactionType: { 
+    type: String, 
+    enum: ['purchase', 'vendor_purchase', 'vendor_move'],
+    default: 'purchase',
+    index: true
+  },
+  // For vendor purchases: points spent
+  pointsSpent: { type: Number },
+  // For vendor moves: source inventory
+  sourceInventory: { type: String }
 });
 
 // ------------------- Create and export the VendingRequest model -------------------

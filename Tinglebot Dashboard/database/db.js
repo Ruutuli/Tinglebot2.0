@@ -1906,7 +1906,11 @@ const getCurrentVendingStockList = async () => {
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth() + 1;
   const currentYear = currentDate.getFullYear();
-  const currentStock = await stockCollection.findOne({ month: currentMonth, year: currentYear });
+  // First try with year field, then fall back to month only
+  let currentStock = await stockCollection.findOne({ month: currentMonth, year: currentYear });
+  if (!currentStock) {
+   currentStock = await stockCollection.findOne({ month: currentMonth });
+  }
   if (!currentStock) {
    return null;
   }
