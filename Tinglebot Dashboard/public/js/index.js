@@ -1393,15 +1393,10 @@ function showVendingSection() {
   if (vendingSection) {
     vendingSection.style.display = 'block';
     
-    // Load vending shops and setup tabs
+    // Load vending shops
     import('./profile.js?v=20251114').then(profileModule => {
       // Make module available globally for pagination callbacks
       window.profileModule = profileModule;
-      
-      // Setup tabs
-      if (profileModule.setupVendingTabs) {
-        profileModule.setupVendingTabs();
-      }
       
       // Load vending shops into the vending section container
       if (profileModule.loadVendingShops) {
@@ -1437,6 +1432,67 @@ function showVendingSection() {
     breadcrumb.textContent = 'Vending Management';
   }
 }
+
+// ------------------- Function: showVendorDashboardSection -------------------
+// Shows the vendor dashboard page for a specific character
+function showVendorDashboardSection(characterId) {
+  // Scroll to top when showing vendor dashboard section
+  scrollToTop();
+  
+  // Hide all main content sections
+  const mainContent = document.querySelector('.main-content');
+  const sections = mainContent.querySelectorAll('section, #model-details-page');
+  
+  sections.forEach(section => {
+    section.style.display = 'none';
+  });
+  
+  // Show the vendor dashboard section
+  const vendorDashboardSection = document.getElementById('vendor-dashboard-section');
+  if (vendorDashboardSection) {
+    vendorDashboardSection.style.display = 'block';
+    
+    // Load vendor dashboard content
+    import('./profile.js?v=20251114').then(profileModule => {
+      if (profileModule.loadVendorDashboard) {
+        profileModule.loadVendorDashboard(characterId);
+      }
+    }).catch(err => {
+      console.error('[index.js]: Error loading vendor dashboard:', err);
+    });
+  }
+  
+  // Update active state in sidebar - keep vending section active
+  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+  sidebarLinks.forEach(link => {
+    const linkSection = link.getAttribute('data-section');
+    const listItem = link.closest('li');
+    if (listItem) {
+      if (linkSection === 'vending-section') {
+        listItem.classList.add('active');
+      } else {
+        listItem.classList.remove('active');
+      }
+    }
+  });
+  
+  // Update breadcrumb
+  const breadcrumb = document.querySelector('.breadcrumb');
+  if (breadcrumb) {
+    breadcrumb.textContent = 'Vendor Dashboard';
+  }
+  
+  // Setup back button
+  const backBtn = document.getElementById('vendor-dashboard-back-btn');
+  if (backBtn) {
+    backBtn.onclick = () => {
+      showVendingSection();
+    };
+  }
+}
+
+// Make function available globally immediately
+window.showVendorDashboardSection = showVendorDashboardSection;
 
 function showTokensSection() {
   // Scroll to top when showing tokens section

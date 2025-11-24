@@ -2795,75 +2795,105 @@ async function createVendorCard(character) {
         </div>
       </div>
     </div>
-    <div class="vendor-card-inventory" style="max-height: 300px; overflow-y: auto;">
-      <div id="vendor-inventory-${character._id}" style="display: flex; flex-direction: column; gap: 0.5rem;">
-        ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
-          inventoryData.items.sort((a, b) => {
-            // Sort by slot number if available
-            const slotA = a.slot ? parseInt(a.slot.replace(/[^0-9]/g, '')) || 999 : 999;
-            const slotB = b.slot ? parseInt(b.slot.replace(/[^0-9]/g, '')) || 999 : 999;
-            return slotA - slotB;
-          }).map(item => `
-            <div class="vendor-item" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--input-bg); border-radius: 0.25rem; border: 1px solid var(--border-color);">
-              <div style="flex: 1;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
-                  <span style="font-weight: 700; color: white; font-size: 0.8rem; background: var(--primary-color); padding: 0.3rem 0.6rem; border-radius: 0.25rem; min-width: 50px; text-align: center;">
-                    ${item.slot || 'No Slot'}
-                  </span>
-                  <span style="font-weight: 600; color: var(--text-color); font-size: 0.95rem;">${escapeHtmlAttribute(item.itemName)}</span>
+    <div class="vendor-card-tabs" style="border-bottom: 2px solid var(--border-color); margin-bottom: 0;">
+      <div class="vendor-tabs" style="display: flex; gap: 0.5rem; margin: 0;">
+        <button class="vendor-tab-btn active" data-character-id="${character._id}" data-tab="inventory" style="
+          flex: 1;
+          padding: 0.75rem 1rem;
+          background: transparent;
+          color: var(--text-secondary);
+          border: none;
+          border-bottom: 3px solid transparent;
+          cursor: pointer;
+          font-size: 0.9rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        ">
+          <i class="fas fa-box"></i>
+          <span>Inventory</span>
+        </button>
+        <button class="vendor-tab-btn" data-character-id="${character._id}" data-tab="transactions" style="
+          flex: 1;
+          padding: 0.75rem 1rem;
+          background: transparent;
+          color: var(--text-secondary);
+          border: none;
+          border-bottom: 3px solid transparent;
+          cursor: pointer;
+          font-size: 0.9rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        ">
+          <i class="fas fa-exchange-alt"></i>
+          <span>Transactions</span>
+        </button>
+      </div>
+    </div>
+    <div class="vendor-card-tab-content" style="min-height: 200px; max-height: 400px; overflow-y: auto;">
+      <div class="vendor-tab-panel active" id="vendor-inventory-panel-${character._id}" data-character-id="${character._id}">
+        <div id="vendor-inventory-${character._id}" style="display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.5rem;">
+          ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
+            inventoryData.items.sort((a, b) => {
+              // Sort by slot number if available
+              const slotA = a.slot ? parseInt(a.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+              const slotB = b.slot ? parseInt(b.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+              return slotA - slotB;
+            }).map(item => `
+              <div class="vendor-item" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--input-bg); border-radius: 0.25rem; border: 1px solid var(--border-color);">
+                <div style="flex: 1;">
+                  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+                    <span style="font-weight: 700; color: white; font-size: 0.8rem; background: var(--primary-color); padding: 0.3rem 0.6rem; border-radius: 0.25rem; min-width: 50px; text-align: center;">
+                      ${item.slot || 'No Slot'}
+                    </span>
+                    <span style="font-weight: 600; color: var(--text-color); font-size: 0.95rem;">${escapeHtmlAttribute(item.itemName)}</span>
+                  </div>
+                  <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Stock: <strong style="color: var(--text-color);">${item.stockQty}</strong>
+                    ${item.tokenPrice !== null && item.tokenPrice !== undefined ? ` • <strong style="color: var(--primary-color);">${item.tokenPrice}</strong> tokens` : ''}
+                    ${item.artPrice && item.artPrice !== 'N/A' ? ` • ${escapeHtmlAttribute(item.artPrice)} art` : ''}
+                    ${item.otherPrice && item.otherPrice !== 'N/A' ? ` • ${escapeHtmlAttribute(item.otherPrice)}` : ''}
+                  </div>
                 </div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                  Stock: <strong style="color: var(--text-color);">${item.stockQty}</strong>
-                  ${item.tokenPrice !== null && item.tokenPrice !== undefined ? ` • <strong style="color: var(--primary-color);">${item.tokenPrice}</strong> tokens` : ''}
-                  ${item.artPrice && item.artPrice !== 'N/A' ? ` • ${escapeHtmlAttribute(item.artPrice)} art` : ''}
-                  ${item.otherPrice && item.otherPrice !== 'N/A' ? ` • ${escapeHtmlAttribute(item.otherPrice)}` : ''}
+                <div style="display: flex; gap: 0.5rem;">
+                  <button class="edit-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
+                    padding: 0.5rem;
+                    background: var(--primary-color);
+                    color: white;
+                    border: none;
+                    border-radius: 0.25rem;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    transition: background 0.2s;
+                  " title="Edit item">
+                    <i class="fas fa-edit"></i>
+                  </button>
                 </div>
               </div>
-              <div style="display: flex; gap: 0.5rem;">
-                <button class="edit-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
-                  padding: 0.5rem;
-                  background: var(--primary-color);
-                  color: white;
-                  border: none;
-                  border-radius: 0.25rem;
-                  cursor: pointer;
-                  font-size: 0.9rem;
-                  transition: background 0.2s;
-                " title="Edit item">
-                  <i class="fas fa-edit"></i>
-                </button>
-              </div>
-            </div>
-          `).join('') : 
-          inventoryData && inventoryData.items && inventoryData.items.length === 0 ? 
-            '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i><div>No items in vending inventory</div></div>' :
-            '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>Loading inventory...</div>'
-        }
+            `).join('') : 
+            inventoryData && inventoryData.items && inventoryData.items.length === 0 ? 
+              '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i><div>No items in vending inventory</div></div>' :
+              '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>Loading inventory...</div>'
+          }
+        </div>
+      </div>
+      <div class="vendor-tab-panel" id="vendor-transactions-panel-${character._id}" data-character-id="${character._id}" style="display: none; padding-top: 0.5rem;">
+        <div id="vendor-transactions-${character._id}" style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>Loading transactions...
+          </div>
+        </div>
       </div>
     </div>
     <div class="vendor-card-actions" style="display: flex; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-      ${!isSetup ? `
-      <button class="setup-vendor-btn" data-character-id="${character._id}" data-character-name="${escapeHtmlAttribute(character.name)}" style="
-        flex: 1;
-        padding: 0.75rem;
-        background: var(--success-color);
-        color: white;
-        border: none;
-        border-radius: 0.5rem;
-        cursor: pointer;
-        font-size: 0.9rem;
-        font-weight: 500;
-        transition: background 0.2s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-      " onmouseover="this.style.background='var(--success-hover)'" onmouseout="this.style.background='var(--success-color)'">
-        <i class="fas fa-magic"></i>
-        Setup (One-Time)
-      </button>
-      ` : `
-      <button class="add-vendor-item-btn" data-character-id="${character._id}" style="
+      <button class="view-vendor-btn" data-character-id="${character._id}" style="
         flex: 1;
         padding: 0.75rem;
         background: var(--primary-color);
@@ -2878,47 +2908,27 @@ async function createVendorCard(character) {
         align-items: center;
         justify-content: center;
         gap: 0.5rem;
-      " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'">
-        <i class="fas fa-plus"></i>
-        Add Item from Inventory
+      " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'" title="View and manage vendor dashboard">
+        <i class="fas fa-store"></i>
+        View Vendor Dashboard
       </button>
-      <button class="manage-vendor-btn" data-character-id="${character._id}" style="
-        padding: 0.75rem 1rem;
-        background: var(--card-bg);
-        color: var(--text-color);
-        border: 1px solid var(--border-color);
-        border-radius: 0.5rem;
-        cursor: pointer;
-        font-size: 0.9rem;
-        transition: background 0.2s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        position: relative;
-      " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--card-bg)'" title="${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 'Items: ' + inventoryData.items.map(i => `${i.itemName} (${i.slot || 'No Slot'})`).join(', ') : 'No items in inventory'}">
-        <i class="fas fa-cog"></i>
-        Manage
-        ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
-          `<span style="margin-left: 0.25rem; background: var(--primary-color); color: white; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">${inventoryData.items.length}</span>` : 
-          ''
-        }
-      </button>
-      `}
     </div>
   `;
 
   // Add event listeners
-  const setupBtn = card.querySelector('.setup-vendor-btn');
-  setupBtn?.addEventListener('click', () => showVendingSetupModal(character));
-
-  const addBtn = card.querySelector('.add-vendor-item-btn');
-  addBtn?.addEventListener('click', () => showAddVendorItemModal(character));
-
-  const manageBtn = card.querySelector('.manage-vendor-btn');
-  manageBtn?.addEventListener('click', () => {
-    // Open manage vendor modal for editing existing items
-    showManageVendorModal(character);
+  const viewBtn = card.querySelector('.view-vendor-btn');
+  viewBtn?.addEventListener('click', () => {
+    // Navigate to vendor dashboard page
+    // The function is made available globally in index.js
+    if (window.showVendorDashboardSection) {
+      window.showVendorDashboardSection(character._id);
+    } else if (typeof showVendorDashboardSection === 'function') {
+      // Fallback: try direct function call
+      showVendorDashboardSection(character._id);
+    } else {
+      console.error('[profile.js]: showVendorDashboardSection function not available');
+      alert('Unable to open vendor dashboard. Please refresh the page.');
+    }
   });
 
   const editButtons = card.querySelectorAll('.edit-vendor-item-btn');
@@ -2932,6 +2942,74 @@ async function createVendorCard(character) {
       }
     });
   });
+
+  // Setup tabs for this vendor card
+  const tabButtons = card.querySelectorAll('.vendor-tab-btn');
+  tabButtons.forEach(btn => {
+    // Add hover effects
+    btn.addEventListener('mouseenter', () => {
+      if (!btn.classList.contains('active')) {
+        btn.style.color = 'var(--text-color)';
+        btn.style.backgroundColor = 'var(--input-bg)';
+      }
+    });
+    btn.addEventListener('mouseleave', () => {
+      if (!btn.classList.contains('active')) {
+        btn.style.color = 'var(--text-secondary)';
+        btn.style.backgroundColor = 'transparent';
+      }
+    });
+    
+    btn.addEventListener('click', () => {
+      const characterId = btn.dataset.characterId;
+      const tabName = btn.dataset.tab;
+      
+      // Update active tab button
+      card.querySelectorAll('.vendor-tab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.color = 'var(--text-secondary)';
+        b.style.borderBottomColor = 'transparent';
+        b.style.backgroundColor = 'transparent';
+      });
+      btn.classList.add('active');
+      btn.style.color = 'var(--primary-color)';
+      btn.style.borderBottomColor = 'var(--primary-color)';
+      btn.style.backgroundColor = 'transparent';
+      
+      // Update active tab panel
+      const inventoryPanel = card.querySelector(`#vendor-inventory-panel-${characterId}`);
+      const transactionsPanel = card.querySelector(`#vendor-transactions-panel-${characterId}`);
+      
+      if (tabName === 'inventory') {
+        if (inventoryPanel) {
+          inventoryPanel.classList.add('active');
+          inventoryPanel.style.display = 'block';
+        }
+        if (transactionsPanel) {
+          transactionsPanel.classList.remove('active');
+          transactionsPanel.style.display = 'none';
+        }
+      } else if (tabName === 'transactions') {
+        if (inventoryPanel) {
+          inventoryPanel.classList.remove('active');
+          inventoryPanel.style.display = 'none';
+        }
+        if (transactionsPanel) {
+          transactionsPanel.classList.add('active');
+          transactionsPanel.style.display = 'block';
+          // Load transactions for this character
+          loadCharacterTransactions(character._id, character.name);
+        }
+      }
+    });
+  });
+
+  // Set initial active tab styling
+  const activeTabBtn = card.querySelector('.vendor-tab-btn.active');
+  if (activeTabBtn) {
+    activeTabBtn.style.color = 'var(--primary-color)';
+    activeTabBtn.style.borderBottomColor = 'var(--primary-color)';
+  }
 
   return card;
 }
@@ -4442,6 +4520,402 @@ async function showManageVendorModal(character) {
   document.addEventListener('keydown', handleEscape);
 }
 
+// ------------------- Function: loadVendorDashboard -------------------
+// Loads and displays vendor dashboard content on the page
+export async function loadVendorDashboard(characterId) {
+  const dashboardContent = document.getElementById('vendor-dashboard-content');
+  if (!dashboardContent) {
+    console.error('[profile.js]: Vendor dashboard content container not found');
+    return;
+  }
+
+  // Show loading state
+  dashboardContent.innerHTML = `
+    <div style="text-align: center; padding: 3rem;">
+      <div class="loading-spinner"></div>
+      <p style="margin-top: 1rem; color: var(--text-secondary);">Loading vendor information...</p>
+    </div>
+  `;
+
+  // Fetch character data first
+  let character = null;
+  try {
+    const characterResponse = await fetch(`/api/user/characters`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (characterResponse.ok) {
+      const { data: characters } = await characterResponse.json();
+      character = characters.find(c => c._id === characterId);
+      if (!character) {
+        throw new Error('Character not found');
+      }
+    } else {
+      throw new Error('Failed to load character');
+    }
+  } catch (error) {
+    console.error('[profile.js]: Error fetching character:', error);
+    dashboardContent.innerHTML = `
+      <div style="text-align: center; padding: 3rem;">
+        <p style="color: var(--error-color);">Error loading character information. Please try again.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Fetch vendor data
+  let inventoryData = null;
+  let characterTransactions = [];
+  try {
+    // Fetch inventory
+    const inventoryResponse = await fetch(`/api/characters/${characterId}/vending`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (inventoryResponse.ok) {
+      inventoryData = await inventoryResponse.json();
+    }
+
+    // Fetch transactions
+    try {
+      const transactionsResponse = await fetch(`/api/vending/transactions?limit=50&skip=0`, {
+        credentials: 'include'
+      });
+      if (transactionsResponse.ok) {
+        const transactionsData = await transactionsResponse.json();
+        if (transactionsData.success && transactionsData.transactions) {
+          characterTransactions = transactionsData.transactions.filter(tx => 
+            tx.vendorCharacterName === character.name || tx.userCharacterName === character.name
+          ).slice(0, 10); // Show last 10 transactions
+        }
+      }
+    } catch (error) {
+      console.warn('[profile.js]: Could not load transactions:', error);
+    }
+  } catch (error) {
+    console.error('[profile.js]: Error fetching vendor data:', error);
+    dashboardContent.innerHTML = `
+      <div style="text-align: center; padding: 3rem;">
+        <p style="color: var(--error-color);">Error loading vendor information. Please try again.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Calculate slot info
+  const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+  const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+  const vendorType = character.vendorType?.toLowerCase() || character.job?.toLowerCase();
+  const baseSlots = baseSlotLimits[vendorType] || 0;
+  const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase() || character.vendingSetup?.pouchType?.toLowerCase() || 'none'] || 0;
+  const totalSlots = baseSlots + extraSlots;
+  const usedSlots = inventoryData?.character?.slots?.used || 0;
+  const availableSlots = totalSlots - usedSlots;
+
+  // Format last collected month
+  const lastCollectedMonth = character.lastCollectedMonth || 0;
+  const currentMonth = new Date().getMonth() + 1;
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const lastCollectedText = lastCollectedMonth > 0 ? months[lastCollectedMonth - 1] : 'Never';
+  const isCurrentMonth = lastCollectedMonth === currentMonth;
+
+  const iconUrl = formatCharacterIconUrl(character.icon);
+  const shopImage = character.vendingSetup?.shopImage || character.shopImage || '';
+  const isSetup = character.vendingSetup?.setupDate;
+
+  // Build dashboard HTML
+  dashboardContent.innerHTML = `
+    <!-- Header Section -->
+    <div style="background: linear-gradient(135deg, var(--primary-color) 0%, rgba(0,123,255,0.8) 100%); color: white; padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+      <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1rem;">
+        <img src="${iconUrl}" alt="${character.name}" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 4px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" onerror="this.src='/images/ankleicon.png'">
+        <div style="flex: 1;">
+          <h2 style="margin: 0 0 0.5rem 0; color: white; font-size: 2.5rem; font-weight: 700;">${escapeHtmlAttribute(character.name)}</h2>
+          <p style="margin: 0; color: rgba(255,255,255,0.9); font-size: 1.2rem;">
+            ${capitalize(character.vendorType || character.job || 'Vendor')} • ${capitalize(character.shopPouch || character.vendingSetup?.pouchType || 'No')} Pouch
+          </p>
+        </div>
+      </div>
+      ${shopImage ? `
+      <div style="margin-top: 1.5rem; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+        <img src="${escapeHtmlAttribute(shopImage)}" alt="Shop Banner" style="width: 100%; max-height: 250px; object-fit: cover;" onerror="this.style.display='none'">
+      </div>
+      ` : ''}
+    </div>
+    
+    <div style="padding: 0;">
+      <!-- Stats Grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Vending Points</div>
+          <div style="font-size: 2.5rem; font-weight: 700; color: var(--primary-color);">${(character.vendingPoints || 0).toLocaleString()}</div>
+        </div>
+        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Shop Slots</div>
+          <div style="font-size: 2.5rem; font-weight: 700; color: var(--text-color);">${usedSlots}/${totalSlots}</div>
+          <div style="font-size: 0.85rem; color: ${availableSlots > 0 ? 'var(--success-color)' : 'var(--error-color)'}; margin-top: 0.5rem; font-weight: 600;">
+            ${availableSlots} available
+          </div>
+        </div>
+        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Items in Stock</div>
+          <div style="font-size: 2.5rem; font-weight: 700; color: var(--text-color);">${inventoryData?.items?.length || 0}</div>
+        </div>
+        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Last Collected</div>
+          <div style="font-size: 1.3rem; font-weight: 700; color: ${isCurrentMonth ? 'var(--success-color)' : 'var(--text-color)'};">
+            ${lastCollectedText}
+          </div>
+          ${!isCurrentMonth && lastCollectedMonth > 0 ? `
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            ${currentMonth - lastCollectedMonth} month${currentMonth - lastCollectedMonth !== 1 ? 's' : ''} ago
+          </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <!-- Management Actions -->
+      <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h3 style="margin: 0 0 1.5rem 0; color: var(--text-color); font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+          <i class="fas fa-tools" style="color: var(--primary-color);"></i>
+          Manage Shop
+        </h3>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+          ${!isSetup ? `
+          <button class="dashboard-setup-vendor-btn" data-character-id="${character._id}" data-character-name="${escapeHtmlAttribute(character.name)}" style="
+            padding: 1rem 1.5rem;
+            background: var(--success-color);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+          " onmouseover="this.style.background='var(--success-hover)'" onmouseout="this.style.background='var(--success-color)'">
+            <i class="fas fa-magic"></i>
+            Setup Shop (One-Time)
+          </button>
+          ` : `
+          <button class="dashboard-add-vendor-item-btn" data-character-id="${character._id}" style="
+            padding: 1rem 1.5rem;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+          " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'">
+            <i class="fas fa-plus"></i>
+            Add Item from Inventory
+          </button>
+          <button class="dashboard-manage-vendor-btn" data-character-id="${character._id}" style="
+            padding: 1rem 1.5rem;
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 2px solid var(--border-color);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+          " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--card-bg)'">
+            <i class="fas fa-cog"></i>
+            Manage Items & Settings
+            ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
+              `<span style="margin-left: 0.5rem; background: var(--primary-color); color: white; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">${inventoryData.items.length}</span>` : 
+              ''
+            }
+          </button>
+          `}
+        </div>
+      </div>
+
+      <!-- Inventory Section -->
+      <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h3 style="margin: 0 0 1.5rem 0; color: var(--text-color); font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+          <i class="fas fa-boxes" style="color: var(--primary-color);"></i>
+          Inventory Items (${inventoryData?.items?.length || 0})
+        </h3>
+        <div style="max-height: 400px; overflow-y: auto;">
+          ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
+            inventoryData.items.sort((a, b) => {
+              const slotA = a.slot ? parseInt(a.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+              const slotB = b.slot ? parseInt(b.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+              return slotA - slotB;
+            }).map(item => `
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid var(--border-color); margin-bottom: 0.75rem;">
+                <div style="flex: 1;">
+                  <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                    <span style="font-weight: 700; color: white; font-size: 0.85rem; background: var(--primary-color); padding: 0.4rem 0.8rem; border-radius: 0.4rem; min-width: 60px; text-align: center;">
+                      ${item.slot || 'No Slot'}
+                    </span>
+                    <span style="font-weight: 600; color: var(--text-color); font-size: 1.1rem;">${escapeHtmlAttribute(item.itemName)}</span>
+                  </div>
+                  <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <span><strong style="color: var(--text-color);">Stock:</strong> ${item.stockQty}</span>
+                    ${item.tokenPrice !== null && item.tokenPrice !== undefined ? `<span><strong style="color: var(--primary-color);">💰 Tokens:</strong> ${item.tokenPrice}</span>` : ''}
+                    ${item.artPrice && item.artPrice !== 'N/A' ? `<span><strong style="color: var(--text-color);">🎨 Art:</strong> ${escapeHtmlAttribute(item.artPrice)}</span>` : ''}
+                    ${item.otherPrice && item.otherPrice !== 'N/A' ? `<span><strong style="color: var(--text-color);">Other:</strong> ${escapeHtmlAttribute(item.otherPrice)}</span>` : ''}
+                    ${item.barterOpen || item.tradesOpen ? `<span style="color: var(--success-color);"><strong>🔄 Barter Open</strong></span>` : ''}
+                  </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-left: 1rem;">
+                  <button class="dashboard-edit-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
+                    padding: 0.75rem 1rem;
+                    background: var(--primary-color);
+                    color: white;
+                    border: none;
+                    border-radius: 0.5rem;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                    transition: background 0.2s;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 0.5rem;
+                  " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'" title="Edit item">
+                    <i class="fas fa-edit"></i>
+                    Edit
+                  </button>
+                </div>
+              </div>
+            `).join('') : 
+            '<div style="text-align: center; padding: 3rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i><div style="font-size: 1.1rem;">No items in vending inventory</div></div>'
+          }
+        </div>
+      </div>
+
+      <!-- Recent Transactions Section -->
+      <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h3 style="margin: 0 0 1.5rem 0; color: var(--text-color); font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+          <i class="fas fa-exchange-alt" style="color: var(--primary-color);"></i>
+          Recent Transactions (${characterTransactions.length})
+        </h3>
+        <div style="max-height: 300px; overflow-y: auto;">
+          ${characterTransactions.length > 0 ? 
+            characterTransactions.map(tx => {
+              const date = new Date(tx.date).toLocaleString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+              const statusColor = tx.status === 'completed' ? '#10b981' : 
+                                  tx.status === 'pending' ? '#f59e0b' : 
+                                  tx.status === 'failed' ? '#ef4444' : 
+                                  tx.status === 'expired' ? '#6b7280' : '#6366f1';
+              const isVendor = tx.vendorCharacterName === character.name;
+              const roleText = isVendor ? 'Sold to' : 'Bought from';
+              const otherParty = isVendor ? tx.userCharacterName : tx.vendorCharacterName;
+              let paymentInfo = '';
+              if (tx.paymentMethod === 'tokens') {
+                paymentInfo = '💰 Tokens';
+              } else if (tx.paymentMethod === 'art') {
+                paymentInfo = '🎨 Art';
+              } else if (tx.paymentMethod === 'barter') {
+                const items = tx.offeredItemsWithQty && tx.offeredItemsWithQty.length > 0 
+                  ? tx.offeredItemsWithQty 
+                  : (tx.offeredItems || []).map(item => ({ itemName: item, quantity: 1 }));
+                paymentInfo = items.map(item => item.itemName + ' x' + item.quantity).join(', ');
+              }
+              return `
+                <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                    <div style="flex: 1;">
+                      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                        <span style="background: ${statusColor}; color: white; padding: 0.25rem 0.6rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
+                          ${tx.status}
+                        </span>
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;">
+                          ${roleText} ${escapeHtmlAttribute(otherParty)}
+                        </span>
+                      </div>
+                      <h4 style="margin: 0; color: var(--text-color); font-size: 1rem; font-weight: 600;">
+                        ${escapeHtmlAttribute(tx.itemName)} × ${tx.quantity}
+                      </h4>
+                    </div>
+                    <span style="color: var(--text-secondary); font-size: 0.8rem; white-space: nowrap; margin-left: 0.5rem;">${date}</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem;">
+                    <div>
+                      <span style="color: var(--text-secondary); font-size: 0.8rem;">Payment</span>
+                      <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500; font-size: 0.9rem;">
+                        ${tx.paymentMethod === 'tokens' ? '💰 Tokens' : tx.paymentMethod === 'art' ? '🎨 Art' : '🔄 Barter'}
+                      </p>
+                    </div>
+                    ${paymentInfo ? `
+                    <div>
+                      <span style="color: var(--text-secondary); font-size: 0.8rem;">${tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
+                      <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500; font-size: 0.9rem;">${escapeHtmlAttribute(paymentInfo)}</p>
+                    </div>
+                    ` : ''}
+                  </div>
+                </div>
+              `;
+            }).join('') : 
+            '<div style="text-align: center; padding: 3rem; color: var(--text-secondary);"><i class="fas fa-exchange-alt" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i><div style="font-size: 1.1rem;">No transactions found</div></div>'
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Add event listeners for dashboard buttons
+  const setupBtn = dashboardContent.querySelector('.dashboard-setup-vendor-btn');
+  setupBtn?.addEventListener('click', () => {
+    showVendingSetupModal(character);
+  });
+
+  const addBtn = dashboardContent.querySelector('.dashboard-add-vendor-item-btn');
+  addBtn?.addEventListener('click', () => {
+    showAddVendorItemModal(character);
+  });
+
+  const manageBtn = dashboardContent.querySelector('.dashboard-manage-vendor-btn');
+  manageBtn?.addEventListener('click', () => {
+    showManageVendorModal(character);
+  });
+
+  // Add event listeners for edit buttons on inventory items
+  const editButtons = dashboardContent.querySelectorAll('.dashboard-edit-vendor-item-btn');
+  editButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const itemId = btn.dataset.itemId;
+      const item = inventoryData?.items?.find(i => i._id === itemId);
+      if (item) {
+        await showEditVendorItemModal(character, item);
+        // Reload dashboard after editing
+        await loadVendorDashboard(characterId);
+      }
+    });
+  });
+}
+
 // ------------------- Function: showEditVendorItemModal -------------------
 // Shows a modal to edit an existing vending item
 async function showEditVendorItemModal(character, item) {
@@ -4961,6 +5435,146 @@ export async function loadVendingTransactions(page = 1, filter = 'all') {
   }
 }
 
+// ------------------- Function: loadCharacterTransactions -------------------
+// Loads vending transactions for a specific character
+async function loadCharacterTransactions(characterId, characterName) {
+  try {
+    const transactionsContainer = document.getElementById(`vendor-transactions-${characterId}`);
+    if (!transactionsContainer) {
+      console.warn(`[profile.js]: Transactions container not found for character ${characterId}`);
+      return;
+    }
+
+    // Show loading state
+    transactionsContainer.innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+        <i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>Loading transactions...
+      </div>
+    `;
+
+    // Fetch all transactions (we'll filter by character name on client side)
+    const response = await fetch(`/api/vending/transactions?limit=100&skip=0`, {
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to load transactions: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && data.transactions) {
+      // Filter transactions for this character (as vendor or buyer)
+      const characterTransactions = data.transactions.filter(tx => 
+        tx.vendorCharacterName === characterName || tx.userCharacterName === characterName
+      );
+
+      if (characterTransactions.length === 0) {
+        transactionsContainer.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+            <div>No transactions found for this character</div>
+          </div>
+        `;
+        return;
+      }
+
+      // Render transactions
+      const transactionsHtml = characterTransactions.map(tx => {
+        const date = new Date(tx.date).toLocaleString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        
+        const statusColor = tx.status === 'completed' ? '#10b981' : 
+                            tx.status === 'pending' ? '#f59e0b' : 
+                            tx.status === 'failed' ? '#ef4444' : 
+                            tx.status === 'expired' ? '#6b7280' : '#6366f1';
+        
+        const isVendor = tx.vendorCharacterName === characterName;
+        const roleText = isVendor ? 'Selling to' : 'Buying from';
+        const otherParty = isVendor ? tx.userCharacterName : tx.vendorCharacterName;
+        
+        let paymentInfo = '';
+        if (tx.paymentMethod === 'tokens') {
+          paymentInfo = '💰 Tokens';
+        } else if (tx.paymentMethod === 'art') {
+          paymentInfo = '🎨 Art';
+        } else if (tx.paymentMethod === 'barter') {
+          const items = tx.offeredItemsWithQty && tx.offeredItemsWithQty.length > 0 
+            ? tx.offeredItemsWithQty 
+            : (tx.offeredItems || []).map(item => ({ itemName: item, quantity: 1 }));
+          paymentInfo = items.map(item => item.itemName + ' x' + item.quantity).join(', ');
+        }
+        
+        return `
+          <div class="vendor-transaction-item" style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+              <div style="flex: 1;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                  <span style="background: ${statusColor}; color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">
+                    ${tx.status}
+                  </span>
+                  <span style="color: var(--text-secondary); font-size: 0.8rem;">
+                    ${roleText} ${escapeHtmlAttribute(otherParty)}
+                  </span>
+                </div>
+                <h4 style="margin: 0; color: var(--text-color); font-size: 1rem; font-weight: 600;">
+                  ${escapeHtmlAttribute(tx.itemName)} × ${tx.quantity}
+                </h4>
+              </div>
+              <span style="color: var(--text-secondary); font-size: 0.75rem; white-space: nowrap; margin-left: 0.5rem;">${date}</span>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-top: 0.75rem;">
+              <div>
+                <span style="color: var(--text-secondary); font-size: 0.75rem;">Payment</span>
+                <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500; font-size: 0.85rem;">
+                  ${tx.paymentMethod === 'tokens' ? '💰 Tokens' : tx.paymentMethod === 'art' ? '🎨 Art' : '🔄 Barter'}
+                </p>
+              </div>
+              ${paymentInfo ? `
+              <div>
+                <span style="color: var(--text-secondary); font-size: 0.75rem;">${tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
+                <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500; font-size: 0.85rem;">${escapeHtmlAttribute(paymentInfo)}</p>
+              </div>
+              ` : ''}
+            </div>
+            
+            ${tx.notes ? `
+            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+              <span style="color: var(--text-secondary); font-size: 0.75rem;">Notes</span>
+              <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-size: 0.85rem;">${escapeHtmlAttribute(tx.notes)}</p>
+            </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      transactionsContainer.innerHTML = transactionsHtml;
+    } else {
+      transactionsContainer.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+          No transactions found.
+        </div>
+      `;
+    }
+  } catch (error) {
+    console.error(`[profile.js]: ❌ Error loading transactions for character ${characterId}:`, error);
+    const transactionsContainer = document.getElementById(`vendor-transactions-${characterId}`);
+    if (transactionsContainer) {
+      transactionsContainer.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--error-color);">
+          Error loading transactions: ${error.message || 'Unknown error'}
+        </div>
+      `;
+    }
+  }
+}
+
 // ------------------- Function: renderVendingTransactions -------------------
 // Renders the vending transactions list
 function renderVendingTransactions(transactions, total, hasMore) {
@@ -5083,7 +5697,5 @@ export {
   initProfilePage,
   loadProfileData,
   updateProfileDisplay,
-  loadVendingShops,
-  loadVendingTransactions,
-  setupVendingTabs
+  loadVendingShops
 }; 

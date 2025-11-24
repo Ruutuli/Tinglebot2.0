@@ -860,62 +860,49 @@
           <div class="dashboard-divider"></div>
         </div>
         <div class="vending-management-container">
-          <!-- Vending Tabs -->
-          <div class="vending-tabs" style="display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 2px solid var(--border-color);">
-            <button class="vending-tab-btn active" id="vending-shops-tab" data-tab="shops">
-              <i class="fas fa-store"></i> My Shops
-            </button>
-            <button class="vending-tab-btn" id="vending-transactions-tab" data-tab="transactions">
-              <i class="fas fa-exchange-alt"></i> Transactions
-            </button>
+          <div class="vending-header-info" style="margin-bottom: 2rem; padding: 1.5rem; background: var(--card-bg); border-radius: 0.5rem; border: 1px solid var(--border-color);">
+            <h2 style="margin: 0 0 0.5rem 0; color: var(--text-color);">Manage Your Vending Shops</h2>
+            <p style="margin: 0; color: var(--text-secondary);">
+              Manage inventory, prices, and settings for all your vendor characters. Add items, update stock quantities, set prices, and organize your shop slots.
+            </p>
           </div>
-          
-          <!-- Shops Tab Content -->
-          <div class="vending-tab-content active" id="vending-shops-tab-content">
-            <div class="vending-header-info" style="margin-bottom: 2rem; padding: 1.5rem; background: var(--card-bg); border-radius: 0.5rem; border: 1px solid var(--border-color);">
-              <h2 style="margin: 0 0 0.5rem 0; color: var(--text-color);">Manage Your Vending Shops</h2>
-              <p style="margin: 0; color: var(--text-secondary);">
-                Manage inventory, prices, and settings for all your vendor characters. Add items, update stock quantities, set prices, and organize your shop slots.
-              </p>
-            </div>
-            <div class="vending-shops-container" id="vending-shops-container">
-              <div class="vending-shops-loading" id="vending-shops-loading">
-                <div class="loading-spinner"></div>
-                <p>Loading your vending shops...</p>
-              </div>
+          <div class="vending-shops-container" id="vending-shops-container">
+            <div class="vending-shops-loading" id="vending-shops-loading">
+              <div class="loading-spinner"></div>
+              <p>Loading your vending shops...</p>
             </div>
           </div>
-          
-          <!-- Transactions Tab Content -->
-          <div class="vending-tab-content" id="vending-transactions-tab-content" style="display: none;">
-            <div class="vending-header-info" style="margin-bottom: 2rem; padding: 1.5rem; background: var(--card-bg); border-radius: 0.5rem; border: 1px solid var(--border-color);">
-              <h2 style="margin: 0 0 0.5rem 0; color: var(--text-color);">Vending Transaction History</h2>
-              <p style="margin: 0; color: var(--text-secondary);">
-                View all your vending transactions, including purchases, sales, and barter trades. Track your activity as both a buyer and vendor.
-              </p>
-            </div>
-            
-            <!-- Transaction Filters -->
-            <div class="vending-transactions-filters" style="margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap;">
-              <button class="tokens-filter-btn active" id="vending-filter-all">All</button>
-              <button class="tokens-filter-btn" id="vending-filter-buyer">As Buyer</button>
-              <button class="tokens-filter-btn" id="vending-filter-vendor">As Vendor</button>
-              <button class="tokens-filter-btn" id="vending-filter-pending">Pending</button>
-              <button class="tokens-filter-btn" id="vending-filter-completed">Completed</button>
-            </div>
-            
-            <!-- Transaction List -->
-            <div class="vending-transactions-container">
-              <div class="vending-transactions-list" id="vending-transactions-list">
-                <div class="vending-transactions-loading" id="vending-transactions-loading">
-                  <div class="loading-spinner"></div>
-                  <p>Loading vending transactions...</p>
-                </div>
-              </div>
-              <div class="vending-pagination" id="vending-pagination" style="display: none; margin-top: 1.5rem; text-align: center;">
-                <!-- Pagination will be added here -->
-              </div>
-            </div>
+        </div>
+      </section>
+
+      <!-- Vendor Dashboard Section -->
+      <section id="vendor-dashboard-section" style="display:none;">
+        <div class="dashboard-header">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <h1><i class="fas fa-store"></i> Vendor Dashboard</h1>
+            <button id="vendor-dashboard-back-btn" class="btn-primary" style="
+              padding: 0.5rem 1rem;
+              background: var(--card-bg);
+              color: var(--text-color);
+              border: 1px solid var(--border-color);
+              border-radius: 0.5rem;
+              cursor: pointer;
+              font-size: 0.9rem;
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              transition: background 0.2s;
+            " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--card-bg)'">
+              <i class="fas fa-arrow-left"></i>
+              Back to Vending
+            </button>
+          </div>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div id="vendor-dashboard-content" style="padding: 2rem;">
+          <div style="text-align: center; padding: 3rem;">
+            <div class="loading-spinner"></div>
+            <p style="margin-top: 1rem; color: var(--text-secondary);">Loading vendor information...</p>
           </div>
         </div>
       </section>
