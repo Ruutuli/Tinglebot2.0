@@ -13,8 +13,8 @@ function formatCharacterIconUrl(icon) {
   
   // Check for Google Cloud Storage URL first
   if (icon.includes('storage.googleapis.com/tinglebot/')) {
-    const path = icon.replace('https://storage.googleapis.com/tinglebot/', '');
-    return `/api/images/${path}`;
+    const filename = icon.split('/').pop();
+    return `/api/images/${filename}`;
   }
   
   // If it's another HTTP URL, return as is
@@ -33,8 +33,8 @@ function formatShopImageUrl(shopImage) {
   
   // Check for Google Cloud Storage URL first
   if (shopImage.includes('storage.googleapis.com/tinglebot/')) {
-    const path = shopImage.replace('https://storage.googleapis.com/tinglebot/', '');
-    return `/api/images/${path}`;
+    const filename = shopImage.split('/').pop();
+    return `/api/images/${filename}`;
   }
   
   // If it's another HTTP URL, return as is
@@ -188,14 +188,16 @@ function renderVendorShop(characterName, items) {
   const shopBanner = document.createElement('div');
   shopBanner.className = 'vendor-shop-banner';
   if (shopImageUrl) {
-    // Use CSS custom property and direct style for better browser support
+    // Set background image with proper escaping
     const escapedUrl = shopImageUrl.replace(/'/g, "\\'").replace(/"/g, '\\"');
     shopBanner.style.backgroundImage = `url('${escapedUrl}')`;
+    // Add error handling - if image fails to load, CSS gradient will show
+    const testImg = new Image();
+    testImg.onerror = function() {
+      shopBanner.style.backgroundImage = '';
+    };
+    testImg.src = shopImageUrl;
   }
-  // Add error handler for background image
-  shopBanner.addEventListener('error', function() {
-    this.style.backgroundImage = '';
-  }, true);
   shopCard.appendChild(shopBanner);
 
   const header = document.createElement('div');
@@ -210,15 +212,44 @@ function renderVendorShop(characterName, items) {
     this.src = '/images/ankleicon.png';
   };
   
+  // Get vendor info from first item
+  const vendorType = items[0]?.vendorType || null;
+  const currentVillage = items[0]?.currentVillage || null;
+  const shopLink = items[0]?.shopLink || null;
+  const vendingPoints = items[0]?.vendingPoints || 0;
+
+  const villageDisplay = currentVillage ? currentVillage.charAt(0).toUpperCase() + currentVillage.slice(1) : 'Unknown';
+  const vendorTypeDisplay = vendorType ? vendorType.charAt(0).toUpperCase() + vendorType.slice(1) : 'Unknown';
+
   header.innerHTML = `
     <div class="vendor-shop-header-left">
       <div class="vendor-shop-header-info">
         <h3>
           <i class="fas fa-store"></i> ${characterName}
         </h3>
-        <span class="item-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
+        <div class="vendor-shop-meta">
+          <span class="vendor-meta-item">
+            <i class="fas fa-tag"></i> ${vendorTypeDisplay}
+          </span>
+          <span class="vendor-meta-item">
+            <i class="fas fa-map-marker-alt"></i> ${villageDisplay}
+          </span>
+          <span class="item-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
+          ${vendingPoints > 0 ? `
+            <span class="vendor-meta-item">
+              <i class="fas fa-coins"></i> ${vendingPoints} points
+            </span>
+          ` : ''}
+        </div>
       </div>
     </div>
+    ${shopLink ? `
+      <div class="vendor-shop-link">
+        <a href="${shopLink}" target="_blank" rel="noopener noreferrer" class="shop-link-button">
+          <i class="fas fa-external-link-alt"></i> Visit Shop
+        </a>
+      </div>
+    ` : ''}
   `;
   
   // Insert icon before header info
