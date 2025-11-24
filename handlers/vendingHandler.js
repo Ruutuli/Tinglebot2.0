@@ -4372,11 +4372,56 @@ async function handleVendingViewVillage(interaction, villageKey) {
       );
     } else {
       const items = stockList[villageKey];
-      embed.setDescription(
-        items.map(i =>
-          `${i.emoji || '📦'} **${i.itemName}**\n  > **Cost:** ${i.points} pts\n  > **Type:** ${i.vendingType}`
-        ).join('\n\n') || '*No items found*'
-      );
+      
+      if (!items || items.length === 0) {
+        embed.setDescription('*No items found*');
+      } else {
+        // Group items by vendingType
+        const merchantItems = items.filter(i => i.vendingType === 'Merchant');
+        const shopkeeperItems = items.filter(i => i.vendingType === 'Shopkeeper');
+        
+        // Helper function to format items in 2 columns using embed fields
+        const addItemsAsFields = (itemList, typeName) => {
+          if (itemList.length === 0) return;
+          
+          // Split items into two columns
+          const midPoint = Math.ceil(itemList.length / 2);
+          const leftColumn = itemList.slice(0, midPoint);
+          const rightColumn = itemList.slice(midPoint);
+          
+          // Format left column
+          const leftText = leftColumn.map(i => 
+            `${i.emoji || '📦'} **${i.itemName}**\nCost: ${i.points} pts`
+          ).join('\n\n');
+          
+          // Format right column
+          const rightText = rightColumn.map(i => 
+            `${i.emoji || '📦'} **${i.itemName}**\nCost: ${i.points} pts`
+          ).join('\n\n');
+          
+          // Add section header if both columns exist
+          if (leftColumn.length > 0 && rightColumn.length > 0) {
+            embed.addFields(
+              { name: `**${typeName} Items**`, value: leftText, inline: true },
+              { name: '\u200b', value: rightText, inline: true }
+            );
+          } else if (leftColumn.length > 0) {
+            embed.addFields(
+              { name: `**${typeName} Items**`, value: leftText, inline: false }
+            );
+          }
+        };
+        
+        // Add Merchant items
+        if (merchantItems.length > 0) {
+          addItemsAsFields(merchantItems, 'Merchant');
+        }
+        
+        // Add Shopkeeper items
+        if (shopkeeperItems.length > 0) {
+          addItemsAsFields(shopkeeperItems, 'Shopkeeper');
+        }
+      }
     }
 
     return interaction.update({

@@ -4570,8 +4570,9 @@ export async function loadVendorDashboard(characterId) {
   // Fetch vendor data
   let inventoryData = null;
   let characterTransactions = [];
+  let characterInventory = [];
   try {
-    // Fetch inventory
+    // Fetch vending inventory
     const inventoryResponse = await fetch(`/api/characters/${characterId}/vending`, {
       method: 'GET',
       headers: {
@@ -4582,6 +4583,19 @@ export async function loadVendorDashboard(characterId) {
 
     if (inventoryResponse.ok) {
       inventoryData = await inventoryResponse.json();
+    }
+
+    // Fetch character's full inventory for job/village/limited items
+    try {
+      const invResponse = await fetch(`/api/inventory/characters?characters=${encodeURIComponent(character.name)}`, {
+        credentials: 'include'
+      });
+      if (invResponse.ok) {
+        const invData = await invResponse.json();
+        characterInventory = invData.data || [];
+      }
+    } catch (error) {
+      console.warn('[profile.js]: Could not load character inventory:', error);
     }
 
     // Fetch transactions
@@ -4610,6 +4624,20 @@ export async function loadVendorDashboard(characterId) {
     return;
   }
 
+  // Filter inventory items by job, village, and limited status
+  const jobItems = characterInventory.filter(item => 
+    item.job && item.job.toLowerCase() === (character.job?.toLowerCase() || '')
+  );
+  const villageItems = characterInventory.filter(item => 
+    item.location && item.location.toLowerCase() === (character.currentVillage?.toLowerCase() || character.homeVillage?.toLowerCase() || '')
+  );
+  const limitedItems = characterInventory.filter(item => 
+    item.type?.toLowerCase().includes('limited') || 
+    item.category?.toLowerCase().includes('limited') ||
+    item.obtain?.toLowerCase().includes('limited') ||
+    item.subtype?.toLowerCase().includes('limited')
+  );
+
   // Calculate slot info
   const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
   const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
@@ -4633,9 +4661,9 @@ export async function loadVendorDashboard(characterId) {
 
   // Build dashboard HTML
   dashboardContent.innerHTML = `
-    <!-- Header Section -->
-    <div style="background: linear-gradient(135deg, var(--primary-color) 0%, rgba(0,123,255,0.8) 100%); color: white; padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-      <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1rem;">
+    <!-- Header Section with Collection Status -->
+    <div style="background: linear-gradient(135deg, var(--primary-color) 0%, rgba(0,123,255,0.8) 100%); color: white; padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); position: relative; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1rem; position: relative; z-index: 1;">
         <img src="${iconUrl}" alt="${character.name}" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 4px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" onerror="this.src='/images/ankleicon.png'">
         <div style="flex: 1;">
           <h2 style="margin: 0 0 0.5rem 0; color: white; font-size: 2.5rem; font-weight: 700;">${escapeHtmlAttribute(character.name)}</h2>
@@ -4644,41 +4672,67 @@ export async function loadVendorDashboard(characterId) {
           </p>
         </div>
       </div>
+      
+      <!-- Collection Status Banner -->
+      <div style="background: ${isCurrentMonth ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; border: 2px solid ${isCurrentMonth ? '#10b981' : '#ef4444'}; border-radius: 0.75rem; padding: 1rem 1.5rem; margin-bottom: 1rem; position: relative; z-index: 1; backdrop-filter: blur(10px);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="width: 50px; height: 50px; border-radius: 50%; background: ${isCurrentMonth ? '#10b981' : '#ef4444'}; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+              ${isCurrentMonth ? '✓' : '⚠'}
+            </div>
+            <div>
+              <div style="font-size: 1.1rem; font-weight: 700; color: white; margin-bottom: 0.25rem;">
+                ${isCurrentMonth ? 'Points Collected This Month!' : 'Points Not Collected This Month'}
+              </div>
+              <div style="font-size: 0.9rem; color: rgba(255,255,255,0.9);">
+                ${isCurrentMonth ? 
+                  `You collected your vending points in ${lastCollectedText}.` : 
+                  lastCollectedMonth > 0 ? 
+                    `Last collected: ${lastCollectedText} (${currentMonth - lastCollectedMonth} month${currentMonth - lastCollectedMonth !== 1 ? 's' : ''} ago)` :
+                    'You have never collected vending points. Use /vending collect to collect them!'
+                }
+              </div>
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 2rem; font-weight: 700; color: white;">${(character.vendingPoints || 0).toLocaleString()}</div>
+            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8);">Vending Points</div>
+          </div>
+        </div>
+      </div>
+      
       ${shopImage ? `
-      <div style="margin-top: 1.5rem; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+      <div style="margin-top: 1rem; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.3); position: relative; z-index: 1;">
         <img src="${escapeHtmlAttribute(shopImage)}" alt="Shop Banner" style="width: 100%; max-height: 250px; object-fit: cover;" onerror="this.style.display='none'">
       </div>
       ` : ''}
     </div>
     
     <div style="padding: 0;">
-      <!-- Stats Grid -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Vending Points</div>
-          <div style="font-size: 2.5rem; font-weight: 700; color: var(--primary-color);">${(character.vendingPoints || 0).toLocaleString()}</div>
-        </div>
-        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Shop Slots</div>
-          <div style="font-size: 2.5rem; font-weight: 700; color: var(--text-color);">${usedSlots}/${totalSlots}</div>
-          <div style="font-size: 0.85rem; color: ${availableSlots > 0 ? 'var(--success-color)' : 'var(--error-color)'}; margin-top: 0.5rem; font-weight: 600;">
+      <!-- Quick Stats Grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Shop Slots</div>
+          <div style="font-size: 2rem; font-weight: 700; color: var(--text-color); margin-bottom: 0.25rem;">${usedSlots}/${totalSlots}</div>
+          <div style="font-size: 0.8rem; color: ${availableSlots > 0 ? 'var(--success-color)' : 'var(--error-color)'}; font-weight: 600;">
             ${availableSlots} available
           </div>
         </div>
-        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Items in Stock</div>
-          <div style="font-size: 2.5rem; font-weight: 700; color: var(--text-color);">${inventoryData?.items?.length || 0}</div>
+        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Items in Stock</div>
+          <div style="font-size: 2rem; font-weight: 700; color: var(--primary-color);">${inventoryData?.items?.length || 0}</div>
         </div>
-        <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Last Collected</div>
-          <div style="font-size: 1.3rem; font-weight: 700; color: ${isCurrentMonth ? 'var(--success-color)' : 'var(--text-color)'};">
-            ${lastCollectedText}
-          </div>
-          ${!isCurrentMonth && lastCollectedMonth > 0 ? `
-          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-            ${currentMonth - lastCollectedMonth} month${currentMonth - lastCollectedMonth !== 1 ? 's' : ''} ago
-          </div>
-          ` : ''}
+        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Job Items</div>
+          <div style="font-size: 2rem; font-weight: 700; color: var(--text-color);">${jobItems.length}</div>
+        </div>
+        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Village Items</div>
+          <div style="font-size: 2rem; font-weight: 700; color: var(--text-color);">${villageItems.length}</div>
+        </div>
+        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(255,193,7,0.1) 100%); border: 2px solid ${limitedItems.length > 0 ? '#ffc107' : 'var(--border-color)'}; border-radius: 0.75rem; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Limited Items</div>
+          <div style="font-size: 2rem; font-weight: 700; color: ${limitedItems.length > 0 ? '#ffc107' : 'var(--text-color)'};">${limitedItems.length}</div>
         </div>
       </div>
 
