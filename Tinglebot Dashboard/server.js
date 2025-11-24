@@ -2368,8 +2368,22 @@ app.get('/api/models/:modelType', async (req, res) => {
           const stockCollection = db.collection('vending_stock');
           const currentMonth = new Date().getMonth() + 1;
           
-          // Get current month's stock
-          const stockData = await stockCollection.findOne({ month: currentMonth });
+          // First try to get current month's stock
+          let stockData = await stockCollection.findOne({ month: currentMonth });
+          
+          // If no current month stock found, get the most recent stock entry
+          if (!stockData) {
+            console.log(`[server.js]: ⚠️ No stock found for current month (${currentMonth}), fetching most recent stock...`);
+            stockData = await stockCollection.findOne(
+              {},
+              { sort: { createdAt: -1 } }
+            );
+            if (stockData) {
+              console.log(`[server.js]: ✅ Found stock for month ${stockData.month} (created: ${stockData.createdAt})`);
+            }
+          } else {
+            console.log(`[server.js]: ✅ Found stock for current month ${currentMonth}`);
+          }
           
           if (!stockData) {
             return res.json({
@@ -2386,6 +2400,19 @@ app.get('/api/models/:modelType', async (req, res) => {
           // Convert ObjectId to string for JSON serialization
           if (stockData._id && stockData._id.toString) {
             stockData._id = stockData._id.toString();
+          }
+          
+          // Ensure stockList is properly formatted as a plain object (not Map)
+          if (stockData.stockList) {
+            // Convert Map to object if needed
+            if (stockData.stockList instanceof Map) {
+              stockData.stockList = Object.fromEntries(stockData.stockList);
+            }
+          }
+          
+          // Convert Date to ISO string for JSON serialization
+          if (stockData.createdAt && stockData.createdAt instanceof Date) {
+            stockData.createdAt = stockData.createdAt.toISOString();
           }
           
           // Return the stock data
