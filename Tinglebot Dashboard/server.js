@@ -2366,23 +2366,25 @@ app.get('/api/models/:modelType', async (req, res) => {
         try {
           const db = vendingConnection.db;
           const stockCollection = db.collection('vending_stock');
-          const currentMonth = new Date().getMonth() + 1;
+          const currentDate = new Date();
+          const currentMonth = currentDate.getMonth() + 1;
+          const currentYear = currentDate.getFullYear();
           
-          // First try to get current month's stock
-          let stockData = await stockCollection.findOne({ month: currentMonth });
+          // First try to get current month/year's stock
+          let stockData = await stockCollection.findOne({ month: currentMonth, year: currentYear });
           
-          // If no current month stock found, get the most recent stock entry
+          // If no current month/year stock found, get the most recent stock entry
           if (!stockData) {
-            console.log(`[server.js]: ⚠️ No stock found for current month (${currentMonth}), fetching most recent stock...`);
+            console.log(`[server.js]: ⚠️ No stock found for current month/year (${currentMonth}/${currentYear}), fetching most recent stock...`);
             stockData = await stockCollection.findOne(
               {},
               { sort: { createdAt: -1 } }
             );
             if (stockData) {
-              console.log(`[server.js]: ✅ Found stock for month ${stockData.month} (created: ${stockData.createdAt})`);
+              console.log(`[server.js]: ✅ Found stock for month ${stockData.month}, year ${stockData.year || 'N/A'} (created: ${stockData.createdAt})`);
             }
           } else {
-            console.log(`[server.js]: ✅ Found stock for current month ${currentMonth}`);
+            console.log(`[server.js]: ✅ Found stock for current month/year ${currentMonth}/${currentYear}`);
           }
           
           if (!stockData) {
