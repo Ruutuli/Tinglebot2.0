@@ -18,6 +18,7 @@ const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
+const { v4: uuidv4 } = require('uuid');
 const { getDiscordGateway } = require('./utils/discordGateway');
 const MessageTracking = require('./models/MessageTrackingModel');
 const compression = require('compression');
@@ -57,6 +58,7 @@ const Mount = require('./models/MountModel');
 const VillageShops = require('./models/VillageShopsModel');
 const Weather = require('./models/WeatherModel');
 const { VendingRequest } = require('./models/VendingModel');
+const { initializeVendingStockModel, getVendingStockModel } = require('./models/VendingStockModel');
 const Square = require('./models/mapModel');
 const { Village } = require('./models/VillageModel');
 const Party = require('./models/PartyModel');
@@ -92,12 +94,12 @@ const isLocalhost = process.env.FORCE_LOCALHOST === 'true' ||
                    process.env.NODE_ENV === 'development' ||
                    process.env.USE_LOCALHOST === 'true';
 
-logger.info('Environment Detection:', 'server.js');
-logger.debug('NODE_ENV: ' + process.env.NODE_ENV, null, 'server.js');
-logger.debug('RAILWAY_ENVIRONMENT: ' + process.env.RAILWAY_ENVIRONMENT, null, 'server.js');
-logger.debug('FORCE_LOCALHOST: ' + process.env.FORCE_LOCALHOST, null, 'server.js');
-logger.debug('isProduction: ' + isProduction, null, 'server.js');
-logger.debug('isLocalhost: ' + isLocalhost, null, 'server.js');
+logger.info('Environment Detection', 'server.js');
+logger.debug(`NODE_ENV: ${process.env.NODE_ENV}`, null, 'server.js');
+logger.debug(`RAILWAY_ENVIRONMENT: ${process.env.RAILWAY_ENVIRONMENT}`, null, 'server.js');
+logger.debug(`FORCE_LOCALHOST: ${process.env.FORCE_LOCALHOST}`, null, 'server.js');
+logger.debug(`isProduction: ${isProduction}`, null, 'server.js');
+logger.debug(`isLocalhost: ${isLocalhost}`, null, 'server.js');
 
 // Trust proxy for production environments (Railway, etc.)
 if (isProduction) {
@@ -127,8 +129,8 @@ try {
   });
   
   logger.database('Session store created successfully', 'server.js');
-  logger.debug('Session store type: ' + typeof sessionStore, null, 'server.js');
-  logger.debug('Session store is null: ' + (sessionStore === null), null, 'server.js');
+  logger.debug(`Session store type: ${typeof sessionStore}`, null, 'server.js');
+  logger.debug(`Session store is null: ${sessionStore === null}`, null, 'server.js');
 } catch (error) {
   logger.error('Failed to create session store', error, 'server.js');
   // Fallback to memory store (not recommended for production but allows server to start)
@@ -155,7 +157,7 @@ app.use(session({
 app.use((req, res, next) => {
   // Only log session issues, not every request
   if (req.path.includes('/auth/') && !req.session) {
-    logger.warn('No session found for auth request: ' + req.path, 'server.js');
+    logger.warn(`No session found for auth request: ${req.path}`, 'server.js');
   }
   next();
 });
@@ -187,10 +189,10 @@ const callbackURL = process.env.DISCORD_CALLBACK_URL ||
     : `http://localhost:5001/auth/discord/callback`);
 
 logger.info('Discord OAuth Configuration:', 'server.js');
-logger.debug('isProduction: ' + isProduction, null, 'server.js');
-logger.debug('domain: ' + domain, null, 'server.js');
-logger.debug('callbackURL: ' + callbackURL, null, 'server.js');
-logger.debug('DISCORD_CALLBACK_URL env: ' + process.env.DISCORD_CALLBACK_URL, null, 'server.js');
+logger.debug(`isProduction: ${isProduction}`, null, 'server.js');
+logger.debug(`domain: ${domain}`, null, 'server.js');
+logger.debug(`callbackURL: ${callbackURL}`, null, 'server.js');
+logger.debug(`DISCORD_CALLBACK_URL env: ${process.env.DISCORD_CALLBACK_URL}`, null, 'server.js');
 
 
 
@@ -365,12 +367,20 @@ async function initializeDatabases() {
     await connectToTinglebot();
     logger.database('Connected to Tinglebot database', 'server.js');
     
+    // Initialize VendingStock model (uses tinglebot database)
+    try {
+      await initializeVendingStockModel();
+      logger.database('Initialized VendingStock model', 'server.js');
+    } catch (vendingStockError) {
+      logger.warn(`Failed to initialize VendingStock model: ${vendingStockError.message}`, 'server.js');
+    }
+    
     // Connect to Inventories database using db.js method
     try {
       inventoriesConnection = await connectToInventories();
       logger.database('Connected to Inventories database', 'server.js');
     } catch (inventoryError) {
-      logger.warn('Failed to connect to Inventories database: ' + inventoryError.message, 'server.js');
+      logger.warn(`Failed to connect to Inventories database: ${inventoryError.message}`, 'server.js');
       // Continue without inventories connection - spirit orb counting will fail gracefully
     }
     
@@ -379,7 +389,7 @@ async function initializeDatabases() {
       vendingConnection = await connectToVending();
       logger.database('Connected to Vending database', 'server.js');
     } catch (vendingError) {
-      logger.warn('Failed to connect to Vending database: ' + vendingError.message, 'server.js');
+      logger.warn(`Failed to connect to Vending database: ${vendingError.message}`, 'server.js');
       // Continue without vending connection
     }
     
@@ -991,8 +1001,8 @@ app.get('/auth/discord', (req, res, next) => {
   // Store the return URL in session if provided
   if (req.query.returnTo) {
     req.session.returnTo = req.query.returnTo;
-    logger.debug('Storing returnTo in session: ' + req.query.returnTo, null, 'server.js');
-    logger.debug('Session ID: ' + req.session.id, null, 'server.js');
+    logger.debug(`Storing returnTo in session: ${req.query.returnTo}`, null, 'server.js');
+    logger.debug(`Session ID: ${req.session.id}`, null, 'server.js');
     
     // Save session explicitly and wait for it to complete
     req.session.save((err) => {
@@ -1003,11 +1013,11 @@ app.get('/auth/discord', (req, res, next) => {
       logger.debug('Session saved successfully', null, 'server.js');
       
       // Now proceed with Discord authentication
-      logger.debug('Initiating Discord auth with callback URL: ' + callbackURL, null, 'server.js');
+      logger.debug(`Initiating Discord auth with callback URL: ${callbackURL}`, null, 'server.js');
       passport.authenticate('discord')(req, res, next);
     });
   } else {
-    logger.debug('Initiating Discord auth with callback URL: ' + callbackURL, null, 'server.js');
+    logger.debug(`Initiating Discord auth with callback URL: ${callbackURL}`, null, 'server.js');
     passport.authenticate('discord')(req, res, next);
   }
 });
@@ -1026,13 +1036,13 @@ app.get('/auth/discord/callback',
     const returnTo = req.session.returnTo || req.query.returnTo;
     
     logger.debug('Discord callback redirect:', null, 'server.js');
-    logger.debug('returnTo from session: ' + req.session.returnTo, null, 'server.js');
-    logger.debug('returnTo from query: ' + req.query.returnTo, null, 'server.js');
-    logger.debug('final returnTo: ' + returnTo, null, 'server.js');
-    logger.debug('session ID: ' + req.session.id, null, 'server.js');
-    logger.debug('passport user: ' + req.session.passport?.user, null, 'server.js');
-    logger.debug('session exists: ' + !!req.session, null, 'server.js');
-    logger.debug('session keys: ' + Object.keys(req.session || {}), null, 'server.js');
+    logger.debug(`returnTo from session: ${req.session.returnTo}`, null, 'server.js');
+    logger.debug(`returnTo from query: ${req.query.returnTo}`, null, 'server.js');
+    logger.debug(`final returnTo: ${returnTo}`, null, 'server.js');
+    logger.debug(`session ID: ${req.session.id}`, null, 'server.js');
+    logger.debug(`passport user: ${req.session.passport?.user}`, null, 'server.js');
+    logger.debug(`session exists: ${!!req.session}`, null, 'server.js');
+    logger.debug(`session keys: ${Object.keys(req.session || {})}`, null, 'server.js');
     
     // Normalize returnTo - handle empty string, '/', or undefined
     let finalReturnTo = returnTo;
@@ -1050,7 +1060,7 @@ app.get('/auth/discord/callback',
     const redirectUrl = finalReturnTo + separator + 'login=success';
     
     // Redirect to the destination
-    logger.debug('Redirecting to: ' + redirectUrl, null, 'server.js');
+    logger.debug(`Redirecting to: ${redirectUrl}`, null, 'server.js');
     res.redirect(redirectUrl);
   }
 );
@@ -1123,9 +1133,9 @@ app.get('/api/debug/session', (req, res) => {
 // Simple endpoint to test session persistence
 app.get('/api/test/session', (req, res) => {
   logger.debug('Session test endpoint called', null, 'server.js');
-  logger.debug('Session ID: ' + req.sessionID, null, 'server.js');
-  logger.debug('Session exists: ' + !!req.session, null, 'server.js');
-  logger.debug('Session store: ' + (sessionStore ? 'MongoDB' : 'Memory'), null, 'server.js');
+  logger.debug(`Session ID: ${req.sessionID}`, null, 'server.js');
+  logger.debug(`Session exists: ${!!req.session}`, null, 'server.js');
+  logger.debug(`Session store: ${sessionStore ? 'MongoDB' : 'Memory'}`, null, 'server.js');
   
   if (req.query.test) {
     req.session.testValue = req.query.test;
@@ -2244,6 +2254,109 @@ app.get('/api/models/inventory', async (req, res) => {
   }
 });
 
+// ------------------- Function: getVendingShopsData -------------------
+// Returns vending inventory data for all vendors
+app.get('/api/models/vendingShops', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 1000;
+    const page = parseInt(req.query.page) || 1;
+    const skip = (page - 1) * limit;
+    
+    if (!vendingConnection || !vendingConnection.db) {
+      return res.status(500).json({ error: 'Vending database connection not available' });
+    }
+    
+    const db = vendingConnection.db;
+    
+    // List all collections in the vending database (each character has their own collection)
+    const collections = await db.listCollections().toArray();
+    const collectionNames = collections
+      .map(c => c.name)
+      .filter(n => !n.startsWith('system.') && n !== 'vending_stock');
+    
+    console.log(`[server.js]: Found ${collectionNames.length} vending shop collections`);
+    
+    // Fetch character data (icon and shopImage) for all characters
+    const characterDataMap = {};
+    try {
+      await connectToTinglebot();
+      const uniqueCharacterNames = [...new Set(collectionNames)];
+      for (const characterName of uniqueCharacterNames) {
+        try {
+          // Try regular character first
+          let character = await Character.findOne({ name: characterName }, { icon: 1, shopImage: 1, vendingSetup: 1 }).lean();
+          if (!character) {
+            // Try mod character
+            character = await ModCharacter.findOne({ name: characterName }, { icon: 1, shopImage: 1, vendingSetup: 1 }).lean();
+          }
+          if (character) {
+            characterDataMap[characterName] = {
+              icon: character.icon || null,
+              shopImage: character.vendingSetup?.shopImage || character.shopImage || null
+            };
+          }
+        } catch (error) {
+          console.warn(`[server.js]: Error fetching character data for ${characterName}:`, error.message);
+        }
+      }
+    } catch (error) {
+      console.warn(`[server.js]: Error fetching character data:`, error.message);
+    }
+    
+    // Process collections in batches
+    const BATCH_SIZE = 5;
+    let allItems = [];
+    for (let i = 0; i < collectionNames.length; i += BATCH_SIZE) {
+      const batch = collectionNames.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(async characterName => {
+        try {
+          const items = await db.collection(characterName)
+            .find()
+            .project({ 
+              itemName: 1, 
+              stockQty: 1, 
+              costEach: 1, 
+              tokenPrice: 1, 
+              slot: 1,
+              date: 1,
+              pointsSpent: 1
+            })
+            .toArray();
+          const characterData = characterDataMap[characterName] || {};
+          return items.map(it => ({ 
+            ...it, 
+            characterName,
+            characterIcon: characterData.icon || null,
+            shopImage: characterData.shopImage || null
+          }));
+        } catch (error) {
+          console.warn(`[server.js]: Error fetching items for ${characterName}:`, error.message);
+          return [];
+        }
+      }));
+      allItems.push(...results.flat());
+    }
+    
+    const paginated = allItems.slice(skip, skip + limit);
+    
+    res.json({
+      data: paginated,
+      pagination: {
+        total: allItems.length,
+        page, 
+        limit,
+        pages: Math.ceil(allItems.length / limit)
+      }
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error fetching vending shops:', error);
+    res.status(500).json({
+      error: 'Failed to fetch vending shops',
+      details: error.message
+    });
+  }
+});
+
 // ------------------- Function: getModelData -------------------
 // Returns paginated data for any model type with filtering support
 app.get('/api/models/:modelType', async (req, res) => {
@@ -2357,34 +2470,53 @@ app.get('/api/models/:modelType', async (req, res) => {
         })) : null;
         break;
       case 'vending':
-        // Vending uses vending_stock collection, handle specially
-        if (!vendingConnection) {
-          console.error(`[server.js]: ❌ Vending connection not initialized`);
-          return res.status(500).json({ error: 'Vending database connection not available' });
-        }
-        // Query vending_stock collection directly
+        // Vending uses vending_stock collection from tinglebot database
         try {
-          const db = vendingConnection.db;
-          const stockCollection = db.collection('vending_stock');
-          const currentDate = new Date();
-          const currentMonth = currentDate.getMonth() + 1;
-          const currentYear = currentDate.getFullYear();
+          // Ensure VendingStock model is initialized
+          const VendingStock = getVendingStockModel();
           
-          // First try to get current month/year's stock
-          let stockData = await stockCollection.findOne({ month: currentMonth, year: currentYear });
+          // Check if specific month/year is requested
+          const requestedMonth = parseInt(req.query.month);
+          const requestedYear = parseInt(req.query.year);
           
-          // If no current month/year stock found, get the most recent stock entry
-          if (!stockData) {
-            console.log(`[server.js]: ⚠️ No stock found for current month/year (${currentMonth}/${currentYear}), fetching most recent stock...`);
-            stockData = await stockCollection.findOne(
-              {},
-              { sort: { createdAt: -1 } }
-            );
-            if (stockData) {
-              console.log(`[server.js]: ✅ Found stock for month ${stockData.month}, year ${stockData.year || 'N/A'} (created: ${stockData.createdAt})`);
+          let stockData;
+          
+          if (requestedMonth && requestedYear) {
+            // Fetch specific month/year
+            console.log(`[server.js]: 🔍 Querying vending stock for month: ${requestedMonth}, year: ${requestedYear}`);
+            stockData = await VendingStock.findOne({ month: requestedMonth, year: requestedYear });
+            if (!stockData) {
+              stockData = await VendingStock.findOne({ month: requestedMonth });
             }
           } else {
-            console.log(`[server.js]: ✅ Found stock for current month/year ${currentMonth}/${currentYear}`);
+            // Default: get current month/year
+            const currentDate = new Date();
+            const currentMonth = currentDate.getMonth() + 1;
+            const currentYear = currentDate.getFullYear();
+            
+            console.log(`[server.js]: 🔍 Querying vending stock for month: ${currentMonth}, year: ${currentYear} using tinglebot database`);
+            
+            // First try to get current month/year's stock (for documents with year field)
+            stockData = await VendingStock.findOne({ month: currentMonth, year: currentYear });
+            
+            // If no match, try to find by month only (for documents without year field)
+            if (!stockData) {
+              stockData = await VendingStock.findOne({ month: currentMonth });
+              if (stockData) {
+                console.log(`[server.js]: ✅ Found stock for month ${currentMonth} (no year field, created: ${stockData.createdAt})`);
+              }
+            } else {
+              console.log(`[server.js]: ✅ Found stock for current month/year ${currentMonth}/${currentYear}`);
+            }
+            
+            // If still no current month stock found, get the most recent stock entry
+            if (!stockData) {
+              console.log(`[server.js]: ⚠️ No stock found for current month/year (${currentMonth}/${currentYear}), fetching most recent stock...`);
+              stockData = await VendingStock.findOne({}).sort({ createdAt: -1 });
+              if (stockData) {
+                console.log(`[server.js]: ✅ Found stock for month ${stockData.month}, year ${stockData.year || 'N/A'} (created: ${stockData.createdAt})`);
+              }
+            }
           }
           
           if (!stockData) {
@@ -2399,27 +2531,30 @@ app.get('/api/models/:modelType', async (req, res) => {
             });
           }
           
+          // Convert to plain object and ensure proper formatting
+          const stockDataObj = stockData.toObject();
+          
           // Convert ObjectId to string for JSON serialization
-          if (stockData._id && stockData._id.toString) {
-            stockData._id = stockData._id.toString();
+          if (stockDataObj._id && stockDataObj._id.toString) {
+            stockDataObj._id = stockDataObj._id.toString();
           }
           
           // Ensure stockList is properly formatted as a plain object (not Map)
-          if (stockData.stockList) {
+          if (stockDataObj.stockList) {
             // Convert Map to object if needed
-            if (stockData.stockList instanceof Map) {
-              stockData.stockList = Object.fromEntries(stockData.stockList);
+            if (stockDataObj.stockList instanceof Map) {
+              stockDataObj.stockList = Object.fromEntries(stockDataObj.stockList);
             }
           }
           
           // Convert Date to ISO string for JSON serialization
-          if (stockData.createdAt && stockData.createdAt instanceof Date) {
-            stockData.createdAt = stockData.createdAt.toISOString();
+          if (stockDataObj.createdAt && stockDataObj.createdAt instanceof Date) {
+            stockDataObj.createdAt = stockDataObj.createdAt.toISOString();
           }
           
           // Return the stock data
           return res.json({
-            data: [stockData],
+            data: [stockDataObj],
             pagination: {
               page: 1,
               pages: 1,
@@ -6869,13 +7004,13 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
       const VendingInventory = await initializeVendingInventoryModel(character.name);
       const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
       items = vendingItems;
-      console.log(`[server.js]: ✅ Found ${items.length} vending items for ${character.name}`);
+      logger.success(`Found ${items.length} vending items for ${character.name}`, 'server.js');
       if (items.length > 0) {
-        console.log(`[server.js]: Sample item:`, JSON.stringify(items[0], null, 2));
+        logger.debug(`Sample item for ${character.name}`, items[0], 'server.js');
       }
     } catch (vendingDbError) {
-      console.warn('[server.js]: Could not read from vending database:', vendingDbError.message);
-      console.error('[server.js]: Vending DB error stack:', vendingDbError.stack);
+      logger.warn(`Could not read from vending database: ${vendingDbError.message}`, 'server.js');
+      logger.error('Vending DB error stack', vendingDbError.stack, 'server.js');
     }
 
     // Calculate slot usage - count items, not cumulative slotsUsed
@@ -7332,6 +7467,33 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
       });
     }
 
+    // Log transaction for vendor move
+    try {
+      const user = await User.findOne({ discordId: userId });
+      const fulfillmentId = `vendor_move_${uuidv4()}`;
+      const vendorTransaction = new VendingRequest({
+        fulfillmentId: fulfillmentId,
+        userCharacterName: character.name,
+        vendorCharacterName: character.name,
+        itemName: itemName.trim(),
+        quantity: stockQtyNum,
+        paymentMethod: 'inventory_transfer',
+        notes: `Vendor moved ${stockQtyNum}x ${itemName} from personal inventory to vending shop`,
+        buyerId: userId,
+        buyerUsername: user?.username || character.name,
+        date: new Date(),
+        status: 'completed',
+        processedAt: new Date(),
+        transactionType: 'vendor_move',
+        sourceInventory: 'personal_inventory'
+      });
+      await vendorTransaction.save();
+      console.log(`[server.js]: ✅ Logged vendor move transaction: ${fulfillmentId}`);
+    } catch (txError) {
+      console.error('[server.js]: ⚠️ Failed to log vendor move transaction:', txError);
+      // Don't fail the request if transaction logging fails
+    }
+
     console.log(`[server.js]: ✅ Added ${stockQtyNum}x ${itemName} to ${character.name}'s vending shop and removed from inventory`);
     console.log(`[server.js]: Barter open value: ${barterOpen}, tradesOpen: ${barterOpen || false}`);
 
@@ -7355,15 +7517,26 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
 });
 
 // ------------------- Function: restockVendingItem -------------------
-// Restocks an existing vending item using vending points
+// Restocks an existing vending item using vending points, or creates it from vending stock if it doesn't exist
 app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req, res) => {
   try {
     const { characterId } = req.params;
     const userId = req.user.discordId;
-    const { itemId, itemName, quantity, slot } = req.body;
+    const { itemId, itemName, quantity, slot, costEach, tokenPrice, artPrice, otherPrice } = req.body;
 
-    if (!itemId || !itemName || !quantity || quantity <= 0) {
-      return res.status(400).json({ error: 'Invalid restock request. Item ID, name, and quantity are required.' });
+    if (!itemName || !quantity || quantity <= 0) {
+      return res.status(400).json({ error: 'Invalid restock request. Item name and quantity are required.' });
+    }
+
+    // Validate that at least one price is set (for new items)
+    if (!itemId) {
+      const hasTokenPrice = tokenPrice !== null && tokenPrice !== undefined && tokenPrice > 0;
+      const hasArtPrice = artPrice && artPrice.trim() !== '' && artPrice.trim() !== 'N/A';
+      const hasOtherPrice = otherPrice && otherPrice.trim() !== '' && otherPrice.trim() !== 'N/A';
+
+      if (!hasTokenPrice && !hasArtPrice && !hasOtherPrice) {
+        return res.status(400).json({ error: 'At least one price must be set (Token Price, Art Price, or Other Price). Items cannot be sold without at least one price.' });
+      }
     }
 
     // Find character (check both regular and mod characters)
@@ -7386,14 +7559,37 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
       return res.status(400).json({ error: 'Character must set up vending shop first' });
     }
 
+    // Get character job type (check vendorType first, then job field)
+    const characterJob = (character.vendorType || character.job || '').toLowerCase().trim();
+    const isShopkeeper = characterJob === 'shopkeeper';
+    
+    // Shopkeepers can only restock from their home village
+    if (isShopkeeper) {
+      const homeVillage = (character.homeVillage || '').toLowerCase().trim();
+      const currentVillage = (character.currentVillage || '').toLowerCase().trim();
+      
+      if (!homeVillage) {
+        return res.status(400).json({ error: 'Shopkeeper must have a home village set' });
+      }
+      
+      if (currentVillage !== homeVillage) {
+        return res.status(403).json({ 
+          error: `Shopkeepers can only restock items from their home village. You are currently in ${character.currentVillage || 'unknown'}, but your home village is ${character.homeVillage || 'unknown'}.`,
+          message: `Please travel to your home village (${character.homeVillage}) using the Discord command: \`/travel charactername:${character.name} destination:${character.homeVillage} mode:on foot\``
+        });
+      }
+    }
+
     // Initialize vending inventory model
     const { initializeVendingInventoryModel } = require('./models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the existing item
     let vendingItem;
+    let pointCost = costEach;
+    
     try {
-      if (itemId.match(/^[0-9a-fA-F]{24}$/)) {
+      if (itemId && itemId.match(/^[0-9a-fA-F]{24}$/)) {
         vendingItem = await VendingInventory.findById(itemId);
       }
       if (!vendingItem) {
@@ -7408,50 +7604,458 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
       return res.status(500).json({ error: 'Error finding vending item', details: error.message });
     }
 
+    // Track if this is a new item creation
+    let isNewItem = false;
+
+    // Get item details (needed for stack size validation in both branches)
+    const itemDetails = await Item.findOne({ itemName });
+    const isCustomItem = !itemDetails;
+
+    // Validate stack size upfront (before processing)
+    if (!isCustomItem && itemDetails) {
+      const isStackable = itemDetails.stackable || false;
+      const maxStackSize = itemDetails.maxStackSize || 10;
+      
+      if (!isStackable && quantity > 1) {
+        return res.status(400).json({ 
+          error: `Item "${itemName}" is not stackable. Quantity must be 1, but ${quantity} was provided.` 
+        });
+      }
+      
+      if (isStackable && quantity > maxStackSize) {
+        return res.status(400).json({ 
+          error: `Item "${itemName}" has a maximum stack size of ${maxStackSize} per slot. Cannot restock ${quantity} items in a single slot.` 
+        });
+      }
+
+      // If a specific slot is provided and item exists in that slot, check if restocking would exceed maxStackSize
+      if (slot && vendingItem && vendingItem.slot === slot) {
+        const currentStock = vendingItem.stockQty || 0;
+        const newTotal = currentStock + quantity;
+        
+        if (isStackable && newTotal > maxStackSize) {
+          return res.status(400).json({ 
+            error: `Cannot restock ${quantity} items in ${slot}. Current stock: ${currentStock}, max stack size: ${maxStackSize}. Adding ${quantity} would exceed the maximum (${newTotal} > ${maxStackSize}). Please restock ${maxStackSize - currentStock} or fewer items, or use a different slot.` 
+          });
+        }
+      }
+    }
+
+    // If item doesn't exist, check if it's available in vending stock
+    // BUT: If the user is providing a slot, they might be trying to restock an item that's not in current stock
+    // In that case, we should allow it if they have the item in their inventory or if it's a custom item
     if (!vendingItem) {
-      return res.status(404).json({ error: 'Vending item not found' });
-    }
+      // First, check if item exists in character's personal inventory (for custom items)
+      if (!inventoriesConnection) {
+        return res.status(500).json({ error: 'Inventories database connection not available' });
+      }
+      
+      // Get or create the Inventory model
+      let Inventory;
+      if (inventoriesConnection.models['Inventory']) {
+        Inventory = inventoriesConnection.models['Inventory'];
+      } else {
+        const inventorySchema = new mongoose.Schema({
+          characterId: { type: mongoose.Schema.Types.ObjectId, ref: 'Character', required: true },
+          itemName: { type: String, required: true },
+          itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', required: true },
+          quantity: { type: Number, default: 1 },
+          category: { type: String },
+          type: { type: String },
+          subtype: { type: String },
+          job: { type: String },
+          perk: { type: String },
+          location: { type: String },
+          date: { type: Date },
+          craftedAt: { type: Date },
+          gatheredAt: { type: Date },
+          obtain: { type: String, default: '' },
+          synced: { type: String, unique: true }
+        });
+        Inventory = inventoriesConnection.model('Inventory', inventorySchema);
+      }
+      
+      const inventoryItem = await Inventory.findOne({ 
+        characterId: character._id,
+        itemName: itemName
+      });
 
-    // Check if item has costEach set
-    if (!vendingItem.costEach || vendingItem.costEach <= 0) {
-      return res.status(400).json({ error: 'This item cannot be restocked. No cost per item is set.' });
-    }
+      // If item exists in inventory, allow restocking (it's a custom item)
+      if (inventoryItem) {
+        isNewItem = true;
+        // We'll create the vending item below - skip vending stock check
+      } else {
+        // Get vending stock list to check if item is available
+        const stockList = await getCurrentVendingStockList();
+        if (!stockList?.stockList) {
+          return res.status(404).json({ error: 'Vending stock not available. Item not found in your shop or in vending stock.' });
+        }
 
-    // Calculate total cost
-    const totalCost = vendingItem.costEach * quantity;
+        // Shopkeepers can only restock from their home village; Merchants can use current village
+        const normalizedVillage = isShopkeeper 
+          ? (character.homeVillage || '').toLowerCase().trim()
+          : (character.currentVillage || character.homeVillage || '').toLowerCase().trim();
+        const villageStock = stockList.stockList[normalizedVillage] || [];
+        const limitedItems = stockList.limitedItems || [];
+        
+        logger.debug(`Looking for item "${itemName}" in vending stock`, {
+          village: normalizedVillage,
+          characterJob: characterJob,
+          villageStockCount: villageStock.length,
+          limitedItemsCount: limitedItems.length,
+          availableVillages: Object.keys(stockList.stockList || {}),
+          characterName: character.name
+        }, 'server.js');
+        
+        // First check village stock (Merchant/Shopkeeper items)
+        // Match by item name and vendingType (if character has a job)
+        let itemDoc = villageStock.find(item => {
+          const itemNameMatch = item.itemName.toLowerCase().trim() === itemName.toLowerCase().trim();
+          if (!itemNameMatch) return false;
+          
+          // If character has a job, match by vendingType
+          if (characterJob) {
+            const itemVendingType = (item.vendingType || '').toLowerCase().trim();
+            return itemVendingType === characterJob;
+          }
+          // If no job specified, match any item
+          return true;
+        });
+        
+        // If not found in village stock, check if item exists but with wrong vendingType
+        if (!itemDoc && characterJob) {
+          const itemWithWrongType = villageStock.find(item => 
+            item.itemName.toLowerCase().trim() === itemName.toLowerCase().trim()
+          );
+          if (itemWithWrongType) {
+            logger.debug(`Item "${itemName}" found but with wrong vendingType:`, {
+              foundType: itemWithWrongType.vendingType,
+              requiredType: characterJob,
+              item: itemWithWrongType
+            }, 'server.js');
+          }
+        }
+        
+        // If not found in village stock, check Limited items (available to both Shopkeepers and Merchants)
+        if (!itemDoc) {
+          itemDoc = limitedItems.find(item => 
+            item.itemName.toLowerCase().trim() === itemName.toLowerCase().trim()
+          );
+        }
+        
+        // For merchants, also check other villages' stock (they can travel)
+        if (!itemDoc && !isShopkeeper) {
+          const allVillages = Object.keys(stockList.stockList || {});
+          for (const otherVillage of allVillages) {
+            if (otherVillage === normalizedVillage) continue; // Already checked
+            const otherVillageStock = stockList.stockList[otherVillage] || [];
+            const foundInOtherVillage = otherVillageStock.find(item => {
+              const itemNameMatch = item.itemName.toLowerCase().trim() === itemName.toLowerCase().trim();
+              if (!itemNameMatch) return false;
+              if (characterJob) {
+                const itemVendingType = (item.vendingType || '').toLowerCase().trim();
+                return itemVendingType === characterJob;
+              }
+              return true;
+            });
+            if (foundInOtherVillage) {
+              logger.debug(`Item "${itemName}" found in different village:`, {
+                foundIn: otherVillage,
+                currentVillage: normalizedVillage,
+                item: foundInOtherVillage
+              }, 'server.js');
+              // Don't set itemDoc - merchant needs to be in that village to restock
+              break;
+            }
+          }
+        }
 
-    // Check if character has enough vending points
-    if (character.vendingPoints < totalCost) {
-      return res.status(400).json({ 
-        error: `Insufficient vending points. Required: ${totalCost}, Available: ${character.vendingPoints}` 
+        if (!itemDoc) {
+          // If user provided a slot explicitly, they might be restocking a custom item or item from previous stock
+          // Check if item exists in character's inventory as a fallback
+          if (slot) {
+            // Already checked inventoryItem above, so if we're here, it doesn't exist
+            // Log more details for debugging
+            const availableItems = villageStock.map(item => `${item.itemName} (${item.vendingType || 'no type'})`).join(', ');
+            const availableItemNames = villageStock.map(item => item.itemName).join(', ');
+            logger.error(`Item "${itemName}" not found.`, null, 'server.js');
+            logger.debug(`Item search details:`, {
+              village: normalizedVillage,
+              characterJob: characterJob,
+              availableItems: availableItemNames || 'None',
+              allItems: availableItems || 'None',
+              limitedItemNames: limitedItems.map(item => item.itemName).join(', ') || 'None',
+              searchedItemName: itemName
+            }, 'server.js');
+            return res.status(404).json({ 
+              error: `Item "${itemName}" not found in vending stock for ${character.currentVillage || character.homeVillage || 'your village'} or in Limited items.`,
+              details: characterJob ? `Looking for ${characterJob} items in ${normalizedVillage}` : `Looking in ${normalizedVillage}`,
+              debug: {
+                village: normalizedVillage,
+                characterJob: characterJob,
+                availableItems: availableItemNames || 'None'
+              }
+            });
+          } else {
+            // Log more details for debugging
+            const availableItems = villageStock.map(item => `${item.itemName} (${item.vendingType || 'no type'})`).join(', ');
+            const availableItemNames = villageStock.map(item => item.itemName).join(', ');
+            logger.error(`Item "${itemName}" not found.`, null, 'server.js');
+            logger.debug(`Item search details:`, {
+              village: normalizedVillage,
+              characterJob: characterJob,
+              availableItems: availableItemNames || 'None',
+              allItems: availableItems || 'None',
+              limitedItemNames: limitedItems.map(item => item.itemName).join(', ') || 'None',
+              searchedItemName: itemName
+            }, 'server.js');
+            return res.status(404).json({ 
+              error: `Item "${itemName}" not found in vending stock for ${character.currentVillage || character.homeVillage || 'your village'} or in Limited items.`,
+              details: characterJob ? `Looking for ${characterJob} items in ${normalizedVillage}` : `Looking in ${normalizedVillage}`,
+              debug: {
+                village: normalizedVillage,
+                characterJob: characterJob,
+                availableItems: availableItemNames || 'None'
+              }
+            });
+          }
+        } else {
+          // Item found in vending stock, mark as new item
+          isNewItem = true;
+        }
+      }
+
+      // Calculate slot limits
+      const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+      const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+      const vendorType = character.vendorType?.toLowerCase() || character.job?.toLowerCase() || 'shopkeeper';
+      const pouchType = character.shopPouch?.toLowerCase() || character.vendingSetup?.pouchType?.toLowerCase() || 'none';
+      const baseSlots = baseSlotLimits[vendorType] || 0;
+      const pouchSlots = pouchCapacities[pouchType] || 0;
+      const totalSlots = baseSlots + pouchSlots;
+
+      // Find next available slot
+      const allItems = await VendingInventory.find({ characterName: character.name });
+      const occupiedSlots = new Set(allItems.map(item => item.slot).filter(Boolean));
+      
+      let newSlot = slot;
+      if (!newSlot) {
+        // Try to find existing slot with same item that has room (for stackable items)
+        if (!isCustomItem && itemDetails) {
+          const maxStackSize = itemDetails.maxStackSize || 10;
+          const isStackable = itemDetails.stackable;
+          
+          if (isStackable) {
+            // Find existing slot with same item that has room for the full quantity
+            const existingItemSlot = allItems.find(item => {
+              if (item.itemName === itemName && item.slot) {
+                const newTotal = item.stockQty + quantity;
+                return newTotal <= maxStackSize;
+              }
+              return false;
+            });
+            if (existingItemSlot) {
+              // Found existing item in stackable slot with room for all items
+              vendingItem = existingItemSlot;
+              newSlot = existingItemSlot.slot;
+            }
+          }
+        }
+        
+        // If no stacking slot found, find first available empty slot
+        if (!newSlot) {
+          for (let i = 1; i <= totalSlots; i++) {
+            const slotName = `Slot ${i}`;
+            if (!occupiedSlots.has(slotName)) {
+              newSlot = slotName;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!newSlot && !vendingItem) {
+        return res.status(400).json({ error: 'No available slots in your shop. Please remove an item first.' });
+      }
+
+      // Use cost from stock if not provided (stock uses 'points' field)
+      // For custom items from inventory, use the provided costEach
+      let itemDoc = null;
+      if (!inventoryItem) {
+        // Get vending stock to find itemDoc for cost
+        const stockList = await getCurrentVendingStockList();
+        if (stockList?.stockList) {
+          const normalizedVillage = (character.currentVillage || character.homeVillage || '').toLowerCase().trim();
+          const villageStock = stockList.stockList[normalizedVillage] || [];
+          const limitedItems = stockList.limitedItems || [];
+          const characterJob = (character.vendorType || character.job || '').toLowerCase().trim();
+          
+          itemDoc = villageStock.find(item => {
+            const itemNameMatch = item.itemName.toLowerCase().trim() === itemName.toLowerCase().trim();
+            if (!itemNameMatch) return false;
+            if (characterJob) {
+              const itemVendingType = (item.vendingType || '').toLowerCase().trim();
+              return itemVendingType === characterJob;
+            }
+            return true;
+          });
+          
+          if (!itemDoc) {
+            itemDoc = limitedItems.find(item => 
+              item.itemName.toLowerCase().trim() === itemName.toLowerCase().trim()
+            );
+          }
+        }
+      }
+      
+      pointCost = pointCost || (itemDoc ? itemDoc.points : 0) || 0;
+      
+      if (!pointCost || pointCost <= 0) {
+        return res.status(400).json({ error: 'This item cannot be restocked. No cost per item is set in vending stock.' });
+      }
+
+      // If we found an existing item in a stackable slot, skip creation (will increment below)
+      // Otherwise, create new vending item
+      if (!vendingItem) {
+        isNewItem = true;
+        vendingItem = new VendingInventory({
+          characterName: character.name,
+          itemName: itemName,
+          itemId: itemDetails?._id || (itemDoc ? itemDoc.itemId : null) || null,
+          stockQty: quantity,
+          costEach: pointCost,
+          pointsSpent: pointCost * quantity,
+          boughtFrom: character.currentVillage || character.homeVillage || 'Unknown',
+          slot: newSlot,
+          date: new Date(),
+          slotsUsed: isCustomItem ? quantity : (itemDetails?.stackable ? Math.ceil(quantity / (itemDetails.maxStackSize || 10)) : quantity),
+          tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : null,
+          artPrice: artPrice && artPrice.trim() !== '' && artPrice.trim() !== 'N/A' ? artPrice.trim() : null,
+          otherPrice: otherPrice && otherPrice.trim() !== '' && otherPrice.trim() !== 'N/A' ? otherPrice.trim() : null
+        });
+
+        await vendingItem.save();
+        console.log(`[server.js]: ✅ ${character.name} created and restocked ${quantity} × ${itemName} for ${pointCost * quantity} points`);
+      }
+    } else {
+      // Item exists - use its costEach
+      pointCost = vendingItem.costEach;
+      
+      if (!pointCost || pointCost <= 0) {
+        return res.status(400).json({ error: 'This item cannot be restocked. No cost per item is set.' });
+      }
+
+      // Calculate total cost
+      const totalCost = pointCost * quantity;
+
+      // Check if character has enough vending points
+      if (character.vendingPoints < totalCost) {
+        return res.status(400).json({ 
+          error: `Insufficient vending points. Required: ${totalCost}, Available: ${character.vendingPoints}` 
+        });
+      }
+
+      // If item already existed (not newly created), update it by incrementing
+      if (!isNewItem && vendingItem._id) {
+        // Validate stack size when incrementing existing item
+        if (!isCustomItem && itemDetails) {
+          const isStackable = itemDetails.stackable || false;
+          const maxStackSize = itemDetails.maxStackSize || 10;
+          
+          if (isStackable) {
+            const currentStock = vendingItem.stockQty || 0;
+            const newTotal = currentStock + quantity;
+            
+            if (newTotal > maxStackSize) {
+              return res.status(400).json({ 
+                error: `Cannot restock ${quantity} items. Current stock: ${currentStock}, max stack size: ${maxStackSize}. Adding ${quantity} would exceed the maximum (${newTotal} > ${maxStackSize}). Please restock ${maxStackSize - currentStock} or fewer items, or use a different slot.` 
+              });
+            }
+          } else {
+            // Non-stackable items - each item must be in its own slot
+            if (vendingItem.stockQty > 0) {
+              return res.status(400).json({ 
+                error: `Item "${itemName}" is not stackable and already has stock in this slot. Cannot add more items to the same slot.` 
+              });
+            }
+          }
+        }
+
+        const updateData = {
+          $inc: { 
+            stockQty: quantity,
+            pointsSpent: totalCost
+          },
+          $set: {
+            date: new Date(),
+            boughtFrom: character.currentVillage || character.homeVillage || 'Unknown'
+          }
+        };
+
+        // Update prices if provided (only if they're not null/undefined)
+        if (tokenPrice !== null && tokenPrice !== undefined) {
+          updateData.$set.tokenPrice = tokenPrice;
+        }
+        if (artPrice !== null && artPrice !== undefined && artPrice.trim() !== '') {
+          updateData.$set.artPrice = artPrice.trim();
+        }
+        if (otherPrice !== null && otherPrice !== undefined && otherPrice.trim() !== '') {
+          updateData.$set.otherPrice = otherPrice.trim();
+        }
+
+        // Update slotsUsed if item is stackable
+        if (!isCustomItem && itemDetails && itemDetails.stackable) {
+          const maxStackSize = itemDetails.maxStackSize || 10;
+          const updatedStock = (vendingItem.stockQty || 0) + quantity;
+          updateData.$set.slotsUsed = Math.ceil(updatedStock / maxStackSize);
+        }
+
+        await VendingInventory.findByIdAndUpdate(vendingItem._id, updateData);
+        // Reload to get updated stockQty
+        vendingItem = await VendingInventory.findById(vendingItem._id);
+      }
+
+      // Deduct vending points from character
+      character.vendingPoints -= totalCost;
+      await character.save();
+
+      // Log transaction for vendor purchase
+      try {
+        const user = await User.findOne({ discordId: userId });
+        const fulfillmentId = `vendor_purchase_${uuidv4()}`;
+        const vendorTransaction = new VendingRequest({
+          fulfillmentId: fulfillmentId,
+          userCharacterName: character.name,
+          vendorCharacterName: character.name,
+          itemName: itemName,
+          quantity: quantity,
+          paymentMethod: 'vending_points',
+          notes: `Vendor restocked ${quantity}x ${itemName} from vending stock`,
+          buyerId: userId,
+          buyerUsername: user?.username || character.name,
+          date: new Date(),
+          status: 'completed',
+          processedAt: new Date(),
+          transactionType: 'vendor_purchase',
+          pointsSpent: totalCost
+        });
+        await vendorTransaction.save();
+        console.log(`[server.js]: ✅ Logged vendor purchase transaction: ${fulfillmentId}`);
+      } catch (txError) {
+        console.error('[server.js]: ⚠️ Failed to log vendor purchase transaction:', txError);
+        // Don't fail the request if transaction logging fails
+      }
+
+      console.log(`[server.js]: ✅ ${character.name} restocked ${quantity} × ${itemName} for ${totalCost} points`);
+
+      res.json({
+        success: true,
+        message: `Successfully restocked ${quantity} × ${itemName}`,
+        totalCost: totalCost,
+        newStockQty: vendingItem.stockQty,
+        remainingPoints: character.vendingPoints
       });
     }
-
-    // Update vending inventory - increment stock and points spent
-    await VendingInventory.findByIdAndUpdate(vendingItem._id, {
-      $inc: { 
-        stockQty: quantity,
-        pointsSpent: totalCost
-      },
-      $set: {
-        date: new Date(),
-        boughtFrom: character.currentVillage || character.homeVillage || 'Unknown'
-      }
-    });
-
-    // Deduct vending points from character
-    character.vendingPoints -= totalCost;
-    await character.save();
-
-    console.log(`[server.js]: ✅ ${character.name} restocked ${quantity} × ${itemName} for ${totalCost} points`);
-
-    res.json({
-      success: true,
-      message: `Successfully restocked ${quantity} × ${itemName}`,
-      totalCost: totalCost,
-      newStockQty: vendingItem.stockQty + quantity,
-      remainingPoints: character.vendingPoints
-    });
   } catch (error) {
     console.error('[server.js]: ❌ Error restocking vending item:', error);
     res.status(500).json({ error: 'Failed to restock item', details: error.message });
@@ -10623,9 +11227,9 @@ app.get('/api/tokens/transactions', requireAuth, async (req, res) => {
         .skip(skip)
         .lean();
       dbTotal = await TokenTransaction.countDocuments(query);
-      console.log(`[server.js]: ✅ Database transactions found: ${dbTransactions.length} (total: ${dbTotal})`);
+      logger.success(`Database transactions found: ${dbTransactions.length} (total: ${dbTotal})`, 'server.js');
     } catch (error) {
-      console.error('[server.js]: ❌ Error getting transactions from database:', error);
+      logger.error('Error getting transactions from database', error, 'server.js');
     }
     
     // Also read from Google Sheets if available and we need more data
@@ -10712,6 +11316,43 @@ app.get('/api/tokens/transactions', requireAuth, async (req, res) => {
 });
 
 // Get user's vending transactions
+// ------------------- Endpoint: Get Available Vending Stock Months -------------------
+app.get('/api/vending/months', async (req, res) => {
+  try {
+    const VendingStock = getVendingStockModel();
+    
+    // Fetch all unique month/year combinations, sorted by most recent first
+    const allStock = await VendingStock.find({})
+      .select('month year createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Create unique month/year combinations
+    const monthMap = new Map();
+    allStock.forEach(stock => {
+      const key = `${stock.month}-${stock.year || new Date(stock.createdAt).getFullYear()}`;
+      if (!monthMap.has(key)) {
+        monthMap.set(key, {
+          month: stock.month,
+          year: stock.year || new Date(stock.createdAt).getFullYear(),
+          createdAt: stock.createdAt
+        });
+      }
+    });
+    
+    // Convert to array and sort by year/month descending
+    const months = Array.from(monthMap.values()).sort((a, b) => {
+      if (b.year !== a.year) return b.year - a.year;
+      return b.month - a.month;
+    });
+    
+    return res.json({ months });
+  } catch (error) {
+    console.error(`[server.js]: ❌ Error fetching available months:`, error);
+    return res.status(500).json({ error: 'Failed to fetch available months', details: error.message });
+  }
+});
+
 app.get('/api/vending/transactions', requireAuth, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
@@ -10719,12 +11360,12 @@ app.get('/api/vending/transactions', requireAuth, async (req, res) => {
     const status = req.query.status; // 'pending', 'completed', 'failed', 'expired', or undefined (all)
     const role = req.query.role; // 'buyer' or 'vendor' to filter by role
     
-    console.log(`[server.js]: 🔍 Fetching vending transactions for user ${req.user.discordId}`, {
+    logger.debug(`Fetching vending transactions for user ${req.user.discordId}`, {
       limit,
       skip,
       status: status || 'all',
       role: role || 'all'
-    });
+    }, 'server.js');
     
     const user = await User.findOne({ discordId: req.user.discordId });
     if (!user) {
@@ -10767,9 +11408,9 @@ app.get('/api/vending/transactions', requireAuth, async (req, res) => {
         .skip(skip)
         .lean();
       total = await VendingRequest.countDocuments(query);
-      console.log(`[server.js]: ✅ Database transactions found: ${transactions.length} (total: ${total})`);
+      logger.success(`Database transactions found: ${transactions.length} (total: ${total})`, 'server.js');
     } catch (error) {
-      console.error('[server.js]: ❌ Error getting transactions from database:', error);
+      logger.error('Error getting transactions from database', error, 'server.js');
       return res.status(500).json({ error: 'Failed to fetch transactions from database', details: error.message });
     }
     
@@ -10793,6 +11434,9 @@ app.get('/api/vending/transactions', requireAuth, async (req, res) => {
       processedAt: tx.processedAt,
       status: tx.status || 'pending',
       expiresAt: tx.expiresAt,
+      transactionType: tx.transactionType || 'purchase',
+      pointsSpent: tx.pointsSpent,
+      sourceInventory: tx.sourceInventory,
       // Determine user's role in this transaction
       userRole: characterNames.includes(tx.userCharacterName) ? 'buyer' : 'vendor',
       otherParty: characterNames.includes(tx.userCharacterName) ? tx.vendorCharacterName : tx.userCharacterName
@@ -12334,7 +12978,7 @@ const startServer = async () => {
   try {
     initializeCacheCleanup();
   } catch (err) {
-    logger.warn('Cache cleanup initialization failed', err);
+    logger.warn('Cache cleanup initialization failed', 'server.js');
   }
   
   // Start server FIRST so health checks pass immediately

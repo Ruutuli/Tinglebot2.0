@@ -1,0 +1,637 @@
+/* ============================================================================ */
+/* Vending Stock Styles                                                         */
+/* Styling for vending stock display with village-based organization           */
+/* ============================================================================ */
+
+/* ============================================================================ */
+/* Main Container                                                               */
+/* ============================================================================ */
+
+.vending-stock-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* ============================================================================ */
+/* Header Section                                                               */
+/* ============================================================================ */
+
+.vending-stock-header {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 1.5rem 2rem;
+  margin-bottom: 2rem;
+  backdrop-filter: blur(var(--frost-blur));
+  box-shadow: var(--section-shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.vending-stock-header .header-content {
+  flex: 1;
+}
+
+.vending-stock-header .month-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vending-stock-header .month-selector label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.vending-stock-header .month-selector select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 0.5rem 1rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 200px;
+}
+
+.vending-stock-header .month-selector select:hover {
+  border-color: var(--accent);
+}
+
+.vending-stock-header .month-selector select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 163, 218, 0.2);
+}
+
+.vending-stock-header h2 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vending-stock-header h2 i {
+  color: var(--accent);
+  font-size: 1.8rem;
+}
+
+.vending-stock-header p {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ============================================================================ */
+/* Village Section                                                              */
+/* ============================================================================ */
+
+.vending-village-section {
+  margin-bottom: 2.5rem;
+}
+
+.vending-village-header {
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 1rem 1.5rem;
+  margin-bottom: 1rem;
+  backdrop-filter: blur(var(--frost-blur));
+  position: relative;
+  overflow: hidden;
+  opacity: 1;
+}
+
+.vending-village-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  opacity: 0.8;
+}
+
+.vending-village-section.rudania .vending-village-header::before {
+  background: linear-gradient(90deg, #ff4444, #cc0000);
+}
+
+.vending-village-section.inariko .vending-village-header::before {
+  background: linear-gradient(90deg, #4444ff, #0000cc);
+}
+
+.vending-village-section.vhintl .vending-village-header::before {
+  background: linear-gradient(90deg, #44ff44, #00cc00);
+}
+
+.vending-village-section.rudania .vending-village-header {
+  border-color: rgba(255, 68, 68, 0.5);
+  background: linear-gradient(135deg, rgba(255, 68, 68, 0.25), rgba(204, 0, 0, 0.15));
+  box-shadow: 0 2px 8px rgba(255, 68, 68, 0.2);
+}
+
+.vending-village-section.inariko .vending-village-header {
+  border-color: rgba(68, 68, 255, 0.5);
+  background: linear-gradient(135deg, rgba(68, 68, 255, 0.25), rgba(0, 0, 204, 0.15));
+  box-shadow: 0 2px 8px rgba(68, 68, 255, 0.2);
+}
+
+.vending-village-section.vhintl .vending-village-header {
+  border-color: rgba(68, 255, 68, 0.5);
+  background: linear-gradient(135deg, rgba(68, 255, 68, 0.25), rgba(0, 204, 0, 0.15));
+  box-shadow: 0 2px 8px rgba(68, 255, 68, 0.2);
+}
+
+.vending-village-section.rudania .vending-item-card {
+  border-left: 3px solid #ff4444;
+}
+
+.vending-village-section.inariko .vending-item-card {
+  border-left: 3px solid #4444ff;
+}
+
+.vending-village-section.vhintl .vending-item-card {
+  border-left: 3px solid #44ff44;
+}
+
+.vending-village-header h3 {
+  font-size: 1.5rem;
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================ */
+/* Item Group                                                                   */
+/* ============================================================================ */
+
+.vending-item-group {
+  margin-bottom: 1.5rem;
+}
+
+.vending-item-group h4 {
+  font-size: 1.2rem;
+  color: var(--accent);
+  margin: 0 0 1rem 0;
+  font-weight: 600;
+}
+
+/* ============================================================================ */
+/* Items Grid                                                                   */
+/* ============================================================================ */
+
+.vending-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+/* ============================================================================ */
+/* Item Card                                                                    */
+/* ============================================================================ */
+
+.vending-item-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 1rem;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(var(--frost-blur));
+  position: relative;
+  overflow: hidden;
+}
+
+.vending-item-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--botw-blue), var(--accent));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.vending-item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--section-shadow);
+  border-color: var(--accent);
+}
+
+.vending-item-card:hover::before {
+  opacity: 1;
+}
+
+.vending-item-card h5 {
+  font-size: 1.1rem;
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.vending-item-card .item-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.vending-item-card .item-emoji {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.vending-item-card .item-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vending-item-card .item-points {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.vending-item-card .item-points i {
+  color: var(--accent);
+}
+
+.vending-item-card .item-image {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 4px;
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+}
+
+.vending-item-card .item-type {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.vending-item-card .item-type i {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+/* ============================================================================ */
+/* Limited Items Section                                                       */
+/* ============================================================================ */
+
+.vending-limited-section {
+  margin-top: 3rem;
+  padding: 1.5rem;
+  background: var(--glass-bg);
+  border: 2px solid var(--accent);
+  border-radius: var(--card-radius);
+  backdrop-filter: blur(var(--frost-blur));
+  box-shadow: 0 0 20px rgba(0, 163, 218, 0.1);
+}
+
+.vending-limited-section h3 {
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem 0;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vending-limited-section h3 i {
+  color: var(--accent);
+}
+
+.vending-limited-section p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.vending-limited-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.vending-limited-section .vending-item-card {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.vending-limited-section .stock-indicator {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.vending-limited-section .stock-indicator.in-stock {
+  background: rgba(255, 165, 0, 0.2);
+  color: #ffa500;
+  border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+.vending-limited-section .stock-indicator.out-of-stock {
+  background: rgba(255, 0, 0, 0.2);
+  color: #ff0000;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+/* ============================================================================ */
+/* Error State                                                                  */
+/* ============================================================================ */
+
+.error-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text-secondary);
+}
+
+.error-state i {
+  font-size: 3rem;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  margin-bottom: 1rem;
+}
+
+.error-state p {
+  font-size: 1.1rem;
+  margin: 0.5rem 0;
+}
+
+.retry-button {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--card-radius);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.retry-button:hover {
+  background: var(--botw-dark-blue);
+  transform: translateY(-2px);
+  box-shadow: var(--section-shadow);
+}
+
+/* ============================================================================ */
+/* MOBILE RESPONSIVE DESIGN                                                     */
+/* ============================================================================ */
+
+@media (max-width: 1024px) {
+  .vending-stock-container {
+    padding: 1.5rem;
+  }
+
+  .vending-items-grid,
+  .vending-limited-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 0.875rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .vending-stock-container {
+    padding: 1rem;
+  }
+
+  .vending-stock-header {
+    padding: 1.25rem 1.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .vending-stock-header .header-content {
+    width: 100%;
+  }
+
+  .vending-stock-header .month-selector {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .vending-stock-header .month-selector select {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .vending-stock-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .vending-stock-header p {
+    font-size: 0.9rem;
+  }
+
+  .vending-village-header {
+    padding: 0.875rem 1.25rem;
+  }
+
+  .vending-village-header h3 {
+    font-size: 1.25rem;
+  }
+
+  .vending-item-group h4 {
+    font-size: 1.1rem;
+  }
+
+  .vending-items-grid,
+  .vending-limited-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .vending-item-card {
+    padding: 0.875rem;
+  }
+
+  .vending-item-card h5 {
+    font-size: 1rem;
+  }
+
+  .vending-limited-section {
+    padding: 1.25rem;
+    margin-top: 2rem;
+  }
+
+  .vending-limited-section h3 {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .vending-stock-container {
+    padding: 0.75rem;
+  }
+
+  .vending-stock-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .vending-stock-header h2 {
+    font-size: 1.25rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .vending-stock-header h2 i {
+    font-size: 1.5rem;
+  }
+
+  .vending-village-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .vending-village-header h3 {
+    font-size: 1.1rem;
+  }
+
+  .vending-item-card {
+    padding: 0.75rem;
+  }
+
+  .vending-item-card .item-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .vending-limited-section {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .vending-stock-container {
+    padding: 0.5rem;
+  }
+
+  .vending-stock-header {
+    padding: 0.875rem 1rem;
+  }
+
+  .vending-stock-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .vending-stock-header p {
+    font-size: 0.85rem;
+  }
+
+  .vending-item-card h5 {
+    font-size: 0.95rem;
+  }
+
+  .vending-item-card .item-points,
+  .vending-item-card .item-type {
+    font-size: 0.8rem;
+  }
+
+  .vending-item-card .item-rarity {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
+  }
+}
+
+/* ============================================================================ */
+/* Touch-friendly interactions                                                  */
+/* ============================================================================ */
+
+@media (hover: none) and (pointer: coarse) {
+  .vending-item-card {
+    min-height: 120px;
+  }
+
+  .vending-item-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+
+  .retry-button:active {
+    transform: scale(0.98);
+  }
+
+  .vending-item-card:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================================ */
+/* Landscape mobile optimizations                                               */
+/* ============================================================================ */
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .vending-items-grid,
+  .vending-limited-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+  }
+}
+
+/* ============================================================================ */
+/* High DPI displays                                                            */
+/* ============================================================================ */
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .vending-item-card,
+  .vending-village-header,
+  .vending-stock-header {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ============================================================================ */
+/* Reduced motion for accessibility                                             */
+/* ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .vending-item-card,
+  .retry-button {
+    transition: none;
+  }
+
+  .vending-item-card:hover,
+  .vending-item-card:active {
+    transform: none;
+  }
+
+  .vending-item-card::before {
+    transition: none;
+  }
+}
+

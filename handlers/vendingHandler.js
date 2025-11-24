@@ -571,7 +571,6 @@ async function retryOperation(fn, maxRetries = MAX_RETRY_ATTEMPTS, operationName
 // ------------------- atomicUpdateTokenBalance -------------------
 // Atomically updates token balance with validation and retry logic
 async function atomicUpdateTokenBalance(userId, change, session = null, maxRetries = MAX_RETRY_ATTEMPTS) {
-  const User = require('../models/UserModel');
   const options = session ? { session } : {};
   
   let lastError;
@@ -621,7 +620,7 @@ async function atomicUpdateTokenBalance(userId, change, session = null, maxRetri
           { discordId: userId },
           { 
             $inc: { tokens: change },
-            $setOnInsert: { tokens: change, tokenTracker: '', tokensSynced: false }
+            $setOnInsert: { tokenTracker: '', tokensSynced: false }
           },
           { 
             new: true, 
@@ -1280,8 +1279,11 @@ async function handleRestock(interaction) {
       return interaction.editReply("❌ Character not found or doesn't belong to you.");
     }
 
+    // Get character job type (check vendorType first, then job field)
+    const characterJob = (character.vendorType || character.job || '').toLowerCase().trim();
+
     // ------------------- Shopkeeper Village Restrictions -------------------
-    if (character.job?.toLowerCase() === 'shopkeeper') {
+    if (characterJob === 'shopkeeper') {
       // Block buying stock from other village town halls
       if (character.currentVillage.toLowerCase() !== character.homeVillage.toLowerCase()) {
         const embed = createErrorEmbed(
@@ -1299,7 +1301,7 @@ async function handleRestock(interaction) {
     // ------------------- Slot Limits -------------------
     const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
     const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
-    const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
+    const baseSlots = baseSlotLimits[characterJob] || 0;
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
@@ -1342,7 +1344,7 @@ async function handleRestock(interaction) {
     // First check village stock (Merchant/Shopkeeper items)
     let itemDoc = villageStock.find(item => 
       item.itemName.toLowerCase() === itemName.toLowerCase() && 
-      item.vendingType?.toLowerCase() === character.job.toLowerCase()
+      item.vendingType?.toLowerCase() === characterJob
     );
     
     // If not found in village stock, check Limited items (available to both Shopkeepers and Merchants)
@@ -1355,11 +1357,11 @@ async function handleRestock(interaction) {
     if (!itemDoc) {
       const embed = createErrorEmbed(
         '❌ Item Not Found',
-        `Item "${itemName}" not found in ${character.currentVillage}'s stock for ${character.job}s or in Limited items.`,
+        `Item "${itemName}" not found in ${character.currentVillage}'s stock for ${characterJob}s or in Limited items.`,
         [
           { name: '🔍 Item Name', value: itemName, inline: true },
           { name: '🏘️ Village', value: character.currentVillage, inline: true },
-          { name: '💼 Job Type', value: character.job, inline: true }
+          { name: '💼 Job Type', value: characterJob || character.job || 'Unknown', inline: true }
         ]
       );
       return interaction.editReply({ embeds: [embed] });
@@ -1627,7 +1629,8 @@ async function handleRestock(interaction) {
 
       if (existingItem) {
         const newTotal = existingItem.stockQty + stockQty;
-        if (isStackable && newTotal > maxStackSize && existingItem.slot === newSlot) {
+        // Validate stack size - check if adding would exceed maxStackSize
+        if (isStackable && newTotal > maxStackSize) {
           const embed = createErrorEmbed(
             '❌ Stack Size Exceeded',
             `Cannot add ${stockQty} more ${itemName} to this slot. This would exceed the maximum stack size.`,
@@ -1635,7 +1638,21 @@ async function handleRestock(interaction) {
               { name: '📦 Item', value: itemName, inline: true },
               { name: '📊 Current Stack', value: `${existingItem.stockQty}`, inline: true },
               { name: '📈 Maximum Allowed', value: `${maxStackSize} per slot`, inline: true },
-              { name: '💡 Note', value: 'Stackable items can occupy multiple slots (10 per slot). Choose a different slot to add more.', inline: false }
+              { name: '🔢 Would Result In', value: `${newTotal} items (exceeds ${maxStackSize})`, inline: true },
+              { name: '💡 Solution', value: `Please restock ${maxStackSize - existingItem.stockQty} or fewer items, or use a different slot.`, inline: false }
+            ]
+          );
+          return interaction.editReply({ embeds: [embed] });
+        }
+        // For non-stackable items, if item already exists in slot, cannot add more
+        if (!isStackable && existingItem.stockQty > 0) {
+          const embed = createErrorEmbed(
+            '❌ Cannot Stack Non-Stackable Item',
+            `Item "${itemName}" is not stackable and already has stock in this slot.`,
+            [
+              { name: '📦 Item', value: itemName, inline: true },
+              { name: '📊 Current Stock', value: `${existingItem.stockQty}`, inline: true },
+              { name: '💡 Solution', value: 'Non-stackable items cannot be stacked. Use a different slot or remove the existing item first.', inline: false }
             ]
           );
           return interaction.editReply({ embeds: [embed] });
@@ -1664,25 +1681,51 @@ async function handleRestock(interaction) {
       
       // Update inventory
       if (existingItem) {
+        // Validate stack size before updating (double-check, in case something changed)
+        if (!isCustomItem && itemDetails) {
+          const isStackable = itemDetails.stackable || false;
+          const maxStackSize = itemDetails.maxStackSize || 10;
+          const currentStock = existingItem.stockQty || 0;
+          const newTotal = currentStock + stockQty;
+          
+          if (isStackable && newTotal > maxStackSize) {
+            throw new Error(`Cannot restock ${stockQty} items. Current stock: ${currentStock}, max stack size: ${maxStackSize}. Adding ${stockQty} would exceed the maximum (${newTotal} > ${maxStackSize}).`);
+          }
+          
+          if (!isStackable && currentStock > 0 && stockQty > 0) {
+            throw new Error(`Item "${itemName}" is not stackable and already has stock in this slot. Cannot add more items to the same slot.`);
+          }
+        }
+
         // Atomically update existing item with stock validation
+        const updateData = {
+          $inc: { stockQty: stockQty, pointsSpent: totalCost },
+          $set: { 
+            date: new Date(), 
+            boughtFrom: character.currentVillage,
+            // Update prices if provided
+            tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : existingItem.tokenPrice,
+            artPrice: artPrice && artPrice.trim() !== '' ? artPrice : existingItem.artPrice,
+            otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : existingItem.otherPrice,
+            barterOpen: barterOpen !== undefined ? barterOpen : existingItem.barterOpen,
+            tradesOpen: barterOpen !== undefined ? barterOpen : existingItem.tradesOpen // Legacy compatibility
+          }
+        };
+
+        // Update slotsUsed if item is stackable
+        if (!isCustomItem && itemDetails && itemDetails.stackable) {
+          const maxStackSize = itemDetails.maxStackSize || 10;
+          const currentStock = existingItem.stockQty || 0;
+          const updatedStock = currentStock + stockQty;
+          updateData.$set.slotsUsed = Math.ceil(updatedStock / maxStackSize);
+        }
+
         const updateResult = await vendCollectionWithSession.findOneAndUpdate(
           { 
             _id: existingItem._id,
             stockQty: { $exists: true } // Ensure item still exists
           },
-          {
-            $inc: { stockQty: stockQty, pointsSpent: totalCost },
-            $set: { 
-              date: new Date(), 
-              boughtFrom: character.currentVillage,
-              // Update prices if provided
-              tokenPrice: tokenPrice !== null && tokenPrice !== undefined ? tokenPrice : existingItem.tokenPrice,
-              artPrice: artPrice && artPrice.trim() !== '' ? artPrice : existingItem.artPrice,
-              otherPrice: otherPrice && otherPrice.trim() !== '' ? otherPrice : existingItem.otherPrice,
-              barterOpen: barterOpen !== undefined ? barterOpen : existingItem.barterOpen,
-              tradesOpen: barterOpen !== undefined ? barterOpen : existingItem.tradesOpen // Legacy compatibility
-            }
-          },
+          updateData,
           { 
             returnDocument: 'after',
             session 
@@ -1741,6 +1784,33 @@ async function handleRestock(interaction) {
         throw new Error(`Insufficient vending points. Points may have changed during transaction.`);
       }
     });
+
+    // Log transaction for vendor purchase
+    try {
+      const user = await User.findOne({ discordId: character.userId });
+      const fulfillmentId = `vendor_purchase_${uuidv4()}`;
+      const vendorTransaction = new VendingRequest({
+        fulfillmentId: fulfillmentId,
+        userCharacterName: characterName,
+        vendorCharacterName: characterName,
+        itemName: itemName,
+        quantity: stockQty,
+        paymentMethod: 'vending_points',
+        notes: `Vendor restocked ${stockQty}x ${itemName} from vending stock`,
+        buyerId: character.userId,
+        buyerUsername: user?.username || characterName,
+        date: new Date(),
+        status: 'completed',
+        processedAt: new Date(),
+        transactionType: 'vendor_purchase',
+        pointsSpent: totalCost
+      });
+      await vendorTransaction.save();
+      console.log(`[vendingHandler.js]: ✅ Logged vendor purchase transaction: ${fulfillmentId}`);
+    } catch (txError) {
+      console.error('[vendingHandler.js]: ⚠️ Failed to log vendor purchase transaction:', txError);
+      // Don't fail the request if transaction logging fails
+    }
 
     // ------------------- Update Google Sheets -------------------
     const shopLink = character.shopLink || character.vendingSetup?.shopLink;
@@ -5072,6 +5142,33 @@ async function handleAddPersonalItem(characterName, itemName, quantity, slot, to
         isCustomItem: isCustomItem,
         customItemData: isCustomItem ? { name: itemName } : null
       });
+    }
+
+    // Log transaction for vendor move
+    try {
+      const user = await User.findOne({ discordId: character.userId });
+      const fulfillmentId = `vendor_move_${uuidv4()}`;
+      const vendorTransaction = new VendingRequest({
+        fulfillmentId: fulfillmentId,
+        userCharacterName: characterName,
+        vendorCharacterName: characterName,
+        itemName: itemName,
+        quantity: quantity,
+        paymentMethod: 'inventory_transfer',
+        notes: `Vendor moved ${quantity}x ${itemName} from personal inventory to vending shop`,
+        buyerId: character.userId,
+        buyerUsername: user?.username || characterName,
+        date: new Date(),
+        status: 'completed',
+        processedAt: new Date(),
+        transactionType: 'vendor_move',
+        sourceInventory: 'personal_inventory'
+      });
+      await vendorTransaction.save();
+      console.log(`[vendingHandler.js]: ✅ Logged vendor move transaction: ${fulfillmentId}`);
+    } catch (txError) {
+      console.error('[vendingHandler.js]: ⚠️ Failed to log vendor move transaction:', txError);
+      // Don't fail the request if transaction logging fails
     }
 
     return { success: true, message: `Successfully added ${quantity}x ${itemName} to shop as personal item.` };

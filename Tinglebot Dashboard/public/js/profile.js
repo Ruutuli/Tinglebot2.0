@@ -38,6 +38,73 @@ function escapeHtmlAttribute(str) {
     .replace(/'/g, '&#39;');
 }
 
+// ------------------- Function: showVendingNotification -------------------
+// Shows a styled notification toast for vending operations
+function showVendingNotification(message, type = 'success', duration = 4000) {
+  // Remove any existing notification
+  const existing = document.querySelector('.vending-notification');
+  if (existing) {
+    existing.remove();
+  }
+
+  const notification = document.createElement('div');
+  notification.className = `vending-notification ${type}`;
+
+  const iconMap = {
+    success: 'fas fa-check-circle',
+    error: 'fas fa-exclamation-circle'
+  };
+
+  const icon = document.createElement('i');
+  icon.className = `${iconMap[type] || iconMap.success} vending-notification-icon`;
+
+  const content = document.createElement('div');
+  content.className = 'vending-notification-content';
+
+  // Split message by newlines for title and message
+  const lines = message.split('\n').filter(line => line.trim());
+  const title = lines[0] || message;
+  const subtitle = lines.slice(1).join('\n');
+
+  const titleEl = document.createElement('div');
+  titleEl.className = 'vending-notification-title';
+  titleEl.textContent = title;
+
+  content.appendChild(titleEl);
+
+  if (subtitle) {
+    const messageEl = document.createElement('div');
+    messageEl.className = 'vending-notification-message';
+    messageEl.textContent = subtitle;
+    content.appendChild(messageEl);
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'vending-notification-close';
+  closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+  closeBtn.setAttribute('aria-label', 'Close notification');
+  closeBtn.onclick = () => {
+    notification.classList.remove('show');
+    setTimeout(() => notification.remove(), 300);
+  };
+
+  notification.appendChild(icon);
+  notification.appendChild(content);
+  notification.appendChild(closeBtn);
+  document.body.appendChild(notification);
+
+  // Trigger animation
+  setTimeout(() => {
+    notification.classList.add('show');
+  }, 10);
+
+  // Auto-remove after duration
+  setTimeout(() => {
+    notification.classList.remove('show');
+    setTimeout(() => notification.remove(), 300);
+  }, duration);
+}
+
 // ============================================================================
 // ------------------- Section: Profile Page Initialization -------------------
 // Sets up profile page and loads user data
@@ -2938,15 +3005,88 @@ function showValidationErrorsModal(errors, title, type = 'error') {
 
 // ------------------- Function: showRestockModal -------------------
 // Shows a custom styled modal for restocking vending items
-function showRestockModal(itemName, costEach) {
-  return new Promise((resolve) => {
+async function showRestockModal(itemName, costEach, characterId, itemId = null, currentSlot = null) {
+  return new Promise(async (resolve) => {
     const modal = document.createElement('div');
     modal.className = 'character-modal';
     modal.style.zIndex = '10003';
 
     const modalContent = document.createElement('div');
     modalContent.className = 'character-modal-content';
-    modalContent.style.maxWidth = '500px';
+    modalContent.style.maxWidth = '600px';
+
+    // Fetch character and slot information
+    let availableSlots = [];
+    let occupiedSlots = [];
+    let totalSlots = 0;
+    let character = null;
+    let existingItemSlot = null;
+
+    if (characterId) {
+      try {
+        // Fetch character data
+        const charResponse = await fetch(`/api/character/${characterId}`, {
+          credentials: 'include'
+        });
+        if (charResponse.ok) {
+          const charData = await charResponse.json();
+          character = charData;
+        }
+
+        // Fetch vending inventory to check slots
+        const vendingResponse = await fetch(`/api/characters/${characterId}/vending`, {
+          credentials: 'include'
+        });
+        
+        if (vendingResponse.ok) {
+          const vendingData = await vendingResponse.json();
+          
+          // Calculate slot limits
+          const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+          const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+          const vendorType = character?.vendorType?.toLowerCase() || character?.job?.toLowerCase() || 'shopkeeper';
+          const pouchType = character?.shopPouch?.toLowerCase() || character?.vendingSetup?.pouchType?.toLowerCase() || 'none';
+          const baseSlots = baseSlotLimits[vendorType] || 0;
+          const pouchSlots = pouchCapacities[pouchType] || 0;
+          totalSlots = baseSlots + pouchSlots;
+
+          // Get occupied slots
+          if (vendingData.items && Array.isArray(vendingData.items)) {
+            occupiedSlots = vendingData.items
+              .filter(item => item.slot && (!itemId || item._id !== itemId))
+              .map(item => ({
+                slot: item.slot,
+                itemName: item.itemName,
+                stockQty: item.stockQty
+              }));
+
+            // Check if item already exists and can be stacked
+            if (itemId) {
+              existingItemSlot = vendingData.items.find(item => item._id === itemId);
+            } else {
+              // Check if same item exists in a slot (for stacking)
+              existingItemSlot = vendingData.items.find(item => 
+                item.itemName === itemName && item.slot
+              );
+            }
+          }
+
+          // Calculate available slots
+          const occupiedSlotNames = new Set(occupiedSlots.map(s => s.slot));
+          for (let i = 1; i <= totalSlots; i++) {
+            const slotName = `Slot ${i}`;
+            if (!occupiedSlotNames.has(slotName)) {
+              availableSlots.push(slotName);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[profile.js]: Error fetching slot information:', error);
+      }
+    }
+
+    // Determine default slot
+    let defaultSlot = currentSlot || (existingItemSlot?.slot) || (availableSlots.length > 0 ? availableSlots[0] : null);
 
     modalContent.innerHTML = `
       <div class="character-modal-header">
@@ -2974,6 +3114,57 @@ function showRestockModal(itemName, costEach) {
             </div>
           </div>
 
+          ${totalSlots > 0 ? `
+          <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; margin-bottom: 0.75rem; color: var(--text-color); font-weight: 600; font-size: 0.95rem;">
+              <i class="fas fa-layer-group" style="margin-right: 0.5rem;"></i> Slot <span style="color: var(--error-color); font-weight: 700;">*</span>
+            </label>
+            ${existingItemSlot && existingItemSlot.slot ? `
+              <div style="background: linear-gradient(135deg, rgba(76,175,80,0.1) 0%, rgba(76,175,80,0.05) 100%); border: 2px solid #4CAF50; border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                  <i class="fas fa-info-circle" style="color: #4CAF50;"></i>
+                  <span style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 600;">Existing item found in ${existingItemSlot.slot}</span>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                  Current stock: ${existingItemSlot.stockQty || 0} • Will add to existing stock
+                </div>
+              </div>
+            ` : ''}
+            <select 
+              id="restock-slot-select"
+              style="width: 100%; padding: 1rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem; font-weight: 600; transition: all 0.2s; box-sizing: border-box; cursor: pointer;"
+              onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+              onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+            >
+              ${existingItemSlot && existingItemSlot.slot ? `
+                <option value="${existingItemSlot.slot}" selected>${existingItemSlot.slot} (Current - Add to existing stock)</option>
+              ` : ''}
+              ${availableSlots.map(slot => `
+                <option value="${slot}" ${slot === defaultSlot && !existingItemSlot ? 'selected' : ''}>${slot} (Available)</option>
+              `).join('')}
+              ${occupiedSlots.map(slot => `
+                <option value="${slot.slot}" disabled>${slot.slot} (Occupied: ${slot.itemName})</option>
+              `).join('')}
+            </select>
+            <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 0.5rem; border: 1px solid var(--border-color);">
+              <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                <strong>Slot Status:</strong>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.8rem;">
+                <span style="padding: 0.25rem 0.5rem; background: rgba(76,175,80,0.2); color: #4CAF50; border-radius: 4px; font-weight: 600;">
+                  ${availableSlots.length} Available
+                </span>
+                <span style="padding: 0.25rem 0.5rem; background: rgba(136,136,136,0.2); color: #888; border-radius: 4px; font-weight: 600;">
+                  ${occupiedSlots.length} Occupied
+                </span>
+                <span style="padding: 0.25rem 0.5rem; background: rgba(0,123,255,0.2); color: var(--primary-color); border-radius: 4px; font-weight: 600;">
+                  ${totalSlots} Total
+                </span>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+
           <label style="display: block; margin-bottom: 0.75rem; color: var(--text-color); font-weight: 600; font-size: 0.95rem;">
             Quantity <span style="color: var(--error-color); font-weight: 700;">*</span>
           </label>
@@ -2995,6 +3186,68 @@ function showRestockModal(itemName, costEach) {
               <div id="restock-total-amount" style="font-size: 1.5rem; color: #4CAF50; font-weight: 700;">${costEach.toLocaleString()} points</div>
             </div>
             <i class="fas fa-calculator" style="color: #4CAF50; font-size: 2rem; opacity: 0.7;"></i>
+          </div>
+
+          <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid var(--border-color);">
+            <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fas fa-tags" style="color: var(--primary-color);"></i>
+              Set Item Prices <span style="color: var(--error-color); font-weight: 700;">*</span>
+            </h3>
+            <div style="background: linear-gradient(135deg, rgba(255,193,7,0.1) 0%, rgba(255,193,7,0.05) 100%); border: 2px solid #ffc107; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <i class="fas fa-info-circle" style="color: #ffc107;"></i>
+                <span style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 600;">At least one price must be set</span>
+              </div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                Set token price, art price, or other price. Items cannot be sold without at least one price.
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+              <div>
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 600; font-size: 0.9rem;">
+                  <i class="fas fa-coins" style="margin-right: 0.5rem; color: #ffc107;"></i>Token Price
+                </label>
+                <input 
+                  type="number" 
+                  id="restock-token-price"
+                  min="0"
+                  step="1"
+                  placeholder="0"
+                  style="width: 100%; padding: 0.875rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem; font-weight: 500; transition: all 0.2s; box-sizing: border-box;"
+                  onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+                  onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+                />
+              </div>
+
+              <div>
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 600; font-size: 0.9rem;">
+                  <i class="fas fa-palette" style="margin-right: 0.5rem; color: #9c27b0;"></i>Art Price
+                </label>
+                <input 
+                  type="text" 
+                  id="restock-art-price"
+                  placeholder="N/A"
+                  style="width: 100%; padding: 0.875rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem; font-weight: 500; transition: all 0.2s; box-sizing: border-box;"
+                  onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+                  onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+                />
+              </div>
+
+              <div>
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-color); font-weight: 600; font-size: 0.9rem;">
+                  <i class="fas fa-handshake" style="margin-right: 0.5rem; color: var(--accent);"></i>Other Price
+                </label>
+                <input 
+                  type="text" 
+                  id="restock-other-price"
+                  placeholder="N/A"
+                  style="width: 100%; padding: 0.875rem; border: 2px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem; font-weight: 500; transition: all 0.2s; box-sizing: border-box;"
+                  onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'"
+                  onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3060,9 +3313,60 @@ function showRestockModal(itemName, costEach) {
         }, 2000);
         return;
       }
+
+      // Validate prices - at least one must be set
+      const tokenPriceInput = document.getElementById('restock-token-price');
+      const artPriceInput = document.getElementById('restock-art-price');
+      const otherPriceInput = document.getElementById('restock-other-price');
+      
+      const tokenPrice = tokenPriceInput.value ? parseFloat(tokenPriceInput.value) : null;
+      const artPrice = artPriceInput.value.trim() || null;
+      const otherPrice = otherPriceInput.value.trim() || null;
+
+      // Check if at least one price is set
+      const hasTokenPrice = tokenPrice !== null && tokenPrice !== undefined && tokenPrice > 0;
+      const hasArtPrice = artPrice && artPrice !== 'N/A' && artPrice.trim() !== '';
+      const hasOtherPrice = otherPrice && otherPrice !== 'N/A' && otherPrice.trim() !== '';
+
+      if (!hasTokenPrice && !hasArtPrice && !hasOtherPrice) {
+        // Show error on all price fields
+        const errorStyle = 'var(--error-color)';
+        const errorShadow = '0 0 0 3px rgba(220,53,69,0.1)';
+        
+        tokenPriceInput.style.borderColor = errorStyle;
+        tokenPriceInput.style.boxShadow = errorShadow;
+        artPriceInput.style.borderColor = errorStyle;
+        artPriceInput.style.boxShadow = errorShadow;
+        otherPriceInput.style.borderColor = errorStyle;
+        otherPriceInput.style.boxShadow = errorShadow;
+
+        // Show notification
+        showVendingNotification('At least one price must be set (Token, Art, or Other price)', 'error');
+
+        // Reset styles after 3 seconds
+        setTimeout(() => {
+          tokenPriceInput.style.borderColor = 'var(--border-color)';
+          tokenPriceInput.style.boxShadow = 'none';
+          artPriceInput.style.borderColor = 'var(--border-color)';
+          artPriceInput.style.boxShadow = 'none';
+          otherPriceInput.style.borderColor = 'var(--border-color)';
+          otherPriceInput.style.boxShadow = 'none';
+        }, 3000);
+        return;
+      }
+
+      const slotSelect = document.getElementById('restock-slot-select');
+      const selectedSlot = slotSelect ? slotSelect.value : null;
+
       document.body.removeChild(modal);
       delete window.updateRestockTotal;
-      resolve(quantity);
+      resolve({ 
+        quantity, 
+        slot: selectedSlot,
+        tokenPrice: hasTokenPrice ? tokenPrice : null,
+        artPrice: hasArtPrice ? artPrice : null,
+        otherPrice: hasOtherPrice ? otherPrice : null
+      });
     });
 
     // Close on escape key
@@ -4599,8 +4903,12 @@ export async function loadVendorDashboard(characterId) {
   // Fetch village shop items for restocking (from vending_stock collection)
   let villageShopItems = [];
   let limitedItems = [];
-  const characterVillage = character.currentVillage || character.homeVillage;
   const characterVendorType = character.vendorType?.toLowerCase() || character.job?.toLowerCase() || '';
+  const isShopkeeper = characterVendorType === 'shopkeeper';
+  // Shopkeepers can only restock from their home village; Merchants can use current village
+  const characterVillage = isShopkeeper 
+    ? (character.homeVillage || character.currentVillage)
+    : (character.currentVillage || character.homeVillage);
   
   if (characterVillage) {
     try {
@@ -4690,6 +4998,26 @@ export async function loadVendorDashboard(characterId) {
           </div>
         </div>
       </div>
+      
+      ${isShopkeeper && character.currentVillage?.toLowerCase() !== character.homeVillage?.toLowerCase() ? `
+      <!-- Shopkeeper Travel Warning -->
+      <div style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; border-radius: 0.75rem; padding: 1rem 1.5rem; margin-bottom: 1rem; position: relative; z-index: 1; backdrop-filter: blur(10px);">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <div style="width: 50px; height: 50px; border-radius: 50%; background: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: white;">
+            ⚠
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 1.1rem; font-weight: 700; color: white; margin-bottom: 0.25rem;">
+              Shopkeepers can only restock from their home village!
+            </div>
+            <div style="font-size: 0.9rem; color: rgba(255,255,255,0.9);">
+              You are currently in ${capitalize(character.currentVillage || 'unknown')}, but your home village is ${capitalize(character.homeVillage || 'unknown')}. 
+              Please travel to your home village using: <code style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.85rem;">/travel charactername:${character.name} destination:${character.homeVillage} mode:on foot</code>
+            </div>
+          </div>
+        </div>
+      </div>
+      ` : ''}
       
       <!-- Shop Banner Image -->
       <div style="margin-top: 1rem; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.3); position: relative; z-index: 1; background: var(--input-bg); border: 2px solid var(--border-color);">
@@ -5013,19 +5341,45 @@ export async function loadVendorDashboard(characterId) {
                                   tx.status === 'pending' ? '#f59e0b' : 
                                   tx.status === 'failed' ? '#ef4444' : 
                                   tx.status === 'expired' ? '#6b7280' : '#6366f1';
-              const isVendor = tx.vendorCharacterName === character.name;
-              const roleText = isVendor ? 'Sold to' : 'Bought from';
-              const otherParty = isVendor ? tx.userCharacterName : tx.vendorCharacterName;
+              
+              // Determine transaction type and display text
+              const isVendorPurchase = tx.transactionType === 'vendor_purchase';
+              const isVendorMove = tx.transactionType === 'vendor_move';
+              const isVendorTransaction = isVendorPurchase || isVendorMove;
+              
+              let roleText = '';
+              if (isVendorPurchase) {
+                roleText = '📦 Restocked';
+              } else if (isVendorMove) {
+                roleText = '📤 Moved from inventory';
+              } else {
+                const isVendor = tx.vendorCharacterName === character.name;
+                roleText = isVendor ? 'Sold to' : 'Bought from';
+                roleText += ` ${isVendor ? tx.userCharacterName : tx.vendorCharacterName}`;
+              }
+              
               let paymentInfo = '';
-              if (tx.paymentMethod === 'tokens') {
+              let paymentMethodDisplay = '';
+              if (isVendorPurchase) {
+                paymentMethodDisplay = '💎 Vending Points';
+                paymentInfo = `${tx.pointsSpent || 0} points`;
+              } else if (isVendorMove) {
+                paymentMethodDisplay = '📦 Inventory Transfer';
+                paymentInfo = 'From personal inventory';
+              } else if (tx.paymentMethod === 'tokens') {
+                paymentMethodDisplay = '💰 Tokens';
                 paymentInfo = '💰 Tokens';
               } else if (tx.paymentMethod === 'art') {
+                paymentMethodDisplay = '🎨 Art';
                 paymentInfo = '🎨 Art';
               } else if (tx.paymentMethod === 'barter') {
+                paymentMethodDisplay = '🔄 Barter';
                 const items = tx.offeredItemsWithQty && tx.offeredItemsWithQty.length > 0 
                   ? tx.offeredItemsWithQty 
                   : (tx.offeredItems || []).map(item => ({ itemName: item, quantity: 1 }));
                 paymentInfo = items.map(item => item.itemName + ' x' + item.quantity).join(', ');
+              } else {
+                paymentMethodDisplay = tx.paymentMethod || 'N/A';
               }
               return `
                 <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem;">
@@ -5036,7 +5390,7 @@ export async function loadVendorDashboard(characterId) {
                           ${tx.status}
                         </span>
                         <span style="color: var(--text-secondary); font-size: 0.85rem;">
-                          ${roleText} ${escapeHtmlAttribute(otherParty)}
+                          ${roleText}
                         </span>
                       </div>
                       <h4 style="margin: 0; color: var(--text-color); font-size: 1rem; font-weight: 600;">
@@ -5049,12 +5403,12 @@ export async function loadVendorDashboard(characterId) {
                     <div>
                       <span style="color: var(--text-secondary); font-size: 0.8rem;">Payment</span>
                       <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500; font-size: 0.9rem;">
-                        ${tx.paymentMethod === 'tokens' ? '💰 Tokens' : tx.paymentMethod === 'art' ? '🎨 Art' : '🔄 Barter'}
+                        ${paymentMethodDisplay}
                       </p>
                     </div>
                     ${paymentInfo ? `
                     <div>
-                      <span style="color: var(--text-secondary); font-size: 0.8rem;">${tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
+                      <span style="color: var(--text-secondary); font-size: 0.8rem;">${isVendorPurchase ? 'Points Spent' : isVendorMove ? 'Source' : tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
                       <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500; font-size: 0.9rem;">${escapeHtmlAttribute(paymentInfo)}</p>
                     </div>
                     ` : ''}
@@ -5108,14 +5462,16 @@ export async function loadVendorDashboard(characterId) {
       const costEach = parseFloat(btn.dataset.costEach) || 0;
 
       if (costEach <= 0) {
-        alert('This item cannot be restocked (no cost set).');
+        showVendingNotification('This item cannot be restocked (no cost set).', 'error');
         return;
       }
 
       // Show custom restock modal
-      const quantity = await showRestockModal(itemName, costEach);
-      if (!quantity) return;
+      const restockData = await showRestockModal(itemName, costEach, characterId);
+      if (!restockData || !restockData.quantity) return;
 
+      const quantity = restockData.quantity;
+      const slot = restockData.slot;
       const totalCost = costEach * quantity;
 
       // Disable button during request
@@ -5123,26 +5479,7 @@ export async function loadVendorDashboard(characterId) {
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restocking...';
 
       try {
-        // First, check if item exists in vending inventory
-        const inventoryResponse = await fetch(`/api/characters/${characterId}/vending`, {
-          credentials: 'include'
-        });
-        
-        if (!inventoryResponse.ok) {
-          throw new Error('Failed to fetch vending inventory');
-        }
-
-        const inventoryData = await inventoryResponse.json();
-        const existingItem = inventoryData.items?.find(item => item.itemName === itemName);
-
-        if (!existingItem) {
-          alert(`Item "${itemName}" is not in your vending inventory. Please add it first using "Add Item from Inventory".`);
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-shopping-cart"></i> Restock';
-          return;
-        }
-
-        // Restock the item
+        // Restock the item (API will handle creating it if it doesn't exist)
         const response = await fetch(`/api/characters/${characterId}/vending/restock`, {
           method: 'POST',
           headers: {
@@ -5150,27 +5487,30 @@ export async function loadVendorDashboard(characterId) {
           },
           credentials: 'include',
           body: JSON.stringify({
-            itemId: existingItem._id,
             itemName: itemName,
             quantity: quantity,
-            slot: existingItem.slot || ''
+            costEach: costEach,
+            slot: slot,
+            tokenPrice: restockData.tokenPrice,
+            artPrice: restockData.artPrice,
+            otherPrice: restockData.otherPrice
           })
         });
 
         const result = await response.json();
 
         if (response.ok && result.success) {
-          alert(`Successfully restocked ${quantity} × ${itemName}!\n\nPoints spent: ${totalCost}`);
+          showVendingNotification(`Successfully restocked ${quantity} × ${itemName}!\n\nPoints spent: ${totalCost}`, 'success');
           // Reload dashboard to show updated stock
           await loadVendorDashboard(characterId);
         } else {
-          alert(`Failed to restock: ${result.error || 'Unknown error'}`);
+          showVendingNotification(`Failed to restock: ${result.error || 'Unknown error'}`, 'error');
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-shopping-cart"></i> Restock';
         }
       } catch (error) {
         console.error('[profile.js]: Error restocking item from shop:', error);
-        alert(`Error restocking item: ${error.message}`);
+        showVendingNotification(`Error restocking item: ${error.message}`, 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-shopping-cart"></i> Restock';
       }
@@ -5188,14 +5528,16 @@ export async function loadVendorDashboard(characterId) {
       const slot = btn.dataset.slot || '';
 
       if (costEach <= 0) {
-        alert('This item cannot be restocked (no cost set).');
+        showVendingNotification('This item cannot be restocked (no cost set).', 'error');
         return;
       }
 
       // Show custom restock modal
-      const quantity = await showRestockModal(itemName, costEach);
-      if (!quantity) return;
+      const restockData = await showRestockModal(itemName, costEach, characterId, itemId, slot);
+      if (!restockData || !restockData.quantity) return;
 
+      const quantity = restockData.quantity;
+      const selectedSlot = restockData.slot || slot;
       const totalCost = costEach * quantity;
 
       // Disable button during request
@@ -5213,24 +5555,27 @@ export async function loadVendorDashboard(characterId) {
             itemId: itemId,
             itemName: itemName,
             quantity: quantity,
-            slot: slot
+            slot: selectedSlot || slot,
+            tokenPrice: restockData.tokenPrice,
+            artPrice: restockData.artPrice,
+            otherPrice: restockData.otherPrice
           })
         });
 
         const result = await response.json();
 
         if (response.ok && result.success) {
-          alert(`Successfully restocked ${quantity} × ${itemName}!\n\nPoints spent: ${totalCost}`);
+          showVendingNotification(`Successfully restocked ${quantity} × ${itemName}!\n\nPoints spent: ${totalCost}`, 'success');
           // Reload dashboard to show updated stock
           await loadVendorDashboard(characterId);
         } else {
-          alert(`Failed to restock: ${result.error || 'Unknown error'}`);
+          showVendingNotification(`Failed to restock: ${result.error || 'Unknown error'}`, 'error');
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-sync-alt"></i> Restock';
         }
       } catch (error) {
         console.error('[profile.js]: Error restocking item:', error);
-        alert(`Error restocking item: ${error.message}`);
+        showVendingNotification(`Error restocking item: ${error.message}`, 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-sync-alt"></i> Restock';
       }
@@ -5817,20 +6162,44 @@ async function loadCharacterTransactions(characterId, characterName) {
                             tx.status === 'failed' ? '#ef4444' : 
                             tx.status === 'expired' ? '#6b7280' : '#6366f1';
         
-        const isVendor = tx.vendorCharacterName === characterName;
-        const roleText = isVendor ? 'Selling to' : 'Buying from';
-        const otherParty = isVendor ? tx.userCharacterName : tx.vendorCharacterName;
+        // Determine transaction type and display text
+        const isVendorPurchase = tx.transactionType === 'vendor_purchase';
+        const isVendorMove = tx.transactionType === 'vendor_move';
+        const isVendorTransaction = isVendorPurchase || isVendorMove;
+        
+        let roleText = '';
+        if (isVendorPurchase) {
+          roleText = '📦 Restocked';
+        } else if (isVendorMove) {
+          roleText = '📤 Moved from inventory';
+        } else {
+          const isVendor = tx.vendorCharacterName === characterName;
+          roleText = isVendor ? 'Selling to' : 'Buying from';
+          roleText += ` ${isVendor ? tx.userCharacterName : tx.vendorCharacterName}`;
+        }
         
         let paymentInfo = '';
-        if (tx.paymentMethod === 'tokens') {
+        let paymentMethodDisplay = '';
+        if (isVendorPurchase) {
+          paymentMethodDisplay = '💎 Vending Points';
+          paymentInfo = `${tx.pointsSpent || 0} points`;
+        } else if (isVendorMove) {
+          paymentMethodDisplay = '📦 Inventory Transfer';
+          paymentInfo = 'From personal inventory';
+        } else if (tx.paymentMethod === 'tokens') {
+          paymentMethodDisplay = '💰 Tokens';
           paymentInfo = '💰 Tokens';
         } else if (tx.paymentMethod === 'art') {
+          paymentMethodDisplay = '🎨 Art';
           paymentInfo = '🎨 Art';
         } else if (tx.paymentMethod === 'barter') {
+          paymentMethodDisplay = '🔄 Barter';
           const items = tx.offeredItemsWithQty && tx.offeredItemsWithQty.length > 0 
             ? tx.offeredItemsWithQty 
             : (tx.offeredItems || []).map(item => ({ itemName: item, quantity: 1 }));
           paymentInfo = items.map(item => item.itemName + ' x' + item.quantity).join(', ');
+        } else {
+          paymentMethodDisplay = tx.paymentMethod || 'N/A';
         }
         
         return `
@@ -5842,7 +6211,7 @@ async function loadCharacterTransactions(characterId, characterName) {
                     ${tx.status}
                   </span>
                   <span style="color: var(--text-secondary); font-size: 0.8rem;">
-                    ${roleText} ${escapeHtmlAttribute(otherParty)}
+                    ${roleText}
                   </span>
                 </div>
                 <h4 style="margin: 0; color: var(--text-color); font-size: 1rem; font-weight: 600;">
@@ -5856,12 +6225,12 @@ async function loadCharacterTransactions(characterId, characterName) {
               <div>
                 <span style="color: var(--text-secondary); font-size: 0.75rem;">Payment</span>
                 <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500; font-size: 0.85rem;">
-                  ${tx.paymentMethod === 'tokens' ? '💰 Tokens' : tx.paymentMethod === 'art' ? '🎨 Art' : '🔄 Barter'}
+                  ${paymentMethodDisplay}
                 </p>
               </div>
               ${paymentInfo ? `
               <div>
-                <span style="color: var(--text-secondary); font-size: 0.75rem;">${tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
+                <span style="color: var(--text-secondary); font-size: 0.75rem;">${isVendorPurchase ? 'Points Spent' : isVendorMove ? 'Source' : tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
                 <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500; font-size: 0.85rem;">${escapeHtmlAttribute(paymentInfo)}</p>
               </div>
               ` : ''}
@@ -5926,16 +6295,43 @@ function renderVendingTransactions(transactions, total, hasMore) {
                         tx.status === 'failed' ? '#ef4444' : 
                         tx.status === 'expired' ? '#6b7280' : '#6366f1';
     
+    // Determine transaction type and display text
+    const isVendorPurchase = tx.transactionType === 'vendor_purchase';
+    const isVendorMove = tx.transactionType === 'vendor_move';
+    const isVendorTransaction = isVendorPurchase || isVendorMove;
+    
+    let roleText = '';
+    if (isVendorPurchase) {
+      roleText = '📦 Restocked';
+    } else if (isVendorMove) {
+      roleText = '📤 Moved from inventory';
+    } else {
+      roleText = tx.userRole === 'buyer' ? '👤 Buying from' : '🏪 Selling to';
+      roleText += tx.otherParty ? ` ${tx.otherParty}` : '';
+    }
+    
     let paymentInfo = '';
-    if (tx.paymentMethod === 'tokens') {
+    let paymentMethodDisplay = '';
+    if (isVendorPurchase) {
+      paymentMethodDisplay = '💎 Vending Points';
+      paymentInfo = `${tx.pointsSpent || 0} points`;
+    } else if (isVendorMove) {
+      paymentMethodDisplay = '📦 Inventory Transfer';
+      paymentInfo = 'From personal inventory';
+    } else if (tx.paymentMethod === 'tokens') {
+      paymentMethodDisplay = '💰 Tokens';
       paymentInfo = '💰 Tokens';
     } else if (tx.paymentMethod === 'art') {
+      paymentMethodDisplay = '🎨 Art';
       paymentInfo = '🎨 Art';
     } else if (tx.paymentMethod === 'barter') {
+      paymentMethodDisplay = '🔄 Barter';
       const items = tx.offeredItemsWithQty && tx.offeredItemsWithQty.length > 0 
         ? tx.offeredItemsWithQty 
         : (tx.offeredItems || []).map(item => ({ itemName: item, quantity: 1 }));
       paymentInfo = items.map(item => item.itemName + ' x' + item.quantity).join(', ');
+    } else {
+      paymentMethodDisplay = tx.paymentMethod || 'N/A';
     }
     
     return `
@@ -5947,7 +6343,7 @@ function renderVendingTransactions(transactions, total, hasMore) {
                 ${tx.status}
               </span>
               <span style="color: var(--text-secondary); font-size: 0.875rem;">
-                ${tx.userRole === 'buyer' ? '👤 Buying from' : '🏪 Selling to'} ${tx.otherParty}
+                ${roleText}
               </span>
             </div>
             <h4 style="margin: 0; color: var(--text-color); font-size: 1.1rem;">
@@ -5960,11 +6356,11 @@ function renderVendingTransactions(transactions, total, hasMore) {
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
           <div>
             <span style="color: var(--text-secondary); font-size: 0.875rem;">Payment Method</span>
-            <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500;">${tx.paymentMethod === 'tokens' ? '💰 Tokens' : tx.paymentMethod === 'art' ? '🎨 Art' : '🔄 Barter'}</p>
+            <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500;">${paymentMethodDisplay}</p>
           </div>
           ${paymentInfo ? `
           <div>
-            <span style="color: var(--text-secondary); font-size: 0.875rem;">${tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
+            <span style="color: var(--text-secondary); font-size: 0.875rem;">${isVendorPurchase ? 'Points Spent' : isVendorMove ? 'Source' : tx.paymentMethod === 'barter' ? 'Traded Items' : 'Amount'}</span>
             <p style="margin: 0.25rem 0 0 0; color: var(--text-color); font-weight: 500;">${paymentInfo}</p>
           </div>
           ` : ''}

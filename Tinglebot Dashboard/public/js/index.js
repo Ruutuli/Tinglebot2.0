@@ -18,6 +18,7 @@ import * as auth from './auth.js';
 import * as guilds from './guilds.js';
 import * as villageShops from './villageShops.js';
 import * as vending from './vending.js';
+import * as vendingShops from './vendingShops.js';
 import * as monsters from './monsters.js';
 import * as pets from './pets.js';
 import * as starterGear from './starterGear.js';
@@ -313,9 +314,17 @@ function setupModelCards() {
             // Render async with proper delay to ensure loading shows
             await renderHelpWantedQuests(data, contentDiv);
             break;
-          case 'vending':
-            title.textContent = 'Vending Stock';
-            await vending.initializeVendingPage(data, pagination.page, contentDiv);
+                case 'vending':
+                  title.textContent = 'Vending Stock';
+                  await vending.initializeVendingPage(data, pagination.page, contentDiv);
+                  break;
+                case 'vendingShops':
+                  title.textContent = 'Vending Shops';
+                  await vendingShops.initializeVendingShopsPage(data, pagination.page, contentDiv);
+                  break;
+          case 'vendingShops':
+            title.textContent = 'Vending Shops';
+            await vendingShops.initializeVendingShopsPage(data, pagination.page, contentDiv);
             break;
           default:
             console.error(`Unknown model type: ${modelName}`);
@@ -351,6 +360,11 @@ function setupModelCards() {
 
           // Skip pagination for village shops as it uses its own efficient system
           if (modelName === 'villageShops') {
+            return;
+          }
+
+          // Skip pagination for vending shops as it uses its own efficient system
+          if (modelName === 'vendingShops') {
             return;
           }
 
@@ -561,6 +575,9 @@ function handleModelDataError(modelName, contentDiv) {
             break;
           case 'vending':
             await vending.initializeVendingPage(data, pagination.page, contentDiv);
+            break;
+          case 'vendingShops':
+            await vendingShops.initializeVendingShopsPage(data, pagination.page, contentDiv);
             break;
           default:
             console.error(`Unknown model type: ${modelName}`);
@@ -901,7 +918,7 @@ function setupSidebarNavigation() {
     const hashValue = hash.substring(1);
     
     // List of known model names
-    const modelNames = ['character', 'monster', 'pet', 'mount', 'vending', 'item', 'starterGear', 'village', 'villageShops', 'relic', 'quest', 'inventory'];
+    const modelNames = ['character', 'monster', 'pet', 'mount', 'vending', 'vendingShops', 'item', 'starterGear', 'village', 'villageShops', 'relic', 'quest', 'inventory'];
     
     // Check for admin area sub-sections
     if (hashValue === 'admin-area-section/database-editor') {
