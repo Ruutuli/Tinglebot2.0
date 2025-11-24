@@ -4359,73 +4359,112 @@ async function handleVendingViewVillage(interaction, villageKey) {
       color: '#f4c542'
     };
 
-    const embed = createVendingEmbed('info', {
-      title: `${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
-      color: settings.color
-    });
-
     if (villageKey === 'limited') {
+      const embed = createVendingEmbed('info', {
+        title: `${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
+        color: settings.color
+      });
       embed.setDescription(
         limitedItems.map(i =>
           `${i.emoji || '📦'} **${i.itemName}**\n  > **Cost:** ${i.points} pts\n  > **Stock:** x${i.stock ?? '?'}`
         ).join('\n\n') || '*No limited items available*'
       );
-    } else {
-      const items = stockList[villageKey];
+      return interaction.update({
+        embeds: [embed],
+        components: [
+          generateVillageButtonRow(villageKey),
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('vending_view_limited')
+              .setLabel('Limited Items')
+              .setEmoji('🎁')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(villageKey === 'limited')
+          )
+        ]
+      });
+    }
+
+    const items = stockList[villageKey];
+    const embeds = [];
+    
+    if (!items || items.length === 0) {
+      const embed = createVendingEmbed('info', {
+        title: `${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
+        color: settings.color
+      });
+      embed.setDescription('*No items found*');
+      return interaction.update({
+        embeds: [embed],
+        components: [
+          generateVillageButtonRow(villageKey),
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('vending_view_limited')
+              .setLabel('Limited Items')
+              .setEmoji('🎁')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(villageKey === 'limited')
+          )
+        ]
+      });
+    }
+
+    // Group items by vendingType
+    const merchantItems = items.filter(i => i.vendingType === 'Merchant');
+    const shopkeeperItems = items.filter(i => i.vendingType === 'Shopkeeper');
+    
+    // Helper function to create an embed for a type of items
+    const createTypeEmbed = (itemList, typeName) => {
+      if (itemList.length === 0) return null;
       
-      if (!items || items.length === 0) {
-        embed.setDescription('*No items found*');
-      } else {
-        // Group items by vendingType
-        const merchantItems = items.filter(i => i.vendingType === 'Merchant');
-        const shopkeeperItems = items.filter(i => i.vendingType === 'Shopkeeper');
-        
-        // Helper function to format items in 2 columns using embed fields
-        const addItemsAsFields = (itemList, typeName) => {
-          if (itemList.length === 0) return;
-          
-          // Split items into two columns
-          const midPoint = Math.ceil(itemList.length / 2);
-          const leftColumn = itemList.slice(0, midPoint);
-          const rightColumn = itemList.slice(midPoint);
-          
-          // Format left column
-          const leftText = leftColumn.map(i => 
-            `${i.emoji || '📦'} **${i.itemName}**\nCost: ${i.points} pts`
-          ).join('\n\n');
-          
-          // Format right column
-          const rightText = rightColumn.map(i => 
-            `${i.emoji || '📦'} **${i.itemName}**\nCost: ${i.points} pts`
-          ).join('\n\n');
-          
-          // Add section header if both columns exist
-          if (leftColumn.length > 0 && rightColumn.length > 0) {
-            embed.addFields(
-              { name: `**${typeName} Items**`, value: leftText, inline: true },
-              { name: '\u200b', value: rightText, inline: true }
-            );
-          } else if (leftColumn.length > 0) {
-            embed.addFields(
-              { name: `**${typeName} Items**`, value: leftText, inline: false }
-            );
-          }
-        };
-        
-        // Add Merchant items
-        if (merchantItems.length > 0) {
-          addItemsAsFields(merchantItems, 'Merchant');
-        }
-        
-        // Add Shopkeeper items
-        if (shopkeeperItems.length > 0) {
-          addItemsAsFields(shopkeeperItems, 'Shopkeeper');
-        }
-      }
+      const typeEmbed = createVendingEmbed('info', {
+        title: `${settings.emoji} ${typeName} Items — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
+        color: settings.color
+      });
+      
+      // Split items into two columns
+      const midPoint = Math.ceil(itemList.length / 2);
+      const leftColumn = itemList.slice(0, midPoint);
+      const rightColumn = itemList.slice(midPoint);
+      
+      // Format left column
+      const leftText = leftColumn.map(i => 
+        `${i.emoji || '📦'} **${i.itemName}**\nCost: ${i.points} pts`
+      ).join('\n\n') || '\u200b';
+      
+      // Format right column
+      const rightText = rightColumn.map(i => 
+        `${i.emoji || '📦'} **${i.itemName}**\nCost: ${i.points} pts`
+      ).join('\n\n') || '\u200b';
+      
+      // Add exactly 2 inline fields - this creates 2 columns
+      typeEmbed.addFields(
+        { name: '\u200b', value: leftText, inline: true },
+        { name: '\u200b', value: rightText, inline: true }
+      );
+      
+      return typeEmbed;
+    };
+    
+    // Create Merchant embed
+    if (merchantItems.length > 0) {
+      const merchantEmbed = createTypeEmbed(merchantItems, 'Merchant');
+      if (merchantEmbed) embeds.push(merchantEmbed);
+    }
+    
+    // Create Shopkeeper embed
+    if (shopkeeperItems.length > 0) {
+      const shopkeeperEmbed = createTypeEmbed(shopkeeperItems, 'Shopkeeper');
+      if (shopkeeperEmbed) embeds.push(shopkeeperEmbed);
     }
 
     return interaction.update({
-      embeds: [embed],
+      embeds: embeds.length > 0 ? embeds : [createVendingEmbed('info', {
+        title: `${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
+        description: '*No items found*',
+        color: settings.color
+      })],
       components: [
         generateVillageButtonRow(villageKey),
         new ActionRowBuilder().addComponents(

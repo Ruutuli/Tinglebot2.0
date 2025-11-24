@@ -2722,10 +2722,10 @@ async function createVendorCard(character) {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
-    padding: 1.5rem;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
   `;
 
   // Calculate slot info
@@ -2771,131 +2771,36 @@ async function createVendorCard(character) {
   const isSetup = character.vendingSetup?.setupDate;
 
   card.innerHTML = `
-    <div class="vendor-card-header" style="display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
-      <img src="${iconUrl}" alt="${character.name}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color);" onerror="this.src='/images/ankleicon.png'">
+    <div class="vendor-card-header" style="display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+      <img src="${iconUrl}" alt="${character.name}" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color);" onerror="this.src='/images/ankleicon.png'">
       <div style="flex: 1;">
-        <h4 style="margin: 0 0 0.25rem 0; color: var(--text-color); font-size: 1.2rem;">${character.name}</h4>
-        <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
-          ${capitalize(character.vendorType || character.job || 'Vendor')} • ${capitalize(character.shopPouch || character.vendingSetup?.pouchType || 'No')} Pouch
+        <h4 style="margin: 0 0 0.15rem 0; color: var(--text-color); font-size: 1.1rem; font-weight: 600;">${character.name}</h4>
+        <p style="margin: 0; color: var(--text-secondary); font-size: 0.85rem;">
+          ${capitalize(character.vendorType || character.job || 'Vendor')} • ${usedSlots}/${totalSlots} slots
         </p>
       </div>
     </div>
-    <div class="vendor-card-stats" style="display: flex; gap: 1rem; padding: 0.75rem 0;">
-      <div style="flex: 1; text-align: center; padding: 0.5rem; background: var(--input-bg); border-radius: 0.25rem;">
-        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Vending Points</div>
-        <div style="font-size: 1.2rem; font-weight: 600; color: var(--text-color);">${(character.vendingPoints || 0).toLocaleString()}</div>
-      </div>
-      <div style="flex: 1; text-align: center; padding: 0.5rem; background: var(--input-bg); border-radius: 0.25rem;">
-        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Slots</div>
-        <div style="font-size: 1.2rem; font-weight: 600; color: var(--text-color);">
-          ${usedSlots}/${totalSlots}
-        </div>
-        <div style="font-size: 0.75rem; color: ${availableSlots > 0 ? 'var(--success-color)' : 'var(--error-color)'}; margin-top: 0.25rem;">
-          ${availableSlots} available
-        </div>
-      </div>
-    </div>
-    <div class="vendor-card-tabs" style="border-bottom: 2px solid var(--border-color); margin-bottom: 0;">
-      <div class="vendor-tabs" style="display: flex; gap: 0.5rem; margin: 0;">
-        <button class="vendor-tab-btn active" data-character-id="${character._id}" data-tab="inventory" style="
-          flex: 1;
-          padding: 0.75rem 1rem;
-          background: transparent;
-          color: var(--text-secondary);
-          border: none;
-          border-bottom: 3px solid transparent;
-          cursor: pointer;
-          font-size: 0.9rem;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-        ">
-          <i class="fas fa-box"></i>
-          <span>Inventory</span>
-        </button>
-        <button class="vendor-tab-btn" data-character-id="${character._id}" data-tab="transactions" style="
-          flex: 1;
-          padding: 0.75rem 1rem;
-          background: transparent;
-          color: var(--text-secondary);
-          border: none;
-          border-bottom: 3px solid transparent;
-          cursor: pointer;
-          font-size: 0.9rem;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-        ">
-          <i class="fas fa-exchange-alt"></i>
-          <span>Transactions</span>
-        </button>
+    <div class="vendor-card-slots" style="margin-bottom: 0.75rem;">
+      <div id="vendor-inventory-${character._id}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem;">
+        ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
+          inventoryData.items.sort((a, b) => {
+            const slotA = a.slot ? parseInt(a.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+            const slotB = b.slot ? parseInt(b.slot.replace(/[^0-9]/g, '')) || 999 : 999;
+            return slotA - slotB;
+          }).map(item => `
+            <div style="padding: 0.5rem; background: var(--input-bg); border-radius: 0.4rem; border: 1px solid var(--border-color); text-align: center;">
+              <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.25rem; font-weight: 600;">${item.slot || 'No Slot'}</div>
+              <div style="font-size: 0.85rem; color: var(--text-color); font-weight: 500; word-break: break-word;">${escapeHtmlAttribute(item.itemName)}</div>
+            </div>
+          `).join('') : 
+          '<div style="grid-column: 1 / -1; text-align: center; padding: 1.5rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.5;"></i><div style="font-size: 0.9rem;">No items</div></div>'
+        }
       </div>
     </div>
-    <div class="vendor-card-tab-content" style="min-height: 200px; max-height: 400px; overflow-y: auto;">
-      <div class="vendor-tab-panel active" id="vendor-inventory-panel-${character._id}" data-character-id="${character._id}">
-        <div id="vendor-inventory-${character._id}" style="display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.5rem;">
-          ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
-            inventoryData.items.sort((a, b) => {
-              // Sort by slot number if available
-              const slotA = a.slot ? parseInt(a.slot.replace(/[^0-9]/g, '')) || 999 : 999;
-              const slotB = b.slot ? parseInt(b.slot.replace(/[^0-9]/g, '')) || 999 : 999;
-              return slotA - slotB;
-            }).map(item => `
-              <div class="vendor-item" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--input-bg); border-radius: 0.25rem; border: 1px solid var(--border-color);">
-                <div style="flex: 1;">
-                  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
-                    <span style="font-weight: 700; color: white; font-size: 0.8rem; background: var(--primary-color); padding: 0.3rem 0.6rem; border-radius: 0.25rem; min-width: 50px; text-align: center;">
-                      ${item.slot || 'No Slot'}
-                    </span>
-                    <span style="font-weight: 600; color: var(--text-color); font-size: 0.95rem;">${escapeHtmlAttribute(item.itemName)}</span>
-                  </div>
-                  <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                    Stock: <strong style="color: var(--text-color);">${item.stockQty}</strong>
-                    ${item.tokenPrice !== null && item.tokenPrice !== undefined ? ` • <strong style="color: var(--primary-color);">${item.tokenPrice}</strong> tokens` : ''}
-                    ${item.artPrice && item.artPrice !== 'N/A' ? ` • ${escapeHtmlAttribute(item.artPrice)} art` : ''}
-                    ${item.otherPrice && item.otherPrice !== 'N/A' ? ` • ${escapeHtmlAttribute(item.otherPrice)}` : ''}
-                  </div>
-                </div>
-                <div style="display: flex; gap: 0.5rem;">
-                  <button class="edit-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
-                    padding: 0.5rem;
-                    background: var(--primary-color);
-                    color: white;
-                    border: none;
-                    border-radius: 0.25rem;
-                    cursor: pointer;
-                    font-size: 0.9rem;
-                    transition: background 0.2s;
-                  " title="Edit item">
-                    <i class="fas fa-edit"></i>
-                  </button>
-                </div>
-              </div>
-            `).join('') : 
-            inventoryData && inventoryData.items && inventoryData.items.length === 0 ? 
-              '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i><div>No items in vending inventory</div></div>' :
-              '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>Loading inventory...</div>'
-          }
-        </div>
-      </div>
-      <div class="vendor-tab-panel" id="vendor-transactions-panel-${character._id}" data-character-id="${character._id}" style="display: none; padding-top: 0.5rem;">
-        <div id="vendor-transactions-${character._id}" style="display: flex; flex-direction: column; gap: 0.5rem;">
-          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-            <i class="fas fa-spinner fa-spin" style="margin-right: 0.5rem;"></i>Loading transactions...
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="vendor-card-actions" style="display: flex; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+    <div class="vendor-card-actions" style="padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
       <button class="view-vendor-btn" data-character-id="${character._id}" style="
-        flex: 1;
-        padding: 0.75rem;
+        width: 100%;
+        padding: 0.65rem;
         background: var(--primary-color);
         color: white;
         border: none;
@@ -2910,7 +2815,7 @@ async function createVendorCard(character) {
         gap: 0.5rem;
       " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'" title="View and manage vendor dashboard">
         <i class="fas fa-store"></i>
-        View Vendor Dashboard
+        View Dashboard
       </button>
     </div>
   `;
@@ -2930,86 +2835,6 @@ async function createVendorCard(character) {
       alert('Unable to open vendor dashboard. Please refresh the page.');
     }
   });
-
-  const editButtons = card.querySelectorAll('.edit-vendor-item-btn');
-  editButtons.forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const characterId = btn.dataset.characterId;
-      const itemId = btn.dataset.itemId;
-      const item = inventoryData.items.find(i => i._id === itemId);
-      if (item) {
-        await showEditVendorItemModal(character, item);
-      }
-    });
-  });
-
-  // Setup tabs for this vendor card
-  const tabButtons = card.querySelectorAll('.vendor-tab-btn');
-  tabButtons.forEach(btn => {
-    // Add hover effects
-    btn.addEventListener('mouseenter', () => {
-      if (!btn.classList.contains('active')) {
-        btn.style.color = 'var(--text-color)';
-        btn.style.backgroundColor = 'var(--input-bg)';
-      }
-    });
-    btn.addEventListener('mouseleave', () => {
-      if (!btn.classList.contains('active')) {
-        btn.style.color = 'var(--text-secondary)';
-        btn.style.backgroundColor = 'transparent';
-      }
-    });
-    
-    btn.addEventListener('click', () => {
-      const characterId = btn.dataset.characterId;
-      const tabName = btn.dataset.tab;
-      
-      // Update active tab button
-      card.querySelectorAll('.vendor-tab-btn').forEach(b => {
-        b.classList.remove('active');
-        b.style.color = 'var(--text-secondary)';
-        b.style.borderBottomColor = 'transparent';
-        b.style.backgroundColor = 'transparent';
-      });
-      btn.classList.add('active');
-      btn.style.color = 'var(--primary-color)';
-      btn.style.borderBottomColor = 'var(--primary-color)';
-      btn.style.backgroundColor = 'transparent';
-      
-      // Update active tab panel
-      const inventoryPanel = card.querySelector(`#vendor-inventory-panel-${characterId}`);
-      const transactionsPanel = card.querySelector(`#vendor-transactions-panel-${characterId}`);
-      
-      if (tabName === 'inventory') {
-        if (inventoryPanel) {
-          inventoryPanel.classList.add('active');
-          inventoryPanel.style.display = 'block';
-        }
-        if (transactionsPanel) {
-          transactionsPanel.classList.remove('active');
-          transactionsPanel.style.display = 'none';
-        }
-      } else if (tabName === 'transactions') {
-        if (inventoryPanel) {
-          inventoryPanel.classList.remove('active');
-          inventoryPanel.style.display = 'none';
-        }
-        if (transactionsPanel) {
-          transactionsPanel.classList.add('active');
-          transactionsPanel.style.display = 'block';
-          // Load transactions for this character
-          loadCharacterTransactions(character._id, character.name);
-        }
-      }
-    });
-  });
-
-  // Set initial active tab styling
-  const activeTabBtn = card.querySelector('.vendor-tab-btn.active');
-  if (activeTabBtn) {
-    activeTabBtn.style.color = 'var(--primary-color)';
-    activeTabBtn.style.borderBottomColor = 'var(--primary-color)';
-  }
 
   return card;
 }
@@ -4625,18 +4450,26 @@ export async function loadVendorDashboard(characterId) {
   }
 
   // Filter inventory items by job, village, and limited status
-  const jobItems = characterInventory.filter(item => 
-    item.job && item.job.toLowerCase() === (character.job?.toLowerCase() || '')
-  );
-  const villageItems = characterInventory.filter(item => 
-    item.location && item.location.toLowerCase() === (character.currentVillage?.toLowerCase() || character.homeVillage?.toLowerCase() || '')
-  );
-  const limitedItems = characterInventory.filter(item => 
-    item.type?.toLowerCase().includes('limited') || 
-    item.category?.toLowerCase().includes('limited') ||
-    item.obtain?.toLowerCase().includes('limited') ||
-    item.subtype?.toLowerCase().includes('limited')
-  );
+  const characterJob = character.job?.toLowerCase() || '';
+  const characterVillage = (character.currentVillage || character.homeVillage || '').toLowerCase();
+  
+  const jobItems = characterInventory.filter(item => {
+    const itemJob = item.job?.toLowerCase() || '';
+    return itemJob && itemJob === characterJob;
+  });
+  
+  const villageItems = characterInventory.filter(item => {
+    const itemLocation = item.location?.toLowerCase() || '';
+    return itemLocation && itemLocation === characterVillage;
+  });
+  
+  const limitedItems = characterInventory.filter(item => {
+    const type = typeof item.type === 'string' ? item.type.toLowerCase() : '';
+    const category = typeof item.category === 'string' ? item.category.toLowerCase() : '';
+    const obtain = typeof item.obtain === 'string' ? item.obtain.toLowerCase() : '';
+    const subtype = typeof item.subtype === 'string' ? item.subtype.toLowerCase() : '';
+    return type.includes('limited') || category.includes('limited') || obtain.includes('limited') || subtype.includes('limited');
+  });
 
   // Calculate slot info
   const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
@@ -4738,64 +4571,68 @@ export async function loadVendorDashboard(characterId) {
 
       <!-- Management Actions -->
       <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h3 style="margin: 0 0 1.5rem 0; color: var(--text-color); font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-          <i class="fas fa-tools" style="color: var(--primary-color);"></i>
-          Manage Shop
-        </h3>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <h3 style="margin: 0; color: var(--text-color); font-size: 1.4rem; display: flex; align-items: center; gap: 0.75rem; font-weight: 700;">
+            <i class="fas fa-tools" style="color: var(--primary-color); font-size: 1.2rem;"></i>
+            Shop Management
+          </h3>
+        </div>
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
           ${!isSetup ? `
           <button class="dashboard-setup-vendor-btn" data-character-id="${character._id}" data-character-name="${escapeHtmlAttribute(character.name)}" style="
-            padding: 1rem 1.5rem;
-            background: var(--success-color);
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, var(--success-color) 0%, #45a049 100%);
             color: white;
             border: none;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             cursor: pointer;
             font-size: 1rem;
             font-weight: 600;
-            transition: background 0.2s;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 0.75rem;
-          " onmouseover="this.style.background='var(--success-hover)'" onmouseout="this.style.background='var(--success-color)'">
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+          " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(76, 175, 80, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(76, 175, 80, 0.3)'">
             <i class="fas fa-magic"></i>
             Setup Shop (One-Time)
           </button>
           ` : `
           <button class="dashboard-add-vendor-item-btn" data-character-id="${character._id}" style="
-            padding: 1rem 1.5rem;
-            background: var(--primary-color);
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, var(--primary-color) 0%, #0056b3 100%);
             color: white;
             border: none;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             cursor: pointer;
             font-size: 1rem;
             font-weight: 600;
-            transition: background 0.2s;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 0.75rem;
-          " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'">
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+          " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 123, 255, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 123, 255, 0.3)'">
             <i class="fas fa-plus"></i>
             Add Item from Inventory
           </button>
           <button class="dashboard-manage-vendor-btn" data-character-id="${character._id}" style="
-            padding: 1rem 1.5rem;
+            padding: 1rem 2rem;
             background: var(--card-bg);
             color: var(--text-color);
             border: 2px solid var(--border-color);
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             cursor: pointer;
             font-size: 1rem;
             font-weight: 600;
-            transition: background 0.2s;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 0.75rem;
-          " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--card-bg)'">
+          " onmouseover="this.style.background='var(--input-bg)'; this.style.borderColor='var(--primary-color)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='var(--card-bg)'; this.style.borderColor='var(--border-color)'; this.style.transform='translateY(0)'">
             <i class="fas fa-cog"></i>
             Manage Items & Settings
             ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
@@ -4807,68 +4644,199 @@ export async function loadVendorDashboard(characterId) {
         </div>
       </div>
 
-      <!-- Inventory Section -->
-      <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h3 style="margin: 0 0 1.5rem 0; color: var(--text-color); font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-          <i class="fas fa-boxes" style="color: var(--primary-color);"></i>
-          Inventory Items (${inventoryData?.items?.length || 0})
+      <!-- Available Items Sections -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Job Items -->
+        ${jobItems.length > 0 ? `
+        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(0,123,255,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+            <i class="fas fa-briefcase" style="color: var(--primary-color);"></i>
+            ${capitalize(character.job || 'Job')} Items (${jobItems.length})
+          </h3>
+          <div style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+            ${jobItems.slice(0, 10).map(item => `
+              <div style="padding: 0.75rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600; color: var(--text-color); font-size: 0.95rem;">${escapeHtmlAttribute(item.itemName)}</div>
+                  <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Qty: ${item.quantity || 1}</div>
+                </div>
+                <button class="dashboard-add-from-inventory-btn" data-character-id="${character._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" style="
+                  padding: 0.5rem 1rem;
+                  background: var(--primary-color);
+                  color: white;
+                  border: none;
+                  border-radius: 0.4rem;
+                  cursor: pointer;
+                  font-size: 0.85rem;
+                  font-weight: 500;
+                  transition: background 0.2s;
+                " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'">
+                  <i class="fas fa-plus"></i> Add
+                </button>
+              </div>
+            `).join('')}
+            ${jobItems.length > 10 ? `<div style="text-align: center; padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">+ ${jobItems.length - 10} more items</div>` : ''}
+          </div>
+        </div>
+        ` : ''}
+        
+        <!-- Village Items -->
+        ${villageItems.length > 0 ? `
+        <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(16,185,129,0.05) 100%); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+            <i class="fas fa-map-marker-alt" style="color: var(--success-color);"></i>
+            ${capitalize(character.currentVillage || character.homeVillage || 'Village')} Items (${villageItems.length})
+          </h3>
+          <div style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+            ${villageItems.slice(0, 10).map(item => `
+              <div style="padding: 0.75rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600; color: var(--text-color); font-size: 0.95rem;">${escapeHtmlAttribute(item.itemName)}</div>
+                  <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Qty: ${item.quantity || 1}</div>
+                </div>
+                <button class="dashboard-add-from-inventory-btn" data-character-id="${character._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" style="
+                  padding: 0.5rem 1rem;
+                  background: var(--success-color);
+                  color: white;
+                  border: none;
+                  border-radius: 0.4rem;
+                  cursor: pointer;
+                  font-size: 0.85rem;
+                  font-weight: 500;
+                  transition: background 0.2s;
+                " onmouseover="this.style.background='var(--success-hover)'" onmouseout="this.style.background='var(--success-color)'">
+                  <i class="fas fa-plus"></i> Add
+                </button>
+              </div>
+            `).join('')}
+            ${villageItems.length > 10 ? `<div style="text-align: center; padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">+ ${villageItems.length - 10} more items</div>` : ''}
+          </div>
+        </div>
+        ` : ''}
+      </div>
+
+      <!-- Limited Items -->
+      ${limitedItems.length > 0 ? `
+      <div style="background: linear-gradient(135deg, var(--card-bg) 0%, rgba(255,193,7,0.1) 100%); border: 2px solid #ffc107; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(255,193,7,0.2);">
+        <h3 style="margin: 0 0 1rem 0; color: var(--text-color); font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+          <i class="fas fa-star" style="color: #ffc107;"></i>
+          Limited Items (${limitedItems.length})
         </h3>
-        <div style="max-height: 400px; overflow-y: auto;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+          ${limitedItems.slice(0, 12).map(item => `
+            <div style="padding: 1rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid #ffc107; text-align: center;">
+              <div style="font-weight: 600; color: var(--text-color); font-size: 0.9rem; margin-bottom: 0.5rem;">${escapeHtmlAttribute(item.itemName)}</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Qty: ${item.quantity || 1}</div>
+              <button class="dashboard-add-from-inventory-btn" data-character-id="${character._id}" data-item-name="${escapeHtmlAttribute(item.itemName)}" style="
+                width: 100%;
+                padding: 0.5rem;
+                background: #ffc107;
+                color: #000;
+                border: none;
+                border-radius: 0.4rem;
+                cursor: pointer;
+                font-size: 0.85rem;
+                font-weight: 600;
+                transition: background 0.2s;
+              " onmouseover="this.style.background='#ffb300'" onmouseout="this.style.background='#ffc107'">
+                <i class="fas fa-plus"></i> Add to Shop
+              </button>
+            </div>
+          `).join('')}
+        </div>
+        ${limitedItems.length > 12 ? `<div style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.9rem; margin-top: 1rem;">+ ${limitedItems.length - 12} more limited items</div>` : ''}
+      </div>
+      ` : ''}
+
+      <!-- Vending Inventory Section -->
+      <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <h3 style="margin: 0; color: var(--text-color); font-size: 1.4rem; display: flex; align-items: center; gap: 0.75rem; font-weight: 700;">
+            <i class="fas fa-boxes" style="color: var(--primary-color); font-size: 1.2rem;"></i>
+            Vending Shop Inventory (${inventoryData?.items?.length || 0})
+          </h3>
+        </div>
+        <div style="max-height: 500px; overflow-y: auto;">
           ${inventoryData && inventoryData.items && inventoryData.items.length > 0 ? 
             inventoryData.items.sort((a, b) => {
               const slotA = a.slot ? parseInt(a.slot.replace(/[^0-9]/g, '')) || 999 : 999;
               const slotB = b.slot ? parseInt(b.slot.replace(/[^0-9]/g, '')) || 999 : 999;
               return slotA - slotB;
             }).map(item => `
-              <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: var(--input-bg); border-radius: 0.5rem; border: 1px solid var(--border-color); margin-bottom: 0.75rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; background: linear-gradient(135deg, var(--input-bg) 0%, rgba(0,123,255,0.03) 100%); border-radius: 0.75rem; border: 2px solid var(--border-color); margin-bottom: 1rem; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 4px 12px rgba(0,123,255,0.15)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'">
                 <div style="flex: 1;">
-                  <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
-                    <span style="font-weight: 700; color: white; font-size: 0.85rem; background: var(--primary-color); padding: 0.4rem 0.8rem; border-radius: 0.4rem; min-width: 60px; text-align: center;">
+                  <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                    <span style="font-weight: 700; color: white; font-size: 0.9rem; background: linear-gradient(135deg, var(--primary-color) 0%, #0056b3 100%); padding: 0.5rem 1rem; border-radius: 0.5rem; min-width: 70px; text-align: center; box-shadow: 0 2px 6px rgba(0,123,255,0.3);">
                       ${item.slot || 'No Slot'}
                     </span>
-                    <span style="font-weight: 600; color: var(--text-color); font-size: 1.1rem;">${escapeHtmlAttribute(item.itemName)}</span>
+                    <span style="font-weight: 600; color: var(--text-color); font-size: 1.15rem;">${escapeHtmlAttribute(item.itemName)}</span>
                   </div>
-                  <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <span><strong style="color: var(--text-color);">Stock:</strong> ${item.stockQty}</span>
-                    ${item.tokenPrice !== null && item.tokenPrice !== undefined ? `<span><strong style="color: var(--primary-color);">💰 Tokens:</strong> ${item.tokenPrice}</span>` : ''}
-                    ${item.artPrice && item.artPrice !== 'N/A' ? `<span><strong style="color: var(--text-color);">🎨 Art:</strong> ${escapeHtmlAttribute(item.artPrice)}</span>` : ''}
-                    ${item.otherPrice && item.otherPrice !== 'N/A' ? `<span><strong style="color: var(--text-color);">Other:</strong> ${escapeHtmlAttribute(item.otherPrice)}</span>` : ''}
-                    ${item.barterOpen || item.tradesOpen ? `<span style="color: var(--success-color);"><strong>🔄 Barter Open</strong></span>` : ''}
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-top: 0.75rem;">
+                    <div style="padding: 0.5rem; background: rgba(0,0,0,0.05); border-radius: 0.4rem;">
+                      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px;">Stock</div>
+                      <div style="font-size: 1rem; font-weight: 700; color: var(--text-color);">${item.stockQty}</div>
+                    </div>
+                    ${item.tokenPrice !== null && item.tokenPrice !== undefined ? `
+                    <div style="padding: 0.5rem; background: rgba(0,123,255,0.1); border-radius: 0.4rem;">
+                      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px;">💰 Tokens</div>
+                      <div style="font-size: 1rem; font-weight: 700; color: var(--primary-color);">${item.tokenPrice}</div>
+                    </div>
+                    ` : ''}
+                    ${item.artPrice && item.artPrice !== 'N/A' ? `
+                    <div style="padding: 0.5rem; background: rgba(0,0,0,0.05); border-radius: 0.4rem;">
+                      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px;">🎨 Art</div>
+                      <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-color);">${escapeHtmlAttribute(item.artPrice)}</div>
+                    </div>
+                    ` : ''}
+                    ${item.otherPrice && item.otherPrice !== 'N/A' ? `
+                    <div style="padding: 0.5rem; background: rgba(0,0,0,0.05); border-radius: 0.4rem;">
+                      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px;">Other</div>
+                      <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-color);">${escapeHtmlAttribute(item.otherPrice)}</div>
+                    </div>
+                    ` : ''}
+                    ${item.barterOpen || item.tradesOpen ? `
+                    <div style="padding: 0.5rem; background: rgba(16,185,129,0.1); border-radius: 0.4rem;">
+                      <div style="font-size: 0.75rem; color: var(--success-color); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🔄 Barter Open</div>
+                    </div>
+                    ` : ''}
                   </div>
                 </div>
-                <div style="display: flex; gap: 0.5rem; margin-left: 1rem;">
+                <div style="display: flex; gap: 0.75rem; margin-left: 1.5rem;">
                   <button class="dashboard-edit-vendor-item-btn" data-character-id="${character._id}" data-item-id="${item._id}" style="
-                    padding: 0.75rem 1rem;
-                    background: var(--primary-color);
+                    padding: 0.75rem 1.25rem;
+                    background: linear-gradient(135deg, var(--primary-color) 0%, #0056b3 100%);
                     color: white;
                     border: none;
                     border-radius: 0.5rem;
                     cursor: pointer;
                     font-size: 0.9rem;
-                    font-weight: 500;
-                    transition: background 0.2s;
+                    font-weight: 600;
+                    transition: all 0.2s;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     gap: 0.5rem;
-                  " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary-color)'" title="Edit item">
+                    box-shadow: 0 2px 6px rgba(0,123,255,0.3);
+                  " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 10px rgba(0,123,255,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 6px rgba(0,123,255,0.3)'" title="Edit item">
                     <i class="fas fa-edit"></i>
                     Edit
                   </button>
                 </div>
               </div>
             `).join('') : 
-            '<div style="text-align: center; padding: 3rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i><div style="font-size: 1.1rem;">No items in vending inventory</div></div>'
+            '<div style="text-align: center; padding: 4rem; color: var(--text-secondary);"><i class="fas fa-inbox" style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.5;"></i><div style="font-size: 1.2rem; font-weight: 500;">No items in vending inventory</div><div style="font-size: 0.9rem; margin-top: 0.5rem; color: var(--text-secondary);">Add items from your inventory to start selling!</div></div>'
           }
         </div>
       </div>
 
       <!-- Recent Transactions Section -->
       <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h3 style="margin: 0 0 1.5rem 0; color: var(--text-color); font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-          <i class="fas fa-exchange-alt" style="color: var(--primary-color);"></i>
-          Recent Transactions (${characterTransactions.length})
-        </h3>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <h3 style="margin: 0; color: var(--text-color); font-size: 1.4rem; display: flex; align-items: center; gap: 0.75rem; font-weight: 700;">
+            <i class="fas fa-exchange-alt" style="color: var(--primary-color); font-size: 1.2rem;"></i>
+            Recent Transactions (${characterTransactions.length})
+          </h3>
+        </div>
         <div style="max-height: 300px; overflow-y: auto;">
           ${characterTransactions.length > 0 ? 
             characterTransactions.map(tx => {
@@ -4966,6 +4934,15 @@ export async function loadVendorDashboard(characterId) {
         // Reload dashboard after editing
         await loadVendorDashboard(characterId);
       }
+    });
+  });
+
+  // Add event listeners for "Add from inventory" buttons
+  const addFromInventoryButtons = dashboardContent.querySelectorAll('.dashboard-add-from-inventory-btn');
+  addFromInventoryButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Open the add vendor item modal - it will handle finding the item
+      showAddVendorItemModal(character);
     });
   });
 }
