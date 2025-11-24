@@ -54,7 +54,7 @@ async function initializeVendingPage(data, page, contentDiv) {
         <i class="fas fa-store"></i> Vending Stock
       </h2>
       <p style="font-size: 1rem; color: var(--text-secondary);">
-        Month ${stockData.month || 'Unknown'} • Last Updated: ${stockData.createdAt ? new Date(stockData.createdAt).toLocaleDateString() : 'N/A'}
+        ${stockData.year ? `${new Date(stockData.year, (stockData.month || 1) - 1).toLocaleString('default', { month: 'long' })} ${stockData.year}` : `Month ${stockData.month || 'Unknown'}`} • Last Updated: ${stockData.createdAt ? new Date(stockData.createdAt).toLocaleDateString() : 'N/A'}
       </p>
     `;
     container.appendChild(header);

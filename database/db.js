@@ -2206,8 +2206,10 @@ const getLimitedItems = async () => {
  const stockCollection = db.collection("vending_stock");
 
  try {
-  const currentMonth = new Date().getMonth() + 1;
-  const currentStock = await stockCollection.findOne({ month: currentMonth });
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+  const currentStock = await stockCollection.findOne({ month: currentMonth, year: currentYear });
   return currentStock ? currentStock.limitedItems : [];
  } catch (error) {
   handleError(error, "vendingService.js");
