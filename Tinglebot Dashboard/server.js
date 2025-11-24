@@ -2284,15 +2284,35 @@ app.get('/api/models/vendingShops', async (req, res) => {
       for (const characterName of uniqueCharacterNames) {
         try {
           // Try regular character first
-          let character = await Character.findOne({ name: characterName }, { icon: 1, shopImage: 1, vendingSetup: 1 }).lean();
+          let character = await Character.findOne({ name: characterName }, { 
+            icon: 1, 
+            shopImage: 1, 
+            vendingSetup: 1,
+            vendorType: 1,
+            currentVillage: 1,
+            shopLink: 1,
+            vendingPoints: 1
+          }).lean();
           if (!character) {
             // Try mod character
-            character = await ModCharacter.findOne({ name: characterName }, { icon: 1, shopImage: 1, vendingSetup: 1 }).lean();
+            character = await ModCharacter.findOne({ name: characterName }, { 
+              icon: 1, 
+              shopImage: 1, 
+              vendingSetup: 1,
+              vendorType: 1,
+              currentVillage: 1,
+              shopLink: 1,
+              vendingPoints: 1
+            }).lean();
           }
           if (character) {
             characterDataMap[characterName] = {
               icon: character.icon || null,
-              shopImage: character.vendingSetup?.shopImage || character.shopImage || null
+              shopImage: character.vendingSetup?.shopImage || character.shopImage || null,
+              vendorType: character.vendorType || null,
+              currentVillage: character.currentVillage || null,
+              shopLink: character.vendingSetup?.shopLink || character.shopLink || null,
+              vendingPoints: character.vendingPoints || 0
             };
           }
         } catch (error) {
@@ -2327,7 +2347,11 @@ app.get('/api/models/vendingShops', async (req, res) => {
             ...it, 
             characterName,
             characterIcon: characterData.icon || null,
-            shopImage: characterData.shopImage || null
+            shopImage: characterData.shopImage || null,
+            vendorType: characterData.vendorType || null,
+            currentVillage: characterData.currentVillage || null,
+            shopLink: characterData.shopLink || null,
+            vendingPoints: characterData.vendingPoints || 0
           }));
         } catch (error) {
           console.warn(`[server.js]: Error fetching items for ${characterName}:`, error.message);
