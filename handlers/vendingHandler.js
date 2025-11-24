@@ -1593,7 +1593,6 @@ async function handleVendingBarter(interaction) {
       const requestedItemName = interaction.options.getString("itemname");
       const quantity = interaction.options.getInteger("quantity");
       const paymentType = interaction.options.getString("payment_type");
-      const offeredItemInput = interaction.options.getString("offer");
       const notes = interaction.options.getString("notes");
   
       // ------------------- Validate Inputs -------------------
@@ -1608,29 +1607,89 @@ async function handleVendingBarter(interaction) {
         return interaction.editReply({ embeds: [embed] });
       }
 
-      // Parse offered items (support multiple items separated by commas)
+      // Parse offered items from separate fields (support up to 3 items with quantities)
       let offeredItems = [];
+      let offeredItemsWithQty = [];
       if (paymentType === 'barter') {
-        if (!offeredItemInput || !offeredItemInput.trim()) {
+        const barterItem1 = interaction.options.getString("barter_item_1");
+        const barterItem1Qty = interaction.options.getInteger("barter_item_1_qty");
+        const barterItem2 = interaction.options.getString("barter_item_2");
+        const barterItem2Qty = interaction.options.getInteger("barter_item_2_qty");
+        const barterItem3 = interaction.options.getString("barter_item_3");
+        const barterItem3Qty = interaction.options.getInteger("barter_item_3_qty");
+
+        // First item is required for barter
+        if (!barterItem1 || !barterItem1.trim()) {
           const embed = createWarningEmbed(
             '⚠️ Missing Barter Offer',
-            'Please provide an item to offer when using barter payment type.',
+            'Please provide at least one item to offer when using barter payment type.',
             [
               { name: '💡 Payment Type', value: 'Barter', inline: true },
-              { name: '📦 Required', value: 'An item to offer in exchange (separate multiple items with commas)', inline: false }
+              { name: '📦 Required', value: 'At least one barter item with quantity', inline: false }
             ]
           );
           return interaction.editReply({ embeds: [embed] });
         }
-        // Parse comma-separated items and trim whitespace
-        offeredItems = offeredItemInput.split(',').map(item => item.trim()).filter(item => item.length > 0);
+
+        // Validate first item has quantity
+        if (!barterItem1Qty || barterItem1Qty < 1) {
+          const embed = createWarningEmbed(
+            '⚠️ Invalid Barter Quantity',
+            'Please provide a valid quantity (1 or more) for the first barter item.',
+            [
+              { name: '💡 Payment Type', value: 'Barter', inline: true },
+              { name: '📦 Item', value: barterItem1, inline: true }
+            ]
+          );
+          return interaction.editReply({ embeds: [embed] });
+        }
+
+        // Add first item (required)
+        offeredItems.push(barterItem1.trim());
+        offeredItemsWithQty.push({ itemName: barterItem1.trim(), quantity: barterItem1Qty });
+
+        // Add second item if provided
+        if (barterItem2 && barterItem2.trim()) {
+          const qty2 = barterItem2Qty || 1;
+          if (qty2 < 1) {
+            const embed = createWarningEmbed(
+              '⚠️ Invalid Barter Quantity',
+              'Please provide a valid quantity (1 or more) for the second barter item, or leave it empty.',
+              [
+                { name: '💡 Payment Type', value: 'Barter', inline: true },
+                { name: '📦 Item', value: barterItem2, inline: true }
+              ]
+            );
+            return interaction.editReply({ embeds: [embed] });
+          }
+          offeredItems.push(barterItem2.trim());
+          offeredItemsWithQty.push({ itemName: barterItem2.trim(), quantity: qty2 });
+        }
+
+        // Add third item if provided
+        if (barterItem3 && barterItem3.trim()) {
+          const qty3 = barterItem3Qty || 1;
+          if (qty3 < 1) {
+            const embed = createWarningEmbed(
+              '⚠️ Invalid Barter Quantity',
+              'Please provide a valid quantity (1 or more) for the third barter item, or leave it empty.',
+              [
+                { name: '💡 Payment Type', value: 'Barter', inline: true },
+                { name: '📦 Item', value: barterItem3, inline: true }
+              ]
+            );
+            return interaction.editReply({ embeds: [embed] });
+          }
+          offeredItems.push(barterItem3.trim());
+          offeredItemsWithQty.push({ itemName: barterItem3.trim(), quantity: qty3 });
+        }
+
         if (offeredItems.length === 0) {
           const embed = createWarningEmbed(
             '⚠️ Invalid Barter Offer',
             'Please provide at least one valid item to offer.',
             [
-              { name: '💡 Payment Type', value: 'Barter', inline: true },
-              { name: '📦 Format', value: 'Separate multiple items with commas', inline: false }
+              { name: '💡 Payment Type', value: 'Barter', inline: true }
             ]
           );
           return interaction.editReply({ embeds: [embed] });
@@ -1988,12 +2047,15 @@ async function handleVendingBarter(interaction) {
               );
               return interaction.editReply({ embeds: [embed] });
             }
-            // Check if buyer has all the offered items
+            // Check if buyer has all the offered items with required quantities
             const buyerInventoryCollection = await getInventoryCollection(buyer.name);
             const buyerInventoryItems = await buyerInventoryCollection.find({}).toArray();
             
-            // Validate each offered item
-            for (const offeredItemName of offeredItems) {
+            // Validate each offered item with its quantity
+            for (const offeredItemData of offeredItemsWithQty) {
+              const offeredItemName = offeredItemData.itemName;
+              const requiredQty = offeredItemData.quantity;
+              
               const offeredItem = buyerInventoryItems.find(item => 
                 item.itemName && item.itemName.toLowerCase() === offeredItemName.toLowerCase()
               );
@@ -2003,12 +2065,14 @@ async function handleVendingBarter(interaction) {
                 .filter(item => item.itemName && item.itemName.toLowerCase() === offeredItemName.toLowerCase())
                 .reduce((sum, item) => sum + (item.quantity || 0), 0);
               
-              if (!offeredItem || totalQuantity < 1) {
+              if (!offeredItem || totalQuantity < requiredQty) {
                 const embed = createWarningEmbed(
-                  '⚠️ Item Not in Inventory',
-                  `You don't have **${offeredItemName}** in your inventory.`,
+                  '⚠️ Insufficient Item Quantity',
+                  `You don't have enough **${offeredItemName}** in your inventory. You need ${requiredQty}, but you only have ${totalQuantity}.`,
                   [
                     { name: '📦 Required Item', value: offeredItemName, inline: true },
+                    { name: '📊 Required Quantity', value: requiredQty.toString(), inline: true },
+                    { name: '📊 Available Quantity', value: totalQuantity.toString(), inline: true },
                     { name: '👤 Character', value: buyer.name, inline: true }
                   ]
                 );
@@ -2043,6 +2107,7 @@ async function handleVendingBarter(interaction) {
         paymentMethod: paymentType,
         offeredItem: paymentType === 'barter' ? (offeredItems.length === 1 ? offeredItems[0] : offeredItems.join(', ')) : null,
         offeredItems: paymentType === 'barter' ? offeredItems : [],
+        offeredItemsWithQty: paymentType === 'barter' ? offeredItemsWithQty : [],
         notes: notes || '',
         buyerId,
         buyerUsername: buyerName,
@@ -2088,10 +2153,10 @@ async function handleVendingBarter(interaction) {
       } else if (paymentType === 'art' && requestedItem.artPrice) {
         priceInfo = requestedItem.artPrice;
       } else if (paymentType === 'barter') {
-        if (offeredItems.length === 1) {
-          priceInfo = `Trading: **${offeredItems[0]}**`;
+        if (offeredItemsWithQty.length === 1) {
+          priceInfo = `Trading: **${offeredItemsWithQty[0].itemName}** x${offeredItemsWithQty[0].quantity}`;
         } else {
-          priceInfo = `Trading: ${offeredItems.map(item => `**${item}**`).join(', ')}`;
+          priceInfo = `Trading: ${offeredItemsWithQty.map(item => `**${item.itemName}** x${item.quantity}`).join(', ')}`;
         }
       }
       
@@ -2113,12 +2178,12 @@ async function handleVendingBarter(interaction) {
         }
       ];
 
-      if (paymentType === 'barter' && offeredItems.length > 0) {
-        const offeredItemsDisplay = offeredItems.length === 1 
-          ? `**${offeredItems[0]}**` 
-          : offeredItems.map(item => `• **${item}**`).join('\n');
+      if (paymentType === 'barter' && offeredItemsWithQty.length > 0) {
+        const offeredItemsDisplay = offeredItemsWithQty.map(item => 
+          `• **${item.itemName}** x${item.quantity}`
+        ).join('\n');
         fields.push({ 
-          name: offeredItems.length === 1 ? '🔄 Offered in Trade' : '🔄 Offered in Trade (Multiple Items)', 
+          name: offeredItemsWithQty.length === 1 ? '🔄 Offered in Trade' : '🔄 Offered in Trade (Multiple Items)', 
           value: offeredItemsDisplay, 
           inline: false 
         });
@@ -2206,6 +2271,7 @@ async function handleFulfill(interaction) {
           paymentMethod: tempRequest.paymentMethod,
           offeredItem: tempRequest.offeredItem,
           offeredItems: tempRequest.offeredItems || (tempRequest.offeredItem ? [tempRequest.offeredItem] : []),
+          offeredItemsWithQty: tempRequest.offeredItemsWithQty || (tempRequest.offeredItem ? [{ itemName: tempRequest.offeredItem, quantity: 1 }] : (tempRequest.offeredItems ? tempRequest.offeredItems.map(itemName => ({ itemName, quantity: 1 })) : [])),
           notes: tempRequest.notes,
           buyerId: tempRequest.buyerId,
           buyerUsername: tempRequest.buyerUsername,
@@ -2239,15 +2305,29 @@ async function handleFulfill(interaction) {
         paymentMethod,
         offeredItem,
         offeredItems: requestOfferedItems,
+        offeredItemsWithQty: requestOfferedItemsWithQty,
         notes,
         buyerId,
         buyerUsername
       } = request;
       
-      // Support both new array format and legacy single item format
-      const offeredItems = requestOfferedItems && requestOfferedItems.length > 0 
-        ? requestOfferedItems 
-        : (offeredItem ? [offeredItem] : []);
+      // Support both new array format with quantities and legacy single item format
+      let offeredItems = [];
+      let offeredItemsWithQty = [];
+      
+      if (requestOfferedItemsWithQty && requestOfferedItemsWithQty.length > 0) {
+        // New format with quantities
+        offeredItemsWithQty = requestOfferedItemsWithQty;
+        offeredItems = requestOfferedItemsWithQty.map(item => item.itemName);
+      } else if (requestOfferedItems && requestOfferedItems.length > 0) {
+        // Legacy format without quantities - default to quantity 1
+        offeredItems = requestOfferedItems;
+        offeredItemsWithQty = requestOfferedItems.map(itemName => ({ itemName, quantity: 1 }));
+      } else if (offeredItem) {
+        // Single item legacy format
+        offeredItems = [offeredItem];
+        offeredItemsWithQty = [{ itemName: offeredItem, quantity: 1 }];
+      }
   
       // ------------------- Fetch Characters -------------------
       const buyer = await fetchCharacterByName(userCharacterName);
@@ -2507,31 +2587,79 @@ async function handleFulfill(interaction) {
           throw new Error(`Failed to add item to inventory: ${inventoryError.message}`);
         }
 
-        // If this was a barter, remove the offered items from buyer's inventory
-        if (paymentMethod === 'barter' && offeredItems.length > 0) {
-          for (const offeredItemName of offeredItems) {
+        // If this was a barter, remove the offered items from buyer's inventory with correct quantities
+        if (paymentMethod === 'barter' && offeredItemsWithQty.length > 0) {
+          for (const offeredItemData of offeredItemsWithQty) {
+            const offeredItemName = offeredItemData.itemName;
+            const quantityToRemove = offeredItemData.quantity || 1;
+            
             try {
-              const offeredItemDoc = await buyerInventory.findOne({ 'inventory.name': offeredItemName });
-              if (offeredItemDoc) {
-                await buyerInventory.updateOne(
-                  { 'inventory.name': offeredItemName },
-                  { $inc: { 'inventory.$.quantity': -1 } }
-                );
-                rollbackActions.push({ type: 'barter', buyerInventory, itemName: offeredItemName });
-                console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removed from buyer inventory', {
-                  fulfillmentId,
-                  offeredItem: offeredItemName
-                });
-              } else {
+              // Find all matching items (can be multiple stacks)
+              const matchingItems = await buyerInventory.find({
+                itemName: { $regex: new RegExp(`^${escapeRegExp(offeredItemName)}$`, 'i') },
+                quantity: { $gt: 0 }
+              }).sort({ quantity: -1 }).toArray();
+              
+              if (matchingItems.length === 0) {
                 console.warn('[vendingHandler.js] [handleFulfillBarter] ⚠️ Offered item not found in buyer inventory', {
                   fulfillmentId,
                   offeredItem: offeredItemName
+                });
+                continue;
+              }
+              
+              // Calculate total available quantity
+              const totalAvailable = matchingItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+              if (totalAvailable < quantityToRemove) {
+                console.warn('[vendingHandler.js] [handleFulfillBarter] ⚠️ Insufficient quantity in buyer inventory', {
+                  fulfillmentId,
+                  offeredItem: offeredItemName,
+                  required: quantityToRemove,
+                  available: totalAvailable
+                });
+                continue;
+              }
+              
+              // Remove items from stacks until we've removed the required quantity
+              let remainingToRemove = quantityToRemove;
+              for (const itemDoc of matchingItems) {
+                if (remainingToRemove <= 0) break;
+                
+                const itemQty = itemDoc.quantity || 0;
+                const removeQty = Math.min(remainingToRemove, itemQty);
+                
+                if (removeQty === itemQty) {
+                  // Remove entire stack
+                  await buyerInventory.deleteOne({ _id: itemDoc._id });
+                } else {
+                  // Partial removal
+                  await buyerInventory.updateOne(
+                    { _id: itemDoc._id },
+                    { $inc: { quantity: -removeQty } }
+                  );
+                }
+                
+                remainingToRemove -= removeQty;
+                rollbackActions.push({ 
+                  type: 'barter', 
+                  buyerInventory, 
+                  itemName: offeredItemName,
+                  quantity: removeQty,
+                  itemId: itemDoc._id
+                });
+                
+                console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removed from buyer inventory', {
+                  fulfillmentId,
+                  offeredItem: offeredItemName,
+                  removed: removeQty,
+                  remaining: remainingToRemove
                 });
               }
             } catch (barterError) {
               console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to remove barter item', {
                 fulfillmentId,
                 offeredItem: offeredItemName,
+                quantity: quantityToRemove,
                 error: barterError.message
               });
               // Don't fail the transaction for this - barter item removal is secondary
@@ -2828,10 +2956,12 @@ async function handleFulfill(interaction) {
         priceInfo = `**${totalCost} tokens** (${perItemPrice} per item)`;
       } else if (paymentMethod === 'art' && stockItem.artPrice) {
         priceInfo = stockItem.artPrice;
-      } else if (paymentMethod === 'barter' && offeredItems.length > 0) {
-        priceInfo = offeredItems.length === 1 
-          ? `Trading: **${offeredItems[0]}**` 
-          : `Trading: ${offeredItems.length} items`;
+      } else if (paymentMethod === 'barter' && offeredItemsWithQty.length > 0) {
+        if (offeredItemsWithQty.length === 1) {
+          priceInfo = `Trading: **${offeredItemsWithQty[0].itemName}** x${offeredItemsWithQty[0].quantity}`;
+        } else {
+          priceInfo = `Trading: ${offeredItemsWithQty.map(item => `**${item.itemName}** x${item.quantity}`).join(', ')}`;
+        }
       }
       
       const fields = [
@@ -2862,12 +2992,12 @@ async function handleFulfill(interaction) {
         }
       ];
 
-      if (paymentMethod === 'barter' && offeredItems.length > 0) {
-        const offeredItemsDisplay = offeredItems.length === 1 
-          ? `**${offeredItems[0]}**` 
-          : offeredItems.map(item => `• **${item}**`).join('\n');
+      if (paymentMethod === 'barter' && offeredItemsWithQty.length > 0) {
+        const offeredItemsDisplay = offeredItemsWithQty.map(item => 
+          `• **${item.itemName}** x${item.quantity}`
+        ).join('\n');
         fields.push({ 
-          name: offeredItems.length === 1 ? '🔄 Traded Item' : '🔄 Traded Items', 
+          name: offeredItemsWithQty.length === 1 ? '🔄 Traded Item' : '🔄 Traded Items', 
           value: offeredItemsDisplay, 
           inline: false 
         });

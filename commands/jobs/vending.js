@@ -223,8 +223,36 @@ const command = new SlashCommandBuilder()
    )
    .addStringOption((opt) =>
     opt
-     .setName("offer")
-     .setDescription("What you are offering in return (required for barter). Separate multiple items with commas.")
+     .setName("barter_item_1")
+     .setDescription("First item you are offering (required for barter)")
+     .setAutocomplete(true)
+   )
+   .addIntegerOption((opt) =>
+    opt
+     .setName("barter_item_1_qty")
+     .setDescription("Quantity of first barter item (required for barter)")
+   )
+   .addStringOption((opt) =>
+    opt
+     .setName("barter_item_2")
+     .setDescription("Second item you are offering (optional for barter)")
+     .setAutocomplete(true)
+   )
+   .addIntegerOption((opt) =>
+    opt
+     .setName("barter_item_2_qty")
+     .setDescription("Quantity of second barter item")
+   )
+   .addStringOption((opt) =>
+    opt
+     .setName("barter_item_3")
+     .setDescription("Third item you are offering (optional for barter)")
+     .setAutocomplete(true)
+   )
+   .addIntegerOption((opt) =>
+    opt
+     .setName("barter_item_3_qty")
+     .setDescription("Quantity of third barter item")
    )
    .addStringOption((opt) =>
     opt.setName("notes").setDescription("Additional notes for the vendor")

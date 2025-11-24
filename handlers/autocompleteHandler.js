@@ -301,6 +301,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "character") {
                   await handleModGiveCharacterAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "vendingreset") {
+                if (focusedOption.name === "character") {
+                  await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+                }
           } else if (modSubcommand === "stealreset") {
             if (focusedOption.name === "character") {
               try {
@@ -565,6 +569,13 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             // Handle vendorcharacter autocomplete
             else if (focusedOption.name === "vendorcharacter" && vendingSubcommand === "barter") {
               await handleVendingBarterAutocomplete(interaction, focusedOption);
+            }
+            // Handle barter item autocomplete (buyer's inventory for barter)
+            else if ((focusedOption.name === "barter_item_1" || 
+                      focusedOption.name === "barter_item_2" || 
+                      focusedOption.name === "barter_item_3") && 
+                     vendingSubcommand === "barter") {
+              await handleVendingOfferAutocomplete(interaction, focusedOption);
             }
             // Handle fulfillmentid autocomplete
             else if (focusedOption.name === "fulfillmentid" && vendingSubcommand === "accept") {
@@ -5006,6 +5017,73 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
     }
 
     console.error("[handleVendingBarterAutocomplete]: Error:", error);
+    try {
+      await interaction.respond([]).catch(() => {});
+    } catch (e) {
+      // Ignore any errors from the fallback response
+    }
+  }
+}
+
+// ------------------- Function: handleVendingOfferAutocomplete -------------------
+// Provides autocomplete suggestions for items from the buyer's inventory for barter offers
+async function handleVendingOfferAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const buyerCharacterName = interaction.options.getString("charactername");
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+
+    // Need the buyer's character name to get their inventory
+    if (!buyerCharacterName) {
+      await interaction.respond([]);
+      return;
+    }
+
+    // Get the buyer's character to verify ownership
+    const buyerCharacter = await fetchCharacterByNameAndUserId(buyerCharacterName, userId);
+    if (!buyerCharacter) {
+      await interaction.respond([]);
+      return;
+    }
+
+    // Get items from buyer's inventory
+    const inventoryCollection = await getCharacterInventoryCollection(buyerCharacterName);
+    const items = await inventoryCollection.find().toArray();
+
+    // Aggregate by name, exclude 'Initial Item' and items with quantity <= 0
+    const itemMap = new Map();
+    for (const item of items) {
+      if (!item.itemName || item.itemName.toLowerCase() === 'initial item') continue;
+      if (item.quantity <= 0) continue; // Skip items with zero quantity
+      const key = item.itemName.trim().toLowerCase();
+      if (!itemMap.has(key)) {
+        itemMap.set(key, { name: item.itemName, quantity: item.quantity });
+      } else {
+        itemMap.get(key).quantity += item.quantity;
+      }
+    }
+
+    // Format choices with quantity
+    const choices = Array.from(itemMap.values()).map(item => ({
+      name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
+      value: item.name
+    }));
+
+    // Filter based on search query
+    const filtered = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchQuery) || 
+      choice.value.toLowerCase().includes(searchQuery)
+    );
+
+    await interaction.respond(filtered.slice(0, 25));
+  } catch (error) {
+    // Handle specific error types
+    if (error.code === 10062) {
+      console.log('[handleVendingOfferAutocomplete]: Interaction already expired');
+      return;
+    }
+
+    console.error("[handleVendingOfferAutocomplete]: Error:", error);
     try {
       await interaction.respond([]).catch(() => {});
     } catch (e) {
