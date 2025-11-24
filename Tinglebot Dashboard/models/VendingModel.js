@@ -97,5 +97,6 @@ const VendingRequest = mongoose.model('VendingRequest', vendingRequestSchema);
 module.exports = {
   VendingRequest,
   initializeVendingInventoryModel,
-  vendingInventorySchema
+  vendingInventorySchema,
+  vendingRequestSchema
 };

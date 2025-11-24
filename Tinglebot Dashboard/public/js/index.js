@@ -17,6 +17,7 @@ import * as error from './error.js';
 import * as auth from './auth.js';
 import * as guilds from './guilds.js';
 import * as villageShops from './villageShops.js';
+import * as vending from './vending.js';
 import * as monsters from './monsters.js';
 import * as pets from './pets.js';
 import * as starterGear from './starterGear.js';
@@ -40,6 +41,7 @@ export {
   auth,
   guilds,
   villageShops,
+  vending,
   monsters,
   pets,
   starterGear,
@@ -311,6 +313,10 @@ function setupModelCards() {
             // Render async with proper delay to ensure loading shows
             await renderHelpWantedQuests(data, contentDiv);
             break;
+          case 'vending':
+            title.textContent = 'Vending Stock';
+            await vending.initializeVendingPage(data, pagination.page, contentDiv);
+            break;
           default:
             console.error(`Unknown model type: ${modelName}`);
             contentDiv.innerHTML = `
@@ -551,7 +557,10 @@ function handleModelDataError(modelName, contentDiv) {
             await monsters.initializeMonsterPage(data, pagination.page, contentDiv);
             break;
           case 'villageShops':
-            await villageShops.initializeVillageShopsPage(data, pagination.page, contentDiv);
+            await villageShops.initializeVendingPage(data, pagination.page, contentDiv);
+            break;
+          case 'vending':
+            await vending.initializeVendingPage(data, pagination.page, contentDiv);
             break;
           default:
             console.error(`Unknown model type: ${modelName}`);

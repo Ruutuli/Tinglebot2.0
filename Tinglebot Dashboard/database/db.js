@@ -1703,10 +1703,23 @@ const connectToDatabase = async () => {
  }
 };
 
+// ------------------- connectToTinglebotDatabase -------------------
+const connectToTinglebotDatabase = async () => {
+ const client = new MongoClient(tinglebotUri, {});
+ try {
+  await client.connect();
+  return client;
+ } catch (error) {
+  handleError(error, "vendingService.js");
+  console.error("[vendingService.js]: ❌ Error connecting to tinglebot database:", error);
+  throw error;
+ }
+};
+
 // ------------------- clearExistingStock -------------------
 const clearExistingStock = async () => {
- const client = await connectToDatabase();
- const dbName = inventoriesUri.split('/').pop();
+ const client = await connectToTinglebotDatabase();
+ const dbName = tinglebotUri.split('/').pop();
  const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
@@ -1722,8 +1735,8 @@ const clearExistingStock = async () => {
 
 // ------------------- generateVendingStockList -------------------
 const generateVendingStockList = async () => {
- const client = await connectToDatabase();
- const dbName = inventoriesUri.split('/').pop();
+ const client = await connectToTinglebotDatabase();
+ const dbName = tinglebotUri.split('/').pop();
  const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
@@ -1876,8 +1889,8 @@ const generateVendingStockList = async () => {
 
 // ------------------- getCurrentVendingStockList -------------------
 const getCurrentVendingStockList = async () => {
- const client = await connectToDatabase();
- const dbName = inventoriesUri.split('/').pop();
+ const client = await connectToTinglebotDatabase();
+ const dbName = tinglebotUri.split('/').pop();
  const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
@@ -1912,8 +1925,8 @@ const getCurrentVendingStockList = async () => {
 
 // ------------------- getLimitedItems -------------------
 const getLimitedItems = async () => {
- const client = await connectToDatabase();
- const dbName = inventoriesUri.split('/').pop();
+ const client = await connectToTinglebotDatabase();
+ const dbName = tinglebotUri.split('/').pop();
  const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
@@ -1935,8 +1948,8 @@ const getLimitedItems = async () => {
 
 // ------------------- updateItemStockByName -------------------
 const updateItemStockByName = async (itemName, quantity) => {
- const client = await connectToDatabase();
- const dbName = inventoriesUri.split('/').pop();
+ const client = await connectToTinglebotDatabase();
+ const dbName = tinglebotUri.split('/').pop();
  const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
@@ -1983,8 +1996,8 @@ async function updateVendingStock({
  otherPrice,
  tradesOpen,
 }) {
- const client = await connectToDatabase();
- const dbName = inventoriesUri.split('/').pop();
+ const client = await connectToTinglebotDatabase();
+ const dbName = tinglebotUri.split('/').pop();
  const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
