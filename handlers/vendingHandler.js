@@ -2648,6 +2648,66 @@ async function handleFulfill(interaction) {
                   itemId: itemDoc._id
                 });
                 
+                // Log removal to Google Sheets
+                if (buyer.inventory && typeof buyer.inventory === 'string' && isValidGoogleSheetsUrl(buyer.inventory)) {
+                  try {
+                    // Fetch item details for proper categorization
+                    let offeredItemDetails;
+                    if (offeredItemName.includes('+')) {
+                      offeredItemDetails = await ItemModel.findOne({ itemName: offeredItemName });
+                    } else {
+                      offeredItemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(offeredItemName)}$`, 'i') } });
+                    }
+                    
+                    const category = Array.isArray(offeredItemDetails?.category) ? offeredItemDetails.category.join(", ") : (offeredItemDetails?.category || "");
+                    const type = Array.isArray(offeredItemDetails?.type) ? offeredItemDetails.type.join(", ") : (offeredItemDetails?.type || "");
+                    const subtype = Array.isArray(offeredItemDetails?.subtype) ? offeredItemDetails.subtype.join(", ") : (offeredItemDetails?.subtype || "");
+                    const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+                    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+                    const uniqueSyncId = uuidv4();
+                    
+                    // Create removal log entry (negative quantity for removal)
+                    const removalLogEntry = [
+                      buyer.name, // Character Name (A)
+                      offeredItemName, // Item Name (B)
+                      -removeQty, // Qty of Item (C) - negative for removal
+                      category, // Category (D)
+                      type, // Type (E)
+                      subtype, // Subtype (F)
+                      'Barter Trade', // Obtain (G)
+                      buyer.job || "", // Job (H)
+                      buyer.perk || "", // Perk (I)
+                      vendor.name, // Location (Vendor name) (J)
+                      interactionUrl, // Link (K)
+                      formattedDateTime, // Date/Time (L)
+                      uniqueSyncId // Confirmed Sync (M)
+                    ];
+                    
+                    // Log to Google Sheets
+                    await safeAppendDataToSheet(
+                      buyer.inventory,
+                      buyer,
+                      'loggedInventory!A2:M',
+                      [removalLogEntry],
+                      interaction?.client,
+                      { skipValidation: true, context: { commandName: 'vending', userTag: interaction?.user?.tag, userId: interaction?.user?.id } }
+                    );
+                    
+                    console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removal logged to Google Sheets', {
+                      fulfillmentId,
+                      offeredItem: offeredItemName,
+                      quantity: removeQty
+                    });
+                  } catch (sheetError) {
+                    console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to log barter item removal to Google Sheets', {
+                      fulfillmentId,
+                      offeredItem: offeredItemName,
+                      error: sheetError.message
+                    });
+                    // Don't fail the transaction if sheet logging fails
+                  }
+                }
+                
                 console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removed from buyer inventory', {
                   fulfillmentId,
                   offeredItem: offeredItemName,
