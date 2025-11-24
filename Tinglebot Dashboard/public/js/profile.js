@@ -4561,8 +4561,8 @@ async function showEditVendorItemModal(character, item) {
             Barter/Trades Open
           </label>
           <select id="edit-barter-open" name="barterOpen" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; background: var(--input-bg); color: var(--text-color); font-size: 1rem;">
-            <option value="false" ${!item.barterOpen ? 'selected' : ''}>No</option>
-            <option value="true" ${item.barterOpen ? 'selected' : ''}>Yes</option>
+            <option value="false" ${!(item.barterOpen !== undefined ? item.barterOpen : (item.tradesOpen || false)) ? 'selected' : ''}>No</option>
+            <option value="true" ${(item.barterOpen !== undefined ? item.barterOpen : (item.tradesOpen || false)) ? 'selected' : ''}>Yes</option>
           </select>
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
