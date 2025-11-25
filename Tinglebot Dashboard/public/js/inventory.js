@@ -477,6 +477,33 @@ async function loadCharacterInventory(characterName) {
 // ------------------- Main Rendering Functions -------------------
 
 /**
+ * Stacks items by itemName, summing quantities while preserving other properties
+ * @param {Array} items - Items to stack
+ * @returns {Array} Stacked items with combined quantities
+ */
+function stackItemsByName(items) {
+  const stackedMap = new Map();
+  
+  items.forEach(item => {
+    const itemName = item.itemName || 'Unknown Item';
+    
+    if (stackedMap.has(itemName)) {
+      // Item already exists, add to quantity
+      const existing = stackedMap.get(itemName);
+      existing.quantity = (existing.quantity || 0) + (item.quantity || 0);
+    } else {
+      // New item, add to map
+      stackedMap.set(itemName, {
+        ...item,
+        quantity: item.quantity || 0
+      });
+    }
+  });
+  
+  return Array.from(stackedMap.values());
+}
+
+/**
  * Applies current filters and renders character cards
  * @param {number} page - Current page number (default: 1)
  */
@@ -746,7 +773,7 @@ function renderCharacterItems(items, characterName, renderFilterBar = true) {
   }
   const filterState = window.characterItemFilters[characterName];
 
-  // Populate filter options from this character's items
+  // Populate filter options from this character's items (before stacking)
   const allCategories = Array.from(new Set(
     filteredItems.flatMap(item => {
       if (Array.isArray(item.category)) return item.category;
@@ -781,6 +808,9 @@ function renderCharacterItems(items, characterName, renderFilterBar = true) {
     const matchesType = filterState.type === 'all' || itemTypes.includes(filterState.type);
     return matchesSearch && matchesCategory && matchesType;
   });
+
+  // Stack items by name (combine quantities for items with the same name)
+  filteredItems = stackItemsByName(filteredItems);
 
   // Apply sort
   filteredItems = [...filteredItems].sort((a, b) => {
@@ -1000,6 +1030,9 @@ function updateCharacterItemsGrid(items, characterName) {
     const matchesType = filterState.type === 'all' || itemTypes.includes(filterState.type);
     return matchesSearch && matchesCategory && matchesType;
   });
+
+  // Stack items by name (combine quantities for items with the same name)
+  filteredItems = stackItemsByName(filteredItems);
 
   // Apply sort
   filteredItems = [...filteredItems].sort((a, b) => {
