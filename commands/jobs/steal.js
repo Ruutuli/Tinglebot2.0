@@ -1019,6 +1019,175 @@ function formatCooldownTime(timeLeft) {
     }
 }
 
+// ------------------- Get All Cooldown Information -------------------
+// Get all cooldown information for a character (NPCs and player targets)
+async function getAllCooldownInfo(characterId) {
+    try {
+        const cooldowns = {
+            npcs: [],
+            players: []
+        };
+
+        // Get all NPCs
+        const allNPCs = await NPC.find({});
+        
+        for (const npc of allNPCs) {
+            // Check global protection (applies to all thieves)
+            let globalCooldown = null;
+            if (npc.stealProtection?.isProtected && !npc.isProtectionExpired()) {
+                const timeLeft = npc.getProtectionTimeLeft();
+                globalCooldown = {
+                    active: true,
+                    timeLeft: timeLeft,
+                    formatted: formatCooldownTime(timeLeft),
+                    type: 'global'
+                };
+            }
+
+            // Check personal lockout (30-day cooldown for this character)
+            let personalCooldown = null;
+            const personalLockout = npc.personalLockouts?.find(lockout => 
+                lockout.characterId.toString() === characterId.toString() && 
+                lockout.lockoutEndTime > new Date()
+            );
+            
+            if (personalLockout) {
+                const timeLeft = personalLockout.lockoutEndTime.getTime() - Date.now();
+                personalCooldown = {
+                    active: true,
+                    timeLeft: timeLeft,
+                    formatted: formatCooldownTime(timeLeft),
+                    type: 'personal'
+                };
+            }
+
+            // Only include NPCs that have at least one active cooldown
+            if (globalCooldown || personalCooldown) {
+                cooldowns.npcs.push({
+                    name: npc.name,
+                    global: globalCooldown,
+                    personal: personalCooldown,
+                    icon: NPCs[npc.name]?.icon || null
+                });
+            }
+        }
+
+        // Get all player characters that have protection
+        const protectedCharacters = await Character.find({
+            'stealProtection.isProtected': true,
+            _id: { $ne: characterId } // Exclude self
+        });
+
+        for (const char of protectedCharacters) {
+            // Check if protection is still active
+            if (char.stealProtection?.isProtected && !char.isProtectionExpired()) {
+                const timeLeft = char.getProtectionTimeLeft();
+                if (timeLeft > 0) {
+                    cooldowns.players.push({
+                        name: char.name,
+                        global: {
+                            active: true,
+                            timeLeft: timeLeft,
+                            formatted: formatCooldownTime(timeLeft),
+                            type: 'global'
+                        },
+                        icon: char.icon || null
+                    });
+                }
+            }
+        }
+
+        // Sort NPCs by name
+        cooldowns.npcs.sort((a, b) => a.name.localeCompare(b.name));
+        // Sort players by name
+        cooldowns.players.sort((a, b) => a.name.localeCompare(b.name));
+
+        return cooldowns;
+    } catch (error) {
+        logger.error('NPC', 'Error getting all cooldown info', error);
+        return { npcs: [], players: [] };
+    }
+}
+
+// ------------------- Get Single Target Cooldown Information -------------------
+// Get cooldown information for a specific NPC or player target
+async function getTargetCooldownInfo(characterId, targetName, isNPC) {
+    try {
+        if (isNPC) {
+            const npc = await NPC.findOne({ name: targetName });
+            if (!npc) {
+                return null;
+            }
+
+            // Check global protection
+            let globalCooldown = null;
+            if (npc.stealProtection?.isProtected && !npc.isProtectionExpired()) {
+                const timeLeft = npc.getProtectionTimeLeft();
+                globalCooldown = {
+                    active: true,
+                    timeLeft: timeLeft,
+                    formatted: formatCooldownTime(timeLeft),
+                    type: 'global'
+                };
+            }
+
+            // Check personal lockout
+            let personalCooldown = null;
+            const personalLockout = npc.personalLockouts?.find(lockout => 
+                lockout.characterId.toString() === characterId.toString() && 
+                lockout.lockoutEndTime > new Date()
+            );
+            
+            if (personalLockout) {
+                const timeLeft = personalLockout.lockoutEndTime.getTime() - Date.now();
+                personalCooldown = {
+                    active: true,
+                    timeLeft: timeLeft,
+                    formatted: formatCooldownTime(timeLeft),
+                    type: 'personal'
+                };
+            }
+
+            return {
+                name: npc.name,
+                isNPC: true,
+                global: globalCooldown,
+                personal: personalCooldown,
+                icon: NPCs[npc.name]?.icon || null
+            };
+        } else {
+            const character = await Character.findOne({ name: targetName });
+            if (!character) {
+                return null;
+            }
+
+            // Check global protection
+            let globalCooldown = null;
+            if (character.stealProtection?.isProtected && !character.isProtectionExpired()) {
+                const timeLeft = character.getProtectionTimeLeft();
+                if (timeLeft > 0) {
+                    globalCooldown = {
+                        active: true,
+                        timeLeft: timeLeft,
+                        formatted: formatCooldownTime(timeLeft),
+                        type: 'global'
+                    };
+                }
+            }
+
+            return {
+                name: character.name,
+                isNPC: false,
+                global: globalCooldown,
+                icon: character.icon || null
+            };
+        }
+    } catch (error) {
+        logger.error('NPC', 'Error getting target cooldown info', error);
+        return null;
+    }
+}
+
 // Reset all protections (called by scheduler at midnight EST)
 async function resetAllStealProtections() {
   try {
@@ -2178,6 +2347,20 @@ module.exports = {
                     option.setName('charactername')
                         .setDescription('Your character name')
                         .setRequired(true)
+                        .setAutocomplete(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('cooldown')
+                .setDescription('Check cooldown times for stealing from NPCs and characters.')
+                .addStringOption(option =>
+                    option.setName('charactername')
+                        .setDescription('Your character name')
+                        .setRequired(true)
+                        .setAutocomplete(true))
+                .addStringOption(option =>
+                    option.setName('target')
+                        .setDescription('Specific NPC or character to check (optional)')
+                        .setRequired(false)
                         .setAutocomplete(true))),
 
     // ============================================================================
@@ -2360,6 +2543,221 @@ module.exports = {
                 
                 await interaction.editReply({ embeds: [embed] });
                 return;
+            }
+
+            if (subcommand === 'cooldown') {
+                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
+                if (!valid) {
+                    await interaction.reply({ content: error, ephemeral: true });
+                    return;
+                }
+
+                await interaction.deferReply();
+
+                const targetName = interaction.options.getString('target');
+                
+                if (targetName) {
+                    // Check specific target
+                    // Try NPC first
+                    const npcCooldown = await getTargetCooldownInfo(character._id, targetName, true);
+                    if (npcCooldown) {
+                        const embed = createBaseEmbed('⏰ Steal Cooldown Check', '#FF6B35')
+                            .setDescription(`Cooldown information for **${targetName}** (NPC)`)
+                            .setThumbnail(npcCooldown.icon)
+                            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+
+                        const fields = [];
+                        
+                        if (npcCooldown.global) {
+                            fields.push({
+                                name: '🌍 Global Cooldown',
+                                value: `> **${npcCooldown.global.formatted}** remaining\n> *Applies to all thieves*`,
+                                inline: false
+                            });
+                        } else {
+                            fields.push({
+                                name: '🌍 Global Cooldown',
+                                value: '> ✅ **No global cooldown**\n> *This NPC is available for all thieves*',
+                                inline: false
+                            });
+                        }
+
+                        if (npcCooldown.personal) {
+                            fields.push({
+                                name: '👤 Personal Cooldown',
+                                value: `> **${npcCooldown.personal.formatted}** remaining\n> *Your 30-day cooldown for this NPC*`,
+                                inline: false
+                            });
+                        } else {
+                            fields.push({
+                                name: '👤 Personal Cooldown',
+                                value: '> ✅ **No personal cooldown**\n> *You can steal from this NPC*',
+                                inline: false
+                            });
+                        }
+
+                        // Summary
+                        const canSteal = !npcCooldown.global && !npcCooldown.personal;
+                        fields.push({
+                            name: '📊 Status',
+                            value: canSteal 
+                                ? '> ✅ **Available to steal from**' 
+                                : '> ❌ **On cooldown - cannot steal yet**',
+                            inline: false
+                        });
+
+                        embed.addFields(fields);
+                        await interaction.editReply({ embeds: [embed] });
+                        return;
+                    }
+
+                    // Try player character
+                    const playerCooldown = await getTargetCooldownInfo(character._id, targetName, false);
+                    if (playerCooldown) {
+                        const embed = createBaseEmbed('⏰ Steal Cooldown Check', '#FF6B35')
+                            .setDescription(`Cooldown information for **${targetName}** (Player)`)
+                            .setThumbnail(playerCooldown.icon)
+                            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+
+                        const fields = [];
+                        
+                        if (playerCooldown.global) {
+                            fields.push({
+                                name: '🌍 Global Cooldown',
+                                value: `> **${playerCooldown.global.formatted}** remaining\n> *Applies to all thieves*`,
+                                inline: false
+                            });
+                        } else {
+                            fields.push({
+                                name: '🌍 Global Cooldown',
+                                value: '> ✅ **No global cooldown**\n> *This character is available for all thieves*',
+                                inline: false
+                            });
+                        }
+
+                        // Summary
+                        const canSteal = !playerCooldown.global;
+                        fields.push({
+                            name: '📊 Status',
+                            value: canSteal 
+                                ? '> ✅ **Available to steal from**' 
+                                : '> ❌ **On cooldown - cannot steal yet**',
+                            inline: false
+                        });
+
+                        embed.addFields(fields);
+                        await interaction.editReply({ embeds: [embed] });
+                        return;
+                    }
+
+                    // Target not found
+                    await interaction.editReply({
+                        content: `❌ **Target "${targetName}" not found.**\n\n**Tip:** Make sure to select an NPC or character from the dropdown menu.`,
+                        ephemeral: true
+                    });
+                    return;
+                } else {
+                    // Show all cooldowns
+                    const allCooldowns = await getAllCooldownInfo(character._id);
+
+                    const embed = createBaseEmbed('⏰ Steal Cooldowns', '#FF6B35')
+                        .setDescription(`Cooldown information for **${character.name}**`)
+                        .setThumbnail(character.icon)
+                        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+
+                    // NPC Cooldowns
+                    if (allCooldowns.npcs.length > 0) {
+                        const npcFields = [];
+                        for (const npc of allCooldowns.npcs.slice(0, 10)) { // Limit to 10 NPCs per embed
+                            let npcText = `**${npc.name}**\n`;
+                            
+                            if (npc.global) {
+                                npcText += `🌍 Global: ${npc.global.formatted}\n`;
+                            } else {
+                                npcText += `🌍 Global: ✅ Available\n`;
+                            }
+                            
+                            if (npc.personal) {
+                                npcText += `👤 Personal: ${npc.personal.formatted}`;
+                            } else {
+                                npcText += `👤 Personal: ✅ Available`;
+                            }
+                            
+                            npcFields.push({
+                                name: '\u200b',
+                                value: npcText,
+                                inline: true
+                            });
+                        }
+
+                        embed.addFields([
+                            { 
+                                name: `__🤖 NPC Cooldowns (${allCooldowns.npcs.length} total)__`, 
+                                value: allCooldowns.npcs.length > 10 
+                                    ? `*Showing first 10 of ${allCooldowns.npcs.length} NPCs with cooldowns*` 
+                                    : '\u200b',
+                                inline: false 
+                            },
+                            ...npcFields
+                        ]);
+                    } else {
+                        embed.addFields({
+                            name: '__🤖 NPC Cooldowns__',
+                            value: '> ✅ **No NPCs on cooldown**\n> *All NPCs are available*',
+                            inline: false
+                        });
+                    }
+
+                    // Player Cooldowns
+                    if (allCooldowns.players.length > 0) {
+                        const playerFields = [];
+                        for (const player of allCooldowns.players.slice(0, 10)) { // Limit to 10 players per embed
+                            let playerText = `**${player.name}**\n`;
+                            
+                            if (player.global) {
+                                playerText += `🌍 Global: ${player.global.formatted}`;
+                            } else {
+                                playerText += `🌍 Global: ✅ Available`;
+                            }
+                            
+                            playerFields.push({
+                                name: '\u200b',
+                                value: playerText,
+                                inline: true
+                            });
+                        }
+
+                        embed.addFields([
+                            { 
+                                name: `__👥 Player Cooldowns (${allCooldowns.players.length} total)__`, 
+                                value: allCooldowns.players.length > 10 
+                                    ? `*Showing first 10 of ${allCooldowns.players.length} players with cooldowns*` 
+                                    : '\u200b',
+                                inline: false 
+                            },
+                            ...playerFields
+                        ]);
+                    } else {
+                        embed.addFields({
+                            name: '__👥 Player Cooldowns__',
+                            value: '> ✅ **No players on cooldown**\n> *All players are available*',
+                            inline: false
+                        });
+                    }
+
+                    // Add summary
+                    const totalOnCooldown = allCooldowns.npcs.length + allCooldowns.players.length;
+                    embed.addFields({
+                        name: '__📊 Summary__',
+                        value: totalOnCooldown > 0
+                            ? `> **${totalOnCooldown}** target${totalOnCooldown !== 1 ? 's' : ''} currently on cooldown\n> Use \`/steal cooldown target:<name>\` to check a specific target`
+                            : '> ✅ **All targets are available!**',
+                        inline: false
+                    });
+
+                    await interaction.editReply({ embeds: [embed] });
+                    return;
+                }
             }
 
             // If we get here, we're handling the 'commit' subcommand

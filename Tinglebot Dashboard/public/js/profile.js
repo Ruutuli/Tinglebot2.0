@@ -169,6 +169,9 @@ async function loadProfileData() {
     // Load vending shops
     await loadVendingShops();
     
+    // Setup steal cooldowns character selector
+    setupStealCooldownsSelector();
+    
   } catch (error) {
     console.error('[profile.js]: ❌ Error loading profile data:', error);
     showProfileError('Failed to load profile data');
@@ -5978,6 +5981,199 @@ async function deleteVendorItem(characterId, itemId) {
 let currentVendingFilter = 'all'; // 'all', 'buyer', 'vendor', 'pending', 'completed'
 let currentVendingPage = 1;
 const vendingPageSize = 50;
+
+// ------------------- Function: setupStealCooldownsSelector -------------------
+// Sets up the character selector for steal cooldowns
+async function setupStealCooldownsSelector() {
+  try {
+    const selector = document.getElementById('steal-cooldowns-character-select');
+    if (!selector) {
+      return;
+    }
+
+    // Fetch user's characters
+    const response = await fetch('/api/user/characters', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const { data: characters } = await response.json();
+
+    // Clear existing options (except the first one)
+    selector.innerHTML = '<option value="">Select a character...</option>';
+
+    // Add character options
+    characters.forEach(char => {
+      const option = document.createElement('option');
+      option.value = char._id;
+      option.textContent = char.name;
+      selector.appendChild(option);
+    });
+
+    // Set up change event listener
+    selector.addEventListener('change', async (e) => {
+      const characterId = e.target.value;
+      if (characterId) {
+        await loadStealCooldowns(characterId);
+      } else {
+        const content = document.getElementById('steal-cooldowns-content');
+        if (content) {
+          content.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+              <i class="fas fa-info-circle" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+              <p>Select a character to view steal cooldowns</p>
+            </div>
+          `;
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[profile.js]: Error setting up steal cooldowns selector:', error);
+  }
+}
+
+// ------------------- Function: loadStealCooldowns -------------------
+// Loads and displays steal cooldown information for a character
+export async function loadStealCooldowns(characterId) {
+  try {
+    const cooldownsContainer = document.getElementById('steal-cooldowns-content');
+    if (!cooldownsContainer) {
+      console.warn('[profile.js]: Steal cooldowns container not found');
+      return;
+    }
+
+    // Show loading state
+    cooldownsContainer.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Loading cooldowns...</div>';
+
+    const response = await fetch(`/api/steal/cooldowns/${characterId}`, {
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        cooldownsContainer.innerHTML = '<div class="error-message">Character not found</div>';
+        return;
+      }
+      if (response.status === 403) {
+        cooldownsContainer.innerHTML = '<div class="error-message">Access denied</div>';
+        return;
+      }
+      throw new Error(`Failed to load cooldowns: ${response.statusText}`);
+    }
+
+    const cooldowns = await response.json();
+
+    // Format cooldown time helper
+    const formatTime = (timeLeft) => {
+      const days = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
+      const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+      const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
+      
+      if (days > 0) {
+        return `${days}d ${hours}h ${minutes}m`;
+      } else if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      } else {
+        return `${minutes}m`;
+      }
+    };
+
+    // Build HTML
+    let html = '<div class="steal-cooldowns-dashboard">';
+
+    // NPC Cooldowns Section
+    html += '<div class="cooldowns-section">';
+    html += '<h3><i class="fas fa-robot"></i> NPC Cooldowns</h3>';
+    
+    if (cooldowns.npcs && cooldowns.npcs.length > 0) {
+      html += '<div class="cooldowns-grid">';
+      cooldowns.npcs.forEach(npc => {
+        html += '<div class="cooldown-card npc-cooldown">';
+        html += `<div class="cooldown-card-header"><strong>${npc.name}</strong></div>`;
+        html += '<div class="cooldown-card-body">';
+        
+        if (npc.global) {
+          html += `<div class="cooldown-item global"><span class="cooldown-label">🌍 Global:</span> <span class="cooldown-time">${npc.global.formatted}</span></div>`;
+        } else {
+          html += '<div class="cooldown-item global available"><span class="cooldown-label">🌍 Global:</span> <span class="cooldown-time">✅ Available</span></div>';
+        }
+        
+        if (npc.personal) {
+          html += `<div class="cooldown-item personal"><span class="cooldown-label">👤 Personal:</span> <span class="cooldown-time">${npc.personal.formatted}</span></div>`;
+        } else {
+          html += '<div class="cooldown-item personal available"><span class="cooldown-label">👤 Personal:</span> <span class="cooldown-time">✅ Available</span></div>';
+        }
+        
+        const canSteal = !npc.global && !npc.personal;
+        html += `<div class="cooldown-status ${canSteal ? 'available' : 'on-cooldown'}">`;
+        html += canSteal ? '✅ Available to steal' : '❌ On cooldown';
+        html += '</div>';
+        
+        html += '</div></div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="no-cooldowns">✅ No NPCs on cooldown - All NPCs are available!</div>';
+    }
+    
+    html += '</div>';
+
+    // Player Cooldowns Section
+    html += '<div class="cooldowns-section">';
+    html += '<h3><i class="fas fa-users"></i> Player Cooldowns</h3>';
+    
+    if (cooldowns.players && cooldowns.players.length > 0) {
+      html += '<div class="cooldowns-grid">';
+      cooldowns.players.forEach(player => {
+        html += '<div class="cooldown-card player-cooldown">';
+        html += `<div class="cooldown-card-header"><strong>${player.name}</strong></div>`;
+        html += '<div class="cooldown-card-body">';
+        
+        if (player.global) {
+          html += `<div class="cooldown-item global"><span class="cooldown-label">🌍 Global:</span> <span class="cooldown-time">${player.global.formatted}</span></div>`;
+        } else {
+          html += '<div class="cooldown-item global available"><span class="cooldown-label">🌍 Global:</span> <span class="cooldown-time">✅ Available</span></div>';
+        }
+        
+        const canSteal = !player.global;
+        html += `<div class="cooldown-status ${canSteal ? 'available' : 'on-cooldown'}">`;
+        html += canSteal ? '✅ Available to steal' : '❌ On cooldown';
+        html += '</div>';
+        
+        html += '</div></div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="no-cooldowns">✅ No players on cooldown - All players are available!</div>';
+    }
+    
+    html += '</div>';
+
+    // Summary
+    const totalOnCooldown = (cooldowns.npcs?.length || 0) + (cooldowns.players?.length || 0);
+    html += '<div class="cooldowns-summary">';
+    html += `<p><strong>Total targets on cooldown:</strong> ${totalOnCooldown}</p>`;
+    html += '<p class="summary-note">💡 Use <code>/steal cooldown</code> in Discord to check cooldowns on the go!</p>';
+    html += '</div>';
+
+    html += '</div>';
+
+    cooldownsContainer.innerHTML = html;
+  } catch (error) {
+    console.error('[profile.js]: Error loading steal cooldowns:', error);
+    const cooldownsContainer = document.getElementById('steal-cooldowns-content');
+    if (cooldownsContainer) {
+      cooldownsContainer.innerHTML = `<div class="error-message">Failed to load cooldowns: ${error.message}</div>`;
+    }
+  }
+}
 
 // ------------------- Function: setupVendingTabs -------------------
 // Sets up tab switching for vending section
