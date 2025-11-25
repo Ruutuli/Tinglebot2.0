@@ -1610,3 +1610,180 @@ form button[type="submit"]:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================================
+   Steal Cooldowns Section
+============================================================================ */
+
+.profile-steal-cooldowns-section {
+  background: var(--card-bg);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.profile-steal-cooldowns-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.profile-steal-cooldowns-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.steal-cooldowns-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.cooldowns-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cooldowns-section h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cooldowns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.cooldown-card {
+  background: var(--card-bg-secondary, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.cooldown-card:hover {
+  border-color: rgba(255, 215, 72, 0.5);
+  transform: translateY(-1px);
+}
+
+.cooldown-card-header {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.cooldown-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cooldown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+}
+
+.cooldown-item.available {
+  color: var(--text-secondary);
+}
+
+.cooldown-label {
+  color: var(--text-secondary);
+}
+
+.cooldown-time {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.cooldown-item.available .cooldown-time {
+  color: #4caf50;
+}
+
+.cooldown-status {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.cooldown-status.available {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.cooldown-status.on-cooldown {
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
+}
+
+.no-cooldowns {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--card-bg-secondary, rgba(255, 255, 255, 0.02));
+}
+
+.cooldowns-summary {
+  padding: 1rem;
+  background: var(--card-bg-secondary, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  margin-top: 1rem;
+}
+
+.cooldowns-summary p {
+  margin: 0.5rem 0;
+  color: var(--text-color);
+}
+
+.cooldowns-summary .summary-note {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.cooldowns-summary code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .cooldowns-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .profile-steal-cooldowns-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

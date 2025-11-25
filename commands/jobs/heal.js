@@ -275,29 +275,24 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
     // If target has debuff, check if healer has Priest boost (which can remove debuffs)
     // Must check BOTH the character's boostedBy field AND TempData to ensure boost is truly active
     const { isBoostActive, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
-    const { fetchCharacterByName } = require('../../database/db');
+    const { getBoosterInfo } = require('../../modules/boostIntegration');
     
     // First check if character has boostedBy set (required for boost to be active)
     if (!healerCharacter.boostedBy) {
       return { valid: false, message: targetDebuff.message };
     }
     
-    const hasPriestBoost = await isBoostActive(healerCharacter.name, 'Healers');
+    const hasHealerBoost = await isBoostActive(healerCharacter.name, 'Healers');
     
-    if (hasPriestBoost) {
+    if (hasHealerBoost) {
       // Get the booster info to check if it's a Priest
-      const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
-      if (activeBoost && activeBoost.status === 'accepted' && activeBoost.boostExpiresAt && Date.now() <= activeBoost.boostExpiresAt) {
-        const booster = await fetchCharacterByName(activeBoost.boostingCharacter);
-        // If healer has Priest boost, allow healing - debuff will be removed during healing
-        if (booster && (booster.job === 'Priest' || activeBoost.boosterJob === 'Priest')) {
-          logger.info('HEAL', `Allowing healing of debuffed ${characterToHeal.name} because healer ${healerCharacter.name} has Priest boost`);
-        } else {
-          // Has boost but not Priest - still block
-          return { valid: false, message: targetDebuff.message };
-        }
+      const boosterInfo = await getBoosterInfo(healerCharacter.name);
+      if (boosterInfo && boosterInfo.job === 'Priest') {
+        // Healer has Priest boost - allow healing, debuff will be removed during healing
+        logger.info('HEAL', `Allowing healing of debuffed ${characterToHeal.name} because healer ${healerCharacter.name} has Priest boost from ${boosterInfo.name}`);
+        // Continue past debuff check - healing is allowed
       } else {
-        // Boost expired or invalid - still block
+        // Has boost but not Priest - still block
         return { valid: false, message: targetDebuff.message };
       }
     } else {

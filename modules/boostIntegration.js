@@ -434,5 +434,6 @@ module.exports = {
   applyVendingBoost,
   applyOtherBoost,
   getCharacterBoostStatus,
+  getBoosterInfo,
   addBoostNotificationToEmbed
 }; 

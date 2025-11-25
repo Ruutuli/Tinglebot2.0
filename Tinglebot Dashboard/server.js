@@ -1891,6 +1891,130 @@ app.get('/api/stats/characters', async (req, res) => {
   }
 });
 
+// ------------------- Function: getStealCooldowns -------------------
+// Returns steal cooldown information for a character
+app.get('/api/steal/cooldowns/:characterId', requireAuth, async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const userId = req.user.discordId;
+
+    // Find character and verify ownership
+    let character = await Character.findById(characterId).lean();
+    if (!character) {
+      character = await ModCharacter.findById(characterId).lean();
+    }
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Verify ownership
+    if (character.userId && character.userId.toString() !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Helper function to format cooldown time
+    const formatCooldownTime = (timeLeft) => {
+      const days = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
+      const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+      const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
+      
+      if (days > 0) {
+        return `${days}d ${hours}h ${minutes}m`;
+      } else if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      } else {
+        return `${minutes}m`;
+      }
+    };
+
+    const cooldowns = {
+      npcs: [],
+      players: []
+    };
+
+    // Get all NPCs
+    const NPC = require('./models/NPCModel');
+    const allNPCs = await NPC.find({});
+    
+    for (const npc of allNPCs) {
+      // Check global protection
+      let globalCooldown = null;
+      if (npc.stealProtection?.isProtected && !npc.isProtectionExpired()) {
+        const timeLeft = npc.getProtectionTimeLeft();
+        globalCooldown = {
+          active: true,
+          timeLeft: timeLeft,
+          formatted: formatCooldownTime(timeLeft),
+          type: 'global'
+        };
+      }
+
+      // Check personal lockout
+      let personalCooldown = null;
+      const personalLockout = npc.personalLockouts?.find(lockout => 
+        lockout.characterId.toString() === characterId && 
+        lockout.lockoutEndTime > new Date()
+      );
+      
+      if (personalLockout) {
+        const timeLeft = personalLockout.lockoutEndTime.getTime() - Date.now();
+        personalCooldown = {
+          active: true,
+          timeLeft: timeLeft,
+          formatted: formatCooldownTime(timeLeft),
+          type: 'personal'
+        };
+      }
+
+      // Only include NPCs that have at least one active cooldown
+      if (globalCooldown || personalCooldown) {
+        cooldowns.npcs.push({
+          name: npc.name,
+          global: globalCooldown,
+          personal: personalCooldown
+        });
+      }
+    }
+
+    // Get all player characters that have protection
+    const protectedCharacters = await Character.find({
+      'stealProtection.isProtected': true,
+      _id: { $ne: characterId } // Exclude self
+    });
+
+    for (const char of protectedCharacters) {
+      // Check if protection is still active
+      if (char.stealProtection?.isProtected && !char.isProtectionExpired()) {
+        const timeLeft = char.getProtectionTimeLeft();
+        if (timeLeft > 0) {
+          cooldowns.players.push({
+            name: char.name,
+            global: {
+              active: true,
+              timeLeft: timeLeft,
+              formatted: formatCooldownTime(timeLeft),
+              type: 'global'
+            }
+          });
+        }
+      }
+    }
+
+    // Sort by name
+    cooldowns.npcs.sort((a, b) => a.name.localeCompare(b.name));
+    cooldowns.players.sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json(cooldowns);
+  } catch (error) {
+    logger.error('Error fetching steal cooldowns', error, 'server.js');
+    res.status(500).json({ 
+      error: 'Failed to fetch steal cooldowns',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // ------------------- Function: getHWQStats -------------------
 // Returns comprehensive Help Wanted Quest statistics
 app.get('/api/stats/hwqs', async (req, res) => {

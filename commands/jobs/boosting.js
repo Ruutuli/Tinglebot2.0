@@ -2509,7 +2509,9 @@ async function clearBoostAfterUse(character, options = {}) {
           const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
           await updateBoostRequestEmbed(client, activeBoost, 'fulfilled');
           // Update the 'Boost Applied' embed if we have its reference
-          await updateBoostAppliedMessage(client, activeBoost);
+          if (typeof module.exports.updateBoostAppliedMessage === 'function') {
+            await module.exports.updateBoostAppliedMessage(client, activeBoost);
+          }
         } catch (embedErr) {
           logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);
           // Continue with clearing even if embed update fails
