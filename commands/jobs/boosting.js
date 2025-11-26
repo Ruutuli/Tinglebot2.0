@@ -803,6 +803,36 @@ module.exports = {
 // ============================================================================
 
 async function handleBoostRequest(interaction) {
+ // Defer the reply immediately to prevent interaction timeout
+ await interaction.deferReply({ ephemeral: false });
+
+ // Helper function to safely respond to interaction
+ const safeReply = async (content, options = {}) => {
+  try {
+   if (!interaction.isRepliable()) {
+    logger.warn('BOOST', 'Interaction not repliable');
+    return;
+   }
+   
+   if (interaction.replied || interaction.deferred) {
+    await interaction.editReply(content);
+   } else {
+    await interaction.reply(content);
+   }
+  } catch (error) {
+   if (error.code === 10062) {
+    // Interaction has expired, try followUp instead
+    try {
+     await interaction.followUp(content);
+    } catch (followUpError) {
+     logger.error('BOOST', 'Failed to send followUp message');
+    }
+   } else {
+    throw error;
+   }
+  }
+ };
+
  const characterName = interaction.options.getString("character");
  const boosterName = interaction.options.getString("booster");
  const category = interaction.options.getString("category");
@@ -817,7 +847,7 @@ async function handleBoostRequest(interaction) {
   logger.error('BOOST',
    `[boosting.js]: Error - One or both characters could not be found. Inputs: character="${characterName}", booster="${boosterName}"`
   );
-  await interaction.reply({
+  await safeReply({
    content: "One or both characters could not be found.",
    ephemeral: true,
   });
@@ -860,7 +890,7 @@ async function handleBoostRequest(interaction) {
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ text: 'You can request a new boost after it is fulfilled, cancelled, or expires.' });
 
-  await interaction.reply({
+  await safeReply({
    embeds: [embed],
    ephemeral: true,
   });
@@ -872,7 +902,7 @@ async function handleBoostRequest(interaction) {
  const villageValidation = validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel);
  if (!villageValidation.valid) {
   logger.debug('BOOST', '[Validation] Village mismatch detected during boost request.');
-  await interaction.reply({
+  await safeReply({
    content: villageValidation.error,
    ephemeral: true,
   });
@@ -883,7 +913,7 @@ async function handleBoostRequest(interaction) {
  const boostRequestValidation = validateBoostRequest(targetCharacter, category);
  if (!boostRequestValidation.valid) {
   logger.debug('BOOST', '[Validation] Boost request invalid for target character.');
-  await interaction.reply({
+  await safeReply({
    content: boostRequestValidation.error,
    ephemeral: true,
   });
@@ -894,7 +924,7 @@ async function handleBoostRequest(interaction) {
   const boostEffectValidation = validateBoostEffect(boosterCharacter.job, category);
   if (!boostEffectValidation.valid) {
    logger.debug('BOOST', `[Validation] ${boostEffectValidation.error}`);
-   await interaction.reply({
+   await safeReply({
     content: boostEffectValidation.error,
     ephemeral: true,
    });
@@ -904,7 +934,7 @@ async function handleBoostRequest(interaction) {
    // Scholar validation
   const scholarValidation = validateScholarVillageParameter(boosterCharacter.job, category, village);
   if (!scholarValidation.valid) {
-   await interaction.reply({
+   await safeReply({
     content: scholarValidation.error,
     ephemeral: true,
    });
@@ -926,15 +956,20 @@ async function handleBoostRequest(interaction) {
 // HARDCODE the slash command mention so it's always clickable
 const commandMention = BOOSTING_ACCEPT_COMMAND_MENTION;
 
-const reply = await interaction.reply({
+await safeReply({
  content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run ${commandMention} within 24 hours.`,
  embeds: [embed]
-}).then(response => response.fetch());
+});
 
  // Save the message ID to TempData for later updates
- requestData.messageId = reply.id;
- requestData.channelId = reply.channelId;
- await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
+ try {
+  const reply = await interaction.fetchReply();
+  requestData.messageId = reply.id;
+  requestData.channelId = reply.channelId;
+  await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
+ } catch (e) {
+  logger.warn('BOOST', `Could not persist message reference for ${requestData.boostRequestId}: ${e.message}`);
+ }
 }
 
 async function handleBoostAccept(interaction) {

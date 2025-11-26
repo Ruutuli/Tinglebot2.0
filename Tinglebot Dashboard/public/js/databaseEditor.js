@@ -5480,10 +5480,16 @@ async function handleSaveRecord() {
   const recordData = {};
   
   for (const [key, value] of formData.entries()) {
-    const fieldInfo = currentSchema[key];
-    if (!fieldInfo) continue;
+    // Skip internal form fields and buttons
+    if (key === '' || key.startsWith('_') || key === 'submit') continue;
     
-    const sanitizedValue = validateAndSanitizeField(key, value, fieldInfo.type);
+    const fieldInfo = currentSchema[key];
+    
+    // If field is not in schema but exists in form, treat it as a String
+    // This allows saving fields that exist in the database but may not be in the schema definition
+    const fieldType = fieldInfo ? fieldInfo.type : 'String';
+    
+    const sanitizedValue = validateAndSanitizeField(key, value, fieldType);
     
     // Handle nested fields (e.g., gearArmor.head)
     if (key.includes('.')) {

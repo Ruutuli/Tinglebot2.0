@@ -1121,12 +1121,14 @@ const createArtSubmissionEmbed = (submissionData) => {
     finalTokenAmount,
     tokenCalculation,
     baseSelections,
+    baseCounts,
     typeMultiplierSelections,
     productMultiplierValue,
     addOnsApplied,
     specialWorksApplied,
     collab,
-    updatedAt
+    updatedAt,
+    characterCount
   } = submissionData;
 
   // Art title fallback
@@ -1152,7 +1154,8 @@ const createArtSubmissionEmbed = (submissionData) => {
     
     // Compose breakdown lines
     if (baseSelections && baseSelections.length) {
-      breakdown += `${capitalizeFirst(baseSelections[0])} (${baseTotal} × ${characterCount || 1}) = ${baseTotal}\n`;
+      // Show base total (baseTotal already includes multiplication by count)
+      breakdown += `Base: ${baseTotal}\n`;
     }
     if (typeMultiplierTotal && typeMultiplierTotal !== 1) {
       breakdown += `× Type Multiplier (${typeMultiplierTotal})\n`;

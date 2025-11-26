@@ -932,9 +932,11 @@ module.exports = {
         let isEntertainerBoost = false;
         
         if (character.boostedBy && boosterCharacter) {
-          // Special handling for Entertainer boost (bonus item after normal gather)
+          // Special handling for Entertainer boost (filters items to only entertainerItems: true)
           if (boosterCharacter.job === 'Entertainer') {
             isEntertainerBoost = true;
+            // Apply Entertainer boost to filter main item pool to only entertainer items
+            boostedAvailableItems = await applyGatheringBoost(character.name, availableItems);
           } else if (boosterCharacter.job !== 'Scholar') {
             // Normal boost application for all other jobs (including Priest) - apply to available items
             // Skip Scholar since we already handled the region change above

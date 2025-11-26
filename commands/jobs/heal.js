@@ -5,7 +5,8 @@ const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { 
   fetchCharacterByName, 
   fetchCharacterByNameAndUserId,
-  fetchModCharacterByNameAndUserId
+  fetchModCharacterByNameAndUserId,
+  fetchModCharacterByName
 } = require('../../database/db.js');
 const { capitalizeFirstLetter } = require('../../modules/formattingModule.js');
 const { useStamina, recoverHearts } = require('../../modules/characterStatsModule.js');
@@ -276,20 +277,27 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
     // Must check BOTH the character's boostedBy field AND TempData to ensure boost is truly active
     const { isBoostActive, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
     const { getBoosterInfo } = require('../../modules/boostIntegration');
+    const { fetchCharacterByName, fetchModCharacterByName } = require('../../database/db');
     
-    // First check if character has boostedBy set (required for boost to be active)
-    if (!healerCharacter.boostedBy) {
+    // Refresh healer character to ensure we have the latest boostedBy field
+    // Try regular character first, then mod character
+    let refreshedHealer = await fetchCharacterByName(healerCharacter.name);
+    if (!refreshedHealer) {
+      refreshedHealer = await fetchModCharacterByName(healerCharacter.name);
+    }
+    if (!refreshedHealer) {
       return { valid: false, message: targetDebuff.message };
     }
     
-    const hasHealerBoost = await isBoostActive(healerCharacter.name, 'Healers');
+    // Check if boost is active in TempData first (this will also trigger self-repair if needed)
+    const hasHealerBoost = await isBoostActive(refreshedHealer.name, 'Healers');
     
     if (hasHealerBoost) {
       // Get the booster info to check if it's a Priest
-      const boosterInfo = await getBoosterInfo(healerCharacter.name);
+      const boosterInfo = await getBoosterInfo(refreshedHealer.name);
       if (boosterInfo && boosterInfo.job === 'Priest') {
         // Healer has Priest boost - allow healing, debuff will be removed during healing
-        logger.info('HEAL', `Allowing healing of debuffed ${characterToHeal.name} because healer ${healerCharacter.name} has Priest boost from ${boosterInfo.name}`);
+        logger.info('HEAL', `Allowing healing of debuffed ${characterToHeal.name} because healer ${refreshedHealer.name} has Priest boost from ${boosterInfo.name}`);
         // Continue past debuff check - healing is allowed
       } else {
         // Has boost but not Priest - still block
