@@ -836,13 +836,19 @@ async function applyEntertainerGatheringBoost(regionItems) {
   return entertainerItems.length > 0 ? entertainerItems : regionItems;
  }
 
+ // Filter regionItems to only include items marked as entertainerItems: true
+ const filteredRegionItems = regionItems.filter((item) => item.entertainerItems === true);
+
+ // If no entertainer items are configured, return empty array (Entertainer boost requires entertainer items)
  if (!entertainerItems.length) {
-  return [...regionItems];
+  return filteredRegionItems.length > 0 ? filteredRegionItems : [];
  }
 
- const mergedItems = [...regionItems];
- const existingNames = new Set(regionItems.map((item) => item.itemName));
+ // Start with filtered region items (only those with entertainerItems: true)
+ const mergedItems = [...filteredRegionItems];
+ const existingNames = new Set(filteredRegionItems.map((item) => item.itemName));
 
+ // Add any additional entertainer items that match the job/region but weren't in the filtered list
  entertainerItems.forEach((item) => {
   if (!existingNames.has(item.itemName)) {
    mergedItems.push(item);

@@ -307,7 +307,7 @@ async function handleConfirmation(interaction, userId, submissionData) {
       userAvatar: submissionData.userAvatar || interaction.user.displayAvatarURL(),
     };
 
-    const embed = createArtSubmissionEmbed(embedData, user);
+    const embed = createArtSubmissionEmbed(embedData);
     // Post to specific submissions channel
     const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
     const sentMessage = await submissionsChannel.send({ embeds: [embed] });
