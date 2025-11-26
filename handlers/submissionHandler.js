@@ -175,8 +175,8 @@ async function handleSubmissionCompletion(interaction) {
       questBonus = await getQuestBonus(submissionData.questEvent);
       console.log(`[submissionHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
       
-      // Update submission data with the actual quest bonus
-      submissionData.questBonus = questBonus;
+      // Update submission data with the actual quest bonus (convert to string for storage)
+      submissionData.questBonus = String(questBonus);
     }
 
     const { totalTokens, breakdown } = calculateTokens({

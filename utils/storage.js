@@ -171,7 +171,7 @@ async function saveSubmissionToStorage(key, submissionData) {
     userAvatar: submissionData.userAvatar,
     category: submissionData.category || "art",
     questEvent: submissionData.questEvent || "N/A",
-    questBonus: submissionData.questBonus || "N/A",
+    questBonus: submissionData.questBonus ? String(submissionData.questBonus) : "N/A",
     baseSelections: submissionData.baseSelections || [],
     typeMultiplierSelections: submissionData.typeMultiplierSelections || [],
     productMultiplierValue: submissionData.productMultiplierValue,

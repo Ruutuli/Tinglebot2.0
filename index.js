@@ -114,6 +114,52 @@ async function initializeDatabases() {
     });
     logger.success('CLEANUP', `${boostingCleanupResult.deletedCount} expired boosting entries`);
     
+    // Fix questBonus type issues (convert numeric questBonus to string)
+    try {
+      const ApprovedSubmission = require('./models/ApprovedSubmissionModel');
+      
+      // Fix ApprovedSubmission records with numeric questBonus
+      const approvedSubmissionsWithNumericBonus = await ApprovedSubmission.find({
+        questBonus: { $type: 'number' }
+      });
+      
+      let approvedFixedCount = 0;
+      for (const submission of approvedSubmissionsWithNumericBonus) {
+        await ApprovedSubmission.updateOne(
+          { _id: submission._id },
+          { $set: { questBonus: String(submission.questBonus) } }
+        );
+        approvedFixedCount++;
+      }
+      
+      // Fix TempData submission records with numeric questBonus in data field
+      const tempSubmissionsWithNumericBonus = await TempData.find({
+        type: 'submission',
+        'data.questBonus': { $type: 'number' }
+      });
+      
+      let tempFixedCount = 0;
+      for (const tempData of tempSubmissionsWithNumericBonus) {
+        if (tempData.data && typeof tempData.data.questBonus === 'number') {
+          await TempData.updateOne(
+            { _id: tempData._id },
+            { $set: { 'data.questBonus': String(tempData.data.questBonus) } }
+          );
+          tempFixedCount++;
+        }
+      }
+      
+      if (approvedFixedCount > 0 || tempFixedCount > 0) {
+        logger.success('CLEANUP', `Fixed ${approvedFixedCount} ApprovedSubmission records with numeric questBonus`);
+        logger.success('CLEANUP', `Fixed ${tempFixedCount} TempData submission records with numeric questBonus`);
+      } else {
+        logger.info('CLEANUP', 'No questBonus type issues found');
+      }
+    } catch (questBonusError) {
+      logger.warn('CLEANUP', `Error fixing questBonus types: ${questBonusError.message}`);
+      // Don't fail initialization if cleanup fails
+    }
+    
     console.log('\n');
     logger.separator('═', 60);
     logger.success('DATABASE', '✨ Database initialization complete');

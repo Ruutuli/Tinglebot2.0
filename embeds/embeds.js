@@ -1105,6 +1105,31 @@ const createWritingSubmissionEmbed = (submissionData) => {
  return embed;
 };
 
+// ------------------- Function: ensureEmbedFieldValueIsString -------------------
+// Helper function to ensure embed field values are strings (Discord requirement)
+// Converts numbers, null, undefined, and other types to appropriate string representations
+const ensureEmbedFieldValueIsString = (value) => {
+  if (value === null || value === undefined) {
+    return 'N/A';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
 // ------------------- Function: createArtSubmissionEmbed -------------------
 // Creates an embed for art submission approvals with detailed token breakdown
 const createArtSubmissionEmbed = (submissionData) => {
@@ -1200,7 +1225,7 @@ const createArtSubmissionEmbed = (submissionData) => {
   }
   
   if (questBonus && questBonus !== 'N/A') {
-    fields.push({ name: 'Quest/Event Bonus', value: questBonus, inline: true });
+    fields.push({ name: 'Quest/Event Bonus', value: ensureEmbedFieldValueIsString(questBonus), inline: true });
   }
   
   // Add collab field if present
@@ -1242,12 +1267,18 @@ const createArtSubmissionEmbed = (submissionData) => {
     fields.push({ name: 'Token Calculation', value: `\n${breakdown}\n`, inline: false });
   }
 
+  // Validate all field values are strings (Discord requirement)
+  const validatedFields = fields.map(field => ({
+    ...field,
+    value: ensureEmbedFieldValueIsString(field.value)
+  }));
+
   // Build the embed
   const embed = new EmbedBuilder()
     .setColor(0x2ecc71)
     .setAuthor({ name: `Submitted by: ${username || 'Unknown User'}`, iconURL: userAvatar || undefined })
     .setTitle(`🎨 ${artTitle}`)
-    .addFields(fields);
+    .addFields(validatedFields);
 
   // Set different footer and timestamp based on submission type
   if (tokenCalculation === 'No tokens - Display only') {
