@@ -292,12 +292,6 @@ async function handleConfirmation(interaction, userId, submissionData) {
       embedSent: true
     };
 
-    // First update the interaction
-    await interaction.update({
-      content: '✅ **You have confirmed your submission! Mods will review it shortly.**',
-      components: [],
-    });
-
     // Ensure all required fields are present
     const embedData = {
       ...submissionData,
@@ -307,16 +301,66 @@ async function handleConfirmation(interaction, userId, submissionData) {
       userAvatar: submissionData.userAvatar || interaction.user.displayAvatarURL(),
     };
 
-    const embed = createArtSubmissionEmbed(embedData);
-    // Post to specific submissions channel
-    const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
-    const sentMessage = await submissionsChannel.send({ embeds: [embed] });
+    // Create embed and post to channel BEFORE showing success message
+    // This way errors are caught before user sees success
+    let embed;
+    let sentMessage;
+    let messageUrl;
     
-    // Update with message URL
-    const messageUrl = `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}`;
-    await updateSubmissionData(submissionData.submissionId, {
-      ...updates,
-      messageUrl: messageUrl
+    try {
+      embed = createArtSubmissionEmbed(embedData);
+      
+      // Post to specific submissions channel
+      const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
+      if (!submissionsChannel) {
+        throw new Error('Submissions channel not found. Please contact a moderator.');
+      }
+      
+      sentMessage = await submissionsChannel.send({ embeds: [embed] });
+      
+      // Update with message URL
+      messageUrl = `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}`;
+      await updateSubmissionData(submissionData.submissionId, {
+        ...updates,
+        messageUrl: messageUrl
+      });
+    } catch (embedError) {
+      // Log detailed error information
+      console.error('[componentHandler.js]: ❌ Error creating or posting submission embed:', {
+        error: embedError.message,
+        stack: embedError.stack,
+        submissionId: submissionData.submissionId,
+        userId: userId,
+        questBonus: submissionData.questBonus,
+        questBonusType: typeof submissionData.questBonus
+      });
+      
+      // Provide user-friendly error message
+      const errorMessage = embedError.message?.includes('ValidationError') || embedError.message?.includes('Expected a string')
+        ? '❌ **An error occurred while formatting your submission. This may be due to invalid data. Please try again or contact a moderator if the issue persists.**'
+        : embedError.message?.includes('channel not found')
+        ? '❌ **Submissions channel not found. Please contact a moderator.**'
+        : '❌ **An error occurred while posting your submission. Please try again or contact a moderator if the issue persists.**';
+      
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: errorMessage,
+          ephemeral: true
+        });
+      } else if (interaction.deferred) {
+        await interaction.editReply({
+          content: errorMessage,
+          components: []
+        });
+      }
+      
+      throw embedError; // Re-throw to be caught by outer catch
+    }
+
+    // Only show success message after embed is successfully created and posted
+    await interaction.update({
+      content: '✅ **You have confirmed your submission! Mods will review it shortly.**',
+      components: [],
     });
 
     // Send notification to approval channel
@@ -390,17 +434,38 @@ async function handleConfirmation(interaction, userId, submissionData) {
 
     logger.success('SUBMISSION', `✅ Confirmed submission ${submissionData.submissionId} with ${totalTokens} tokens`);
   } catch (error) {
-    console.error('Error in handleConfirmation:', error);
+    // Log detailed error information
+    console.error('[componentHandler.js]: ❌ Error in handleConfirmation:', {
+      error: error.message,
+      stack: error.stack,
+      name: error.name,
+      submissionId: submissionData?.submissionId,
+      userId: userId,
+      questBonus: submissionData?.questBonus,
+      questBonusType: typeof submissionData?.questBonus
+    });
+    
     try {
+      // Provide user-friendly error message based on error type
+      let errorMessage = '❌ **An error occurred while confirming your submission. Please try again.**';
+      
+      if (error.message?.includes('Token calculation not found')) {
+        errorMessage = '❌ **Token calculation is missing. Please complete all submission steps and try again.**';
+      } else if (error.message?.includes('ValidationError') || error.message?.includes('Expected a string')) {
+        errorMessage = '❌ **An error occurred while formatting your submission data. Please try again or contact a moderator if the issue persists.**';
+      } else if (error.message?.includes('channel not found')) {
+        errorMessage = '❌ **Submissions channel not found. Please contact a moderator.**';
+      }
+      
       // Only try to reply if we haven't already
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: '❌ **An error occurred while confirming your submission. Please try again.**',
+          content: errorMessage,
           ephemeral: true
         });
       } else if (interaction.replied) {
         await interaction.followUp({
-          content: '❌ **An error occurred while confirming your submission. Please try again.**',
+          content: errorMessage,
           ephemeral: true
         });
       }

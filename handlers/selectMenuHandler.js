@@ -238,9 +238,9 @@ async function handleSelectMenuInteraction(interaction) {
         questBonus = await getQuestBonus(updatedSubmissionData.questEvent);
         console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${updatedSubmissionData.questEvent}: ${questBonus}`);
         
-        // Update submission data with the actual quest bonus
+        // Update submission data with the actual quest bonus (convert to string for storage)
         await updateSubmissionData(submissionId, {
-          questBonus: questBonus
+          questBonus: String(questBonus)
         });
       }
 
@@ -428,8 +428,8 @@ async function confirmSubmission(interaction) {
       questBonus = await getQuestBonus(submissionData.questEvent);
       console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
       
-      // Update submission data with the actual quest bonus
-      submissionData.questBonus = questBonus;
+      // Update submission data with the actual quest bonus (convert to string for storage)
+      submissionData.questBonus = String(questBonus);
     }
 
     // Calculate tokens and generate breakdown
