@@ -583,8 +583,8 @@ function setupMobileSidebar() {
   
   overlay.addEventListener('click', toggleSidebar);
   
-  // Close sidebar when clicking on a link
-  const sidebarLinks = sidebar.querySelectorAll('a');
+  // Close sidebar when clicking on a navigation link (but not dropdown toggles)
+  const sidebarLinks = sidebar.querySelectorAll('.sidebar-nav a:not(.nav-dropdown-toggle)');
   sidebarLinks.forEach(link => {
     link.addEventListener('click', () => {
       if (window.innerWidth <= 768) {

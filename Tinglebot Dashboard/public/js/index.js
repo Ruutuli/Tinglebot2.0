@@ -717,33 +717,50 @@ function setupSidebarNavigation() {
     });
   });
   
-  // Close dropdowns when clicking outside
+  // Close dropdowns when clicking outside (but not on mobile when sidebar is open)
   document.addEventListener('click', (e) => {
+    // Don't close dropdowns if clicking inside the sidebar on mobile
+    if (isMobileView() && e.target.closest('.sidebar')) {
+      return;
+    }
+    
     if (!e.target.closest('.nav-dropdown')) {
       document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
         dropdown.classList.remove('active');
-        dropdown.querySelector('.nav-dropdown-toggle').setAttribute('aria-expanded', 'false');
+        const toggle = dropdown.querySelector('.nav-dropdown-toggle');
+        if (toggle) {
+          toggle.setAttribute('aria-expanded', 'false');
+        }
       });
     }
   });
   
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+  const sidebarLinks = document.querySelectorAll('.sidebar-nav a:not(.nav-dropdown-toggle)');
   
   sidebarLinks.forEach(link => {
     const sectionId = link.getAttribute('data-section');
     
     link.addEventListener('click', e => {
+      // Skip if this is a dropdown toggle (handled separately above)
+      if (link.classList.contains('nav-dropdown-toggle')) {
+        return;
+      }
+      
       // Allow external links (like /map) to work normally
       if (!sectionId) {
         // No data-section means it's an external link, don't prevent default
-        closeMobileSidebar();
+        if (isMobileView()) {
+          closeMobileSidebar();
+        }
         return;
       }
       
       e.preventDefault();
       
-      // Close mobile sidebar if open
-      closeMobileSidebar();
+      // Close mobile sidebar if open (only for actual navigation links, not dropdown toggles)
+      if (isMobileView()) {
+        closeMobileSidebar();
+      }
       
       // If link is inside a dropdown, open that dropdown
       const dropdown = link.closest('.nav-dropdown');
