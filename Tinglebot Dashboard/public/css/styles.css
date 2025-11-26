@@ -947,6 +947,113 @@ h4 { font-size: 1.25rem; }
     background: rgba(255, 255, 255, 0.05);
   }
   
+  /* ------------------- Sidebar Dropdown Mobile ------------------- */
+  .nav-dropdown {
+    position: relative;
+  }
+  
+  .nav-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 1rem 1.5rem;
+    margin: 0.25rem 1rem;
+    border-radius: 0.5rem;
+    min-height: 48px;
+    width: calc(100% - 2rem);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .nav-dropdown-toggle i:first-child {
+    width: 19px;
+    text-align: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+  }
+  
+  .nav-dropdown-toggle span {
+    font-size: 0.9rem;
+    font-weight: 500;
+    flex: 1;
+  }
+  
+  .nav-chevron {
+    font-size: 0.75rem;
+    transition: transform 0.3s ease;
+    margin-left: auto;
+  }
+  
+  .nav-dropdown.active .nav-chevron {
+    transform: rotate(180deg);
+  }
+  
+  .nav-dropdown-toggle:hover,
+  .nav-dropdown.active .nav-dropdown-toggle {
+    background: var(--glass-bg);
+    color: var(--totk-light-green);
+  }
+  
+  .nav-dropdown-menu {
+    list-style: none;
+    margin: 0.25rem 0 0.25rem 1.5rem;
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .nav-dropdown.active .nav-dropdown-menu {
+    max-height: 1000px;
+    opacity: 1;
+    padding: 0.5rem 0;
+  }
+  
+  .nav-dropdown-menu li {
+    margin: 0.1rem 0;
+  }
+  
+  .nav-dropdown-menu a {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.875rem 1.25rem;
+    margin: 0.2rem 0.875rem;
+    border-radius: 0.4375rem;
+    min-height: 48px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  
+  .nav-dropdown-menu a i {
+    width: 19px;
+    text-align: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+  }
+  
+  .nav-dropdown-menu a span {
+    font-size: 0.9rem;
+  }
+  
+  .nav-dropdown-menu a:hover,
+  .nav-dropdown-menu li.active a {
+    background: var(--glass-bg);
+    color: var(--totk-light-green);
+    padding-left: 1.25rem;
+  }
+  
+  .nav-dropdown-menu li.active > a {
+    background: var(--glass-bg);
+    color: var(--totk-light-green);
+    font-weight: 600;
+    border-left: 3px solid var(--totk-light-green);
+  }
+  
   /* Sidebar overlay - Z-index: 1001 (between topbar and sidebar) */
   .sidebar-overlay {
     display: block;
