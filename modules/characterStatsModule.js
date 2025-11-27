@@ -467,7 +467,13 @@ const healKoCharacter = async (characterId, healerId = null) => {
     }
 
     await updateCurrentHearts(characterId, 1);
-    await Character.updateOne({ _id: characterId }, { $set: { ko: false } });
+    await Character.updateOne({ _id: characterId }, { 
+      $set: { 
+        ko: false,
+        'debuff.active': false,
+        'debuff.endDate': null
+      } 
+    });
     return createSimpleCharacterEmbed(character, `❤️ ${character.name} has been revived.`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {
