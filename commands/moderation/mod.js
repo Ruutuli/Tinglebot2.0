@@ -1978,7 +1978,18 @@ async function handleApprove(interaction) {
                     console.log(`[mod.js]: 🎉 Quest ${submission.questEvent} was fully completed!`);
                   }
                 } else {
-                  console.log(`[mod.js]: ℹ️ No main quest completion needed: ${questResult.reason || questResult.error}`);
+                  // Log as warning for expected failures, error for unexpected ones
+                  const isExpectedFailure = questResult.reason && 
+                      (questResult.reason.includes('not an Art quest') || 
+                       questResult.reason.includes('not a Writing quest') ||
+                       questResult.reason.includes('not active') ||
+                       questResult.reason === 'No quest ID');
+                  
+                  if (isExpectedFailure) {
+                      console.log(`[mod.js]: ℹ️ Quest completion skipped: ${questResult.reason || questResult.error}`);
+                  } else {
+                      console.error(`[mod.js]: ❌ Unexpected quest completion error: ${questResult.reason || questResult.error}`);
+                  }
                 }
               } else if (submission.category === 'writing') {
                 const { processWritingQuestCompletionFromSubmission } = require('../../modules/questRewardModule');
@@ -1990,7 +2001,18 @@ async function handleApprove(interaction) {
                     console.log(`[mod.js]: 🎉 Quest ${submission.questEvent} was fully completed!`);
                   }
                 } else {
-                  console.log(`[mod.js]: ℹ️ No main quest completion needed: ${questResult.reason || questResult.error}`);
+                  // Log as warning for expected failures, error for unexpected ones
+                  const isExpectedFailure = questResult.reason && 
+                      (questResult.reason.includes('not an Art quest') || 
+                       questResult.reason.includes('not a Writing quest') ||
+                       questResult.reason.includes('not active') ||
+                       questResult.reason === 'No quest ID');
+                  
+                  if (isExpectedFailure) {
+                      console.log(`[mod.js]: ℹ️ Quest completion skipped: ${questResult.reason || questResult.error}`);
+                  } else {
+                      console.error(`[mod.js]: ❌ Unexpected quest completion error: ${questResult.reason || questResult.error}`);
+                  }
                 }
               }
             } else {

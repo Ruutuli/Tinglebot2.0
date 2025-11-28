@@ -592,7 +592,7 @@ questSchema.methods.completeFromArtSubmission = async function(userId, submissio
             throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
         }
         
-        if (this.questType !== 'Art') {
+        if (this.questType !== 'Art' && this.questType !== 'Art / Writing') {
             throw new Error(`Quest ${this.questID} is not an Art quest`);
         }
         
@@ -629,7 +629,7 @@ questSchema.methods.completeFromWritingSubmission = async function(userId, submi
             throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
         }
         
-        if (this.questType !== 'Writing') {
+        if (this.questType !== 'Writing' && this.questType !== 'Art / Writing') {
             throw new Error(`Quest ${this.questID} is not a Writing quest`);
         }
         
