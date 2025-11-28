@@ -1797,11 +1797,8 @@ async function checkAndCompleteQuestFromSubmission(submissionData, client) {
       return;
     }
 
-    // Check if quest is expired
-    if (isQuestExpired(quest)) {
-      console.log(`[helpWantedModule]: Quest ${questId} is expired`);
-      return;
-    }
+    // Note: We don't check expiration here - let completeQuestFromSubmission handle it
+    // This allows expired quests with approved submissions to be completed
 
     // Check if submission type matches quest type
     const submissionType = submissionData.category; // 'art' or 'writing'
@@ -1869,9 +1866,29 @@ async function checkSubmissionApproval(messageUrl, client) {
 }
 
 // ------------------- Function: completeQuestFromSubmission -------------------
-// Completes a quest when a submission is approved
+// Completes a quest when a submission is approved (only if quest period has ended)
 async function completeQuestFromSubmission(quest, submissionData, client) {
   try {
+    // Check if quest period has ended before completing
+    // Help Wanted quests expire at midnight on the day they are posted
+    if (!isQuestExpired(quest)) {
+      console.log(`[helpWantedModule]: Quest ${quest.questId} submission approved, but quest period has not ended yet. Completion will be processed when period expires.`);
+      // Update user tracking to mark they completed the quest (even though quest isn't completed yet)
+      const User = require('../models/UserModel');
+      const user = await User.findOne({ discordId: submissionData.userId });
+      if (user) {
+        await updateUserTracking(user, quest, submissionData.userId);
+      }
+      // Update quest embed to show completion status
+      await updateQuestEmbed(client, quest, {
+        userId: submissionData.userId,
+        characterId: null,
+        timestamp: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'})
+      });
+      return; // Don't complete quest or send messages until period ends
+    }
+
+    // Quest period has ended - proceed with completion
     // Mark quest as completed
     quest.completed = true;
     quest.completedBy = {
@@ -1894,7 +1911,7 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
     // Send completion message to the original town hall channel
     await sendQuestCompletionMessage(quest, submissionData, client);
 
-    console.log(`[helpWantedModule]: ✅ Quest ${quest.questId} completed via submission approval`);
+    console.log(`[helpWantedModule]: ✅ Quest ${quest.questId} completed via submission approval (period has ended)`);
     
   } catch (error) {
     console.error(`[helpWantedModule]: Error completing quest from submission:`, error);
