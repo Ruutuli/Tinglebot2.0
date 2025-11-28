@@ -2803,14 +2803,21 @@ async function handleFulfill(interaction) {
                 buyerTokenBalance = await atomicUpdateTokenBalance(buyerId, -totalCost, session);
                 rollbackActions.push({ type: 'token', userId: buyerId, amount: totalCost });
                 
-                vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, session);
-                rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost });
+                // For self-purchases, skip vendor token addition (buyer and vendor are the same)
+                if (!isVendorSelfPurchase) {
+                  vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, session);
+                  rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost });
+                } else {
+                  // For self-purchases, vendor balance is the same as buyer balance
+                  vendorTokenBalance = buyerTokenBalance;
+                }
               });
               
               console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Tokens transferred (transaction)', {
                 fulfillmentId,
                 buyerBalance: buyerTokenBalance,
-                vendorBalance: vendorTokenBalance
+                vendorBalance: vendorTokenBalance,
+                isVendorSelfPurchase
               });
             } catch (transactionError) {
               // Fallback: Try individual updates with retry logic if transaction fails
@@ -2829,34 +2836,47 @@ async function handleFulfill(interaction) {
               buyerTokenBalance = await atomicUpdateTokenBalance(buyerId, -totalCost, null, MAX_RETRY_ATTEMPTS);
               rollbackActions.push({ type: 'token', userId: buyerId, amount: totalCost, fallback: true });
               
-              try {
-                // Attempt vendor update with retry
-                vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, null, MAX_RETRY_ATTEMPTS);
-                rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost, fallback: true });
+              // For self-purchases, skip vendor token addition (buyer and vendor are the same)
+              if (!isVendorSelfPurchase) {
+                try {
+                  // Attempt vendor update with retry
+                  vendorTokenBalance = await atomicUpdateTokenBalance(vendor.userId, totalCost, null, MAX_RETRY_ATTEMPTS);
+                  rollbackActions.push({ type: 'token', userId: vendor.userId, amount: -totalCost, fallback: true });
+                  
+                  console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Tokens transferred (fallback)', {
+                    fulfillmentId,
+                    buyerBalance: buyerTokenBalance,
+                    vendorBalance: vendorTokenBalance
+                  });
+                } catch (vendorError) {
+                  // Rollback buyer update if vendor update fails
+                  console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Vendor token update failed, rolling back buyer update', {
+                    fulfillmentId,
+                    vendorError: vendorError.message
+                  });
+                  try {
+                    await atomicUpdateTokenBalance(buyerId, totalCost, null, MAX_RETRY_ATTEMPTS);
+                    console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Buyer token rollback successful', { fulfillmentId });
+                  } catch (rollbackError) {
+                    console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Buyer token rollback failed', {
+                      fulfillmentId,
+                      rollbackError: rollbackError.message,
+                      buyerId,
+                      amount: totalCost
+                    });
+                  }
+                  throw new Error(`Failed to update vendor tokens: ${vendorError.message}. Buyer tokens were rolled back.`);
+                }
+              } else {
+                // For self-purchases, vendor balance is the same as buyer balance
+                vendorTokenBalance = buyerTokenBalance;
                 
-                console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Tokens transferred (fallback)', {
+                console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Tokens deducted (fallback, self-purchase)', {
                   fulfillmentId,
                   buyerBalance: buyerTokenBalance,
-                  vendorBalance: vendorTokenBalance
+                  vendorBalance: vendorTokenBalance,
+                  isVendorSelfPurchase: true
                 });
-              } catch (vendorError) {
-                // Rollback buyer update if vendor update fails
-                console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Vendor token update failed, rolling back buyer update', {
-                  fulfillmentId,
-                  vendorError: vendorError.message
-                });
-                try {
-                  await atomicUpdateTokenBalance(buyerId, totalCost, null, MAX_RETRY_ATTEMPTS);
-                  console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Buyer token rollback successful', { fulfillmentId });
-                } catch (rollbackError) {
-                  console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Buyer token rollback failed', {
-                    fulfillmentId,
-                    rollbackError: rollbackError.message,
-                    buyerId,
-                    amount: totalCost
-                  });
-                }
-                throw new Error(`Failed to update vendor tokens: ${vendorError.message}. Buyer tokens were rolled back.`);
               }
             }
           } catch (tokenError) {
