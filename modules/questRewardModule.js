@@ -1349,6 +1349,12 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
             return { success: false, reason: 'Quest not active' };
         }
         
+        // Validate quest type before attempting completion
+        if (quest.questType !== 'Art' && quest.questType !== 'Art / Writing') {
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not an Art quest (type: ${quest.questType})`);
+            return { success: false, reason: `Quest is not an Art quest (type: ${quest.questType})` };
+        }
+        
         // Complete the quest for this participant
         const completionResult = await quest.completeFromArtSubmission(userId, submissionData);
         
@@ -1396,6 +1402,12 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         if (quest.status !== 'active') {
             console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
             return { success: false, reason: 'Quest not active' };
+        }
+        
+        // Validate quest type before attempting completion
+        if (quest.questType !== 'Writing' && quest.questType !== 'Art / Writing') {
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not a Writing quest (type: ${quest.questType})`);
+            return { success: false, reason: `Quest is not a Writing quest (type: ${quest.questType})` };
         }
         
         // Complete the quest for this participant

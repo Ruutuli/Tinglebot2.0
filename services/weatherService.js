@@ -222,7 +222,7 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
       }
 
       weather = await legacyWeather.save();
-      console.warn(`[weatherService.js]: ⚠️ Realigned legacy weather record for ${normalizedVillage} to new UTC window.`);
+      console.log(`[weatherService.js]: ℹ️ Realigned legacy weather record for ${normalizedVillage} to new UTC window.`);
     }
   }
 
