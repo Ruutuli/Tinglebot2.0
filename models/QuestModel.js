@@ -1263,12 +1263,23 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
     }
     
     const allCompleted = Array.from(this.participants.values()).every(p => p.progress === PROGRESS_STATUS.COMPLETED);
+    // Only complete quest when all participants finished AND time has expired
+    // This prevents premature completion when submissions are approved before the quest period ends
     if (allCompleted && this.status === PROGRESS_STATUS.ACTIVE) {
+        // Check if time has expired - quest should only complete when period ends
+        const timeExpired = this.checkTimeExpiration();
+        if (!timeExpired) {
+            console.log(`[QuestModel.js] ⏳ All participants completed quest "${this.title}", but waiting for quest period to end before completing`);
+            await this.save();
+            return { completed: false, reason: 'All participants completed, but quest period has not ended yet' };
+        }
+        
+        // Time has expired and all participants completed - proceed with completion
         this.status = PROGRESS_STATUS.COMPLETED;
         this.completedAt = new Date();
         this.completionReason = COMPLETION_REASONS.ALL_PARTICIPANTS_COMPLETED;
         this.completionProcessed = false; // Mark for reward processing
-        console.log(`[QuestModel.js] 🎉 Quest "${this.title}" completed - all participants finished`);
+        console.log(`[QuestModel.js] 🎉 Quest "${this.title}" completed - all participants finished and quest period has ended`);
         await this.save();
         
         // Don't send summary here - it will be sent after rewards are processed

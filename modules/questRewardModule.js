@@ -186,13 +186,15 @@ async function getQuestNotificationChannel(quest, participant) {
             return participant.rpThreadId;
         }
 
-        // For other quest types, use the quest channel or general channel
+        // For other quest types, use the quest channel if specified
         if (quest.targetChannel) {
             return quest.targetChannel;
         }
 
-        // Fallback to quest channel constant
-        return QUEST_CHANNEL_ID;
+        // Fallback to Sheikah Slate channel for quest completion notifications
+        // (Quest Board channel is used for quest announcements, not completions)
+        const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
+        return SHEIKAH_SLATE_CHANNEL_ID;
 
     } catch (error) {
         console.error(`[questRewardModule] ❌ Error getting notification channel:`, error);
@@ -1364,6 +1366,8 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
         }
         
         // Check if the entire quest should be completed
+        // Note: checkAutoCompletion now requires time expiration before completing
+        // This prevents premature completion when submissions are approved before quest period ends
         const autoCompletionResult = await quest.checkAutoCompletion();
         
         if (autoCompletionResult.completed && autoCompletionResult.needsRewardProcessing) {
@@ -1374,6 +1378,8 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
             
             // Mark completion as processed to prevent duplicates
             await quest.markCompletionProcessed();
+        } else if (autoCompletionResult.reason && autoCompletionResult.reason.includes('quest period has not ended')) {
+            console.log(`[questRewardModule.js] ⏳ Quest ${questID} participant completed, but quest period has not ended yet. Completion will be processed when period expires.`);
         }
         
         return { success: true, questCompleted: autoCompletionResult.completed };
@@ -1419,6 +1425,8 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         }
         
         // Check if the entire quest should be completed
+        // Note: checkAutoCompletion now requires time expiration before completing
+        // This prevents premature completion when submissions are approved before quest period ends
         const autoCompletionResult = await quest.checkAutoCompletion();
         
         if (autoCompletionResult.completed && autoCompletionResult.needsRewardProcessing) {
@@ -1429,6 +1437,8 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
             
             // Mark completion as processed to prevent duplicates
             await quest.markCompletionProcessed();
+        } else if (autoCompletionResult.reason && autoCompletionResult.reason.includes('quest period has not ended')) {
+            console.log(`[questRewardModule.js] ⏳ Quest ${questID} participant completed, but quest period has not ended yet. Completion will be processed when period expires.`);
         }
         
         return { success: true, questCompleted: autoCompletionResult.completed };
