@@ -2303,17 +2303,25 @@ function setupDailyTasks(client) {
    logger.error('BOOST', 'Monthly Nitro boost reward distribution failed', error.message);
   }
  });
- // Monthly quest reward distribution - runs at 11:59 PM daily, but only processes on last day of month
+ // Monthly quest reward distribution - runs at 11:59 PM EST on the last day of month
  createCronJob("59 23 * * *", "monthly quest reward distribution", async () => {
   try {
-   // Check if today is the last day of the month
+   // Get current date/time
    const now = new Date();
-   const tomorrow = new Date(now);
-   tomorrow.setDate(tomorrow.getDate() + 1);
+   // Calculate tomorrow by adding 24 hours (86400000 milliseconds)
+   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
    
-   // If tomorrow is the 1st, then today is the last day of the month
-   if (tomorrow.getDate() === 1) {
-    logger.info('QUEST', 'Starting monthly quest reward distribution (last day of month)...');
+   // Format tomorrow's date in EST timezone to check the day
+   const estFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    day: 'numeric'
+   });
+   
+   const tomorrowDay = parseInt(estFormatter.formatToParts(tomorrow).find(p => p.type === 'day').value);
+   
+   // If tomorrow is the 1st in EST, then today is the last day of the month
+   if (tomorrowDay === 1) {
+    logger.info('QUEST', 'Starting monthly quest reward distribution (last day of month at 11:59 PM EST)...');
     const result = await processMonthlyQuestRewards();
     logger.success('SCHEDULER', `Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
    } else {
@@ -2323,7 +2331,7 @@ function setupDailyTasks(client) {
    handleError(error, 'scheduler.js');
    logger.error('QUEST', 'Monthly quest reward distribution failed', error.message);
   }
- });
+ }, "America/New_York");
 
  // Periodic raid expiration check (every 5 minutes) to ensure raids timeout even if bot restarts
  createCronJob("*/5 * * * *", "raid expiration check", async () => {
