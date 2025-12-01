@@ -6,6 +6,7 @@
 const Quest = require('../models/QuestModel');
 const Character = require('../models/CharacterModel');
 const User = require('../models/UserModel');
+const ApprovedSubmission = require('../models/ApprovedSubmissionModel');
 const { handleError } = require('../utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
 
@@ -487,6 +488,96 @@ const QUEST_TYPE_HANDLERS = {
     }
 };
 
+// ------------------- Sync Approved Submissions to Participant ------------------
+// Safeguard function to ensure approved submissions are synced to participant records
+async function syncApprovedSubmissionsToParticipant(quest, participant) {
+    try {
+        // Only check for Art and Writing quests
+        if (quest.questType !== QUEST_TYPES.ART && 
+            quest.questType !== QUEST_TYPES.WRITING && 
+            quest.questType !== QUEST_TYPES.ART_WRITING) {
+            return { synced: false, reason: 'Not an Art/Writing quest' };
+        }
+        
+        // Find approved submissions for this user and quest
+        const approvedSubmissions = await ApprovedSubmission.find({
+            questEvent: quest.questID,
+            userId: participant.userId,
+            approvedAt: { $exists: true, $ne: null }
+        });
+        
+        if (approvedSubmissions.length === 0) {
+            return { synced: false, reason: 'No approved submissions found' };
+        }
+        
+        let syncedCount = 0;
+        const questType = quest.questType.toLowerCase();
+        
+        for (const submission of approvedSubmissions) {
+            const submissionType = submission.category.toLowerCase();
+            
+            // Check if submission type matches quest requirements
+            let shouldSync = false;
+            if (questType === 'art' && submissionType === 'art') {
+                shouldSync = true;
+            } else if (questType === 'writing' && submissionType === 'writing') {
+                shouldSync = true;
+            } else if (questType === 'art / writing' || questType === 'art/writing') {
+                shouldSync = true; // Sync both art and writing for combined quests
+            }
+            
+            if (!shouldSync) continue;
+            
+            // Check if submission already exists in participant record
+            const submissionExists = participant.submissions?.some(sub => 
+                (sub.url === submission.messageUrl || sub.url === submission.fileUrl) ||
+                (sub.type === submission.category && sub.approved && sub.approvedAt && 
+                 Math.abs(new Date(sub.approvedAt).getTime() - new Date(submission.approvedAt).getTime()) < 60000)
+            );
+            
+            if (!submissionExists) {
+                // Add submission to participant record
+                if (!participant.submissions) {
+                    participant.submissions = [];
+                }
+                
+                participant.submissions.push({
+                    type: submission.category,
+                    url: submission.messageUrl || submission.fileUrl,
+                    submittedAt: submission.submittedAt || submission.approvedAt,
+                    approved: true,
+                    approvedBy: submission.approvedBy,
+                    approvedAt: submission.approvedAt
+                });
+                
+                syncedCount++;
+                console.log(`[questRewardModule.js] 🔄 Synced approved ${submission.category} submission to participant ${participant.characterName} for quest ${quest.questID}`);
+            }
+        }
+        
+        // If we synced submissions and participant is still active, check if they should be marked as completed
+        if (syncedCount > 0 && participant.progress === 'active') {
+            const meetsReq = meetsRequirements(participant, quest);
+            if (meetsReq) {
+                participant.progress = 'completed';
+                participant.completedAt = participant.submissions
+                    .filter(sub => sub.approved && sub.approvedAt)
+                    .map(sub => new Date(sub.approvedAt))
+                    .sort((a, b) => b - a)[0] || new Date();
+                participant.updatedAt = new Date();
+                
+                console.log(`[questRewardModule.js] ✅ Marked participant ${participant.characterName} as completed after syncing approved submissions for quest ${quest.questID}`);
+            }
+        }
+        
+        return { synced: syncedCount > 0, syncedCount };
+        
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Error syncing approved submissions for participant ${participant.characterName}:`, error);
+        return { synced: false, error: error.message };
+    }
+}
+
 // ------------------- Requirements Check ------------------
 function meetsRequirements(participant, quest) {
     const { questType, postRequirement, requiredRolls } = quest;
@@ -652,6 +743,22 @@ async function processQuestCompletion(questId) {
         }
 
         const participants = Array.from(quest.participants.values());
+        
+        // SAFEGUARD: Sync approved submissions for all participants before processing
+        // This ensures participants with approved submissions are properly tracked
+        if (quest.questType === QUEST_TYPES.ART || 
+            quest.questType === QUEST_TYPES.WRITING || 
+            quest.questType === QUEST_TYPES.ART_WRITING) {
+            for (const participant of participants) {
+                try {
+                    await syncApprovedSubmissionsToParticipant(quest, participant);
+                } catch (error) {
+                    console.error(`[questRewardModule.js] ⚠️ Error syncing submissions for ${participant.characterName}:`, error);
+                }
+            }
+            await quest.save(); // Save after syncing all participants
+        }
+        
         const results = await processAllParticipants(quest, participants);
 
         if (results.rewardedCount > 0 && results.rewardedCount === participants.length) {
@@ -1179,6 +1286,43 @@ async function processQuestMonthlyRewards(quest) {
         
         for (const participant of participants) {
             try {
+                // SAFEGUARD: Sync approved submissions from ApprovedSubmission collection
+                // This ensures participants with approved submissions are properly tracked
+                // even if the submission approval process didn't complete properly
+                if (quest.questType === QUEST_TYPES.ART || 
+                    quest.questType === QUEST_TYPES.WRITING || 
+                    quest.questType === QUEST_TYPES.ART_WRITING) {
+                    await syncApprovedSubmissionsToParticipant(quest, participant);
+                }
+                
+                // Check if active participants meet requirements before checking reward status
+                // This ensures participants who submitted objectives are marked as completed
+                // even if they weren't explicitly marked before quest expiration
+                if (participant.progress === 'active') {
+                    const meetsReq = meetsRequirements(participant, quest);
+                    if (meetsReq) {
+                        // Mark participant as completed
+                        participant.progress = 'completed';
+                        participant.completedAt = participant.completedAt || new Date();
+                        participant.completionProcessed = false;
+                        participant.lastCompletionCheck = new Date();
+                        participant.updatedAt = new Date();
+                        
+                        // Record quest completion for the user with temporary reward data (tokens: 0)
+                        // This ensures user.quests.totalCompleted is updated immediately
+                        // The record will be updated with actual reward data when rewards are distributed
+                        const tempRewardResult = {
+                            success: true,
+                            tokensAdded: 0,
+                            itemsAdded: 0,
+                            tokenBreakdown: { base: 0 }
+                        };
+                        await recordUserQuestCompletion(participant, quest, tempRewardResult, 'monthly');
+                        
+                        console.log(`[questRewardModule.js] ✅ Marked active participant ${participant.characterName} as completed for quest ${quest.questID} (requirements met)`);
+                    }
+                }
+                
                 // Enhanced reward status checking to prevent double-rewarding
                 const rewardStatus = getParticipantRewardStatus(participant);
                 
@@ -1190,6 +1334,8 @@ async function processQuestMonthlyRewards(quest) {
                     
                     if (rewardResult.success) {
                         updateParticipantRewardData(participant, quest, rewardResult, 'monthly');
+                        // Record quest completion again with actual reward data
+                        // recordQuestCompletion handles duplicate quest IDs by updating existing entry
                         await recordUserQuestCompletion(participant, quest, rewardResult, 'monthly');
                         rewarded++;
                         console.log(`[questRewardModule.js] ✅ Rewarded ${participant.characterName} for quest ${quest.questID}`);
@@ -1345,9 +1491,24 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
         // Find the quest
         const quest = await findQuestSafely(questID);
         
+        // Get participant before checking quest status
+        const participant = quest.getParticipant(userId);
+        
+        // SAFEGUARD: Sync approved submissions even if quest is not active
+        // This handles cases where quest expired but submission was approved
+        if (participant && (quest.questType === 'Art' || quest.questType === 'Art / Writing')) {
+            await syncApprovedSubmissionsToParticipant(quest, participant);
+            await quest.save(); // Save after syncing
+        }
+        
         // Check if quest is active
         if (quest.status !== 'active') {
             console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
+            // Even if quest is not active, if we synced submissions and participant is now completed, return success
+            if (participant && participant.progress === 'completed') {
+                console.log(`[questRewardModule.js] ✅ Participant ${participant.characterName} was marked as completed via submission sync`);
+                return { success: true, questCompleted: false, synced: true };
+            }
             return { success: false, reason: 'Quest not active' };
         }
         
@@ -1404,9 +1565,24 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         // Find the quest
         const quest = await findQuestSafely(questID);
         
+        // Get participant before checking quest status
+        const participant = quest.getParticipant(userId);
+        
+        // SAFEGUARD: Sync approved submissions even if quest is not active
+        // This handles cases where quest expired but submission was approved
+        if (participant && (quest.questType === 'Writing' || quest.questType === 'Art / Writing')) {
+            await syncApprovedSubmissionsToParticipant(quest, participant);
+            await quest.save(); // Save after syncing
+        }
+        
         // Check if quest is active
         if (quest.status !== 'active') {
             console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
+            // Even if quest is not active, if we synced submissions and participant is now completed, return success
+            if (participant && participant.progress === 'completed') {
+                console.log(`[questRewardModule.js] ✅ Participant ${participant.characterName} was marked as completed via submission sync`);
+                return { success: true, questCompleted: false, synced: true };
+            }
             return { success: false, reason: 'Quest not active' };
         }
         
