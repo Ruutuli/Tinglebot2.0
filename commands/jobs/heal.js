@@ -274,7 +274,7 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
   const targetDebuff = await checkDebuff(characterToHeal);
   if (targetDebuff.hasDebuff) {
     // If target has debuff, check if patient has Priest boost (which can remove debuffs)
-    // The boost is applied to the patient, and Spiritual Cleanse removes debuffs during healing
+    // Priest boost (Spiritual Cleanse) removes debuffs immediately when boost is active
     // Must check BOTH the character's boostedBy field AND TempData to ensure boost is truly active
     const { isBoostActive, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
     const { getBoosterInfo } = require('../../modules/boostIntegration');
@@ -297,8 +297,13 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
       // Get the booster info to check if it's a Priest
       const boosterInfo = await getBoosterInfo(refreshedPatient.name);
       if (boosterInfo && boosterInfo.job === 'Priest') {
-        // Patient has Priest boost - allow healing, debuff will be removed during healing
-        logger.info('HEAL', `Allowing healing of debuffed ${characterToHeal.name} because patient has Priest boost from ${boosterInfo.name}`);
+        // Patient has Priest boost - remove debuff immediately (Spiritual Cleanse)
+        const { applyBoostEffect } = require('../../modules/boostingModule');
+        const cleansedPatient = await applyBoostEffect('Priest', 'Healers', refreshedPatient);
+        if (cleansedPatient && cleansedPatient._id) {
+          await cleansedPatient.save();
+          logger.info('HEAL', `Priest boost - Spiritual Cleanse removed debuff from ${characterToHeal.name} (boosted by ${boosterInfo.name})`);
+        }
         // Continue past debuff check - healing is allowed
       } else {
         // Has boost but not Priest - still block
