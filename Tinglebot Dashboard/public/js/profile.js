@@ -1002,7 +1002,7 @@ function renderQuestCompletionsList(completions = []) {
         const typeLabel = capitalize((completion.questType || 'Unknown').replace(/_/g, ' '));
         const completionDate = completion.completedAt || completion.rewardedAt;
         const dateText = completionDate ? formatDateOnly(completionDate) : 'Pending date';
-        const rewardText = completion.tokensEarned
+        const rewardText = typeof completion.tokensEarned === 'number'
           ? `+${completion.tokensEarned.toLocaleString()} tokens`
           : 'No tokens logged';
         return `
