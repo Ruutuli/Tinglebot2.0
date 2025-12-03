@@ -172,7 +172,8 @@ async function handleSubmissionCompletion(interaction) {
     let questBonus = 0;
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
       const { getQuestBonus } = require('../utils/tokenUtils');
-      questBonus = await getQuestBonus(submissionData.questEvent);
+      const userId = submissionData.userId || interaction.user.id;
+      questBonus = await getQuestBonus(submissionData.questEvent, userId);
       console.log(`[submissionHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
       
       // Update submission data with the actual quest bonus (convert to string for storage)

@@ -589,7 +589,7 @@ module.exports = {
         let questBonus = 0;
         if (questId && questId !== 'N/A') {
           const { getQuestBonus } = require('../../utils/tokenUtils');
-          questBonus = await getQuestBonus(questId);
+          questBonus = await getQuestBonus(questId, user.id);
           console.log(`[submit.js]: 🎯 Quest bonus for ${questId}: ${questBonus}`);
         }
 
