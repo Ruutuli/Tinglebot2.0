@@ -950,10 +950,24 @@ async function recordUserQuestCompletion(participant, quest, rewardResult, rewar
             return;
         }
         
+        // ------------------- Validate quest data -------------------
+        if (!quest || !quest.questID) {
+            console.error(`[questRewardModule.js] ❌ Cannot record quest completion: quest or questID is missing`);
+            return;
+        }
+        
+        if (!quest.questType) {
+            console.warn(`[questRewardModule.js] ⚠️ Quest ${quest.questID} missing questType`);
+        }
+        
+        if (!quest.title) {
+            console.warn(`[questRewardModule.js] ⚠️ Quest ${quest.questID} missing title`);
+        }
+        
         await user.recordQuestCompletion({
             questId: quest.questID,
-            questType: quest.questType,
-            questTitle: quest.title,
+            questType: quest.questType || 'Other',
+            questTitle: quest.title || `Quest ${quest.questID}`,
             completedAt: participant.completedAt || new Date(),
             rewardedAt: participant.rewardedAt || new Date(),
             tokensEarned: rewardResult.tokensAdded || 0,
