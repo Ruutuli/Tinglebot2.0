@@ -500,10 +500,19 @@ userSchema.methods.recordQuestCompletion = async function({
       }))
     : [];
   
+  // ------------------- Validate questId -------------------
+  // questId is required for proper tracking - warn if missing but don't fail
+  if (!questId || questId.trim() === '') {
+    console.warn(`[UserModel.recordQuestCompletion] ⚠️ Quest completion recorded without questId for user ${this.discordId}. This may cause tracking issues.`);
+  }
+  
   let isNewCompletion = true;
+  let existingCompletion = null;
+  
   if (questId) {
-    const existingCompletion = questTracking.completions.find(entry => entry.questId === questId);
+    existingCompletion = questTracking.completions.find(entry => entry.questId === questId);
     if (existingCompletion) {
+      // Update existing completion
       existingCompletion.questType = questType;
       existingCompletion.questTitle = questTitle;
       existingCompletion.completedAt = completedAt || existingCompletion.completedAt || completionTimestamp;
@@ -513,9 +522,37 @@ userSchema.methods.recordQuestCompletion = async function({
       existingCompletion.rewardSource = rewardSource;
       isNewCompletion = false;
     }
+  } else {
+    // If no questId provided, check if there's a completion with matching title and recent date
+    // This helps prevent duplicates when questId is missing
+    if (questTitle) {
+      const recentDate = new Date(completionTimestamp.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
+      existingCompletion = questTracking.completions.find(entry => 
+        !entry.questId && 
+        entry.questTitle === questTitle &&
+        entry.completedAt && 
+        new Date(entry.completedAt) >= recentDate
+      );
+      if (existingCompletion) {
+        // Update existing completion even without questId match
+        existingCompletion.questType = questType;
+        existingCompletion.questTitle = questTitle;
+        existingCompletion.completedAt = completedAt || existingCompletion.completedAt || completionTimestamp;
+        existingCompletion.rewardedAt = rewardedAt || completionTimestamp;
+        existingCompletion.tokensEarned = tokensEarned;
+        existingCompletion.itemsEarned = normalizedItems;
+        existingCompletion.rewardSource = rewardSource;
+        // Try to set questId if we now have it
+        if (questId) {
+          existingCompletion.questId = questId;
+        }
+        isNewCompletion = false;
+      }
+    }
   }
   
   if (isNewCompletion) {
+    // Add new completion
     questTracking.completions.push({
       questId,
       questType,
@@ -530,6 +567,33 @@ userSchema.methods.recordQuestCompletion = async function({
     questTracking.totalCompleted += 1;
     questTracking.pendingTurnIns = (questTracking.pendingTurnIns || 0) + 1;
     questTracking.typeTotals[typeKey] = (questTracking.typeTotals[typeKey] || 0) + 1;
+  } else {
+    // ------------------- Safeguard: Ensure pendingTurnIns is in sync -------------------
+    // When updating an existing completion, verify that pendingTurnIns is correct
+    // Count unique quest completions to ensure consistency
+    const uniqueQuestIds = new Set();
+    let nullIdCount = 0;
+    for (const completion of questTracking.completions) {
+      if (completion.questId && completion.questId.trim() !== '') {
+        uniqueQuestIds.add(completion.questId);
+      } else {
+        nullIdCount++;
+      }
+    }
+    const actualCompletions = uniqueQuestIds.size + nullIdCount;
+    
+    // If totalCompleted doesn't match actual completions, fix it
+    if (questTracking.totalCompleted !== actualCompletions) {
+      console.warn(`[UserModel.recordQuestCompletion] ⚠️ Quest tracking mismatch for user ${this.discordId}: totalCompleted=${questTracking.totalCompleted}, actual=${actualCompletions}. Auto-fixing...`);
+      const diff = actualCompletions - questTracking.totalCompleted;
+      questTracking.totalCompleted = actualCompletions;
+      
+      // Adjust pendingTurnIns if needed (only increase, never decrease to avoid undercounting)
+      if (diff > 0) {
+        questTracking.pendingTurnIns = (questTracking.pendingTurnIns || 0) + diff;
+        console.log(`[UserModel.recordQuestCompletion] ✅ Fixed pendingTurnIns: added ${diff} missing completions`);
+      }
+    }
   }
   
   questTracking.lastCompletionAt = completionTimestamp;
@@ -543,7 +607,8 @@ userSchema.methods.recordQuestCompletion = async function({
   return {
     totalCompleted: questTracking.totalCompleted,
     lastCompletionAt: questTracking.lastCompletionAt,
-    typeTotals: questTracking.typeTotals
+    typeTotals: questTracking.typeTotals,
+    pendingTurnIns: questTracking.pendingTurnIns
   };
 };
 
