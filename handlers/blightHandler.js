@@ -2159,43 +2159,84 @@ async function rollForBlightProgression(interaction, characterName) {
 // ------------------- Function: postBlightRollCall -------------------
 // Sends daily roll reminder at 8:00 PM EST to the configured channel.
 async function postBlightRollCall(client) {
-  const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
-  const roleId = process.env.BLIGHT_REMINDER_ROLE_ID;
+  try {
+    const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
+    const roleId = process.env.BLIGHT_REMINDER_ROLE_ID;
 
-  if (!client || !client.channels) {
-    console.error('[blightHandler]: Invalid Discord client.');
-    return;
+    if (!client || !client.channels) {
+      console.error('[blightHandler]: Invalid Discord client.');
+      logger.error('BLIGHT', 'Invalid Discord client in postBlightRollCall');
+      return;
+    }
+
+    if (!channelId) {
+      console.error('[blightHandler]: BLIGHT_NOTIFICATIONS_CHANNEL_ID not set in environment variables.');
+      logger.error('BLIGHT', 'BLIGHT_NOTIFICATIONS_CHANNEL_ID not configured');
+      return;
+    }
+
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) {
+      console.error('[blightHandler]: Channel not found for posting blight roll call.');
+      logger.error('BLIGHT', `Channel not found: ${channelId}`);
+      return;
+    }
+
+    // Check if bot has permission to send messages
+    if (!channel.permissionsFor(client.user)?.has(['SendMessages', 'ViewChannel'])) {
+      console.error('[blightHandler]: Bot lacks permissions to send messages in blight notifications channel.');
+      logger.error('BLIGHT', `Bot lacks permissions in channel: ${channelId}`);
+      return;
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#AD1457')
+      .setTitle('📢 Daily Blight Roll Call! Please roll to see if your Blight gets any worse!')
+      .setDescription(
+        `**__INSTRUCTIONS__** ▻\n` +
+        `Use this command:  \n` +
+        `\`/blight roll character_name\`  \n` + `➸ And you're done until the next time!\n\n` +
+        `**~~────────────────────~~**  \n` +
+        `▹ [Blight Information](https://rootsofthewild.com/world/blight 'Blight Information')  \n` +
+        `**~~────────────────────~~**  \n` +
+        `:clock8: Blight calls happen every day around 8:00 PM EST!  \n` +
+        `:alarm_clock: You must complete your roll before the next call for it to be counted!  \n` +
+        `:warning: Remember, if you miss a roll you __automatically progress to the next stage__.  \n` +
+        `▹To request blight healing, please use </blight heal:1306176789634355241>`
+      )
+      .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+      .setFooter({ text: 'Blight calls happen daily at 8:00 PM EST!' })
+      .setTimestamp();
+
+    // Send role ping if roleId is configured
+    if (roleId) {
+      try {
+        const pingMessage = await channel.send({ content: `<@&${roleId}>` });
+        logger.info('BLIGHT', `Role ping sent successfully: ${pingMessage.id}`);
+      } catch (pingError) {
+        console.error('[blightHandler]: Failed to send role ping:', pingError);
+        logger.error('BLIGHT', `Failed to send role ping: ${pingError.message}`);
+        // Continue to send embed even if ping fails
+      }
+    } else {
+      logger.warn('BLIGHT', 'BLIGHT_REMINDER_ROLE_ID not configured, skipping role ping');
+    }
+
+    // Send embed message
+    try {
+      const embedMessage = await channel.send({ embeds: [embed] });
+      logger.success('BLIGHT', `Blight roll call posted successfully - Message ID: ${embedMessage.id}`);
+      console.log(`[blightHandler]: ✅ Blight roll call posted to channel ${channelId} - Message ID: ${embedMessage.id}`);
+    } catch (embedError) {
+      console.error('[blightHandler]: Failed to send blight roll call embed:', embedError);
+      logger.error('BLIGHT', `Failed to send blight roll call embed: ${embedError.message}`);
+      throw embedError; // Re-throw to be caught by cron job handler
+    }
+  } catch (error) {
+    console.error('[blightHandler]: Error in postBlightRollCall:', error);
+    logger.error('BLIGHT', `Error in postBlightRollCall: ${error.message}`);
+    throw error; // Re-throw to be caught by cron job handler
   }
-
-  const channel = client.channels.cache.get(channelId);
-  if (!channel) {
-    console.error('[blightHandler]: Channel not found for posting blight roll call.');
-    return;
-  }
-
-  const embed = new EmbedBuilder()
-    .setColor('#AD1457')
-    .setTitle('📢 Daily Blight Roll Call! Please roll to see if your Blight gets any worse!')
-    .setDescription(
-      `**__INSTRUCTIONS__** ▻\n` +
-      `Use this command:  \n` +
-      `\`/blight roll character_name\`  \n` + `➸ And you're done until the next time!\n\n` +
-      `**~~────────────────────~~**  \n` +
-      `▹ [Blight Information](https://rootsofthewild.com/world/blight 'Blight Information')  \n` +
-      `**~~────────────────────~~**  \n` +
-      `:clock8: Blight calls happen every day around 8:00 PM EST!  \n` +
-      `:alarm_clock: You must complete your roll before the next call for it to be counted!  \n` +
-      `:warning: Remember, if you miss a roll you __automatically progress to the next stage__.  \n` +
-      `▹To request blight healing, please use </blight heal:1306176789634355241>`
-    )
-    .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-    .setFooter({ text: 'Blight calls happen daily at 8:00 PM EST!' })
-    .setTimestamp();
-
-  await channel.send({ content: `<@&${roleId}>` });
-  await channel.send({ embeds: [embed] });
-
-  logger.success('BLIGHT', 'Blight roll call posted successfully');
 }
 
 // ------------------- Function: viewBlightStatus -------------------
