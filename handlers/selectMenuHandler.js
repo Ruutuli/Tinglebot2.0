@@ -235,7 +235,8 @@ async function handleSelectMenuInteraction(interaction) {
       let questBonus = 0;
       if (updatedSubmissionData.questEvent && updatedSubmissionData.questEvent !== 'N/A') {
         const { getQuestBonus } = require('../utils/tokenUtils');
-        questBonus = await getQuestBonus(updatedSubmissionData.questEvent);
+        const userId = updatedSubmissionData.userId || interaction.user.id;
+        questBonus = await getQuestBonus(updatedSubmissionData.questEvent, userId);
         console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${updatedSubmissionData.questEvent}: ${questBonus}`);
         
         // Update submission data with the actual quest bonus (convert to string for storage)
@@ -425,7 +426,8 @@ async function confirmSubmission(interaction) {
     let questBonus = 0;
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
       const { getQuestBonus } = require('../utils/tokenUtils');
-      questBonus = await getQuestBonus(submissionData.questEvent);
+      const userId = submissionData.userId || interaction.user.id;
+      questBonus = await getQuestBonus(submissionData.questEvent, userId);
       console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
       
       // Update submission data with the actual quest bonus (convert to string for storage)

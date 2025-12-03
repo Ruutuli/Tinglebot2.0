@@ -518,33 +518,44 @@ async function removeQuestItems(character, quest, interaction) {
 async function updateVillageShopsStock(itemName, amountUsed, retryAttempt = 0) {
   try {
     // Find the item in VillageShops and reduce stock
-    let shopItem;
+    let itemFilter;
     if (itemName.includes('+')) {
-      shopItem = await VillageShopItem.findOne({
-        itemName: itemName
-      });
+      itemFilter = { itemName: itemName };
     } else {
-      shopItem = await VillageShopItem.findOne({
-        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-      });
+      itemFilter = { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } };
     }
     
+    const shopItem = await VillageShopItem.findOne(itemFilter);
+    
     if (shopItem && shopItem.stock > 0) {
-      // ------------------- Failsafe: Fix specialWeather before saving -------------------
-      const normalizedSpecialWeather = VillageShopItem.normalizeSpecialWeather(shopItem.specialWeather);
-      if (shopItem.specialWeather !== normalizedSpecialWeather) {
-        console.warn(`[helpWanted.js]: Normalizing specialWeather for ${itemName}:`, shopItem.specialWeather, '→', normalizedSpecialWeather);
-        shopItem.specialWeather = normalizedSpecialWeather;
+      // Check if itemId exists to avoid validation errors
+      if (!shopItem.itemId) {
+        console.warn(`[helpWanted.js]: Skipping stock update for ${itemName} - missing itemId`);
+        return;
       }
       
-      const newStock = Math.max(0, shopItem.stock - amountUsed);
-      shopItem.stock = newStock;
-      await shopItem.save();
+      const oldStock = shopItem.stock;
+      const newStock = Math.max(0, oldStock - amountUsed);
       
-      console.log(`[helpWanted.js]: Updated VillageShops stock for ${itemName}: ${shopItem.stock + amountUsed} → ${newStock}`);
+      // Use updateOne instead of save() to avoid full document validation
+      // This prevents validation errors if other fields are missing or invalid
+      const updateResult = await VillageShopItem.updateOne(
+        { _id: shopItem._id },
+        { $set: { stock: newStock } }
+      );
+      
+      if (updateResult.modifiedCount > 0) {
+        console.log(`[helpWanted.js]: Updated VillageShops stock for ${itemName}: ${oldStock} → ${newStock}`);
+      }
     }
   } catch (error) {
     console.error(`[helpWanted.js]: ❌ Error updating VillageShops stock for ${itemName}:`, error);
+    
+    // ------------------- Handle itemId validation errors -------------------
+    if (error.name === 'ValidationError' && error.errors?.itemId) {
+      console.warn(`[helpWanted.js]: Skipping stock update for ${itemName} - itemId validation error:`, error.errors.itemId.message);
+      return; // Skip error reporting for missing itemId - this is expected for some legacy items
+    }
     
     // ------------------- Additional debugging information -------------------
     if (error.name === 'ValidationError' && error.errors?.specialWeather) {

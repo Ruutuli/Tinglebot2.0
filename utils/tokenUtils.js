@@ -484,7 +484,7 @@ function logTokenBalanceChange(user, amount, action) {
 
 // ------------------- Get Quest Bonus -------------------
 // Retrieves quest bonus from quest data based on quest ID
-async function getQuestBonus(questId) {
+async function getQuestBonus(questId, userId = null) {
     try {
         if (!questId || questId === 'N/A') {
             console.log(`[tokenUtils.js]: ⚠️ No quest ID provided or quest ID is N/A`);
@@ -496,6 +496,16 @@ async function getQuestBonus(questId) {
         if (!quest) {
             console.log(`[tokenUtils.js]: ⚠️ Quest ${questId} not found in database`);
             return 0;
+        }
+
+        // If userId is provided, check if the user is a participant in the quest
+        if (userId) {
+            const participant = quest.getParticipant(userId);
+            if (!participant) {
+                console.log(`[tokenUtils.js]: ⚠️ User ${userId} is not a participant in quest ${questId} - no quest bonus will be awarded`);
+                return 0;
+            }
+            console.log(`[tokenUtils.js]: ✅ User ${userId} is a participant in quest ${questId}`);
         }
 
         console.log(`[tokenUtils.js]: 📋 Found quest: ${quest.title} (${quest.questType})`);
