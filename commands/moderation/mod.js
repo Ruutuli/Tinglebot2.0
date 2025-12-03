@@ -1725,6 +1725,14 @@ async function handleQuestCompletionFromSubmission(submission, userId) {
     // Clear the quest submission info since it's been processed
     participant.questSubmissionInfo = null;
     
+    // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
+    try {
+        const questRewardModule = require('../../modules/questRewardModule');
+        await questRewardModule.recordQuestCompletionSafeguard(participant, quest);
+    } catch (error) {
+        console.error(`[mod.js] ❌ Error recording quest completion safeguard:`, error);
+    }
+    
     // Save the quest with updated participant data
     await quest.save();
     
