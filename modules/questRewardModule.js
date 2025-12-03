@@ -942,6 +942,55 @@ async function distributeTokens(userId, tokensToAward) {
     }
 }
 
+// ------------------- Record Quest Completion Safeguard ------------------
+// Records quest completion immediately when participant is marked as completed
+// This ensures quest count is updated even if reward processing doesn't happen immediately
+async function recordQuestCompletionSafeguard(participant, quest) {
+    try {
+        // Only record if participant is marked as completed
+        if (participant.progress !== 'completed' && participant.progress !== 'rewarded') {
+            return;
+        }
+        
+        const user = await findUserSafely(participant.userId);
+        if (!user || typeof user.recordQuestCompletion !== 'function') {
+            return;
+        }
+        
+        // Validate quest data
+        if (!quest || !quest.questID) {
+            return;
+        }
+        
+        // Check if quest completion is already recorded using ensureQuestTracking
+        const questTracking = user.ensureQuestTracking();
+        const completions = questTracking.completions || [];
+        const alreadyRecorded = completions.some(entry => entry.questId === quest.questID);
+        
+        if (alreadyRecorded) {
+            // Already recorded, no need to record again
+            return;
+        }
+        
+        // Record with temporary reward data (will be updated when rewards are distributed)
+        // recordQuestCompletion handles duplicate quest IDs by updating existing entry, so it's safe to call
+        await user.recordQuestCompletion({
+            questId: quest.questID,
+            questType: quest.questType || 'Other',
+            questTitle: quest.title || `Quest ${quest.questID}`,
+            completedAt: participant.completedAt || new Date(),
+            rewardedAt: null, // Will be set when rewards are distributed
+            tokensEarned: 0, // Will be updated when rewards are distributed
+            itemsEarned: [],
+            rewardSource: 'pending' // Will be updated to 'immediate' or 'monthly' when rewards are distributed
+        });
+        
+        console.log(`[questRewardModule.js] 🛡️ Safeguard: Recorded quest completion for user ${participant.userId} (${quest.questID}) - quest count updated`);
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ Error in quest completion safeguard for user ${participant.userId}:`, error);
+    }
+}
+
 async function recordUserQuestCompletion(participant, quest, rewardResult, rewardSource = 'immediate') {
     try {
         const user = await findUserSafely(participant.userId);
@@ -1888,6 +1937,7 @@ module.exports = {
     sendQuestCompletionSummary,
     createCompletionNotificationEmbed,
     getQuestNotificationChannel,
+    recordQuestCompletionSafeguard,
     
     // Village Validation Functions
     extractVillageFromLocation,

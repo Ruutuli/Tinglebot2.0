@@ -134,6 +134,14 @@ async function processValidRPPost(quest, participant, channelId) {
         participant.completionProcessed = false;
         participant.lastCompletionCheck = new Date();
         
+        // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
+        // even if reward processing doesn't happen immediately
+        try {
+            await questRewardModule.recordQuestCompletionSafeguard(participant, quest);
+        } catch (error) {
+            logger.error('QUEST', `Error recording quest completion safeguard: ${error.message}`);
+        }
+        
         await sendRequirementMetNotification(quest, participant, channelId);
         logger.quest.completed(quest.questID, 1);
     }

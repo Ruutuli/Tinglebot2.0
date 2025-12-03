@@ -606,6 +606,14 @@ questSchema.methods.completeFromArtSubmission = async function(userId, submissio
         participant.submissions.push(submission);
         markParticipantCompleted(participant);
         
+        // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
+        try {
+            const questRewardModule = require('../modules/questRewardModule');
+            await questRewardModule.recordQuestCompletionSafeguard(participant, this);
+        } catch (error) {
+            console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
+        }
+        
         await this.save();
         
         // Send completion notification
@@ -642,6 +650,14 @@ questSchema.methods.completeFromWritingSubmission = async function(userId, submi
         const submission = createQuestSubmission('writing', submissionData);
         participant.submissions.push(submission);
         markParticipantCompleted(participant);
+        
+        // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
+        try {
+            const questRewardModule = require('../modules/questRewardModule');
+            await questRewardModule.recordQuestCompletionSafeguard(participant, this);
+        } catch (error) {
+            console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
+        }
         
         await this.save();
         
@@ -755,6 +771,14 @@ questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
         // Check if quest is now completed
         if (rollResult_data.questCompleted) {
             markParticipantCompleted(participant);
+            
+            // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
+            try {
+                const questRewardModule = require('../modules/questRewardModule');
+                await questRewardModule.recordQuestCompletionSafeguard(participant, this);
+            } catch (error) {
+                console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
+            }
             
             await this.save();
             
@@ -1240,6 +1264,15 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
             participantsCompleted++;
             newCompletions++;
             console.log(`[QuestModel.js] ✅ Auto-completed quest for ${participant.characterName} in quest ${this.title}`);
+            
+            // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
+            // even if reward processing doesn't happen immediately
+            try {
+                const questRewardModule = require('../modules/questRewardModule');
+                await questRewardModule.recordQuestCompletionSafeguard(participant, this);
+            } catch (error) {
+                console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
+            }
             
             // Send completion notification for non-RP quests (RP quests handle their own notifications)
             if (this.questType !== QUEST_TYPES.RP) {
