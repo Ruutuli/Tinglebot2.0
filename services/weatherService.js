@@ -842,7 +842,15 @@ async function generateBanner(village, weather, options = {}) {
 // ============================================================================
 
 // ------------------- Special Weather Flavor Text -------------------
-function specialWeatherFlavorText(weatherType) {
+function specialWeatherFlavorText(weatherType, character = null) {
+  const HIBIKI_USER_ID = "668281042414600212";
+  const isHibiki = character && character.userId === HIBIKI_USER_ID;
+  
+  // Only give Hibiki special flavor text for Blight Rain
+  if (isHibiki && weatherType === "Blight Rain") {
+    return "The rain falls, and you know it can't touch you... you've been here before...";
+  }
+  
   const weatherTextMap = {
     "Avalanche": "There has been an avalanche and some roads are blocked! Travel to and from this village today is impossible.",
     "Drought": "A drought has dried up the smaller vegetation surrounding the village... any plants or mushrooms rolled today are found dead and will not be gathered.",

@@ -493,12 +493,20 @@ async function joinRaid(character, raidId) {
     let blightRainMessage = null;
     
     if (weatherData?.special?.label === 'Blight Rain') {
-      // Mod characters are immune to blight infection
-      if (character.isModCharacter) {
-        blightRainMessage = 
-          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
-          `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
-        console.log(`[raidModule.js]: 🛡️ Mod character ${character.name} is immune to blight infection`);
+      // Mod characters and Hibiki are immune to blight infection
+      const HIBIKI_USER_ID = "668281042414600212";
+      if (character.isModCharacter || character.userId === HIBIKI_USER_ID) {
+        if (character.isModCharacter) {
+          blightRainMessage = 
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
+          console.log(`[raidModule.js]: 🛡️ Mod character ${character.name} is immune to blight infection`);
+        } else {
+          blightRainMessage = 
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** was definitely in the blight rain, but somehow avoided being infected... Was it luck? Or something else? ◈`;
+          console.log(`[raidModule.js]: 🛡️ Hibiki (${character.name}) avoided blight infection`);
+        }
       } else if (character.blighted) {
         blightRainMessage = 
           "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
