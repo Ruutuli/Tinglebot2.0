@@ -955,7 +955,21 @@ async function processTravelDay(day, context) {
       // Check destination for blight rain after arrival
       const destinationWeather = await getWeatherWithoutGeneration(destination);
       if (destinationWeather?.special?.label === 'Blight Rain') {
-        if (character.blighted) {
+        // Mod characters and Hibiki are immune to blight infection
+        const HIBIKI_USER_ID = "668281042414600212";
+        if (character.isModCharacter || character.userId === HIBIKI_USER_ID) {
+          let immuneMsg;
+          if (character.isModCharacter) {
+            immuneMsg =
+              "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+              `◈ Your character **${character.name}** arrived in ${capitalizeFirstLetter(destination)} during blight rain, but as a ${character.modTitle} of ${character.modType} they are immune to blight infection! ◈`;
+          } else {
+            immuneMsg =
+              "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+              `◈ Your character **${character.name}** arrived in ${capitalizeFirstLetter(destination)} during blight rain, and was definitely exposed to it, but somehow avoided being infected... Was it luck? Or something else? ◈`;
+          }
+          await finalChannel.send({ content: immuneMsg });
+        } else if (character.blighted) {
           const alreadyMsg =
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
@@ -1027,12 +1041,20 @@ async function processTravelDay(day, context) {
       // Check starting village for blight rain AFTER successful travel completion
       // This ensures characters are only blighted from starting village if they actually complete the journey
       if (startingWeather?.special?.label === 'Blight Rain') {
-        // Mod characters are immune to blight infection
-        if (character.isModCharacter) {
-          const immuneMsg =
-            "<:blight_eye:805576955725611058> **Blight Rain at Departure!**\n\n" +
-            `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain, but as a ${character.modTitle} of ${character.modType} they are immune to blight infection! ◈`;
-          await finalChannel.send({ content: immuneMsg });
+        // Mod characters and Hibiki are immune to blight infection
+        const HIBIKI_USER_ID = "668281042414600212";
+        if (character.isModCharacter || character.userId === HIBIKI_USER_ID) {
+          if (character.isModCharacter) {
+            const immuneMsg =
+              "<:blight_eye:805576955725611058> **Blight Rain at Departure!**\n\n" +
+              `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain, but as a ${character.modTitle} of ${character.modType} they are immune to blight infection! ◈`;
+            await finalChannel.send({ content: immuneMsg });
+          } else {
+            const immuneMsg =
+              "<:blight_eye:805576955725611058> **Blight Rain at Departure!**\n\n" +
+              `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain, and was definitely exposed to it, but somehow avoided being infected... Was it luck? Or something else? ◈`;
+            await finalChannel.send({ content: immuneMsg });
+          }
         } else if (character.blighted) {
           const alreadyMsg =
             "<:blight_eye:805576955725611058> **Blight Rain at Departure!**\n\n" +
