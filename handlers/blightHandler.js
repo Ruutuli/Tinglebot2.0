@@ -1508,17 +1508,32 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       // ---- END NEW ----
 
       if (!requiredItem) {
+        // Build list of accepted items for the error message
+        const acceptedItemsList = healingItems.map(item => 
+          `• **${item.name}** x${item.quantity}`
+        ).join('\n');
+
         const invalidRequirementEmbed = new EmbedBuilder()
           .setColor('#FF0000')
-          .setTitle('❌ Invalid Healing Requirement')
-          .setDescription(`**${itemName} x${itemQuantityInt}** is not a valid requirement from **${healer.name}**.`)
+          .setTitle('❌ Wrong Item Submitted')
+          .setDescription(`You tried to submit **${itemName} x${itemQuantityInt}**, but that's not what **${healer.name}** needs!`)
           .addFields(
-            { name: '📝 What Happened?', value: 'The item you submitted does not match any of the accepted items for this healing request.' },
-            { name: '💡 How to Fix', value: 'Please check the healing request details and submit one of the accepted items.' },
-            { name: '🆘 Need Help?', value: 'Use </blight heal:1306176789634355241> to request a new healing task.' }
+            { 
+              name: '🤔 What Went Wrong?', 
+              value: `The item you submitted doesn't match what **${healer.name}** is asking for. The list shows everything that mod OCs might want, but you need to figure out which specific item to offer based on the hint in your healing prompt!` 
+            },
+
+            { 
+              name: '📋 How to Fix', 
+              value: `1. Look at your healing request message (the one with the task description)\n2. Read the hint carefully - it describes what the healer wants\n3. Match the hint to one of the items in the list \n4. Type the item name **exactly** as shown (e.g., "Amber", not "orangey gem")\n5. Use the format: **Item Name xQuantity** (e.g., "Amber x5")` 
+            },
+            { 
+              name: '🆘 Still Confused?', 
+              value: `• Check your inventory with \`/inventory\` to see the exact item names you have\n• Look back at your original healing request message - it shows which items are needed\n• Make sure you're using the exact item name (not a description like "orangey gem")` 
+            }
           )
           .setThumbnail(healer.iconUrl)
-          .setImage('https://storage.googleapis.com/tinglebot/border.png')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ text: 'Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
           .setTimestamp();
 
