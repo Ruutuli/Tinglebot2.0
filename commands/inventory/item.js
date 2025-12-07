@@ -1269,17 +1269,28 @@ module.exports = {
       // Apply heart and stamina modifiers, update DB, remove items, and log usage.
       let healAmount = 0;
       let staminaRecovered = 0;
+      
+      // Store original values for display
+      const originalHearts = character.currentHearts;
+      const originalStamina = character.currentStamina;
 
-      if (item.modifierHearts) {
+      if (item.modifierHearts && item.modifierHearts > 0) {
         healAmount = Math.min(item.modifierHearts * quantity, character.maxHearts - character.currentHearts);
-        character.currentHearts += healAmount;
-        await updateCurrentHearts(character._id, character.currentHearts);
+        if (healAmount > 0) {
+          const newHearts = character.currentHearts + healAmount;
+          await updateCurrentHearts(character._id, newHearts);
+          character.currentHearts = newHearts;
+        }
       }
 
-      if (item.staminaRecovered) {
+      if (item.staminaRecovered !== undefined && item.staminaRecovered !== null && item.staminaRecovered > 0) {
         staminaRecovered = Math.min(item.staminaRecovered * quantity, character.maxStamina - character.currentStamina);
-        character.currentStamina += staminaRecovered;
-        await updateCurrentStamina(character._id, character.currentStamina);
+        if (staminaRecovered > 0) {
+          const newStamina = character.currentStamina + staminaRecovered;
+          // Update database first, then update in-memory character object
+          await updateCurrentStamina(character._id, newStamina);
+          character.currentStamina = newStamina;
+        }
       }
 
       await syncToInventoryDatabase(character, {
@@ -1288,22 +1299,26 @@ module.exports = {
         obtain: `Used for healing`
       }, interaction);
 
+      // Build description with actual recovered amounts
+      const heartsDisplay = healAmount > 0 ? `❤️ +${healAmount}` : '';
+      const staminaDisplay = staminaRecovered > 0 ? `🟩 +${staminaRecovered}` : '';
+      const recoveryText = [heartsDisplay, staminaDisplay].filter(Boolean).join(' / ') || '';
+      
       const successEmbed = new EmbedBuilder()
         .setColor('#59A914')
         .setTitle('✅ Healing Successful!')
         .setDescription(
-          `**${character.name}** has been successfully healed using **${item.itemName}**${quantity > 1 ? ` x${quantity}` : ''}!` +
-          ` ❤️ +${item.modifierHearts * quantity} / 🟩 +${item.staminaRecovered * quantity}\n`
+          `**${character.name}** has been successfully healed using **${item.itemName}**${quantity > 1 ? ` x${quantity}` : ''}!${recoveryText ? ` ${recoveryText}\n` : '\n'}`
         )
         .addFields(
           { 
             name: '💚 Hearts', 
-            value: `> **${character.currentHearts - healAmount}/${character.maxHearts}** → **${character.currentHearts}/${character.maxHearts}**`, 
+            value: `> **${originalHearts}/${character.maxHearts}** → **${character.currentHearts}/${character.maxHearts}**`, 
             inline: true 
           },
           { 
             name: '🟩 Stamina', 
-            value: `> **${character.currentStamina - staminaRecovered}/${character.maxStamina}** → **${character.currentStamina}/${character.maxStamina}**`, 
+            value: `> **${originalStamina}/${character.maxStamina}** → **${character.currentStamina}/${character.maxStamina}**`, 
             inline: true 
           }
         )
