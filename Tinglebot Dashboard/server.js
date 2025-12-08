@@ -80,6 +80,20 @@ const logger = require('./utils/logger');
 const googleSheets = require('./googleSheetsUtils');
 const { google } = require('googleapis');
 
+// Import route modules
+const authRoutes = require('./routes/auth');
+const characterRoutes = require('./routes/api/characters');
+const itemRoutes = require('./routes/api/items');
+const inventoryRoutes = require('./routes/api/inventory');
+const weatherRoutes = require('./routes/api/weather');
+const statsRoutes = require('./routes/api/stats');
+
+// Import middleware
+const { requireAuth, optionalAuth, checkAdminAccess } = require('./middleware/auth');
+const { errorHandler, asyncHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { requestLogger, errorLogger } = require('./middleware/requestLogger');
+const { generalLimiter, authLimiter } = require('./middleware/rateLimiter');
+
 // ------------------- Section: App Configuration -------------------
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -144,11 +158,11 @@ app.use(session({
   saveUninitialized: true, // Allow saving uninitialized sessions
   store: sessionStore,
   cookie: {
-    secure: false, // Always false for localhost development
+    secure: isProduction, // true in production (HTTPS required), false in development
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax',
-    domain: undefined // No domain restriction for localhost
+    sameSite: isProduction ? 'strict' : 'lax',
+    domain: isProduction ? domain : undefined // Set domain in production, undefined for localhost
   },
   name: 'tinglebot.sid'
 }));
@@ -260,59 +274,16 @@ let inventoriesConnection = null;
 let vendingConnection = null;
 
 // ------------------- Section: Caching Configuration -------------------
-const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-const inventoryCache = new Map();
-const characterListCache = { 
-  data: null, 
-  timestamp: 0, 
-  CACHE_DURATION: 10 * 60 * 1000 
-};
+// Import improved cache management
+const {
+  inventoryCache,
+  characterListCache,
+  characterDataCache,
+  spiritOrbCache
+} = require('./utils/cache');
 
-// Add character data caching
-const characterDataCache = {
-  data: null,
-  timestamp: 0,
-  CACHE_DURATION: 5 * 60 * 1000 // 5 minutes for character data
-};
-
-// Add spirit orb cache
-const spiritOrbCache = new Map();
-const SPIRIT_ORB_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-
-// ------------------- Function: initializeCacheCleanup -------------------
-// Sets up periodic cache cleanup to prevent memory leaks
-const initializeCacheCleanup = () => {
-  // Clean up cache every hour
-  setInterval(() => {
-    const now = Date.now();
-    
-    // Clean up inventoryCache (Map)
-    for (const [key, value] of inventoryCache.entries()) {
-      if (now - value.timestamp > CACHE_DURATION) {
-        inventoryCache.delete(key);
-      }
-    }
-    
-    // Clean up characterListCache (object)
-    if (characterListCache.data && now - characterListCache.timestamp > characterListCache.CACHE_DURATION) {
-      characterListCache.data = null;
-      characterListCache.timestamp = 0;
-    }
-    
-    // Clean up characterDataCache (object)
-    if (characterDataCache.data && now - characterDataCache.timestamp > characterDataCache.CACHE_DURATION) {
-      characterDataCache.data = null;
-      characterDataCache.timestamp = 0;
-    }
-    
-    // Clean up spiritOrbCache (Map)
-    for (const [key, value] of spiritOrbCache.entries()) {
-      if (now - value.timestamp > SPIRIT_ORB_CACHE_DURATION) {
-        spiritOrbCache.delete(key);
-      }
-    }
-  }, 60 * 60 * 1000); // Every hour
-};
+// Legacy cache structure for backward compatibility (will be migrated gradually)
+// These are now managed by the Cache utility above
 
 // ------------------- Section: Database Initialization -------------------
 
@@ -441,11 +412,69 @@ app.use((req, res, next) => {
 app.use(compression());
 
 // CORS and other middleware
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : (isProduction ? ['https://tinglebot.xyz', 'https://www.tinglebot.xyz'] : ['http://localhost:5001', 'http://localhost:3000', 'http://127.0.0.1:5001', 'http://127.0.0.1:3000']);
+
+// Helper function to check if request is for static file
+function isStaticFile(path) {
+  return path.startsWith('/js/') || 
+         path.startsWith('/css/') || 
+         path.startsWith('/images/') ||
+         path.startsWith('/manifest/') ||
+         path.endsWith('.js') ||
+         path.endsWith('.css') ||
+         path.endsWith('.png') ||
+         path.endsWith('.jpg') ||
+         path.endsWith('.jpeg') ||
+         path.endsWith('.gif') ||
+         path.endsWith('.svg') ||
+         path.endsWith('.ico') ||
+         path.endsWith('.json') ||
+         path.endsWith('.woff') ||
+         path.endsWith('.woff2') ||
+         path.endsWith('.ttf');
+}
+
 app.use(cors({
-  origin: true, // Allow all origins for now
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like same-origin requests, mobile apps, or curl requests)
+    // Same-origin requests don't send an Origin header, so we should allow them
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // In development, allow all localhost and 127.0.0.1 origins
+    if (!isProduction) {
+      // Explicitly check for localhost and 127.0.0.1 with any port
+      if (origin.startsWith('http://localhost') || 
+          origin.startsWith('http://127.0.0.1') ||
+          origin.startsWith('https://localhost') ||
+          origin.startsWith('https://127.0.0.1')) {
+        return callback(null, true);
+      }
+      // In development, be very permissive - allow all origins
+      return callback(null, true);
+    }
+    
+    // In production, check against allowed origins
+    // Also check if origin matches localhost patterns (fallback)
+    if (allowedOrigins.indexOf(origin) !== -1 ||
+        origin.startsWith('http://localhost') || 
+        origin.startsWith('http://127.0.0.1') ||
+        origin.startsWith('https://localhost') ||
+        origin.startsWith('https://127.0.0.1')) {
+      callback(null, true);
+    } else {
+      // Log the blocked origin for debugging
+      logger.warn(`CORS blocked origin: ${origin}`, 'server.js');
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true, // Allow credentials (cookies, authorization headers)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -531,7 +560,7 @@ async function uploadPinImageToGCS(file, pinId) {
     
     return new Promise((resolve, reject) => {
       stream.on('error', (error) => {
-        console.error('[server.js]: Error uploading pin image to GCS:', error);
+        logger.error('Error uploading pin image to GCS', error, 'server.js');
         reject(error);
       });
       
@@ -543,7 +572,7 @@ async function uploadPinImageToGCS(file, pinId) {
       stream.end(file.buffer);
     });
   } catch (error) {
-    console.error('[server.js]: Error in uploadPinImageToGCS:', error);
+    logger.error('Error in uploadPinImageToGCS', error, 'server.js');
     throw error;
   }
 }
@@ -560,22 +589,8 @@ if (isProduction) {
 }
 
 // ------------------- Section: Authentication Middleware -------------------
-
-// ------------------- Function: requireAuth -------------------
-// Middleware to require authentication for protected routes
-function requireAuth(req, res, next) {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  res.status(401).json({ error: 'Authentication required' });
-}
-
-// ------------------- Function: optionalAuth -------------------
-// Middleware that adds user info to request if authenticated
-function optionalAuth(req, res, next) {
-  // Always continue, but req.user will be available if authenticated
-  next();
-}
+// Note: Authentication middleware (requireAuth, optionalAuth, checkAdminAccess) 
+// is imported from ./middleware/auth.js above
 
 // ------------------- Section: Page Routes -------------------
 
@@ -602,6 +617,24 @@ app.get('/inventories', (req, res) => {
 app.get('/inventories.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'inventories.html'));
 });
+
+// ------------------- Section: Request Logging -------------------
+// Add request logging middleware
+app.use(requestLogger);
+
+// ------------------- Section: Rate Limiting -------------------
+// Apply rate limiting to API routes
+app.use('/api', generalLimiter);
+app.use('/auth', authLimiter);
+
+// ------------------- Section: Route Mounting -------------------
+// Mount route modules
+app.use('/auth', authRoutes);
+app.use('/api/characters', characterRoutes);
+app.use('/api/items', itemRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/weather', weatherRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -3102,7 +3135,7 @@ app.get('/api/character/:id', async (req, res) => {
     if (!char) return res.status(404).json({ error: 'Character not found' });
     res.json({ ...char.toObject(), icon: char.icon });
   } catch (error) {
-    console.error('[server.js]: ❌ Error fetching character:', error);
+    logger.error('Error fetching character', error, 'server.js');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -3136,7 +3169,7 @@ app.get('/api/user/characters', requireAuth, async (req, res) => {
     
     res.json({ data: characters });
   } catch (error) {
-    console.error('[server.js]: ❌ Error fetching user characters:', error);
+    logger.error('Error fetching user characters', error, 'server.js');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -4261,7 +4294,7 @@ app.get('/api/characters', async (req, res) => {
     
     res.json({ characters });
   } catch (error) {
-    console.error('[server.js]: ❌ Error fetching characters for relationships:', error);
+    logger.error('Error fetching characters for relationships', error, 'server.js');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -7064,7 +7097,7 @@ app.get('/api/inventory/characters', async (req, res) => {
     
     res.json({ data: inventoryData });
   } catch (error) {
-    console.error('[server.js]: ❌ Error fetching character inventory data:', error);
+    logger.error('Error fetching character inventory data', error, 'server.js');
     res.status(500).json({ error: 'Failed to fetch character inventory data', details: error.message });
   }
 });
@@ -8495,7 +8528,7 @@ app.get('/api/items', async (req, res) => {
     
     res.json(items);
   } catch (error) {
-    console.error('[server.js]: ❌ Error fetching items data:', error);
+    logger.error('Error fetching items data', error, 'server.js');
     res.status(500).json({ error: 'Failed to fetch items data', details: error.message });
   }
 });
@@ -8524,7 +8557,7 @@ app.post('/api/inventory/item', async (req, res) => {
     }
     res.json(inventoryData);
   } catch (error) {
-    console.error('[server.js]: ❌ ERROR OCCURRED:', error);
+    logger.error('Error searching inventory by item', error, 'server.js');
     res.status(500).json({ error: 'Failed to fetch inventory data' });
   }
 });
@@ -12648,13 +12681,9 @@ app.delete('/api/admin/db/Inventory/item/:characterId/:itemId', requireAuth, asy
 });
 
 // ------------------- Section: Error Handling Middleware -------------------
-app.use((err, req, res, next) => {
-  console.error('[server.js]: ❌ Error:', err);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
-});
+// Use centralized error handler
+app.use(errorLogger); // Log errors with request context
+app.use(errorHandler); // Handle errors and send responses
 
 // ============================================================================
 // ------------------- Section: Pin Management API -------------------
@@ -13366,37 +13395,7 @@ app.get('/api/test-blood-moon', async (req, res) => {
 // ============================================================================
 
 // ------------------- Function: checkAdminAccess -------------------
-// Helper function to check if user has admin access
-async function checkAdminAccess(req) {
-  if (!req.isAuthenticated() || !req.user) {
-    return false;
-  }
-  
-  const guildId = process.env.PROD_GUILD_ID;
-  const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
-  
-  if (!guildId || !ADMIN_ROLE_ID) {
-    return false;
-  }
-  
-  try {
-    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
-      headers: {
-        'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (response.ok) {
-      const memberData = await response.json();
-      const roles = memberData.roles || [];
-      return roles.includes(ADMIN_ROLE_ID);
-    }
-  } catch (error) {
-    console.error('[server.js]: ❌ Error checking admin access:', error);
-  }
-  
-  return false;
-}
+// Note: checkAdminAccess is now imported from ./middleware/auth.js
+// This function has been moved to the middleware module for better organization
 
 
