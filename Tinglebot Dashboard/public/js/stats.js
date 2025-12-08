@@ -1146,7 +1146,7 @@ async function initStatsPage() {
         modStatsSection.innerHTML = generateModCharacterStatsSection(data);
         
         // Insert after the jail status section
-        if (jailStatusSection.firstElementChild) {
+        if (jailStatusSection.firstElementChild && modStatsSection.firstElementChild) {
             jailStatusSection.firstElementChild.parentNode.insertBefore(modStatsSection.firstElementChild, jailStatusSection.firstElementChild.nextSibling);
         }
 
