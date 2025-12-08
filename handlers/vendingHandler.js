@@ -1186,6 +1186,7 @@ async function handleCollectPoints(interaction) {
     });
 
     // ------------------- Embed Response -------------------
+    const monthName = estDate.toLocaleDateString('en-US', { month: 'long' });
     const fields = [];
     if (character.vendingSheetUrl) {
       fields.push({
@@ -1195,9 +1196,16 @@ async function handleCollectPoints(interaction) {
       });
     }
 
+    // Add rules field explaining collection window
+    fields.push({
+      name: '📋 Collection Rules',
+      value: 'Points can only be collected during the **1st to 5th** of each month.',
+      inline: false
+    });
+
     const embed = createSuccessEmbed(
-      '🪙 Vending Points Awarded',
-      `${characterName} received **${pointsAwarded}** vending points.`,
+      `🪙 Points Collected for ${monthName}`,
+      `${characterName} collected **${pointsAwarded}** vending points for ${monthName}.`,
       fields
     ).setFooter({ text: `Claimed: ${now.toLocaleDateString()}` });
 
