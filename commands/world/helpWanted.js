@@ -196,7 +196,9 @@ function validateCharacterLocation(character, quest) {
       };
     }
   } else {
-    if (character.currentVillage.toLowerCase() !== quest.village.toLowerCase()) {
+    // For monster, item, and crafting quests, check home village (where character is from)
+    // Only villagers FROM the quest village can complete these quests
+    if (character.homeVillage.toLowerCase() !== quest.village.toLowerCase()) {
       const embed = createWrongVillageEmbed(character, quest.village, false);
       return {
         canProceed: false,

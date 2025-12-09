@@ -8665,8 +8665,7 @@ app.get('/api/weather/history/:village', async (req, res) => {
 app.get('/api/weather/stats', async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
-    
-    
+    logger.api(`Fetching weather stats for ${days} days`, 'server.js');
     
     const villages = ['Rudania', 'Inariko', 'Vhintl'];
     const statsData = {};
@@ -8674,16 +8673,19 @@ app.get('/api/weather/stats', async (req, res) => {
     for (const village of villages) {
       const history = await Weather.getRecentWeather(village, days);
       statsData[village] = history;
+      logger.api(`Fetched ${history.length} weather records for ${village}`, 'server.js');
     }
     
+    const totalRecords = Object.values(statsData).reduce((sum, data) => sum + data.length, 0);
+    logger.api(`Returning weather stats: ${totalRecords} total records across ${villages.length} villages`, 'server.js');
     
     res.json({
       days,
       villages: statsData,
-      totalRecords: Object.values(statsData).reduce((sum, data) => sum + data.length, 0)
+      totalRecords
     });
   } catch (error) {
-    console.error(`[server.js]: ❌ Error fetching weather statistics:`, error);
+    logger.error(`Error fetching weather statistics: ${error.message}`, error, 'server.js');
     res.status(500).json({ error: 'Failed to fetch weather statistics', details: error.message });
   }
 });

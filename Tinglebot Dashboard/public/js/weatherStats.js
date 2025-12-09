@@ -132,7 +132,7 @@ const villageCrests = {
  */
 async function fetchWeatherHistory(days = 30) {
   try {
-    
+    console.log('[weatherStats.js]: Fetching weather history for', days, 'days');
     // Use the new stats endpoint for better performance
     const response = await fetch(`/api/weather/stats?days=${days}`);
     if (!response.ok) {
@@ -140,8 +140,17 @@ async function fetchWeatherHistory(days = 30) {
     }
     
     const data = await response.json();
+    console.log('[weatherStats.js]: Received data:', data);
+    
+    if (!data || !data.villages) {
+      console.error('[weatherStats.js]: ❌ Invalid data structure:', data);
+      throw new Error('Invalid data structure: missing villages property');
+    }
+    
+    console.log('[weatherStats.js]: ✅ Returning villages data:', Object.keys(data.villages));
     return data.villages;
   } catch (error) {
+    console.error('[weatherStats.js]: ❌ Error fetching weather history:', error);
     throw error;
   }
 }
@@ -176,9 +185,26 @@ async function getWeatherStatsData(days = 30) {
  * Analyzes weather patterns for a village
  */
 function analyzeWeatherPatterns(weatherData, village) {
-  if (!weatherData || !weatherData[village]) return null;
+  if (!weatherData || !weatherData[village]) {
+    console.warn(`[weatherStats.js]: ⚠️ No weather data for ${village}`, {
+      hasWeatherData: !!weatherData,
+      hasVillageData: !!(weatherData && weatherData[village]),
+      villages: weatherData ? Object.keys(weatherData) : []
+    });
+    return null;
+  }
   
   const data = weatherData[village];
+  if (!Array.isArray(data) || data.length === 0) {
+    console.warn(`[weatherStats.js]: ⚠️ Empty or invalid data array for ${village}`, {
+      isArray: Array.isArray(data),
+      length: data ? data.length : 0
+    });
+    return null;
+  }
+  
+  console.log(`[weatherStats.js]: Analyzing ${data.length} days of weather data for ${village}`);
+  
   const analysis = {
     village,
     totalDays: data.length,
@@ -679,9 +705,11 @@ function renderRecentWeather(weatherData, village) {
  */
 async function renderWeatherStatsPage() {
   try {
+    console.log('[weatherStats.js]: Rendering weather stats page...');
     
     const contentDiv = document.getElementById('model-details-data');
     if (!contentDiv) {
+      console.error('[weatherStats.js]: ❌ Content div not found');
       return;
     }
     
@@ -695,6 +723,7 @@ async function renderWeatherStatsPage() {
     
     // Fetch weather data
     const weatherData = await getWeatherStatsData(30); // Last 30 days
+    console.log('[weatherStats.js]: Weather data received:', weatherData);
     
     // Analyze data for each village
     const villages = ['Rudania', 'Inariko', 'Vhintl'];
@@ -703,6 +732,29 @@ async function renderWeatherStatsPage() {
     villages.forEach(village => {
       analyses[village] = analyzeWeatherPatterns(weatherData, village);
     });
+    
+    console.log('[weatherStats.js]: Analyses completed:', analyses);
+    
+    // Check if we have any valid analyses
+    const hasValidData = villages.some(village => analyses[village] !== null);
+    
+    if (!hasValidData) {
+      console.warn('[weatherStats.js]: ⚠️ No valid weather data found for any village');
+      contentDiv.innerHTML = `
+        <div class="weather-stats-page">
+          <div class="weather-stats-header">
+            <h2>🌤️ Weather Statistics & Analysis</h2>
+            <p>No weather data available</p>
+          </div>
+          <div class="weather-stats-error" style="margin: 2rem; text-align: center;">
+            <i class="fas fa-info-circle" style="font-size: 3rem; color: #4ECDC4; margin-bottom: 1rem;"></i>
+            <p>No weather statistics are available at this time.</p>
+            <p style="font-size: 0.9em; color: #999; margin-top: 0.5em;">This may be because there is no weather data in the database for the selected time period.</p>
+          </div>
+        </div>
+      `;
+      return;
+    }
     
     // Render the page
     let pageHTML = `
@@ -727,6 +779,8 @@ async function renderWeatherStatsPage() {
              ${renderRecentWeather(weatherData, village)}
            </div>
          `;
+       } else {
+         console.warn(`[weatherStats.js]: ⚠️ Skipping ${village} - no analysis data`);
        }
      });
     
@@ -745,6 +799,7 @@ async function renderWeatherStatsPage() {
     }, 100);
     
   } catch (error) {
+    console.error('[weatherStats.js]: ❌ Error rendering weather stats page:', error);
     
     const contentDiv = document.getElementById('model-details-data');
     if (contentDiv) {
@@ -752,7 +807,8 @@ async function renderWeatherStatsPage() {
         <div class="weather-stats-error">
           <i class="fas fa-exclamation-triangle"></i>
           <p>Failed to load weather statistics</p>
-          <button class="retry-button" onclick="renderWeatherStatsPage()">Retry</button>
+          <p style="font-size: 0.9em; color: #999; margin-top: 0.5em;">${error.message || 'Unknown error'}</p>
+          <button class="retry-button" onclick="window.weatherStats?.renderWeatherStatsPage()">Retry</button>
         </div>
       `;
     }
