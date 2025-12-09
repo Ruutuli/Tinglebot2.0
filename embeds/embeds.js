@@ -198,6 +198,10 @@ const getBoostInfo = async (character, category) => {
 // ------------------- Function: addBoostFlavorText ------------------
 // Adds boost flavor text to a description if boost information is available
 const addBoostFlavorText = (description, boostInfo) => {
+ // Ensure description is a string
+ if (!description || typeof description !== 'string') {
+   description = 'A successful gathering trip!';
+ }
  if (!boostInfo?.boostFlavorText) return description;
  return `${description}\n\n⚡ **Boost Effect:** ${boostInfo.boostFlavorText}`;
 };
@@ -1323,20 +1327,32 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
  const isTeacherBoost = character.boostedBy && boosterCharacter && 
    (boosterCharacter.job === 'Teacher' || boosterCharacter.job?.toLowerCase() === 'teacher');
  
+ // Check if this is a Priest boost
+ const isPriestBoost = character.boostedBy && boosterCharacter && 
+   (boosterCharacter.job === 'Priest' || boosterCharacter.job?.toLowerCase() === 'priest');
+ 
  // Use divine flavor text if this is a divine item gathered with Priest boost
+ // Use noDivine flavor text if Priest boost is active but no divine item was found
  let flavorText;
  if (isDivineItemWithPriestBoost) {
     flavorText = generateDivineItemFlavorText();
- } else {
-   if (isTeacherBoost) {
+ } else if (isPriestBoost && !isDivineItemWithPriestBoost) {
+    // Priest boost active but no divine item found - use noDivine messages as main flavor text
+    flavorText = generateBoostFlavorText('Priest', 'Gathering', { outcome: 'noDivine' });
+ } else if (isTeacherBoost) {
       flavorText = generateTeacherGatheringFlavorText();
-   } else {
+ } else {
      flavorText = generateGatherFlavorText(randomItem.type[0]);
-   }
+ }
+ 
+ // Ensure flavorText is always a string
+ if (!flavorText || typeof flavorText !== 'string') {
+   flavorText = 'A successful gathering trip!';
  }
 
   // Get boost information for non-special cases, including Entertainer bonus item name and Scholar target village
-  let boostInfo = !isDivineItemWithPriestBoost && !isTeacherBoost ? await getBoostInfo(character, 'Gathering') : null;
+  // We always get boostInfo when there's a boost (for footer display), but we handle flavor text separately
+  let boostInfo = !isTeacherBoost ? await getBoostInfo(character, 'Gathering') : null;
   if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'entertainer' && bonusItem?.itemName) {
     // Regenerate the boost flavor text to include the bonus item name
     boostInfo = {
@@ -1353,12 +1369,24 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
     };
     console.log(`[embeds.js]: ✅ New Scholar boost flavor text: ${boostInfo.boostFlavorText}`);
   }
+  // For Priest boosts, only add boost flavor text if we haven't already used it as the main flavor text
+  // (i.e., only add it when there's a divine item, since noDivine is already the main text)
   if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'priest') {
-    const outcome = isDivineItemWithPriestBoost ? 'success' : 'noDivine';
-    boostInfo = {
-      ...boostInfo,
-      boostFlavorText: generateBoostFlavorText('Priest', 'Gathering', { outcome })
-    };
+    if (isDivineItemWithPriestBoost) {
+      // Divine item found - add success message as boost effect
+      const outcome = 'success';
+      boostInfo = {
+        ...boostInfo,
+        boostFlavorText: generateBoostFlavorText('Priest', 'Gathering', { outcome })
+      };
+    } else {
+      // No divine item - we already used noDivine as main text, so don't add it again as boost effect
+      // Just keep boostInfo for footer display, but don't add boost flavor text
+      boostInfo = {
+        ...boostInfo,
+        boostFlavorText: null
+      };
+    }
   }
   let description = addBoostFlavorText(flavorText, boostInfo);
  
@@ -1373,6 +1401,11 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
    if (isEntertainerBoost) {
      description += `\n\n🎭 **Entertainer's Gift:** ${character.name} also found ${bonusArticle} ${bonusEmoji}${bonusItem.itemName}!`;
    }
+ }
+
+ // Ensure description is always a string (Discord embed requirement)
+ if (!description || typeof description !== 'string') {
+   description = 'A successful gathering trip!';
  }
 
  const locationPrefix = getLocationPrefix(character);

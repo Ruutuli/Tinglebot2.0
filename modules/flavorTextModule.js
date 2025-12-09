@@ -9,6 +9,9 @@ const { debug } = require('../utils/logger');
 
 // Utility function to get a random message from an array
 const getRandomMessage = (messages) => {
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return null;
+  }
   return messages[Math.floor(Math.random() * messages.length)];
 };
 
@@ -854,7 +857,9 @@ const generateBlightRollBoostFlavorText = (blightStage, originalRoll, adjustedRo
 // ============================================================================
 
 const generateDivineItemFlavorText = () => {
-  const divineFlavorTexts = BOOST_FLAVOR_MESSAGES.Priest.Gathering;
+  const divineFlavorTexts = BOOST_FLAVOR_MESSAGES.Priest.Gathering?.success || 
+                            BOOST_FLAVOR_MESSAGES.Priest.Gathering?.default || 
+                            ["A divine blessing guided your gathering."];
   
   return getRandomMessage(divineFlavorTexts);
 };
@@ -1164,14 +1169,17 @@ const generateBoostFlavorText = (boosterJob, category = 'default', options = nul
   // Handle object-based message sets (e.g., outcome-specific)
   if (categoryMessages && typeof categoryMessages === 'object' && !Array.isArray(categoryMessages)) {
     if (options?.outcome && Array.isArray(categoryMessages[options.outcome])) {
-      return getRandomMessage(categoryMessages[options.outcome]);
+      const result = getRandomMessage(categoryMessages[options.outcome]);
+      return result || 'Boost effect active.';
     }
     if (Array.isArray(categoryMessages.default)) {
-      return getRandomMessage(categoryMessages.default);
+      const result = getRandomMessage(categoryMessages.default);
+      return result || 'Boost effect active.';
     }
   }
 
-  return getRandomMessage(categoryMessages);
+  const result = getRandomMessage(categoryMessages);
+  return result || 'Boost effect active.';
 };
 
 // ============================================================================
