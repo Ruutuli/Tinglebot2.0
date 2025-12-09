@@ -564,6 +564,18 @@ userSchema.methods.recordQuestCompletion = async function({
         console.log(`[UserModel.recordQuestCompletion] ✅ Fixed pendingTurnIns: added ${diff} missing completions`);
       }
     }
+    
+    // ------------------- Always validate pendingTurnIns matches unique completions -------------------
+    // Even if totalCompleted is correct, pendingTurnIns might be wrong
+    // pendingTurnIns should equal the number of unique quest completions (available for turn-in)
+    const currentPendingTurnIns = questTracking.pendingTurnIns || 0;
+    const expectedPendingTurnIns = actualCompletions;
+    
+    if (currentPendingTurnIns < expectedPendingTurnIns) {
+      const pendingDiff = expectedPendingTurnIns - currentPendingTurnIns;
+      questTracking.pendingTurnIns = expectedPendingTurnIns;
+      console.log(`[UserModel.recordQuestCompletion] 🔧 Fixed pendingTurnIns discrepancy for user ${this.discordId}: was ${currentPendingTurnIns}, expected ${expectedPendingTurnIns} (added ${pendingDiff})`);
+    }
   }
   
   questTracking.lastCompletionAt = completionTimestamp;

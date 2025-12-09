@@ -251,7 +251,8 @@ const useHearts = async (characterId, hearts, context = {}) => {
 };
 
 // ------------------- Use Stamina -------------------
-// Deducts stamina from a character. If stamina reaches 0, returns a message indicating exhaustion.
+// Deducts stamina from a character. Returns exhausted: true if the character doesn't have enough stamina BEFORE deducting.
+// If the character has enough stamina, it will be deducted and exhausted: false is returned (even if stamina reaches 0 after use).
 const useStamina = async (characterId, stamina, context = {}) => {
   try {
     // First check if this is a mod character
@@ -271,13 +272,20 @@ const useStamina = async (characterId, stamina, context = {}) => {
       return { message: `🟩 Mod character - no stamina lost`, exhausted: false };
     }
 
+    // Check if character has enough stamina BEFORE deducting
+    if (character.currentStamina < stamina) {
+      console.log(`[characterStatsModule.js]: ⚠️ ${character.name} doesn't have enough stamina! Required: ${stamina}, Available: ${character.currentStamina}`);
+      return { message: `⚠️ ${character.name} doesn't have enough stamina! Required: ${stamina}, Available: ${character.currentStamina}`, exhausted: true };
+    }
+
+    // Deduct stamina and update database
     const newStamina = Math.max(character.currentStamina - stamina, 0);
     await updateCurrentStamina(characterId, newStamina, true);
 
-    // Check if stamina is exhausted.
+    // If stamina reaches 0 after use, log it but don't mark as exhausted
+    // (they successfully used the stamina they had)
     if (newStamina === 0) {
-      console.log(`[characterStatsModule.js]: ⚠️ ${character.name} has run out of stamina!`);
-      return { message: `⚠️ ${character.name} has no stamina left!`, exhausted: true };
+      console.log(`[characterStatsModule.js]: ⚠️ ${character.name} has run out of stamina after using ${stamina} stamina.`);
     }
 
     return { message: `🟩 -${stamina} stamina used`, exhausted: false };

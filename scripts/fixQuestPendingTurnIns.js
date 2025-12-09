@@ -71,14 +71,25 @@ function analyzeUserQuestTracking(user) {
     });
   }
   
-  // Check if pendingTurnIns seems reasonable
-  // It should be <= totalCompleted (can't have more pending than total)
-  // But we can't know exactly how many have been turned in
+  // Check if pendingTurnIns matches unique quest completions
+  // pendingTurnIns should equal the number of unique quest completions (available for turn-in)
+  // It can't be less than actualCompletions (unless some were turned in, but we can't track that)
+  // The main issue: pendingTurnIns should at least equal actualCompletions
   const totalPending = legacyPending + pendingTurnIns;
   if (pendingTurnIns < 0) {
     issues.push({
       type: 'pendingTurnIns_negative',
       value: pendingTurnIns
+    });
+  }
+  
+  // Check if pendingTurnIns is less than actual completions (main issue we're fixing)
+  if (pendingTurnIns < actualCompletions) {
+    issues.push({
+      type: 'pendingTurnIns_too_low',
+      expected: actualCompletions,
+      actual: pendingTurnIns,
+      difference: actualCompletions - pendingTurnIns
     });
   }
   
@@ -131,33 +142,28 @@ async function fixUserQuestTracking(user, analysis) {
     }
   }
   
-  // Fix 2: Recalculate pendingTurnIns
-  // The key issue: when recordQuestCompletion is called with an existing questId,
-  // it updates the completion but doesn't increment pendingTurnIns (because isNewCompletion = false)
-  // However, if a quest completion was never properly recorded initially, it won't have pendingTurnIns
+  // Fix 2: Recalculate pendingTurnIns to match unique quest completions
+  // The key issue: pendingTurnIns should equal the number of unique quest completions
+  // (available for turn-in). Even if totalCompleted is correct, pendingTurnIns might be wrong.
   // 
-  // Strategy: If we found more completions than totalCompleted, those missing completions
-  // should add to pendingTurnIns. We can't know exactly how many have been turned in,
-  // but we can ensure pendingTurnIns reflects the missing completions.
+  // Strategy: pendingTurnIns should equal the number of unique quest completions.
+  // We can't know exactly how many have been turned in, but we can ensure pendingTurnIns
+  // at least matches the number of unique completions (it can't be less).
   
-  // Calculate the difference in totalCompleted
-  const oldTotalCompleted = questTracking.totalCompleted || 0;
-  const totalCompletedDiff = analysis.actualCompletions - oldTotalCompleted;
+  // Calculate the expected pendingTurnIns based on unique completions
+  const currentPendingTurnIns = questTracking.pendingTurnIns || 0;
+  const expectedPendingTurnIns = analysis.actualCompletions;
   
-  if (totalCompletedDiff > 0) {
-    // We found more completions than were recorded in totalCompleted
-    // These missing completions should add to pendingTurnIns
-    // This is the main fix for the reported issue
-    const oldPending = questTracking.pendingTurnIns || 0;
-    const newPending = Math.max(0, oldPending + totalCompletedDiff);
-    questTracking.pendingTurnIns = newPending;
-    fixes.push(`Updated pendingTurnIns from ${oldPending} to ${newPending} (added ${totalCompletedDiff} missing completions)`);
+  if (currentPendingTurnIns < expectedPendingTurnIns) {
+    // pendingTurnIns is less than the number of unique completions - fix it
+    const pendingDiff = expectedPendingTurnIns - currentPendingTurnIns;
+    questTracking.pendingTurnIns = expectedPendingTurnIns;
+    fixes.push(`Updated pendingTurnIns from ${currentPendingTurnIns} to ${expectedPendingTurnIns} (added ${pendingDiff} missing completions)`);
     fixed = true;
-  } else if (totalCompletedDiff < 0) {
-    // We found fewer completions than were recorded
-    // This is unusual - might indicate data corruption or deleted completions
-    // Don't adjust pendingTurnIns downward as it might have been consumed
-    fixes.push(`Warning: Found fewer completions than recorded (${Math.abs(totalCompletedDiff)} difference). Not adjusting pendingTurnIns to avoid undercounting.`);
+  } else if (currentPendingTurnIns > expectedPendingTurnIns) {
+    // pendingTurnIns is greater than unique completions - this could mean some were turned in
+    // or there's data inconsistency. Log a warning but don't decrease to avoid undercounting.
+    fixes.push(`Warning: pendingTurnIns (${currentPendingTurnIns}) is greater than unique completions (${expectedPendingTurnIns}). This may indicate some quests were turned in. Not adjusting to avoid undercounting.`);
   }
   
   // Fix 3: Ensure pendingTurnIns is not negative
@@ -168,7 +174,14 @@ async function fixUserQuestTracking(user, analysis) {
     fixed = true;
   }
   
-  // Note: Fix 2 already handles the pendingTurnIns adjustment when totalCompletedDiff > 0
+  // Fix 4: Fix pendingTurnIns if it's too low (main issue)
+  if (analysis.issues.some(i => i.type === 'pendingTurnIns_too_low')) {
+    const issue = analysis.issues.find(i => i.type === 'pendingTurnIns_too_low');
+    const oldPending = questTracking.pendingTurnIns || 0;
+    questTracking.pendingTurnIns = issue.expected;
+    fixes.push(`Fixed pendingTurnIns from ${oldPending} to ${issue.expected} (added ${issue.difference} missing completions)`);
+    fixed = true;
+  }
   
   return { fixed, fixes };
 }
@@ -235,6 +248,8 @@ async function fixQuestPendingTurnIns() {
             console.log(`   • totalCompleted mismatch: expected ${issue.expected}, got ${issue.actual} (diff: ${issue.difference})`);
           } else if (issue.type === 'pendingTurnIns_negative') {
             console.log(`   • pendingTurnIns is negative: ${issue.value}`);
+          } else if (issue.type === 'pendingTurnIns_too_low') {
+            console.log(`   • pendingTurnIns too low: expected ${issue.expected}, got ${issue.actual} (diff: ${issue.difference})`);
           } else if (issue.type === 'completions_without_questId') {
             console.log(`   • ${issue.count} completions without questId`);
           }

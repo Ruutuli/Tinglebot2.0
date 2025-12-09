@@ -566,7 +566,14 @@ async function syncApprovedSubmissionsToParticipant(quest, participant) {
                     .sort((a, b) => b - a)[0] || new Date();
                 participant.updatedAt = new Date();
                 
-                console.log(`[questRewardModule.js] ✅ Marked participant ${participant.characterName} as completed after syncing approved submissions for quest ${quest.questID}`);
+                // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
+                try {
+                    await recordQuestCompletionSafeguard(participant, quest);
+                } catch (error) {
+                    console.error(`[questRewardModule] ❌ Error recording quest completion safeguard after syncing submissions:`, error);
+                }
+                
+                console.log(`[questRewardModule] ✅ Marked participant ${participant.characterName} as completed after syncing approved submissions for quest ${quest.questID}`);
             }
         }
         
@@ -962,18 +969,9 @@ async function recordQuestCompletionSafeguard(participant, quest) {
             return;
         }
         
-        // Check if quest completion is already recorded using ensureQuestTracking
-        const questTracking = user.ensureQuestTracking();
-        const completions = questTracking.completions || [];
-        const alreadyRecorded = completions.some(entry => entry.questId === quest.questID);
-        
-        if (alreadyRecorded) {
-            // Already recorded, no need to record again
-            return;
-        }
-        
+        // Always call recordQuestCompletion - it handles duplicates by updating existing entries
+        // This ensures the safeguard logic in recordQuestCompletion runs and fixes any discrepancies
         // Record with temporary reward data (will be updated when rewards are distributed)
-        // recordQuestCompletion handles duplicate quest IDs by updating existing entry, so it's safe to call
         await user.recordQuestCompletion({
             questId: quest.questID,
             questType: quest.questType || 'Other',

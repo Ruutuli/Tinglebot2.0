@@ -190,32 +190,65 @@ async function removeOfflineAction(id) {
 
 // Message handling for cache management
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
-    event.waitUntil(
-      caches.delete(CACHE_NAME).then(() => {
-        console.log('Map cache cleared');
-        return caches.open(CACHE_NAME);
-      })
-    );
-  }
-  
-  // Disabled image preloading due to CORS issues
-  if (event.data && event.data.type === 'PRELOAD_IMAGES') {
-    console.log('⚠️ Image preloading disabled due to CORS policy');
-    // event.waitUntil(
-    //   caches.open(CACHE_NAME).then(cache => {
-    //     return Promise.all(
-    //       event.data.urls.map(url => 
-    //         fetch(url).then(response => {
-    //           if (response.ok) {
-    //             return cache.put(url, response);
-    //           }
-    //         }).catch(error => {
-    //           console.warn('Failed to preload image:', url, error);
-    //         })
-    //       )
-    //     );
-    //   })
-    // );
+  // Handle messages with proper error handling
+  try {
+    if (event.data && event.data.type === 'CLEAR_CACHE') {
+      event.waitUntil(
+        caches.delete(CACHE_NAME).then(() => {
+          console.log('Map cache cleared');
+          return caches.open(CACHE_NAME).then(() => {
+            // Send response back if port is still open
+            if (event.ports && event.ports[0]) {
+              event.ports[0].postMessage({ success: true, type: 'CLEAR_CACHE' });
+            }
+          });
+        }).catch(error => {
+          console.error('Error clearing cache:', error);
+          if (event.ports && event.ports[0]) {
+            event.ports[0].postMessage({ success: false, error: error.message });
+          }
+        })
+      );
+      return;
+    }
+    
+    // Disabled image preloading due to CORS issues
+    if (event.data && event.data.type === 'PRELOAD_IMAGES') {
+      console.log('⚠️ Image preloading disabled due to CORS policy');
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ success: false, message: 'Image preloading disabled' });
+      }
+      // event.waitUntil(
+      //   caches.open(CACHE_NAME).then(cache => {
+      //     return Promise.all(
+      //       event.data.urls.map(url => 
+      //         fetch(url).then(response => {
+      //           if (response.ok) {
+      //             return cache.put(url, response);
+      //           }
+      //         }).catch(error => {
+      //           console.warn('Failed to preload image:', url, error);
+      //         })
+      //       )
+      //     );
+      //   })
+      // );
+      return;
+    }
+    
+    // Send acknowledgment for any other messages
+    if (event.ports && event.ports[0]) {
+      event.ports[0].postMessage({ success: true, message: 'Message received' });
+    }
+  } catch (error) {
+    console.error('Error handling service worker message:', error);
+    // Try to send error response if port is still available
+    if (event.ports && event.ports[0]) {
+      try {
+        event.ports[0].postMessage({ success: false, error: error.message });
+      } catch (portError) {
+        // Port may already be closed, ignore silently
+      }
+    }
   }
 });
