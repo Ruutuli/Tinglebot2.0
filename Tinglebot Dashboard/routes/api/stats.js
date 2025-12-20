@@ -5,19 +5,18 @@
 
 const express = require('express');
 const router = express.Router();
-const Character = require('../../models/CharacterModel');
-const ModCharacter = require('../../models/ModCharacterModel');
-const User = require('../../models/UserModel');
-const Pet = require('../../models/PetModel');
-const Mount = require('../../models/MountModel');
-const VillageShops = require('../../models/VillageShopsModel');
+const mongoose = require('mongoose');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const logger = require('../../utils/logger');
-const { getCharacterInventoryCollection } = require('../../database/db');
+const { getCharacterInventoryCollection } = require('../../database/db-dashboard');
 
 // ------------------- Function: getTinglebotStats -------------------
 // Returns statistics for Tinglebot system data
 router.get('/tinglebot', asyncHandler(async (req, res) => {
+  const User = mongoose.models.User;
+  const Pet = mongoose.models.Pet;
+  const Mount = mongoose.models.Mount;
+  const VillageShops = mongoose.models.VillageShops;
   const [totalUsers, activePets, totalMounts, villageShops] = await Promise.all([
     User.countDocuments(),
     Pet.countDocuments({ status: 'active' }),
@@ -57,6 +56,8 @@ async function countSpiritOrbsBatch(characterNames) {
 // ------------------- Function: getCharacterStats -------------------
 // Returns comprehensive character statistics and analytics
 router.get('/characters', asyncHandler(async (req, res) => {
+  const Character = mongoose.models.Character;
+  const ModCharacter = mongoose.models.ModCharacter;
   // Get both regular and mod characters for total count
   const [regularCharacters, modCharacters] = await Promise.all([
     Character.find({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } }).lean(),

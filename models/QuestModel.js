@@ -608,7 +608,7 @@ questSchema.methods.completeFromArtSubmission = async function(userId, submissio
         
         // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
         try {
-            const questRewardModule = require('../modules/questRewardModule');
+            const questRewardModule = require('../bot/modules/questRewardModule');
             await questRewardModule.recordQuestCompletionSafeguard(participant, this);
         } catch (error) {
             console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
@@ -653,7 +653,7 @@ questSchema.methods.completeFromWritingSubmission = async function(userId, submi
         
         // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
         try {
-            const questRewardModule = require('../modules/questRewardModule');
+            const questRewardModule = require('../bot/modules/questRewardModule');
             await questRewardModule.recordQuestCompletionSafeguard(participant, this);
         } catch (error) {
             console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
@@ -774,7 +774,7 @@ questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
             
             // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
             try {
-                const questRewardModule = require('../modules/questRewardModule');
+                const questRewardModule = require('../bot/modules/questRewardModule');
                 await questRewardModule.recordQuestCompletionSafeguard(participant, this);
             } catch (error) {
                 console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
@@ -1268,7 +1268,7 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
             // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
             // even if reward processing doesn't happen immediately
             try {
-                const questRewardModule = require('../modules/questRewardModule');
+                const questRewardModule = require('../bot/modules/questRewardModule');
                 await questRewardModule.recordQuestCompletionSafeguard(participant, this);
             } catch (error) {
                 console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);

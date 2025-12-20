@@ -12,7 +12,7 @@ let dbConfig = null;
 function getDbConfig() {
   if (!dbConfig) {
     try {
-      dbConfig = require('../config/database');
+      dbConfig = require('../config/database-dashboard');
     } catch (error) {
       console.warn('Warning: Could not load database config:', error.message);
       dbConfig = { tinglebot: null, inventories: null, vending: null };

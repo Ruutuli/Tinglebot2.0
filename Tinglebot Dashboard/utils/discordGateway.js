@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const MessageTracking = require('../models/MessageTrackingModel');
+const MessageTracking = require('../../models/MessageTrackingModel');
 const logger = require('./logger');
 
 class DiscordGateway {

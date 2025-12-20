@@ -14,10 +14,10 @@ const {
   extractSpreadsheetId,
   isValidGoogleSheetsUrl
 } = require("./googleSheetsUtils");
-const generalCategories = require("../models/GeneralItemCategories");
+const generalCategories = require("../../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
-const ItemModel = require('../models/ItemModel');
+const ItemModel = require('../../models/ItemModel');
 
 // ============================================================================
 // ---- Constants ----

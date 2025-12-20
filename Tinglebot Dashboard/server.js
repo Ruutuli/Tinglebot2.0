@@ -1,14 +1,22 @@
-/* ============================================================================
-// server.js
-// Purpose: Express server for Tinglebot dashboard – handles API routes,
-//          database operations, caching, and server management using db.js methods.
-// ============================================================================ */
-
+// ============================================================================
 // ------------------- Section: Imports & Configuration -------------------
-require('dotenv').config();
+// ============================================================================
+
+const path = require('path');
+const envPath = path.join(__dirname, '..', '.env');
+require('dotenv').config({ path: envPath });
+
+// Import logger early for initialization logging
+const logger = require('./utils/logger');
+
+// Verify .env file is being loaded
+if (process.env.MONGODB_URI || process.env.MONGODB_TINGLEBOT_URI || process.env.MONGODB_TINGLEBOT_URI_PROD) {
+  logger.info('MongoDB environment variables detected', 'server.js');
+} else {
+  logger.warn('No MongoDB environment variables found - check .env file', 'server.js');
+}
 
 const express = require('express');
-const path = require('path');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
@@ -20,7 +28,7 @@ const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
 const { getDiscordGateway } = require('./utils/discordGateway');
-const MessageTracking = require('./models/MessageTrackingModel');
+const MessageTracking = require('../models/MessageTrackingModel');
 const compression = require('compression');
 const multer = require('multer');
 const fs = require('fs').promises;
@@ -44,40 +52,111 @@ const {
   getOrCreateUser,
   getCurrentVendingStockList,
   getLimitedItems
-} = require('./database/db');
+} = require('./database/db-dashboard');
 
 // Import models
-const Character = require('./models/CharacterModel');
-const ModCharacter = require('./models/ModCharacterModel');
-const Quest = require('./models/QuestModel');
-const Item = require('./models/ItemModel');
-const Monster = require('./models/MonsterModel');
-const User = require('./models/UserModel');
-const Pet = require('./models/PetModel');
-const Mount = require('./models/MountModel');
-const VillageShops = require('./models/VillageShopsModel');
-const Weather = require('./models/WeatherModel');
-const { VendingRequest } = require('./models/VendingModel');
-const { initializeVendingStockModel, getVendingStockModel } = require('./models/VendingStockModel');
-const Square = require('./models/mapModel');
-const { Village } = require('./models/VillageModel');
-const Party = require('./models/PartyModel');
-const Relic = require('./models/RelicModel');
-const CharacterOfWeek = require('./models/CharacterOfWeekModel');
-const Relationship = require('./models/RelationshipModel');
-const Raid = require('./models/RaidModel');
-const StealStats = require('./models/StealStatsModel');
-const BlightRollHistory = require('./models/BlightRollHistoryModel');
-const { getGearType, getWeaponStyle } = require('./gearModule');
+const Character = require('../models/CharacterModel');
+const ModCharacter = require('../models/ModCharacterModel');
+const Quest = require('../models/QuestModel');
+const Item = require('../models/ItemModel');
+const Monster = require('../models/MonsterModel');
+const User = require('../models/UserModel');
+const Pet = require('../models/PetModel');
+const Mount = require('../models/MountModel');
+const VillageShops = require('../models/VillageShopsModel');
+const Weather = require('../models/WeatherModel');
+const { VendingRequest } = require('../models/VendingModel');
+const { initializeVendingStockModel, getVendingStockModel } = require('../models/VendingStockModel');
+const Square = require('../models/mapModel');
+const { Village } = require('../models/VillageModel');
+const Party = require('../models/PartyModel');
+const Relic = require('../models/RelicModel');
+const CharacterOfWeek = require('../models/CharacterOfWeekModel');
+const Relationship = require('../models/RelationshipModel');
+const Raid = require('../models/RaidModel');
+const StealStats = require('../models/StealStatsModel');
+const BlightRollHistory = require('../models/BlightRollHistoryModel');
+const ApprovedSubmission = require('../models/ApprovedSubmissionModel');
+const HelpWantedQuest = require('../models/HelpWantedQuestModel');
+const Pin = require('../models/PinModel');
+
+// Import additional models for admin database editor
+const BloodMoonTracking = require('../models/BloodMoonTrackingModel');
+const GeneralItem = require('../models/GeneralItemModel');
+const Inventory = require('../models/InventoryModel');
+const MemberLore = require('../models/MemberLoreModel');
+const Minigame = require('../models/MinigameModel');
+const NPC = require('../models/NPCModel');
+const RuuGame = require('../models/RuuGameModel');
+const TableModel = require('../models/TableModel');
+const TableRoll = require('../models/TableRollModel');
+const TempData = require('../models/TempDataModel');
+const TokenTransaction = require('../models/TokenTransactionModel');
+
+// ------------------- Model Names Constant -------------------
+// Single source of truth for all models that need to be re-created on active connection
+const MODEL_NAMES = [
+  'Character',
+  'ModCharacter',
+  'Quest',
+  'Item',
+  'Monster',
+  'User',
+  'Pet',
+  'Mount',
+  'VillageShops',
+  'Weather',
+  'Square',
+  'Village',
+  'Party',
+  'Relic',
+  'CharacterOfWeek',
+  'Relationship',
+  'Raid',
+  'StealStats',
+  'BlightRollHistory',
+  'ApprovedSubmission',
+  'HelpWantedQuest',
+  'VendingRequest',
+  'Pin'
+];
+
+// ------------------- Model Registry -------------------
+// Wrap all imported models in a registry object that can be updated after connection
+// This allows us to reassign model references when they're re-created on the active connection
+const models = {
+  Character,
+  ModCharacter,
+  Quest,
+  Item,
+  Monster,
+  User,
+  Pet,
+  Mount,
+  VillageShops,
+  Weather,
+  Square,
+  Village,
+  Party,
+  Relic,
+  CharacterOfWeek,
+  Relationship,
+  Raid,
+  StealStats,
+  BlightRollHistory,
+  ApprovedSubmission,
+  HelpWantedQuest,
+  VendingRequest,
+  Pin
+};
+
+const { getGearType, getWeaponStyle } = require('./utils/gearModule');
 
 // Import calendar module
-const calendarModule = require('./calendarModule');
-
-// Import pretty logger utility
-const logger = require('./utils/logger');
+const calendarModule = require('./utils/calendarModule');
 
 // Import Google Sheets utilities
-const googleSheets = require('./googleSheetsUtils');
+const googleSheets = require('./utils/googleSheetsUtils');
 const { google } = require('googleapis');
 
 // Import route modules
@@ -108,12 +187,7 @@ const isLocalhost = process.env.FORCE_LOCALHOST === 'true' ||
                    process.env.NODE_ENV === 'development' ||
                    process.env.USE_LOCALHOST === 'true';
 
-logger.info('Environment Detection', 'server.js');
-logger.debug(`NODE_ENV: ${process.env.NODE_ENV}`, null, 'server.js');
-logger.debug(`RAILWAY_ENVIRONMENT: ${process.env.RAILWAY_ENVIRONMENT}`, null, 'server.js');
-logger.debug(`FORCE_LOCALHOST: ${process.env.FORCE_LOCALHOST}`, null, 'server.js');
-logger.debug(`isProduction: ${isProduction}`, null, 'server.js');
-logger.debug(`isLocalhost: ${isLocalhost}`, null, 'server.js');
+// Environment detection - only log summary
 
 // Trust proxy for production environments (Railway, etc.)
 if (isProduction) {
@@ -143,8 +217,6 @@ try {
   });
   
   logger.database('Session store created successfully', 'server.js');
-  logger.debug(`Session store type: ${typeof sessionStore}`, null, 'server.js');
-  logger.debug(`Session store is null: ${sessionStore === null}`, null, 'server.js');
 } catch (error) {
   logger.error('Failed to create session store', error, 'server.js');
   // Fallback to memory store (not recommended for production but allows server to start)
@@ -189,7 +261,7 @@ passport.serializeUser((user, done) => {
 // Deserialize user from session
 passport.deserializeUser(async (discordId, done) => {
   try {
-    const user = await User.findOne({ discordId });
+    const user = await models.User.findOne({ discordId });
     done(null, user);
   } catch (error) {
     done(error, null);
@@ -202,11 +274,7 @@ const callbackURL = process.env.DISCORD_CALLBACK_URL ||
     ? `https://${domain}/auth/discord/callback`
     : `http://localhost:5001/auth/discord/callback`);
 
-logger.info('Discord OAuth Configuration:', 'server.js');
-logger.debug(`isProduction: ${isProduction}`, null, 'server.js');
-logger.debug(`domain: ${domain}`, null, 'server.js');
-logger.debug(`callbackURL: ${callbackURL}`, null, 'server.js');
-logger.debug(`DISCORD_CALLBACK_URL env: ${process.env.DISCORD_CALLBACK_URL}`, null, 'server.js');
+// Discord OAuth configured
 
 
 
@@ -218,11 +286,11 @@ passport.use(new DiscordStrategy({
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     // Find or create user in database
-    let user = await User.findOne({ discordId: profile.id });
+    let user = await models.User.findOne({ discordId: profile.id });
     
     if (!user) {
       // Create new user
-      user = new User({
+      user = new models.User({
         discordId: profile.id,
         username: profile.username,
         email: profile.email,
@@ -287,44 +355,114 @@ const {
 
 // ------------------- Section: Database Initialization -------------------
 
+// Configure Mongoose buffer settings
+// We'll enable buffering initially, then disable it after connection is verified
+// This prevents operations from failing before connection, but ensures they execute immediately after
+mongoose.set('bufferCommands', true);
+// Note: Buffer timeout is 10 seconds by default
+// We ensure connection is ready before server accepts requests, so buffering should be minimal
+
+// ------------------- Function: waitForMongooseConnection -------------------
+// Waits for Mongoose connection to be fully ready
+async function waitForMongooseConnection(maxWaitMs = 30000) {
+  const startTime = Date.now();
+  let checkCount = 0;
+  
+  while (true) {
+    checkCount++;
+    const elapsed = Date.now() - startTime;
+    const readyState = mongoose.connection.readyState;
+    const hasDb = !!mongoose.connection.db;
+    
+    if (readyState === 1) {
+      // Verify connection can actually perform operations
+      if (mongoose.connection.db) {
+        try {
+          await mongoose.connection.db.admin().ping();
+          return; // Connection is ready and operational
+        } catch (pingError) {
+          // readyState says connected but ping failed, keep waiting
+          if (elapsed > maxWaitMs) {
+            logger.error(`Database connection ping failed after ${maxWaitMs}ms: ${pingError.message}`, 'server.js');
+            throw new Error(`Database connection ping failed after ${maxWaitMs}ms: ${pingError.message}`);
+          }
+        }
+      } else {
+        // readyState is 1 but db object not available yet, keep waiting
+        if (elapsed > maxWaitMs) {
+          logger.error(`Database connection db object not available after ${maxWaitMs}ms`, 'server.js');
+          throw new Error(`Database connection db object not available after ${maxWaitMs}ms`);
+        }
+      }
+    } else if (elapsed > maxWaitMs) {
+      logger.error(`Database connection timeout after ${maxWaitMs}ms. Current state: ${readyState}`, 'server.js');
+      throw new Error(`Database connection timeout after ${maxWaitMs}ms. Current state: ${readyState}`);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
+
 // ------------------- Function: runMigrations -------------------
 // Runs database migrations to update existing data
 async function runMigrations() {
-  try {
-    logger.info('Running database migrations...', 'server.js');
-    
-    // Migration: Update homes pins color to lime green
-    const Pin = require('./models/PinModel');
-    
-    // Update from old gold color
-    const result1 = await Pin.updateMany(
-      { category: 'homes', color: '#FFD700' },
-      { $set: { color: '#C5FF00' } }
-    );
-    
-    // Update from cyan color
-    const result2 = await Pin.updateMany(
-      { category: 'homes', color: '#09A98E' },
-      { $set: { color: '#C5FF00' } }
-    );
-    
-    // Update from previous house color
-    const result3 = await Pin.updateMany(
-      { category: 'homes', color: '#EDAF12' },
-      { $set: { color: '#C5FF00' } }
-    );
-    
-    const totalUpdated = result1.modifiedCount + result2.modifiedCount + result3.modifiedCount;
-    
-    if (totalUpdated > 0) {
-      logger.success(`Updated ${totalUpdated} homes pins to use lime green color #C5FF00`, 'server.js');
-    } else {
-      logger.info('No homes pins needed color update', 'server.js');
+  const maxRetries = 3;
+  let retryCount = 0;
+  
+  while (retryCount < maxRetries) {
+    try {
+      // Add a small delay to ensure connection is fully ready for operations
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      logger.info('Running database migrations...', 'server.js');
+      
+      // Migration: Update homes pins color to lime green
+      // Use the re-created model from models registry (already bound to active connection)
+      const Pin = models.Pin || mongoose.models.Pin;
+      
+      // Update from old gold color
+      const result1 = await Pin.updateMany(
+        { category: 'homes', color: '#FFD700' },
+        { $set: { color: '#C5FF00' } },
+        { maxTimeMS: 30000 } // 30 second timeout for operation
+      );
+      
+      // Update from cyan color
+      const result2 = await Pin.updateMany(
+        { category: 'homes', color: '#09A98E' },
+        { $set: { color: '#C5FF00' } },
+        { maxTimeMS: 30000 }
+      );
+      
+      // Update from previous house color
+      const result3 = await Pin.updateMany(
+        { category: 'homes', color: '#EDAF12' },
+        { $set: { color: '#C5FF00' } },
+        { maxTimeMS: 30000 }
+      );
+      
+      const totalUpdated = result1.modifiedCount + result2.modifiedCount + result3.modifiedCount;
+      
+      if (totalUpdated > 0) {
+        logger.success(`Updated ${totalUpdated} homes pins to use lime green color #C5FF00`, 'server.js');
+      } else {
+        logger.info('No homes pins needed color update', 'server.js');
+      }
+      
+      // Success - exit retry loop
+      return;
+      
+    } catch (error) {
+      retryCount++;
+      if (retryCount < maxRetries) {
+        logger.warn(`Migration attempt ${retryCount} failed, retrying... (${error.message})`, 'server.js');
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+      } else {
+        logger.error('Migration failed after all retries:', error);
+        // Don't throw error - migrations shouldn't break server startup
+      }
     }
-    
-  } catch (error) {
-    logger.error('Migration failed:', error);
-    // Don't throw error - migrations shouldn't break server startup
   }
 }
 
@@ -336,7 +474,115 @@ async function initializeDatabases() {
     
     // Connect to Tinglebot database using db.js method
     await connectToTinglebot();
+    await waitForMongooseConnection(60000); // 60 second timeout
+    
+    // Verify connection state
+    const finalReadyState = mongoose.connection.readyState;
+    const finalHasDb = !!mongoose.connection.db;
+    
+    if (finalReadyState !== 1) {
+      throw new Error(`Connection state is ${finalReadyState}, expected 1 (connected)`);
+    }
+    
+    // CRITICAL: Re-create all models on the active connection
+      // Models created before connection are bound to a disconnected connection
+      // We need to delete and re-create them on the active connection using their schemas
+      
+      // Generate modelsToRecreate array from MODEL_NAMES constant (single source of truth)
+      const modelsToRecreate = MODEL_NAMES.map(name => {
+        // Map model name to imported model reference
+        const modelMap = {
+          'Character': Character,
+          'ModCharacter': ModCharacter,
+          'Quest': Quest,
+          'Item': Item,
+          'Monster': Monster,
+          'User': User,
+          'Pet': Pet,
+          'Mount': Mount,
+          'VillageShops': VillageShops,
+          'Weather': Weather,
+          'Square': Square,
+          'Village': Village,
+          'Party': Party,
+          'Relic': Relic,
+          'CharacterOfWeek': CharacterOfWeek,
+          'Relationship': Relationship,
+          'Raid': Raid,
+          'StealStats': StealStats,
+          'BlightRollHistory': BlightRollHistory,
+          'ApprovedSubmission': ApprovedSubmission,
+          'HelpWantedQuest': HelpWantedQuest,
+          'VendingRequest': VendingRequest,
+          'Pin': Pin
+        };
+        return { name, model: modelMap[name] };
+      }).filter(({ model }) => model && model.schema); // Filter out any missing models
+      
+      let recreatedCount = 0;
+      for (const { name, model } of modelsToRecreate) {
+        if (model && model.schema) {
+          // Delete existing model if it exists
+          if (mongoose.models[name]) {
+            delete mongoose.models[name];
+          }
+          if (mongoose.connection.models[name]) {
+            delete mongoose.connection.models[name];
+          }
+          
+          // Re-create on active connection
+          mongoose.connection.model(name, model.schema);
+          recreatedCount++;
+        } else {
+          logger.warn(`${name} model or schema not available`, 'server.js');
+        }
+      }
+      
+      
+      // CRITICAL: Update models registry to point to newly created models from mongoose.models
+      // This ensures all code using models.* will use the correctly bound models
+      // Generate modelNameMap from MODEL_NAMES constant (single source of truth)
+      const modelNameMap = MODEL_NAMES.reduce((acc, name) => {
+        acc[name] = name;
+        return acc;
+      }, {});
+      
+      let updatedCount = 0;
+      for (const [registryKey, modelName] of Object.entries(modelNameMap)) {
+        const recreatedModel = mongoose.models[modelName] || mongoose.connection.models[modelName];
+        if (recreatedModel) {
+          models[registryKey] = recreatedModel;
+          updatedCount++;
+        } else {
+          logger.warn(`Could not find recreated model ${modelName} in mongoose.models`, 'server.js');
+        }
+      }
+      
+      if (updatedCount > 0) {
+      }
+      
+      // CRITICAL: Disable buffering AFTER models are re-created
+      // This ensures all subsequent operations execute immediately instead of buffering
+      mongoose.set('bufferCommands', false);
+    
     logger.database('Connected to Tinglebot database', 'server.js');
+    
+    // Set up connection event handlers to detect disconnections
+    mongoose.connection.on('connected', () => {
+      logger.database('MongoDB connected', 'server.js');
+    });
+    
+    mongoose.connection.on('disconnected', () => {
+      logger.error('MongoDB connection lost!', null, 'server.js');
+    });
+    
+    mongoose.connection.on('error', (err) => {
+      logger.error('MongoDB connection error', err, 'server.js');
+    });
+    
+    mongoose.connection.on('reconnected', () => {
+      logger.database('MongoDB reconnected', 'server.js');
+    });
     
     // Initialize VendingStock model (uses tinglebot database)
     try {
@@ -349,10 +595,17 @@ async function initializeDatabases() {
     // Connect to Inventories database using db.js method
     try {
       inventoriesConnection = await connectToInventories();
-      logger.database('Connected to Inventories database', 'server.js');
+      if (inventoriesConnection) {
+        // Ensure we're using the 'inventories' database
+        inventoriesConnection.useDb('inventories');
+        logger.database('Connected to Inventories database', 'server.js');
+      } else {
+        throw new Error('connectToInventories returned null');
+      }
     } catch (inventoryError) {
-      logger.warn(`Failed to connect to Inventories database: ${inventoryError.message}`, 'server.js');
+      logger.error(`Failed to connect to Inventories database: ${inventoryError.message}`, inventoryError, 'server.js');
       // Continue without inventories connection - spirit orb counting will fail gracefully
+      inventoriesConnection = null;
     }
     
     // Connect to Vending database using db.js method
@@ -541,7 +794,7 @@ async function uploadPinImageToGCS(file, pinId) {
   try {
     if (!file) return null;
     
-    const bucket = require('./config/gcsService');
+    const bucket = require('./config/gcsService-dashboard');
     const fileName = `tinglebot/mapUserImages/${pinId}_${Date.now()}_${Math.round(Math.random() * 1E9)}`;
     
     const fileUpload = bucket.file(fileName);
@@ -626,6 +879,64 @@ app.use(requestLogger);
 // Apply rate limiting to API routes
 app.use('/api', generalLimiter);
 app.use('/auth', authLimiter);
+
+// ------------------- Section: Database Connection Middleware -------------------
+// Middleware to ensure database connection is ready before processing requests
+const ensureDbConnection = async (req, res, next) => {
+  // Skip database check for non-database routes
+  const skipDbCheck = req.path.startsWith('/api/health') || 
+                      req.path.startsWith('/auth/') ||
+                      req.path === '/' ||
+                      req.path.startsWith('/js/') ||
+                      req.path.startsWith('/css/') ||
+                      req.path.startsWith('/images/');
+  
+  if (skipDbCheck) {
+    return next();
+  }
+  
+  const readyState = mongoose.connection.readyState;
+  const hasDb = !!mongoose.connection.db;
+  
+  // Quick check if connection is ready
+  if (readyState === 1 && hasDb) {
+    // Verify connection can actually perform operations with a quick ping
+    try {
+      // Use a short timeout for ping to avoid blocking
+      await Promise.race([
+        mongoose.connection.db.admin().ping(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 1000))
+      ]);
+      return next();
+    } catch (pingError) {
+      logger.warn(`ensureDbConnection - readyState is 1 but ping failed for ${req.path}: ${pingError.message}`, 'server.js');
+      // Connection state says ready but ping failed or timed out
+      // Continue to wait for connection
+    }
+  } else {
+    logger.warn(`ensureDbConnection - connection not ready for ${req.path} - readyState: ${readyState}, hasDb: ${hasDb}`, 'server.js');
+  }
+  
+  // Connection not ready, wait for it (with shorter timeout for API requests)
+  try {
+    await waitForMongooseConnection(3000); // 3 second timeout for API requests
+    // Verify with ping
+    await Promise.race([
+      mongoose.connection.db.admin().ping(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 1000))
+    ]);
+    return next();
+  } catch (error) {
+    logger.error(`ensureDbConnection failed for ${req.path} - readyState: ${mongoose.connection.readyState}, hasDb: ${!!mongoose.connection.db}`, error, 'server.js');
+    return res.status(503).json({ 
+      error: 'Database connection not available',
+      message: 'Please try again in a moment'
+    });
+  }
+};
+
+// Apply database connection middleware to API routes
+app.use('/api', ensureDbConnection);
 
 // ------------------- Section: Route Mounting -------------------
 // Mount route modules
@@ -1261,7 +1572,7 @@ app.get('/api/user', async (req, res) => {
       
       // Fetch full user data from database to get leveling, birthday, helpWanted, etc.
       try {
-        const dbUser = await User.findOne({ discordId: req.user.discordId })
+        const dbUser = await models.User.findOne({ discordId: req.user.discordId })
           .select('discordId username email avatar discriminator tokens characterSlot status leveling birthday helpWanted quests createdAt nickname')
           .lean();
         
@@ -1271,7 +1582,7 @@ app.get('/api/user', async (req, res) => {
             isAdmin: isAdmin,
             user: {
               ...dbUser,
-              id: dbUser._id
+              id: dbmodels.User._id
             },
             session: req.session ? {
               id: req.session.id,
@@ -1328,7 +1639,7 @@ app.get('/api/users/search', async (req, res) => {
 
     const searchRegex = new RegExp(query, 'i');
     
-    const users = await User.find({
+    const users = await models.User.find({
       $or: [
         { username: searchRegex },
         { discordId: searchRegex }
@@ -1342,7 +1653,7 @@ app.get('/api/users/search', async (req, res) => {
     // Get character counts for each user
     const usersWithCharacters = await Promise.all(
       users.map(async (user) => {
-        const characterCount = await Character.countDocuments({ 
+        const characterCount = await models.Character.countDocuments({ 
           userId: user.discordId,
           name: { $nin: ['Tingle', 'Tingle test', 'John'] }
         });
@@ -1370,7 +1681,7 @@ app.get('/api/users', async (req, res) => {
     const skip = (page - 1) * limit;
 
     // Get all unique users
-    const allUsers = await User.aggregate([
+    const allUsers = await models.User.aggregate([
       {
         $group: {
           _id: '$discordId',
@@ -1393,7 +1704,7 @@ app.get('/api/users', async (req, res) => {
     if (allItems) {
       const usersWithCharacters = await Promise.all(
         allUsers.map(async (user) => {
-          const characterCount = await Character.countDocuments({ 
+          const characterCount = await models.Character.countDocuments({ 
             userId: user._id,
             name: { $nin: ['Tingle', 'Tingle test', 'John'] }
           });
@@ -1422,7 +1733,7 @@ app.get('/api/users', async (req, res) => {
     // Get character counts for paginated users
     const usersWithCharacters = await Promise.all(
       paginatedUsers.map(async (user) => {
-        const characterCount = await Character.countDocuments({ 
+        const characterCount = await models.Character.countDocuments({ 
           userId: user._id,
           name: { $nin: ['Tingle', 'Tingle test', 'John'] }
         });
@@ -1465,7 +1776,7 @@ app.get('/api/users/:discordId', async (req, res) => {
   try {
     const { discordId } = req.params;
 
-    const user = await User.findOne({ discordId })
+    const user = await models.User.findOne({ discordId })
       .select('discordId username discriminator avatar tokens characterSlot status createdAt nickname')
       .lean();
 
@@ -1474,7 +1785,7 @@ app.get('/api/users/:discordId', async (req, res) => {
     }
 
     // Get user's characters
-    const characters = await Character.find({ 
+    const characters = await models.Character.find({ 
       userId: discordId,
       name: { $nin: ['Tingle', 'Tingle test', 'John'] }
     })
@@ -1513,10 +1824,10 @@ app.get('/api/activities', (_, res) => {
 app.get('/api/rootsofthewild/stats', async (req, res) => {
   try {
     const [totalCharacters, activeQuests, totalItems, activeMonsters] = await Promise.all([
-      Character.countDocuments({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
-      Quest.countDocuments({ status: 'active' }),
-      Item.countDocuments(),
-      Monster.countDocuments({ isActive: true })
+      models.Character.countDocuments({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
+      models.Quest.countDocuments({ status: 'active' }),
+      models.Item.countDocuments(),
+      models.Monster.countDocuments({ isActive: true })
     ]);
     res.json({ totalCharacters, activeQuests, totalItems, activeMonsters });
   } catch (error) {
@@ -1529,10 +1840,10 @@ app.get('/api/rootsofthewild/stats', async (req, res) => {
 app.get('/api/tinglebot/stats', async (req, res) => {
   try {
     const [totalUsers, activePets, totalMounts, villageShops] = await Promise.all([
-      User.countDocuments(),
-              Pet.countDocuments({ status: 'active' }),
-      Mount.countDocuments(),
-      VillageShops.countDocuments()
+      models.User.countDocuments(),
+              models.Pet.countDocuments({ status: 'active' }),
+      models.Mount.countDocuments(),
+      models.VillageShops.countDocuments()
     ]);
     res.json({ totalUsers, activePets, totalMounts, villageShops });
   } catch (error) {
@@ -1546,15 +1857,15 @@ app.get('/api/stats/characters', async (req, res) => {
   try {
     // Get both regular and mod characters for total count
     const [regularCharacters, modCharacters] = await Promise.all([
-      Character.find({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } }).lean(),
-      ModCharacter.find({}).lean()
+      models.Character.find({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } }).lean(),
+      models.ModCharacter.find({}).lean()
     ]);
     
     const totalCharacters = regularCharacters.length + modCharacters.length;
     const allCharacters = [...regularCharacters, ...modCharacters];
 
     // Get characters per village (including mod characters)
-    const perVillageAgg = await Character.aggregate([
+    const perVillageAgg = await models.Character.aggregate([
       { $match: { 
         homeVillage: { $exists: true, $ne: null },
         name: { $nin: ['Tingle', 'Tingle test', 'John'] }
@@ -1582,7 +1893,7 @@ app.get('/api/stats/characters', async (req, res) => {
     });
 
     // Get characters per race (including mod characters)
-    const perRaceAgg = await Character.aggregate([
+    const perRaceAgg = await models.Character.aggregate([
       { 
         $match: { 
           race: { 
@@ -1635,7 +1946,7 @@ app.get('/api/stats/characters', async (req, res) => {
 
 
     // Get characters per job (including mod characters)
-    const perJobAgg = await Character.aggregate([
+    const perJobAgg = await models.Character.aggregate([
       { $match: { 
         job: { $exists: true, $ne: null, $ne: '' },
         name: { $nin: ['Tingle', 'Tingle test', 'John'] }
@@ -1682,7 +1993,7 @@ app.get('/api/stats/characters', async (req, res) => {
     // Get upcoming birthdays (including mod characters)
     const today = new Date();
     const thisYr = today.getFullYear();
-    const allBday = await Character.find({ 
+    const allBday = await models.Character.find({ 
       birthday: { $exists: true, $ne: '' },
       name: { $nin: ['Tingle', 'Tingle test', 'John'] }
     }, { name: 1, birthday: 1 }).lean();
@@ -1714,7 +2025,7 @@ app.get('/api/stats/characters', async (req, res) => {
 
     // Get visiting counts and details (including mod characters)
     const villages = ['rudania', 'inariko', 'vhintl'];
-    const visitingAgg = await Character.aggregate([
+    const visitingAgg = await models.Character.aggregate([
       { $match: { 
         currentVillage: { $in: villages }, 
         homeVillage: { $in: villages, $ne: null }, 
@@ -1747,7 +2058,7 @@ app.get('/api/stats/characters', async (req, res) => {
     });
 
     // Get detailed visiting characters
-    const visitingCharacters = await Character.find(
+    const visitingCharacters = await models.Character.find(
       { 
         currentVillage: { $in: villages }, 
         homeVillage: { $in: villages, $ne: null }, 
@@ -1787,7 +2098,7 @@ app.get('/api/stats/characters', async (req, res) => {
 
     // Get top characters by various stats
     const getTop = async (field) => {
-      const top = await Character.find({ 
+      const top = await models.Character.find({ 
         [field]: { $gt: 0 },
         name: { $nin: ['Tingle', 'Tingle test', 'John'] }
       })
@@ -1842,30 +2153,30 @@ app.get('/api/stats/characters', async (req, res) => {
 
     // Get special character counts (mod characters are immune to negative effects)
     const [kodCount, blightedCount, debuffedCount, jailedCount] = await Promise.all([
-      Character.countDocuments({ ko: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
-      Character.countDocuments({ blighted: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
-      Character.countDocuments({ 'debuff.active': true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
-      Character.countDocuments({ inJail: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } })
+      models.Character.countDocuments({ ko: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
+      models.Character.countDocuments({ blighted: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
+      models.Character.countDocuments({ 'debuff.active': true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
+      models.Character.countDocuments({ inJail: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } })
     ]);
 
     // Get debuffed characters details
-    const debuffedCharacters = await Character.find(
+    const debuffedCharacters = await models.Character.find(
       { 'debuff.active': true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } },
       { name: 1, 'debuff.endDate': 1 }
     ).lean();
 
     // Get KO'd and blighted characters details
-    const kodCharacters = await Character.find(
+    const kodCharacters = await models.Character.find(
       { ko: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } },
       { name: 1, lastRollDate: 1, ko: 1 }
     ).lean();
-    const blightedCharacters = await Character.find(
+    const blightedCharacters = await models.Character.find(
       { blighted: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } },
       { name: 1, blightedAt: 1, blighted: 1 }
     ).lean();
 
     // Get jailed characters details
-    const jailedCharacters = await Character.find(
+    const jailedCharacters = await models.Character.find(
       { inJail: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } },
       { name: 1, jailReleaseTime: 1, currentVillage: 1, homeVillage: 1 }
     ).lean();
@@ -1912,11 +2223,7 @@ app.get('/api/stats/characters', async (req, res) => {
     });
   } catch (error) {
     logger.error('Error fetching character stats', error, 'server.js');
-    console.error('[server.js]: Full error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
+    logger.error('Error fetching character stats', error, 'server.js');
     res.status(500).json({ 
       error: 'Failed to fetch character stats',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -1932,9 +2239,9 @@ app.get('/api/steal/cooldowns/:characterId', requireAuth, async (req, res) => {
     const userId = req.user.discordId;
 
     // Find character and verify ownership
-    let character = await Character.findById(characterId).lean();
+    let character = await models.Character.findById(characterId).lean();
     if (!character) {
-      character = await ModCharacter.findById(characterId).lean();
+      character = await models.ModCharacter.findById(characterId).lean();
     }
 
     if (!character) {
@@ -1967,7 +2274,7 @@ app.get('/api/steal/cooldowns/:characterId', requireAuth, async (req, res) => {
     };
 
     // Get all NPCs
-    const NPC = require('./models/NPCModel');
+    const NPC = require('../models/NPCModel');
     const allNPCs = await NPC.find({});
     
     for (const npc of allNPCs) {
@@ -2011,7 +2318,7 @@ app.get('/api/steal/cooldowns/:characterId', requireAuth, async (req, res) => {
     }
 
     // Get all player characters that have protection
-    const protectedCharacters = await Character.find({
+    const protectedCharacters = await models.Character.find({
       'stealProtection.isProtected': true,
       _id: { $ne: characterId } // Exclude self
     });
@@ -2053,7 +2360,7 @@ app.get('/api/steal/cooldowns/:characterId', requireAuth, async (req, res) => {
 app.get('/api/stats/hwqs', async (req, res) => {
   try {
     // Fetch all HWQs
-    const allHWQs = await HelpWantedQuest.find({}).lean();
+    const allHWQs = await models.HelpWantedQuest.find({}).lean();
     
     const totalQuests = allHWQs.length;
     const completedQuests = allHWQs.filter(q => q.completed).length;
@@ -2143,7 +2450,7 @@ app.get('/api/stats/hwqs', async (req, res) => {
     
     // Fetch usernames for top completers
     const topCompleterUserIds = topCompleters.map(t => t.userId);
-    const users = await User.find({ discordId: { $in: topCompleterUserIds } })
+    const users = await models.User.find({ discordId: { $in: topCompleterUserIds } })
       .select('discordId username nickname')
       .lean();
     
@@ -2161,7 +2468,7 @@ app.get('/api/stats/hwqs', async (req, res) => {
     });
     
     // Fetch character names
-    const characters = await Character.find({ _id: { $in: Array.from(allCharacterIds) } })
+    const characters = await models.Character.find({ _id: { $in: Array.from(allCharacterIds) } })
       .select('_id name job')
       .lean();
     
@@ -2253,7 +2560,7 @@ app.get('/api/calendar', async (req, res) => {
     const bloodmoonDates = calendarModule.bloodmoonDates;
     
     // Get all birthdays for calendar display
-    const allBirthdays = await Character.find({ 
+    const allBirthdays = await models.Character.find({ 
       birthday: { $exists: true, $ne: '' },
       name: { $nin: ['Tingle', 'Tingle test', 'John'] }
     }, { name: 1, birthday: 1, icon: 1 }).lean();
@@ -2296,17 +2603,17 @@ app.get('/api/models/counts', async (req, res) => {
 
     
     const modelMap = {
-      character: { model: Character, connection: mongoose.connection },
-      weather: { model: Weather, connection: mongoose.connection },
-      monster: { model: Monster, connection: mongoose.connection },
-      pet: { model: Pet, connection: mongoose.connection },
-      mount: { model: Mount, connection: mongoose.connection },
-      item: { model: Item, connection: mongoose.connection },
-      party: { model: Party, connection: mongoose.connection },
-      relic: { model: Relic, connection: mongoose.connection },
-      quest: { model: Quest, connection: mongoose.connection },
+      character: { model: models.Character, connection: mongoose.connection },
+      weather: { model: models.Weather, connection: mongoose.connection },
+      monster: { model: models.Monster, connection: mongoose.connection },
+      pet: { model: models.Pet, connection: mongoose.connection },
+      mount: { model: models.Mount, connection: mongoose.connection },
+      item: { model: models.Item, connection: mongoose.connection },
+      party: { model: models.Party, connection: mongoose.connection },
+      relic: { model: models.Relic, connection: mongoose.connection },
+      quest: { model: models.Quest, connection: mongoose.connection },
       inventory: { model: null, connection: inventoriesConnection },
-      vending: { model: VendingRequest, connection: vendingConnection }
+      vending: { model: models.VendingRequest, connection: vendingConnection }
     };
     
     const counts = Object.fromEntries(Object.keys(modelMap).map(k => [k, 0]));
@@ -2441,7 +2748,7 @@ app.get('/api/models/vendingShops', async (req, res) => {
       for (const characterName of uniqueCharacterNames) {
         try {
           // Try regular character first
-          let character = await Character.findOne({ name: characterName }, { 
+          let character = await models.Character.findOne({ name: characterName }, { 
             icon: 1, 
             shopImage: 1, 
             vendingSetup: 1,
@@ -2452,7 +2759,7 @@ app.get('/api/models/vendingShops', async (req, res) => {
           }).lean();
           if (!character) {
             // Try mod character
-            character = await ModCharacter.findOne({ name: characterName }, { 
+            character = await models.ModCharacter.findOne({ name: characterName }, { 
               icon: 1, 
               shopImage: 1, 
               vendingSetup: 1,
@@ -2592,45 +2899,45 @@ app.get('/api/models/:modelType', async (req, res) => {
     // Map model type to corresponding model
     switch (modelType) {
       case 'character':
-        Model = Character;
-        if (!Character) {
+        Model = models.Character;
+        if (!models.Character) {
           console.error(`[server.js]: ❌ Character model not initialized`);
           return res.status(500).json({ error: 'Character model not available' });
         }
         // For character requests, we'll handle both regular and mod characters specially
         break;
       case 'item':
-        Model = Item;
+        Model = models.Item;
         break;
       case 'monster':
-        Model = Monster;
+        Model = models.Monster;
         query = {};
         break;
       case 'pet':
-        Model = Pet;
+        Model = models.Pet;
         query = { status: 'active' };
         break;
       case 'mount':
-        Model = Mount;
+        Model = models.Mount;
         break;
       case 'village':
-        Model = Village;
+        Model = models.Village;
         break;
       case 'party':
-        Model = Party;
+        Model = models.Party;
         break;
       case 'relic':
-        Model = Relic;
+        Model = models.Relic;
         break;
       case 'villageShops':
-        Model = VillageShops;
+        Model = models.VillageShops;
         break;
       case 'quest':
-        Model = Quest;
+        Model = models.Quest;
         break;
       case 'helpwantedquest':
       case 'HelpWantedQuest':
-        Model = HelpWantedQuest;
+        Model = models.HelpWantedQuest;
         break;
       case 'inventory':
         // Create inventory model dynamically for the inventories connection
@@ -2817,8 +3124,8 @@ app.get('/api/models/:modelType', async (req, res) => {
       if (modelType === 'character') {
         // For characters, fetch both regular and mod characters
         const [regularCharacters, modCharacters] = await Promise.all([
-          Character.find({}).lean(),
-          ModCharacter.find({}).lean()
+          models.Character.find({}).lean(),
+          models.ModCharacter.find({}).lean()
         ]);
         
         // Combine both character types
@@ -2853,7 +3160,7 @@ app.get('/api/models/:modelType', async (req, res) => {
           const userIds = [...new Set(regularCharacterUserIds)];
           
           // Fetch user information for all unique user IDs in one query
-          const users = await User.find({ discordId: { $in: userIds } }, { 
+          const users = await models.User.find({ discordId: { $in: userIds } }, { 
             discordId: 1, 
             username: 1, 
             discriminator: 1 
@@ -2981,7 +3288,7 @@ app.get('/api/models/:modelType', async (req, res) => {
           const userIds = [...new Set(data.map(char => char.userId))];
           
           // Fetch user information for all unique user IDs in one query
-          const users = await User.find({ discordId: { $in: userIds } }, { 
+          const users = await models.User.find({ discordId: { $in: userIds } }, { 
             discordId: 1, 
             username: 1, 
             discriminator: 1 
@@ -3078,7 +3385,7 @@ app.get('/api/models/:modelType', async (req, res) => {
 // Returns total number of characters
 app.get('/api/character-count', async (_, res) => {
   try {
-    const count = await Character.countDocuments({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } });
+    const count = await models.Character.countDocuments({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } });
     res.json({ count });
   } catch (error) {
     console.error('[server.js]: ❌ Failed to fetch character count:', error);
@@ -3100,8 +3407,8 @@ app.get('/api/debug/character-model', async (req, res) => {
     
     if (debug.modelLoaded && debug.databaseConnected) {
       try {
-        debug.characterCount = await Character.countDocuments({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } });
-        debug.sampleCharacter = await Character.findOne().lean();
+        debug.characterCount = await models.Character.countDocuments({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } });
+        debug.sampleCharacter = await models.Character.findOne().lean();
       } catch (dbError) {
         debug.databaseError = dbError.message;
       }
@@ -3118,7 +3425,7 @@ app.get('/api/debug/character-model', async (req, res) => {
 // Returns character icon URL by character ID
 app.get('/api/character/:id/icon', async (req, res) => {
   try {
-    const char = await Character.findById(req.params.id);
+    const char = await models.Character.findById(req.params.id);
     if (!char) return res.status(404).json({ error: 'Character not found' });
     res.json({ icon: char.icon });
   } catch (error) {
@@ -3131,7 +3438,7 @@ app.get('/api/character/:id/icon', async (req, res) => {
 // Returns character data by character ID
 app.get('/api/character/:id', async (req, res) => {
   try {
-    const char = await Character.findById(req.params.id);
+    const char = await models.Character.findById(req.params.id);
     if (!char) return res.status(404).json({ error: 'Character not found' });
     res.json({ ...char.toObject(), icon: char.icon });
   } catch (error) {
@@ -3146,8 +3453,8 @@ app.get('/api/user/characters', requireAuth, async (req, res) => {
   try {
     const userId = req.user.discordId;
     
-    const regularCharacters = await Character.find({ userId }).lean();
-    const modCharacters = await ModCharacter.find({ userId }).lean();
+    const regularCharacters = await models.Character.find({ userId }).lean();
+    const modCharacters = await models.ModCharacter.find({ userId }).lean();
     
     // Combine both character types
     const characters = [...regularCharacters, ...modCharacters];
@@ -3181,7 +3488,7 @@ app.get('/api/user/quests', requireAuth, async (req, res) => {
     const userId = req.user.discordId;
     const participantField = `participants.${userId}`;
 
-    const quests = await Quest.find({
+    const quests = await models.Quest.find({
       [participantField]: { $exists: true }
     })
       .select('questID title questType status location date timeLimit postedAt updatedAt completionReason participants requiredVillage tokenReward collabAllowed')
@@ -3273,11 +3580,11 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     const userId = req.user.discordId;
     
     // Find the character and verify ownership (check both regular and mod characters)
-    let character = await Character.findOne({ _id: id, userId }).lean();
+    let character = await models.Character.findOne({ _id: id, userId }).lean();
     let isModCharacter = false;
     
     if (!character) {
-      character = await ModCharacter.findOne({ _id: id, userId }).lean();
+      character = await models.ModCharacter.findOne({ _id: id, userId }).lean();
       isModCharacter = true;
     }
     
@@ -3310,7 +3617,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     
     // Fetch pets
     try {
-      const pets = await Pet.find({ 
+      const pets = await models.Pet.find({ 
         $or: [
           { owner: character._id },
           { discordId: userId }
@@ -3325,7 +3632,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     
     // Fetch mounts
     try {
-      const mounts = await Mount.find({ 
+      const mounts = await models.Mount.find({ 
         $or: [
           { characterId: character._id },
           { discordId: userId }
@@ -3340,7 +3647,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     
     // Fetch relationships
     try {
-      const relationships = await Relationship.find({
+      const relationships = await models.Relationship.find({
         $or: [
           { characterId: character._id },
           { targetCharacterId: character._id }
@@ -3355,7 +3662,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     
     // Fetch quests (where character is a participant)
     try {
-      const quests = await Quest.find({
+      const quests = await models.Quest.find({
         [`participants.${userId}`]: { $exists: true }
       }).lean();
       exportData.quests = quests;
@@ -3367,7 +3674,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     
     // Fetch parties
     try {
-      const parties = await Party.find({
+      const parties = await models.Party.find({
         'characters.userId': userId
       }).lean();
       exportData.parties = parties;
@@ -3379,7 +3686,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     
     // Fetch raids
     try {
-      const raids = await Raid.find({
+      const raids = await models.Raid.find({
         'participants.userId': userId
       }).lean();
       exportData.raids = raids;
@@ -3391,7 +3698,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     
     // Fetch steal stats
     try {
-      const stealStats = await StealStats.findOne({ characterId: character._id }).lean();
+      const stealStats = await models.StealStats.findOne({ characterId: character._id }).lean();
       exportData.stealStats = stealStats || null;
       console.log(`[server.js]: ✅ Found steal stats`);
     } catch (error) {
@@ -3401,7 +3708,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
     
     // Fetch blight roll history
     try {
-      const blightHistory = await BlightRollHistory.find({ characterId: character._id }).lean();
+      const blightHistory = await models.BlightRollHistory.find({ characterId: character._id }).lean();
       exportData.blightHistory = blightHistory;
       console.log(`[server.js]: ✅ Found ${blightHistory.length} blight history entries`);
     } catch (error) {
@@ -3439,7 +3746,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
     
     // Fetch user data
     try {
-      const user = await User.findOne({ discordId: userId }).lean();
+      const user = await models.User.findOne({ discordId: userId }).lean();
       exportData.user = user;
       console.log(`[server.js]: ✅ Found user data`);
     } catch (error) {
@@ -3448,8 +3755,8 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
     }
     
     // Fetch all characters (both regular and mod characters)
-    const regularCharacters = await Character.find({ userId }).lean();
-    const modCharacters = await ModCharacter.find({ userId }).lean();
+    const regularCharacters = await models.Character.find({ userId }).lean();
+    const modCharacters = await models.ModCharacter.find({ userId }).lean();
     const allCharacters = [...regularCharacters, ...modCharacters];
     
     console.log(`[server.js]: 📋 Found ${allCharacters.length} characters (${regularCharacters.length} regular, ${modCharacters.length} mod)`);
@@ -3476,7 +3783,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
       
       // Fetch pets
       try {
-        const pets = await Pet.find({ 
+        const pets = await models.Pet.find({ 
           $or: [
             { owner: character._id },
             { discordId: userId }
@@ -3490,7 +3797,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
       
       // Fetch mounts
       try {
-        const mounts = await Mount.find({ 
+        const mounts = await models.Mount.find({ 
           $or: [
             { characterId: character._id },
             { discordId: userId }
@@ -3504,7 +3811,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
       
       // Fetch relationships
       try {
-        const relationships = await Relationship.find({
+        const relationships = await models.Relationship.find({
           $or: [
             { characterId: character._id },
             { targetCharacterId: character._id }
@@ -3518,7 +3825,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
       
       // Fetch quests
       try {
-        const quests = await Quest.find({
+        const quests = await models.Quest.find({
           [`participants.${userId}`]: { $exists: true }
         }).lean();
         characterData.quests = quests;
@@ -3529,7 +3836,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
       
       // Fetch steal stats
       try {
-        const stealStats = await StealStats.findOne({ characterId: character._id }).lean();
+        const stealStats = await models.StealStats.findOne({ characterId: character._id }).lean();
         characterData.stealStats = stealStats || null;
       } catch (error) {
         console.warn(`[server.js]: ⚠️ Error fetching steal stats for ${character.name}:`, error.message);
@@ -3538,7 +3845,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
       
       // Fetch blight roll history
       try {
-        const blightHistory = await BlightRollHistory.find({ characterId: character._id }).lean();
+        const blightHistory = await models.BlightRollHistory.find({ characterId: character._id }).lean();
         characterData.blightHistory = blightHistory;
       } catch (error) {
         console.warn(`[server.js]: ⚠️ Error fetching blight history for ${character.name}:`, error.message);
@@ -3550,7 +3857,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
     
     // Fetch parties for the user (not character-specific)
     try {
-      const parties = await Party.find({
+      const parties = await models.Party.find({
         'characters.userId': userId
       }).lean();
       exportData.parties = parties;
@@ -3562,7 +3869,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
     
     // Fetch raids for the user (not character-specific)
     try {
-      const raids = await Raid.find({
+      const raids = await models.Raid.find({
         'participants.userId': userId
       }).lean();
       exportData.raids = raids;
@@ -3591,7 +3898,7 @@ app.patch('/api/characters/:id/profile', requireAuth, upload.single('icon'), asy
     const { age, pronouns, height, birthday, canBeStolenFrom } = req.body;
     
     // Find the character and verify ownership
-    const character = await Character.findOne({ _id: id, userId });
+    const character = await models.Character.findOne({ _id: id, userId });
     
     if (!character) {
       return res.status(404).json({ error: 'Character not found or access denied' });
@@ -3672,7 +3979,7 @@ app.get('/api/character-of-week', async (req, res) => {
   try {
     
     
-    const currentCharacter = await CharacterOfWeek.findOne({ isActive: true })
+    const currentCharacter = await models.CharacterOfWeek.findOne({ isActive: true })
       .populate('characterId')
       .sort({ startDate: -1 })
       .lean();
@@ -3757,13 +4064,13 @@ app.post('/api/character-of-week', requireAuth, async (req, res) => {
     }
     
     // Verify character exists
-    const character = await Character.findById(characterId);
+    const character = await models.Character.findById(characterId);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
     
     // Deactivate current character of the week
-    await CharacterOfWeek.updateMany(
+    await models.CharacterOfWeek.updateMany(
       { isActive: true },
       { isActive: false }
     );
@@ -3773,7 +4080,7 @@ app.post('/api/character-of-week', requireAuth, async (req, res) => {
     const endDate = getNextSundayMidnight(startDate);
     
     // Create new character of the week
-    const newCharacterOfWeek = new CharacterOfWeek({
+    const newCharacterOfWeek = new models.CharacterOfWeek({
       characterId: character._id,
       characterName: character.name,
       userId: character.userId,
@@ -3836,7 +4143,7 @@ app.post('/api/character-of-week/random', requireAuth, async (req, res) => {
     // Use the same rotation logic to ensure fair character selection
     await rotateCharacterOfWeek();
     
-    const newCharacter = await CharacterOfWeek.findOne({ isActive: true }).populate('characterId');
+    const newCharacter = await models.CharacterOfWeek.findOne({ isActive: true }).populate('characterId');
     
     res.json({ 
       data: newCharacter,
@@ -3887,7 +4194,7 @@ app.post('/api/character-of-week/trigger-first', requireAuth, async (req, res) =
     }
     
     // Check if there's already an active character of the week
-    const existingCharacter = await CharacterOfWeek.findOne({ isActive: true });
+    const existingCharacter = await models.CharacterOfWeek.findOne({ isActive: true });
     if (existingCharacter) {
       return res.json({ 
         data: existingCharacter,
@@ -3898,7 +4205,7 @@ app.post('/api/character-of-week/trigger-first', requireAuth, async (req, res) =
     // Use the same rotation logic to ensure fair character selection
     await rotateCharacterOfWeek();
     
-    const newCharacter = await CharacterOfWeek.findOne({ isActive: true }).populate('characterId');
+    const newCharacter = await models.CharacterOfWeek.findOne({ isActive: true }).populate('characterId');
     
     res.json({ 
       data: newCharacter,
@@ -3923,21 +4230,21 @@ app.get('/api/relationships/character/:characterId', requireAuth, async (req, re
     const userId = req.user.discordId;
     
     // Verify the character belongs to the authenticated user (check both regular and mod characters)
-    let character = await Character.findOne({ _id: characterId, userId });
+    let character = await models.Character.findOne({ _id: characterId, userId });
     if (!character) {
-      character = await ModCharacter.findOne({ _id: characterId, userId });
+      character = await models.ModCharacter.findOne({ _id: characterId, userId });
     }
     if (!character) {
       return res.status(404).json({ error: 'Character not found or access denied' });
     }
     
     // Get relationships where this character is the initiator (characterId)
-    const outgoingRelationships = await Relationship.find({ characterId })
+    const outgoingRelationships = await models.Relationship.find({ characterId })
       .sort({ createdAt: -1 })
       .lean();
     
     // Get relationships where this character is the target (targetCharacterId)
-    const incomingRelationships = await Relationship.find({ targetCharacterId: characterId })
+    const incomingRelationships = await models.Relationship.find({ targetCharacterId: characterId })
       .sort({ createdAt: -1 })
       .lean();
     
@@ -3947,13 +4254,13 @@ app.get('/api/relationships/character/:characterId', requireAuth, async (req, re
         const targetId = relationship[targetField];
         
         // Try to find in regular characters first
-        let foundCharacter = await Character.findById(targetId)
+        let foundCharacter = await models.Character.findById(targetId)
           .select('name race job currentVillage homeVillage icon isModCharacter modTitle modType')
           .lean();
         
         // If not found, try mod characters
         if (!foundCharacter) {
-          foundCharacter = await ModCharacter.findById(targetId)
+          foundCharacter = await models.ModCharacter.findById(targetId)
             .select('name race job currentVillage homeVillage icon isModCharacter modTitle modType')
             .lean();
         }
@@ -4007,25 +4314,25 @@ app.post('/api/relationships', requireAuth, async (req, res) => {
     }
     
     // Verify the character belongs to the authenticated user (check both regular and mod characters)
-    let character = await Character.findOne({ _id: characterId, userId });
+    let character = await models.Character.findOne({ _id: characterId, userId });
     if (!character) {
-      character = await ModCharacter.findOne({ _id: characterId, userId });
+      character = await models.ModCharacter.findOne({ _id: characterId, userId });
     }
     if (!character) {
       return res.status(404).json({ error: 'Character not found or access denied' });
     }
     
     // Verify target character exists (check both regular and mod characters)
-    let targetCharacterExists = await Character.findById(targetCharacterId);
+    let targetCharacterExists = await models.Character.findById(targetCharacterId);
     if (!targetCharacterExists) {
-      targetCharacterExists = await ModCharacter.findById(targetCharacterId);
+      targetCharacterExists = await models.ModCharacter.findById(targetCharacterId);
     }
     if (!targetCharacterExists) {
       return res.status(404).json({ error: 'Target character not found' });
     }
     
     // Check if relationship already exists between these characters for this user
-    const existingRelationship = await Relationship.findOne({ 
+    const existingRelationship = await models.Relationship.findOne({ 
       userId,
       characterId, 
       targetCharacterId
@@ -4037,7 +4344,7 @@ app.post('/api/relationships', requireAuth, async (req, res) => {
     
     // Create new relationship
     
-    const relationship = new Relationship({
+    const relationship = new models.Relationship({
       userId,
       characterId,
       targetCharacterId,
@@ -4050,12 +4357,12 @@ app.post('/api/relationships', requireAuth, async (req, res) => {
     await relationship.save();
     
     // Manually populate target character info for response
-    let populatedTargetCharacter = await Character.findById(targetCharacterId)
+    let populatedTargetCharacter = await models.Character.findById(targetCharacterId)
       .select('name race job currentVillage homeVillage icon isModCharacter modTitle modType')
       .lean();
     
     if (!populatedTargetCharacter) {
-      populatedTargetCharacter = await ModCharacter.findById(targetCharacterId)
+      populatedTargetCharacter = await models.ModCharacter.findById(targetCharacterId)
         .select('name race job currentVillage homeVillage icon isModCharacter modTitle modType')
         .lean();
     }
@@ -4094,24 +4401,24 @@ app.put('/api/relationships/:relationshipId', requireAuth, async (req, res) => {
     }
     
     // Find the relationship and verify ownership
-    const relationship = await Relationship.findOne({ _id: relationshipId, userId });
+    const relationship = await models.Relationship.findOne({ _id: relationshipId, userId });
     if (!relationship) {
       return res.status(404).json({ error: 'Relationship not found or access denied' });
     }
     
     // Verify the character belongs to the authenticated user (check both regular and mod characters)
-    let character = await Character.findOne({ _id: characterId, userId });
+    let character = await models.Character.findOne({ _id: characterId, userId });
     if (!character) {
-      character = await ModCharacter.findOne({ _id: characterId, userId });
+      character = await models.ModCharacter.findOne({ _id: characterId, userId });
     }
     if (!character) {
       return res.status(404).json({ error: 'Character not found or access denied' });
     }
     
     // Verify target character exists (check both regular and mod characters)
-    let targetCharacterExists = await Character.findById(targetCharacterId);
+    let targetCharacterExists = await models.Character.findById(targetCharacterId);
     if (!targetCharacterExists) {
-      targetCharacterExists = await ModCharacter.findById(targetCharacterId);
+      targetCharacterExists = await models.ModCharacter.findById(targetCharacterId);
     }
     if (!targetCharacterExists) {
       return res.status(404).json({ error: 'Target character not found' });
@@ -4119,7 +4426,7 @@ app.put('/api/relationships/:relationshipId', requireAuth, async (req, res) => {
     
     // Check if changing the target character would create a conflict with another relationship
     if (relationship.targetCharacterId.toString() !== targetCharacterId) {
-      const existingRelationship = await Relationship.findOne({ 
+      const existingRelationship = await models.Relationship.findOne({ 
         userId,
         characterId, 
         targetCharacterId
@@ -4140,12 +4447,12 @@ app.put('/api/relationships/:relationshipId', requireAuth, async (req, res) => {
     await relationship.save();
     
     // Manually populate target character info for response
-    let populatedTargetCharacter = await Character.findById(relationship.targetCharacterId)
+    let populatedTargetCharacter = await models.Character.findById(relationship.targetCharacterId)
       .select('name race job currentVillage homeVillage icon isModCharacter modTitle modType')
       .lean();
     
     if (!populatedTargetCharacter) {
-      populatedTargetCharacter = await ModCharacter.findById(relationship.targetCharacterId)
+      populatedTargetCharacter = await models.ModCharacter.findById(relationship.targetCharacterId)
         .select('name race job currentVillage homeVillage icon isModCharacter modTitle modType')
         .lean();
     }
@@ -4178,12 +4485,12 @@ app.delete('/api/relationships/:relationshipId', requireAuth, async (req, res) =
     const userId = req.user.discordId;
     
     // Find and verify the relationship belongs to the authenticated user
-    const relationship = await Relationship.findOne({ _id: relationshipId, userId });
+    const relationship = await models.Relationship.findOne({ _id: relationshipId, userId });
     if (!relationship) {
       return res.status(404).json({ error: 'Relationship not found or access denied' });
     }
     
-    await Relationship.findByIdAndDelete(relationshipId);
+    await models.Relationship.findByIdAndDelete(relationshipId);
     
     res.json({ message: 'Relationship deleted successfully' });
   } catch (error) {
@@ -4199,7 +4506,7 @@ app.get('/api/relationships/all', async (req, res) => {
     console.log('[server.js]: 🌍 /api/relationships/all endpoint called');
     
     // Get ALL relationships (not just the user's) - optimized to avoid N+1 queries
-    const relationships = await Relationship.find({})
+    const relationships = await models.Relationship.find({})
       .sort({ createdAt: -1 })
       .lean();
     
@@ -4207,18 +4514,17 @@ app.get('/api/relationships/all', async (req, res) => {
     
     // Get all characters in parallel (both regular and mod characters)
     const [regularCharacters, modCharacters] = await Promise.all([
-      Character.find({})
+      models.Character.find({})
         .select('name race job currentVillage homeVillage icon userId isModCharacter')
         .sort({ name: 1 })
         .lean(),
-      ModCharacter.find({})
+      models.ModCharacter.find({})
         .select('name race job currentVillage homeVillage icon userId isModCharacter modTitle modType')
         .sort({ name: 1 })
         .lean()
     ]);
     
-    console.log('[server.js]: 🌍 Found regular characters:', regularCharacters.length);
-    console.log('[server.js]: 🌍 Found mod characters:', modCharacters.length);
+    logger.info(`Found ${regularCharacters.length} regular characters and ${modCharacters.length} mod characters`, 'server.js');
     
     // Create a lookup map for efficient character finding
     const characterMap = new Map();
@@ -4277,12 +4583,12 @@ app.get('/api/relationships/all', async (req, res) => {
 // Returns all characters for relationship selection (including mod characters)
 app.get('/api/characters', async (req, res) => {
   try {
-    const regularCharacters = await Character.find({})
+    const regularCharacters = await models.Character.find({})
       .select('name race job currentVillage homeVillage icon userId isModCharacter')
       .sort({ name: 1 })
       .lean();
     
-    const modCharacters = await ModCharacter.find({})
+    const modCharacters = await models.ModCharacter.find({})
       .select('name race job currentVillage homeVillage icon userId isModCharacter modTitle modType')
       .sort({ name: 1 })
       .lean();
@@ -4302,28 +4608,63 @@ app.get('/api/characters', async (req, res) => {
 // ------------------- Function: setupWeeklyCharacterRotation -------------------
 // Sets up the weekly character rotation scheduler and initializes on server start
 const setupWeeklyCharacterRotation = async () => {
-  logger.schedule('Setting up weekly character rotation scheduler');
+  const maxRetries = 3;
+  let retryCount = 0;
   
-  // Check if there's already an active character of the week
-  const existingCharacter = await CharacterOfWeek.findOne({ isActive: true });
-  
-  if (existingCharacter) {
-    logger.character(`Current character of the week: ${existingCharacter.characterName}`);
-    
-    // Check if the existing character should be rotated based on Sunday midnight schedule
-    const shouldRotate = checkIfShouldRotate(existingCharacter.startDate);
-    
-    if (shouldRotate) {
-      logger.event('Rotating character of the week...');
-      await rotateCharacterOfWeek();
+  while (retryCount < maxRetries) {
+    try {
+      logger.schedule('Setting up weekly character rotation scheduler');
+      
+      // Wait for database connection to be ready and operational
+      await waitForMongooseConnection(60000); // Increased timeout to 60s
+      
+      // Verify connection with ping before querying
+      try {
+        await mongoose.connection.db.admin().ping();
+      } catch (pingError) {
+        throw new Error(`Connection ping failed: ${pingError.message}`);
+      }
+      
+      // Check if there's already an active character of the week
+      const existingCharacter = await models.CharacterOfWeek.findOne(
+        { isActive: true },
+        null,
+        { maxTimeMS: 30000 } // 30 second timeout for operation
+      );
+      
+      if (existingCharacter) {
+        logger.character(`Current character of the week: ${existingCharacter.characterName}`);
+        
+        // Check if the existing character should be rotated based on Sunday midnight schedule
+        const shouldRotate = checkIfShouldRotate(existingCharacter.startDate);
+        
+        if (shouldRotate) {
+          logger.event('Rotating character of the week...');
+          await rotateCharacterOfWeek();
+        }
+      } else {
+        logger.info('No active character found, creating first character of the week');
+        await rotateCharacterOfWeek();
+      }
+      
+      // Setup weekly scheduler for Sunday midnight EST
+      scheduleNextSundayMidnightRotation();
+      
+      // Success - exit retry loop
+      return;
+      
+    } catch (error) {
+      retryCount++;
+      if (retryCount < maxRetries) {
+        logger.warn(`Character rotation setup attempt ${retryCount} failed, retrying... (${error.message})`, 'server.js');
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+      } else {
+        logger.error('Error setting up weekly character rotation after all retries:', error);
+        // Don't throw - allow server to continue without this feature
+      }
     }
-  } else {
-    logger.info('No active character found, creating first character of the week');
-    await rotateCharacterOfWeek();
   }
-  
-  // Setup weekly scheduler for Sunday midnight EST
-  scheduleNextSundayMidnightRotation();
 };
 
 // ------------------- Function: checkIfShouldRotate -------------------
@@ -4396,7 +4737,7 @@ app.use('/map-files', express.static('2025 Map Stuff'));
 app.get('/api/map/layers', async (req, res) => {
   try {
     // Get basic layers plus exploration squares
-    const squares = await Square.getVisibleSquares();
+    const squares = await models.Square.getVisibleSquares();
     
     const layers = [
       { 
@@ -4443,7 +4784,7 @@ app.get('/api/map/layers', async (req, res) => {
 app.get('/api/map/squares/:squareId', async (req, res) => {
   try {
     const { squareId } = req.params;
-    const square = await Square.findOne({ squareId: squareId });
+    const square = await models.Square.findOne({ squareId: squareId });
     
     if (!square) {
       return res.status(404).json({ error: 'Square not found' });
@@ -4470,7 +4811,7 @@ app.get('/api/map/user-pins', requireAuth, async (req, res) => {
   try {
     const userId = req.user.discordId;
     
-    const user = await User.findOne({ discordId: userId });
+    const user = await models.User.findOne({ discordId: userId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -4488,7 +4829,7 @@ app.post('/api/map/user-pins', pinImageUpload.single('image'), requireAuth, asyn
   try {
     const userId = req.user.discordId;
     
-    const user = await User.findOne({ discordId: userId });
+    const user = await models.User.findOne({ discordId: userId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -4537,7 +4878,7 @@ app.delete('/api/map/user-pins/:pinId', requireAuth, async (req, res) => {
     const userId = req.user.discordId;
     const { pinId } = req.params;
     
-    const user = await User.findOne({ discordId: userId });
+    const user = await models.User.findOne({ discordId: userId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -4641,7 +4982,7 @@ const getNextMidnightEST = (fromDate) => {
 // ------------------- Function: checkIfTodayIsBeforeBloodMoon -------------------
 // Checks if today is the day before a blood moon event
 const checkIfTodayIsBeforeBloodMoon = () => {
-  const { bloodmoonDates } = require('./calendarModule');
+  const { bloodmoonDates } = require('./utils/calendarModule');
   
   const now = new Date();
   const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -4737,7 +5078,7 @@ const setupBloodMoonAlerts = () => {
 const rotateCharacterOfWeek = async () => {
   try {
     // Get all active characters
-    const characters = await Character.find({}).lean();
+    const characters = await models.Character.find({}).lean();
     
     if (characters.length === 0) {
       console.log('[server.js]: No characters found for rotation');
@@ -4745,7 +5086,7 @@ const rotateCharacterOfWeek = async () => {
     }
     
     // Get all characters that have ever been featured
-    const allFeaturedCharacters = await CharacterOfWeek.find({}).distinct('characterId');
+    const allFeaturedCharacters = await models.CharacterOfWeek.find({}).distinct('characterId');
     
     // Find characters that have never been featured
     const neverFeaturedCharacters = characters.filter(char => 
@@ -4768,7 +5109,7 @@ const rotateCharacterOfWeek = async () => {
     });
     
     // Get the most recent featured date for each character
-    const featuredHistory = await CharacterOfWeek.find({}).sort({ startDate: -1 });
+    const featuredHistory = await models.CharacterOfWeek.find({}).sort({ startDate: -1 });
     featuredHistory.forEach(entry => {
       const charId = entry.characterId.toString();
       if (characterLastFeaturedDates[charId] && entry.startDate > characterLastFeaturedDates[charId]) {
@@ -4804,7 +5145,7 @@ const rotateCharacterOfWeek = async () => {
 const createNewCharacterOfWeek = async (character) => {
   try {
     // Deactivate current character of the week
-    await CharacterOfWeek.updateMany(
+    await models.CharacterOfWeek.updateMany(
       { isActive: true },
       { isActive: false }
     );
@@ -4814,7 +5155,7 @@ const createNewCharacterOfWeek = async (character) => {
     const endDate = getNextSundayMidnight(startDate);
     
     // Create new character of the week
-    const newCharacterOfWeek = new CharacterOfWeek({
+    const newCharacterOfWeek = new models.CharacterOfWeek({
       characterId: character._id,
       characterName: character.name,
       userId: character.userId,
@@ -4840,7 +5181,7 @@ app.post('/api/character-of-week/trigger-simple', async (req, res) => {
   try {
     
     // Check if there's already an active character of the week
-    const existingCharacter = await CharacterOfWeek.findOne({ isActive: true });
+    const existingCharacter = await models.CharacterOfWeek.findOne({ isActive: true });
     if (existingCharacter) {
       
       // Check if the existing character should be rotated based on Sunday midnight schedule
@@ -4849,7 +5190,7 @@ app.post('/api/character-of-week/trigger-simple', async (req, res) => {
       if (shouldRotate) {
         console.log('[server.js]: 🔄 Triggering rotation due to Sunday midnight schedule');
         await rotateCharacterOfWeek();
-        const newCharacter = await CharacterOfWeek.findOne({ isActive: true }).populate('characterId');
+        const newCharacter = await models.CharacterOfWeek.findOne({ isActive: true }).populate('characterId');
         return res.json({ 
           data: newCharacter,
           message: `Rotated character of the week: ${newCharacter.characterName}` 
@@ -4867,7 +5208,7 @@ app.post('/api/character-of-week/trigger-simple', async (req, res) => {
     }
     
     // Get all active characters
-    const characters = await Character.find({}).lean();
+    const characters = await models.Character.find({}).lean();
     
     if (characters.length === 0) {    
       return res.status(404).json({ error: 'No characters found' });
@@ -4877,7 +5218,7 @@ app.post('/api/character-of-week/trigger-simple', async (req, res) => {
     // Use the rotation function to create the first character
     await rotateCharacterOfWeek();
     
-    const newCharacter = await CharacterOfWeek.findOne({ isActive: true }).populate('characterId');
+    const newCharacter = await models.CharacterOfWeek.findOne({ isActive: true }).populate('characterId');
     
     res.json({ 
       data: newCharacter,
@@ -4894,10 +5235,10 @@ app.post('/api/character-of-week/trigger-simple', async (req, res) => {
 app.get('/api/character-of-week/rotation-status', async (req, res) => {
   try {
     // Get all characters
-    const characters = await Character.find({}).lean();
+    const characters = await models.Character.find({}).lean();
     
     // Get all featured characters with their last featured date
-    const featuredHistory = await CharacterOfWeek.find({}).sort({ startDate: -1 });
+    const featuredHistory = await models.CharacterOfWeek.find({}).sort({ startDate: -1 });
     
     // Build rotation status
     const rotationStatus = {
@@ -4925,7 +5266,7 @@ app.get('/api/character-of-week/rotation-status', async (req, res) => {
     };
     
     // Get current active character
-    const currentCharacter = await CharacterOfWeek.findOne({ isActive: true });
+    const currentCharacter = await models.CharacterOfWeek.findOne({ isActive: true });
     if (currentCharacter) {
       rotationStatus.currentCharacter = {
         id: currentCharacter.characterId,
@@ -5156,8 +5497,34 @@ app.get('/api/guild/activity', async (req, res) => {
     const presences = await gateway.getGuildPresences(guildId);
     const voiceCount = await gateway.getVoiceChannelMembers(guildId);
     
-    // Get message count for today
-    const messagesToday = await MessageTracking.getTodayMessageCount(guildId);
+    // Get message count for today with connection check and timeout handling
+    let messagesToday = 0;
+    try {
+      // Verify database connection is actually working before querying
+      if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+        try {
+          // Ping the database to verify it's actually responsive
+          await mongoose.connection.db.admin().ping();
+          
+          // Add timeout wrapper to prevent hanging (3 second timeout)
+          const queryPromise = MessageTracking.getTodayMessageCount(guildId);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Query timeout')), 3000)
+          );
+          messagesToday = await Promise.race([queryPromise, timeoutPromise]);
+        } catch (pingError) {
+          // Database ping failed or query timed out
+          logger.warn(`[server.js]: Database ping failed or query timed out, returning 0 for message count:`, pingError.message, 'server.js');
+          messagesToday = 0;
+        }
+      } else {
+        logger.warn(`[server.js]: Database not connected (state: ${mongoose.connection.readyState}), returning 0 for message count`, 'server.js');
+      }
+    } catch (error) {
+      // Log error but don't fail the entire request
+      logger.error('[server.js]: Error fetching message count, using default 0:', error.message || error, 'server.js');
+      messagesToday = 0;
+    }
     
     res.json({
       onlineCount: presences ? (presences.online + presences.idle + presences.dnd) : (guildData.approximate_presence_count || 0),
@@ -5547,7 +5914,7 @@ app.get('/api/admin/users/activity', async (req, res) => {
     }
 
     // Get all users with their message activity data
-    const totalUsers = await User.countDocuments();
+    const totalUsers = await models.User.countDocuments();
     
     if (totalUsers === 0) {
       return res.json({
@@ -5569,7 +5936,7 @@ app.get('/api/admin/users/activity', async (req, res) => {
     let users = [];
     
     try {
-      users = await User.aggregate([
+      users = await models.User.aggregate([
         {
           $group: {
             _id: '$discordId',
@@ -5600,7 +5967,7 @@ app.get('/api/admin/users/activity', async (req, res) => {
         let discordRoles = user.roles || [];
         
         try {
-          characterCount = await Character.countDocuments({ 
+          characterCount = await models.Character.countDocuments({ 
             userId: user._id, // Use _id from aggregated result (which is discordId due to $group)
             name: { $nin: ['Tingle', 'Tingle test', 'John'] }
           });
@@ -5807,7 +6174,7 @@ app.post('/api/admin/users/update-status', async (req, res) => {
     }
 
     // Update user status
-    const result = await User.updateMany(
+    const result = await models.User.updateMany(
       { discordId },
       { 
         status,
@@ -5896,7 +6263,7 @@ async function checkUserDiscordActivity(discordId) {
     // Method 3: Check database for any stored activity data
     let databaseActivity = null;
     try {
-      const user = await User.findOne({ discordId });
+      const user = await models.User.findOne({ discordId });
       if (user) {
         databaseActivity = {
           lastMessageTimestamp: user.lastMessageTimestamp,
@@ -6015,7 +6382,7 @@ app.post('/api/admin/users/update-timestamp', async (req, res) => {
     console.log(`[server.js]: 🔄 Admin updating timestamp for user ${discordId} to ${newTimestamp.toISOString()}`);
 
     // Update user timestamp
-    const result = await User.updateMany(
+    const result = await models.User.updateMany(
       { discordId },
       { 
         lastMessageTimestamp: newTimestamp,
@@ -6227,7 +6594,7 @@ async function buildGearPayloadFromInventoryItem(item = {}) {
 
   const needsModifierHydration = !Number.isFinite(stats.modifierHearts) || stats.modifierHearts === 0;
   if (needsModifierHydration) {
-    const canonical = await Item.findOne({ itemName: item.itemName }).lean();
+    const canonical = await models.Item.findOne({ itemName: item.itemName }).lean();
     if (canonical && Number.isFinite(canonical?.modifierHearts) && canonical.modifierHearts !== 0) {
       stats.modifierHearts = canonical.modifierHearts;
     }
@@ -6437,18 +6804,18 @@ async function buildUserInventoryResponse(userId) {
       const collection = await getCharacterInventoryCollection(character.name);
       const rawItems = await collection.find().toArray();
       const normalizedItems = rawItems.map(item => normalizeInventoryItem(item, character));
-      const characterQuantity = normalizedItems.reduce((sum, invItem) => sum + invItem.quantity, 0);
+      const characterQuantity = normalizedItems.reduce((sum, invItem) => sum + invmodels.Item.quantity, 0);
       totalQuantity += characterQuantity;
 
       normalizedItems.forEach(invItem => {
-        if (invItem.itemName) {
-          itemNames.add(invItem.itemName);
+        if (invmodels.Item.itemName) {
+          itemNames.add(invmodels.Item.itemName);
         }
-        const key = invItem.itemName ? invItem.itemName.toLowerCase() : invItem.id;
+        const key = invmodels.Item.itemName ? invmodels.Item.itemName.toLowerCase() : invmodels.Item.id;
         if (!aggregateMap.has(key)) {
           aggregateMap.set(key, {
-            itemName: invItem.itemName || 'Unknown Item',
-            itemId: invItem.itemId,
+            itemName: invmodels.Item.itemName || 'Unknown Item',
+            itemId: invmodels.Item.itemId,
             categories: new Set(),
             types: new Set(),
             subtypes: new Set(),
@@ -6459,27 +6826,27 @@ async function buildUserInventoryResponse(userId) {
         }
 
         const aggregateEntry = aggregateMap.get(key);
-        aggregateEntry.totalQuantity += invItem.quantity;
-        if (invItem.category) {
-          aggregateEntry.categories.add(invItem.category);
+        aggregateEntry.totalQuantity += invmodels.Item.quantity;
+        if (invmodels.Item.category) {
+          aggregateEntry.categories.add(invmodels.Item.category);
         }
-        if (invItem.type) {
-          aggregateEntry.types.add(invItem.type);
+        if (invmodels.Item.type) {
+          aggregateEntry.types.add(invmodels.Item.type);
         }
-        invItem.subtype?.forEach(sub => aggregateEntry.subtypes.add(sub));
-        if (invItem.fortuneTellerBoost) {
+        invmodels.Item.subtype?.forEach(sub => aggregateEntry.subtypes.add(sub));
+        if (invmodels.Item.fortuneTellerBoost) {
           aggregateEntry.hasFortuneBoost = true;
         }
         aggregateEntry.instances.push({
-          inventoryId: invItem.id,
-          characterId: invItem.characterId,
+          inventoryId: invmodels.Item.id,
+          characterId: invmodels.Item.characterId,
           characterName: character.name,
-          quantity: invItem.quantity,
-          location: invItem.location,
-          job: invItem.job,
-          perk: invItem.perk,
-          obtain: invItem.obtain,
-          fortuneTellerBoost: invItem.fortuneTellerBoost
+          quantity: invmodels.Item.quantity,
+          location: invmodels.Item.location,
+          job: invmodels.Item.job,
+          perk: invmodels.Item.perk,
+          obtain: invmodels.Item.obtain,
+          fortuneTellerBoost: invmodels.Item.fortuneTellerBoost
         });
       });
 
@@ -6521,7 +6888,7 @@ async function buildUserInventoryResponse(userId) {
   let imageMap = {};
 
   if (itemNames.size > 0) {
-    const itemsMeta = await Item.find(
+    const itemsMeta = await models.Item.find(
       { itemName: { $in: Array.from(itemNames) } },
       { itemName: 1, image: 1 }
     ).lean();
@@ -6615,15 +6982,15 @@ app.post('/api/inventories/transfer', requireAuth, async (req, res) => {
     }
 
     const inventoriesDb = await connectToInventoriesNative();
-    const sourceCollection = inventoriesDb.collection(sourceCharacter.name.trim().toLowerCase());
-    const targetCollection = inventoriesDb.collection(targetCharacter.name.trim().toLowerCase());
+    const sourceCollection = inventoriesDb.collection(sourcemodels.Character.name.trim().toLowerCase());
+    const targetCollection = inventoriesDb.collection(targetmodels.Character.name.trim().toLowerCase());
 
     const sourceItem = await sourceCollection.findOne({ _id: sourceItemObjectId });
     if (!sourceItem) {
       return res.status(404).json({ error: 'Source inventory item not found' });
     }
 
-    const availableQuantity = Number(sourceItem.quantity) || 0;
+    const availableQuantity = Number(sourcemodels.Item.quantity) || 0;
     if (transferQuantity > availableQuantity) {
       return res.status(400).json({ error: 'Transfer quantity exceeds available quantity' });
     }
@@ -6638,28 +7005,28 @@ app.post('/api/inventories/transfer', requireAuth, async (req, res) => {
       );
     }
 
-    const targetQuery = buildItemNameQuery(sourceItem.itemName);
+    const targetQuery = buildItemNameQuery(sourcemodels.Item.itemName);
     let destinationItem = await targetCollection.findOne(targetQuery);
 
-    const transferNote = buildTransferObtainNote(sourceCharacter.name);
+    const transferNote = buildTransferObtainNote(sourcemodels.Character.name);
 
     if (destinationItem) {
       await targetCollection.updateOne(
-        { _id: destinationItem._id },
+        { _id: destinationmodels.Item._id },
         {
           $inc: { quantity: transferQuantity },
           $set: { obtain: transferNote }
         }
       );
-      destinationItem = await targetCollection.findOne({ _id: destinationItem._id });
+      destinationItem = await targetCollection.findOne({ _id: destinationmodels.Item._id });
     } else {
       const { _id, characterId, ...rest } = sourceItem;
       const newItem = {
         ...rest,
-        characterId: targetCharacter._id,
+        characterId: targetmodels.Character._id,
         quantity: transferQuantity,
-        job: targetCharacter.job || rest.job || '',
-        location: targetCharacter.currentVillage || rest.location || '',
+        job: targetmodels.Character.job || rest.job || '',
+        location: targetmodels.Character.currentVillage || rest.location || '',
         date: new Date(),
         obtain: transferNote
       };
@@ -6850,9 +7217,9 @@ app.patch('/api/characters/:characterId/gear', requireAuth, async (req, res) => 
         return res.status(404).json({ error: 'Inventory item not found' });
       }
 
-      let canonicalItem = await Item.findOne({ itemName: inventoryItem.itemName }).lean();
-      if (!canonicalItem && inventoryItem.itemName) {
-        canonicalItem = await Item.findOne({ itemName: new RegExp(`^${inventoryItem.itemName}$`, 'i') }).lean();
+      let canonicalItem = await models.Item.findOne({ itemName: inventorymodels.Item.itemName }).lean();
+      if (!canonicalItem && inventorymodels.Item.itemName) {
+        canonicalItem = await models.Item.findOne({ itemName: new RegExp(`^${inventorymodels.Item.itemName}$`, 'i') }).lean();
       }
       const combinedItem = canonicalItem ? { ...canonicalItem, ...inventoryItem } : inventoryItem;
 
@@ -6898,7 +7265,7 @@ app.patch('/api/characters/:characterId/gear', requireAuth, async (req, res) => 
       ? buildCharacterGearUpdate(normalizedSlot, gearPayload)
       : buildCharacterGearClearUpdate(normalizedSlot);
 
-    await Character.updateOne({ _id: character._id }, gearUpdate);
+    await models.Character.updateOne({ _id: character._id }, gearUpdate);
 
     const refreshedCharacter = await fetchCharacterById(character._id);
 
@@ -6982,7 +7349,7 @@ app.get('/api/gallery/submissions', async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
     
     // Fetch submissions
-    const submissions = await ApprovedSubmission.find(query)
+    const submissions = await models.ApprovedSubmission.find(query)
       .sort(sortOptions)
       .skip(skip)
       .limit(limitNum)
@@ -6990,7 +7357,7 @@ app.get('/api/gallery/submissions', async (req, res) => {
     
     
     // Get total count for pagination
-    const totalCount = await ApprovedSubmission.countDocuments(query);
+    const totalCount = await models.ApprovedSubmission.countDocuments(query);
     
     res.json({
       submissions,
@@ -7025,7 +7392,7 @@ app.put('/api/gallery/submissions/:submissionId', async (req, res) => {
     });
     
     // Find and update the submission
-    const submission = await ApprovedSubmission.findOneAndUpdate(
+    const submission = await models.ApprovedSubmission.findOneAndUpdate(
       { submissionId },
       { 
         title,
@@ -7080,7 +7447,7 @@ app.get('/api/inventory/characters', async (req, res) => {
         // Fetch all item names in this inventory
         const itemNames = inv.map(item => item.itemName);
         // Fetch all item docs in one go
-        const itemDocs = await Item.find({ itemName: { $in: itemNames } }, { itemName: 1, image: 1 }).lean();
+        const itemDocs = await models.Item.find({ itemName: { $in: itemNames } }, { itemName: 1, image: 1 }).lean();
         const itemImageMap = {};
         itemDocs.forEach(doc => { itemImageMap[doc.itemName] = doc.image; });
         // Attach image to each inventory item
@@ -7102,59 +7469,7 @@ app.get('/api/inventory/characters', async (req, res) => {
   }
 });
 
-// ------------------- Function: getCharacterList -------------------
-// Returns basic character info without inventory data (fast loading, including mod characters)
-app.get('/api/characters/list', async (req, res) => {
-  try {
-    const regularCharacters = await Character.find({}, {
-      name: 1,
-      icon: 1,
-      race: 1,
-      job: 1,
-      homeVillage: 1,
-      currentVillage: 1,
-      isModCharacter: 1
-    }).lean();
-    
-    const modCharacters = await ModCharacter.find({}, {
-      name: 1,
-      icon: 1,
-      race: 1,
-      job: 1,
-      homeVillage: 1,
-      currentVillage: 1,
-      isModCharacter: 1,
-      modTitle: 1,
-      modType: 1
-    }).lean();
-    
-    // Combine both character types
-    const allCharacters = [...regularCharacters, ...modCharacters];
-    
-    // Filter out excluded characters
-    const excludedCharacters = ['Tingle', 'Tingle test', 'John'];
-    const filteredCharacters = allCharacters.filter(char => 
-      !excludedCharacters.includes(char.name)
-    );
-    
-    const characterList = filteredCharacters.map(char => ({
-      characterName: char.name,
-      icon: char.icon,
-      race: char.race,
-      job: char.job,
-      homeVillage: char.homeVillage,
-      currentVillage: char.currentVillage,
-      isModCharacter: char.isModCharacter || false,
-      modTitle: char.modTitle || null,
-      modType: char.modType || null
-    }));
-    
-    res.json({ data: characterList });
-  } catch (error) {
-    console.error('[server.js]: ❌ Error fetching character list:', error);
-    res.status(500).json({ error: 'Failed to fetch character list', details: error.message });
-  }
-});
+// Note: /api/characters/list endpoint is defined in routes/api/characters.js
 
 // ------------------- Function: getVendingInventory -------------------
 // Returns vending inventory for a character from vendingInventories collection
@@ -7164,9 +7479,9 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
     const userId = req.user.discordId;
 
     // Find character (check both regular and mod characters)
-    let character = await Character.findById(characterId);
+    let character = await models.Character.findById(characterId);
     if (!character) {
-      character = await ModCharacter.findById(characterId);
+      character = await models.ModCharacter.findById(characterId);
     }
 
     if (!character) {
@@ -7181,7 +7496,7 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
     // Get items from vending database using VendingInventory model
     let items = [];
     try {
-      const { initializeVendingInventoryModel } = require('./models/VendingModel');
+      const { initializeVendingInventoryModel } = require('../models/VendingModel');
       const VendingInventory = await initializeVendingInventoryModel(character.name);
       const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
       items = vendingItems;
@@ -7264,9 +7579,9 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
     }
 
     // Find character (check both regular and mod characters)
-    let character = await Character.findById(characterId);
+    let character = await models.Character.findById(characterId);
     if (!character) {
-      character = await ModCharacter.findById(characterId);
+      character = await models.ModCharacter.findById(characterId);
     }
 
     if (!character) {
@@ -7304,7 +7619,7 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
     const vendorType = job === 'shopkeeper' ? 'shopkeeper' : 'merchant';
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // First, validate all items before saving any
@@ -7314,7 +7629,7 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
     for (const row of parsedRows) {
       try {
         // Find item by name
-        const item = await Item.findOne({ itemName: row.itemName });
+        const item = await models.Item.findOne({ itemName: row.itemName });
         if (!item) {
           validationErrors.push(`Item "${row.itemName}" not found in database`);
           continue;
@@ -7440,7 +7755,7 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
           slotsUsed: slotsUsed
         });
 
-        await vendingItem.save();
+        await vendingmodels.Item.save();
         importedItems.push(row.itemName);
       } catch (error) {
         console.error(`[server.js]: Error importing item "${row.itemName}":`, error);
@@ -7521,9 +7836,9 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
     }
 
     // Find character (check both regular and mod characters)
-    let character = await Character.findById(characterId);
+    let character = await models.Character.findById(characterId);
     if (!character) {
-      character = await ModCharacter.findById(characterId);
+      character = await models.ModCharacter.findById(characterId);
     }
 
     if (!character) {
@@ -7541,7 +7856,7 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
     }
 
     // Find item in database to get maxStackSize
-    const item = await Item.findOne({ itemName: itemName.trim() });
+    const item = await models.Item.findOne({ itemName: itemName.trim() });
     if (!item) {
       return res.status(400).json({ error: `Item "${itemName}" not found in database` });
     }
@@ -7570,30 +7885,30 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
       itemName: { $regex: new RegExp(`^${itemName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
     });
 
-    if (!inventoryItem || inventoryItem.quantity < stockQtyNum) {
+    if (!inventoryItem || inventorymodels.Item.quantity < stockQtyNum) {
       return res.status(400).json({ 
         error: `Not enough ${itemName} in inventory. Available: ${inventoryItem?.quantity || 0}, Requested: ${stockQtyNum}` 
       });
     }
 
     // Remove items from character inventory
-    const newQuantity = inventoryItem.quantity - stockQtyNum;
+    const newQuantity = inventorymodels.Item.quantity - stockQtyNum;
     if (newQuantity <= 0) {
       // Remove the item entirely
       await inventoryCollection.deleteOne({
         characterId: character._id,
-        itemName: inventoryItem.itemName
+        itemName: inventorymodels.Item.itemName
       });
     } else {
       // Update quantity
       await inventoryCollection.updateOne(
-        { characterId: character._id, itemName: inventoryItem.itemName },
+        { characterId: character._id, itemName: inventorymodels.Item.itemName },
         { $inc: { quantity: -stockQtyNum } }
       );
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Calculate slots used
@@ -7650,7 +7965,7 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
 
     // Log transaction for vendor move
     try {
-      const user = await User.findOne({ discordId: userId });
+      const user = await models.User.findOne({ discordId: userId });
       const fulfillmentId = `vendor_move_${uuidv4()}`;
       const vendorTransaction = new VendingRequest({
         fulfillmentId: fulfillmentId,
@@ -7721,9 +8036,9 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
     }
 
     // Find character (check both regular and mod characters)
-    let character = await Character.findById(characterId);
+    let character = await models.Character.findById(characterId);
     if (!character) {
-      character = await ModCharacter.findById(characterId);
+      character = await models.ModCharacter.findById(characterId);
     }
 
     if (!character) {
@@ -7762,7 +8077,7 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the existing item
@@ -7789,7 +8104,7 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
     let isNewItem = false;
 
     // Get item details (needed for stack size validation in both branches)
-    const itemDetails = await Item.findOne({ itemName });
+    const itemDetails = await models.Item.findOne({ itemName });
     const isCustomItem = !itemDetails;
 
     // Validate stack size upfront (before processing)
@@ -7810,8 +8125,8 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
       }
 
       // If a specific slot is provided and item exists in that slot, check if restocking would exceed maxStackSize
-      if (slot && vendingItem && vendingItem.slot === slot) {
-        const currentStock = vendingItem.stockQty || 0;
+      if (slot && vendingItem && vendingmodels.Item.slot === slot) {
+        const currentStock = vendingmodels.Item.stockQty || 0;
         const newTotal = currentStock + quantity;
         
         if (isStackable && newTotal > maxStackSize) {
@@ -8115,12 +8430,12 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
           otherPrice: otherPrice && otherPrice.trim() !== '' && otherPrice.trim() !== 'N/A' ? otherPrice.trim() : null
         });
 
-        await vendingItem.save();
+        await vendingmodels.Item.save();
         console.log(`[server.js]: ✅ ${character.name} created and restocked ${quantity} × ${itemName} for ${pointCost * quantity} points`);
       }
     } else {
       // Item exists - use its costEach
-      pointCost = vendingItem.costEach;
+      pointCost = vendingmodels.Item.costEach;
       
       if (!pointCost || pointCost <= 0) {
         return res.status(400).json({ error: 'This item cannot be restocked. No cost per item is set.' });
@@ -8137,14 +8452,14 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
       }
 
       // If item already existed (not newly created), update it by incrementing
-      if (!isNewItem && vendingItem._id) {
+      if (!isNewItem && vendingmodels.Item._id) {
         // Validate stack size when incrementing existing item
         if (!isCustomItem && itemDetails) {
           const isStackable = itemDetails.stackable || false;
           const maxStackSize = itemDetails.maxStackSize || 10;
           
           if (isStackable) {
-            const currentStock = vendingItem.stockQty || 0;
+            const currentStock = vendingmodels.Item.stockQty || 0;
             const newTotal = currentStock + quantity;
             
             if (newTotal > maxStackSize) {
@@ -8154,7 +8469,7 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
             }
           } else {
             // Non-stackable items - each item must be in its own slot
-            if (vendingItem.stockQty > 0) {
+            if (vendingmodels.Item.stockQty > 0) {
               return res.status(400).json({ 
                 error: `Item "${itemName}" is not stackable and already has stock in this slot. Cannot add more items to the same slot.` 
               });
@@ -8187,13 +8502,13 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
         // Update slotsUsed if item is stackable
         if (!isCustomItem && itemDetails && itemDetails.stackable) {
           const maxStackSize = itemDetails.maxStackSize || 10;
-          const updatedStock = (vendingItem.stockQty || 0) + quantity;
+          const updatedStock = (vendingmodels.Item.stockQty || 0) + quantity;
           updateData.$set.slotsUsed = Math.ceil(updatedStock / maxStackSize);
         }
 
-        await VendingInventory.findByIdAndUpdate(vendingItem._id, updateData);
+        await VendingInventory.findByIdAndUpdate(vendingmodels.Item._id, updateData);
         // Reload to get updated stockQty
-        vendingItem = await VendingInventory.findById(vendingItem._id);
+        vendingItem = await VendingInventory.findById(vendingmodels.Item._id);
       }
 
       // Deduct vending points from character
@@ -8202,7 +8517,7 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
 
       // Log transaction for vendor purchase
       try {
-        const user = await User.findOne({ discordId: userId });
+        const user = await models.User.findOne({ discordId: userId });
         const fulfillmentId = `vendor_purchase_${uuidv4()}`;
         const vendorTransaction = new VendingRequest({
           fulfillmentId: fulfillmentId,
@@ -8233,7 +8548,7 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
         success: true,
         message: `Successfully restocked ${quantity} × ${itemName}`,
         totalCost: totalCost,
-        newStockQty: vendingItem.stockQty,
+        newStockQty: vendingmodels.Item.stockQty,
         remainingPoints: character.vendingPoints
       });
     }
@@ -8252,9 +8567,9 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, asy
     const { stockQty, tokenPrice, artPrice, otherPrice, barterOpen, slot } = req.body;
 
     // Find character (check both regular and mod characters)
-    let character = await Character.findById(characterId);
+    let character = await models.Character.findById(characterId);
     if (!character) {
-      character = await ModCharacter.findById(characterId);
+      character = await models.ModCharacter.findById(characterId);
     }
 
     if (!character) {
@@ -8272,7 +8587,7 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, asy
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the item - handle both ObjectId and string formats
@@ -8312,7 +8627,7 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, asy
 
     // Find item in database to validate stack size if stockQty is being updated
     if (stockQty !== undefined) {
-      const item = await Item.findOne({ itemName: vendingItem.itemName });
+      const item = await models.Item.findOne({ itemName: vendingmodels.Item.itemName });
       if (item) {
         const stockQtyNum = parseInt(stockQty);
         const isStackable = item.stackable || false;
@@ -8320,13 +8635,13 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, asy
 
         if (!isStackable && stockQtyNum > 1) {
           return res.status(400).json({ 
-            error: `Item "${vendingItem.itemName}" is not stackable. Stock quantity must be 1, but ${stockQtyNum} was provided.` 
+            error: `Item "${vendingmodels.Item.itemName}" is not stackable. Stock quantity must be 1, but ${stockQtyNum} was provided.` 
           });
         }
 
         if (isStackable && stockQtyNum > maxStackSize) {
           return res.status(400).json({ 
-            error: `Item "${vendingItem.itemName}" has a maximum stack size of ${maxStackSize}, but ${stockQtyNum} was provided.` 
+            error: `Item "${vendingmodels.Item.itemName}" has a maximum stack size of ${maxStackSize}, but ${stockQtyNum} was provided.` 
           });
         }
 
@@ -8337,30 +8652,30 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, asy
         } else {
           slotsUsed = stockQtyNum;
         }
-        vendingItem.slotsUsed = slotsUsed;
+        vendingmodels.Item.slotsUsed = slotsUsed;
       }
-      vendingItem.stockQty = parseInt(stockQty);
+      vendingmodels.Item.stockQty = parseInt(stockQty);
     }
 
     // Update other fields
     if (tokenPrice !== undefined) {
-      vendingItem.tokenPrice = tokenPrice !== null ? parseFloat(tokenPrice) : null;
+      vendingmodels.Item.tokenPrice = tokenPrice !== null ? parseFloat(tokenPrice) : null;
     }
     if (artPrice !== undefined) {
-      vendingItem.artPrice = artPrice && artPrice.trim() !== '' ? artPrice.trim() : null;
+      vendingmodels.Item.artPrice = artPrice && artPrice.trim() !== '' ? artPrice.trim() : null;
     }
     if (otherPrice !== undefined) {
-      vendingItem.otherPrice = otherPrice && otherPrice.trim() !== '' ? otherPrice.trim() : null;
+      vendingmodels.Item.otherPrice = otherPrice && otherPrice.trim() !== '' ? otherPrice.trim() : null;
     }
     if (barterOpen !== undefined) {
-      vendingItem.tradesOpen = Boolean(barterOpen);
-      vendingItem.barterOpen = Boolean(barterOpen);
+      vendingmodels.Item.tradesOpen = Boolean(barterOpen);
+      vendingmodels.Item.barterOpen = Boolean(barterOpen);
     }
     if (slot !== undefined) {
-      vendingItem.slot = slot && slot.trim() !== '' ? slot.trim() : null;
+      vendingmodels.Item.slot = slot && slot.trim() !== '' ? slot.trim() : null;
     }
 
-    await vendingItem.save();
+    await vendingmodels.Item.save();
 
     res.json({
       success: true,
@@ -8381,9 +8696,9 @@ app.delete('/api/characters/:characterId/vending/items/:itemId', requireAuth, as
     const userId = req.user.discordId;
 
     // Find character (check both regular and mod characters)
-    let character = await Character.findById(characterId);
+    let character = await models.Character.findById(characterId);
     if (!character) {
-      character = await ModCharacter.findById(characterId);
+      character = await models.ModCharacter.findById(characterId);
     }
 
     if (!character) {
@@ -8401,7 +8716,7 @@ app.delete('/api/characters/:characterId/vending/items/:itemId', requireAuth, as
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find and delete the item
@@ -8436,9 +8751,9 @@ app.patch('/api/characters/:characterId/vending/shop-image', requireAuth, async 
     const { shopImage } = req.body;
 
     // Find character (check both regular and mod characters)
-    let character = await Character.findById(characterId);
+    let character = await models.Character.findById(characterId);
     if (!character) {
-      character = await ModCharacter.findById(characterId);
+      character = await models.ModCharacter.findById(characterId);
     }
 
     if (!character) {
@@ -8536,29 +8851,54 @@ app.get('/api/items', async (req, res) => {
 
 // ------------------- Function: searchInventoryByItem -------------------
 // Searches inventory for specific item across all characters
-app.post('/api/inventory/item', async (req, res) => {
-  
+app.post('/api/inventory/item', ensureDbConnection, async (req, res) => {
   const { itemName } = req.body;
+  
+  // Validate input
+  if (!itemName || typeof itemName !== 'string' || itemName.trim().length === 0) {
+    return res.status(400).json({ error: 'Item name is required' });
+  }
+  
   try {
+    // Verify connection is ready before fetching characters
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        error: 'Database connection not available',
+        message: 'Please try again in a moment'
+      });
+    }
+    
     const characters = await fetchAllCharacters();
     const inventoryData = [];
 
     for (const char of characters) {
       try {
+        if (!char || !char.name) {
+          continue;
+        }
+        
         const col = await getCharacterInventoryCollection(char.name);
         const inv = await col.find().toArray();
-        const entry = inv.find(i => i.itemName.toLowerCase() === itemName.toLowerCase());
+        const entry = inv.find(i => i.itemName && i.itemName.toLowerCase() === itemName.toLowerCase());
         if (entry) {
-          inventoryData.push({ characterName: char.name, quantity: entry.quantity });
+          inventoryData.push({ 
+            characterName: char.name, 
+            quantity: entry.quantity || 0 
+          });
         }
-      } catch {
+      } catch (error) {
+        // Log but continue with other characters
+        logger.debug(`Error fetching inventory for ${char?.name}: ${error.message}`, 'server.js');
         continue;
       }
     }
     res.json(inventoryData);
   } catch (error) {
     logger.error('Error searching inventory by item', error, 'server.js');
-    res.status(500).json({ error: 'Failed to fetch inventory data' });
+    res.status(500).json({ 
+      error: 'Failed to fetch inventory data',
+      details: error.message 
+    });
   }
 });
 
@@ -8604,7 +8944,7 @@ app.get('/api/weather/today', async (req, res) => {
     
     
     // Get weather for all villages for the current weather day
-    const weatherData = await Weather.find({
+    const weatherData = await models.Weather.find({
       date: {
         $gte: weatherDayStart,
         $lt: weatherDayEnd
@@ -8645,7 +8985,7 @@ app.get('/api/weather/history/:village', async (req, res) => {
     
     
     // Only fetch weather for the current season
-    const history = await Weather.getRecentWeather(village, days, currentSeason);
+    const history = await models.Weather.getRecentWeather(village, days, currentSeason);
     
     
     res.json({
@@ -8671,7 +9011,7 @@ app.get('/api/weather/stats', async (req, res) => {
     const statsData = {};
     
     for (const village of villages) {
-      const history = await Weather.getRecentWeather(village, days);
+      const history = await models.Weather.getRecentWeather(village, days);
       statsData[village] = history;
       logger.api(`Fetched ${history.length} weather records for ${village}`, 'server.js');
     }
@@ -9189,7 +9529,7 @@ app.post('/api/member-lore', async (req, res) => {
     console.log('✅ Security validation passed - no malicious content detected');
 
     // Save to database
-    const MemberLore = require('./models/MemberLoreModel');
+    const MemberLore = require('../models/MemberLoreModel');
     const loreSubmission = new MemberLore({
       memberName: memberName.trim(),
       topic: topic.trim(),
@@ -9795,7 +10135,7 @@ app.post('/api/admin/security-cleanup', requireAuth, async (req, res) => {
       }
     }
     
-    console.log('[server.js]: 🧹 Security cleanup requested by:', req.user.username);
+    logger.info(`Security cleanup requested by: ${req.user.username}`, 'server.js');
     
     // First run a security audit to get current issues
     const auditResults = await performSecurityAudit();
@@ -10111,8 +10451,7 @@ async function performAccessAudit() {
 
   try {
     // Get all users with admin roles
-    const User = require('./models/UserModel.js');
-    const users = await User.find({}).lean();
+    const users = await models.User.find({}).lean();
     
     for (const user of users) {
       // Check if user has been active recently
@@ -10406,7 +10745,7 @@ setInterval(async () => {
 // Get user settings
 app.get('/api/user/settings', requireAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -10454,7 +10793,7 @@ app.put('/api/user/settings', requireAuth, async (req, res) => {
     }
     
     // Get current user settings before updating (to detect what changed)
-    const currentUser = await User.findOne({ discordId: req.user.discordId });
+    const currentUser = await models.User.findOne({ discordId: req.user.discordId });
     
     if (!currentUser) {
       return res.status(404).json({ error: 'User not found' });
@@ -10499,7 +10838,7 @@ app.put('/api/user/settings', requireAuth, async (req, res) => {
     }
     
     // Update user settings in database
-    const user = await User.findOneAndUpdate(
+    const user = await models.User.findOneAndUpdate(
       { discordId: req.user.discordId },
       { $set: settingsToUpdate },
       { new: true, runValidators: true }
@@ -10553,7 +10892,7 @@ app.patch('/api/user/nickname', requireAuth, async (req, res) => {
     }
     
     // Update user nickname in database
-    const user = await User.findOneAndUpdate(
+    const user = await models.User.findOneAndUpdate(
       { discordId: req.user.discordId },
       { $set: { nickname: nickname || '' } },
       { new: true, runValidators: true }
@@ -10581,7 +10920,7 @@ app.patch('/api/user/nickname', requireAuth, async (req, res) => {
 // Claim blupee reward
 app.post('/api/blupee/claim', requireAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -10735,7 +11074,7 @@ app.post('/api/blupee/claim', requireAuth, async (req, res) => {
 // Get blupee status (check if user can claim)
 app.get('/api/blupee/status', requireAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -10772,7 +11111,7 @@ app.get('/api/blupee/status', requireAuth, async (req, res) => {
     
     // Only reset if it's actually a new day
     if (!dailyResetDate || dailyResetDate.getTime() !== today.getTime()) {
-      console.log(`[server.js]: STATUS - Resetting daily count for user ${user.username || user.discordId} - was ${user.blupeeHunt.dailyCount}, reset date was ${dailyResetDate}, new date is ${today}`);
+      logger.info(`Resetting daily count for user ${user.username || user.discordId} - was ${user.blupeeHunt.dailyCount}`, 'server.js');
       user.blupeeHunt.dailyCount = 0;
       user.blupeeHunt.dailyResetDate = today;
       await user.save();
@@ -11009,8 +11348,8 @@ app.post('/api/notifications/character-of-week', requireAuth, async (req, res) =
 // Export character data
 app.get('/api/characters/export', async (req, res) => {
   try {
-    const characters = await Character.find({}).lean();
-    const modCharacters = await ModCharacter.find({}).lean();
+    const characters = await models.Character.find({}).lean();
+    const modCharacters = await models.ModCharacter.find({}).lean();
     
     const exportData = {
       version: '1.0',
@@ -11049,7 +11388,7 @@ app.get('/api/inventory/export', async (req, res) => {
 // Export relationship data
 app.get('/api/relationships/export', async (req, res) => {
   try {
-    const relationships = await Relationship.find({}).lean();
+    const relationships = await models.Relationship.find({}).lean();
     
     const exportData = {
       version: '1.0',
@@ -11075,14 +11414,14 @@ app.get('/api/user/export-all', async (req, res) => {
     const userId = req.user.discordId;
     
     // Get user's characters
-    const characters = await Character.find({ userId: userId }).lean();
-    const modCharacters = await ModCharacter.find({ userId: userId }).lean();
+    const characters = await models.Character.find({ userId: userId }).lean();
+    const modCharacters = await models.ModCharacter.find({ userId: userId }).lean();
     
     // Get user's inventory
     const inventories = await getCharacterInventoryCollection().find({ userId: userId }).toArray();
     
     // Get user's relationships
-    const relationships = await Relationship.find({ 
+    const relationships = await models.Relationship.find({ 
       $or: [
         { character1Id: { $in: characters.map(c => c._id) } },
         { character2Id: { $in: characters.map(c => c._id) } }
@@ -11090,7 +11429,7 @@ app.get('/api/user/export-all', async (req, res) => {
     }).lean();
     
     // Get user's profile
-    const userProfile = await User.findOne({ discordId: userId }).lean();
+    const userProfile = await models.User.findOne({ discordId: userId }).lean();
     
     const exportData = {
       version: '1.0',
@@ -11125,7 +11464,7 @@ app.get('/api/user/export-all', async (req, res) => {
 // Get user's level and rank information
 app.get('/api/user/levels/rank', requireAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -11143,7 +11482,7 @@ app.get('/api/user/levels/rank', requireAuth, async (req, res) => {
     const progress = user.getProgressToNextLevel();
     
     // Get rank (position on leaderboard)
-    const higherRankedUsers = await User.countDocuments({
+    const higherRankedUsers = await models.User.countDocuments({
       $or: [
         { 'leveling.level': { $gt: leveling.level } },
         { 
@@ -11180,7 +11519,7 @@ app.get('/api/levels/leaderboard', async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const limitCapped = Math.min(Math.max(limit, 5), 50); // Between 5 and 50
     
-    const topUsers = await User.find({})
+    const topUsers = await models.User.find({})
       .sort({ 'leveling.level': -1, 'leveling.xp': -1 })
       .limit(limitCapped)
       .select('discordId username discriminator avatar leveling nickname')
@@ -11321,7 +11660,7 @@ async function readTransactionsFromGoogleSheets(userId, tokenTrackerUrl) {
 // Get user's token transaction summary
 app.get('/api/tokens/summary', requireAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -11389,7 +11728,7 @@ app.get('/api/tokens/transactions', requireAuth, async (req, res) => {
       type: type || 'all'
     });
     
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     if (!user) {
       console.warn(`[server.js]: ⚠️ User not found: ${req.user.discordId}`);
       return res.status(404).json({ error: 'User not found' });
@@ -11550,7 +11889,7 @@ app.get('/api/vending/transactions', requireAuth, async (req, res) => {
       role: role || 'all'
     }, 'server.js');
     
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     if (!user) {
       console.warn(`[server.js]: ⚠️ User not found: ${req.user.discordId}`);
       return res.status(404).json({ error: 'User not found' });
@@ -11585,12 +11924,12 @@ app.get('/api/vending/transactions', requireAuth, async (req, res) => {
     let transactions = [];
     let total = 0;
     try {
-      transactions = await VendingRequest.find(query)
+      transactions = await models.VendingRequest.find(query)
         .sort({ date: -1 })
         .limit(limit)
         .skip(skip)
         .lean();
-      total = await VendingRequest.countDocuments(query);
+      total = await models.VendingRequest.countDocuments(query);
       logger.success(`Database transactions found: ${transactions.length} (total: ${total})`, 'server.js');
     } catch (error) {
       logger.error('Error getting transactions from database', error, 'server.js');
@@ -11684,7 +12023,7 @@ app.get('/api/levels/blupee-leaderboard', async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const limitCapped = Math.min(Math.max(limit, 5), 50); // Between 5 and 50
     
-    const topBlupeeHunters = await User.find({ 'blupeeHunt.totalClaimed': { $gt: 0 } })
+    const topBlupeeHunters = await models.User.find({ 'blupeeHunt.totalClaimed': { $gt: 0 } })
       .sort({ 'blupeeHunt.totalClaimed': -1 })
       .limit(limitCapped)
       .select('discordId username discriminator avatar nickname blupeeHunt')
@@ -11718,7 +12057,7 @@ app.get('/api/levels/user/:discordId', async (req, res) => {
   try {
     const { discordId } = req.params;
     
-    const user = await User.findOne({ discordId: discordId })
+    const user = await models.User.findOne({ discordId: discordId })
       .select('discordId username discriminator avatar leveling nickname')
       .lean();
     
@@ -11758,7 +12097,7 @@ app.get('/api/levels/user/:discordId', async (req, res) => {
     const percentage = Math.min(100, Math.max(0, Math.round((clampedProgress / xpNeededForNextLevel) * 100)));
     
     // Get rank (position on leaderboard)
-    const higherRankedUsers = await User.countDocuments({
+    const higherRankedUsers = await models.User.countDocuments({
       $or: [
         { 'leveling.level': { $gt: leveling.level } },
         { 
@@ -11795,7 +12134,7 @@ app.get('/api/levels/user/:discordId', async (req, res) => {
 // Get exchange status and perform exchange
 app.post('/api/user/levels/exchange', requireAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -11825,7 +12164,7 @@ app.post('/api/user/levels/exchange', requireAuth, async (req, res) => {
 // Get exchange status only (no exchange)
 app.get('/api/user/levels/exchange-status', requireAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await models.User.findOne({ discordId: req.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -11932,12 +12271,12 @@ app.get('/api/admin/village-shops', requireAuth, async (req, res) => {
     }
 
     const [items, total] = await Promise.all([
-      VillageShops.find(query)
+      models.VillageShops.find(query)
         .populate('itemId', 'itemName image')
         .sort({ itemName: 1 })
         .skip(skip)
         .limit(parseInt(limit)),
-      VillageShops.countDocuments(query)
+      models.VillageShops.countDocuments(query)
     ]);
 
     res.json({
@@ -11963,7 +12302,7 @@ app.get('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const item = await VillageShops.findById(req.params.id).populate('itemId', 'itemName image');
+    const item = await models.VillageShops.findById(req.params.id).populate('itemId', 'itemName image');
     
     if (!item) {
       return res.status(404).json({ error: 'Village shop item not found' });
@@ -11985,7 +12324,7 @@ app.post('/api/admin/village-shops', requireAuth, async (req, res) => {
     }
 
     // Find the item by name to get the itemId
-    const item = await Item.findOne({ itemName: req.body.itemName });
+    const item = await models.Item.findOne({ itemName: req.body.itemName });
     if (!item) {
       return res.status(400).json({ error: 'Item not found. Please ensure the item exists in the database.' });
     }
@@ -12005,10 +12344,10 @@ app.post('/api/admin/village-shops', requireAuth, async (req, res) => {
       imageType: item.imageType || 'No Image Type'
     };
 
-    const shopItem = new VillageShops(shopItemData);
-    await shopItem.save();
+    const shopItem = new models.VillageShops(shopItemData);
+    await shopmodels.Item.save();
 
-    console.log(`[server.js]: ✅ Admin ${req.user.username} created village shop item:`, shopItem._id);
+    console.log(`[server.js]: ✅ Admin ${req.user.username} created village shop item:`, shopmodels.Item._id);
     
     res.status(201).json({
       success: true,
@@ -12045,7 +12384,7 @@ app.put('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
       updateData.subtype = [updateData.subtype];
     }
 
-    const item = await VillageShops.findByIdAndUpdate(
+    const item = await models.VillageShops.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true, runValidators: true }
@@ -12079,7 +12418,7 @@ app.delete('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const item = await VillageShops.findByIdAndDelete(req.params.id);
+    const item = await models.VillageShops.findByIdAndDelete(req.params.id);
     
     if (!item) {
       return res.status(404).json({ error: 'Village shop item not found' });
@@ -12099,57 +12438,44 @@ app.delete('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
 
 // ------------------- Section: Admin Database Editor -------------------
 
-// ------------------- Import all remaining models for database management -------------------
-const ApprovedSubmission = require('./models/ApprovedSubmissionModel');
-const BloodMoonTracking = require('./models/BloodMoonTrackingModel');
-const GeneralItem = require('./models/GeneralItemModel');
-const HelpWantedQuest = require('./models/HelpWantedQuestModel');
-const Inventory = require('./models/InventoryModel');
-const MemberLore = require('./models/MemberLoreModel');
-const Minigame = require('./models/MinigameModel');
-const NPC = require('./models/NPCModel');
-const RuuGame = require('./models/RuuGameModel');
-const TableModel = require('./models/TableModel');
-const TableRoll = require('./models/TableRollModel');
-const TempData = require('./models/TempDataModel');
-const TokenTransaction = require('./models/TokenTransactionModel');
-// Note: Raid, StealStats, and BlightRollHistory are imported at the top of the file
-
 // ------------------- Model Registry -------------------
-// Maps model names to their Mongoose models
+// Maps model names to their Mongoose models for admin database editor
+// Uses models.* references where models exist in the main models registry
+// Direct imports are used for models only needed in admin editor
 const MODEL_REGISTRY = {
-  'ApprovedSubmission': ApprovedSubmission,
-  'BlightRollHistory': BlightRollHistory,
+  'ApprovedSubmission': models.ApprovedSubmission,
+  'BlightRollHistory': models.BlightRollHistory,
   'BloodMoonTracking': BloodMoonTracking,
-  'Character': Character,
-  'CharacterOfWeek': CharacterOfWeek,
+  'Character': models.Character,
+  'CharacterOfWeek': models.CharacterOfWeek,
   'GeneralItem': GeneralItem,
-  'HelpWantedQuest': HelpWantedQuest,
+  'HelpWantedQuest': models.HelpWantedQuest,
   'Inventory': Inventory,
-  'Item': Item,
+  'Item': models.Item,
   'MemberLore': MemberLore,
   'Minigame': Minigame,
-  'ModCharacter': ModCharacter,
-  'Monster': Monster,
-  'Mount': Mount,
+  'ModCharacter': models.ModCharacter,
+  'Monster': models.Monster,
+  'Mount': models.Mount,
   'NPC': NPC,
-  'Party': Party,
-  'Pet': Pet,
-  'Quest': Quest,
-  'Raid': Raid,
-  'Relationship': Relationship,
-  'Relic': Relic,
+  'Party': models.Party,
+  'Pet': models.Pet,
+  'Pin': models.Pin,
+  'Quest': models.Quest,
+  'Raid': models.Raid,
+  'Relationship': models.Relationship,
+  'Relic': models.Relic,
   'RuuGame': RuuGame,
-  'StealStats': StealStats,
+  'StealStats': models.StealStats,
   'TableModel': TableModel,
   'TableRoll': TableRoll,
   'TempData': TempData,
   'TokenTransaction': TokenTransaction,
-  'User': User,
-  'VendingRequest': VendingRequest,
-  'Village': Village,
-  'VillageShops': VillageShops,
-  'Weather': Weather
+  'User': models.User,
+  'VendingRequest': models.VendingRequest,
+  'Village': models.Village,
+  'VillageShops': models.VillageShops,
+  'Weather': models.Weather
 };
 
 // ------------------- Helper: Get Model with Special Handling -------------------
@@ -12158,7 +12484,12 @@ const getModelForAdmin = (modelName) => {
   if (modelName === 'Inventory') {
     // Inventory uses a separate database connection
     if (!inventoriesConnection) {
-      throw new Error('Inventories database connection not available');
+      throw new Error('Inventories database connection not available. Please ensure the inventories database is connected.');
+    }
+    
+    // Verify connection is ready
+    if (inventoriesConnection.readyState !== 1) {
+      throw new Error(`Inventories database connection not ready. State: ${inventoriesConnection.readyState}`);
     }
     
     // Check if the model already exists to avoid "Cannot overwrite model" error
@@ -12166,25 +12497,10 @@ const getModelForAdmin = (modelName) => {
       return inventoriesConnection.models['Inventory'];
     }
     
-    // Create the model dynamically using the inventories connection
-    const inventorySchema = new mongoose.Schema({
-      characterId: { type: mongoose.Schema.Types.ObjectId, ref: 'Character', required: true },
-      itemName: { type: String, required: true },
-      itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', required: true },
-      quantity: { type: Number, default: 1 },
-      category: { type: String },
-      type: { type: String },
-      subtype: { type: String },
-      job: { type: String },
-      perk: { type: String },
-      location: { type: String },
-      date: { type: Date },
-      craftedAt: { type: Date },
-      gatheredAt: { type: Date },
-      obtain: { type: String, default: '' },
-      synced: { type: String, unique: true }
-    });
+    // Use the schema from InventoryModel
+    const { inventorySchema } = require('../models/InventoryModel');
     
+    // Create the model dynamically using the inventories connection
     return inventoriesConnection.model('Inventory', inventorySchema);
   }
   
@@ -12692,9 +13008,6 @@ app.use(errorHandler); // Handle errors and send responses
 // Handles user-created map pins with authentication and permissions
 // ============================================================================
 
-// Import Pin model
-const Pin = require('./models/PinModel');
-
 // ------------------- Function: checkUserAccess -------------------
 // Helper function to check if user has access to pin operations
 async function checkUserAccess(req) {
@@ -13160,7 +13473,18 @@ const startServer = async () => {
     logger.warn('Cache cleanup initialization failed', 'server.js');
   }
   
-  // Start server FIRST so health checks pass immediately
+  // Initialize databases FIRST - this ensures connection is ready before server accepts requests
+  // This prevents Mongoose operation timeouts when API routes are hit before connection is established
+  try {
+    await initializeDatabases();
+    logger.success('Database initialization complete', 'server.js');
+  } catch (error) {
+    logger.error('CRITICAL: Database initialization failed', error);
+    logger.error('Server cannot start without database connection', 'server.js');
+    process.exit(1);
+  }
+  
+  // Start HTTP server AFTER database is connected
   // Bind to 0.0.0.0 for Railway/Docker deployments
   // This MUST succeed or we exit
   try {
@@ -13179,21 +13503,19 @@ const startServer = async () => {
     process.exit(1);
   }
   
-  // Initialize databases in background (non-blocking, failures are non-fatal)
-  initializeDatabases().catch(err => {
-    logger.error('Database initialization failed - some features will be limited', err);
-  });
-  
-  // Initialize background tasks (non-blocking, failures are non-fatal)
+  // Initialize background tasks after server starts (can run in parallel, non-blocking)
   Promise.all([
     setupWeeklyCharacterRotation(),
     Promise.resolve(setupDailyResetReminders()),
     Promise.resolve(setupBloodMoonAlerts())
-  ]).then(() => {
-    logger.divider('SCHEDULERS INITIALIZED');
-  }).catch(err => {
-    logger.error('Error initializing schedulers', err);
-  });
+  ])
+    .then(() => {
+      logger.divider('SCHEDULERS INITIALIZED');
+    })
+    .catch(err => {
+      logger.error('Error initializing background tasks/schedulers', err);
+      // Continue server operation even if schedulers fail
+    });
   
   // Initialize Discord Gateway (non-blocking, failures are non-fatal)
   const gateway = getDiscordGateway();
@@ -13246,13 +13568,15 @@ async function countSpiritOrbs(characterName) {
     });
     return spiritOrbItem ? spiritOrbItem.quantity || 0 : 0;
   } catch (error) {
-    console.warn(`[server.js]: Error counting spirit orbs for ${characterName}:`, error.message);
+    logger.warn(`Error counting spirit orbs for ${characterName}: ${error.message}`, 'server.js');
     return 0;
   }
 }
 
 // ------------------- Function: countSpiritOrbsBatch -------------------
 // Counts spirit orbs for multiple characters efficiently with caching
+const SPIRIT_ORB_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
 async function countSpiritOrbsBatch(characterNames) {
   const spiritOrbCounts = {};
   const now = Date.now();
@@ -13274,7 +13598,7 @@ async function countSpiritOrbsBatch(characterNames) {
       try {
         // Ensure characterName is valid
         if (!characterName || typeof characterName !== 'string') {
-          console.warn(`[server.js]: Invalid character name for spirit orb count: ${characterName}`);
+          logger.warn(`Invalid character name for spirit orb count: ${characterName}`, 'server.js');
           spiritOrbCounts[characterName] = 0;
           continue;
         }
@@ -13293,7 +13617,7 @@ async function countSpiritOrbsBatch(characterNames) {
         
         spiritOrbCounts[characterName] = count;
       } catch (error) {
-        console.warn(`[server.js]: ⚠️ Error counting spirit orbs for ${characterName}:`, error.message);
+        logger.warn(`Error counting spirit orbs for ${characterName}: ${error.message}`, 'server.js');
         spiritOrbCounts[characterName] = 0;
       }
     }

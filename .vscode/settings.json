@@ -1,0 +1,18 @@
+{
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.profiles.windows": {
+      "PowerShell": {
+        "source": "PowerShell",
+        "path": "powershell.exe",
+        "args": ["-NoExit", "-Command", "Set-Location -LiteralPath '${workspaceFolder}'"]
+      }
+    },
+    "css.lint.unknownAtRules": "ignore",
+    "scss.lint.unknownAtRules": "ignore",
+    "less.lint.unknownAtRules": "ignore"
+  }
+  
+  
+  
+  

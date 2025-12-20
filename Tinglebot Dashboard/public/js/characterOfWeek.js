@@ -336,6 +336,9 @@ window.characterOfWeek = {
 // Also export viewCharacterProfile globally for HTML onclick events
 window.viewCharacterProfile = viewCharacterProfile;
 
+// Export loadCharacterOfWeek globally for HTML onclick events
+window.loadCharacterOfWeek = loadCharacterOfWeek;
+
 // ------------------- Auto-Initialize -------------------
 // Initialize when script loads
 initCharacterOfWeek(); 
