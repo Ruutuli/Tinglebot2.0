@@ -4,7 +4,8 @@
   "description": "Root package.json for Tinglebot 2.0",
   "private": true,
   "scripts": {
-    "start": "cd bot && npm run start"
+    "start": "cd bot && npm run start",
+    "install:dashboard": "cd \"Tinglebot Dashboard\" && npm install"
   },
   "dependencies": {
     "jimp": "^0.22.10",
