@@ -871,13 +871,19 @@ async function handleCharacterBasedCommandsAutocomplete(
                 const characters = await fetchCharactersByUserId(userId);
                 const modCharacters = await fetchModCharactersByUserId(userId);
                 
-                // Combine regular characters and mod characters
-                const allCharacters = [...characters, ...modCharacters];
+                // Combine regular characters and mod characters, filtering out any null/undefined
+                const allCharacters = [...(characters || []), ...(modCharacters || [])].filter(char => char && char.name);
+                
+                // If no characters found, respond with empty array
+                if (!allCharacters || allCharacters.length === 0) {
+                  await safeAutocompleteResponse(interaction, []);
+                  return;
+                }
                 
   // Map all characters to choices with their basic info
   const choices = allCharacters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-   value: character.name,
+   name: `${character.name || 'Unknown'} | ${capitalize(character.currentVillage || 'No Village')} | ${capitalize(character.job || 'No Job')}`,
+   value: character.name || 'Unknown',
                 }));
                 
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
