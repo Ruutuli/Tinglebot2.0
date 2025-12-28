@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "jimp": "^0.22.10",
-    "mathjs": "^14.4.0"
+    "mathjs": "^14.4.0",
+    "mongoose": "^8.20.4",
+    "mongodb": "^6.16.0"
   }
 }
