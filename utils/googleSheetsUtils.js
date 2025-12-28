@@ -266,7 +266,6 @@ function getServiceAccountCredentials() {
         };
     } else {
         // Local environment - read from file
-        console.log(`[googleSheetsUtils.js]: 🏠 Using local service account file for Google Sheets authentication`);
         try {
             if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
                 console.warn(`[googleSheetsUtils.js]: ⚠️ Service account file not found at ${SERVICE_ACCOUNT_PATH}`);
@@ -290,8 +289,6 @@ function getServiceAccountCredentials() {
 // ------------------- Function: authorizeSheets -------------------
 // Authorizes the Google Sheets API using service account credentials
 async function authorizeSheets() {
-    console.log(`[googleSheetsUtils.js]: 🔐 authorizeSheets() called`);
-    
     try {
         const credentials = getServiceAccountCredentials();
         if (!credentials) {
@@ -311,7 +308,6 @@ async function authorizeSheets() {
         }
         
         // Try GoogleAuth first (the working method)
-        console.log(`[googleSheetsUtils.js]: 🔐 Attempting authentication with GoogleAuth...`);
         try {
             // Use GoogleAuth constructor with credentials object (same as test file)
             const googleAuth = new GoogleAuth({
@@ -325,19 +321,12 @@ async function authorizeSheets() {
             // Try to verify credentials work by attempting to get an access token
             // This will fail early if credentials are invalid, rather than failing on first API call
             try {
-                const token = await googleAuth.getAccessToken();
-                if (token) {
-                    console.log(`[googleSheetsUtils.js]: ✅ GoogleAuth client obtained and token verified!`);
-                } else {
-                    console.warn(`[googleSheetsUtils.js]: ⚠️ GoogleAuth client obtained but token is null`);
-                }
+                await googleAuth.getAccessToken();
             } catch (tokenError) {
                 // If token fails, log detailed error but still return client
                 // The error will be caught again on actual API calls with better context
                 console.error(`[googleSheetsUtils.js]: ⚠️ Token verification failed: ${tokenError.message}`);
-                console.error(`[googleSheetsUtils.js]:    This suggests the credentials may be invalid`);
                 console.error(`[googleSheetsUtils.js]:    Service Account: ${credentials.client_email}`);
-                console.error(`[googleSheetsUtils.js]:    Error details:`, tokenError.message);
                 // Still return the client - let the actual API call provide the final error
             }
             
@@ -345,7 +334,6 @@ async function authorizeSheets() {
             return client;
         } catch (googleAuthError) {
             console.warn(`[googleSheetsUtils.js]: ⚠️ GoogleAuth authentication failed: ${googleAuthError.message}`);
-            console.log(`[googleSheetsUtils.js]: 🔄 Attempting fallback authentication with JWT...`);
             
             // Fallback to JWT authentication
             return new Promise((resolve, reject) => {
@@ -367,7 +355,6 @@ async function authorizeSheets() {
                         console.error(`[googleSheetsUtils.js]: ❌ JWT authentication also failed: ${errorMessage}`);
                         return reject(new Error(`Both authentication methods failed. Last error: ${errorMessage}`));
                     }
-                    console.log(`[googleSheetsUtils.js]: ✅ JWT authentication successful!`);
                     resolve(auth);
                 });
             });
@@ -688,25 +675,18 @@ async function getSheetIdByName(auth, spreadsheetId, sheetName) {
 // Gets a sheet ID by its title
 async function getSheetIdByTitle(auth, spreadsheetId, sheetTitle) {
     try {
-        console.log(`[getSheetIdByTitle] Looking for sheet: "${sheetTitle}" in spreadsheet: ${spreadsheetId}`);
         const response = await google.sheets({ version: 'v4', auth }).spreadsheets.get({
             spreadsheetId,
             includeGridData: false,
         });
         
-        const availableSheets = response.data.sheets.map(s => s.properties.title);
-        console.log(`[getSheetIdByTitle] Available sheets in spreadsheet:`, availableSheets);
-        
         const sheet = response.data.sheets.find(s => s.properties.title.trim() === sheetTitle.trim());
         if (sheet) {
-            console.log(`[getSheetIdByTitle] Found sheet "${sheetTitle}" with ID: ${sheet.properties.sheetId} (matched: "${sheet.properties.title}")`);
             return sheet.properties.sheetId;
         } else {
-            console.log(`[getSheetIdByTitle] Sheet "${sheetTitle}" not found. Available sheets:`, availableSheets);
             return null;
         }
     } catch (error) {
-        console.error(`[getSheetIdByTitle] Error occurred:`, error.message);
         if (error.message.includes('does not have permission')) {
             throw new Error(
                 'Permission denied. Please share your Google Sheet with Editor access to:\n' +
