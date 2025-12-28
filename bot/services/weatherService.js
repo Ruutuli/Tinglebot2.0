@@ -319,38 +319,87 @@ function calculateCandidateProbability(candidates, weightMapping, selectedCandid
 
 // ------------------- Smoothing Functions -------------------
 function getSmoothTemperatureChoices(currentTempF, seasonTemps, forceDrop = false) {
+  // If currentTempF is invalid, return all season temps
+  if (currentTempF === null || currentTempF === undefined || isNaN(currentTempF)) {
+    return seasonTemps;
+  }
+  
   const maxDelta = forceDrop ? 0 : 20;
-  return seasonTemps.filter(label => {
+  const filtered = seasonTemps.filter(label => {
     const temp = parseFahrenheit(label);
-    return temp !== null && Math.abs(temp - currentTempF) <= maxDelta;
+    return temp !== null && !isNaN(temp) && Math.abs(temp - currentTempF) <= maxDelta;
   });
+  
+  // If filtering removed all candidates, fall back to all season temps
+  return filtered.length > 0 ? filtered : seasonTemps;
 }
 
 function getSmoothWindChoices(currentWindLabel, seasonWinds) {
+  if (!currentWindLabel || !seasonWinds || seasonWinds.length === 0) {
+    return seasonWinds || [];
+  }
+  
   const index = seasonWinds.indexOf(currentWindLabel);
-  return [index - 1, index, index + 1]
+  // If previous wind not found, return all winds
+  if (index === -1) {
+    return seasonWinds;
+  }
+  
+  const filtered = [index - 1, index, index + 1]
     .filter(i => i >= 0 && i < seasonWinds.length)
     .map(i => seasonWinds[i]);
+  
+  // If filtering removed all candidates, fall back to all winds
+  return filtered.length > 0 ? filtered : seasonWinds;
 }
 
 function getSmoothedTemperature(tempOptions, previous, hadStormYesterday, weightMap, modifierMap) {
+  if (!tempOptions || tempOptions.length === 0) {
+    console.error('[weatherService.js]: No temperature options provided to getSmoothedTemperature');
+    return null;
+  }
+  
   const prevTemp = parseFahrenheit(previous?.temperature?.label);
   const filtered = previous?.temperature?.label
     ? getSmoothTemperatureChoices(prevTemp, tempOptions, hadStormYesterday)
     : tempOptions;
+  
+  // Ensure we have candidates before calling safeWeightedChoice
+  if (!filtered || filtered.length === 0) {
+    console.warn('[weatherService.js]: Filtered temperature array is empty, using original options');
+    return safeWeightedChoice(tempOptions, weightMap, modifierMap);
+  }
+  
   return safeWeightedChoice(filtered, weightMap, modifierMap);
 }
 
 function getSmoothedWind(windOptions, previous, weightMap) {
+  if (!windOptions || windOptions.length === 0) {
+    console.error('[weatherService.js]: No wind options provided to getSmoothedWind');
+    return null;
+  }
+  
   const prevWind = previous?.wind?.label;
   const filtered = prevWind
     ? getSmoothWindChoices(prevWind, windOptions)
     : windOptions;
+  
+  // Ensure we have candidates before calling safeWeightedChoice
+  if (!filtered || filtered.length === 0) {
+    console.warn('[weatherService.js]: Filtered wind array is empty, using original options');
+    return safeWeightedChoice(windOptions, weightMap);
+  }
+  
   return safeWeightedChoice(filtered, weightMap);
 }
 
 // ------------------- Weather Generation Functions -------------------
 function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weightMapping, modifierMap = {}) {
+  if (!seasonData || !seasonData.Precipitation || seasonData.Precipitation.length === 0) {
+    console.error('[weatherService.js]: No precipitation options in seasonData');
+    return null;
+  }
+  
   const validPrecipitations = seasonData.Precipitation.filter(label => {
     const precipObj = precipitations.find(p => p.label === label);
     if (!precipObj || !precipObj.conditions) return true;
@@ -364,6 +413,11 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
         if (!match) return true;
         const [_, operator, num] = match;
         const compareValue = parseInt(num);
+        
+        // Handle invalid simTemp
+        if (simTemp === null || simTemp === undefined || isNaN(simTemp)) {
+          return true; // Allow if temp is invalid
+        }
         
         switch (operator) {
           case '<=': return simTemp <= compareValue;
@@ -384,6 +438,11 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
         if (!match) return true;
         const [_, operator, num] = match;
         const compareValue = parseInt(num);
+        
+        // Handle invalid simWind
+        if (simWind === null || simWind === undefined || isNaN(simWind)) {
+          return true; // Allow if wind is invalid
+        }
         
         switch (operator) {
           case '<=': return simWind <= compareValue;
@@ -400,10 +459,20 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
     return true;
   });
   
+  // If filtering removed all candidates, fall back to all precipitations
+  if (validPrecipitations.length === 0) {
+    console.warn('[weatherService.js]: No valid precipitations after filtering, using all options');
+    return safeWeightedChoice(seasonData.Precipitation, weightMapping, modifierMap);
+  }
+  
   return safeWeightedChoice(validPrecipitations, weightMapping, modifierMap);
 }
 
 function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStreak, weightMapping, modifierMap = {}) {
+  if (!seasonData || !seasonData.Special || seasonData.Special.length === 0) {
+    return null; // No special weather available
+  }
+  
   const validSpecials = seasonData.Special.filter(label => {
     const specialObj = specials.find(s => s.label === label);
     if (!specialObj || !specialObj.conditions) return true;
@@ -417,6 +486,11 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
         if (!match) return true;
         const [_, operator, num] = match;
         const compareValue = parseInt(num);
+        
+        // Handle invalid simTemp
+        if (simTemp === null || simTemp === undefined || isNaN(simTemp)) {
+          return true; // Allow if temp is invalid
+        }
         
         switch (operator) {
           case '<=': return simTemp <= compareValue;
@@ -438,6 +512,11 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
         const [_, operator, num] = match;
         const compareValue = parseInt(num);
         
+        // Handle invalid simWind
+        if (simWind === null || simWind === undefined || isNaN(simWind)) {
+          return true; // Allow if wind is invalid
+        }
+        
         switch (operator) {
           case '<=': return simWind <= compareValue;
           case '>=': return simWind >= compareValue;
@@ -452,6 +531,8 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
     
     // Check precipitation conditions
     if (precipConds && !precipConds.includes('any')) {
+      if (!precipLabel) return false; // Need valid precipitation label
+      
       const normalizedPrecip = precipLabel.toLowerCase();
       const precipValid = precipConds.some(cond => {
         const normalizedCond = cond.toLowerCase();
@@ -469,6 +550,12 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
     
     return true;
   });
+  
+  // If filtering removed all candidates, fall back to all specials
+  if (validSpecials.length === 0) {
+    console.warn('[weatherService.js]: No valid specials after filtering, using all options');
+    return safeWeightedChoice(seasonData.Special, weightMapping, modifierMap);
+  }
   
   return safeWeightedChoice(validSpecials, weightMapping, modifierMap);
 }
@@ -520,6 +607,20 @@ async function simulateWeightedWeather(village, season, options = {}) {
     .length;
   const hadStormYesterday = ['Thunderstorm', 'Heavy Rain'].includes(previous.precipitation?.label);
   
+  // Validate season data structure
+  if (!seasonInfo.Temperature || seasonInfo.Temperature.length === 0) {
+    console.error(`[weatherService.js]: No temperature options for ${village} in ${seasonKey}`);
+    return null;
+  }
+  if (!seasonInfo.Wind || seasonInfo.Wind.length === 0) {
+    console.error(`[weatherService.js]: No wind options for ${village} in ${seasonKey}`);
+    return null;
+  }
+  if (!seasonInfo.Precipitation || seasonInfo.Precipitation.length === 0) {
+    console.error(`[weatherService.js]: No precipitation options for ${village} in ${seasonKey}`);
+    return null;
+  }
+  
   // Temperature
   const temperatureLabel = getSmoothedTemperature(
     seasonInfo.Temperature,
@@ -529,6 +630,11 @@ async function simulateWeightedWeather(village, season, options = {}) {
     weightModifiers.temperature || {}
   );
   
+  if (!temperatureLabel) {
+    console.error(`[weatherService.js]: Failed to generate temperature label for ${village} in ${seasonKey}`);
+    return null;
+  }
+  
   const simTemp = parseFahrenheit(temperatureLabel);
   
   // Wind
@@ -537,6 +643,12 @@ async function simulateWeightedWeather(village, season, options = {}) {
     previous,
     windWeights
   );
+  
+  if (!windLabel) {
+    console.error(`[weatherService.js]: Failed to generate wind label for ${village} in ${seasonKey}`);
+    return null;
+  }
+  
   const simWind = parseWind(windLabel);
   
   // Precipitation
@@ -549,9 +661,14 @@ async function simulateWeightedWeather(village, season, options = {}) {
     weightModifiers.precipitation || {}
   );
   
+  if (!precipitationLabel) {
+    console.error(`[weatherService.js]: Failed to generate precipitation label for ${village} in ${seasonKey}`);
+    return null;
+  }
+  
   // Validate that we have valid labels
   if (!temperatureLabel || !windLabel || !precipitationLabel) {
-    console.error(`[weatherService.js]: Failed to generate weather labels for ${village}`);
+    console.error(`[weatherService.js]: Failed to generate weather labels for ${village} - temp: ${temperatureLabel}, wind: ${windLabel}, precip: ${precipitationLabel}`);
     return null;
   }
   
