@@ -1,6 +1,10 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+<<<<<<< HEAD
+=======
+const { connectToInventories } = require('../database/db');
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 // ------------------- Define the inventory schema -------------------
 const inventorySchema = new Schema({
@@ -24,6 +28,7 @@ const inventorySchema = new Schema({
 
 // ------------------- Initialize the inventory model -------------------
 // Initialize the model using the inventories database connection
+<<<<<<< HEAD
 // Accepts an optional connection parameter to work with both bot and dashboard
 const initializeInventoryModel = async (inventoriesConnection = null) => {
   try {
@@ -63,6 +68,22 @@ const initializeInventoryModel = async (inventoriesConnection = null) => {
     return {
       model,
       connection: connection
+=======
+const initializeInventoryModel = async () => {
+  console.log(`[initializeInventoryModel]: Initializing inventory model.`);
+  try {
+    const inventoriesConnection = await connectToInventories();
+    if (!inventoriesConnection) {
+      throw new Error(`[initializeInventoryModel]: Failed to connect to the inventories database.`);
+    }
+    console.log(`[initializeInventoryModel]: Successfully connected to the inventories database.`);
+
+    // Create and return both the model and connection
+    const model = inventoriesConnection.model('Inventory', inventorySchema);
+    return {
+      model,
+      connection: inventoriesConnection
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
     };
   } catch (error) {
     console.error(`[initializeInventoryModel]: Error initializing model:`, error);
@@ -70,7 +91,10 @@ const initializeInventoryModel = async (inventoriesConnection = null) => {
   }
 };
 
+<<<<<<< HEAD
 // Export both the schema and the initialization function
+=======
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 module.exports = initializeInventoryModel;
 module.exports.inventorySchema = inventorySchema;
 

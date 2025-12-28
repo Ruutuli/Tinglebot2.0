@@ -1,7 +1,11 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+<<<<<<< HEAD
 const { connectToVending } = require('../bot/database/db-bot');
+=======
+const { connectToVending } = require('../database/db');
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 // ------------------- Define the vending inventory schema -------------------
 const vendingInventorySchema = new Schema({

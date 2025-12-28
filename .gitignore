@@ -14,6 +14,9 @@ bot/config/credentials.json
 Tinglebot Dashboard/config/token.json
 Tinglebot Dashboard/config/service_account.json
 Tinglebot Dashboard/config/credentials.json
+config/token.json
+config/service_account.json
+config/credentials.json
 eslint.config.mjs
 node_modules
 nodemon.log

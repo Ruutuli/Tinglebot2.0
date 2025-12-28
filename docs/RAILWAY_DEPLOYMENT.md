@@ -4,7 +4,11 @@ This guide explains how to deploy both the Tinglebot Discord bot and the Tingleb
 
 ## Architecture Overview
 
+<<<<<<< HEAD
 - **Bot Service**: Deploys from `bot/` directory, runs `index.js`
+=======
+- **Bot Service**: Deploys from root directory, runs `index.js`
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 - **Dashboard Service**: Deploys from `Tinglebot Dashboard/` directory, runs `server.js`
 
 Both services share:
@@ -17,10 +21,17 @@ Both services share:
 
 ### Bot Service Setup
 
+<<<<<<< HEAD
 1. **Root Directory**: `bot/` (configure in Railway service settings)
 2. **Start Command**: `npm run start` (runs `node index.js`)
 3. **Build Command**: `npm install`
 4. **Railway Config**: Uses `bot/railway.json`
+=======
+1. **Root Directory**: `/` (root of repository)
+2. **Start Command**: `npm run start` (runs `node index.js`)
+3. **Build Command**: `npm install`
+4. **Railway Config**: Uses `railway.json` in root
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 ### Dashboard Service Setup
 
@@ -29,9 +40,13 @@ Both services share:
 3. **Build Command**: `npm install`
 4. **Railway Config**: Uses `Tinglebot Dashboard/railway.json`
 
+<<<<<<< HEAD
 **Important**: In Railway, you must set the **Root Directory** to:
 - `bot/` for the bot service
 - `Tinglebot Dashboard/` for the dashboard service
+=======
+**Important**: In Railway, you must set the **Root Directory** to `Tinglebot Dashboard` for the dashboard service.
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 ## Environment Variables
 
@@ -80,11 +95,18 @@ ITEMS_SPREADSHEET_ID=...
 
 All relative paths are configured to work from each service's root:
 
+<<<<<<< HEAD
 ### Bot Service (bot/ Directory)
 - Models: `../models/` (goes up one level to root)
 - Database: `../database/db.js` (goes up one level to root)
 - Config: `../config/database.js` (goes up one level to root)
 - Bot files: `./index.js`, `./commands/`, etc.
+=======
+### Bot Service (Root Directory)
+- Models: `./models/` or `models/`
+- Database: `./database/db.js`
+- Config: `./config/database.js`
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 ### Dashboard Service (Tinglebot Dashboard/ Directory)
 - Models: `../models/` (goes up one level to root)
@@ -103,6 +125,7 @@ All relative paths are configured to work from each service's root:
 ### 2. Configure Bot Service
 
 1. Connect to your GitHub repository
+<<<<<<< HEAD
 2. **Root Directory**: Set to `bot/` (critical!)
 3. Railway will automatically detect `bot/railway.json`
 4. Set environment variables (see above)
@@ -112,6 +135,12 @@ All relative paths are configured to work from each service's root:
 - Scroll to "Root Directory"
 - Enter: `bot/`
 
+=======
+2. **Root Directory**: Leave empty (defaults to root `/`)
+3. Railway will automatically detect `railway.json` in root
+4. Set environment variables (see above)
+
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 ### 3. Configure Dashboard Service
 
 1. Connect to the same GitHub repository
@@ -122,7 +151,11 @@ All relative paths are configured to work from each service's root:
 **To set Root Directory in Railway:**
 - Go to service settings
 - Scroll to "Root Directory"
+<<<<<<< HEAD
 - Enter: `Tinglebot Dashboard` (for dashboard service)
+=======
+- Enter: `Tinglebot Dashboard`
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 ### 4. Health Checks
 
@@ -142,14 +175,22 @@ All relative paths are configured to work from each service's root:
 
 ## Common Issues
 
+<<<<<<< HEAD
 ### Issue: Bot or Dashboard can't find models
+=======
+### Issue: Dashboard can't find models
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 **Symptom**: `Error: Cannot find module '../models/...'`
 
 **Solution**: 
+<<<<<<< HEAD
 - Verify Root Directory is set correctly:
   - Bot service: `bot/`
   - Dashboard service: `Tinglebot Dashboard/`
+=======
+- Verify Root Directory is set to `Tinglebot Dashboard` (not `/`)
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 - Check that models exist in root `models/` directory
 
 ### Issue: Database connection fails
@@ -173,6 +214,7 @@ All relative paths are configured to work from each service's root:
 
 ```
 Tinglebot 2.0/
+<<<<<<< HEAD
 ├── bot/                        # Bot code
 │   ├── index.js                # Bot entry point
 │   ├── railway.json            # Bot Railway config
@@ -190,6 +232,21 @@ Tinglebot 2.0/
 │   └── db.js                   # Shared database connection
 └── config/
     └── database.js             # Shared database config
+=======
+├── index.js                    # Bot entry point
+├── railway.json                # Bot Railway config
+├── package.json                # Bot dependencies
+├── models/                     # Shared models (used by both)
+├── database/
+│   └── db.js                   # Shared database connection
+├── config/
+│   └── database.js             # Shared database config
+└── Tinglebot Dashboard/
+    ├── server.js               # Dashboard entry point
+    ├── railway.json            # Dashboard Railway config
+    ├── package.json            # Dashboard dependencies
+    └── ...
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 ```
 
 ## Testing Locally
@@ -198,7 +255,11 @@ Before deploying, test the path resolution:
 
 ```bash
 # Test Bot Service
+<<<<<<< HEAD
 cd "C:\Users\Ruu\Desktop\Tinglebot 2.0\bot"
+=======
+cd "C:\Users\Ruu\Desktop\Tinglebot 2.0"
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 npm start
 
 # Test Dashboard Service

@@ -14,8 +14,13 @@
 ### 📋 Railway Service Configuration
 
 #### Bot Service
+<<<<<<< HEAD
 - **Root Directory**: `bot/` ⚠️ **CRITICAL - Must be set in Railway**
 - **railway.json**: Located in `bot/railway.json`
+=======
+- **Root Directory**: `/` (root of repo - default)
+- **railway.json**: Located in root directory
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 - **Start Command**: `npm run start` (runs `node index.js`)
 
 #### Dashboard Service
@@ -79,12 +84,19 @@ ITEMS_SPREADSHEET_ID=<spreadsheet-id>
 
 ```
 Tinglebot 2.0/
+<<<<<<< HEAD
 ├── bot/                        ✅ Bot code
 │   ├── index.js                ✅ Bot entry point
 │   ├── railway.json            ✅ Bot Railway config
 │   ├── package.json            ✅ Bot dependencies
 │   └── ...
 ├── models/                     ✅ Shared models (all 37 models)
+=======
+├── index.js                    ✅ Bot entry point
+├── railway.json                ✅ Bot Railway config
+├── package.json                ✅ Bot dependencies
+├── models/                     ✅ Shared models (all 36 models)
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 │   ├── CharacterModel.js
 │   ├── UserModel.js
 │   ├── MessageTrackingModel.js
@@ -111,11 +123,18 @@ Tinglebot 2.0/
 
 ### ✅ Path Resolution Verification
 
+<<<<<<< HEAD
 #### Bot Service (bot/ Directory)
 - ✅ Models: `../models/` → Goes up to root `models/`
 - ✅ Database: `../database/db.js` → Goes up to root `database/db.js`
 - ✅ Config: `../config/database.js` → Goes up to root `config/database.js`
 - ✅ Bot files: `./index.js`, `./commands/` → Bot directory
+=======
+#### Bot Service (Root Directory)
+- ✅ Models: `./models/` → `models/`
+- ✅ Database: `./database/db.js` → `database/db.js`
+- ✅ Config: `./config/database.js` → `config/database.js`
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 #### Dashboard Service (Tinglebot Dashboard/ Directory)
 - ✅ Models: `../models/` → Goes up to root `models/`
@@ -137,7 +156,11 @@ git push origin main
 #### Bot Service
 1. Create/select service in Railway
 2. Connect to GitHub repo
+<<<<<<< HEAD
 3. **Root Directory**: Set to `bot/` ⚠️ **CRITICAL**
+=======
+3. **Root Directory**: Leave empty (defaults to `/`)
+>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 4. Set environment variables (Bot Service Only + Shared)
 
 #### Dashboard Service
