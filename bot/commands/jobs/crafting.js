@@ -192,17 +192,50 @@ module.exports = {
 
       // ------------------- Validate Character Job and Voucher -------------------
       let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
-      info('CRFT', `Job determined for ${character.name}: "${job}"`);
+      info('CRFT', `Job determined for ${character.name}: "${job}" (type: ${typeof job}, voucher: ${character.jobVoucher ? 'yes' : 'no'})`);
 
       // ------------------- Validate Job Perks -------------------
-      const jobPerk = getJobPerk(job);
+      // Normalize job name for consistent comparison
+      const jobNormalized = job ? job.trim() : '';
+      const jobLower = jobNormalized.toLowerCase();
+      info('CRFT', `Normalized job for ${character.name}: "${jobNormalized}" (lowercase: "${jobLower}")`);
       
-      // Check if character's job matches item's crafting requirements using boolean fields
-      const jobLower = job.toLowerCase();
+      const jobPerk = getJobPerk(jobNormalized);
+      info('CRFT', `Job perk lookup for "${jobNormalized}": ${jobPerk ? JSON.stringify(jobPerk) : 'null'}`);
+      
+      // Check 1: Verify job perk exists
+      if (!jobPerk) {
+        error('CRFT', `Job "${jobNormalized}" not found in job perks for ${character.name}`);
+        const errorResponse = getJobVoucherErrorMessage('MISSING_SKILLS', {
+          characterName: character.name,
+          jobName: jobNormalized,
+          activity: 'crafting'
+        });
+        return interaction.editReply({ 
+          embeds: [errorResponse.embed],
+          ephemeral: false 
+        });
+      }
       
       // Special handling for mod characters with ALL perks (Oracle, Sage, Dragon)
-      const hasAllPerks = jobPerk && jobPerk.perks.includes('ALL');
+      const hasAllPerks = jobPerk.perks.includes('ALL');
+      info('CRFT', `Has ALL perks: ${hasAllPerks}, perks array: ${JSON.stringify(jobPerk.perks)}`);
       
+      // Check 2: Verify job has CRAFTING perk (unless it has ALL perks)
+      if (!hasAllPerks && !jobPerk.perks.includes('CRAFTING')) {
+        error('CRFT', `Job "${jobNormalized}" lacks CRAFTING perk for ${character.name}. Perks: ${JSON.stringify(jobPerk.perks)}`);
+        const errorResponse = getJobVoucherErrorMessage('MISSING_SKILLS', {
+          characterName: character.name,
+          jobName: jobNormalized,
+          activity: 'crafting'
+        });
+        return interaction.editReply({ 
+          embeds: [errorResponse.embed],
+          ephemeral: false 
+        });
+      }
+      
+      // Check 3: Verify item is craftable by this job
       const jobFieldMap = {
         'cook': 'cook',
         'blacksmith': 'blacksmith',
@@ -214,13 +247,16 @@ module.exports = {
         'witch': 'witch'
       };
       const jobField = jobFieldMap[jobLower];
-      const canCraftItem = hasAllPerks || (jobField && item[jobField] === true);
+      info('CRFT', `Job field mapping for "${jobLower}": "${jobField}", item[${jobField}]: ${item[jobField]}`);
       
-      if (!jobPerk || (!jobPerk.perks.includes('CRAFTING') && !hasAllPerks) || !canCraftItem) {
-        error('CRFT', `Invalid job "${job}" for ${character.name} - missing crafting skills`);
+      const canCraftItem = hasAllPerks || (jobField && item[jobField] === true);
+      info('CRFT', `Can craft item "${itemName}": ${canCraftItem} (hasAllPerks: ${hasAllPerks}, jobField: ${jobField}, item[jobField]: ${item[jobField]})`);
+      
+      if (!canCraftItem) {
+        error('CRFT', `Item "${itemName}" is not craftable by job "${jobNormalized}" for ${character.name}. Item researcher field: ${item.researcher}, jobField: ${jobField}`);
         const errorResponse = getJobVoucherErrorMessage('MISSING_SKILLS', {
           characterName: character.name,
-          jobName: job,
+          jobName: jobNormalized,
           activity: 'crafting'
         });
         return interaction.editReply({ 
