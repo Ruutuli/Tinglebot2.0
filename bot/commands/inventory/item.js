@@ -1123,7 +1123,11 @@ module.exports = {
 
       // ------------------- Debuff and Inventory Sync Checks -------------------
       // Prevent item use if character is debuffed or inventory isn't synced.
-      if (character.debuff?.active) {
+      // Exception: Healing items (fairy and Recipe category items) can be used even when debuffed
+      const isHealingItem = item.itemName.toLowerCase() === 'fairy' || 
+                            (Array.isArray(item.category) && item.category.includes('Recipe'));
+      
+      if (character.debuff?.active && !isHealingItem) {
         const debuffEndDate = new Date(character.debuff.endDate);
         const now = new Date();
         

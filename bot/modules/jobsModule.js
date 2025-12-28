@@ -66,7 +66,13 @@ const getJobPerk = (job) => {
   }
   const normalizedJob = job.toLowerCase().trim();
   const perkInfo = jobPerks.find(perk => perk.job.toLowerCase().trim() === normalizedJob);
-  return perkInfo ? { perks: perkInfo.perk.split(' / ').map(perk => perk.trim()), village: perkInfo.village } : null;
+  if (!perkInfo) {
+    console.error(`[jobsModule.js]: No perk info found for job: "${job}" (normalized: "${normalizedJob}")`);
+    return null;
+  }
+  // Split perks by ' / ' and normalize to uppercase for consistency
+  const perks = perkInfo.perk.split(' / ').map(perk => perk.trim().toUpperCase());
+  return { perks: perks, village: perkInfo.village };
 };
 
 // Check if a job is exclusive to a village
