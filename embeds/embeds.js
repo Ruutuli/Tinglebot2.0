@@ -202,10 +202,7 @@ const addBoostFlavorText = (description, boostInfo) => {
  if (!description || typeof description !== 'string') {
    description = 'A successful gathering trip!';
  }
- // Ensure boostFlavorText is a string before using it
- if (!boostInfo?.boostFlavorText || typeof boostInfo.boostFlavorText !== 'string') {
-   return description;
- }
+ if (!boostInfo?.boostFlavorText) return description;
  return `${description}\n\n⚡ **Boost Effect:** ${boostInfo.boostFlavorText}`;
 };
 
@@ -1408,10 +1405,6 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
 
  // Ensure description is always a string (Discord embed requirement)
  if (!description || typeof description !== 'string') {
-   description = 'A successful gathering trip!';
- }
- // Final safety check: ensure description is a non-empty string before setting
- if (typeof description !== 'string' || description.length === 0) {
    description = 'A successful gathering trip!';
  }
 

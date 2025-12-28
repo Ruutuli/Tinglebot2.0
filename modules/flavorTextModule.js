@@ -545,7 +545,7 @@ const generateGatherFlavorText = (itemType) => {
   // Get base flavor text (Scholar boost flavor is handled separately in the boost effect section)
   const baseFlavorText = getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
   
-  return baseFlavorText || "A successful gathering trip!";
+  return baseFlavorText;
 };
 
 const generateCraftingFlavorText = (job) => {
@@ -861,15 +861,13 @@ const generateDivineItemFlavorText = () => {
                             BOOST_FLAVOR_MESSAGES.Priest.Gathering?.default || 
                             ["A divine blessing guided your gathering."];
   
-  const result = getRandomMessage(divineFlavorTexts);
-  return result || "A divine blessing guided your gathering.";
+  return getRandomMessage(divineFlavorTexts);
 };
 
 const generateTeacherGatheringFlavorText = () => {
   const teacherFlavorTexts = BOOST_FLAVOR_MESSAGES.Teacher.Gathering;
   
-  const result = getRandomMessage(teacherFlavorTexts);
-  return result || "A successful gathering trip!";
+  return getRandomMessage(teacherFlavorTexts);
 };
 
 // ============================================================================

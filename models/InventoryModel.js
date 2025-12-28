@@ -1,10 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-<<<<<<< HEAD
-=======
 const { connectToInventories } = require('../database/db');
->>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 
 // ------------------- Define the inventory schema -------------------
 const inventorySchema = new Schema({
@@ -28,47 +25,6 @@ const inventorySchema = new Schema({
 
 // ------------------- Initialize the inventory model -------------------
 // Initialize the model using the inventories database connection
-<<<<<<< HEAD
-// Accepts an optional connection parameter to work with both bot and dashboard
-const initializeInventoryModel = async (inventoriesConnection = null) => {
-  try {
-    let connection = inventoriesConnection;
-    
-    // If no connection provided, try to get one from available sources
-    if (!connection) {
-      // Try dashboard connection first (if running from dashboard)
-      try {
-        const path = require('path');
-        const dbDashboardPath = path.join(__dirname, '..', 'Tinglebot Dashboard', 'database', 'db-dashboard');
-        const dbDashboard = require(dbDashboardPath);
-        connection = await dbDashboard.connectToInventories();
-      } catch (dashboardError) {
-        // If dashboard import fails, try bot connection
-        try {
-          const dbBotPath = path.join(__dirname, '..', 'database', 'db-bot');
-          const dbBot = require(dbBotPath);
-          connection = await dbBot.connectToInventories();
-        } catch (botError) {
-          throw new Error(`Failed to connect to inventories database from either location: ${botError.message}`);
-        }
-      }
-    }
-    
-    if (!connection) {
-      throw new Error('Failed to connect to the inventories database');
-    }
-
-    // Ensure we're using the 'inventories' database
-    if (connection.useDb) {
-      connection.useDb('inventories');
-    }
-
-    // Create and return both the model and connection
-    const model = connection.model('Inventory', inventorySchema);
-    return {
-      model,
-      connection: connection
-=======
 const initializeInventoryModel = async () => {
   console.log(`[initializeInventoryModel]: Initializing inventory model.`);
   try {
@@ -83,7 +39,6 @@ const initializeInventoryModel = async () => {
     return {
       model,
       connection: inventoriesConnection
->>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
     };
   } catch (error) {
     console.error(`[initializeInventoryModel]: Error initializing model:`, error);
@@ -91,10 +46,5 @@ const initializeInventoryModel = async () => {
   }
 };
 
-<<<<<<< HEAD
-// Export both the schema and the initialization function
-=======
->>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 module.exports = initializeInventoryModel;
-module.exports.inventorySchema = inventorySchema;
 

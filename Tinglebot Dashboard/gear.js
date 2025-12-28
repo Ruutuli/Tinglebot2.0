@@ -11,20 +11,12 @@ const { handleInteractionError } = require('../../utils/globalErrorHandler.js');
 const { escapeRegExp } = require('../../utils/inventoryUtils.js');
 // ------------------- Database Services -------------------
 // Import character-related database services for fetching and updating character data.
-<<<<<<<< HEAD:bot/commands/inventory/gear.js
-const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../database/db-bot.js');
-========
 const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../database/db.js');
->>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d:Tinglebot Dashboard/gear.js
 
 
 // ------------------- Database Models -------------------
 // Import the Item model for fetching item details.
-<<<<<<<< HEAD:bot/commands/inventory/gear.js
-const ItemModel = require('../../models/ItemModel.js');
-========
 const ItemModel = require('../models/ItemModel.js');
->>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d:Tinglebot Dashboard/gear.js
 
 
 // ------------------- Embeds -------------------

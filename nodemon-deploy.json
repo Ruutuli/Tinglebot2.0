@@ -1,0 +1,18 @@
+{
+  "watch": [
+    "embeds/",
+    "commands/",
+    "handlers/",
+    "scripts/",
+    "scripts/deploy-commands.js",
+    "index.js",
+    "database/",
+    "models/",
+    "modules/",
+    "utils/"
+  ],
+  "ignore": ["node_modules/"],
+  "ext": "js,json",
+  "exec": "set NODE_ENV=production && node scripts/deploy-commands.js > nodemon.log 2>&1",
+  "legacy-watch": true
+}

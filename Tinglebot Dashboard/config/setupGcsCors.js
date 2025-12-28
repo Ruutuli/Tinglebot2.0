@@ -2,9 +2,9 @@ const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables from root .env file
+// Load environment variables
 const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: path.join(__dirname, '..', '..', `.env.${env}`) });
+dotenv.config({ path: `.env.${env}` });
 
 // Create a storage client
 let storage;

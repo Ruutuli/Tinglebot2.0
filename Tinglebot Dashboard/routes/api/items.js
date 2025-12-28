@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { fetchAllItems, fetchItemByName } = require('../../database/db-dashboard');
+const { fetchAllItems, fetchItemByName } = require('../../database/db');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const logger = require('../../utils/logger');
 
@@ -30,7 +30,6 @@ router.get('/:name', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
-
 
 
 

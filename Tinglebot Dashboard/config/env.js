@@ -3,8 +3,7 @@
 // Centralized environment variable loading and validation
 // ============================================================================
 
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+require('dotenv').config();
 const logger = require('../utils/logger');
 
 // ------------------- Environment Detection -------------------

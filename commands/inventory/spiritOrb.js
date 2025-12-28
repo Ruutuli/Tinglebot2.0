@@ -6,11 +6,7 @@ const { handleInteractionError } = require('../../utils/globalErrorHandler');
 const Character = require('../../models/CharacterModel');
 
 // ------------------- Services -------------------
-<<<<<<<< HEAD:bot/commands/inventory/spiritOrb.js
-const { getCharacterInventoryCollection } = require('../../database/db-bot');
-========
 const { getCharacterInventoryCollection } = require('../../database/db');
->>>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d:commands/inventory/spiritOrb.js
 
 // ------------------- Modules -------------------
 const { exchangeSpiritOrbs } = require('../../modules/characterStatsModule');

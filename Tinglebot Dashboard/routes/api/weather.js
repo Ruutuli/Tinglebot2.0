@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
+const Weather = require('../../models/WeatherModel');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const logger = require('../../utils/logger');
 
@@ -41,7 +41,6 @@ function getWeatherDayBounds() {
 // ------------------- Function: getTodayWeather -------------------
 // Returns today's weather for all villages (using 8am-8am weather day)
 router.get('/today', asyncHandler(async (req, res) => {
-  const Weather = mongoose.models.Weather;
   const { weatherDayStart, weatherDayEnd } = getWeatherDayBounds();
   
   // Get weather for all villages for the current weather day
@@ -70,7 +69,6 @@ router.get('/today', asyncHandler(async (req, res) => {
 // ------------------- Function: getWeatherHistory -------------------
 // Returns weather history for a specific village
 router.get('/history/:village', asyncHandler(async (req, res) => {
-  const Weather = mongoose.models.Weather;
   const { village } = req.params;
   const limit = parseInt(req.query.limit) || 30;
   
@@ -85,7 +83,6 @@ router.get('/history/:village', asyncHandler(async (req, res) => {
 // ------------------- Function: getWeatherStats -------------------
 // Returns weather statistics
 router.get('/stats', asyncHandler(async (req, res) => {
-  const Weather = mongoose.models.Weather;
   const villages = ['Rudania', 'Inariko', 'Vhintl'];
   const stats = {};
   
@@ -108,7 +105,6 @@ router.get('/stats', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
-
 
 
 

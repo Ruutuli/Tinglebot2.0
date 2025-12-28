@@ -26,7 +26,7 @@ const {
  connectToInventories,
  getCharacterInventoryCollection,
  fetchItemByName,
-} = require("../database/db-dashboard");
+} = require("../database/db");
 
 // Handlers
 const {
@@ -49,7 +49,7 @@ const {
 
 // Modules
 const { recoverDailyStamina } = require("./modules/characterStatsModule");
-const { bloodmoonDates, convertToHyruleanDate } = require("./utils/calendarModule");
+const { bloodmoonDates, convertToHyruleanDate } = require("./modules/calendarModule");
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest, regenerateArtWritingQuest } = require('./modules/helpWantedModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 
@@ -102,11 +102,11 @@ const { postQuests } = require('./scripts/questAnnouncements');
 
 const env = process.env.NODE_ENV || "development";
 try {
- const envPath = path.join(__dirname, '..', `.env.${env}`);
+ const envPath = path.resolve(process.cwd(), `.env.${env}`);
  dotenv.config({ path: envPath });
 } catch (error) {
  console.error(`[scheduler.js]: Failed to load .env.${env}:`, error.message);
- dotenv.config({ path: path.join(__dirname, '..', '.env') });
+ dotenv.config();
 }
 
 // ============================================================================

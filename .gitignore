@@ -4,16 +4,6 @@
 
 .cursor/rules/
 .dependency-cruiser.js
-# Google OAuth and service account credentials (never commit these!)
-**/config/token.json
-**/config/service_account.json
-**/config/credentials.json
-bot/config/token.json
-bot/config/service_account.json
-bot/config/credentials.json
-Tinglebot Dashboard/config/token.json
-Tinglebot Dashboard/config/service_account.json
-Tinglebot Dashboard/config/credentials.json
 config/token.json
 config/service_account.json
 config/credentials.json

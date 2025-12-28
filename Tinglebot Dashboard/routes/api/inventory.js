@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { fetchAllCharacters, getCharacterInventoryCollection } = require('../../database/db-dashboard');
+const { fetchAllCharacters, getCharacterInventoryCollection } = require('../../database/db');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const { validateRequiredFields } = require('../../middleware/validation');
 const logger = require('../../utils/logger');
@@ -108,7 +108,6 @@ router.get('/characters', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
-
 
 
 

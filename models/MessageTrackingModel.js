@@ -44,15 +44,6 @@ MessageTrackingSchema.index({ guildId: 1, channelId: 1, dayKey: 1 });
 
 // Static method to get daily message count for a guild
 MessageTrackingSchema.statics.getDailyMessageCount = function(guildId, dayKey = null) {
-<<<<<<< HEAD
-  // Thoroughly check if database connection is ready and functional
-  const connection = mongoose.connection;
-  if (connection.readyState !== 1 || !connection.db) {
-    return Promise.resolve(0);
-  }
-  
-=======
->>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
   const query = { guildId };
   if (dayKey) {
     query.dayKey = dayKey;
@@ -62,28 +53,7 @@ MessageTrackingSchema.statics.getDailyMessageCount = function(guildId, dayKey = 
     query.dayKey = today;
   }
   
-<<<<<<< HEAD
-  // Use countDocuments with error handling and timeout
-  // Wrap in a promise that rejects quickly if connection issues occur
-  return new Promise((resolve) => {
-    // Double-check connection before executing
-    if (connection.readyState !== 1 || !connection.db) {
-      return resolve(0);
-    }
-    
-    // Execute query with timeout protection
-    const queryPromise = this.countDocuments(query);
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Query timeout')), 2000)
-    );
-    
-    Promise.race([queryPromise, timeoutPromise])
-      .then(result => resolve(result))
-      .catch(() => resolve(0));
-  });
-=======
   return this.countDocuments(query);
->>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
 };
 
 // Static method to get message count for a specific day
@@ -94,15 +64,6 @@ MessageTrackingSchema.statics.getTodayMessageCount = function(guildId) {
 
 // Static method to get message count for last 7 days
 MessageTrackingSchema.statics.getWeeklyMessageCount = function(guildId) {
-<<<<<<< HEAD
-  // Thoroughly check if database connection is ready and functional
-  const connection = mongoose.connection;
-  if (connection.readyState !== 1 || !connection.db) {
-    return Promise.resolve(0);
-  }
-  
-=======
->>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
   const today = new Date();
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(today.getDate() - 7);
@@ -114,31 +75,9 @@ MessageTrackingSchema.statics.getWeeklyMessageCount = function(guildId) {
     dayKeys.push(date.toISOString().split('T')[0]);
   }
   
-<<<<<<< HEAD
-  // Use countDocuments with error handling and timeout
-  return new Promise((resolve) => {
-    // Double-check connection before executing
-    if (connection.readyState !== 1 || !connection.db) {
-      return resolve(0);
-    }
-    
-    // Execute query with timeout protection
-    const queryPromise = this.countDocuments({
-      guildId,
-      dayKey: { $in: dayKeys }
-    });
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Query timeout')), 2000)
-    );
-    
-    Promise.race([queryPromise, timeoutPromise])
-      .then(result => resolve(result))
-      .catch(() => resolve(0));
-=======
   return this.countDocuments({
     guildId,
     dayKey: { $in: dayKeys }
->>>>>>> 936db428ccba1deb103d2940e3fa14eda8608e4d
   });
 };
 
