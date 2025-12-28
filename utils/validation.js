@@ -9,7 +9,7 @@
 const mongoose = require('mongoose');
 const { EmbedBuilder } = require('discord.js');
 
-const { handleError } = require('../utils/globalErrorHandler');
+const { handleError } = require('./globalErrorHandler');
 // ============================================================================
 // Database Models
 // ------------------- Importing database models -------------------
@@ -18,10 +18,10 @@ const Character = require('../models/CharacterModel');
 // ============================================================================
 // Modules
 // ------------------- Importing custom modules -------------------
-const { isVillageExclusiveJob } = require('../modules/jobsModule');
-const { isValidVillage } = require('../modules/locationsModule');
-const { isValidRace, getRaceValueByName } = require('../modules/raceModule');
-const { capitalizeFirstLetter } = require('../modules/formattingModule');
+const { isVillageExclusiveJob } = require('../bot/modules/jobsModule');
+const { isValidVillage } = require('../bot/modules/locationsModule');
+const { isValidRace, getRaceValueByName } = require('../bot/modules/raceModule');
+const { capitalizeFirstLetter } = require('../bot/modules/formattingModule');
 const { capitalizeVillageName } = require('./stringUtils');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('./googleSheetsUtils');
 

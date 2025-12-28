@@ -1,18 +1,14 @@
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables from .env file
-dotenv.config();
-
-// Helper function to get MongoDB URI
-const getMongoUri = (type) => {
-  return process.env[`MONGODB_${type}_URI_PROD`] || process.env.MONGODB_URI;
-};
+// Load environment variables from .env file in project root
+const envPath = path.resolve(__dirname, '..', '.env');
+dotenv.config({ path: envPath });
 
 const dbConfig = {
-  tinglebot: getMongoUri('TINGLEBOT'),
-  inventories: getMongoUri('INVENTORIES'),
-  vending: getMongoUri('VENDING')
+  tinglebot: process.env.MONGODB_TINGLEBOT_URI_PROD || process.env.MONGODB_URI,
+  inventories: process.env.MONGODB_INVENTORIES_URI_PROD || process.env.MONGODB_URI,
+  vending: process.env.MONGODB_VENDING_URI_PROD || process.env.MONGODB_URI
 };
 
 // Validate configuration

@@ -14,8 +14,8 @@
 ### 📋 Railway Service Configuration
 
 #### Bot Service
-- **Root Directory**: `/` (root of repo - default)
-- **railway.json**: Located in root directory
+- **Root Directory**: `bot/` ⚠️ **CRITICAL - Must be set in Railway**
+- **railway.json**: Located in `bot/railway.json`
 - **Start Command**: `npm run start` (runs `node index.js`)
 
 #### Dashboard Service
@@ -79,9 +79,17 @@ ITEMS_SPREADSHEET_ID=<spreadsheet-id>
 
 ```
 Tinglebot 2.0/
-├── index.js                    ✅ Bot entry point
-├── railway.json                ✅ Bot Railway config
-├── package.json                ✅ Bot dependencies
+├── bot/                        ✅ Bot-specific code
+│   ├── index.js               ✅ Bot entry point
+│   ├── railway.json            ✅ Bot Railway config
+│   ├── package.json            ✅ Bot dependencies
+│   ├── commands/              ✅ Discord slash commands
+│   ├── handlers/              ✅ Interaction handlers
+│   ├── modules/               ✅ Bot game logic modules
+│   ├── embeds/                ✅ Discord embed builders
+│   ├── scripts/               ✅ Bot utility scripts
+│   ├── scheduler.js           ✅ Bot scheduler
+│   └── assets/                ✅ Bot-specific assets
 ├── models/                     ✅ Shared models (all 36 models)
 │   ├── CharacterModel.js
 │   ├── UserModel.js
@@ -97,27 +105,31 @@ Tinglebot 2.0/
 ├── config/
 │   ├── database.js             ✅ Shared database config
 │   └── gcsService.js
+├── utils/                      ✅ Shared utilities
+├── data/                       ✅ Shared data files
 └── Tinglebot Dashboard/
     ├── server.js               ✅ Dashboard entry point
-    ├── railway.json            ✅ Dashboard Railway config (updated)
+    ├── railway.json            ✅ Dashboard Railway config
     ├── package.json            ✅ Dashboard dependencies
-    ├── database/
-    │   └── db.js               ⚠️ References parent via ../../models/
-    └── config/
-        └── database.js         ⚠️ References parent via ../../config/
+    └── ...
 ```
 
 ### ✅ Path Resolution Verification
 
-#### Bot Service (Root Directory)
-- ✅ Models: `./models/` → `models/`
-- ✅ Database: `./database/db.js` → `database/db.js`
-- ✅ Config: `./config/database.js` → `config/database.js`
+#### Bot Service (bot/ Directory)
+- ✅ Models: `../models/` → Goes up to root `models/`
+- ✅ Database: `../database/db.js` → Goes up to root `database/db.js`
+- ✅ Config: `../config/database.js` → Goes up to root `config/`
+- ✅ Utils: `../utils/` → Goes up to root `utils/`
+- ✅ Data: `../data/` → Goes up to root `data/`
+- ✅ Bot files: `./index.js`, `./commands/`, etc. → Bot directory
 
 #### Dashboard Service (Tinglebot Dashboard/ Directory)
 - ✅ Models: `../models/` → Goes up to root `models/`
 - ✅ Database: `../database/db.js` → Goes up to root `database/db.js`
-- ✅ Config: `../../config/database.js` → Goes up two levels to root `config/`
+- ✅ Config: `../config/database.js` → Goes up to root `config/`
+- ✅ Utils: `../utils/` → Goes up to root `utils/`
+- ✅ Data: `../data/` → Goes up to root `data/`
 - ✅ Dashboard files: `./server.js`, `./public/` → Dashboard directory
 
 ## Deployment Steps
@@ -134,7 +146,7 @@ git push origin main
 #### Bot Service
 1. Create/select service in Railway
 2. Connect to GitHub repo
-3. **Root Directory**: Leave empty (defaults to `/`)
+3. **Root Directory**: Set to `bot` ⚠️ **CRITICAL**
 4. Set environment variables (Bot Service Only + Shared)
 
 #### Dashboard Service
@@ -163,11 +175,12 @@ git push origin main
 
 ## Common Issues & Solutions
 
-### ❌ Dashboard can't find models
+### ❌ Bot or Dashboard can't find models
 **Error**: `Cannot find module '../models/...'`
 
 **Solution**: 
-- Verify Root Directory is set to `Tinglebot Dashboard` (not `/`)
+- For Bot: Verify Root Directory is set to `bot` (not `/`)
+- For Dashboard: Verify Root Directory is set to `Tinglebot Dashboard` (not `/`)
 - Check that files exist in root `models/` directory
 
 ### ❌ Database connection fails

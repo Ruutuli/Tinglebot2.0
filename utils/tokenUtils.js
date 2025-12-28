@@ -4,8 +4,8 @@
 
 // ------------------- Imports -------------------
 // Modules for token calculations and formatting
-const artModule = require('../modules/artModule');
-const { capitalizeFirstLetter } = require('../modules/formattingModule');
+const artModule = require('../bot/modules/artModule');
+const { capitalizeFirstLetter } = require('../bot/modules/formattingModule');
 const Quest = require('../models/QuestModel');
 
 // Mapping for display names

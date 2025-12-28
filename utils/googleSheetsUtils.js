@@ -15,11 +15,18 @@ const path = require('path');
 // Third-Party Libraries
 const Bottleneck = require('bottleneck');
 const { google } = require('googleapis');
+const { GoogleAuth } = require('google-auth-library');
 
 // Internal Models
 const Character = require('../models/CharacterModel');
 const logger = require('./logger');
 const TempData = require('../models/TempDataModel');
+
+// ============================================================================
+// ------------------- Module Load Verification -------------------
+// Diagnostic logging to verify this file is loaded and version tracking
+// ============================================================================
+const MODULE_VERSION = '2.0.1-DEBUG';
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -60,20 +67,195 @@ const sheetCache = new Map();
 // Handles Google Sheets API authentication and authorization
 // ============================================================================
 
+// ------------------- Function: diagnoseEnvVars -------------------
+// Diagnostic function to verify environment variables are loaded correctly
+function diagnoseEnvVars() {
+    // Diagnostic function kept for potential future use, but logging removed
+}
+
+// Function to normalize private key format
+// Handles multiple formats: escaped newlines, actual newlines, missing newlines
+function normalizePrivateKey(privateKey) {
+    if (!privateKey) {
+        console.error(`[googleSheetsUtils.js]: ❌ normalizePrivateKey() received null/undefined`);
+        return null;
+    }
+    
+    // Handle different formats of private key storage
+    let normalized = String(privateKey).trim();
+    
+    // Remove any surrounding quotes if present (from .env parsing)
+    normalized = normalized.replace(/^["']|["']$/g, '');
+    
+    // Replace escaped newlines (\\n) with actual newlines FIRST
+    // This handles cases where the key is stored as a single string with escaped newlines
+    const escapedNewlineCount = (normalized.match(/\\n/g) || []).length;
+    if (escapedNewlineCount > 0) {
+        normalized = normalized.replace(/\\n/g, '\n');
+    }
+    
+    // Ensure consistent newline format (LF only, not CRLF)
+    normalized = normalized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // If it contains the markers, ensure proper formatting
+    if (normalized.includes('-----BEGIN PRIVATE KEY-----') && normalized.includes('-----END PRIVATE KEY-----')) {
+        const beginMarker = '-----BEGIN PRIVATE KEY-----';
+        const endMarker = '-----END PRIVATE KEY-----';
+        
+        // Find the start and end positions
+        const beginPos = normalized.indexOf(beginMarker);
+        const endPos = normalized.indexOf(endMarker);
+        
+        if (beginPos === -1 || endPos === -1 || endPos <= beginPos) {
+            console.error(`[googleSheetsUtils.js]: ❌ Invalid key structure - markers not found or in wrong order`);
+            return null;
+        }
+        
+        // Extract just the key portion (remove any leading/trailing content)
+        normalized = normalized.substring(beginPos, endPos + endMarker.length);
+        
+        // Split by newlines to work with individual lines
+        let lines = normalized.split('\n');
+        
+        // Find marker lines again after extraction
+        const beginLineIndex = lines.findIndex(line => line.includes(beginMarker));
+        const endLineIndex = lines.findIndex(line => line.includes(endMarker));
+        
+        if (beginLineIndex !== -1 && endLineIndex !== -1 && endLineIndex > beginLineIndex) {
+            // Ensure BEGIN marker is on its own line
+            if (!lines[beginLineIndex].trim().endsWith(beginMarker)) {
+                const beginLine = lines[beginLineIndex];
+                const markerStart = beginLine.indexOf(beginMarker);
+                if (markerStart >= 0) {
+                    // Split line: content before marker, then marker on its own line
+                    const beforeMarker = beginLine.substring(0, markerStart).trim();
+                    lines[beginLineIndex] = beginMarker;
+                    if (beforeMarker) {
+                        lines.splice(beginLineIndex, 0, beforeMarker);
+                    }
+                }
+            } else {
+                lines[beginLineIndex] = beginMarker;
+            }
+            
+            // Ensure END marker is on its own line
+            if (!lines[endLineIndex].trim().startsWith(endMarker)) {
+                const endLine = lines[endLineIndex];
+                const markerStart = endLine.indexOf(endMarker);
+                if (markerStart >= 0) {
+                    // Split line: marker on its own line, then content after
+                    const afterMarker = endLine.substring(markerStart + endMarker.length).trim();
+                    lines[endLineIndex] = endMarker;
+                    if (afterMarker) {
+                        lines.splice(endLineIndex + 1, 0, afterMarker);
+                    }
+                }
+            } else {
+                lines[endLineIndex] = endMarker;
+            }
+            
+            // Reconstruct, preserving the key content structure
+            normalized = lines.join('\n');
+        }
+        
+        // Clean up: remove empty lines but preserve structure around markers
+        lines = normalized.split('\n');
+        const cleanedLines = [];
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+            
+            // Always keep non-empty lines
+            if (trimmed.length > 0) {
+                cleanedLines.push(line);
+            } else {
+                // Keep empty line only if it's between BEGIN and content, or between content and END
+                const prevLine = i > 0 ? lines[i - 1] : '';
+                const nextLine = i < lines.length - 1 ? lines[i + 1] : '';
+                const prevTrimmed = prevLine.trim();
+                const nextTrimmed = nextLine.trim();
+                
+                // Keep if it's right after BEGIN marker or right before END marker
+                if (prevTrimmed === beginMarker || nextTrimmed === endMarker) {
+                    cleanedLines.push('');
+                }
+            }
+        }
+        
+        normalized = cleanedLines.join('\n');
+        
+        // Ensure proper structure: BEGIN marker on its own line, END marker on its own line
+        if (!normalized.startsWith(beginMarker + '\n')) {
+            normalized = beginMarker + '\n' + normalized.substring(beginMarker.length);
+        }
+        if (!normalized.includes('\n' + endMarker + '\n') && !normalized.endsWith('\n' + endMarker)) {
+            normalized = normalized.replace(endMarker, '\n' + endMarker);
+        }
+        
+        // Ensure it ends with exactly one newline
+        normalized = normalized.trimEnd() + '\n';
+        
+        // Final validation
+        if (!normalized.startsWith(beginMarker + '\n')) {
+            console.error(`[googleSheetsUtils.js]: ❌ Validation failed: Key doesn't start with "${beginMarker}\\n"`);
+            console.error(`[googleSheetsUtils.js]:    Actual start: ${normalized.substring(0, 35)}...`);
+            return null;
+        }
+        
+        if (!normalized.includes('\n' + endMarker + '\n')) {
+            console.error(`[googleSheetsUtils.js]: ❌ Validation failed: Key doesn't end with "\\n${endMarker}\\n"`);
+            return null;
+        }
+        
+        return normalized;
+    }
+    
+    // If it's missing markers, warn but still try to use it
+    console.warn(`[googleSheetsUtils.js]: ⚠️ Private key format may be incorrect - missing BEGIN/END markers`);
+    return normalized;
+}
+
 // Function to get service account credentials
 function getServiceAccountCredentials() {
     // Check if we're in a deployed environment (Railway) or if environment variables are set
     const hasEnvVars = process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_PROJECT_ID;
     const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_NAME;
     
-    
     if (isRailway || hasEnvVars) {
+        // Get raw private key from environment
+        const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+        
+        if (!rawPrivateKey) {
+            console.error(`[googleSheetsUtils.js]: ❌ GOOGLE_PRIVATE_KEY environment variable is missing or empty`);
+            return null;
+        }
+        
+        // Normalize the private key
+        const privateKey = normalizePrivateKey(rawPrivateKey);
+        
+        if (!privateKey) {
+            console.error(`[googleSheetsUtils.js]: ❌ Failed to normalize private key`);
+            return null;
+        }
+        
+        // Validate private key format after normalization
+        if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+            console.error(`[googleSheetsUtils.js]: ❌ GOOGLE_PRIVATE_KEY appears to be malformed - missing BEGIN marker`);
+            return null;
+        }
+        
+        // Validate END marker
+        if (!privateKey.includes('-----END PRIVATE KEY-----')) {
+            console.error(`[googleSheetsUtils.js]: ❌ GOOGLE_PRIVATE_KEY appears to be malformed - missing END marker`);
+            return null;
+        }
+        
         // Create service account object from environment variables
         return {
             type: "service_account",
             project_id: process.env.GOOGLE_PROJECT_ID,
             private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
-            private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            private_key: privateKey,
             client_email: process.env.GOOGLE_CLIENT_EMAIL,
             client_id: process.env.GOOGLE_CLIENT_ID,
             auth_uri: "https://accounts.google.com/o/oauth2/auth",
@@ -91,7 +273,12 @@ function getServiceAccountCredentials() {
                 console.warn(`[googleSheetsUtils.js]: ⚠️ Google Sheets functionality will be disabled`);
                 return null;
             }
-            return JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH));
+            const credentials = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH));
+            // Normalize private key from file as well
+            if (credentials.private_key) {
+                credentials.private_key = normalizePrivateKey(credentials.private_key);
+            }
+            return credentials;
         } catch (err) {
             console.error(`[googleSheetsUtils.js]: ❌ Error loading service account file: ${err}`);
             console.warn(`[googleSheetsUtils.js]: ⚠️ Google Sheets functionality will be disabled`);
@@ -103,28 +290,92 @@ function getServiceAccountCredentials() {
 // ------------------- Function: authorizeSheets -------------------
 // Authorizes the Google Sheets API using service account credentials
 async function authorizeSheets() {
-    return new Promise((resolve, reject) => {
-        try {
-            const credentials = getServiceAccountCredentials();
-            if (!credentials) {
-                console.warn(`[googleSheetsUtils.js]: ⚠️ No credentials available, Google Sheets functionality disabled`);
-                return reject(new Error('Google Sheets functionality disabled - no credentials available'));
-            }
-            const { client_email, private_key } = credentials;
-            const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
-            
-            auth.authorize((err, tokens) => {
-                if (err) {
-                    console.error(`[googleSheetsUtils.js]: ❌ Error authorizing service account: ${err}`);
-                    return reject(`Error authorizing service account: ${err}`);
-                }
-                resolve(auth);
-            });
-        } catch (error) {
-            console.error(`[googleSheetsUtils.js]: ❌ Error parsing service account credentials: ${error}`);
-            reject(`Error parsing service account credentials: ${error}`);
+    console.log(`[googleSheetsUtils.js]: 🔐 authorizeSheets() called`);
+    
+    try {
+        const credentials = getServiceAccountCredentials();
+        if (!credentials) {
+            console.warn(`[googleSheetsUtils.js]: ⚠️ No credentials available, Google Sheets functionality disabled`);
+            throw new Error('Google Sheets functionality disabled - no credentials available');
         }
-    });
+        
+        const { client_email, private_key } = credentials;
+        
+        // Validate required fields
+        if (!client_email) {
+            throw new Error('Missing GOOGLE_CLIENT_EMAIL in credentials');
+        }
+        
+        if (!private_key) {
+            throw new Error('Missing GOOGLE_PRIVATE_KEY in credentials');
+        }
+        
+        // Try GoogleAuth first (the working method)
+        console.log(`[googleSheetsUtils.js]: 🔐 Attempting authentication with GoogleAuth...`);
+        try {
+            // Use GoogleAuth constructor with credentials object (same as test file)
+            const googleAuth = new GoogleAuth({
+                credentials: credentials,
+                scopes: SCOPES
+            });
+            
+            // Get the client - this is what the test file does
+            const client = await googleAuth.getClient();
+            
+            // Try to verify credentials work by attempting to get an access token
+            // This will fail early if credentials are invalid, rather than failing on first API call
+            try {
+                const token = await googleAuth.getAccessToken();
+                if (token) {
+                    console.log(`[googleSheetsUtils.js]: ✅ GoogleAuth client obtained and token verified!`);
+                } else {
+                    console.warn(`[googleSheetsUtils.js]: ⚠️ GoogleAuth client obtained but token is null`);
+                }
+            } catch (tokenError) {
+                // If token fails, log detailed error but still return client
+                // The error will be caught again on actual API calls with better context
+                console.error(`[googleSheetsUtils.js]: ⚠️ Token verification failed: ${tokenError.message}`);
+                console.error(`[googleSheetsUtils.js]:    This suggests the credentials may be invalid`);
+                console.error(`[googleSheetsUtils.js]:    Service Account: ${credentials.client_email}`);
+                console.error(`[googleSheetsUtils.js]:    Error details:`, tokenError.message);
+                // Still return the client - let the actual API call provide the final error
+            }
+            
+            // Return the client - it can be used directly with google.sheets()
+            return client;
+        } catch (googleAuthError) {
+            console.warn(`[googleSheetsUtils.js]: ⚠️ GoogleAuth authentication failed: ${googleAuthError.message}`);
+            console.log(`[googleSheetsUtils.js]: 🔄 Attempting fallback authentication with JWT...`);
+            
+            // Fallback to JWT authentication
+            return new Promise((resolve, reject) => {
+                // Validate private key format for JWT
+                if (!private_key.includes('-----BEGIN PRIVATE KEY-----') || !private_key.includes('-----END PRIVATE KEY-----')) {
+                    const errorMsg = 'Private key is missing BEGIN/END markers. Ensure the private key is properly formatted with newlines.';
+                    console.error(`[googleSheetsUtils.js]: ❌ ${errorMsg}`);
+                    return reject(new Error(errorMsg));
+                }
+                
+                // Create JWT auth instance
+                const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
+                auth.key = private_key;
+                auth.keyId = credentials.private_key_id;
+                
+                auth.authorize((err, tokens) => {
+                    if (err) {
+                        const errorMessage = err.message || err.toString();
+                        console.error(`[googleSheetsUtils.js]: ❌ JWT authentication also failed: ${errorMessage}`);
+                        return reject(new Error(`Both authentication methods failed. Last error: ${errorMessage}`));
+                    }
+                    console.log(`[googleSheetsUtils.js]: ✅ JWT authentication successful!`);
+                    resolve(auth);
+                });
+            });
+        }
+    } catch (error) {
+        console.error(`[googleSheetsUtils.js]: ❌ Error in authorizeSheets(): ${error.message || error}`);
+        throw error;
+    }
 }
 
 // ------------------- Function: makeApiRequest -------------------
@@ -158,12 +409,27 @@ async function makeApiRequest(fn, { suppressLog = false, context = {} } = {}) {
 
         return await limiter.schedule(() => fn());
     } catch (error) {
+        // Enhanced error handling for JWT signature errors
+        if (error.message && (error.message.includes('Invalid JWT Signature') || error.message.includes('invalid_grant'))) {
+            const credentials = getServiceAccountCredentials();
+            console.error(`[googleSheetsUtils.js]: ❌ JWT Signature Error Details:`);
+            console.error(`[googleSheetsUtils.js]:    Service Account Email: ${credentials.client_email}`);
+            console.error(`[googleSheetsUtils.js]:    Error: ${error.message}`);
+            console.error(`[googleSheetsUtils.js]:    Full error:`, JSON.stringify(error, Object.getOwnPropertyNames(error)));
+            console.error(`[googleSheetsUtils.js]: 💡 This error typically means:`);
+            console.error(`[googleSheetsUtils.js]:    1. The private key doesn't match the service account`);
+            console.error(`[googleSheetsUtils.js]:    2. The service account key has been revoked or regenerated`);
+            console.error(`[googleSheetsUtils.js]:    3. The credentials in environment variables are incorrect`);
+            console.error(`[googleSheetsUtils.js]:    → Action: Verify credentials in Google Cloud Console and regenerate key if needed`);
+        }
+        
         if (!suppressLog) {
             console.error(`[googleSheetsUtils.js]: ❌ API Request Error: ${error.message}`);
             // Add context to the error
             error.context = {
                 ...context,
-                errorType: error.message.includes('Unable to parse range') ? 'range_parse_error' : 'api_error',
+                errorType: error.message.includes('Unable to parse range') ? 'range_parse_error' : 
+                          error.message.includes('Invalid JWT Signature') ? 'jwt_signature_error' : 'api_error',
                 serviceAccountEmail: getServiceAccountCredentials().client_email
             };
         }
@@ -962,6 +1228,10 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             return;
         }
 
+        // Handle both User and Character objects
+        isUserObject = character.discordId && !character.name;
+        isCharacterObject = character.name;
+
         // Validate required character properties
         if (isCharacterObject && (!character.name || !character.inventory || !character.userId)) {
             console.error(`[googleSheetsUtils.js]: ❌ Character missing required properties:`, {
@@ -971,10 +1241,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             });
             return;
         }
-
-        // Handle both User and Character objects
-        isUserObject = character.discordId && !character.name;
-        isCharacterObject = character.name;
         
         if (!isUserObject && !isCharacterObject) {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid object type - neither User nor Character:`, character);
@@ -1009,10 +1275,9 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             throw new Error('Failed to authorize Google Sheets API');
         }
         
-        // Validate auth object has required properties
-        if (!auth.credentials || !auth.credentials.access_token) {
-            throw new Error('Google Sheets API auth object is not properly configured');
-        }
+        // Note: GoogleAuth clients don't expose credentials.access_token immediately
+        // They fetch tokens lazily when making API calls, so we don't validate it here
+        // If auth is invalid, the Google Sheets API will return a proper error
 
         if (!skipValidation) {
             // Validate the range format
@@ -1145,15 +1410,19 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         
 
     } catch (error) {
-        console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
+        // Normalize error to Error object if it's a string
+        const normalizedError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = normalizedError.message || String(error);
+        
+        console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, errorMessage);
         
         // Check if this is a service unavailable error or conflict error
-        if (error.message.includes('service is currently unavailable') || 
-            error.message.includes('quota exceeded') ||
-            error.message.includes('rate limit') ||
-            error.message.includes('temporarily unavailable') ||
-            error.message.includes('aborted') ||
-            error.status === 409) {
+        if (errorMessage.includes('service is currently unavailable') || 
+            errorMessage.includes('quota exceeded') ||
+            errorMessage.includes('rate limit') ||
+            errorMessage.includes('temporarily unavailable') ||
+            errorMessage.includes('aborted') ||
+            normalizedError.status === 409) {
             
             try {
                 // Store the operation for later retry
@@ -1169,7 +1438,7 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                     userTag: context?.userTag || client?.user?.tag,
                     clientUserId: context?.userId || client?.user?.id,
                     options: context?.options || client?.options?.data,
-                    originalError: error.message
+                    originalError: errorMessage
                 };
                 
                 const operationId = await storePendingSheetOperation(operationData);
@@ -1178,13 +1447,14 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                 return { success: false, storedForRetry: true, operationId };
                 
             } catch (storageError) {
-                console.error(`[googleSheetsUtils.js]: ❌ Failed to store operation for retry: ${storageError.message}`);
+                const storageErrorMessage = storageError instanceof Error ? storageError.message : String(storageError);
+                console.error(`[googleSheetsUtils.js]: ❌ Failed to store operation for retry: ${storageErrorMessage}`);
                 // Fall through to throw the original error
             }
         }
         
         // Add context to the error
-        error.context = {
+        normalizedError.context = {
             characterName: isCharacterObject ? character?.name : null,
             userId: isUserObject ? character?.discordId : character?.userId,
             spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
@@ -1195,7 +1465,7 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             clientUserId: context?.userId || client?.user?.id,
             options: context?.options || client?.options?.data
         };
-        throw error;
+        throw normalizedError;
     }
 }
 

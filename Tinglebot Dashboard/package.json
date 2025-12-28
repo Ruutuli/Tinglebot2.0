@@ -25,6 +25,7 @@
     "express-session": "^1.17.3",
     "googleapis": "^150.0.1",
     "helmet": "^8.1.0",
+    "jimp": "^0.22.10",
     "moment": "^2.30.1",
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.0",

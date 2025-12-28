@@ -57,7 +57,7 @@ const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 const { safeAppendDataToSheet, extractSpreadsheetId } = require('./utils/googleSheetsUtils');
 
 // Services
-const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("./services/weatherService");
+const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("../services/weatherService");
 
 // Utils
 const { handleError } = require("./utils/globalErrorHandler");

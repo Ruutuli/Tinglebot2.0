@@ -20,7 +20,7 @@ const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
 const { getDiscordGateway } = require('./utils/discordGateway');
-const MessageTracking = require('./models/MessageTrackingModel');
+const MessageTracking = require('../models/MessageTrackingModel');
 const compression = require('compression');
 const multer = require('multer');
 const fs = require('fs').promises;
@@ -44,30 +44,30 @@ const {
   getOrCreateUser,
   getCurrentVendingStockList,
   getLimitedItems
-} = require('./database/db');
+} = require('../database/db');
 
 // Import models
-const Character = require('./models/CharacterModel');
-const ModCharacter = require('./models/ModCharacterModel');
-const Quest = require('./models/QuestModel');
-const Item = require('./models/ItemModel');
-const Monster = require('./models/MonsterModel');
-const User = require('./models/UserModel');
-const Pet = require('./models/PetModel');
-const Mount = require('./models/MountModel');
-const VillageShops = require('./models/VillageShopsModel');
-const Weather = require('./models/WeatherModel');
-const { VendingRequest } = require('./models/VendingModel');
-const { initializeVendingStockModel, getVendingStockModel } = require('./models/VendingStockModel');
-const Square = require('./models/mapModel');
-const { Village } = require('./models/VillageModel');
-const Party = require('./models/PartyModel');
-const Relic = require('./models/RelicModel');
-const CharacterOfWeek = require('./models/CharacterOfWeekModel');
-const Relationship = require('./models/RelationshipModel');
-const Raid = require('./models/RaidModel');
-const StealStats = require('./models/StealStatsModel');
-const BlightRollHistory = require('./models/BlightRollHistoryModel');
+const Character = require('../models/CharacterModel');
+const ModCharacter = require('../models/ModCharacterModel');
+const Quest = require('../models/QuestModel');
+const Item = require('../models/ItemModel');
+const Monster = require('../models/MonsterModel');
+const User = require('../models/UserModel');
+const Pet = require('../models/PetModel');
+const Mount = require('../models/MountModel');
+const VillageShops = require('../models/VillageShopsModel');
+const Weather = require('../models/WeatherModel');
+const { VendingRequest } = require('../models/VendingModel');
+const { initializeVendingStockModel, getVendingStockModel } = require('../models/VendingStockModel');
+const Square = require('../models/mapModel');
+const { Village } = require('../models/VillageModel');
+const Party = require('../models/PartyModel');
+const Relic = require('../models/RelicModel');
+const CharacterOfWeek = require('../models/CharacterOfWeekModel');
+const Relationship = require('../models/RelationshipModel');
+const Raid = require('../models/RaidModel');
+const StealStats = require('../models/StealStatsModel');
+const BlightRollHistory = require('../models/BlightRollHistoryModel');
 const { getGearType, getWeaponStyle } = require('./gearModule');
 
 // Import calendar module
@@ -294,7 +294,7 @@ async function runMigrations() {
     logger.info('Running database migrations...', 'server.js');
     
     // Migration: Update homes pins color to lime green
-    const Pin = require('./models/PinModel');
+    const Pin = require('../models/PinModel');
     
     // Update from old gold color
     const result1 = await Pin.updateMany(
@@ -541,7 +541,7 @@ async function uploadPinImageToGCS(file, pinId) {
   try {
     if (!file) return null;
     
-    const bucket = require('./config/gcsService');
+    const bucket = require('../config/gcsService');
     const fileName = `tinglebot/mapUserImages/${pinId}_${Date.now()}_${Math.round(Math.random() * 1E9)}`;
     
     const fileUpload = bucket.file(fileName);
@@ -1967,7 +1967,7 @@ app.get('/api/steal/cooldowns/:characterId', requireAuth, async (req, res) => {
     };
 
     // Get all NPCs
-    const NPC = require('./models/NPCModel');
+    const NPC = require('../models/NPCModel');
     const allNPCs = await NPC.find({});
     
     for (const npc of allNPCs) {
@@ -7181,7 +7181,7 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
     // Get items from vending database using VendingInventory model
     let items = [];
     try {
-      const { initializeVendingInventoryModel } = require('./models/VendingModel');
+      const { initializeVendingInventoryModel } = require('../models/VendingModel');
       const VendingInventory = await initializeVendingInventoryModel(character.name);
       const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
       items = vendingItems;
@@ -7304,7 +7304,7 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
     const vendorType = job === 'shopkeeper' ? 'shopkeeper' : 'merchant';
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // First, validate all items before saving any
@@ -7593,7 +7593,7 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Calculate slots used
@@ -7762,7 +7762,7 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the existing item
@@ -8272,7 +8272,7 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, asy
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the item - handle both ObjectId and string formats
@@ -8401,7 +8401,7 @@ app.delete('/api/characters/:characterId/vending/items/:itemId', requireAuth, as
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('./models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find and delete the item
@@ -9189,7 +9189,7 @@ app.post('/api/member-lore', async (req, res) => {
     console.log('✅ Security validation passed - no malicious content detected');
 
     // Save to database
-    const MemberLore = require('./models/MemberLoreModel');
+    const MemberLore = require('../models/MemberLoreModel');
     const loreSubmission = new MemberLore({
       memberName: memberName.trim(),
       topic: topic.trim(),
@@ -10111,7 +10111,7 @@ async function performAccessAudit() {
 
   try {
     // Get all users with admin roles
-    const User = require('./models/UserModel.js');
+    const User = require('../models/UserModel.js');
     const users = await User.find({}).lean();
     
     for (const user of users) {
@@ -12100,19 +12100,19 @@ app.delete('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
 // ------------------- Section: Admin Database Editor -------------------
 
 // ------------------- Import all remaining models for database management -------------------
-const ApprovedSubmission = require('./models/ApprovedSubmissionModel');
-const BloodMoonTracking = require('./models/BloodMoonTrackingModel');
-const GeneralItem = require('./models/GeneralItemModel');
-const HelpWantedQuest = require('./models/HelpWantedQuestModel');
-const Inventory = require('./models/InventoryModel');
-const MemberLore = require('./models/MemberLoreModel');
-const Minigame = require('./models/MinigameModel');
-const NPC = require('./models/NPCModel');
-const RuuGame = require('./models/RuuGameModel');
-const TableModel = require('./models/TableModel');
-const TableRoll = require('./models/TableRollModel');
-const TempData = require('./models/TempDataModel');
-const TokenTransaction = require('./models/TokenTransactionModel');
+const ApprovedSubmission = require('../models/ApprovedSubmissionModel');
+const BloodMoonTracking = require('../models/BloodMoonTrackingModel');
+const GeneralItem = require('../models/GeneralItemModel');
+const HelpWantedQuest = require('../models/HelpWantedQuestModel');
+const Inventory = require('../models/InventoryModel');
+const MemberLore = require('../models/MemberLoreModel');
+const Minigame = require('../models/MinigameModel');
+const NPC = require('../models/NPCModel');
+const RuuGame = require('../models/RuuGameModel');
+const TableModel = require('../models/TableModel');
+const TableRoll = require('../models/TableRollModel');
+const TempData = require('../models/TempDataModel');
+const TokenTransaction = require('../models/TokenTransactionModel');
 // Note: Raid, StealStats, and BlightRollHistory are imported at the top of the file
 
 // ------------------- Model Registry -------------------
@@ -12693,7 +12693,7 @@ app.use(errorHandler); // Handle errors and send responses
 // ============================================================================
 
 // Import Pin model
-const Pin = require('./models/PinModel');
+const Pin = require('../models/PinModel');
 
 // ------------------- Function: checkUserAccess -------------------
 // Helper function to check if user has access to pin operations

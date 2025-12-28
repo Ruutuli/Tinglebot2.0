@@ -304,7 +304,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
         );
       }
     } catch (sheetError) {
-      logger.error('STORAGE', `Sheet sync error for ${character.name}: ${sheetError.message}`);
+      const errorMessage = sheetError instanceof Error ? sheetError.message : (sheetError?.message || String(sheetError) || 'Unknown error');
+      logger.error('STORAGE', `Sheet sync error for ${character.name}: ${errorMessage}`);
     }
   } catch (error) {
     if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
@@ -490,10 +491,11 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         );
         
       } catch (sheetError) {
-        logger.error('STORAGE', `Failed to log item addition to Google Sheets: ${sheetError.message}`);
+        const errorMessage = sheetError instanceof Error ? sheetError.message : (sheetError?.message || String(sheetError) || 'Unknown error');
+        logger.error('STORAGE', `Failed to log item addition to Google Sheets: ${errorMessage}`);
         
         // If this is a retryable error, the operation should have been stored for retry
-        if (sheetError.message.includes('stored for retry') || sheetError.storedForRetry) {
+        if ((errorMessage && errorMessage.includes('stored for retry')) || sheetError?.storedForRetry) {
           logger.info('STORAGE', 'Operation stored for retry');
         }
         
@@ -693,7 +695,8 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         );
         
       } catch (sheetError) {
-        logger.error('STORAGE', `Failed to log item removal to Google Sheets: ${sheetError.message}`);
+        const errorMessage = sheetError instanceof Error ? sheetError.message : (sheetError?.message || String(sheetError) || 'Unknown error');
+        logger.error('STORAGE', `Failed to log item removal to Google Sheets: ${errorMessage}`);
         // Don't fail the removal if sheet logging fails
       }
     }
@@ -910,7 +913,8 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
     await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues);
   } catch (error) {
     handleError(error, 'inventoryUtils.js');
-    logger.error('STORAGE', `Error logging materials to Google Sheets: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : (error?.message || String(error) || 'Unknown error');
+    logger.error('STORAGE', `Error logging materials to Google Sheets: ${errorMessage}`);
   }
 }
 

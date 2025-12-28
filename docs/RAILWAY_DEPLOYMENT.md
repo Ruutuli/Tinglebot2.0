@@ -4,23 +4,27 @@ This guide explains how to deploy both the Tinglebot Discord bot and the Tingleb
 
 ## Architecture Overview
 
-- **Bot Service**: Deploys from root directory, runs `index.js`
+- **Bot Service**: Deploys from `bot/` directory, runs `index.js`
 - **Dashboard Service**: Deploys from `Tinglebot Dashboard/` directory, runs `server.js`
 
 Both services share:
 - The same `models/` directory (in root)
 - The same `database/db.js` connection code (in root)
 - The same `config/database.js` configuration
+- The same `utils/` directory (shared utilities in root)
+- The same `data/` directory (shared data files in root)
 - The same MongoDB databases
 
 ## Railway Service Configuration
 
 ### Bot Service Setup
 
-1. **Root Directory**: `/` (root of repository)
+1. **Root Directory**: `bot/` (configure in Railway service settings)
 2. **Start Command**: `npm run start` (runs `node index.js`)
 3. **Build Command**: `npm install`
-4. **Railway Config**: Uses `railway.json` in root
+4. **Railway Config**: Uses `bot/railway.json`
+
+**Important**: In Railway, you must set the **Root Directory** to `bot` for the bot service.
 
 ### Dashboard Service Setup
 
@@ -29,7 +33,7 @@ Both services share:
 3. **Build Command**: `npm install`
 4. **Railway Config**: Uses `Tinglebot Dashboard/railway.json`
 
-**Important**: In Railway, you must set the **Root Directory** to `Tinglebot Dashboard` for the dashboard service.
+**Important**: In Railway, you must set the **Root Directory** to `Tinglebot Dashboard` for the dashboard service, and `bot` for the bot service.
 
 ## Environment Variables
 
@@ -78,15 +82,20 @@ ITEMS_SPREADSHEET_ID=...
 
 All relative paths are configured to work from each service's root:
 
-### Bot Service (Root Directory)
-- Models: `./models/` or `models/`
-- Database: `./database/db.js`
-- Config: `./config/database.js`
+### Bot Service (bot/ Directory)
+- Models: `../models/` (goes up one level to root)
+- Database: `../database/db.js` (goes up one level to root)
+- Config: `../config/database.js` (goes up one level to root)
+- Utils: `../utils/` (goes up one level to root)
+- Data: `../data/` (goes up one level to root)
+- Bot files: `./index.js`, `./commands/`, `./handlers/`, etc.
 
 ### Dashboard Service (Tinglebot Dashboard/ Directory)
 - Models: `../models/` (goes up one level to root)
 - Database: `../database/db.js` (goes up one level to root)
 - Config: `../config/database.js` (goes up one level to root)
+- Utils: `../utils/` (goes up one level to root)
+- Data: `../data/` (goes up one level to root)
 - Dashboard files: `./server.js`, `./public/`, etc.
 
 ## Railway Setup Steps
@@ -100,8 +109,8 @@ All relative paths are configured to work from each service's root:
 ### 2. Configure Bot Service
 
 1. Connect to your GitHub repository
-2. **Root Directory**: Leave empty (defaults to root `/`)
-3. Railway will automatically detect `railway.json` in root
+2. **Root Directory**: Set to `bot` (critical!)
+3. Railway will automatically detect `bot/railway.json`
 4. Set environment variables (see above)
 
 ### 3. Configure Dashboard Service
@@ -114,7 +123,7 @@ All relative paths are configured to work from each service's root:
 **To set Root Directory in Railway:**
 - Go to service settings
 - Scroll to "Root Directory"
-- Enter: `Tinglebot Dashboard`
+- Enter: `bot` for bot service, or `Tinglebot Dashboard` for dashboard service
 
 ### 4. Health Checks
 
@@ -163,14 +172,24 @@ All relative paths are configured to work from each service's root:
 
 ```
 Tinglebot 2.0/
-├── index.js                    # Bot entry point
-├── railway.json                # Bot Railway config
-├── package.json                # Bot dependencies
+├── bot/                        # Bot-specific code
+│   ├── index.js                # Bot entry point
+│   ├── railway.json            # Bot Railway config
+│   ├── package.json            # Bot dependencies
+│   ├── commands/               # Discord slash commands
+│   ├── handlers/               # Interaction handlers
+│   ├── modules/               # Bot game logic modules
+│   ├── embeds/                # Discord embed builders
+│   ├── scripts/               # Bot utility scripts
+│   ├── scheduler.js           # Bot scheduler
+│   └── assets/                # Bot-specific assets
 ├── models/                     # Shared models (used by both)
 ├── database/
 │   └── db.js                   # Shared database connection
 ├── config/
 │   └── database.js             # Shared database config
+├── utils/                      # Shared utilities (used by both)
+├── data/                       # Shared data files (used by both)
 └── Tinglebot Dashboard/
     ├── server.js               # Dashboard entry point
     ├── railway.json            # Dashboard Railway config
@@ -184,11 +203,11 @@ Before deploying, test the path resolution:
 
 ```bash
 # Test Bot Service
-cd "C:\Users\Ruu\Desktop\Tinglebot 2.0"
+cd "C:\Users\Ruu\Desktop\Tinglebot 2.0\bot"
 npm start
 
 # Test Dashboard Service
-cd "Tinglebot Dashboard"
+cd "C:\Users\Ruu\Desktop\Tinglebot 2.0\Tinglebot Dashboard"
 npm start
 ```
 
@@ -203,8 +222,8 @@ Both should start without path errors.
 ## Notes
 
 - Both services share the same codebase and database
-- Models are in the root `models/` directory - both services reference them
-- Dashboard uses relative paths (`../`) to access root-level resources
-- Railway deploys each service from its configured root directory
+- Models, database, config, utils, and data are in the root directory - both services reference them using `../`
+- Both bot and dashboard use relative paths (`../`) to access root-level shared resources
+- Railway deploys each service from its configured root directory (`bot/` for bot, `Tinglebot Dashboard/` for dashboard)
 - Environment variables must be set in **both** Railway services for shared resources
 

@@ -19,10 +19,11 @@ const {
 } = require('../data/weatherData');
 const seasonsData = require('../data/seasonsData');
 const { validateWeatherCombination, findWeatherEmoji } = require('../utils/weatherValidation');
-const { convertToHyruleanDate } = require('../modules/calendarModule');
+const { convertToHyruleanDate } = require('../bot/modules/calendarModule');
 const path = require('path');
 const fs = require('fs');
-const Jimp = require('jimp');
+// Resolve jimp from bot/node_modules since it's installed there
+const Jimp = require(path.resolve(__dirname, '..', 'bot', 'node_modules', 'jimp'));
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
 // ============================================================================

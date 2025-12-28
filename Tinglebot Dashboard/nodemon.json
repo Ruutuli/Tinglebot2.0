@@ -1,16 +1,23 @@
 {
   "watch": [
     "server.js",
-    "models/",
     "utils/",
     "config/",
     "data/",
     "database/",
+    "routes/",
+    "middleware/",
     "public/js/",
     "public/css/",
     "public/*.html",
     "levels.js",
-    "calendarModule.js"
+    "calendarModule.js",
+    "../database/",
+    "../models/",
+    "../utils/",
+    "../config/",
+    "../data/",
+    "../services/"
   ],
   "ext": "js,json,html,css",
   "ignore": [
