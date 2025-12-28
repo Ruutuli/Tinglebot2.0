@@ -68,12 +68,31 @@ function getServiceAccountCredentials() {
     
     
     if (isRailway || hasEnvVars) {
+        // Process private key - handle both escaped newlines and actual newlines
+        let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+        
+        if (!privateKey) {
+            console.error(`[googleSheetsUtils.js]: ❌ GOOGLE_PRIVATE_KEY environment variable is not set`);
+            return null;
+        }
+        
+        // Replace escaped newlines with actual newlines
+        // This handles cases where the key is stored as a string with \n literals
+        privateKey = privateKey.replace(/\\n/g, '\n');
+        
+        // Validate that the key looks correct after processing
+        if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+            console.error(`[googleSheetsUtils.js]: ❌ Private key appears to be malformed - missing BEGIN marker`);
+            console.error(`[googleSheetsUtils.js]: 🔍 Key preview (first 100 chars): ${privateKey.substring(0, 100)}`);
+            return null;
+        }
+        
         // Create service account object from environment variables
         return {
             type: "service_account",
             project_id: process.env.GOOGLE_PROJECT_ID,
             private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
-            private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            private_key: privateKey,
             client_email: process.env.GOOGLE_CLIENT_EMAIL,
             client_id: process.env.GOOGLE_CLIENT_ID,
             auth_uri: "https://accounts.google.com/o/oauth2/auth",
@@ -91,9 +110,17 @@ function getServiceAccountCredentials() {
                 console.warn(`[googleSheetsUtils.js]: ⚠️ Google Sheets functionality will be disabled`);
                 return null;
             }
-            return JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH));
+            const credentials = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH));
+            
+            // Validate private key in file
+            if (credentials.private_key && !credentials.private_key.includes('-----BEGIN PRIVATE KEY-----')) {
+                console.error(`[googleSheetsUtils.js]: ❌ Private key in file appears to be malformed - missing BEGIN marker`);
+                return null;
+            }
+            
+            return credentials;
         } catch (err) {
-            console.error(`[googleSheetsUtils.js]: ❌ Error loading service account file: ${err}`);
+            console.error(`[googleSheetsUtils.js]: ❌ Error loading service account file: ${err.message || err}`);
             console.warn(`[googleSheetsUtils.js]: ⚠️ Google Sheets functionality will be disabled`);
             return null;
         }
@@ -110,19 +137,62 @@ async function authorizeSheets() {
                 console.warn(`[googleSheetsUtils.js]: ⚠️ No credentials available, Google Sheets functionality disabled`);
                 return reject(new Error('Google Sheets functionality disabled - no credentials available'));
             }
+            
             const { client_email, private_key } = credentials;
+            
+            // Validate private key format before attempting authorization
+            if (!private_key) {
+                const errorMsg = 'Private key is missing from credentials';
+                console.error(`[googleSheetsUtils.js]: ❌ ${errorMsg}`);
+                return reject(new Error(errorMsg));
+            }
+            
+            // Check if private key has proper BEGIN/END markers
+            if (!private_key.includes('-----BEGIN PRIVATE KEY-----') || !private_key.includes('-----END PRIVATE KEY-----')) {
+                const errorMsg = 'Private key is missing BEGIN/END markers. The key may be malformed or truncated.';
+                console.error(`[googleSheetsUtils.js]: ❌ ${errorMsg}`);
+                console.error(`[googleSheetsUtils.js]: 🔍 Private key preview (first 50 chars): ${private_key.substring(0, 50)}...`);
+                return reject(new Error(errorMsg));
+            }
+            
+            // Validate client_email
+            if (!client_email) {
+                const errorMsg = 'Client email is missing from credentials';
+                console.error(`[googleSheetsUtils.js]: ❌ ${errorMsg}`);
+                return reject(new Error(errorMsg));
+            }
+            
             const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
             
             auth.authorize((err, tokens) => {
                 if (err) {
-                    console.error(`[googleSheetsUtils.js]: ❌ Error authorizing service account: ${err}`);
-                    return reject(`Error authorizing service account: ${err}`);
+                    // Enhanced error logging for JWT signature errors
+                    let errorDetails = `Error authorizing service account: ${err.message || err}`;
+                    
+                    if (err.message && err.message.includes('Invalid JWT Signature')) {
+                        errorDetails += '\n\n🔍 **Diagnostic Information:**';
+                        errorDetails += `\n- Client Email: ${client_email ? '✅ Present' : '❌ Missing'}`;
+                        errorDetails += `\n- Private Key Length: ${private_key ? private_key.length : 0} characters`;
+                        errorDetails += `\n- Has BEGIN marker: ${private_key.includes('-----BEGIN PRIVATE KEY-----') ? '✅' : '❌'}`;
+                        errorDetails += `\n- Has END marker: ${private_key.includes('-----END PRIVATE KEY-----') ? '✅' : '❌'}`;
+                        errorDetails += `\n- Key starts with: ${private_key.substring(0, 30)}...`;
+                        errorDetails += '\n\n**Common causes:**';
+                        errorDetails += '\n1. Private key is truncated or malformed';
+                        errorDetails += '\n2. Environment variable GOOGLE_PRIVATE_KEY is incorrectly set';
+                        errorDetails += '\n3. Newline characters (\\n) are not properly escaped in environment variable';
+                        errorDetails += '\n4. System clock is out of sync (check system time)';
+                        errorDetails += '\n\n**Solution:** Verify that GOOGLE_PRIVATE_KEY contains the full key with proper BEGIN/END markers and escaped newlines (\\n).';
+                    }
+                    
+                    console.error(`[googleSheetsUtils.js]: ❌ ${errorDetails}`);
+                    return reject(new Error(errorDetails));
                 }
                 resolve(auth);
             });
         } catch (error) {
-            console.error(`[googleSheetsUtils.js]: ❌ Error parsing service account credentials: ${error}`);
-            reject(`Error parsing service account credentials: ${error}`);
+            console.error(`[googleSheetsUtils.js]: ❌ Error parsing service account credentials: ${error.message || error}`);
+            console.error(`[googleSheetsUtils.js]: 🔍 Stack trace:`, error.stack);
+            reject(`Error parsing service account credentials: ${error.message || error}`);
         }
     });
 }
