@@ -1170,16 +1170,27 @@ const generateBoostFlavorText = (boosterJob, category = 'default', options = nul
   if (categoryMessages && typeof categoryMessages === 'object' && !Array.isArray(categoryMessages)) {
     if (options?.outcome && Array.isArray(categoryMessages[options.outcome])) {
       const result = getRandomMessage(categoryMessages[options.outcome]);
-      return result || 'Boost effect active.';
+      if (result && typeof result === 'string') {
+        return result;
+      }
     }
     if (Array.isArray(categoryMessages.default)) {
       const result = getRandomMessage(categoryMessages.default);
-      return result || 'Boost effect active.';
+      if (result && typeof result === 'string') {
+        return result;
+      }
     }
   }
 
-  const result = getRandomMessage(categoryMessages);
-  return result || 'Boost effect active.';
+  // Final fallback - ensure we always return a string
+  if (Array.isArray(categoryMessages)) {
+    const result = getRandomMessage(categoryMessages);
+    if (result && typeof result === 'string') {
+      return result;
+    }
+  }
+  
+  return 'Boost effect active.';
 };
 
 // ============================================================================

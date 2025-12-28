@@ -647,24 +647,21 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
 
           // ------------------- Help Wanted Command -------------------
           case 'helpwanted':
-            if (interaction.options._subcommand) {
-              const helpWantedSubcommand = interaction.options.getSubcommand();
-              if (helpWantedSubcommand === 'complete') {
-                if (focusedOption.name === 'questid') {
+            // Handle character autocomplete for all subcommands (complete, monsterhunt, exchange)
+            if (focusedOption.name === 'character') {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
+            } else {
+              // Handle subcommand-specific autocompletes
+              try {
+                const helpWantedSubcommand = interaction.options.getSubcommand(false);
+                
+                if (helpWantedSubcommand === 'complete' && focusedOption.name === 'questid') {
                   await handleHelpWantedQuestIdAutocomplete(interaction, focusedOption);
-                } else if (focusedOption.name === 'character') {
-                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
-                }
-              } else if (helpWantedSubcommand === 'monsterhunt') {
-                if (focusedOption.name === 'id') {
+                } else if (helpWantedSubcommand === 'monsterhunt' && focusedOption.name === 'id') {
                   await handleHelpWantedQuestIdAutocomplete(interaction, focusedOption);
-                } else if (focusedOption.name === 'character') {
-                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
                 }
-              } else if (helpWantedSubcommand === 'exchange') {
-                if (focusedOption.name === 'character') {
-                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
-                }
+              } catch (subcommandError) {
+                // Subcommand not available, ignore
               }
             }
             break;

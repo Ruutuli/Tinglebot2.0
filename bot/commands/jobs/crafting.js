@@ -191,8 +191,19 @@ module.exports = {
       }
 
       // ------------------- Validate Character Job and Voucher -------------------
+      // Determine the job to use (prioritize job voucher if active, otherwise use character's job)
       let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
-      info('CRFT', `Job determined for ${character.name}: "${job}"`);
+      
+      // Validate that job field exists and is a valid string
+      if (!job || typeof job !== 'string' || !job.trim()) {
+        error('CRFT', `Invalid or missing job field for ${character.name}. job: "${job}", jobVoucher: ${character.jobVoucher}, jobVoucherJob: "${character.jobVoucherJob}", character.job: "${character.job}"`);
+        return interaction.editReply({ 
+          content: `❌ **Error:** ${character.name}'s job information is invalid or missing. Please contact a moderator.`,
+          flags: [MessageFlags.Ephemeral] 
+        });
+      }
+      
+      info('CRFT', `Job determined for ${character.name}: "${job}" (jobVoucher: ${character.jobVoucher}, boostedBy: ${character.boostedBy || 'none'})`);
 
       // ------------------- Validate Job Perks -------------------
       const jobPerk = getJobPerk(job);
@@ -232,8 +243,9 @@ module.exports = {
       const jobField = jobFieldMap[jobLower];
       const canCraftItem = hasAllPerks || (jobField && item[jobField] === true);
       
-      if ((!hasCraftingPerk && !hasAllPerks) || !canCraftItem) {
-        error('CRFT', `Invalid job "${job}" for ${character.name} - missing crafting skills. Perks: ${JSON.stringify(jobPerk.perks)}, canCraftItem: ${canCraftItem}, jobField: ${jobField}, item[${jobField}]: ${item[jobField]}`);
+      // Check for missing crafting perk first
+      if (!hasCraftingPerk && !hasAllPerks) {
+        error('CRFT', `Character ${character.name} with job "${job}" does not have CRAFTING perk. Perks: ${JSON.stringify(jobPerk.perks)}`);
         const errorResponse = getJobVoucherErrorMessage('MISSING_SKILLS', {
           characterName: character.name,
           jobName: job,
@@ -241,6 +253,26 @@ module.exports = {
         });
         return interaction.editReply({ 
           embeds: [errorResponse.embed],
+          ephemeral: false 
+        });
+      }
+      
+      // Check if the specific item can be crafted by this job
+      if (!canCraftItem) {
+        error('CRFT', `Item "${itemName}" cannot be crafted by ${character.name} as a ${capitalizeWords(job)}. jobField: ${jobField}, item[${jobField}]: ${item[jobField]}`);
+        const errorEmbed = new EmbedBuilder()
+          .setTitle('❌ Cannot Craft This Item')
+          .setDescription(`**${character.name}** cannot craft **${itemName}** as a **${capitalizeWords(job)}**.\n\nThis item can only be crafted by specific jobs.`)
+          .addFields([
+            { name: 'Current Job', value: `> ${capitalizeWords(job)}`, inline: true },
+            { name: 'Item', value: `> ${itemName}`, inline: true },
+            { name: 'How to Fix', value: '> Choose a different item that can be crafted by your job, or change your job to one that can craft this item.' }
+          ])
+          .setColor('#FF0000')
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setTimestamp();
+        return interaction.editReply({ 
+          embeds: [errorEmbed],
           ephemeral: false 
         });
       }

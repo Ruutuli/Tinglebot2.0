@@ -183,12 +183,17 @@ const getBoostInfo = async (character, category) => {
   const boostStatus = await getCharacterBoostStatus(character.name);
  
  if (boostStatus && boostStatus.category === category) {
+   // Generate boost flavor text and ensure it's a valid string
+   let boostFlavorText = generateBoostFlavorText(boostStatus.boosterJob, category);
+   if (typeof boostFlavorText !== 'string' || !boostFlavorText.trim()) {
+     boostFlavorText = 'Boost effect active.';
+   }
    return {
      boosterJob: boostStatus.boosterJob,
      boosterName: boostStatus.boosterName,
       boostName: boostStatus.boostName,
       category: boostStatus.category,
-     boostFlavorText: generateBoostFlavorText(boostStatus.boosterJob, category)
+     boostFlavorText
    };
  }
  
@@ -203,7 +208,12 @@ const addBoostFlavorText = (description, boostInfo) => {
    description = 'A successful gathering trip!';
  }
  if (!boostInfo?.boostFlavorText) return description;
- return `${description}\n\n⚡ **Boost Effect:** ${boostInfo.boostFlavorText}`;
+ // Ensure boostFlavorText is a valid string
+ const boostText = typeof boostInfo.boostFlavorText === 'string' && boostInfo.boostFlavorText.trim()
+   ? boostInfo.boostFlavorText
+   : null;
+ if (!boostText) return description;
+ return `${description}\n\n⚡ **Boost Effect:** ${boostText}`;
 };
 
 // ------------------- Function: buildFooterText ------------------
@@ -1355,17 +1365,25 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
   let boostInfo = !isTeacherBoost ? await getBoostInfo(character, 'Gathering') : null;
   if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'entertainer' && bonusItem?.itemName) {
     // Regenerate the boost flavor text to include the bonus item name
+    let entertainerFlavorText = generateBoostFlavorText('Entertainer', 'Gathering', { bonusItemName: bonusItem.itemName });
+    if (typeof entertainerFlavorText !== 'string' || !entertainerFlavorText.trim()) {
+      entertainerFlavorText = 'Boost effect active.';
+    }
     boostInfo = {
       ...boostInfo,
-      boostFlavorText: generateBoostFlavorText('Entertainer', 'Gathering', { bonusItemName: bonusItem.itemName })
+      boostFlavorText: entertainerFlavorText
     };
   }
   // For Scholar boosts, regenerate flavor text with target village
   if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'scholar' && scholarTargetVillage) {
     console.log(`[embeds.js]: 📖 Regenerating Scholar boost flavor with target village: ${scholarTargetVillage}`);
+    let scholarFlavorText = generateBoostFlavorText('Scholar', 'Gathering', { targetRegion: scholarTargetVillage });
+    if (typeof scholarFlavorText !== 'string' || !scholarFlavorText.trim()) {
+      scholarFlavorText = 'Boost effect active.';
+    }
     boostInfo = {
       ...boostInfo,
-      boostFlavorText: generateBoostFlavorText('Scholar', 'Gathering', { targetRegion: scholarTargetVillage })
+      boostFlavorText: scholarFlavorText
     };
     console.log(`[embeds.js]: ✅ New Scholar boost flavor text: ${boostInfo.boostFlavorText}`);
   }
@@ -1375,9 +1393,13 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
     if (isDivineItemWithPriestBoost) {
       // Divine item found - add success message as boost effect
       const outcome = 'success';
+      let priestFlavorText = generateBoostFlavorText('Priest', 'Gathering', { outcome });
+      if (typeof priestFlavorText !== 'string' || !priestFlavorText.trim()) {
+        priestFlavorText = 'Boost effect active.';
+      }
       boostInfo = {
         ...boostInfo,
-        boostFlavorText: generateBoostFlavorText('Priest', 'Gathering', { outcome })
+        boostFlavorText: priestFlavorText
       };
     } else {
       // No divine item - we already used noDivine as main text, so don't add it again as boost effect
@@ -1406,6 +1428,10 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
  // Ensure description is always a string (Discord embed requirement)
  if (!description || typeof description !== 'string') {
    description = 'A successful gathering trip!';
+ }
+ // Ensure description doesn't exceed Discord's 4096 character limit
+ if (description.length > 4096) {
+   description = description.substring(0, 4093) + '...';
  }
 
  const locationPrefix = getLocationPrefix(character);
