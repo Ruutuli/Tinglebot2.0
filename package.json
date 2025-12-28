@@ -8,6 +8,9 @@
     "install:dashboard": "cd \"Tinglebot Dashboard\" && npm install"
   },
   "dependencies": {
+    "bottleneck": "^2.19.5",
+    "google-auth-library": "^9.15.1",
+    "googleapis": "^148.0.0",
     "jimp": "^0.22.10",
     "mathjs": "^14.4.0",
     "mongoose": "^8.20.4",
