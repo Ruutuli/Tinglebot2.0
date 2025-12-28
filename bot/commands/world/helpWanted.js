@@ -1221,7 +1221,8 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   }
   
   // Fetch character
-  const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
+  const { fetchAnyCharacterByNameAndUserId } = require('../../database/db-bot');
+  const character = await fetchAnyCharacterByNameAndUserId(characterName, interaction.user.id);
   if (!character) {
     return await interaction.editReply({ content: '❌ Character not found.' });
   }
@@ -1730,7 +1731,8 @@ module.exports = {
         }
 
         // Fetch character and user
-        const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
+        const { fetchAnyCharacterByNameAndUserId } = require('../../database/db-bot');
+        const character = await fetchAnyCharacterByNameAndUserId(characterName, interaction.user.id);
         if (!character) {
           return await interaction.editReply({ content: '❌ Character not found.' });
         }
@@ -1947,7 +1949,8 @@ module.exports = {
       
       try {
         // Fetch character and user
-        const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
+        const { fetchAnyCharacterByNameAndUserId } = require('../../database/db-bot');
+        const character = await fetchAnyCharacterByNameAndUserId(characterName, interaction.user.id);
         if (!character) {
           return await interaction.editReply({ content: '❌ Character not found.' });
         }

@@ -661,6 +661,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 } else if (focusedOption.name === 'character') {
                   await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
                 }
+              } else if (helpWantedSubcommand === 'exchange') {
+                if (focusedOption.name === 'character') {
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
+                }
               }
             }
             break;
