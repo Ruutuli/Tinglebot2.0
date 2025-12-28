@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Root package.json for Tinglebot 2.0",
   "private": true,
+  "scripts": {
+    "start": "cd bot && npm run start"
+  },
   "dependencies": {
     "jimp": "^0.22.10",
     "mathjs": "^14.4.0"
