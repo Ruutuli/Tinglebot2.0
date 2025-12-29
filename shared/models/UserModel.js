@@ -159,6 +159,21 @@ userSchema.methods.addXP = async function(amount, source = 'message', updateMess
         };
       }
       
+      // Ensure xp is initialized (handles partial leveling objects)
+      if (typeof this.leveling.xp !== 'number') {
+        this.leveling.xp = 0;
+      }
+      
+      // Ensure xpHistory is initialized
+      if (!Array.isArray(this.leveling.xpHistory)) {
+        this.leveling.xpHistory = [];
+      }
+      
+      // Ensure level is initialized
+      if (typeof this.leveling.level !== 'number') {
+        this.leveling.level = 1;
+      }
+      
       this.leveling.xp += amount;
       this.leveling.xpHistory.push({ amount, source, timestamp: new Date() });
       
@@ -202,7 +217,7 @@ userSchema.methods.calculateLevel = function() {
   // Level 50: 283,220 XP total
   // Level 91: ~1.5M XP total
   // To go from 91→92 needs: 46,055 XP
-  if (!this.leveling) return 1;
+  if (!this.leveling || typeof this.leveling.xp !== 'number') return 1;
   
   let level = 1;
   let totalXpRequired = 0;
