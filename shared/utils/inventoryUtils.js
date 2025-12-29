@@ -300,7 +300,11 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       throw new Error("Required database functions not initialized");
     }
 
-    const character = await dbFunctions.fetchCharacterById(characterId);
+    // Try to fetch as regular character first, then mod character
+    let character = await dbFunctions.fetchCharacterById(characterId);
+    if (!character && dbFunctions.fetchModCharacterById) {
+      character = await dbFunctions.fetchModCharacterById(characterId);
+    }
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
@@ -363,7 +367,11 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error("Required database functions not initialized");
     }
 
-    const character = await dbFunctions.fetchCharacterById(characterId);
+    // Try to fetch as regular character first, then mod character
+    let character = await dbFunctions.fetchCharacterById(characterId);
+    if (!character && dbFunctions.fetchModCharacterById) {
+      character = await dbFunctions.fetchModCharacterById(characterId);
+    }
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
@@ -764,7 +772,11 @@ async function removeInitialItemIfSynced(characterId) {
       throw new Error("Required database functions not initialized");
     }
 
-    const character = await dbFunctions.fetchCharacterById(characterId);
+    // Try to fetch as regular character first, then mod character
+    let character = await dbFunctions.fetchCharacterById(characterId);
+    if (!character && dbFunctions.fetchModCharacterById) {
+      character = await dbFunctions.fetchModCharacterById(characterId);
+    }
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
