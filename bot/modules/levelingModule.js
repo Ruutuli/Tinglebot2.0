@@ -1,8 +1,8 @@
 // ------------------- Import necessary modules -------------------
-const User = require('../../models/UserModel');
+const User = require('../../shared/models/UserModel');
 const { EmbedBuilder } = require('discord.js');
-const { handleError } = require('../../utils/globalErrorHandler');
-const logger = require('../../utils/logger');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
+const logger = require('../../shared/utils/logger');
 
 // ------------------- Leveling System Configuration -------------------
 const XP_CONFIG = {

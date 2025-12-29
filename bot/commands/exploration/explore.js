@@ -1,7 +1,7 @@
-const { handleInteractionError } = require("../../../utils/globalErrorHandler.js");
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
 const { SlashCommandBuilder } = require("@discordjs/builders");
 const { EmbedBuilder } = require("discord.js");
-const { fetchAllItems, fetchItemsByMonster } = require("../../../database/db.js");
+const { fetchAllItems, fetchItemsByMonster } = require('../../../shared/database/db.js');
 const {
  calculateFinalValue,
  getMonstersByRegion,
@@ -13,13 +13,13 @@ const {
 } = require("../../modules/raidModule.js");
 const { handleKO } = require("../../modules/characterStatsModule.js");
 const { triggerRaid } = require("../../modules/raidModule.js");
-const { addItemInventoryDatabase } = require("../../../utils/inventoryUtils.js");
-const { checkInventorySync } = require("../../../utils/characterUtils.js");
-const { enforceJail } = require("../../../utils/jailCheck");
-const Party = require("../../../models/PartyModel.js");
-const Character = require("../../../models/CharacterModel.js");
-const ItemModel = require("../../../models/ItemModel.js");
-const Square = require("../../../models/mapModel.js");
+const { addItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils.js');
+const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
+const { enforceJail } = require('../../../shared/utils/jailCheck');
+const Party = require('../../../shared/models/PartyModel.js');
+const Character = require('../../../shared/models/CharacterModel.js');
+const ItemModel = require('../../../shared/models/ItemModel.js');
+const Square = require('../../../shared/models/mapModel.js');
 const {
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
@@ -805,7 +805,7 @@ module.exports = {
       });
 
       const exploreChance = Math.random();
-      if (exploreChance > 0.7 || party.quadrantState !== "unexplored") {
+      if (exploreChance > 0.7 || party.quadrantState !== "unexplored') {
        party.quadrantState = "explored";
 
        embed.addFields({
@@ -841,7 +841,7 @@ module.exports = {
         `[ERROR] Could not add item to inventory: ${error.message}`
        );
       }
-     } else if (encounterType === "monster") {
+     } else if (encounterType === "monster') {
       // Check if character has blight stage 3 or higher (monsters don't attack them)
       if (character.blighted && character.blightStage >= 3) {
         return interaction.editReply({

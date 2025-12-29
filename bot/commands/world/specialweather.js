@@ -10,17 +10,17 @@ const fs = require('fs');
 const Jimp = require('jimp');
 
 // ------------------- Database Services -------------------
-const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../../../database/db.js');
-const ItemModel = require('../../../models/ItemModel');
+const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../../../shared/database/db.js');
+const ItemModel = require('../../../shared/models/ItemModel');
 
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../../modules/rngModule.js');
-const { handleInteractionError } = require('../../../utils/globalErrorHandler.js');
-const { syncToInventoryDatabase, SOURCE_TYPES } = require('../../../utils/inventoryUtils.js');
-const { getWeatherWithoutGeneration } = require('../../../services/weatherService');
-const WeatherService = require('../../../services/weatherService');
-const { enforceJail } = require('../../../utils/jailCheck.js');
-const { checkInventorySync } = require('../../../utils/characterUtils.js');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
+const { syncToInventoryDatabase, SOURCE_TYPES } = require('../../../shared/utils/inventoryUtils.js');
+const { getWeatherWithoutGeneration } = require('../../../shared/services/weatherService');
+const WeatherService = require('../../../shared/services/weatherService');
+const { enforceJail } = require('../../../shared/utils/jailCheck.js');
+const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
 const { createGatherDebuffEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Constants -------------------
@@ -391,7 +391,7 @@ module.exports = {
       
       // If not found as regular character, try as mod character
       if (!character) {
-        const { fetchModCharacterByNameAndUserId } = require('../../../database/db');
+        const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
         character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
       }
       

@@ -12,16 +12,16 @@
 // ------------------- Importing Discord.js components -------------------
 const { ChannelType } = require('discord.js');
 
-const { handleError } = require('../../utils/globalErrorHandler');
-const logger = require('../../utils/logger');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
+const logger = require('../../shared/utils/logger');
 // ============================================================================
 // Local Modules & Database Models
 // ------------------- Importing local services and models -------------------
-const { getMonstersAboveTierByRegion, fetchMonsterByName } = require('../../database/db');
+const { getMonstersAboveTierByRegion, fetchMonsterByName } = require('../../shared/database/db');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer, storeRaidProgress, getRaidProgressById } = require('../modules/raidModule');
-const { capitalizeVillageName } = require('../../utils/stringUtils');
-const TempData = require('../../models/TempDataModel');
+const { capitalizeVillageName } = require('../../shared/utils/stringUtils');
+const TempData = require('../../shared/models/TempDataModel');
 
 // ============================================================================
 // Environment Configuration

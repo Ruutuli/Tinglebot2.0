@@ -23,17 +23,17 @@ const {
   fetchCharacterByNameAndUserId,
   fetchCharactersByUserId,
   getCharacterInventoryCollection
-} = require('../../../database/db.js');
+} = require('../../../shared/database/db.js');
 
 // ------------------- Project Utilities -------------------
-const { handleInteractionError } = require('../../../utils/globalErrorHandler.js');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../../utils/googleSheetsUtils.js');
-const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../../utils/googleSheetsUtils.js');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
+const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../../shared/utils/googleSheetsUtils.js');
+const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../../shared/utils/googleSheetsUtils.js');
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
-const { checkInventorySync } = require('../../../utils/characterUtils.js');
+const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
 
 // ------------------- Database Models -------------------
-const ItemModel = require('../../../models/ItemModel.js');
+const ItemModel = require('../../../shared/models/ItemModel.js');
 
 // ------------------- Project Embeds -------------------
 const { createSyncEmbed, createSetupInstructionsEmbed, formatItemDetails } = require('../../embeds/embeds.js');
@@ -171,7 +171,7 @@ module.exports = {
       
       // If not found as regular character, try as mod character
       if (!character) {
-        const { fetchModCharacterByNameAndUserId } = require('../../../database/db');
+        const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
         character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
       }
       
@@ -367,7 +367,7 @@ module.exports = {
       
       // If not found as regular character, try as mod character
       if (!character) {
-        const { fetchModCharacterByNameAndUserId } = require('../../../database/db');
+        const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
         character = await fetchModCharacterByNameAndUserId(characterName, userId);
       }
       
@@ -436,7 +436,7 @@ module.exports = {
       
       // If not found as regular character, try as mod character
       if (!character) {
-        const { fetchModCharacterByNameAndUserId } = require('../../../database/db');
+        const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
         character = await fetchModCharacterByNameAndUserId(characterName, userId);
       }
       

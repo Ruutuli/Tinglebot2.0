@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const NodeCache = require('node-cache');
-const Item = require('../../models/ItemModel');
+const Item = require('../../shared/models/ItemModel');
 
 // ------------------- Cache and constants -------------------
 const cache = new NodeCache();

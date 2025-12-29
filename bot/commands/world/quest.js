@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("@discordjs/builders");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require("discord.js");
-const { handleInteractionError } = require("../../../utils/globalErrorHandler");
-const logger = require("../../../utils/logger");
-const Quest = require("../../../models/QuestModel");
-const Character = require("../../../models/CharacterModel");
-const User = require("../../../models/UserModel");
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+const logger = require('../../../shared/utils/logger');
+const Quest = require('../../../shared/models/QuestModel');
+const Character = require('../../../shared/models/CharacterModel');
+const User = require('../../../shared/models/UserModel');
 const { 
     BORDER_IMAGE, 
     QUEST_CHANNEL_ID, 
@@ -129,8 +129,8 @@ module.exports = {
     .setDescription("Display post counts for all participants in an RP quest")
     .addStringOption(option =>
      option
-      .setName("questid")
-      .setDescription("ID of the RP quest to check post counts for")
+      .setName("questid')
+      .setDescription("ID of the RP quest to check post counts for')
       .setRequired(true)
       .setAutocomplete(true)
     )
@@ -484,7 +484,7 @@ async handleQuestTurnIn(interaction) {
    rewardValue = "+1 Character Slot";
    description = "You exchanged 10 completed quests for a new character slot.";
   } else {
-   const { getCharacterInventoryCollection } = require("../../../database/db");
+   const { getCharacterInventoryCollection } = require('../../../shared/database/db');
    const inventoryCollection = await getCharacterInventoryCollection(character.name);
    const existingOrb = await inventoryCollection.findOne({
     characterId: character._id,
@@ -570,8 +570,8 @@ async handleQuestTurnIn(interaction) {
 
  async handleLegacyQuestTransfer(interaction) {
   try {
-   const totalLegacy = interaction.options.getInteger("total");
-   const pendingLegacy = interaction.options.getInteger("pending");
+   const totalLegacy = interaction.options.getInteger("total');
+   const pendingLegacy = interaction.options.getInteger("pending');
 
    if (totalLegacy <= 0 && pendingLegacy <= 0) {
     return interaction.reply({
@@ -1397,7 +1397,7 @@ formatQuestCount(count = 0) {
  // ------------------- Check Quest Voucher -------------------
  async checkQuestVoucher(interaction, userID) {
   try {
-   const Character = require("../../../models/CharacterModel");
+   const Character = require('../../../shared/models/CharacterModel');
    const character = await Character.findOne({ userId: userID });
    
    if (!character) return false;
@@ -1413,7 +1413,7 @@ formatQuestCount(count = 0) {
  // ------------------- Handle Quest Voucher Usage -------------------
  async handleQuestVoucherUsage(interaction, quest, userID) {
   try {
-   const Character = require("../../../models/CharacterModel");
+   const Character = require('../../../shared/models/CharacterModel');
    const character = await Character.findOne({ userId: userID });
    
    if (!character || !character.questVoucher) return false;

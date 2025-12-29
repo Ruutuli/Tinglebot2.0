@@ -6,14 +6,14 @@
 // ------------------- Load environment variables first -------------------
 const path = require('path');
 const dotenv = require('dotenv');
-// Load .env from project root (parent directory of scripts folder)
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+// Load .env from project root
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 // ============================================================================
 // Local Modules
 // ------------------- Importing database functions -------------------
-const { generateVendingStockList } = require('../../database/db');
-const logger = require('../../utils/logger');
+const { generateVendingStockList } = require('../../shared/database/db');
+const logger = require('../../shared/utils/logger');
 
 // ============================================================================
 // Main Function

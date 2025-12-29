@@ -16,8 +16,8 @@ const figlet = require("figlet");
 const { Client, GatewayIntentBits, Partials } = require("discord.js");
 
 // ------------------- Database Connections -------------------
-const { connectToTinglebot, connectToInventories } = require("../database/db");
-const TempData = require("../models/TempDataModel");
+const { connectToTinglebot, connectToInventories } = require("../shared/database/db");
+const TempData = require("../shared/models/TempDataModel");
 
 // ------------------- Handlers -------------------
 
@@ -27,15 +27,15 @@ const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
 const { handleInteraction, initializeReactionHandler } = require('./handlers/interactionHandler');
 const { initializeReactionRolesHandler } = require('./handlers/reactionRolesHandler');
 // const { handleMessage } = require('./handlers/messageHandler');
-const { startExpirationChecks } = require('../utils/expirationHandler');
-const logger = require('../utils/logger');
+const { startExpirationChecks } = require('../shared/utils/expirationHandler');
+const logger = require('../shared/utils/logger');
 
 // ------------------- Scripts -------------------
 const {
   handleError,
   initializeErrorHandler,
   initializeErrorTracking,
-} = require("../utils/globalErrorHandler");
+} = require("../shared/utils/globalErrorHandler");
 const {
   createTrelloCard,
   logWishlistToTrello,
@@ -118,7 +118,7 @@ async function initializeDatabases() {
     
     // Fix questBonus type issues (convert numeric questBonus to string)
     try {
-      const ApprovedSubmission = require('../models/ApprovedSubmissionModel');
+      const ApprovedSubmission = require('../shared/models/ApprovedSubmissionModel');
       
       // Fix ApprovedSubmission records with numeric questBonus
       const approvedSubmissionsWithNumericBonus = await ApprovedSubmission.find({
@@ -579,7 +579,7 @@ async function initializeClient() {
         await handleXP(message);
         
         // Handle existing message tracking
-        const { trackLastMessage } = require('../utils/messageUtils');
+        const { trackLastMessage } = require('../shared/utils/messageUtils');
         await trackLastMessage(message);
       } catch (error) {
         console.error("[index.js]: Error handling XP tracking:", error);
@@ -676,22 +676,22 @@ async function initializeClient() {
         logger.info('CLEANUP', `User ${username} (${discordId}) left the server. Starting data cleanup...`);
         
         // Import necessary models
-        const User = require('../models/UserModel');
-        const Character = require('../models/CharacterModel');
-        const ModCharacter = require('../models/ModCharacterModel');
-        const Pet = require('../models/PetModel');
-        const Mount = require('../models/MountModel');
-        const Quest = require('../models/QuestModel');
-        const Party = require('../models/PartyModel');
-        const MinigameModel = require('../models/MinigameModel');
-        const RuuGame = require('../models/RuuGameModel');
-        const StealStats = require('../models/StealStatsModel');
-        const BlightRollHistory = require('../models/BlightRollHistoryModel');
-        const ApprovedSubmission = require('../models/ApprovedSubmissionModel');
-        const Raid = require('../models/RaidModel');
+        const User = require('../shared/models/UserModel');
+        const Character = require('../shared/models/CharacterModel');
+        const ModCharacter = require('../shared/models/ModCharacterModel');
+        const Pet = require('../shared/models/PetModel');
+        const Mount = require('../shared/models/MountModel');
+        const Quest = require('../shared/models/QuestModel');
+        const Party = require('../shared/models/PartyModel');
+        const MinigameModel = require('../shared/models/MinigameModel');
+        const RuuGame = require('../shared/models/RuuGameModel');
+        const StealStats = require('../shared/models/StealStatsModel');
+        const BlightRollHistory = require('../shared/models/BlightRollHistoryModel');
+        const ApprovedSubmission = require('../shared/models/ApprovedSubmissionModel');
+        const Raid = require('../shared/models/RaidModel');
         
         // For vending cleanup, we'll use the vending connection directly
-        const { connectToVending } = require('../database/db');
+        const { connectToVending } = require('../shared/database/db');
         const vendingConnection = await connectToVending();
         
         // Get all characters for this user (needed for cascading deletes)
@@ -725,7 +725,7 @@ async function initializeClient() {
         
         // 4. Delete inventories (for all characters)
         // Import deleteCharacterInventoryCollection function
-        const { deleteCharacterInventoryCollection } = require('../database/db');
+        const { deleteCharacterInventoryCollection } = require('../shared/database/db');
         let inventoryCollectionsDeleted = 0;
         if (allCharacterNames.length > 0) {
           for (const characterName of allCharacterNames) {

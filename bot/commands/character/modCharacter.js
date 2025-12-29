@@ -18,7 +18,7 @@ const { google } = require("googleapis");
 const mongoose = require("mongoose");
 const { MongoClient } = require("mongodb");
 
-const { handleInteractionError } = require("../../../utils/globalErrorHandler");
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
 const {
   getOrCreateToken,
   updateTokenBalance,
@@ -39,7 +39,7 @@ const {
   updateModCharacterById,
   deleteModCharacterById,
   fetchModCharacterById,
-} = require("../../../database/db");
+} = require('../../../shared/database/db');
 const {
   getVillageColorByName,
   getVillageEmojiByName,
@@ -58,13 +58,13 @@ const {
   isValidGoogleSheetsUrl,
   extractSpreadsheetId,
   convertCmToFeetInches,
-} = require("../../../utils/validation");
+} = require('../../../shared/utils/validation');
 const {
   appendSheetData,
   authorizeSheets,
   deleteInventorySheetData,
   safeAppendDataToSheet,
-} = require("../../../utils/googleSheetsUtils");
+} = require('../../../shared/utils/googleSheetsUtils');
 const {
   createCharacterInteraction,
 } = require("../../handlers/characterInteractionHandler");
@@ -100,20 +100,20 @@ const {
   getMountEmoji,
   getMountThumbnail,
 } = require("../../modules/mountModule");
-const bucket = require("../../../config/gcsService");
+const bucket = require('../../../shared/config/gcsService');
 
-const Character = require("../../../models/CharacterModel");
-const ModCharacter = require("../../../models/ModCharacterModel");
-const User = require("../../../models/UserModel");
-const ItemModel = require("../../../models/ItemModel");
-const Mount = require("../../../models/MountModel");
-const { capitalizeVillageName } = require('../../../utils/stringUtils');
-const TempData = require('../../../models/TempDataModel');
+const Character = require('../../../shared/models/CharacterModel');
+const ModCharacter = require('../../../shared/models/ModCharacterModel');
+const User = require('../../../shared/models/UserModel');
+const ItemModel = require('../../../shared/models/ItemModel');
+const Mount = require('../../../shared/models/MountModel');
+const { capitalizeVillageName } = require('../../../shared/utils/stringUtils');
+const TempData = require('../../../shared/models/TempDataModel');
 const {
   savePendingEditToStorage,
   retrievePendingEditFromStorage,
   deletePendingEditFromStorage
-} = require('../../../utils/storage');
+} = require('../../../shared/utils/storage');
 
 // ============================================================================
 // ------------------- Constants and Configuration -------------------

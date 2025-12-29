@@ -17,6 +17,6 @@
         "restartPolicyMaxRetries": 10,
         "healthcheckPath": "/",
         "healthcheckTimeout": 100,
-        "startCommand": "npm run dev"
+        "startCommand": "node bot/index.js"
     }
 } 

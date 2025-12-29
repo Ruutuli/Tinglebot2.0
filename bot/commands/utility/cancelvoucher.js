@@ -1,14 +1,14 @@
 // ------------------- Standard Libraries -------------------
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { handleInteractionError } = require('../../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
 
 // ------------------- Database Services -------------------
-const { fetchCharacterByNameAndUserId } = require('../../../database/db');
+const { fetchCharacterByNameAndUserId } = require('../../../shared/database/db');
 
 // ------------------- Utility Functions -------------------
 const { deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
-const { refundJobVoucher } = require('../../../utils/inventoryUtils');
+const { refundJobVoucher } = require('../../../shared/utils/inventoryUtils');
 
 // ------------------- Command Definition -------------------
 module.exports = {

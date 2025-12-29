@@ -10,8 +10,8 @@ const { MongoClient } = require("mongodb");
 const {
  connectToInventories,
  connectToTinglebot
-} = require("../../database/db");
-const dbConfig = require("../../config/database");
+} = require('../../shared/database/db');
+const dbConfig = require('../../shared/config/database');
 
 // ------------------- Database Services -------------------
 const {
@@ -27,10 +27,10 @@ const {
  getCharacterInventoryCollection,
  getCurrentVendingStockList,
  getVendingModel
-} = require("../../database/db");
+} = require('../../shared/database/db');
 
 // ------------------- Utilities -------------------
-const logger = require("../../utils/logger");
+const logger = require('../../shared/utils/logger');
 
 // ------------------- Custom Modules -------------------
 const {
@@ -54,21 +54,21 @@ const { getAllRaces } = require("../modules/raceModule");
 const { NPCs } = require("../modules/NPCsModule");
 
 // ------------------- Utility Functions -------------------
-const { handleError } = require("../../utils/globalErrorHandler");
+const { handleError } = require('../../shared/utils/globalErrorHandler');
 
 // ------------------- Database Models -------------------
-const Character = require("../../models/CharacterModel");
-const Item = require("../../models/ItemModel");
-const Mount = require("../../models/MountModel");
-const Party = require("../../models/PartyModel");
-const Pet = require("../../models/PetModel");
-const Quest = require("../../models/QuestModel");
-const ShopStock = require("../../models/VillageShopsModel");
-const TableRoll = require("../../models/TableRollModel");
-const TempData = require("../../models/TempDataModel");
-const { VendingRequest } = require("../../models/VendingModel");
-const { Village } = require("../../models/VillageModel");
-const generalCategories = require("../../models/GeneralItemCategories");
+const Character = require('../../shared/models/CharacterModel');
+const Item = require('../../shared/models/ItemModel');
+const Mount = require('../../shared/models/MountModel');
+const Party = require('../../shared/models/PartyModel');
+const Pet = require('../../shared/models/PetModel');
+const Quest = require('../../shared/models/QuestModel');
+const ShopStock = require('../../shared/models/VillageShopsModel');
+const TableRoll = require('../../shared/models/TableRollModel');
+const TempData = require('../../shared/models/TempDataModel');
+const { VendingRequest } = require('../../shared/models/VendingModel');
+const { Village } = require('../../shared/models/VillageModel');
+const generalCategories = require('../../shared/models/GeneralItemCategories');
 
 
 // Add safe response utility
@@ -3302,7 +3302,7 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
 async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
   try {
       // Fetch only available Help Wanted quests (not completed, not expired)
-      const HelpWantedQuest = require('../../models/HelpWantedQuestModel');
+      const HelpWantedQuest = require('../../shared/models/HelpWantedQuestModel');
       const now = new Date();
       const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
       
@@ -3819,7 +3819,7 @@ async function handleModMinigameCharacterAutocomplete(interaction, focusedOption
     const cleanSessionId = sessionIdMatch ? sessionIdMatch[0] : sessionIdOption;
 
     // Find the minigame session
-    const Minigame = require('../../models/MinigameModel');
+    const Minigame = require('../../shared/models/MinigameModel');
     const session = await Minigame.findOne({
       sessionId: cleanSessionId,
       gameType: 'theycame',
@@ -3851,7 +3851,7 @@ async function handleModMinigameCharacterAutocomplete(interaction, focusedOption
 // Provides autocomplete suggestions for active minigame session IDs
 async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
   try {
-    const Minigame = require('../../models/MinigameModel');
+    const Minigame = require('../../shared/models/MinigameModel');
     const searchQuery = focusedOption.value?.toLowerCase() || '';
     
     // Find active minigame sessions
@@ -3889,7 +3889,7 @@ async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for active alien targets in a minigame session
 async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
   try {
-    const Minigame = require('../../models/MinigameModel');
+    const Minigame = require('../../shared/models/MinigameModel');
     let sessionId = interaction.options.getString('session_id');
     const searchQuery = focusedOption.value?.toLowerCase() || '';
     
@@ -4744,7 +4744,7 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
       return await interaction.respond([]);
     }
     
-    const { initializeVendingInventoryModel } = require('../../models/VendingModel');
+    const { initializeVendingInventoryModel } = require('../../shared/models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(characterName);
     const items = await VendingInventory.find({}).lean();
 
@@ -4981,7 +4981,7 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         return;
       }
       
-      const { initializeVendingInventoryModel } = require('../../models/VendingModel');
+      const { initializeVendingInventoryModel } = require('../../shared/models/VendingModel');
       const VendingInventory = await initializeVendingInventoryModel(targetCharacter);
       const vendingItems = await VendingInventory.find({}).lean();
 
@@ -5325,7 +5325,7 @@ async function handleModCharacterJobAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for monster names
 async function handleMonsterAutocomplete(interaction, focusedOption) {
   try {
-    const Monster = require('../../models/MonsterModel');
+    const Monster = require('../../shared/models/MonsterModel');
     const searchQuery = focusedOption.value.toLowerCase();
     
     // Fetch monsters from database
@@ -5427,7 +5427,7 @@ async function handleTaggedCharactersAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for tier 5+ monster names
 async function handleTier5PlusMonsterAutocomplete(interaction, focusedOption) {
   try {
-    const Monster = require('../../models/MonsterModel');
+    const Monster = require('../../shared/models/MonsterModel');
     const searchQuery = focusedOption.value.toLowerCase();
     
     // Fetch tier 5+ monsters from database
@@ -5706,7 +5706,7 @@ handleBlightOverrideTargetAutocomplete,
 async function handleTableRollNameAutocomplete(interaction, focusedOption) {
   try {
     // Import the TableRoll model
-    const TableRoll = require('../../models/TableRollModel');
+    const TableRoll = require('../../shared/models/TableRollModel');
     
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";
@@ -5746,7 +5746,7 @@ async function handleTableRollNameAutocomplete(interaction, focusedOption) {
 async function handleRaidIdAutocomplete(interaction, focusedOption) {
   try {
     // Import the Raid model
-    const Raid = require('../../models/RaidModel');
+    const Raid = require('../../shared/models/RaidModel');
     
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";

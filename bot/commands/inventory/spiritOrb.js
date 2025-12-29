@@ -1,21 +1,21 @@
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
-const { handleInteractionError } = require('../../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
 // ------------------- Models -------------------
-const Character = require('../../../models/CharacterModel');
+const Character = require('../../../shared/models/CharacterModel');
 
 // ------------------- Services -------------------
-const { getCharacterInventoryCollection } = require('../../../database/db');
+const { getCharacterInventoryCollection } = require('../../../shared/database/db');
 
 // ------------------- Modules -------------------
 const { exchangeSpiritOrbs } = require('../../modules/characterStatsModule');
 
 // ------------------- Add Google Sheets Logging -------------------
-const { authorizeSheets, appendSheetData, extractSpreadsheetId, isValidGoogleSheetsUrl,safeAppendDataToSheet  } = require('../../../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, extractSpreadsheetId, isValidGoogleSheetsUrl,safeAppendDataToSheet  } = require('../../../shared/utils/googleSheetsUtils');
 const { v4: uuidv4 } = require('uuid');
 
-const { checkInventorySync } = require('../../../utils/characterUtils');
+const { checkInventorySync } = require('../../../shared/utils/characterUtils');
 
 // ------------------- Slash Command Definition -------------------
 const data = new SlashCommandBuilder()

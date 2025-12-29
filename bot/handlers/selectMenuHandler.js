@@ -9,8 +9,8 @@
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
-const { handleError } = require('../../utils/globalErrorHandler');
-const logger = require('../../utils/logger');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
+const logger = require('../../shared/utils/logger');
 // ============================================================================
 // Modules
 // ============================================================================
@@ -22,7 +22,7 @@ const { capitalizeFirstLetter } = require('../modules/formattingModule');
 // ============================================================================
 
 // Token calculation and breakdown utilities
-const { calculateTokens, generateTokenBreakdown } = require('../../utils/tokenUtils');
+const { calculateTokens, generateTokenBreakdown } = require('../../shared/utils/tokenUtils');
 
 // Storage utilities
 const { 
@@ -30,8 +30,8 @@ const {
   updateSubmissionData, 
   retrieveSubmissionFromStorage, 
   findLatestSubmissionIdForUser 
-} = require('../../utils/storage');
-const { fetchCharacterByNameAndUserId, fetchCharacterByName } = require('../../database/db');
+} = require('../../shared/utils/storage');
+const { fetchCharacterByNameAndUserId, fetchCharacterByName } = require('../../shared/database/db');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
 
 // Menu utilities to generate select menus for the submission process
@@ -41,7 +41,7 @@ const {
   getProductMultiplierMenu,
   getSpecialWorksMenu,
   getTypeMultiplierMenu,
-} = require('../../utils/menuUtils');
+} = require('../../shared/utils/menuUtils');
 
 // ============================================================================
 // Handlers
@@ -234,7 +234,7 @@ async function handleSelectMenuInteraction(interaction) {
       // Get quest bonus if quest is linked
       let questBonus = 0;
       if (updatedSubmissionData.questEvent && updatedSubmissionData.questEvent !== 'N/A') {
-        const { getQuestBonus } = require('../../utils/tokenUtils');
+        const { getQuestBonus } = require('../../shared/utils/tokenUtils');
         const userId = updatedSubmissionData.userId || interaction.user.id;
         questBonus = await getQuestBonus(updatedSubmissionData.questEvent, userId);
         console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${updatedSubmissionData.questEvent}: ${questBonus}`);
@@ -425,7 +425,7 @@ async function confirmSubmission(interaction) {
     // Get quest bonus if quest is linked
     let questBonus = 0;
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
-      const { getQuestBonus } = require('../../utils/tokenUtils');
+      const { getQuestBonus } = require('../../shared/utils/tokenUtils');
       const userId = submissionData.userId || interaction.user.id;
       questBonus = await getQuestBonus(submissionData.questEvent, userId);
       console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);

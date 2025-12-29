@@ -1,6 +1,6 @@
 // ------------------- Standard Libraries -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { handleInteractionError } = require("../../../utils/globalErrorHandler");
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
 
 // ------------------- Database Services -------------------
 const {
@@ -11,20 +11,20 @@ const {
  getOrCreateToken,
  updateTokenBalance,
  getCurrentVendingStockList,
-} = require("../../../database/db");
+} = require('../../../shared/database/db');
 
 // ------------------- Utility Functions -------------------
 const { capitalizeWords } = require("../../modules/formattingModule");
 const {
  addItemInventoryDatabase,
  removeItemInventoryDatabase,
-} = require("../../../utils/inventoryUtils");
-const { generateUniqueId } = require("../../../utils/uniqueIdUtils");
+} = require('../../../shared/utils/inventoryUtils');
+const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils');
 const {
  deleteSubmissionFromStorage,
  retrieveSubmissionFromStorage,
  saveSubmissionToStorage,
-} = require("../../../utils/storage");
+} = require('../../../shared/utils/storage');
 const {
  validateJobVoucher,
  activateJobVoucher,
@@ -33,15 +33,15 @@ const {
  getJobVoucherErrorMessage,
 } = require("../../modules/jobVoucherModule");
 const { getJobPerk } = require("../../modules/jobsModule");
-const { checkInventorySync } = require("../../../utils/characterUtils");
+const { checkInventorySync } = require('../../../shared/utils/characterUtils');
 
 // ------------------- Boost Integration -------------------
 const { applyTravelBoost } = require("../../modules/boostIntegration");
 const { clearBoostAfterUse } = require("./boosting");
 
 // ------------------- Database Models -------------------
-const ItemModel = require("../../../models/ItemModel");
-const TempData = require("../../../models/TempDataModel");
+const ItemModel = require('../../../shared/models/ItemModel');
+const TempData = require('../../../shared/models/TempDataModel');
 
 // ------------------- Google Sheets API -------------------
 const {
@@ -50,7 +50,7 @@ const {
  extractSpreadsheetId,
  isValidGoogleSheetsUrl,
  safeAppendDataToSheet,
-} = require("../../../utils/googleSheetsUtils");
+} = require('../../../shared/utils/googleSheetsUtils');
 
 // ------------------- Temporary In-Memory Storage -------------------
 const deliveryTasks = {};
@@ -95,12 +95,12 @@ const command = {
     .addIntegerOption((opt) =>
      opt
       .setName("quantity")
-      .setDescription("Quantity of the item to deliver")
+      .setDescription("Quantity of the item to deliver')
       .setRequired(true)
     )
     .addStringOption((opt) =>
      opt
-      .setName("payment")
+      .setName("payment')
       .setDescription("Payment details; Item's or other agreed upon payments")
       .setRequired(true)
     )

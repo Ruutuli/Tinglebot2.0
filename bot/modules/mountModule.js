@@ -2,15 +2,15 @@
 // This module contains mount-related data such as species, levels, emojis, and regional mappings.
 
 const fs = require('fs');
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
 const path = require('path');
 const { 
   saveEncounterToStorage, 
   retrieveEncounterFromStorage, 
   deleteEncounterFromStorage 
-} = require('../../utils/storage.js');
+} = require('../../shared/utils/storage.js');
 const { v4: uuidv4 } = require('uuid');
-const TempData = require('../../models/TempDataModel');
+const TempData = require('../../shared/models/TempDataModel');
 
 // Define the path to encounter.json
 const ENCOUNTER_PATH = path.join(__dirname, '..', 'data', 'encounter.json');

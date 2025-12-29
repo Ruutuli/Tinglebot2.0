@@ -18,7 +18,7 @@ const VILLAGE_VISITING_ROLES = {
 const { EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Services -------------------
-const { fetchAllItems, fetchItemsByMonster } = require('../../database/db');
+const { fetchAllItems, fetchItemsByMonster } = require('../../shared/database/db');
 
 // ------------------- Embeds -------------------
 const { 
@@ -52,21 +52,21 @@ const {
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 
 // ------------------- Utility Functions -------------------
-const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
-const { syncToInventoryDatabase, SOURCE_TYPES } = require('../../utils/inventoryUtils');
+const { addItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
+const { syncToInventoryDatabase, SOURCE_TYPES } = require('../../shared/utils/inventoryUtils');
 const {
   appendSheetData,
   authorizeSheets,
   safeAppendDataToSheet
-} = require('../../utils/googleSheetsUtils');
+} = require('../../shared/utils/googleSheetsUtils');
 const {
   extractSpreadsheetId,
   isValidGoogleSheetsUrl
-} = require('../../utils/validation');
-const { handleError } = require('../../utils/globalErrorHandler');
-const { info, success, warn, error, debug } = require('../../utils/logger');
+} = require('../../shared/utils/validation');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
+const { info, success, warn, error, debug } = require('../../shared/utils/logger');
 
-const Character = require('../../models/CharacterModel');
+const Character = require('../../shared/models/CharacterModel');
 
 // ============================================================================
 // ------------------- Daily Roll Functions -------------------
@@ -680,7 +680,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           
           // Fetch the correct emoji from the database for the jelly type
           try {
-            const ItemModel = require('../../models/ItemModel');
+            const ItemModel = require('../../shared/models/ItemModel');
             const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
             if (jellyItem && jellyItem.emoji) {
               item.emoji = jellyItem.emoji;

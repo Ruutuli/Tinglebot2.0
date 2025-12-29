@@ -16,11 +16,11 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Connections -------------------
-const logger = require('../../../utils/logger');
+const logger = require('../../../shared/utils/logger');
 const {
   connectToInventories,
   connectToTinglebot
-} = require('../../../database/db');
+} = require('../../../shared/database/db');
 
 // ------------------- Database Services -------------------
 const {
@@ -47,21 +47,21 @@ const {
   resetPetRollsForAllCharacters,
   updatePetToCharacter,
   updateTokenBalance
-} = require('../../../database/db');
+} = require('../../../shared/database/db');
 
 // ------------------- Database Models -------------------
-const Character = require('../../../models/CharacterModel');
-const Minigame = require('../../../models/MinigameModel');
-const NPC = require('../../../models/NPCModel');
+const Character = require('../../../shared/models/CharacterModel');
+const Minigame = require('../../../shared/models/MinigameModel');
+const NPC = require('../../../shared/models/NPCModel');
 
 // ------------------- Custom Modules -------------------
-const { monsterMapping } = require('../../../models/MonsterModel');
+const { monsterMapping } = require('../../../shared/models/MonsterModel');
 
 // ------------------- Utility Functions -------------------
-const { handleInteractionError } = require('../../../utils/globalErrorHandler');
-const { addItemInventoryDatabase, escapeRegExp } = require('../../../utils/inventoryUtils');
-const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('../../../utils/interactionUtils');
-const { generateUniqueId } = require('../../../utils/uniqueIdUtils');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+const { addItemInventoryDatabase, escapeRegExp } = require('../../../shared/utils/inventoryUtils');
+const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('../../../shared/utils/interactionUtils');
+const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils');
 const {
   authorizeSheets,
   extractSpreadsheetId,
@@ -69,14 +69,14 @@ const {
   safeAppendDataToSheet,
   retryPendingSheetOperations,
   getPendingSheetOperationsCount
-} = require('../../../utils/googleSheetsUtils');
+} = require('../../../shared/utils/googleSheetsUtils');
 const {
   deletePendingEditFromStorage,
   deleteSubmissionFromStorage,
   retrievePendingEditFromStorage,
   retrieveSubmissionFromStorage,
   savePendingEditToStorage
-} = require('../../../utils/storage');
+} = require('../../../shared/utils/storage');
 
 // ------------------- Modules -------------------
 const {
@@ -136,18 +136,18 @@ const {
   handleModGiveItemAutocomplete
 } = require('../../handlers/autocompleteHandler');
 
-const { simulateWeightedWeather } = require('../../../services/weatherService');
+const { simulateWeightedWeather } = require('../../../shared/services/weatherService');
 
 // ------------------- Database Models -------------------
-const ApprovedSubmission = require('../../../models/ApprovedSubmissionModel');
-const ItemModel = require('../../../models/ItemModel');
-const Pet = require('../../../models/PetModel');
-const TempData = require('../../../models/TempDataModel');
-const User = require('../../../models/UserModel');
-const VillageShopsModel = require('../../../models/VillageShopsModel');
+const ApprovedSubmission = require('../../../shared/models/ApprovedSubmissionModel');
+const ItemModel = require('../../../shared/models/ItemModel');
+const Pet = require('../../../shared/models/PetModel');
+const TempData = require('../../../shared/models/TempDataModel');
+const User = require('../../../shared/models/UserModel');
+const VillageShopsModel = require('../../../shared/models/VillageShopsModel');
 
 // ------------------- External API Integrations -------------------
-const bucket = require('../../../config/gcsService');
+const bucket = require('../../../shared/config/gcsService');
 
 // ------------------- Embeds -------------------
 const {
@@ -159,8 +159,8 @@ const {
 } = require('../../embeds/embeds.js');
 
 const { createMountEncounterEmbed } = require('../../embeds/embeds.js');
-const { generateWeatherEmbed } = require('../../../services/weatherService');
-const WeatherService = require('../../../services/weatherService');
+const { generateWeatherEmbed } = require('../../../shared/services/weatherService');
+const WeatherService = require('../../../shared/services/weatherService');
 
 
 // ============================================================================
@@ -1684,7 +1684,7 @@ async function handleMount(interaction) {
 // Handles quest completion when an art/writing submission is approved
 async function handleQuestCompletionFromSubmission(submission, userId) {
   try {
-    const Quest = require('../../../models/QuestModel');
+    const Quest = require('../../../shared/models/QuestModel');
     const questRewardModule = require('../../modules/questRewardModule');
     
     const questID = submission.questEvent;
@@ -3451,7 +3451,7 @@ async function handleTriggerRaid(interaction) {
   try {
     // Get the village region for filtering monsters
     const { getVillageRegionByName } = require('../../modules/locationsModule');
-    const { getMonstersAboveTierByRegion } = require('../../../database/db');
+    const { getMonstersAboveTierByRegion } = require('../../../shared/database/db');
     
     const capitalizedVillage = village.charAt(0).toUpperCase() + village.slice(1);
     const villageRegion = getVillageRegionByName(capitalizedVillage);
@@ -4126,7 +4126,7 @@ async function handleSheets(interaction) {
       return interaction.editReply({ embeds: [embed] });
       
     } else if (action === 'clear') {
-      const TempData = require('../../../models/TempDataModel');
+      const TempData = require('../../../shared/models/TempDataModel');
       const deleteResult = await TempData.deleteMany({ type: 'pendingSheetOperation' });
       
       const embed = new EmbedBuilder()
@@ -4569,7 +4569,7 @@ async function handleCreateMinigame(interaction, questId, village) {
       console.log(`[MINIGAME CREATE] Using TEST quest ID - bypassing quest validation`);
     } else {
       // Validate quest exists if provided
-      const Quest = require('../../../models/QuestModel');
+      const Quest = require('../../../shared/models/QuestModel');
       quest = await Quest.findOne({ questID: questId });
       
       if (!quest) {
@@ -5319,7 +5319,7 @@ function getGameStatusColor(status) {
 async function handleVillageCheck(interaction) {
   try {
     const questID = interaction.options.getString('questid');
-    const Quest = require('../../../models/QuestModel');
+    const Quest = require('../../../shared/models/QuestModel');
 
     // Find the quest
     const quest = await Quest.findOne({ questID });

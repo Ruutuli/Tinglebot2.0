@@ -8,7 +8,7 @@
 
 const { EmbedBuilder } = require('discord.js');
 
-const { handleError } = require('../../utils/globalErrorHandler');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
 const { createArtSubmissionEmbed, createWritingSubmissionEmbed, updateBoostRequestEmbed } = require('../embeds/embeds.js');
 // ============================================================================
 // Database Services
@@ -21,13 +21,13 @@ const {
   fetchModCharacterByNameAndUserId,
   fetchCharacterByName,
   fetchModCharacterByName
-} = require('../../database/db');
+} = require('../../shared/database/db');
 
 // ============================================================================
 // Utility Functions
 // ============================================================================
 
-const { resetSubmissionState, calculateTokens } = require('../../utils/tokenUtils');
+const { resetSubmissionState, calculateTokens } = require('../../shared/utils/tokenUtils');
 // Storage utilities
 const { 
   saveSubmissionToStorage, 
@@ -35,7 +35,7 @@ const {
   retrieveSubmissionFromStorage, 
   deleteSubmissionFromStorage,
   findLatestSubmissionIdForUser 
-} = require('../../utils/storage');
+} = require('../../shared/utils/storage');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
 const { 
   retrieveBoostingRequestFromTempDataByCharacter,
@@ -171,7 +171,7 @@ async function handleSubmissionCompletion(interaction) {
     // Get quest bonus if quest is linked
     let questBonus = 0;
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
-      const { getQuestBonus } = require('../../utils/tokenUtils');
+      const { getQuestBonus } = require('../../shared/utils/tokenUtils');
       const userId = submissionData.userId || interaction.user.id;
       questBonus = await getQuestBonus(submissionData.questEvent, userId);
       console.log(`[submissionHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
@@ -350,7 +350,7 @@ async function handleSubmissionCompletion(interaction) {
     // Link submission to quest if quest ID is provided
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
       try {
-        const Quest = require('../../models/QuestModel');
+        const Quest = require('../../shared/models/QuestModel');
         const quest = await Quest.findOne({ questID: submissionData.questEvent });
         
         if (quest && (quest.questType === 'Art' || quest.questType === 'Writing') && quest.status === 'active') {

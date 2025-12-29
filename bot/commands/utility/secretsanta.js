@@ -4,7 +4,7 @@
 // ============================================================================
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { connectToTinglebot } = require('../../../database/db');
+const { connectToTinglebot } = require('../../../shared/database/db');
 const {
   loadSecretSantaData,
   saveParticipant,
@@ -22,8 +22,8 @@ const {
 
 // Admin role ID from questAnnouncements.js
 const MOD_ROLE_ID = '606128760655183882';
-const { SecretSantaParticipant } = require('../../../models/SecretSantaModel');
-const logger = require('../../../utils/logger');
+const { SecretSantaParticipant } = require('../../../shared/models/SecretSantaModel');
+const logger = require('../../../shared/utils/logger');
 
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
@@ -669,7 +669,7 @@ async function handleEditMatch(interaction) {
   const santaUser = interaction.options.getUser('santa');
   const gifteeUser = interaction.options.getUser('giftee');
   
-  const { SecretSantaMatch } = require('../../../models/SecretSantaModel');
+  const { SecretSantaMatch } = require('../../../shared/models/SecretSantaModel');
   await connectToTinglebot();
   
   // Remove existing matches for this santa

@@ -3,33 +3,33 @@
 // ============================================================================
 
 const { v4: uuidv4 } = require('uuid');
-const logger = require('../../../utils/logger');
+const logger = require('../../../shared/utils/logger');
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const {
  fetchCharacterByNameAndUserId,
  fetchCharacterByName,
  fetchModCharacterByNameAndUserId,
  fetchModCharacterByName,
-} = require('../../../database/db');
+} = require('../../../shared/database/db');
 const { getBoostEffect, normalizeJobName } = require('../../modules/boostingModule');
 const { getJobPerk } = require('../../modules/jobsModule');
 const { useStamina } = require('../../modules/characterStatsModule');
-const { generateUniqueId } = require('../../../utils/uniqueIdUtils');
-const TempData = require('../../../models/TempDataModel');
-const { retrieveBoostingRequestFromStorageByCharacter } = require('../../../utils/storage');
+const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils');
+const TempData = require('../../../shared/models/TempDataModel');
+const { retrieveBoostingRequestFromStorageByCharacter } = require('../../../shared/utils/storage');
 const {
   createBoostRequestEmbed,
   updateBoostRequestEmbed,
   createBoostAppliedEmbed,
 } = require('../../embeds/embeds.js');
-const Weather = require('../../../models/WeatherModel');
+const Weather = require('../../../shared/models/WeatherModel');
 const {
   simulateWeightedWeather,
   getCurrentSeason,
   scheduleSpecialWeather,
   getNextPeriodBounds,
   findWeatherForPeriod,
-} = require('../../../services/weatherService');
+} = require('../../../shared/services/weatherService');
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
 // ============================================================================

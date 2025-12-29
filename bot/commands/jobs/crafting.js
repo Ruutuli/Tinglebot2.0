@@ -13,10 +13,10 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 const { MessageFlags, EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Connections -------------------
-const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, fetchItemByName } = require('../../../database/db');
+const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, fetchItemByName } = require('../../../shared/database/db');
 
 // ------------------- Database Services -------------------
-const ItemModel = require('../../../models/ItemModel');
+const ItemModel = require('../../../shared/models/ItemModel');
 
 // ------------------- Custom Modules -------------------
 const { checkAndUseStamina } = require('../../modules/characterStatsModule');
@@ -25,25 +25,25 @@ const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJ
 const { capitalizeWords, formatDateTime } = require('../../modules/formattingModule');
 const { applyCraftingBoost, applyCraftingStaminaBoost, applyCraftingMaterialBoost, applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
 const { clearBoostAfterUse } = require('./boosting');
-const { info, success, error } = require('../../../utils/logger');
+const { info, success, error } = require('../../../shared/utils/logger');
 
 // ------------------- Utility Functions -------------------
-const { addItemInventoryDatabase, processMaterials } = require('../../../utils/inventoryUtils');
-const { checkInventorySync } = require('../../../utils/characterUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../../utils/googleSheetsUtils');
-const { safeAppendDataToSheet } = require('../../../utils/googleSheetsUtils');
-const { handleInteractionError } = require('../../../utils/globalErrorHandler');
-const { enforceJail } = require('../../../utils/jailCheck');
+const { addItemInventoryDatabase, processMaterials } = require('../../../shared/utils/inventoryUtils');
+const { checkInventorySync } = require('../../../shared/utils/characterUtils');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../../shared/utils/googleSheetsUtils');
+const { safeAppendDataToSheet } = require('../../../shared/utils/googleSheetsUtils');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+const { enforceJail } = require('../../../shared/utils/jailCheck');
 
 
 // ------------------- Embed Imports -------------------
 const { createCraftingEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- External API Integrations -------------------
-const { appendSheetData, authorizeSheets } = require('../../../utils/googleSheetsUtils');
+const { appendSheetData, authorizeSheets } = require('../../../shared/utils/googleSheetsUtils');
 
 // ------------------- Models and Constants -------------------
-const generalCategories = require('../../../models/GeneralItemCategories');
+const generalCategories = require('../../../shared/models/GeneralItemCategories');
 
 // ============================================================================
 // ------------------- CRAFTING COMMAND HANDLER -------------------
@@ -93,7 +93,7 @@ module.exports = {
       
       // If not found as regular character, try as mod character
       if (!character) {
-        const { fetchModCharacterByNameAndUserId } = require('../../../database/db');
+        const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
         character = await fetchModCharacterByNameAndUserId(characterName, userId);
       }
       
@@ -336,7 +336,7 @@ module.exports = {
       let teacherStaminaContribution = 0;
       let crafterStaminaCost = staminaCost;
       if (freshCharacter.boostedBy) {
-        const { fetchCharacterByName } = require('../../../database/db');
+        const { fetchCharacterByName } = require('../../../shared/database/db');
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
         if (boosterCharacter && boosterCharacter.job === 'Teacher') {
           // Teacher can contribute up to 3 stamina (or half the reduced cost if less than 6)
@@ -456,7 +456,7 @@ module.exports = {
         
         // Deduct stamina from Teacher if applicable
         if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
-          const { fetchCharacterByName } = require('../../../database/db');
+          const { fetchCharacterByName } = require('../../../shared/database/db');
           const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
           if (boosterCharacter && boosterCharacter.job === 'Teacher') {
             teacherUpdatedStamina = await checkAndUseStamina(boosterCharacter, teacherStaminaContribution);
@@ -482,7 +482,7 @@ module.exports = {
       
       // Log Entertainer boost if active (for debugging - boost is already applied by applyCraftingQuantityBoost)
       if (freshCharacter.boostedBy) {
-        const { fetchCharacterByName } = require('../../../database/db');
+        const { fetchCharacterByName } = require('../../../shared/database/db');
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
         if (boosterCharacter && boosterCharacter.job === 'Entertainer') {
           info('CRFT', `Entertainer boost active: Added 1 free ${itemName} for ${freshCharacter.name} (total: ${craftedQuantity})`);
@@ -505,7 +505,7 @@ module.exports = {
         // Get Teacher boost info for display
         let teacherBoostInfo = null;
         if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
-          const { fetchCharacterByName } = require('../../../database/db');
+          const { fetchCharacterByName } = require('../../../shared/database/db');
           const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
           if (boosterCharacter && boosterCharacter.job === 'Teacher') {
             teacherBoostInfo = {
@@ -526,7 +526,7 @@ module.exports = {
         // Refund stamina
         await checkAndUseStamina(freshCharacter, -crafterStaminaCost); // Negative to add back
         if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
-          const { fetchCharacterByName } = require('../../../database/db');
+          const { fetchCharacterByName } = require('../../../shared/database/db');
           const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
           if (boosterCharacter && boosterCharacter.job === 'Teacher') {
             await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution);
@@ -545,7 +545,7 @@ module.exports = {
       // Check for Fortune Teller boost to tag items
       let fortuneTellerBoostTag = null;
       if (freshCharacter.boostedBy) {
-        const { fetchCharacterByName } = require('../../../database/db');
+        const { fetchCharacterByName } = require('../../../shared/database/db');
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
         if (boosterCharacter && boosterCharacter.job === 'Fortune Teller') {
           fortuneTellerBoostTag = 'Fortune Teller';
@@ -604,7 +604,7 @@ module.exports = {
           await checkAndUseStamina(freshCharacter, -crafterStaminaCost); // Refund crafter stamina
           // Refund Teacher stamina if applicable
           if (typeof teacherStaminaContribution !== 'undefined' && teacherStaminaContribution > 0 && freshCharacter?.boostedBy) {
-            const { fetchCharacterByName } = require('../../../database/db');
+            const { fetchCharacterByName } = require('../../../shared/database/db');
             const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
             if (boosterCharacter && boosterCharacter.job === 'Teacher') {
               await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution);

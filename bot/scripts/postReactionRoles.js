@@ -12,8 +12,9 @@ const {
   setupRulesAgreementEmbed
 } = require('../handlers/reactionRolesHandler');
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from root
+const path = require('path');
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 // Channel IDs
 const ROLES_CHANNEL_ID = '787807438119370752'; // 🔔》roles

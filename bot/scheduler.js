@@ -12,13 +12,13 @@ const { v4: uuidv4 } = require("uuid");
 const { EmbedBuilder } = require("discord.js");
 
 // Database models
-const Character = require("../models/CharacterModel");
-const Pet = require("../models/PetModel");
-const Raid = require("../models/RaidModel");
-const RuuGame = require("../models/RuuGameModel");
-const HelpWantedQuest = require('../models/HelpWantedQuestModel');
-const ItemModel = require('../models/ItemModel');
-const Weather = require('../models/WeatherModel');
+const Character = require("../shared/models/CharacterModel");
+const Pet = require("../shared/models/PetModel");
+const Raid = require("../shared/models/RaidModel");
+const RuuGame = require("../shared/models/RuuGameModel");
+const HelpWantedQuest = require('../shared/models/HelpWantedQuestModel');
+const ItemModel = require('../shared/models/ItemModel');
+const Weather = require('../shared/models/WeatherModel');
 
 // Database functions
 const {
@@ -27,7 +27,7 @@ const {
  connectToInventories,
  getCharacterInventoryCollection,
  fetchItemByName,
-} = require("../database/db");
+} = require("../shared/database/db");
 
 // Handlers
 const {
@@ -50,7 +50,7 @@ const {
 
 // Modules
 const { recoverDailyStamina } = require("./modules/characterStatsModule");
-const { bloodmoonDates, convertToHyruleanDate } = require("./modules/calendarModule");
+const { bloodmoonDates, convertToHyruleanDate } = require('./modules/calendarModule');
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest, regenerateArtWritingQuest } = require('./modules/helpWantedModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 const { updateAllRoleCountChannels } = require('./modules/roleCountChannelsModule');
@@ -59,28 +59,28 @@ const { addBoostFlavorText, buildFooterText } = require('./embeds/embeds');
 const { generateBoostFlavorText } = require('./modules/flavorTextModule');
 
 // Utilities
-const { safeAppendDataToSheet, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
+const { safeAppendDataToSheet, extractSpreadsheetId } = require('../shared/utils/googleSheetsUtils');
 
 // Services
-const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("../services/weatherService");
+const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("../shared/services/weatherService");
 
 // Utils
-const { handleError } = require("../utils/globalErrorHandler");
-const { sendUserDM } = require("../utils/messageUtils");
-const { checkExpiredRequests } = require("../utils/expirationHandler");
-const { isValidImageUrl } = require("../utils/validation");
-const logger = require("../utils/logger");
+const { handleError } = require("../shared/utils/globalErrorHandler");
+const { sendUserDM } = require("../shared/utils/messageUtils");
+const { checkExpiredRequests } = require("../shared/utils/expirationHandler");
+const { isValidImageUrl } = require("../shared/utils/validation");
+const logger = require("../shared/utils/logger");
 const {
  cleanupExpiredEntries,
  cleanupExpiredHealingRequests,
  cleanupExpiredBoostingRequests,
  getBoostingStatistics,
  archiveOldBoostingRequests,
-} = require("../utils/storage");
+} = require("../shared/utils/storage");
 const {
  retryPendingSheetOperations,
  getPendingSheetOperationsCount,
-} = require("../utils/googleSheetsUtils");
+} = require("../shared/utils/googleSheetsUtils");
 
 // Constants
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
@@ -109,11 +109,17 @@ const { postQuests } = require('./scripts/questAnnouncements');
 
 const env = process.env.NODE_ENV || "development";
 try {
- const envPath = path.resolve(process.cwd(), `.env.${env}`);
- dotenv.config({ path: envPath });
+ const rootEnvPath = path.resolve(__dirname, '..', '.env');
+ const envSpecificPath = path.resolve(__dirname, '..', `.env.${env}`);
+ // Try environment-specific file first, then fall back to root .env
+ if (require('fs').existsSync(envSpecificPath)) {
+   dotenv.config({ path: envSpecificPath });
+ } else {
+   dotenv.config({ path: rootEnvPath });
+ }
 } catch (error) {
- logger.error('SYSTEM', `Failed to load .env.${env}`, error.message);
- dotenv.config();
+ logger.error('SYSTEM', `Failed to load .env:`, error.message);
+ dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 }
 
 // ============================================================================
@@ -476,7 +482,7 @@ async function cleanupFinishedMinigameSessions() {
  try {
   logger.scheduler.job('Minigame cleanup');
   
-  const Minigame = require('../models/MinigameModel');
+  const Minigame = require('../shared/models/MinigameModel');
   const result = await Minigame.cleanupOldSessions();
   
   if (result.deletedCount === 0) {
@@ -553,7 +559,7 @@ async function distributeMonthlyBoostRewards(client) {
     
     logger.info('BOOST', `Found ${boosters.size} active booster(s)`);
     
-    const User = require('../models/UserModel');
+    const User = require('../shared/models/UserModel');
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     
@@ -727,7 +733,7 @@ async function handleBirthdayRoleAssignment(client) {
     logger.info('SCHEDULER', `Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
     
     // Get all users with birthdays today
-    const User = require('../models/UserModel');
+    const User = require('../shared/models/UserModel');
     const usersWithBirthdays = await User.find({
       'birthday.month': month,
       'birthday.day': day
@@ -1004,7 +1010,7 @@ async function executeBirthdayAnnouncements(client) {
   logger.info('SCHEDULER', `Found ${characters.length} characters with birthday on ${today}`);
   
   // Also check for mod characters with birthdays
-  const ModCharacter = require('../models/ModCharacterModel');
+  const ModCharacter = require('../shared/models/ModCharacterModel');
   const modCharacters = await ModCharacter.find({ birthday: today });
   logger.info('SCHEDULER', `Found ${modCharacters.length} mod characters with birthday on ${today}`);
   
@@ -1474,7 +1480,7 @@ async function setupBoostingScheduler(client) {
    const stats = cleanupExpiredBoostingRequests();
    
    // Clean up TempData boosting requests
-   const TempData = require('../models/TempDataModel');
+   const TempData = require('../shared/models/TempDataModel');
    const tempDataResult = await TempData.cleanupByType('boosting');
    
    logger.success('CLEANUP', `Boost cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}, TempData boosting deleted: ${tempDataResult.deletedCount || 0}`);
@@ -1509,7 +1515,7 @@ async function setupBoostingScheduler(client) {
  createCronJob("0 */6 * * *", "TempData Boost Cleanup", async () => {
   try {
    logger.info('CLEANUP', 'Starting TempData boost cleanup');
-   const TempData = require('../models/TempDataModel');
+   const TempData = require('../shared/models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
    if (result.deletedCount > 0) {
      logger.success('CLEANUP', `TempData boost cleanup complete - Deleted: ${result.deletedCount}`);
@@ -1524,7 +1530,7 @@ async function setupBoostingScheduler(client) {
  createCronJob("0 * * * *", "Hourly Boost Cleanup", async () => {
   try {
    logger.info('CLEANUP', 'Starting hourly boost cleanup');
-   const TempData = require('../models/TempDataModel');
+   const TempData = require('../shared/models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
    if (result.deletedCount > 0) {
      logger.success('CLEANUP', `Hourly boost cleanup complete - Deleted: ${result.deletedCount}`);
@@ -1643,7 +1649,7 @@ async function checkQuestCompletions(client) {
   try {
     logger.info('QUEST', 'Checking quest completions...');
     
-    const Quest = require('../models/QuestModel');
+    const Quest = require('../shared/models/QuestModel');
     const questRewardModule = require('./modules/questRewardModule');
     
     const activeQuests = await Quest.find({ status: 'active' });
@@ -1705,7 +1711,7 @@ async function checkVillageTracking(client) {
   try {
     logger.info('SCHEDULER', 'Starting village tracking check...');
     
-    const Quest = require('../models/QuestModel');
+    const Quest = require('../shared/models/QuestModel');
     
     // Find all active RP quests
     const activeRPQuests = await Quest.find({ 
@@ -2173,7 +2179,7 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
     }
     
     // Check if any users have already received rewards this month
-    const User = require('../models/UserModel');
+    const User = require('../shared/models/UserModel');
     const sampleUsers = await User.find({ 
       'boostRewards.lastRewardMonth': currentMonth 
     }).limit(1);

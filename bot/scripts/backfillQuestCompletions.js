@@ -5,13 +5,14 @@
 // ============================================================================
 
 const dotenv = require('dotenv');
-dotenv.config();
+const path = require('path');
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 const mongoose = require('mongoose');
 
-const { connectToTinglebot } = require('../../database/db');
-const Quest = require('../../models/QuestModel');
-const User = require('../../models/UserModel');
+const { connectToTinglebot } = require('../../shared/database/db');
+const Quest = require('../../shared/models/QuestModel');
+const User = require('../../shared/models/UserModel');
 
 const ARG_DRY_RUN = process.argv.includes('--dry-run');
 const ARG_LIMIT = (() => {

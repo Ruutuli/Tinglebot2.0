@@ -10,8 +10,8 @@
 // =============================================================================
 
 // ------------------- Standard Libraries -------------------
-const { handleError } = require('../../utils/globalErrorHandler');
-const logger = require('../../utils/logger');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
+const logger = require('../../shared/utils/logger');
 
 // ------------------- Discord.js Components -------------------
 const {
@@ -27,12 +27,12 @@ const {
   fetchCharacterById,
   fetchModCharacterById,
   getUserById
-} = require('../../database/db');
+} = require('../../shared/database/db');
 
 // ------------------- Database Models -------------------
-const ItemModel = require('../../models/ItemModel');
-const RuuGame = require('../../models/RuuGameModel');
-const Character = require('../../models/CharacterModel');
+const ItemModel = require('../../shared/models/ItemModel');
+const RuuGame = require('../../shared/models/RuuGameModel');
+const Character = require('../../shared/models/CharacterModel');
 
 // ------------------- Embed and Command Imports -------------------
 const {
@@ -67,14 +67,14 @@ const {
   retrieveSubmissionFromStorage, 
   deleteSubmissionFromStorage,
   findLatestSubmissionIdForUser 
-} = require('../../utils/storage');
+} = require('../../shared/utils/storage');
 
 const {
   calculateTokens,
   generateTokenBreakdown
-} = require('../../utils/tokenUtils');
+} = require('../../shared/utils/tokenUtils');
 
-const { canChangeJob } = require('../../utils/validation');
+const { canChangeJob } = require('../../shared/utils/validation');
 
 // ============================================================================
 // ------------------- RuuGame Configuration -------------------
@@ -1509,7 +1509,7 @@ async function awardRuuGamePrize(session, userId, interaction) {
       const itemEmoji = itemDetails?.emoji || '🎁'; // Fallback emoji if not found
 
       // Add item to random character's inventory using inventory utilities
-      const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+      const { addItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
       await addItemInventoryDatabase(
         randomCharacter._id,
         prize.itemName,
@@ -1549,7 +1549,7 @@ async function awardRuuGamePityPrize(session, userId, interaction) {
       const itemEmoji = itemDetails?.emoji || '🧚‍♀️'; // Fallback emoji if not found
 
       // Add Mock Fairy to random character's inventory using inventory utilities
-      const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+      const { addItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
       await addItemInventoryDatabase(
         randomCharacter._id,
         'Mock Fairy',
@@ -1584,7 +1584,7 @@ async function handleMinigameJoin(interaction) {
     console.log(`[MINIGAME COMPONENT JOIN] ${username} (${userId}) attempting to join session ${sessionId} via button`);
     
     // Find the minigame session
-    const Minigame = require('../../models/MinigameModel');
+    const Minigame = require('../../shared/models/MinigameModel');
     const session = await Minigame.findOne({ sessionId: sessionId });
     
     if (!session) {
@@ -1712,7 +1712,7 @@ async function handleMinigameStatus(interaction) {
     const sessionId = interaction.customId.replace('minigame_status_', '');
     
     // Find the minigame session
-    const Minigame = require('../../models/MinigameModel');
+    const Minigame = require('../../shared/models/MinigameModel');
     const session = await Minigame.findOne({ sessionId: sessionId });
     
     if (!session) {

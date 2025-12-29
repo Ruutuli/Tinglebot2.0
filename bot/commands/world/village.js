@@ -11,20 +11,20 @@
 // // ============================================================================
 // // ---- Database Services ----
 // // ============================================================================
-// const { fetchCharacterByName, getOrCreateToken, updateTokenBalance } = require('../../../database/db');
+// const { fetchCharacterByName, getOrCreateToken, updateTokenBalance } = require('../../../shared/database/db');
 
 // // ============================================================================
 // // ---- Utility Functions ----
 // // ============================================================================
-// const { handleInteractionError } = require('../../../utils/globalErrorHandler');
-// const { removeItemInventoryDatabase } = require('../../../utils/inventoryUtils');
-// const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet } = require('../../../utils/googleSheetsUtils');
+// const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+// const { removeItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils');
+// const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet } = require('../../../shared/utils/googleSheetsUtils');
 
 // // ============================================================================
 // // ---- Database Models ----
 // // ============================================================================
-// const ItemModel = require('../../../models/ItemModel');
-// const { Village } = require('../../../models/VillageModel');
+// const ItemModel = require('../../../shared/models/ItemModel');
+// const { Village } = require('../../../shared/models/VillageModel');
 // const { initializeVillages } = require('../../modules/villageModule');
 
 // // ============================================================================

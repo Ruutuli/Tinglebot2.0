@@ -3,11 +3,11 @@
 // Handles automatic quest reward distribution and completion processing
 // ============================================================================
 
-const Quest = require('../../models/QuestModel');
-const Character = require('../../models/CharacterModel');
-const User = require('../../models/UserModel');
-const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
-const { handleError } = require('../../utils/globalErrorHandler');
+const Quest = require('../../shared/models/QuestModel');
+const Character = require('../../shared/models/CharacterModel');
+const User = require('../../shared/models/UserModel');
+const ApprovedSubmission = require('../../shared/models/ApprovedSubmissionModel');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
 
 // ============================================================================
@@ -1034,9 +1034,9 @@ async function distributeItems(quest, participant) {
         const character = await findCharacterSafely(participant.characterName, participant.userId);
         
         // Import inventory utilities and database functions
-        const { connectToInventories } = require('../../database/db');
-        const Item = require('../../models/ItemModel');
-        const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId } = require('../../utils/googleSheetsUtils');
+        const { connectToInventories } = require('../../shared/database/db');
+        const Item = require('../../shared/models/ItemModel');
+        const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId } = require('../../shared/utils/googleSheetsUtils');
         const { v4: uuidv4 } = require('uuid');
         
         // Connect to inventories database

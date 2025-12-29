@@ -6,12 +6,12 @@
 // const { SlashCommandBuilder } = require('@discordjs/builders');
 
 // // ---- Database Services ----
-// const { fetchCharacterByNameAndUserId } = require('../../../database/db');
+// const { fetchCharacterByNameAndUserId } = require('../../../shared/database/db');
 
 // // ---- Custom Modules ----
-// const { handleInteractionError } = require('../../../utils/globalErrorHandler');
-// const { capitalizeVillageName } = require('../../../utils/stringUtils');
-// const { checkInventorySync } = require('../../../utils/characterUtils');
+// const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+// const { capitalizeVillageName } = require('../../../shared/utils/stringUtils');
+// const { checkInventorySync } = require('../../../shared/utils/characterUtils');
 // const { getEncounterById } = require('../../modules/mountModule');
 // const { proceedWithRoll, handleViewMount } = require('../../handlers/mountComponentHandler');
 // const { handleMountAutocomplete } = require('../../handlers/autocompleteHandler');

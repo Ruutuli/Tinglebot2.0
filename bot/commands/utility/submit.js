@@ -5,7 +5,7 @@
 // Standard Library Imports
 const path = require('path');
 
-const { handleInteractionError } = require('../../../utils/globalErrorHandler.js');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
 // Discord.js Imports
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 
@@ -15,18 +15,18 @@ const { handleModalSubmission } = require('../../handlers/modalHandler.js');
 const { getCancelButtonRow, handleButtonInteraction } = require('../../handlers/componentHandler.js');
 
 // Utility Imports
-const { resetSubmissionState, calculateWritingTokens, calculateWritingTokensWithCollab } = require('../../../utils/tokenUtils.js');
-const { getBaseSelectMenu } = require('../../../utils/menuUtils.js');
+const { resetSubmissionState, calculateWritingTokens, calculateWritingTokensWithCollab } = require('../../../shared/utils/tokenUtils.js');
+const { getBaseSelectMenu } = require('../../../shared/utils/menuUtils.js');
 const { 
   saveSubmissionToStorage, 
   retrieveSubmissionFromStorage, 
   getOrCreateSubmission,
   updateSubmissionData 
-} = require('../../../utils/storage.js');
-const { uploadSubmissionImage } = require('../../../utils/uploadUtils.js');
+} = require('../../../shared/utils/storage.js');
+const { uploadSubmissionImage } = require('../../../shared/utils/uploadUtils.js');
 const { createWritingSubmissionEmbed, createArtSubmissionEmbed, updateBoostRequestEmbed } = require('../../embeds/embeds.js');
-const User = require('../../../models/UserModel.js'); 
-const { generateUniqueId } = require('../../../utils/uniqueIdUtils.js');
+const User = require('../../../shared/models/UserModel.js'); 
+const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils.js');
 const { applyScholarTokensBoost } = require('../../modules/boostingModule');
 const {
   retrieveBoostingRequestFromTempDataByCharacter,
@@ -39,7 +39,7 @@ const {
   fetchModCharacterByNameAndUserId,
   fetchCharacterByName,
   fetchModCharacterByName
-} = require('../../../database/db');
+} = require('../../../shared/database/db');
 
 async function parseTaggedCharacters(taggedCharactersInput, interaction) {
   let taggedCharacters = [];
@@ -563,7 +563,7 @@ module.exports = {
           }
 
           // Validate that all characters exist in the database
-          const { fetchAllCharacters } = require('../../../database/db');
+          const { fetchAllCharacters } = require('../../../shared/database/db');
           const allCharacters = await fetchAllCharacters();
           const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
           
@@ -588,7 +588,7 @@ module.exports = {
         // Get quest bonus if quest is linked
         let questBonus = 0;
         if (questId && questId !== 'N/A') {
-          const { getQuestBonus } = require('../../../utils/tokenUtils');
+          const { getQuestBonus } = require('../../../shared/utils/tokenUtils');
           questBonus = await getQuestBonus(questId, user.id);
           console.log(`[submit.js]: 🎯 Quest bonus for ${questId}: ${questBonus}`);
         }
@@ -877,7 +877,7 @@ module.exports = {
           }
 
           // Validate that all characters exist in the database
-          const { fetchAllCharacters } = require('../../../database/db');
+          const { fetchAllCharacters } = require('../../../shared/database/db');
           const allCharacters = await fetchAllCharacters();
           const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
           
@@ -966,7 +966,7 @@ module.exports = {
         };
 
         // Save directly to approved submissions database
-        const ApprovedSubmission = require('../../../models/ApprovedSubmissionModel');
+        const ApprovedSubmission = require('../../../shared/models/ApprovedSubmissionModel');
         const approvedSubmission = new ApprovedSubmission(submissionData);
         await approvedSubmission.save();
 
@@ -1006,7 +1006,7 @@ module.exports = {
           }
 
           // Validate that all characters exist in the database
-          const { fetchAllCharacters } = require('../../../database/db');
+          const { fetchAllCharacters } = require('../../../shared/database/db');
           const allCharacters = await fetchAllCharacters();
           const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
           
@@ -1073,7 +1073,7 @@ module.exports = {
         };
 
         // Save directly to approved submissions database
-        const ApprovedSubmission = require('../../../models/ApprovedSubmissionModel');
+        const ApprovedSubmission = require('../../../shared/models/ApprovedSubmissionModel');
         const approvedSubmission = new ApprovedSubmission(submissionData);
         await approvedSubmission.save();
 

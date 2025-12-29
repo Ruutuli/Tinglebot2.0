@@ -4,22 +4,22 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { handleInteractionError } = require('../../../utils/globalErrorHandler');
-const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchItemByName } = require('../../../database/db');
-const TableRoll = require('../../../models/TableRollModel');
-const Quest = require('../../../models/QuestModel');
-const { addItemInventoryDatabase } = require('../../../utils/inventoryUtils');
-const { safeAppendDataToSheet, extractSpreadsheetId, isValidGoogleSheetsUrl, authorizeSheets } = require('../../../utils/googleSheetsUtils');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchItemByName } = require('../../../shared/database/db');
+const TableRoll = require('../../../shared/models/TableRollModel');
+const Quest = require('../../../shared/models/QuestModel');
+const { addItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils');
+const { safeAppendDataToSheet, extractSpreadsheetId, isValidGoogleSheetsUrl, authorizeSheets } = require('../../../shared/utils/googleSheetsUtils');
 const { DEFAULT_IMAGE_URL } = require('../../embeds/embeds.js');
 const { 
   validateTableName, 
   parseCSVData
-} = require('../../../utils/tableRollUtils');
+} = require('../../../shared/utils/tableRollUtils');
 
 // ------------------- Helper function to get item emoji from database -------------------
 async function getItemEmoji(itemName) {
   try {
-    const Item = require('../../../models/ItemModel');
+    const Item = require('../../../shared/models/ItemModel');
     const item = await Item.findOne({ itemName: itemName });
     if (item && item.emoji) {
       return item.emoji;
@@ -35,7 +35,7 @@ async function getItemEmoji(itemName) {
 // ------------------- Helper function to get item image from database -------------------
 async function getItemImage(itemName) {
   try {
-    const Item = require('../../../models/ItemModel');
+    const Item = require('../../../shared/models/ItemModel');
     const item = await Item.findOne({ itemName: itemName });
     if (item && item.image && item.image !== 'No Image') {
       return item.image;

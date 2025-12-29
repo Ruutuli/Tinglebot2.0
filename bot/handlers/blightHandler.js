@@ -9,10 +9,18 @@ const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
 
 // ------------------- Environment Variables -------------------
-// Load environment variables from .env file
+// Load environment variables from root .env file
 const dotenv = require('dotenv');
+const path = require('path');
 const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: `.env.${env}` });
+const rootEnvPath = path.resolve(__dirname, '..', '..', '.env');
+const envSpecificPath = path.resolve(__dirname, '..', '..', `.env.${env}`);
+// Try environment-specific file first, then fall back to root .env
+if (require('fs').existsSync(envSpecificPath)) {
+  dotenv.config({ path: envSpecificPath });
+} else {
+  dotenv.config({ path: rootEnvPath });
+}
 
 // ------------------- Database Services -------------------
 // Services for token and inventory management, and character fetching
@@ -24,17 +32,17 @@ const {
   getUserTokenData,
   updateTokenBalance,
   dbFunctions
-} = require('../../database/db');
+} = require('../../shared/database/db');
 
 // ------------------- Database Models -------------------
 // Character model representing a user's character document
-const Character = require('../../models/CharacterModel');
+const Character = require('../../shared/models/CharacterModel');
 
 // ------------------- Utilities -------------------
-const logger = require('../../utils/logger');
-const TempData = require('../../models/TempDataModel');
-const Pet = require('../../models/PetModel');
-const Mount = require('../../models/MountModel');
+const logger = require('../../shared/utils/logger');
+const TempData = require('../../shared/models/TempDataModel');
+const Pet = require('../../shared/models/PetModel');
+const Mount = require('../../shared/models/MountModel');
 
 // ------------------- Custom Modules -------------------
 // Module for retrieving moderator character data
@@ -44,15 +52,15 @@ const { generateBlightSubmissionExpiryFlavorText } = require('../modules/flavorT
 
 // ------------------- Utility Functions -------------------
 // Global error handler, inventory utils, Google Sheets utils, storage, and unique ID utils
-const { handleError } = require('../../utils/globalErrorHandler');
-const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
+const { removeItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
 const {
   appendSheetData,
   authorizeSheets,
   extractSpreadsheetId,
   safeAppendDataToSheet,
   deleteInventorySheetData
-} = require('../../utils/googleSheetsUtils');
+} = require('../../shared/utils/googleSheetsUtils');
 const {
   deleteSubmissionFromStorage,
   saveSubmissionToStorage,
@@ -60,11 +68,11 @@ const {
   saveBlightRequestToStorage,
   retrieveBlightRequestFromStorage,
   deleteBlightRequestFromStorage
-} = require('../../utils/storage.js');
-const { generateUniqueId } = require('../../utils/uniqueIdUtils');
+} = require('../../shared/utils/storage.js');
+const { generateUniqueId } = require('../../shared/utils/uniqueIdUtils');
 const { syncInventory } = require('./syncHandler');
-const { checkInventorySync } = require('../../utils/characterUtils');
-const { sendUserDM } = require('../../utils/messageUtils');
+const { checkInventorySync } = require('../../shared/utils/characterUtils');
+const { sendUserDM } = require('../../shared/utils/messageUtils');
 
 // ============================================================================
 // ------------------- Timezone Helper Functions -------------------
@@ -160,7 +168,7 @@ function get8PMESTInUTC(date = new Date()) {
 async function connectToInventories() {
   try {
     if (mongoose.connection.readyState === 0) {
-      const dbConfig = require('../../config/database');
+      const dbConfig = require('../../shared/config/database');
       await mongoose.connect(dbConfig.inventories, {
         useNewUrlParser: true,
         useUnifiedTopology: true
@@ -2113,7 +2121,7 @@ async function rollForBlightProgression(interaction, characterName) {
     await character.save();
 
     // ------------------- Log Blight Roll History -------------------
-    const BlightRollHistory = require('../../models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../../shared/models/BlightRollHistoryModel');
     try {
       // Ensure we're connected to the main database
       if (mongoose.connection.readyState === 0) {
@@ -2291,7 +2299,7 @@ async function viewBlightStatus(interaction, characterName) {
     );
 
     // Get last blight roll history entry
-    const BlightRollHistory = require('../../models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../../shared/models/BlightRollHistoryModel');
     const lastRoll = await BlightRollHistory.findOne({ characterId: character._id })
       .sort({ timestamp: -1 })
       .limit(1);
@@ -2444,7 +2452,7 @@ async function viewBlightStatus(interaction, characterName) {
 // Saves blight-related events to the BlightRollHistoryModel for tracking
 async function saveBlightEventToHistory(character, eventType, details = {}, userInfo = {}) {
   try {
-    const BlightRollHistory = require('../../models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../../shared/models/BlightRollHistoryModel');
     
     // Ensure we're connected to the main database
     if (mongoose.connection.readyState === 0) {
@@ -2705,7 +2713,7 @@ async function sendBlightReminders(client) {
             
             // Send the reminder
             try {
-              const { sendUserDM } = require('../../utils/messageUtils');
+              const { sendUserDM } = require('../../shared/utils/messageUtils');
               const dmSent = await sendUserDM(character.userId, `🚨 **DEATH REMINDER** for ${character.name}`, client);
               
               if (dmSent) {
@@ -2780,7 +2788,7 @@ async function sendBlightReminders(client) {
             });
             
             if (!lastWarning) {
-              const { sendUserDM } = require('../../utils/messageUtils');
+              const { sendUserDM } = require('../../shared/utils/messageUtils');
               const { EmbedBuilder } = require('discord.js');
               
               let title, color, urgencyText;
@@ -2907,7 +2915,7 @@ async function checkExpiringBlightRequests(client) {
               // Send warning DM
               if (submissionData.userId) {
                 try {
-                  const { sendUserDM } = require('../../utils/messageUtils');
+                  const { sendUserDM } = require('../../shared/utils/messageUtils');
                   const { EmbedBuilder } = require('discord.js');
                   
                   const warningEmbed = new EmbedBuilder()
@@ -3046,7 +3054,7 @@ async function cleanupExpiredBlightRequests(client) {
           // Notify the user via DM
           if (submissionData.userId) {
             try {
-              const { sendUserDM } = require('../../utils/messageUtils');
+              const { sendUserDM } = require('../../shared/utils/messageUtils');
               const { EmbedBuilder } = require('discord.js');
               
               // Get character's current blight stage for flavor text
@@ -3610,7 +3618,7 @@ async function checkMissedRolls(client) {
 // Retrieves the blight progression history for a character
 async function getCharacterBlightHistory(characterId, limit = 10) {
   try {
-    const BlightRollHistory = require('../../models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../../shared/models/BlightRollHistoryModel');
     const history = await BlightRollHistory.find({ characterId })
       .sort({ timestamp: -1 })
       .limit(limit);

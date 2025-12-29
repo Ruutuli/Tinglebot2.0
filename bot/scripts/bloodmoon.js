@@ -8,11 +8,19 @@
 // Standard Libraries & Third-Party Modules
 // ------------------- Importing third-party modules -------------------
 const dotenv = require('dotenv');
+const path = require('path');
 const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: `.env.${env}` });
+const rootEnvPath = path.resolve(__dirname, '..', '..', '.env');
+const envSpecificPath = path.resolve(__dirname, '..', '..', `.env.${env}`);
+// Try environment-specific file first, then fall back to root .env
+if (require('fs').existsSync(envSpecificPath)) {
+  dotenv.config({ path: envSpecificPath });
+} else {
+  dotenv.config({ path: rootEnvPath });
+}
 
-const { handleError } = require('../../utils/globalErrorHandler');
-const logger = require('../../utils/logger');
+const { handleError } = require('../../shared/utils/globalErrorHandler');
+const logger = require('../../shared/utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -22,7 +30,7 @@ const { EmbedBuilder } = require('discord.js');
 // Local Modules
 // ------------------- Importing custom modules -------------------
 const { convertToHyruleanDate, bloodmoonDates, isBloodmoon } = require('../modules/calendarModule');
-const BloodMoonTracking = require('../../models/BloodMoonTrackingModel');
+const BloodMoonTracking = require('../../shared/models/BloodMoonTrackingModel');
 
 // ============================================================================
 // Blood Moon Tracking State

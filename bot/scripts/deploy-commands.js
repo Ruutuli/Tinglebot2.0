@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from root
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 async function getCommandFiles() {
     const commandFiles = [];

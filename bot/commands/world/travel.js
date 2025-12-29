@@ -5,8 +5,16 @@
 
 // ------------------- Standard Libraries -------------------
 const dotenv = require('dotenv');
+const path = require('path');
 const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: `.env.${env}` });
+const rootEnvPath = path.resolve(__dirname, '..', '..', '..', '.env');
+const envSpecificPath = path.resolve(__dirname, '..', '..', '..', `.env.${env}`);
+// Try environment-specific file first, then fall back to root .env
+if (require('fs').existsSync(envSpecificPath)) {
+  dotenv.config({ path: envSpecificPath });
+} else {
+  dotenv.config({ path: rootEnvPath });
+}
 
 // ------------------- Discord.js Components -------------------
 const {
@@ -18,18 +26,18 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Services -------------------
-const logger = require('../../../utils/logger');
+const logger = require('../../../shared/utils/logger');
 const {
   fetchCharacterByNameAndUserId,
   fetchCharactersByUserId,
   updateCharacterById,
   updateModCharacterById
-} = require('../../../database/db.js');
+} = require('../../../shared/database/db.js');
 
 // ------------------- Database Models -------------------
-// const Mount = require('../../../models/MountModel');
-const User = require('../../../models/UserModel.js');
-const Character = require('../../../models/CharacterModel.js');
+// const Mount = require('../../../shared/models/MountModel');
+const User = require('../../../shared/models/UserModel.js');
+const Character = require('../../../shared/models/CharacterModel.js');
 
 // ------------------- Embeds -------------------
 const {
@@ -53,11 +61,11 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../../modules/format
 const { getMonstersByPath, getRandomTravelEncounter } = require('../../modules/rngModule.js');
 const { hasPerk } = require('../../modules/jobsModule.js');
 const { isValidVillage, getAllVillages } = require('../../modules/locationsModule.js');
-const { checkInventorySync } = require('../../../utils/characterUtils');
-const { enforceJail } = require('../../../utils/jailCheck');
-const { handleInteractionError } = require('../../../utils/globalErrorHandler.js');
-const { retrieveAllByType } = require('../../../utils/storage.js');
-const { getWeatherWithoutGeneration } = require('../../../services/weatherService');
+const { checkInventorySync } = require('../../../shared/utils/characterUtils');
+const { enforceJail } = require('../../../shared/utils/jailCheck');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
+const { retrieveAllByType } = require('../../../shared/utils/storage.js');
+const { getWeatherWithoutGeneration } = require('../../../shared/services/weatherService');
 const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
 const { applyTravelWeatherBoost } = require('../../modules/boostIntegration');
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
@@ -258,7 +266,7 @@ module.exports = {
         // Update the character in the database
         try {
           if (character.isModCharacter) {
-            const ModCharacter = require('../../../models/ModCharacterModel.js');
+            const ModCharacter = require('../../../shared/models/ModCharacterModel.js');
             await ModCharacter.findByIdAndUpdate(character._id, { job: 'Villager' });
           } else {
             await Character.findByIdAndUpdate(character._id, { job: 'Villager' });
@@ -593,7 +601,7 @@ module.exports = {
             
             // Update character in database to persist the consumed elixir
             if (character.isModCharacter) {
-              const ModCharacter = require('../../../models/ModCharacterModel.js');
+              const ModCharacter = require('../../../shared/models/ModCharacterModel.js');
               await ModCharacter.findByIdAndUpdate(character._id, { buff: character.buff });
             } else {
               await Character.findByIdAndUpdate(character._id, { buff: character.buff });

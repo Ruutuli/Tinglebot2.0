@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
-const User = require('../../models/UserModel');
-const { connectToTinglebot } = require('../../database/db');
+const User = require('../../shared/models/UserModel');
+const { connectToTinglebot } = require('../../shared/database/db');
 const { validateUserLeveling, calculateTotalXPForLevel, calculateLevelFromXP, generateFixSuggestion } = require('./validateUserLeveling');
 const readline = require('readline');
 

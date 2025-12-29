@@ -6,24 +6,24 @@
 // ------------------- /customweapon Command -------------------
 // ------------------- Standard Libraries -------------------
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
-const { handleInteractionError } = require('../../../utils/globalErrorHandler');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 const mongoose = require('mongoose'); // Add mongoose import
 
 // ------------------- Database Connections -------------------
-const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes, fetchAllWeapons } = require('../../../database/db');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes, fetchAllWeapons } = require('../../../shared/database/db');
 
 // ------------------- Utility Functions -------------------
-const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase, escapeRegExp } = require('../../../utils/inventoryUtils');
-const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet, } = require('../../../utils/googleSheetsUtils');
-const { retrieveWeaponSubmissionFromStorage, saveWeaponSubmissionToStorage, updateWeaponSubmissionData, deleteWeaponSubmissionFromStorage, saveSubmissionToStorage, deleteSubmissionFromStorage } = require('../../../utils/storage');
-const { uploadSubmissionImage } = require('../../../utils/uploadUtils');
-const { generateUniqueId } = require('../../../utils/uniqueIdUtils');
+const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase, escapeRegExp } = require('../../../shared/utils/inventoryUtils');
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet, } = require('../../../shared/utils/googleSheetsUtils');
+const { retrieveWeaponSubmissionFromStorage, saveWeaponSubmissionToStorage, updateWeaponSubmissionData, deleteWeaponSubmissionFromStorage, saveSubmissionToStorage, deleteSubmissionFromStorage } = require('../../../shared/utils/storage');
+const { uploadSubmissionImage } = require('../../../shared/utils/uploadUtils');
+const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils');
 const { checkAndUseStamina } = require('../../modules/characterStatsModule')
 const { formatDateTime } = require('../../modules/formattingModule');
 
 // ------------------- Database Models -------------------
-const ItemModel = require('../../../models/ItemModel');
+const ItemModel = require('../../../shared/models/ItemModel');
 
 // ------------------- Helper Functions -------------------
 
@@ -315,7 +315,7 @@ function combineMaterials(materialsUsed) {
 // Retrieves all weapon submissions from storage
 async function getAllWeaponSubmissions() {
     try {
-        const { getAllWeaponSubmissions } = require('../../../utils/storage');
+        const { getAllWeaponSubmissions } = require('../../../shared/utils/storage');
         const submissions = await getAllWeaponSubmissions();
         return submissions;
     } catch (error) {

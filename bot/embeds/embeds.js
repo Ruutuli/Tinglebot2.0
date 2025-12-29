@@ -6,22 +6,22 @@
 const { EmbedBuilder } = require("discord.js");
 
 // ------------------- Utility Module Imports ------------------
-const { handleError } = require("../../utils/globalErrorHandler");
-const logger = require("../../utils/logger");
+const { handleError } = require('../../shared/utils/globalErrorHandler');
+const logger = require('../../shared/utils/logger');
 const { getLastDebugValues } = require("../modules/buffModule");
 const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
 const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
 const { getMountEmoji, getMountThumbnail } = require("../modules/mountModule");
 const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateUnusedBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText, generateBlightRollBoostFlavorText, generateSubmissionBoostFlavorText } = require("../modules/flavorTextModule");
-const { convertCmToFeetInches, isValidImageUrl } = require("../../utils/validation");
-const { validateInventorySheet } = require("../../utils/googleSheetsUtils");
+const { convertCmToFeetInches, isValidImageUrl } = require('../../shared/utils/validation');
+const { validateInventorySheet } = require('../../shared/utils/googleSheetsUtils');
 const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-const { generateUniqueId } = require('../../utils/uniqueIdUtils');
+const { generateUniqueId } = require('../../shared/utils/uniqueIdUtils');
 
 // ------------------- Database Model Imports ------------------
-const Character = require("../../models/CharacterModel");
-const ItemModel = require("../../models/ItemModel");
-const { monsterMapping } = require("../../models/MonsterModel");
+const Character = require('../../shared/models/CharacterModel');
+const ItemModel = require('../../shared/models/ItemModel');
+const { monsterMapping } = require('../../shared/models/MonsterModel');
 
 // ============================================================================
 // CONSTANTS
@@ -2112,7 +2112,7 @@ const createHealEmbed = async (
  let updatedHealer = healerCharacter;
  if (isFulfilled && healerCharacter && healerCharacter._id) {
   try {
-   const Character = require('../../models/CharacterModel');
+   const Character = require('../../shared/models/CharacterModel');
    updatedHealer = await Character.findById(healerCharacter._id);
   } catch (error) {
    // Fallback to original character data if refresh fails
@@ -2250,7 +2250,7 @@ const createHealEmbed = async (
 
   // Patient current status
   try {
-   const Character = require('../../models/CharacterModel');
+   const Character = require('../../shared/models/CharacterModel');
    const refreshedPatient = await Character.findById(characterToHeal._id);
    if (refreshedPatient) {
     // Check if patient has temporary hearts (exceeds maxHearts)

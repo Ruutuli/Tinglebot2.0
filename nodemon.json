@@ -1,0 +1,18 @@
+{
+  "watch": ["bot", "dashboard", "shared"],
+  "ext": "js,json",
+  "ignore": [
+    "node_modules/**",
+    "*.log",
+    "*.test.js",
+    "bot/assets/**",
+    "dashboard/images/**",
+    "dashboard/public/**"
+  ],
+  "delay": 1000,
+  "verbose": false,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}
+

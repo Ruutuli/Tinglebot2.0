@@ -6,9 +6,9 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Quest = require('../../models/QuestModel');
-const User = require('../../models/UserModel');
-const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
+const Quest = require('../../shared/models/QuestModel');
+const User = require('../../shared/models/UserModel');
+const ApprovedSubmission = require('../../shared/models/ApprovedSubmissionModel');
 
 // ============================================================================
 // ------------------- Database Connection -------------------

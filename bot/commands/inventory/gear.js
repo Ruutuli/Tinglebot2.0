@@ -7,16 +7,16 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 
 
-const { handleInteractionError } = require('../../../utils/globalErrorHandler.js');
-const { escapeRegExp } = require('../../../utils/inventoryUtils.js');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
+const { escapeRegExp } = require('../../../shared/utils/inventoryUtils.js');
 // ------------------- Database Services -------------------
 // Import character-related database services for fetching and updating character data.
-const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../../database/db.js');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../../shared/database/db.js');
 
 
 // ------------------- Database Models -------------------
 // Import the Item model for fetching item details.
-const ItemModel = require('../../../models/ItemModel.js');
+const ItemModel = require('../../../shared/models/ItemModel.js');
 
 
 // ------------------- Embeds -------------------
@@ -27,8 +27,8 @@ const { createCharacterGearEmbed } = require('../../embeds/embeds.js');
 // ------------------- Modules -------------------
 // Import character stats modules for updating defense and attack.
 const { updateCharacterDefense, updateCharacterAttack } = require('../../modules/characterStatsModule.js');
-const { checkInventorySync } = require('../../../utils/characterUtils.js');
-const logger = require('../../../utils/logger');
+const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
+const logger = require('../../../shared/utils/logger');
 
 
 // ------------------- Command Definition -------------------
