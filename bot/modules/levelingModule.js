@@ -58,7 +58,7 @@ async function handleXP(message) {
     const result = await user.addXP(finalXP, xpSource, true);
     
     // Log XP gain
-    logger.leveling.xp(message.author.tag, finalXP, result.newLevel);
+    logger.info('LEVEL', `${message.author.tag} gained ${finalXP} XP${result.newLevel ? ` (Level ${result.newLevel})` : ''}`);
     
     // Send level up notification if user leveled up
     if (result.leveledUp) {
