@@ -216,24 +216,57 @@ async function handleAutocomplete(interaction) {
         }
 
         const commandName = interaction.commandName;
-        const focusedOption = interaction.options.getFocused(true);
+        let focusedOption;
+        try {
+            focusedOption = interaction.options.getFocused(true);
+        } catch (getFocusedError) {
+            console.error('[handleAutocomplete]: Error getting focused option:', getFocusedError);
+            // Try to respond with empty array if we can't get focused option
+            try {
+                if (!interaction.responded && interaction.isRepliable()) {
+                    await interaction.respond([]);
+                }
+            } catch (respondError) {
+                // Ignore if already expired
+            }
+            return;
+        }
 
-        // Log autocomplete request for debugging
-        logger.info('AUTOCOMPLETE', `Handling autocomplete for command: ${commandName}, option: ${focusedOption.name}, userId: ${interaction.user.id}`);
+        if (!focusedOption) {
+            console.warn('[handleAutocomplete]: No focused option found');
+            try {
+                if (!interaction.responded && interaction.isRepliable()) {
+                    await interaction.respond([]);
+                }
+            } catch (respondError) {
+                // Ignore if already expired
+            }
+            return;
+        }
+
+        // Log autocomplete request for debugging (non-blocking)
+        try {
+            logger.info('AUTOCOMPLETE', `Handling autocomplete for command: ${commandName}, option: ${focusedOption?.name || 'unknown'}, userId: ${interaction.user?.id || 'unknown'}`);
+        } catch (logError) {
+            // Ignore logging errors, don't block autocomplete
+            console.error('[handleAutocomplete]: Logging error (non-fatal):', logError);
+        }
 
         // Route to internal handler
         await handleAutocompleteInternal(interaction, commandName, focusedOption);
     } catch (error) {
         // Enhanced error handling with better logging
         const commandName = interaction?.commandName || 'unknown';
-        const focusedOptionName = interaction?.options?.getFocused(true)?.name || 'unknown';
+        let focusedOptionName = 'unknown';
+        try {
+            const focused = interaction?.options?.getFocused(true);
+            focusedOptionName = focused?.name || 'unknown';
+        } catch (e) {
+            // Ignore error getting focused option in error handler
+        }
         
-        logger.error('AUTOCOMPLETE', `Error in main autocomplete handler for ${commandName}/${focusedOptionName}:`, {
-            error: error.message,
-            stack: error.stack,
-            userId: interaction?.user?.id,
-            commandName: commandName
-        });
+        console.error(`[handleAutocomplete]: Error in main autocomplete handler for ${commandName}/${focusedOptionName}:`, error);
+        logger.error('AUTOCOMPLETE', `Error in main autocomplete handler for ${commandName}/${focusedOptionName}: ${error.message}`, error);
         
         try {
             if (!interaction.responded && interaction.isRepliable()) {
@@ -243,7 +276,8 @@ async function handleAutocomplete(interaction) {
             if (respondError.code === 10062) {
                 logger.warn('AUTOCOMPLETE', `Main handler - interaction expired for ${commandName}, ignoring response attempt`);
             } else {
-                logger.error('AUTOCOMPLETE', `Main handler - respond error for ${commandName}:`, respondError.message);
+                console.error(`[handleAutocomplete]: Error responding:`, respondError);
+                logger.error('AUTOCOMPLETE', `Main handler - respond error for ${commandName}: ${respondError.message}`, respondError);
             }
         }
     }
@@ -255,7 +289,11 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
         // Check if interaction is still valid (3 second timeout)
         const interactionAge = Date.now() - interaction.createdTimestamp;
         if (interactionAge > 2500) { // 2.5 second safety margin
-            logger.warn('AUTOCOMPLETE', `Interaction too old (${interactionAge}ms) for ${commandName}/${focusedOption.name}, skipping response`);
+            try {
+                logger.warn('AUTOCOMPLETE', `Interaction too old (${interactionAge}ms) for ${commandName}/${focusedOption?.name || 'unknown'}, skipping response`);
+            } catch (logError) {
+                // Ignore logging errors
+            }
             return;
         }
 
@@ -772,8 +810,12 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
           break;
           
           default:
-            // Command not found in switch - log for debugging
-            logger.warn('AUTOCOMPLETE', `No handler found for command: ${commandName}, option: ${focusedOption.name}`);
+            // Command not found in switch - log for debugging (non-blocking)
+            try {
+              logger.warn('AUTOCOMPLETE', `No handler found for command: ${commandName}, option: ${focusedOption?.name || 'unknown'}`);
+            } catch (logError) {
+              // Ignore logging errors
+            }
             // Try to respond with empty array
             try {
               if (!interaction.responded && interaction.isAutocomplete()) {
@@ -781,20 +823,20 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               }
             } catch (respondError) {
               if (respondError.code !== 10062) {
-                logger.error('AUTOCOMPLETE', `Error responding for unhandled command ${commandName}:`, respondError.message);
+                try {
+                  logger.error('AUTOCOMPLETE', `Error responding for unhandled command ${commandName}: ${respondError.message}`, respondError);
+                } catch (logError) {
+                  // Ignore logging errors
+                }
               }
             }
             break;
         }
     } catch (error) {
         // Enhanced error handling with better logging
-        logger.error('AUTOCOMPLETE', `Error in handleAutocompleteInternal for ${commandName}/${focusedOption.name}:`, {
-            error: error.message,
-            stack: error.stack,
-            userId: interaction?.user?.id,
-            commandName: commandName,
-            focusedOption: focusedOption?.name
-        });
+        const focusedOptionName = focusedOption?.name || 'unknown';
+        console.error(`[handleAutocompleteInternal]: Error for ${commandName}/${focusedOptionName}:`, error);
+        logger.error('AUTOCOMPLETE', `Error in handleAutocompleteInternal for ${commandName}/${focusedOptionName}: ${error.message}`, error);
         
         try {
             if (!interaction.responded && interaction.isAutocomplete()) {
@@ -804,7 +846,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             if (respondError.code === 10062) {
                 logger.warn('AUTOCOMPLETE', `Interaction expired for ${commandName}, ignoring response attempt`);
             } else {
-                logger.error('AUTOCOMPLETE', `Error sending error response for ${commandName}:`, respondError.message);
+                console.error(`[handleAutocompleteInternal]: Error responding:`, respondError);
+                logger.error('AUTOCOMPLETE', `Error sending error response for ${commandName}: ${respondError.message}`, respondError);
             }
         }
     }

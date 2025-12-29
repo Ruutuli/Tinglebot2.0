@@ -417,10 +417,40 @@ async function initializeClient() {
                 `[index.js]: ❌ Error in command autocomplete handler for '${interaction.commandName}':`,
                 error
               );
-              await interaction.respond([]);
+              try {
+                if (!interaction.responded && interaction.isRepliable()) {
+                  await interaction.respond([]);
+                }
+              } catch (respondError) {
+                if (respondError.code !== 10062) {
+                  console.error(`[index.js]: Error responding to autocomplete:`, respondError);
+                }
+              }
             }
           } else {
-            await handleAutocomplete(interaction);
+            try {
+              await handleAutocomplete(interaction);
+            } catch (error) {
+              handleError(error, "index.js", {
+                commandName: interaction.commandName,
+                userTag: interaction.user?.tag,
+                userId: interaction.user?.id,
+                operation: 'autocomplete_handler'
+              });
+              console.error(
+                `[index.js]: ❌ Error in handleAutocomplete for '${interaction.commandName}':`,
+                error
+              );
+              try {
+                if (!interaction.responded && interaction.isRepliable()) {
+                  await interaction.respond([]);
+                }
+              } catch (respondError) {
+                if (respondError.code !== 10062) {
+                  console.error(`[index.js]: Error responding to autocomplete:`, respondError);
+                }
+              }
+            }
           }
         } else if (interaction.isModalSubmit()) {
           const { handleModalSubmission } = require("./handlers/modalHandler");
