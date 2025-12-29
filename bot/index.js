@@ -13,7 +13,7 @@ const port = process.env.PORT || 5001;
 const figlet = require("figlet");
 
 // ------------------- Discord.js Components -------------------
-const { Client, GatewayIntentBits, Partials } = require("discord.js");
+const { Client, GatewayIntentBits, Partials, REST, Routes } = require("discord.js");
 
 // ------------------- Database Connections -------------------
 const { connectToTinglebot, connectToInventories } = require("../shared/database/db");
@@ -309,6 +309,9 @@ async function initializeClient() {
           console.log('\n');
 
           try {
+            // Register commands with Discord
+            await registerCommands(client);
+            
             // Initialize core systems
             initializeReactionHandler(client);
             initializeReactionRolesHandler(client);
@@ -919,6 +922,60 @@ async function initializeClient() {
 // ------------------- Helper Functions -------------------
 // Brief description: Logging and utilities.
 // ============================================================================
+async function registerCommands(client) {
+  try {
+    logger.info('COMMANDS', 'Registering commands with Discord...');
+    
+    // Check required environment variables
+    if (!process.env.DISCORD_TOKEN) {
+      logger.error('COMMANDS', 'DISCORD_TOKEN is not set in environment variables');
+      return;
+    }
+    
+    if (!process.env.CLIENT_ID) {
+      logger.error('COMMANDS', 'CLIENT_ID is not set in environment variables');
+      return;
+    }
+    
+    if (!process.env.GUILD_ID) {
+      logger.error('COMMANDS', 'GUILD_ID is not set in environment variables');
+      return;
+    }
+    
+    // Collect all commands from client.commands
+    const commands = [];
+    for (const [name, command] of client.commands) {
+      if (command.data) {
+        commands.push(command.data.toJSON());
+      }
+    }
+    
+    if (commands.length === 0) {
+      logger.warn('COMMANDS', 'No commands found to register');
+      return;
+    }
+    
+    logger.info('COMMANDS', `Registering ${commands.length} commands...`);
+    
+    // Register commands with Discord
+    const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      { body: commands }
+    );
+    
+    logger.success('COMMANDS', `Successfully registered ${commands.length} commands with Discord`);
+  } catch (error) {
+    logger.error('COMMANDS', `Error registering commands: ${error.message}`);
+    if (error.code === 50001) {
+      logger.error('COMMANDS', 'Missing Access: Make sure the bot is in the guild and has proper permissions.');
+    } else if (error.code === 10004) {
+      logger.error('COMMANDS', 'Unknown Guild: The guild ID is invalid or the bot is not in this guild.');
+    }
+    // Don't throw - allow bot to continue even if command registration fails
+  }
+}
+
 function logBloodMoonStatus() {
   const today = new Date();
   const hyruleanDate = convertToHyruleanDate(today);
