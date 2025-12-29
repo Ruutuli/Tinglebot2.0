@@ -1195,7 +1195,7 @@ module.exports = {
       .setThumbnail(sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl))
       .setColor(embedColor)
       .setDescription(`🎉 **${pet.name}** has successfully advanced to **Level ${targetLevel}!**`)
-      .setImage(sanitizeUrl("https://storage.googleapis.com/tinglebot/Graphics/border.png'))
+      .setImage(sanitizeUrl("https://storage.googleapis.com/tinglebot/Graphics/border.png"))
              .addFields(
         { name: "__Pet Name__", value: `> ${pet.name}`, inline: true },
         { name: "__Owner__", value: `> ${character.name}`, inline: true },
@@ -1246,7 +1246,7 @@ module.exports = {
     }
 
     // ------------------- Subcommand: View Pet -------------------
-    if (subcommand === "view') {
+    if (subcommand === "view") {
       try {
         // Find pet directly using Pet model - ensure we get fresh data
         // Force a fresh database fetch to avoid cached data

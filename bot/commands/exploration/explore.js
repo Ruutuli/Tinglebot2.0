@@ -805,7 +805,7 @@ module.exports = {
       });
 
       const exploreChance = Math.random();
-      if (exploreChance > 0.7 || party.quadrantState !== "unexplored') {
+      if (exploreChance > 0.7 || party.quadrantState !== "unexplored") {
        party.quadrantState = "explored";
 
        embed.addFields({
@@ -841,7 +841,7 @@ module.exports = {
         `[ERROR] Could not add item to inventory: ${error.message}`
        );
       }
-     } else if (encounterType === "monster') {
+     } else if (encounterType === "monster") {
       // Check if character has blight stage 3 or higher (monsters don't attack them)
       if (character.blighted && character.blightStage >= 3) {
         return interaction.editReply({

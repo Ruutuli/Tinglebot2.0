@@ -95,12 +95,12 @@ const command = {
     .addIntegerOption((opt) =>
      opt
       .setName("quantity")
-      .setDescription("Quantity of the item to deliver')
+      .setDescription("Quantity of the item to deliver")
       .setRequired(true)
     )
     .addStringOption((opt) =>
      opt
-      .setName("payment')
+      .setName("payment")
       .setDescription("Payment details; Item's or other agreed upon payments")
       .setRequired(true)
     )

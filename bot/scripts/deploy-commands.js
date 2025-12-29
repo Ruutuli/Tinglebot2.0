@@ -27,7 +27,7 @@ async function getCommandFiles() {
     }
 
     for (const dir of commandDirs) {
-        const dirPath = path.join(process.cwd(), dir);
+        const dirPath = path.join(process.cwd(), 'bot', dir);
         if (fs.existsSync(dirPath)) {
             scanDirectory(dirPath);
         }

@@ -115,7 +115,7 @@ const { getCurrentWeather } = require('../../../shared/services/weatherService')
 // ------------------- Helper Functions -------------------
 
 // Unified error handling
-async function handleLootError(interaction, error, context = '") {
+async function handleLootError(interaction, error, context = "") {
   handleInteractionError(error, "loot.js", {
     operation: 'handleLootError',
     commandName: interaction.commandName || 'loot',

@@ -129,8 +129,8 @@ module.exports = {
     .setDescription("Display post counts for all participants in an RP quest")
     .addStringOption(option =>
      option
-      .setName("questid')
-      .setDescription("ID of the RP quest to check post counts for')
+      .setName("questid")
+      .setDescription("ID of the RP quest to check post counts for")
       .setRequired(true)
       .setAutocomplete(true)
     )
@@ -570,8 +570,8 @@ async handleQuestTurnIn(interaction) {
 
  async handleLegacyQuestTransfer(interaction) {
   try {
-   const totalLegacy = interaction.options.getInteger("total');
-   const pendingLegacy = interaction.options.getInteger("pending');
+   const totalLegacy = interaction.options.getInteger("total");
+   const pendingLegacy = interaction.options.getInteger("pending");
 
    if (totalLegacy <= 0 && pendingLegacy <= 0) {
     return interaction.reply({
