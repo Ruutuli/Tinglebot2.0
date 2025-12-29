@@ -5,6 +5,9 @@
 
 const logger = require('./logger');
 
+// Check if we're in production
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';
+
 // ------------------- Cache Entry Class -------------------
 class CacheEntry {
   constructor(data, ttl) {
@@ -126,7 +129,8 @@ class Cache {
       }
     }
     
-    if (cleaned > 0) {
+    // Don't log cache cleanup in production
+    if (cleaned > 0 && !isProduction) {
       logger.debug(`Cache cleanup: removed ${cleaned} expired entries`, null, 'cache.js');
     }
   }

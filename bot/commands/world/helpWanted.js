@@ -1965,6 +1965,9 @@ module.exports = {
           });
         }
 
+        // Reset exchange tracking for new exchange
+        user.helpWanted.lastExchangeAmount = 0;
+
         // ------------------- Process the Exchange -------------------
         if (reward === 'spirit_orb') {
           // Add Spirit Orb to character's inventory
@@ -1994,8 +1997,11 @@ module.exports = {
             });
           }
 
-          // Deduct 50 completions from user
-          user.helpWanted.totalCompletions -= 50;
+          // Deduct 50 completions from user and track exchange
+          const exchangeAmount = 50;
+          user.helpWanted.totalCompletions -= exchangeAmount;
+          user.helpWanted.lastExchangeAmount = exchangeAmount;
+          user.helpWanted.lastExchangeAt = new Date();
           await user.save();
 
           // ------------------- Build Spirit Orb Exchange Embed -------------------
@@ -2012,7 +2018,7 @@ module.exports = {
               },
               {
                 name: '📊 __Help Wanted Progress__',
-                value: `> ${totalCompletions} → ${user.helpWanted.totalCompletions} (used 50)`,
+                value: `> ${totalCompletions} → ${user.helpWanted.totalCompletions} (used ${user.helpWanted.lastExchangeAmount})`,
                 inline: true
               }
             ]);
@@ -2021,8 +2027,11 @@ module.exports = {
 
         } else if (reward === 'character_slot') {
           // Add character slot to user
+          const exchangeAmount = 50;
           user.characterSlot = (user.characterSlot || 2) + 1;
-          user.helpWanted.totalCompletions -= 50;
+          user.helpWanted.totalCompletions -= exchangeAmount;
+          user.helpWanted.lastExchangeAmount = exchangeAmount;
+          user.helpWanted.lastExchangeAt = new Date();
           await user.save();
 
           // ------------------- Build Character Slot Exchange Embed -------------------
@@ -2039,7 +2048,7 @@ module.exports = {
               },
               {
                 name: '📊 __Help Wanted Progress__',
-                value: `> ${totalCompletions} → ${user.helpWanted.totalCompletions} (used 50)`,
+                value: `> ${totalCompletions} → ${user.helpWanted.totalCompletions} (used ${user.helpWanted.lastExchangeAmount})`,
                 inline: true
               }
             ]);

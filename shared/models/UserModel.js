@@ -25,6 +25,8 @@ const userSchema = new mongoose.Schema({
     lastCompletion: { type: String, default: null }, // YYYY-MM-DD
     cooldownUntil: { type: Date, default: null },
     totalCompletions: { type: Number, default: 0 }, // Total number of Help Wanted quests completed
+    lastExchangeAmount: { type: Number, default: 0 }, // Amount exchanged in the last exchange
+    lastExchangeAt: { type: Date, default: null }, // Timestamp of last exchange
     completions: [
       {
         date: { type: String }, // YYYY-MM-DD

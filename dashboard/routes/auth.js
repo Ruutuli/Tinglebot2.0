@@ -29,8 +29,10 @@ router.get('/discord', (req, res, next) => {
   // Store the return URL in session if provided
   if (req.query.returnTo) {
     req.session.returnTo = req.query.returnTo;
-    logger.debug(`Storing returnTo in session: ${req.query.returnTo}`, null, 'auth.js');
-    logger.debug(`Session ID: ${req.session.id}`, null, 'auth.js');
+    if (!isProduction) {
+      logger.debug(`Storing returnTo in session: ${req.query.returnTo}`, null, 'auth.js');
+      logger.debug(`Session ID: ${req.session.id}`, null, 'auth.js');
+    }
     
     // Save session explicitly and wait for it to complete
     req.session.save((err) => {
@@ -38,15 +40,17 @@ router.get('/discord', (req, res, next) => {
         logger.error('Error saving session', err, 'auth.js');
         return next(err);
       }
-      logger.debug('Session saved successfully', null, 'auth.js');
-      
-      // Now proceed with Discord authentication
-      logger.debug(`Initiating Discord auth with callback URL: ${env.discordCallbackUrl}`, null, 'auth.js');
+      if (!isProduction) {
+        logger.debug('Session saved successfully', null, 'auth.js');
+        logger.debug(`Initiating Discord auth with callback URL: ${env.discordCallbackUrl}`, null, 'auth.js');
+      }
       passport.authenticate('discord')(req, res, next);
     });
   } else {
     const callbackUrl = env.discordCallbackUrl;
-    logger.debug(`Initiating Discord auth with callback URL: ${callbackUrl}`, null, 'auth.js');
+    if (!isProduction) {
+      logger.debug(`Initiating Discord auth with callback URL: ${callbackUrl}`, null, 'auth.js');
+    }
     passport.authenticate('discord')(req, res, next);
   }
 });
@@ -55,10 +59,12 @@ router.get('/discord', (req, res, next) => {
 // Handles Discord OAuth callback
 router.get('/discord/callback', 
   (req, res, next) => {
-    // Log callback received
-    logger.debug('Discord callback received', null, 'auth.js');
-    logger.debug(`Query params: ${JSON.stringify(req.query)}`, null, 'auth.js');
-    logger.debug(`Session ID: ${req.session?.id}`, null, 'auth.js');
+    // Log callback received (only in development)
+    if (!isProduction) {
+      logger.debug('Discord callback received', null, 'auth.js');
+      logger.debug(`Query params: ${JSON.stringify(req.query)}`, null, 'auth.js');
+      logger.debug(`Session ID: ${req.session?.id}`, null, 'auth.js');
+    }
     
     // Proceed with authentication
     passport.authenticate('discord', { 
@@ -80,14 +86,17 @@ router.get('/discord/callback',
     // Check if there's a returnTo parameter in the session or query
     const returnTo = req.session.returnTo || req.query.returnTo;
     
-    logger.debug('Discord callback redirect:', null, 'auth.js');
-    logger.debug(`returnTo from session: ${req.session.returnTo}`, null, 'auth.js');
-    logger.debug(`returnTo from query: ${req.query.returnTo}`, null, 'auth.js');
-    logger.debug(`final returnTo: ${returnTo}`, null, 'auth.js');
-    logger.debug(`session ID: ${req.session.id}`, null, 'auth.js');
-    logger.debug(`passport user: ${req.session.passport?.user}`, null, 'auth.js');
-    logger.debug(`session exists: ${!!req.session}`, null, 'auth.js');
-    logger.debug(`session keys: ${Object.keys(req.session || {})}`, null, 'auth.js');
+    // Only log debug info in development
+    if (!isProduction) {
+      logger.debug('Discord callback redirect:', null, 'auth.js');
+      logger.debug(`returnTo from session: ${req.session.returnTo}`, null, 'auth.js');
+      logger.debug(`returnTo from query: ${req.query.returnTo}`, null, 'auth.js');
+      logger.debug(`final returnTo: ${returnTo}`, null, 'auth.js');
+      logger.debug(`session ID: ${req.session.id}`, null, 'auth.js');
+      logger.debug(`passport user: ${req.session.passport?.user}`, null, 'auth.js');
+      logger.debug(`session exists: ${!!req.session}`, null, 'auth.js');
+      logger.debug(`session keys: ${Object.keys(req.session || {})}`, null, 'auth.js');
+    }
     
     // Normalize returnTo - handle empty string, '/', or undefined
     let finalReturnTo = returnTo;
@@ -105,7 +114,9 @@ router.get('/discord/callback',
     const redirectUrl = finalReturnTo + separator + 'login=success';
     
     // Redirect to the destination
-    logger.debug(`Redirecting to: ${redirectUrl}`, null, 'auth.js');
+    if (!isProduction) {
+      logger.debug(`Redirecting to: ${redirectUrl}`, null, 'auth.js');
+    }
     res.redirect(redirectUrl);
   }
 );

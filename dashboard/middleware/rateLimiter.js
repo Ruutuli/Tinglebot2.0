@@ -8,6 +8,9 @@
 
 const logger = require('../../shared/utils/logger');
 
+// Check if we're in production
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';
+
 // In-memory store for rate limiting (in production, use Redis)
 const rateLimitStore = new Map();
 
@@ -51,7 +54,10 @@ function createRateLimiter(options = {}) {
     
     // Check if limit exceeded
     if (entry.count > max) {
-      logger.warn(`Rate limit exceeded for ${key} on ${req.path}`, 'rateLimiter.js');
+      // Only log rate limit warnings in development, or if it's a repeated issue
+      if (!isProduction) {
+        logger.warn(`Rate limit exceeded for ${key} on ${req.path}`, 'rateLimiter.js');
+      }
       return res.status(429).json({
         error: 'Too Many Requests',
         message: message,
@@ -92,7 +98,8 @@ function cleanupRateLimitStore() {
     }
   }
   
-  if (cleaned > 0) {
+  // Don't log cleanup in production
+  if (cleaned > 0 && !isProduction) {
     logger.debug(`Cleaned up ${cleaned} expired rate limit entries`, null, 'rateLimiter.js');
   }
 }

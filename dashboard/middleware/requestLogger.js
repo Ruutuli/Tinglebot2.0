@@ -5,6 +5,9 @@
 
 const logger = require('../../shared/utils/logger');
 
+// Check if we're in production
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';
+
 // ------------------- Function: requestLogger -------------------
 // Logs structured request information
 function requestLogger(req, res, next) {
@@ -17,20 +20,24 @@ function requestLogger(req, res, next) {
   // Skip detailed logging for image requests to reduce log clutter
   const isImageRequest = req.path.startsWith('/api/images/');
   
-  // Log request start (simplified for image requests)
-  if (isImageRequest) {
-    // Only log image requests if they're slow (>500ms) or have errors
-    // We'll check this in the response handler
-  } else {
-    // Combine request info into single log line for non-image requests
-    const requestInfo = [`${req.method} ${req.path}`];
-    if (Object.keys(req.query).length > 0) {
-      requestInfo.push(`Query: ${JSON.stringify(req.query)}`);
+  // In production, only log requests if they're errors or slow
+  // In development, log all requests
+  if (!isProduction) {
+    // Log request start (simplified for image requests)
+    if (isImageRequest) {
+      // Only log image requests if they're slow (>500ms) or have errors
+      // We'll check this in the response handler
+    } else {
+      // Combine request info into single log line for non-image requests
+      const requestInfo = [`${req.method} ${req.path}`];
+      if (Object.keys(req.query).length > 0) {
+        requestInfo.push(`Query: ${JSON.stringify(req.query)}`);
+      }
+      if (req.user) {
+        requestInfo.push(`User: ${req.user.username}`);
+      }
+      logger.api(requestInfo.join(' | '), 'requestLogger.js');
     }
-    if (req.user) {
-      requestInfo.push(`User: ${req.user.username}`);
-    }
-    logger.api(requestInfo.join(' | '), 'requestLogger.js');
   }
   
   // Store original end function to log response
@@ -41,16 +48,26 @@ function requestLogger(req, res, next) {
     
     // Log response
     if (statusCode >= 500) {
+      // Always log server errors
       logger.error(`Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, null, 'requestLogger.js');
     } else if (statusCode >= 400) {
+      // Always log client errors
       logger.warn(`Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, 'requestLogger.js');
-    } else if (isImageRequest) {
-      // Only log slow image requests or skip entirely for normal responses
-      if (duration > 500) {
-        logger.api(`Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, 'requestLogger.js');
+    } else if (isProduction) {
+      // In production, only log slow requests (>1000ms) for successful responses
+      if (duration > 1000) {
+        logger.warn(`Slow response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, 'requestLogger.js');
       }
     } else {
-      logger.api(`Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, 'requestLogger.js');
+      // In development, log all successful responses
+      if (isImageRequest) {
+        // Only log slow image requests
+        if (duration > 500) {
+          logger.api(`Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, 'requestLogger.js');
+        }
+      } else {
+        logger.api(`Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, 'requestLogger.js');
+      }
     }
     
     // Set response time header only if headers haven't been sent
