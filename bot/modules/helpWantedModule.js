@@ -1925,7 +1925,9 @@ async function updateUserTracking(user, quest, userId) {
   const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
   
   user.helpWanted.lastCompletion = today;
+  // Increment both total and current completions
   user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
+  user.helpWanted.currentCompletions = (user.helpWanted.currentCompletions || 0) + 1;
   user.helpWanted.completions.push({
     date: today,
     village: quest.village,

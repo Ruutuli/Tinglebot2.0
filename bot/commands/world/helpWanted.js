@@ -622,14 +622,16 @@ async function updateUserTracking(user, quest, userId) {
   const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
   
   user.helpWanted.lastCompletion = today;
+  // Increment both total and current completions
   user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
-          user.helpWanted.completions.push({
-          date: today,
-          village: quest.village,
-          questType: quest.type,
-          questId: quest.questId,
-          timestamp: new Date()
-        });
+  user.helpWanted.currentCompletions = (user.helpWanted.currentCompletions || 0) + 1;
+  user.helpWanted.completions.push({
+    date: today,
+    village: quest.village,
+    questType: quest.type,
+    questId: quest.questId,
+    timestamp: new Date()
+  });
   await user.save();
 }
 
@@ -1957,11 +1959,12 @@ module.exports = {
           return await interaction.editReply({ content: '❌ No user data found. Please complete some Help Wanted quests first.' });
         }
 
-        const totalCompletions = user.helpWanted?.totalCompletions || 0;
+        const totalCompletions = user.helpWanted?.totalCompletions || user.helpWanted?.completions?.length || 0;
+        const currentCompletions = user.helpWanted?.currentCompletions || 0;
 
-        if (totalCompletions < 50) {
+        if (currentCompletions < 50) {
           return await interaction.editReply({
-            content: `❌ **${character.name}** has only completed **${totalCompletions} Help Wanted quests**. You need at least **50** to exchange for a reward.`
+            content: `❌ **${character.name}** has only **${currentCompletions} current Help Wanted quest completions** for exchange. You need at least **50** to exchange for a reward.\n\n📊 **Total completions:** ${totalCompletions}\n🎯 **Current for exchange:** ${currentCompletions}`
           });
         }
 
@@ -1999,7 +2002,8 @@ module.exports = {
 
           // Deduct 50 completions from user and track exchange
           const exchangeAmount = 50;
-          user.helpWanted.totalCompletions -= exchangeAmount;
+          const beforeCurrent = user.helpWanted.currentCompletions;
+          user.helpWanted.currentCompletions -= exchangeAmount;
           user.helpWanted.lastExchangeAmount = exchangeAmount;
           user.helpWanted.lastExchangeAt = new Date();
           await user.save();
@@ -2018,8 +2022,8 @@ module.exports = {
               },
               {
                 name: '📊 __Help Wanted Progress__',
-                value: `> ${totalCompletions} → ${user.helpWanted.totalCompletions} (used ${user.helpWanted.lastExchangeAmount})`,
-                inline: true
+                value: `> **Current:** ${beforeCurrent} → ${user.helpWanted.currentCompletions} (used ${user.helpWanted.lastExchangeAmount})\n> **Total:** ${user.helpWanted.totalCompletions || totalCompletions}`,
+                inline: false
               }
             ]);
 
@@ -2028,8 +2032,9 @@ module.exports = {
         } else if (reward === 'character_slot') {
           // Add character slot to user
           const exchangeAmount = 50;
+          const beforeCurrent = user.helpWanted.currentCompletions;
           user.characterSlot = (user.characterSlot || 2) + 1;
-          user.helpWanted.totalCompletions -= exchangeAmount;
+          user.helpWanted.currentCompletions -= exchangeAmount;
           user.helpWanted.lastExchangeAmount = exchangeAmount;
           user.helpWanted.lastExchangeAt = new Date();
           await user.save();
@@ -2048,8 +2053,8 @@ module.exports = {
               },
               {
                 name: '📊 __Help Wanted Progress__',
-                value: `> ${totalCompletions} → ${user.helpWanted.totalCompletions} (used ${user.helpWanted.lastExchangeAmount})`,
-                inline: true
+                value: `> **Current:** ${beforeCurrent} → ${user.helpWanted.currentCompletions} (used ${user.helpWanted.lastExchangeAmount})\n> **Total:** ${user.helpWanted.totalCompletions || totalCompletions}`,
+                inline: false
               }
             ]);
 
@@ -2082,7 +2087,8 @@ module.exports = {
           return await interaction.editReply({ content: '❌ No user data found.' });
         }
 
-        const totalCompletions = user.helpWanted?.totalCompletions || 0;
+        const totalCompletions = user.helpWanted?.totalCompletions || user.helpWanted?.completions?.length || 0;
+        const currentCompletions = user.helpWanted?.currentCompletions || 0;
         const recentCompletions = user.helpWanted?.completions || [];
 
         // Calculate today's and this week's completions
@@ -2127,7 +2133,7 @@ module.exports = {
         embed.addFields([
           {
             name: '__📊 Quest Statistics__',
-            value: `> **Total Completed:** ${totalCompletions}\n> **Today:** ${todayCompletions}\n> **This Week:** ${weekCompletions}`,
+            value: `> **Total:** ${totalCompletions}\n> **Current for Exchange:** ${currentCompletions}\n> **Today:** ${todayCompletions}\n> **This Week:** ${weekCompletions}`,
             inline: false
           }
         ]);

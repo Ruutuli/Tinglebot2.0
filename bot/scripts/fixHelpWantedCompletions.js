@@ -26,35 +26,57 @@ const ARG_FIX_EXCHANGES = process.argv.includes('--fix-exchanges');
 function analyzeUserHelpWanted(user) {
   const helpWanted = user.helpWanted || {};
   const completions = helpWanted.completions || [];
-  const totalCompletions = helpWanted.totalCompletions || 0;
+  const totalCompletions = helpWanted.totalCompletions;
+  const currentCompletions = helpWanted.currentCompletions || 0;
   const lastExchangeAmount = helpWanted.lastExchangeAmount;
   const lastExchangeAt = helpWanted.lastExchangeAt;
   
   // Count actual completions in the array
   const actualCompletions = completions.length;
   
-  // Calculate how many were exchanged (if totalCompletions < actualCompletions)
-  const exchangedAmount = actualCompletions > totalCompletions ? (actualCompletions - totalCompletions) : 0;
+  // Calculate how many were exchanged (if currentCompletions < actualCompletions)
+  const exchangedAmount = actualCompletions > currentCompletions ? (actualCompletions - currentCompletions) : 0;
   
-  // Special case: if totalCompletions equals actualCompletions and is a multiple of 50,
+  // Special case: if currentCompletions equals actualCompletions and is a multiple of 50,
   // and lastExchangeAmount is 0, it might indicate an exchange happened but wasn't recorded properly
   // This can happen if the exchange command ran before the tracking fields were added
   const possibleExchangeNotRecorded = (exchangedAmount === 0 && 
-                                       totalCompletions === actualCompletions && 
-                                       totalCompletions > 0 && 
-                                       totalCompletions % 50 === 0 &&
+                                       currentCompletions === actualCompletions && 
+                                       currentCompletions > 0 && 
+                                       currentCompletions % 50 === 0 &&
                                        (lastExchangeAmount === undefined || lastExchangeAmount === null || lastExchangeAmount === 0));
   
   const issues = [];
   
-  // Check if totalCompletions matches actual completions (but only if no exchange happened)
-  // If exchangedAmount > 0, then totalCompletions should be less than actualCompletions
-  if (exchangedAmount === 0 && totalCompletions !== actualCompletions) {
+  // Check if totalCompletions is missing or incorrect
+  if (totalCompletions === undefined || totalCompletions === null) {
+    issues.push({
+      type: 'totalCompletions_missing'
+    });
+  } else if (totalCompletions !== actualCompletions) {
     issues.push({
       type: 'totalCompletions_mismatch',
       expected: actualCompletions,
       actual: totalCompletions,
       difference: actualCompletions - totalCompletions
+    });
+  }
+  
+  // Check if currentCompletions is missing
+  if (currentCompletions === undefined || currentCompletions === null) {
+    issues.push({
+      type: 'currentCompletions_missing'
+    });
+  }
+  
+  // Check if currentCompletions matches expected (but only if no exchange happened)
+  // If exchangedAmount > 0, then currentCompletions should be less than actualCompletions
+  if (exchangedAmount === 0 && currentCompletions !== actualCompletions) {
+    issues.push({
+      type: 'currentCompletions_mismatch',
+      expected: actualCompletions,
+      actual: currentCompletions,
+      difference: actualCompletions - currentCompletions
     });
   }
   
@@ -93,6 +115,7 @@ function analyzeUserHelpWanted(user) {
   
   return {
     totalCompletions,
+    currentCompletions,
     actualCompletions,
     exchangedAmount,
     lastExchangeAmount,
@@ -115,6 +138,7 @@ async function fixUserHelpWanted(user, analysis) {
       lastCompletion: null,
       cooldownUntil: null,
       totalCompletions: 0,
+      currentCompletions: 0,
       lastExchangeAmount: 0,
       lastExchangeAt: null,
       completions: []
@@ -123,8 +147,28 @@ async function fixUserHelpWanted(user, analysis) {
     fixed = true;
   }
   
-  // Fix 1: Update totalCompletions to match actual completions (only if no exchange happened)
-  if (analysis.issues.some(i => i.type === 'totalCompletions_mismatch')) {
+  // Fix 0: Initialize or fix totalCompletions (lifetime total)
+  // Also handle migration from old field names
+  if (helpWanted.totalLifetimeCompletions !== undefined && helpWanted.totalCompletions === undefined) {
+    helpWanted.totalCompletions = helpWanted.totalLifetimeCompletions;
+    delete helpWanted.totalLifetimeCompletions;
+    fixes.push(`Migrated totalLifetimeCompletions to totalCompletions: ${helpWanted.totalCompletions}`);
+    fixed = true;
+  }
+  
+  // Migrate availableCompletions to currentCompletions if it exists
+  if (helpWanted.availableCompletions !== undefined && helpWanted.currentCompletions === undefined) {
+    helpWanted.currentCompletions = helpWanted.availableCompletions;
+    delete helpWanted.availableCompletions;
+    fixes.push(`Migrated availableCompletions to currentCompletions: ${helpWanted.currentCompletions}`);
+    fixed = true;
+  }
+  
+  if (analysis.issues.some(i => i.type === 'totalCompletions_missing')) {
+    helpWanted.totalCompletions = analysis.actualCompletions;
+    fixes.push(`Initialized totalCompletions to ${analysis.actualCompletions}`);
+    fixed = true;
+  } else if (analysis.issues.some(i => i.type === 'totalCompletions_mismatch')) {
     const mismatch = analysis.issues.find(i => i.type === 'totalCompletions_mismatch');
     const oldTotal = helpWanted.totalCompletions || 0;
     helpWanted.totalCompletions = analysis.actualCompletions;
@@ -132,11 +176,34 @@ async function fixUserHelpWanted(user, analysis) {
     fixed = true;
   }
   
-  // Fix 2: Track exchange that happened but wasn't recorded (totalCompletions < actualCompletions)
+  // Fix 1: Initialize or fix currentCompletions (available for exchange)
+  if (analysis.issues.some(i => i.type === 'currentCompletions_missing')) {
+    // If there was an exchange, current should be less than total
+    if (analysis.exchangedAmount > 0) {
+      helpWanted.currentCompletions = analysis.actualCompletions - analysis.exchangedAmount;
+      fixes.push(`Initialized currentCompletions to ${helpWanted.currentCompletions} (after exchange)`);
+    } else {
+      helpWanted.currentCompletions = analysis.actualCompletions;
+      fixes.push(`Initialized currentCompletions to ${analysis.actualCompletions}`);
+    }
+    fixed = true;
+  } else if (analysis.issues.some(i => i.type === 'currentCompletions_mismatch')) {
+    const mismatch = analysis.issues.find(i => i.type === 'currentCompletions_mismatch');
+    const oldCurrent = helpWanted.currentCompletions || 0;
+    helpWanted.currentCompletions = analysis.actualCompletions;
+    fixes.push(`Updated currentCompletions from ${oldCurrent} to ${analysis.actualCompletions}`);
+    fixed = true;
+  }
+  
+  // Fix 2: Track exchange that happened but wasn't recorded (currentCompletions < actualCompletions)
   if (analysis.issues.some(i => i.type === 'exchange_not_tracked')) {
     const exchangeIssue = analysis.issues.find(i => i.type === 'exchange_not_tracked');
     const exchangedAmount = exchangeIssue.exchangedAmount;
     
+    // Set currentCompletions to the correct value (actual - exchanged)
+    const oldCurrent = helpWanted.currentCompletions || 0;
+    helpWanted.currentCompletions = analysis.actualCompletions - exchangedAmount;
+    
     // Set lastExchangeAmount to the amount that was exchanged
     helpWanted.lastExchangeAmount = exchangedAmount;
     
@@ -144,18 +211,18 @@ async function fixUserHelpWanted(user, analysis) {
     const exchangeTimestamp = getExchangeTimestamp(helpWanted);
     helpWanted.lastExchangeAt = exchangeTimestamp;
     
-    fixes.push(`Tracked exchange: ${exchangedAmount} completions exchanged${exchangeTimestamp ? ` (estimated date: ${exchangeTimestamp.toISOString().split('T')[0]})` : ' (date unknown)'}`);
+    fixes.push(`Tracked exchange: ${exchangedAmount} completions exchanged, currentCompletions: ${oldCurrent} → ${helpWanted.currentCompletions}${exchangeTimestamp ? ` (estimated date: ${exchangeTimestamp.toISOString().split('T')[0]})` : ' (date unknown)'}`);
     fixed = true;
   }
   
-  // Fix 2b: Handle possible exchange that wasn't recorded (totalCompletions == actualCompletions but should be 0)
+  // Fix 2b: Handle possible exchange that wasn't recorded (currentCompletions == actualCompletions but should be 0)
   if (analysis.issues.some(i => i.type === 'possible_exchange_not_recorded')) {
     const exchangeIssue = analysis.issues.find(i => i.type === 'possible_exchange_not_recorded');
     const exchangedAmount = exchangeIssue.exchangedAmount;
     
-    // Set totalCompletions to 0 (assuming all were exchanged)
-    const oldTotal = helpWanted.totalCompletions;
-    helpWanted.totalCompletions = 0;
+    // Set currentCompletions to 0 (assuming all were exchanged)
+    const oldCurrent = helpWanted.currentCompletions;
+    helpWanted.currentCompletions = 0;
     
     // Set lastExchangeAmount to the amount that was exchanged
     helpWanted.lastExchangeAmount = exchangedAmount;
@@ -164,7 +231,7 @@ async function fixUserHelpWanted(user, analysis) {
     const exchangeTimestamp = getExchangeTimestamp(helpWanted);
     helpWanted.lastExchangeAt = exchangeTimestamp;
     
-    fixes.push(`Fixed possible exchange: Set totalCompletions from ${oldTotal} to 0, tracked ${exchangedAmount} completions exchanged${exchangeTimestamp ? ` (estimated date: ${exchangeTimestamp.toISOString().split('T')[0]})` : ' (date unknown)'}`);
+    fixes.push(`Fixed possible exchange: Set currentCompletions from ${oldCurrent} to 0, tracked ${exchangedAmount} completions exchanged${exchangeTimestamp ? ` (estimated date: ${exchangeTimestamp.toISOString().split('T')[0]})` : ' (date unknown)'}`);
     fixed = true;
   }
   
@@ -272,8 +339,9 @@ async function fixHelpWantedCompletions() {
         if (shouldShow) {
           console.log(`\n👤 User: ${user.discordId} (${user.username || 'N/A'})`);
           console.log(`   ✅ No issues found - data is correct:`);
-          console.log(`   • totalCompletions: ${analysis.totalCompletions}`);
-          console.log(`   • actualCompletions: ${analysis.actualCompletions}`);
+          console.log(`   • totalCompletions (lifetime): ${analysis.totalCompletions !== undefined ? analysis.totalCompletions : 'MISSING'}`);
+          console.log(`   • currentCompletions (for exchange): ${analysis.currentCompletions}`);
+          console.log(`   • actualCompletions (array length): ${analysis.actualCompletions}`);
           if (analysis.exchangedAmount > 0) {
             console.log(`   • exchangedAmount (detected): ${analysis.exchangedAmount}`);
           }
@@ -287,20 +355,26 @@ async function fixHelpWantedCompletions() {
       
       console.log(`\n👤 User: ${user.discordId} (${user.username || 'N/A'})`);
       console.log(`   Current state:`);
-      console.log(`   • totalCompletions: ${analysis.totalCompletions}`);
-      console.log(`   • actualCompletions: ${analysis.actualCompletions}`);
+      console.log(`   • totalCompletions (lifetime): ${analysis.totalCompletions !== undefined ? analysis.totalCompletions : 'MISSING'}`);
+      console.log(`   • currentCompletions (for exchange): ${analysis.currentCompletions}`);
+      console.log(`   • actualCompletions (array length): ${analysis.actualCompletions}`);
       if (analysis.exchangedAmount > 0) {
         console.log(`   • exchangedAmount (detected): ${analysis.exchangedAmount}`);
       }
       console.log(`   • lastExchangeAmount: ${analysis.lastExchangeAmount !== undefined ? analysis.lastExchangeAmount : 'MISSING'}`);
       console.log(`   • lastExchangeAt: ${analysis.lastExchangeAt !== undefined ? (analysis.lastExchangeAt ? new Date(analysis.lastExchangeAt).toISOString().split('T')[0] : 'null') : 'MISSING'}`);
-      console.log(`   • completions array length: ${analysis.completionsCount}`);
       
       if (analysis.issues.length > 0) {
         console.log(`   Issues found:`);
         analysis.issues.forEach(issue => {
-          if (issue.type === 'totalCompletions_mismatch') {
-            console.log(`   • totalCompletions mismatch: expected ${issue.expected}, got ${issue.actual} (diff: ${issue.difference})`);
+          if (issue.type === 'totalCompletions_missing') {
+            console.log(`   • totalCompletions (lifetime) is missing`);
+          } else if (issue.type === 'totalCompletions_mismatch') {
+            console.log(`   • totalCompletions (lifetime) mismatch: expected ${issue.expected}, got ${issue.actual} (diff: ${issue.difference})`);
+          } else if (issue.type === 'currentCompletions_missing') {
+            console.log(`   • currentCompletions (for exchange) is missing`);
+          } else if (issue.type === 'currentCompletions_mismatch') {
+            console.log(`   • currentCompletions (for exchange) mismatch: expected ${issue.expected}, got ${issue.actual} (diff: ${issue.difference})`);
           } else if (issue.type === 'exchange_not_tracked') {
             console.log(`   • Exchange not tracked: ${issue.exchangedAmount} completions were exchanged but not recorded`);
           } else if (issue.type === 'lastExchangeAmount_missing') {
@@ -346,9 +420,10 @@ async function fixHelpWantedCompletions() {
         // Re-analyze to show new state
         const newAnalysis = analyzeUserHelpWanted(user);
         console.log(`   New state:`);
-        console.log(`   • totalCompletions: ${newAnalysis.totalCompletions}`);
+        console.log(`   • totalCompletions (lifetime): ${newAnalysis.totalCompletions !== undefined ? newAnalysis.totalCompletions : 'MISSING'}`);
+        console.log(`   • currentCompletions (for exchange): ${newAnalysis.currentCompletions}`);
         console.log(`   • lastExchangeAmount: ${newAnalysis.lastExchangeAmount}`);
-        console.log(`   • lastExchangeAt: ${newAnalysis.lastExchangeAt !== undefined ? (newAnalysis.lastExchangeAt || 'null') : 'MISSING'}`);
+        console.log(`   • lastExchangeAt: ${newAnalysis.lastExchangeAt !== undefined ? (newAnalysis.lastExchangeAt ? new Date(newAnalysis.lastExchangeAt).toISOString().split('T')[0] : 'null') : 'MISSING'}`);
       }
       
     } catch (error) {

@@ -113,11 +113,19 @@ router.get('/discord/callback',
     const separator = finalReturnTo.includes('?') ? '&' : '?';
     const redirectUrl = finalReturnTo + separator + 'login=success';
     
-    // Redirect to the destination
-    if (!isProduction) {
-      logger.debug(`Redirecting to: ${redirectUrl}`, null, 'auth.js');
-    }
-    res.redirect(redirectUrl);
+    // Save session explicitly before redirecting to ensure authentication persists
+    req.session.save((err) => {
+      if (err) {
+        logger.error('Error saving session after authentication', err, 'auth.js');
+        return res.redirect('/login?error=session_save_failed');
+      }
+      
+      // Redirect to the destination after session is saved
+      if (!isProduction) {
+        logger.debug(`Redirecting to: ${redirectUrl}`, null, 'auth.js');
+      }
+      res.redirect(redirectUrl);
+    });
   }
 );
 
