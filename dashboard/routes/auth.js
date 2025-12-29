@@ -54,10 +54,26 @@ router.get('/discord', (req, res, next) => {
 // ------------------- Function: handleDiscordCallback -------------------
 // Handles Discord OAuth callback
 router.get('/discord/callback', 
-  passport.authenticate('discord', { 
-    failureRedirect: '/login',
-    failureFlash: true 
-  }), 
+  (req, res, next) => {
+    // Log callback received
+    logger.debug('Discord callback received', null, 'auth.js');
+    logger.debug(`Query params: ${JSON.stringify(req.query)}`, null, 'auth.js');
+    logger.debug(`Session ID: ${req.session?.id}`, null, 'auth.js');
+    
+    // Proceed with authentication
+    passport.authenticate('discord', { 
+      failureRedirect: '/login?error=auth_failed',
+      failureFlash: true 
+    })(req, res, (err) => {
+      if (err) {
+        logger.error('Discord OAuth authentication error', err, 'auth.js');
+        logger.error(`Error message: ${err.message}`, null, 'auth.js');
+        logger.error(`Error stack: ${err.stack}`, null, 'auth.js');
+        return res.redirect(`/login?error=${encodeURIComponent(err.message)}`);
+      }
+      next();
+    });
+  },
   (req, res) => {
     logger.success(`User authenticated: ${req.user?.username} (${req.user?.discordId})`, 'auth.js');
     

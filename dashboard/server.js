@@ -218,6 +218,13 @@ passport.use(new DiscordStrategy({
   scope: ['identify', 'email']
 }, async (accessToken, refreshToken, profile, done) => {
   try {
+    // Check if database is connected
+    if (mongoose.connection.readyState !== 1) {
+      logger.error('Database not connected during OAuth callback', null, 'server.js');
+      logger.error(`Database state: ${mongoose.connection.readyState}`, null, 'server.js');
+      return done(new Error('Database connection not available. Please try again in a moment.'), null);
+    }
+    
     // Find or create user in database
     let user = await User.findOne({ discordId: profile.id });
     
@@ -237,6 +244,7 @@ passport.use(new DiscordStrategy({
         statusChangedAt: new Date()
       });
       await user.save();
+      logger.success(`Created new user: ${user.username} (${user.discordId})`, 'server.js');
     } else {
       // Update existing user's Discord info
       user.username = profile.username;
@@ -246,10 +254,14 @@ passport.use(new DiscordStrategy({
       user.status = 'active';
       user.statusChangedAt = new Date();
       await user.save();
+      logger.debug(`Updated user: ${user.username} (${user.discordId})`, null, 'server.js');
     }
     
     return done(null, user);
   } catch (error) {
+    logger.error('Error in Discord OAuth callback', error, 'server.js');
+    logger.error(`Error details: ${error.message}`, null, 'server.js');
+    logger.error(`Error stack: ${error.stack}`, null, 'server.js');
     return done(error, null);
   }
 }));
@@ -1029,88 +1041,12 @@ app.get('/auth/debug', (req, res) => {
   });
 });
 
-// ------------------- Function: initiateDiscordAuth -------------------
-// Initiates Discord OAuth flow
-app.get('/auth/discord', (req, res, next) => {
-  // Store the return URL in session if provided
-  if (req.query.returnTo) {
-    req.session.returnTo = req.query.returnTo;
-    logger.debug(`Storing returnTo in session: ${req.query.returnTo}`, null, 'server.js');
-    logger.debug(`Session ID: ${req.session.id}`, null, 'server.js');
-    
-    // Save session explicitly and wait for it to complete
-    req.session.save((err) => {
-      if (err) {
-        logger.error('Error saving session', err, 'server.js');
-        return next(err);
-      }
-      logger.debug('Session saved successfully', null, 'server.js');
-      
-      // Now proceed with Discord authentication
-      logger.debug(`Initiating Discord auth with callback URL: ${callbackURL}`, null, 'server.js');
-      passport.authenticate('discord')(req, res, next);
-    });
-  } else {
-    logger.debug(`Initiating Discord auth with callback URL: ${callbackURL}`, null, 'server.js');
-    passport.authenticate('discord')(req, res, next);
-  }
-});
-
-// ------------------- Function: handleDiscordCallback -------------------
-// Handles Discord OAuth callback
-app.get('/auth/discord/callback', 
-  passport.authenticate('discord', { 
-    failureRedirect: '/login',
-    failureFlash: true 
-  }), 
-  (req, res) => {
-    logger.success(`User authenticated: ${req.user?.username} (${req.user?.discordId})`, 'server.js');
-    
-    // Check if there's a returnTo parameter in the session or query
-    const returnTo = req.session.returnTo || req.query.returnTo;
-    
-    logger.debug('Discord callback redirect:', null, 'server.js');
-    logger.debug(`returnTo from session: ${req.session.returnTo}`, null, 'server.js');
-    logger.debug(`returnTo from query: ${req.query.returnTo}`, null, 'server.js');
-    logger.debug(`final returnTo: ${returnTo}`, null, 'server.js');
-    logger.debug(`session ID: ${req.session.id}`, null, 'server.js');
-    logger.debug(`passport user: ${req.session.passport?.user}`, null, 'server.js');
-    logger.debug(`session exists: ${!!req.session}`, null, 'server.js');
-    logger.debug(`session keys: ${Object.keys(req.session || {})}`, null, 'server.js');
-    
-    // Normalize returnTo - handle empty string, '/', or undefined
-    let finalReturnTo = returnTo;
-    if (!finalReturnTo || finalReturnTo === '/' || finalReturnTo.trim() === '') {
-      finalReturnTo = '/dashboard';
-    }
-    
-    // Clear the returnTo from session
-    if (req.session.returnTo) {
-      delete req.session.returnTo;
-    }
-    
-    // Build redirect URL - check if returnTo already has query params
-    const separator = finalReturnTo.includes('?') ? '&' : '?';
-    const redirectUrl = finalReturnTo + separator + 'login=success';
-    
-    // Redirect to the destination
-    logger.debug(`Redirecting to: ${redirectUrl}`, null, 'server.js');
-    res.redirect(redirectUrl);
-  }
-);
-
-// ------------------- Function: logout -------------------
-// Handles user logout
-app.get('/auth/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) {
-      logger.error('Logout error', err);
-      return res.redirect('/login');
-    }
-    logger.info('User logged out successfully', 'server.js');
-    res.redirect('/login');
-  });
-});
+// Note: Discord OAuth routes are handled by routes/auth.js which is mounted at /auth
+// The routes/auth.js file contains:
+// - /auth/discord (initiate OAuth)
+// - /auth/discord/callback (handle callback)
+// - /auth/logout (logout)
+// - /auth/status (check auth status)
 
 // ------------------- Function: checkAuthStatus -------------------
 // Returns current authentication status
