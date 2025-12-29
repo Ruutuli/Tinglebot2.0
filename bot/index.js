@@ -402,7 +402,9 @@ async function initializeClient() {
             await handleComponentInteraction(interaction);
           }
         } else if (interaction.isAutocomplete()) {
+          console.log(`[index.js]: 🔄 Autocomplete interaction received for command: ${interaction.commandName}`);
           const command = client.commands.get(interaction.commandName);
+          console.log(`[index.js]: Command found: ${!!command}, has autocomplete: ${command && typeof command.autocomplete === "function"}`);
           if (command && typeof command.autocomplete === "function") {
             try {
               await command.autocomplete(interaction);
@@ -428,6 +430,7 @@ async function initializeClient() {
               }
             }
           } else {
+            console.log(`[index.js]: Routing to handleAutocomplete for: ${interaction.commandName}`);
             try {
               await handleAutocomplete(interaction);
             } catch (error) {

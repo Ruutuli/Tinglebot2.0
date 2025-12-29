@@ -209,16 +209,29 @@ async function safeRespondWithError(interaction, error) {
 // ------------------- Function: handleAutocomplete -------------------
 // Routes autocomplete requests to appropriate handlers based on command and focused option
 async function handleAutocomplete(interaction) {
+    // Aggressive logging at entry point
+    console.log('[handleAutocomplete]: ENTRY - Called');
+    console.log('[handleAutocomplete]: interaction type:', interaction?.type);
+    console.log('[handleAutocomplete]: isAutocomplete:', interaction?.isAutocomplete?.());
+    console.log('[handleAutocomplete]: responded:', interaction?.responded);
+    console.log('[handleAutocomplete]: commandName:', interaction?.commandName);
+    
     try {
         // Simple validation
         if (!interaction?.isAutocomplete() || interaction.responded) {
+            console.log('[handleAutocomplete]: EARLY RETURN - Not autocomplete or already responded');
             return;
         }
+        
+        console.log('[handleAutocomplete]: Passed validation, proceeding...');
 
         const commandName = interaction.commandName;
+        console.log(`[handleAutocomplete]: Processing command: ${commandName}`);
         let focusedOption;
         try {
+            console.log('[handleAutocomplete]: Attempting to get focused option...');
             focusedOption = interaction.options.getFocused(true);
+            console.log('[handleAutocomplete]: Got focused option:', focusedOption?.name, focusedOption?.value);
         } catch (getFocusedError) {
             console.error('[handleAutocomplete]: Error getting focused option:', getFocusedError);
             // Try to respond with empty array if we can't get focused option
@@ -245,6 +258,7 @@ async function handleAutocomplete(interaction) {
         }
 
         // Log autocomplete request for debugging (non-blocking)
+        console.log(`[handleAutocomplete]: About to route to internal handler - command: ${commandName}, option: ${focusedOption?.name}`);
         try {
             logger.info('AUTOCOMPLETE', `Handling autocomplete for command: ${commandName}, option: ${focusedOption?.name || 'unknown'}, userId: ${interaction.user?.id || 'unknown'}`);
         } catch (logError) {
@@ -253,7 +267,9 @@ async function handleAutocomplete(interaction) {
         }
 
         // Route to internal handler
+        console.log('[handleAutocomplete]: Calling handleAutocompleteInternal...');
         await handleAutocompleteInternal(interaction, commandName, focusedOption);
+        console.log('[handleAutocomplete]: handleAutocompleteInternal completed');
     } catch (error) {
         // Enhanced error handling with better logging
         const commandName = interaction?.commandName || 'unknown';
@@ -285,10 +301,13 @@ async function handleAutocomplete(interaction) {
 
 // Internal autocomplete handler function
 async function handleAutocompleteInternal(interaction, commandName, focusedOption) {
+    console.log(`[handleAutocompleteInternal]: ENTRY - command: ${commandName}, option: ${focusedOption?.name}`);
     try {
         // Check if interaction is still valid (3 second timeout)
         const interactionAge = Date.now() - interaction.createdTimestamp;
+        console.log(`[handleAutocompleteInternal]: Interaction age: ${interactionAge}ms`);
         if (interactionAge > 2500) { // 2.5 second safety margin
+            console.log(`[handleAutocompleteInternal]: Interaction too old, returning`);
             try {
                 logger.warn('AUTOCOMPLETE', `Interaction too old (${interactionAge}ms) for ${commandName}/${focusedOption?.name || 'unknown'}, skipping response`);
             } catch (logError) {
@@ -297,6 +316,7 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             return;
         }
 
+        console.log(`[handleAutocompleteInternal]: Entering switch for command: ${commandName}`);
         switch (commandName) {
 
           // ------------------- Custom Weapon Command -------------------
@@ -503,8 +523,13 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
 
           // ------------------- Gather Command -------------------
           case "gather":
+            console.log('[handleAutocompleteInternal]: GATHER case matched');
             if (focusedOption.name === "charactername") {
+              console.log('[handleAutocompleteInternal]: Calling handleCharacterBasedCommandsAutocomplete for gather');
               await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gather");
+              console.log('[handleAutocompleteInternal]: handleCharacterBasedCommandsAutocomplete completed for gather');
+            } else {
+              console.log(`[handleAutocompleteInternal]: Gather focused option name mismatch: ${focusedOption.name} !== charactername`);
             }
             break;
 
@@ -859,20 +884,22 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
 
 // ------------------- Helper Function to Filter and Respond with Choices -------------------
 async function respondWithFilteredChoices(interaction, focusedOption, choices) {
+  console.log(`[respondWithFilteredChoices]: ENTRY - choices count: ${choices?.length || 0}`);
   try {
     // Check if interaction is already responded to
     if (interaction.responded) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to in respondWithFilteredChoices');
+      console.log('[respondWithFilteredChoices]: ⚠️ Interaction already responded to');
       return;
     }
 
     // Check if interaction is still valid
     if (!interaction.isAutocomplete()) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction is not an autocomplete interaction in respondWithFilteredChoices');
+      console.log('[respondWithFilteredChoices]: ⚠️ Interaction is not an autocomplete interaction');
       return;
     }
 
     const focusedValue = focusedOption?.value?.toLowerCase() || '';
+    console.log(`[respondWithFilteredChoices]: Focused value: "${focusedValue}", filtering ${choices.length} choices`);
 
     // Validate and sanitize choices to ensure they meet Discord's requirements
     const validatedChoices = choices.map(choice => {
@@ -893,6 +920,8 @@ async function respondWithFilteredChoices(interaction, focusedOption, choices) {
       .filter(choice => choice.name.toLowerCase().includes(focusedValue))
       .slice(0, 25);
 
+    console.log(`[respondWithFilteredChoices]: Filtered to ${filteredChoices.length} choices, responding...`);
+
     // Set a timeout for autocomplete responses (Discord's limit is 3 seconds)
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Response timeout')), 2500)
@@ -903,6 +932,7 @@ async function respondWithFilteredChoices(interaction, focusedOption, choices) {
       interaction.respond(filteredChoices),
       timeoutPromise
     ]);
+    console.log(`[respondWithFilteredChoices]: Successfully responded with ${filteredChoices.length} choices`);
   } catch (error) {
     // Handle specific error cases silently
     if (error.code === 10062 || error.message === 'Response timeout') {
@@ -947,9 +977,11 @@ async function handleCharacterBasedCommandsAutocomplete(
  focusedOption,
  commandName
 ) {
+ console.log(`[handleCharacterBasedCommandsAutocomplete]: ENTRY - command: ${commandName}`);
  try {
     // Check if interaction is still valid (3 second timeout)
     const interactionAge = Date.now() - interaction.createdTimestamp;
+    console.log(`[handleCharacterBasedCommandsAutocomplete]: Interaction age: ${interactionAge}ms`);
     if (interactionAge > 2500) { // 2.5 second safety margin
       console.log(`[handleCharacterBasedCommandsAutocomplete]: Interaction too old (${interactionAge}ms), skipping response`);
       return;
@@ -968,6 +1000,7 @@ async function handleCharacterBasedCommandsAutocomplete(
     }
 
     const userId = interaction.user.id;
+    console.log(`[handleCharacterBasedCommandsAutocomplete]: Fetching characters for userId: ${userId}`);
 
     // Add timeout protection for database queries (2 seconds max)
     const queryTimeout = new Promise((_, reject) => 
@@ -978,6 +1011,7 @@ async function handleCharacterBasedCommandsAutocomplete(
     let characters = [];
     let modCharacters = [];
     
+    console.log(`[handleCharacterBasedCommandsAutocomplete]: Starting database queries...`);
     try {
       const [charsResult, modCharsResult] = await Promise.race([
         Promise.all([
@@ -988,7 +1022,9 @@ async function handleCharacterBasedCommandsAutocomplete(
       ]);
       characters = charsResult || [];
       modCharacters = modCharsResult || [];
+      console.log(`[handleCharacterBasedCommandsAutocomplete]: Got ${characters.length} characters, ${modCharacters.length} mod characters`);
     } catch (queryError) {
+      console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error:`, queryError);
       if (queryError.message === 'Database query timeout') {
         console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);
       } else {
@@ -1009,6 +1045,7 @@ async function handleCharacterBasedCommandsAutocomplete(
     
     // Combine regular characters and mod characters
     const allCharacters = [...characters, ...modCharacters];
+    console.log(`[handleCharacterBasedCommandsAutocomplete]: Total characters: ${allCharacters.length}`);
     
     // Map all characters to choices with their basic info
     const choices = allCharacters.map((character) => ({
@@ -1016,7 +1053,9 @@ async function handleCharacterBasedCommandsAutocomplete(
       value: character.name,
     }));
     
+    console.log(`[handleCharacterBasedCommandsAutocomplete]: Created ${choices.length} choices, calling respondWithFilteredChoices...`);
     await respondWithFilteredChoices(interaction, focusedOption, choices);
+    console.log(`[handleCharacterBasedCommandsAutocomplete]: respondWithFilteredChoices completed`);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
