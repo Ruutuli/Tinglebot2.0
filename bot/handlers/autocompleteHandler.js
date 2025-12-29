@@ -218,19 +218,32 @@ async function handleAutocomplete(interaction) {
         const commandName = interaction.commandName;
         const focusedOption = interaction.options.getFocused(true);
 
+        // Log autocomplete request for debugging
+        logger.info('AUTOCOMPLETE', `Handling autocomplete for command: ${commandName}, option: ${focusedOption.name}, userId: ${interaction.user.id}`);
+
         // Route to internal handler
         await handleAutocompleteInternal(interaction, commandName, focusedOption);
     } catch (error) {
-        // Enhanced error handling
+        // Enhanced error handling with better logging
+        const commandName = interaction?.commandName || 'unknown';
+        const focusedOptionName = interaction?.options?.getFocused(true)?.name || 'unknown';
+        
+        logger.error('AUTOCOMPLETE', `Error in main autocomplete handler for ${commandName}/${focusedOptionName}:`, {
+            error: error.message,
+            stack: error.stack,
+            userId: interaction?.user?.id,
+            commandName: commandName
+        });
+        
         try {
             if (!interaction.responded && interaction.isRepliable()) {
                 await interaction.respond([]);
             }
         } catch (respondError) {
             if (respondError.code === 10062) {
-                console.log('[autocompleteHandler.js]: Main handler - interaction expired, ignoring response attempt');
+                logger.warn('AUTOCOMPLETE', `Main handler - interaction expired for ${commandName}, ignoring response attempt`);
             } else {
-                console.error('[autocompleteHandler.js]: Main handler - respond error:', respondError.message);
+                logger.error('AUTOCOMPLETE', `Main handler - respond error for ${commandName}:`, respondError.message);
             }
         }
     }
@@ -242,7 +255,7 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
         // Check if interaction is still valid (3 second timeout)
         const interactionAge = Date.now() - interaction.createdTimestamp;
         if (interactionAge > 2500) { // 2.5 second safety margin
-            console.log('[autocompleteHandler.js]: Interaction too old, skipping response');
+            logger.warn('AUTOCOMPLETE', `Interaction too old (${interactionAge}ms) for ${commandName}/${focusedOption.name}, skipping response`);
             return;
         }
 
@@ -757,15 +770,42 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
           // ------------------- Mod Character Command -------------------
           // Note: ModCharacter autocomplete is handled locally in the command file
           break;
+          
+          default:
+            // Command not found in switch - log for debugging
+            logger.warn('AUTOCOMPLETE', `No handler found for command: ${commandName}, option: ${focusedOption.name}`);
+            // Try to respond with empty array
+            try {
+              if (!interaction.responded && interaction.isAutocomplete()) {
+                await interaction.respond([]);
+              }
+            } catch (respondError) {
+              if (respondError.code !== 10062) {
+                logger.error('AUTOCOMPLETE', `Error responding for unhandled command ${commandName}:`, respondError.message);
+              }
+            }
+            break;
         }
     } catch (error) {
-        // Simple error handling
+        // Enhanced error handling with better logging
+        logger.error('AUTOCOMPLETE', `Error in handleAutocompleteInternal for ${commandName}/${focusedOption.name}:`, {
+            error: error.message,
+            stack: error.stack,
+            userId: interaction?.user?.id,
+            commandName: commandName,
+            focusedOption: focusedOption?.name
+        });
+        
         try {
-            if (!interaction.responded) {
+            if (!interaction.responded && interaction.isAutocomplete()) {
                 await interaction.respond([]);
             }
         } catch (respondError) {
-            // Ignore respond errors - interaction likely expired
+            if (respondError.code === 10062) {
+                logger.warn('AUTOCOMPLETE', `Interaction expired for ${commandName}, ignoring response attempt`);
+            } else {
+                logger.error('AUTOCOMPLETE', `Error sending error response for ${commandName}:`, respondError.message);
+            }
         }
     }
 }
@@ -865,22 +905,75 @@ async function handleCharacterBasedCommandsAutocomplete(
  commandName
 ) {
  try {
-                const userId = interaction.user.id;
+    // Check if interaction is still valid (3 second timeout)
+    const interactionAge = Date.now() - interaction.createdTimestamp;
+    if (interactionAge > 2500) { // 2.5 second safety margin
+      console.log(`[handleCharacterBasedCommandsAutocomplete]: Interaction too old (${interactionAge}ms), skipping response`);
+      return;
+    }
 
-  // Fetch all characters owned by the user (both regular and mod characters)
-                const characters = await fetchCharactersByUserId(userId);
-                const modCharacters = await fetchModCharactersByUserId(userId);
-                
-                // Combine regular characters and mod characters
-                const allCharacters = [...characters, ...modCharacters];
-                
-  // Map all characters to choices with their basic info
-  const choices = allCharacters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-   value: character.name,
-                }));
-                
-                await respondWithFilteredChoices(interaction, focusedOption, choices);
+    // Check if already responded
+    if (interaction.responded) {
+      console.log(`[handleCharacterBasedCommandsAutocomplete]: Interaction already responded for ${commandName}`);
+      return;
+    }
+
+    // Check if interaction is still valid
+    if (!interaction.isAutocomplete()) {
+      console.log(`[handleCharacterBasedCommandsAutocomplete]: Not an autocomplete interaction for ${commandName}`);
+      return;
+    }
+
+    const userId = interaction.user.id;
+
+    // Add timeout protection for database queries (2 seconds max)
+    const queryTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database query timeout')), 2000)
+    );
+
+    // Fetch all characters owned by the user (both regular and mod characters) with timeout
+    let characters = [];
+    let modCharacters = [];
+    
+    try {
+      const [charsResult, modCharsResult] = await Promise.race([
+        Promise.all([
+          fetchCharactersByUserId(userId),
+          fetchModCharactersByUserId(userId)
+        ]),
+        queryTimeout
+      ]);
+      characters = charsResult || [];
+      modCharacters = modCharsResult || [];
+    } catch (queryError) {
+      if (queryError.message === 'Database query timeout') {
+        console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);
+      } else {
+        console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error for ${commandName}:`, queryError);
+      }
+      // Respond with empty array on query failure
+      try {
+        if (!interaction.responded && interaction.isAutocomplete()) {
+          await interaction.respond([]);
+        }
+      } catch (respondError) {
+        if (respondError.code !== 10062) {
+          console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding with empty array:`, respondError);
+        }
+      }
+      return;
+    }
+    
+    // Combine regular characters and mod characters
+    const allCharacters = [...characters, ...modCharacters];
+    
+    // Map all characters to choices with their basic info
+    const choices = allCharacters.map((character) => ({
+      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+      value: character.name,
+    }));
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -888,7 +981,19 @@ async function handleCharacterBasedCommandsAutocomplete(
    `[handleCharacterBasedCommandsAutocomplete]: Error handling ${commandName} autocomplete:`,
    error
   );
-  await safeRespondWithError(interaction, error);
+  
+  // Ensure we always respond, even on error
+  try {
+    if (!interaction.responded && interaction.isAutocomplete()) {
+      await interaction.respond([]);
+    }
+  } catch (respondError) {
+    if (respondError.code === 10062) {
+      console.log(`[handleCharacterBasedCommandsAutocomplete]: Interaction expired for ${commandName}, ignoring response attempt`);
+    } else {
+      console.error(`[handleCharacterBasedCommandsAutocomplete]: Error sending error response for ${commandName}:`, respondError);
+    }
+  }
  }
 }
 
@@ -4218,22 +4323,84 @@ async function handleStableNameAutocomplete(interaction, focusedOption) {
 // ------------------- Pet Character Name Autocomplete -------------------
 async function handlePetCharacterAutocomplete(interaction, focusedOption) {
   try {
-                const userId = interaction.user.id;
-                const characters = await fetchCharactersByUserId(userId);
-                
+    // Check if interaction is still valid (3 second timeout)
+    const interactionAge = Date.now() - interaction.createdTimestamp;
+    if (interactionAge > 2500) { // 2.5 second safety margin
+      console.log(`[handlePetCharacterAutocomplete]: Interaction too old (${interactionAge}ms), skipping response`);
+      return;
+    }
+
+    // Check if already responded
+    if (interaction.responded) {
+      console.log('[handlePetCharacterAutocomplete]: Interaction already responded');
+      return;
+    }
+
+    // Check if interaction is still valid
+    if (!interaction.isAutocomplete()) {
+      console.log('[handlePetCharacterAutocomplete]: Not an autocomplete interaction');
+      return;
+    }
+
+    const userId = interaction.user.id;
+
+    // Add timeout protection for database queries (2 seconds max)
+    const queryTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database query timeout')), 2000)
+    );
+
+    let characters = [];
+    try {
+      characters = await Promise.race([
+        fetchCharactersByUserId(userId),
+        queryTimeout
+      ]);
+      characters = characters || [];
+    } catch (queryError) {
+      if (queryError.message === 'Database query timeout') {
+        console.error(`[handlePetCharacterAutocomplete]: Database query timeout, userId: ${userId}`);
+      } else {
+        console.error('[handlePetCharacterAutocomplete]: Database query error:', queryError);
+      }
+      // Respond with empty array on query failure
+      try {
+        if (!interaction.responded && interaction.isAutocomplete()) {
+          await interaction.respond([]);
+        }
+      } catch (respondError) {
+        if (respondError.code !== 10062) {
+          console.error('[handlePetCharacterAutocomplete]: Error responding with empty array:', respondError);
+        }
+      }
+      return;
+    }
+    
     // Ensure focusedValue is a string and has a default value
     const focusedValue = focusedOption?.value?.toString() || '';
     
     const choices = characters
       .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
-    return await respondWithFilteredChoices(interaction, focusedOption, choices);
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handlePetCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    
+    // Ensure we always respond, even on error
+    try {
+      if (!interaction.responded && interaction.isAutocomplete()) {
+        await interaction.respond([]);
+      }
+    } catch (respondError) {
+      if (respondError.code === 10062) {
+        console.log('[handlePetCharacterAutocomplete]: Interaction expired, ignoring response attempt');
+      } else {
+        console.error('[handlePetCharacterAutocomplete]: Error sending error response:', respondError);
+      }
+    }
   }
 }
 
