@@ -35,12 +35,18 @@ function analyzeUserHelpWanted(user) {
   const actualCompletions = completions.length;
   
   // Calculate how many were exchanged (if currentCompletions < actualCompletions)
-  const exchangedAmount = actualCompletions > currentCompletions ? (actualCompletions - currentCompletions) : 0;
+  // BUT: Only count as exchanged if actualCompletions >= 50 (minimum for exchange)
+  // If actualCompletions < 50, they couldn't have exchanged, so currentCompletions should match actualCompletions
+  const exchangedAmount = (actualCompletions >= 50 && actualCompletions > currentCompletions) 
+    ? (actualCompletions - currentCompletions) 
+    : 0;
   
   // Special case: if currentCompletions equals actualCompletions and is a multiple of 50,
   // and lastExchangeAmount is 0, it might indicate an exchange happened but wasn't recorded properly
   // This can happen if the exchange command ran before the tracking fields were added
+  // BUT: Only consider this if actualCompletions >= 50 (minimum for exchange)
   const possibleExchangeNotRecorded = (exchangedAmount === 0 && 
+                                       actualCompletions >= 50 &&
                                        currentCompletions === actualCompletions && 
                                        currentCompletions > 0 && 
                                        currentCompletions % 50 === 0 &&
@@ -80,12 +86,22 @@ function analyzeUserHelpWanted(user) {
     });
   }
   
-  // Check if an exchange happened but wasn't tracked (totalCompletions < actualCompletions)
-  if (exchangedAmount > 0 && (lastExchangeAmount === undefined || lastExchangeAmount === null || lastExchangeAmount === 0)) {
+  // Check if an exchange happened but wasn't tracked (currentCompletions < actualCompletions)
+  // BUT: Only flag as exchange if actualCompletions >= 50 (minimum for exchange)
+  if (exchangedAmount > 0 && actualCompletions >= 50 && (lastExchangeAmount === undefined || lastExchangeAmount === null || lastExchangeAmount === 0)) {
     issues.push({
       type: 'exchange_not_tracked',
       exchangedAmount: exchangedAmount,
       currentLastExchangeAmount: lastExchangeAmount
+    });
+  }
+  
+  // If actualCompletions < 50 but lastExchangeAmount > 0, this is incorrect - clear it
+  if (actualCompletions < 50 && lastExchangeAmount > 0) {
+    issues.push({
+      type: 'incorrect_exchange_tracking',
+      actualCompletions: actualCompletions,
+      lastExchangeAmount: lastExchangeAmount
     });
   }
   
@@ -147,8 +163,8 @@ async function fixUserHelpWanted(user, analysis) {
     fixed = true;
   }
   
-  // Fix 0: Initialize or fix totalCompletions (lifetime total)
-  // Also handle migration from old field names
+  // Fix 0: Handle migration from old field names
+  // Migrate totalLifetimeCompletions to totalCompletions
   if (helpWanted.totalLifetimeCompletions !== undefined && helpWanted.totalCompletions === undefined) {
     helpWanted.totalCompletions = helpWanted.totalLifetimeCompletions;
     delete helpWanted.totalLifetimeCompletions;
@@ -164,6 +180,41 @@ async function fixUserHelpWanted(user, analysis) {
     fixed = true;
   }
   
+  // Special case: If old totalCompletions exists but currentCompletions doesn't, migrate it
+  // This handles users who had the old system where totalCompletions was used for both
+  // OR users who have totalCompletions but need currentCompletions set
+  if (helpWanted.totalCompletions !== undefined && helpWanted.currentCompletions === undefined) {
+    // Check if they exchanged (lastExchangeAmount > 0 means they exchanged)
+    if (helpWanted.lastExchangeAmount > 0 && helpWanted.lastExchangeAmount > 0) {
+      // They exchanged, so currentCompletions should be totalCompletions - lastExchangeAmount
+      helpWanted.currentCompletions = Math.max(0, helpWanted.totalCompletions - helpWanted.lastExchangeAmount);
+      fixes.push(`Migrated: Set currentCompletions to ${helpWanted.currentCompletions} (totalCompletions: ${helpWanted.totalCompletions} - lastExchangeAmount: ${helpWanted.lastExchangeAmount})`);
+    } else {
+      // No exchange, so currentCompletions should equal totalCompletions
+      helpWanted.currentCompletions = helpWanted.totalCompletions;
+      fixes.push(`Migrated: Set currentCompletions to ${helpWanted.currentCompletions} (same as totalCompletions, no exchange)`);
+    }
+    fixed = true;
+  }
+  
+  // Also handle case where totalCompletions exists and matches actualCompletions but currentCompletions is wrong
+  // This happens when totalCompletions was set correctly but currentCompletions wasn't updated after exchange
+  if (helpWanted.totalCompletions !== undefined && 
+      helpWanted.totalCompletions === analysis.actualCompletions && 
+      helpWanted.currentCompletions !== undefined &&
+      helpWanted.lastExchangeAmount > 0) {
+    // They have totalCompletions matching actual, but they exchanged
+    // So currentCompletions should be 0 (or totalCompletions - lastExchangeAmount)
+    const expectedCurrent = Math.max(0, helpWanted.totalCompletions - helpWanted.lastExchangeAmount);
+    if (helpWanted.currentCompletions !== expectedCurrent) {
+      const oldCurrent = helpWanted.currentCompletions;
+      helpWanted.currentCompletions = expectedCurrent;
+      fixes.push(`Fixed: Updated currentCompletions from ${oldCurrent} to ${expectedCurrent} (accounting for exchange)`);
+      fixed = true;
+    }
+  }
+  
+  // Fix 0b: Initialize or fix totalCompletions (lifetime total)
   if (analysis.issues.some(i => i.type === 'totalCompletions_missing')) {
     helpWanted.totalCompletions = analysis.actualCompletions;
     fixes.push(`Initialized totalCompletions to ${analysis.actualCompletions}`);
@@ -195,28 +246,32 @@ async function fixUserHelpWanted(user, analysis) {
     fixed = true;
   }
   
-  // Fix 2: Track exchange that happened but wasn't recorded (currentCompletions < actualCompletions)
+  // Fix 2: Track exchange that happened but wasn't recorded (currentCompletions < actualCompletions AND actualCompletions >= 50)
   if (analysis.issues.some(i => i.type === 'exchange_not_tracked')) {
     const exchangeIssue = analysis.issues.find(i => i.type === 'exchange_not_tracked');
     const exchangedAmount = exchangeIssue.exchangedAmount;
     
-    // Set currentCompletions to the correct value (actual - exchanged)
-    const oldCurrent = helpWanted.currentCompletions || 0;
-    helpWanted.currentCompletions = analysis.actualCompletions - exchangedAmount;
-    
-    // Set lastExchangeAmount to the amount that was exchanged
-    helpWanted.lastExchangeAmount = exchangedAmount;
-    
-    // Try to determine when the exchange happened
-    const exchangeTimestamp = getExchangeTimestamp(helpWanted);
-    helpWanted.lastExchangeAt = exchangeTimestamp;
-    
-    fixes.push(`Tracked exchange: ${exchangedAmount} completions exchanged, currentCompletions: ${oldCurrent} → ${helpWanted.currentCompletions}${exchangeTimestamp ? ` (estimated date: ${exchangeTimestamp.toISOString().split('T')[0]})` : ' (date unknown)'}`);
-    fixed = true;
+    // Only process if actualCompletions >= 50 (minimum for exchange)
+    if (analysis.actualCompletions >= 50) {
+      // Set currentCompletions to the correct value (actual - exchanged)
+      const oldCurrent = helpWanted.currentCompletions || 0;
+      helpWanted.currentCompletions = analysis.actualCompletions - exchangedAmount;
+      
+      // Set lastExchangeAmount to the amount that was exchanged
+      helpWanted.lastExchangeAmount = exchangedAmount;
+      
+      // Try to determine when the exchange happened
+      const exchangeTimestamp = getExchangeTimestamp(helpWanted);
+      helpWanted.lastExchangeAt = exchangeTimestamp;
+      
+      fixes.push(`Tracked exchange: ${exchangedAmount} completions exchanged, currentCompletions: ${oldCurrent} → ${helpWanted.currentCompletions}${exchangeTimestamp ? ` (estimated date: ${exchangeTimestamp.toISOString().split('T')[0]})` : ' (date unknown)'}`);
+      fixed = true;
+    }
   }
   
   // Fix 2b: Handle possible exchange that wasn't recorded (currentCompletions == actualCompletions but should be 0)
-  if (analysis.issues.some(i => i.type === 'possible_exchange_not_recorded')) {
+  // Only if actualCompletions >= 50 (minimum for exchange)
+  if (analysis.issues.some(i => i.type === 'possible_exchange_not_recorded') && analysis.actualCompletions >= 50) {
     const exchangeIssue = analysis.issues.find(i => i.type === 'possible_exchange_not_recorded');
     const exchangedAmount = exchangeIssue.exchangedAmount;
     
@@ -234,6 +289,34 @@ async function fixUserHelpWanted(user, analysis) {
     fixes.push(`Fixed possible exchange: Set currentCompletions from ${oldCurrent} to 0, tracked ${exchangedAmount} completions exchanged${exchangeTimestamp ? ` (estimated date: ${exchangeTimestamp.toISOString().split('T')[0]})` : ' (date unknown)'}`);
     fixed = true;
   }
+  
+  // Fix 2c: Clear incorrect exchange tracking for users with < 50 completions
+  if (analysis.issues.some(i => i.type === 'incorrect_exchange_tracking')) {
+    const issue = analysis.issues.find(i => i.type === 'incorrect_exchange_tracking');
+    const oldExchangeAmount = helpWanted.lastExchangeAmount;
+    const oldExchangeAt = helpWanted.lastExchangeAt;
+    helpWanted.lastExchangeAmount = 0;
+    helpWanted.lastExchangeAt = null;
+    fixes.push(`Cleared incorrect exchange tracking: lastExchangeAmount ${oldExchangeAmount} → 0, lastExchangeAt cleared (${issue.actualCompletions} < 50, cannot exchange)`);
+    fixed = true;
+  }
+  
+  // Fix 2d: If actualCompletions < 50 and currentCompletions doesn't match, fix it (no exchange possible)
+  // This handles cases where the script incorrectly thought there was an exchange
+  if (analysis.actualCompletions < 50 && (helpWanted.currentCompletions || 0) !== analysis.actualCompletions) {
+    const oldCurrent = helpWanted.currentCompletions || 0;
+    helpWanted.currentCompletions = analysis.actualCompletions;
+    // Clear any incorrect exchange tracking
+    if (helpWanted.lastExchangeAmount > 0 && helpWanted.lastExchangeAmount < 50) {
+      helpWanted.lastExchangeAmount = 0;
+      helpWanted.lastExchangeAt = null;
+      fixes.push(`Fixed: Set currentCompletions from ${oldCurrent} to ${analysis.actualCompletions} and cleared incorrect exchange tracking (${analysis.actualCompletions} < 50, cannot exchange)`);
+    } else {
+      fixes.push(`Fixed: Set currentCompletions from ${oldCurrent} to ${analysis.actualCompletions} (${analysis.actualCompletions} < 50, no exchange possible)`);
+    }
+    fixed = true;
+  }
+  
   
   // Fix 3: Initialize lastExchangeAmount if missing (and no exchange happened)
   if (analysis.issues.some(i => i.type === 'lastExchangeAmount_missing')) {
