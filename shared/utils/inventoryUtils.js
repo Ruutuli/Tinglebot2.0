@@ -45,6 +45,8 @@ let dbFunctions = {
   getInventoryCollection: null,
 };
 
+let promptUserForSpecificItems = null;
+
 // ---- Function: initializeInventoryUtils ----
 // Initializes database functions for inventory operations
 function initializeInventoryUtils(dbModuleFunctions) {
