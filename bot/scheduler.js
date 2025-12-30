@@ -440,7 +440,7 @@ async function cleanupExpiredRaids(client = null) {
   }
   
   if (cleanedCount > 0) {
-   logger.scheduler.complete('Raid cleanup', `${cleanedCount} expired`);
+   logger.success('CLEANUP', `Raid cleanup - ${cleanedCount} expired`);
   }
   
   return { expiredCount: cleanedCount };
@@ -453,7 +453,7 @@ async function cleanupExpiredRaids(client = null) {
 
 async function cleanupOldRuuGameSessions() {
  try {
-  logger.scheduler.job('RuuGame cleanup');
+  logger.info('CLEANUP', 'RuuGame cleanup');
   
   const result = await RuuGame.cleanupOldSessions();
   
@@ -461,7 +461,7 @@ async function cleanupOldRuuGameSessions() {
    return result;
   }
   
-  logger.scheduler.complete('RuuGame cleanup', `${result.deletedCount} deleted`);
+  logger.success('CLEANUP', `RuuGame cleanup - ${result.deletedCount} deleted`);
   
   if (result.finishedCount > 0) {
    logger.info('CLEANUP', `${result.finishedCount} completed games`);
@@ -480,7 +480,7 @@ async function cleanupOldRuuGameSessions() {
 
 async function cleanupFinishedMinigameSessions() {
  try {
-  logger.scheduler.job('Minigame cleanup');
+  logger.info('CLEANUP', 'Minigame cleanup');
   
   const Minigame = require('../shared/models/MinigameModel');
   const result = await Minigame.cleanupOldSessions();
@@ -489,7 +489,7 @@ async function cleanupFinishedMinigameSessions() {
    return result;
   }
   
-  logger.scheduler.complete('Minigame cleanup', `${result.deletedCount} deleted`);
+  logger.success('CLEANUP', `Minigame cleanup - ${result.deletedCount} deleted`);
   
   if (result.finishedCount > 0) {
    logger.info('CLEANUP', `${result.finishedCount} completed games`);
