@@ -26,7 +26,8 @@ const {
   connectToTinglebot,
   fetchCharacterById,
   fetchModCharacterById,
-  getUserById
+  getUserById,
+  fetchCharacterByName
 } = require('../../shared/database/db');
 
 // ------------------- Database Models -------------------
@@ -1855,6 +1856,16 @@ async function handleComponentInteraction(interaction) {
       return await handlePouchUpgradeCancel(interaction);
     }
 
+    // Handle crafting material selection
+    if (interaction.customId.startsWith('crafting-material|')) {
+      return await handleCraftingMaterialSelection(interaction);
+    }
+
+    // Handle crafting cancel
+    if (interaction.customId.startsWith('crafting-cancel|')) {
+      return await handleCraftingCancel(interaction);
+    }
+
   } catch (error) {
     handleError(error, 'componentHandler.js');
     console.error(`[componentHandler.js]: ❌ Failed to handle component: ${error.message}`);
@@ -1883,6 +1894,494 @@ async function handleComponentInteraction(interaction) {
       if (processedInteractions.has(interactionId)) {
         processedInteractions.delete(interactionId);
       }
+    }
+  }
+}
+
+// =============================================================================
+// ------------------- Crafting Material Selection Handlers -------------------
+// =============================================================================
+
+// ------------------- Function: handleCraftingMaterialSelection -------------------
+// Handles user selection of materials for crafting
+async function handleCraftingMaterialSelection(interaction) {
+  try {
+    if (!interaction.isStringSelectMenu()) return;
+
+    const [, selectionId] = interaction.customId.split('|');
+    const TempData = require('../../shared/models/TempDataModel');
+    const craftingState = await TempData.findByTypeAndKey('craftingMaterialSelection', selectionId);
+
+    if (!craftingState || !craftingState.data) {
+      return interaction.reply({
+        content: '❌ **Crafting selection expired or not found. Please start crafting again.**',
+        flags: 64
+      });
+    }
+
+    const state = craftingState.data;
+    
+    // Verify user matches
+    if (state.userId !== interaction.user.id) {
+      return interaction.reply({
+        content: '❌ **This selection is not for you.**',
+        flags: 64
+      });
+    }
+
+    const selectedValues = interaction.values;
+    if (!selectedValues || selectedValues.length === 0) {
+      return interaction.reply({
+        content: '❌ **Please select at least one item.**',
+        flags: 64
+      });
+    }
+
+    // Sequential selection: user selects one item at a time (1/3, 2/3, 3/3, etc.)
+    if (selectedValues.length !== 1) {
+      return interaction.reply({
+        content: '❌ **Please select exactly one item.**',
+        flags: 64
+      });
+    }
+
+    const selectedValue = selectedValues[0];
+    const [itemId, itemName, itemQuantity] = selectedValue.split('|');
+    
+    // Validate parsed values
+    if (!itemId || !itemName || !itemQuantity) {
+      return interaction.reply({
+        content: '❌ **Invalid selection. Please try again.**',
+        flags: 64
+      });
+    }
+    
+    const qty = parseInt(itemQuantity, 10);
+    if (isNaN(qty) || qty <= 0) {
+      return interaction.reply({
+        content: '❌ **Invalid quantity. Please try again.**',
+        flags: 64
+      });
+    }
+
+    // Initialize selectedCount and selectedItemsSoFar if not present (for backward compatibility)
+    if (typeof state.selectedCount === 'undefined') {
+      state.selectedCount = 0;
+      state.selectedItemsSoFar = [];
+    }
+
+    // Add this selection to the list
+    state.selectedCount += 1;
+    state.selectedItemsSoFar.push({
+      itemId,
+      itemName,
+      quantity: qty,
+      value: selectedValue
+    });
+
+    // Get fresh inventory to update available items
+    const { fetchCharacterById, getCharacterInventoryCollection } = require('../../shared/database/db');
+    const character = await fetchCharacterById(state.characterId);
+    
+    if (!character) {
+      return interaction.reply({
+        content: '❌ **Character not found.**',
+        flags: 64
+      });
+    }
+
+    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+    const inventory = await inventoryCollection.find().toArray();
+
+    // Update available items - reduce quantity of selected items
+    // Count how many times each item was selected
+    const selectionCounts = new Map();
+    state.selectedItemsSoFar.forEach(sel => {
+      const key = sel.itemId || sel.itemName;
+      selectionCounts.set(key, (selectionCounts.get(key) || 0) + 1);
+    });
+    
+    const updatedAvailableItems = state.availableItems.map(availItem => {
+      const key = availItem._id || availItem.itemName;
+      const timesSelected = selectionCounts.get(key) || 0;
+      
+      if (timesSelected > 0) {
+        // Reduce available quantity by how many times it was selected
+        const newQty = Math.max(0, availItem.quantity - timesSelected);
+        return { ...availItem, quantity: newQty };
+      }
+      return availItem;
+    }).filter(item => item.quantity > 0); // Remove items with 0 quantity
+
+    // Check if we need more selections
+    const stillNeeded = state.requiredQuantity - state.selectedCount;
+    
+    if (stillNeeded > 0) {
+      // More items needed - show next selection screen
+      const progressText = `${state.selectedCount + 1}/${state.requiredQuantity}`;
+      
+      // Update state
+      state.availableItems = updatedAvailableItems;
+      state.inventory = inventory.map(item => ({
+        _id: item._id.toString(),
+        itemName: item.itemName,
+        quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity, 10) || 0
+      }));
+
+      await TempData.findOneAndUpdate(
+        { type: 'craftingMaterialSelection', key: state.selectionId },
+        {
+          $set: {
+            'data.selectedCount': state.selectedCount,
+            'data.selectedItemsSoFar': state.selectedItemsSoFar,
+            'data.availableItems': updatedAvailableItems,
+            'data.inventory': state.inventory
+          }
+        },
+        { new: true }
+      );
+
+      // Create next selection menu
+      const { createMaterialSelectionMenu } = require('../../shared/utils/inventoryUtils');
+      const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+      const generalCategories = require('../../shared/models/GeneralItemCategories');
+      const isGeneralCategory = generalCategories[state.materialName];
+      
+      const selectMenu = createMaterialSelectionMenu(
+        state.materialName, 
+        updatedAvailableItems, 
+        state.requiredQuantity, 
+        `crafting-material|${state.selectionId}|${state.materialName}`,
+        state.selectedCount
+      );
+      
+      const categoryDescription = isGeneralCategory
+        ? `Please select an item for **${state.materialName}** ${progressText}\n\n**Required:** ${state.requiredQuantity} total\n**Selected so far:** ${state.selectedCount} (${state.selectedItemsSoFar.map(s => s.itemName).join(', ')})\n**Still needed:** ${stillNeeded}`
+        : `Please select an item for **${state.materialName}** ${progressText}\n\n**Required:** ${state.requiredQuantity} total\n**Selected so far:** ${state.selectedCount}\n**Still needed:** ${stillNeeded}`;
+      
+      const embed = new EmbedBuilder()
+        .setColor(0x00CED1)
+        .setTitle(`📦 Select Materials ${progressText}`)
+        .setDescription(categoryDescription)
+        .setFooter({ text: `Select one item (${state.selectedCount + 1} of ${state.requiredQuantity})` })
+        .setTimestamp();
+
+      const cancelButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`crafting-cancel|${state.selectionId}`)
+          .setLabel('❌ Cancel')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      await interaction.update({
+        embeds: [embed],
+        components: [selectMenu, cancelButton]
+      });
+      
+      return; // Wait for next selection
+    }
+
+    // All items selected - process and continue
+    // Update the message to show processing, removing the embed and components
+    await interaction.update({
+      content: `✅ **Selected all ${state.requiredQuantity} items for ${state.materialName}. Processing...**`,
+      embeds: [],
+      components: []
+    });
+
+    // Fetch the message reference so we can edit it later
+    const processingMessage = await interaction.fetchReply();
+
+    // Process all selected items
+    const { continueProcessMaterials } = require('../../shared/utils/inventoryUtils');
+    
+    // Update state with fresh inventory - ensure quantities are numbers
+    state.inventory = inventory.map(item => ({
+      _id: item._id.toString(),
+      itemName: item.itemName,
+      quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity, 10) || 0
+    }));
+
+    // Convert selectedItemsSoFar to format expected by continueProcessMaterials
+    const selectedItems = state.selectedItemsSoFar.map(sel => sel.value);
+    const result = await continueProcessMaterials(interaction, character, selectedItems, craftingState);
+
+    if (result === 'canceled') {
+      return interaction.followUp({
+        content: '❌ **Crafting canceled due to insufficient materials.**',
+        flags: 64
+      });
+    }
+
+    if (result && typeof result === 'object' && result.status === 'pending') {
+      // More materials need selection - already handled in continueProcessMaterials
+      return;
+    }
+
+    // All materials processed - continue with crafting
+    // Delete the material selection state
+    await TempData.findOneAndDelete({ type: 'craftingMaterialSelection', key: selectionId });
+
+    // Get the crafting continuation state
+    const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
+    if (!craftingContinueState || !craftingContinueState.data) {
+      return interaction.followUp({
+        content: '❌ **Crafting state expired. Please start crafting again.**',
+        flags: 64
+      });
+    }
+
+    const continueData = craftingContinueState.data;
+    
+    // Continue the crafting process, passing the message to edit
+    await continueCraftingProcess(interaction, character, result, continueData, processingMessage);
+
+    // Delete the continuation state
+    await TempData.findOneAndDelete({ type: 'craftingContinue', key: selectionId });
+
+  } catch (error) {
+    handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: ❌ Error handling crafting material selection: ${error.message}`);
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while processing your selection.**',
+          flags: 64
+        });
+      } else {
+        await interaction.followUp({
+          content: '❌ **An error occurred while processing your selection.**',
+          flags: 64
+        });
+      }
+    } catch (replyError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send error response: ${replyError.message}`);
+    }
+  }
+}
+
+// ------------------- Function: continueCraftingProcess -------------------
+// Continues the crafting process after material selection
+async function continueCraftingProcess(interaction, character, materialsUsed, continueData, processingMessage = null) {
+  try {
+    const { 
+      addItemInventoryDatabase 
+    } = require('../../shared/utils/inventoryUtils');
+    const { 
+      checkAndUseStamina 
+    } = require('../modules/characterStatsModule');
+    const { 
+      applyCraftingQuantityBoost 
+    } = require('../modules/boostIntegration');
+    const { 
+      clearBoostAfterUse 
+    } = require('../commands/jobs/boosting');
+    const { 
+      createCraftingEmbed 
+    } = require('../embeds/embeds');
+    const { 
+      fetchCharacterByName 
+    } = require('../../shared/database/db');
+    const { 
+      activateJobVoucher, 
+      deactivateJobVoucher
+    } = require('../modules/jobVoucherModule');
+    const { info, success, error } = require('../../shared/utils/logger');
+    const { MessageFlags } = require('discord.js');
+
+    const freshCharacter = await fetchCharacterById(continueData.characterId);
+    if (!freshCharacter) {
+      return interaction.followUp({
+        content: '❌ **Character not found.**',
+        flags: 64
+      });
+    }
+
+    // ------------------- Deduct Stamina -------------------
+    let updatedStamina;
+    let teacherUpdatedStamina = null;
+    try {
+      updatedStamina = await checkAndUseStamina(freshCharacter, continueData.crafterStaminaCost);
+      success('CRFT', `Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
+      
+      if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+          teacherUpdatedStamina = await checkAndUseStamina(boosterCharacter, continueData.teacherStaminaContribution);
+          success('CRFT', `Teacher stamina deducted for ${boosterCharacter.name} - remaining: ${teacherUpdatedStamina}`);
+        }
+      }
+    } catch (error) {
+      error('CRFT', `Failed to deduct stamina: ${error.message}`);
+      // Refund materials
+      for (const mat of materialsUsed) {
+        await addItemInventoryDatabase(freshCharacter._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
+      }
+      return interaction.followUp({ 
+        content: `⚠️ **Crafting failed due to insufficient stamina. Materials have been refunded.**`, 
+        flags: [MessageFlags.Ephemeral] 
+      });
+    }
+
+    // ------------------- Calculate Final Crafted Quantity -------------------
+    let craftedQuantity = continueData.quantity;
+    craftedQuantity = await applyCraftingQuantityBoost(freshCharacter.name, craftedQuantity);
+
+    // ------------------- Send Crafting Embed -------------------
+    let embed;
+    try {
+      const jobForFlavorText = (continueData.jobVoucher && continueData.jobVoucherJob) ? continueData.jobVoucherJob : continueData.job || '';
+      const priestBoostActive = continueData.staminaCost < continueData.originalStaminaCost;
+      const staminaSavings = priestBoostActive ? continueData.originalStaminaCost - continueData.staminaCost : 0;
+      
+      let teacherBoostInfo = null;
+      if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+          teacherBoostInfo = {
+            teacherName: boosterCharacter.name,
+            teacherStaminaUsed: continueData.teacherStaminaContribution,
+            crafterStaminaUsed: continueData.crafterStaminaCost,
+            totalStaminaCost: continueData.staminaCost
+          };
+        }
+      }
+      
+      embed = await createCraftingEmbed(
+        continueData.item, 
+        freshCharacter, 
+        continueData.flavorText, 
+        materialsUsed, 
+        craftedQuantity, 
+        continueData.crafterStaminaCost, 
+        updatedStamina,
+        jobForFlavorText, 
+        continueData.originalStaminaCost, 
+        staminaSavings, 
+        continueData.materialSavings, 
+        teacherBoostInfo
+      );
+    } catch (embedError) {
+      // Refund stamina
+      await checkAndUseStamina(freshCharacter, -continueData.crafterStaminaCost);
+      if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+          await checkAndUseStamina(boosterCharacter, -continueData.teacherStaminaContribution);
+        }
+      }
+      // Refund materials
+      for (const mat of materialsUsed) {
+        await addItemInventoryDatabase(freshCharacter._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
+      }
+      return interaction.followUp({ 
+        content: '❌ **An error occurred while generating the crafting result. Your materials and stamina have been refunded.**', 
+        flags: [MessageFlags.Ephemeral] 
+      });
+    }
+
+    // ------------------- Add Crafted Item to Inventory -------------------
+    let fortuneTellerBoostTag = null;
+    if (freshCharacter.boostedBy) {
+      const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+      if (boosterCharacter && boosterCharacter.job === 'Fortune Teller') {
+        fortuneTellerBoostTag = 'Fortune Teller';
+      }
+    }
+    
+    const craftedAt = new Date();
+    await addItemInventoryDatabase(freshCharacter._id, continueData.itemName, craftedQuantity, interaction, 'Crafting', craftedAt, fortuneTellerBoostTag);
+
+    // ------------------- Clear Boost After Use -------------------
+    await clearBoostAfterUse(freshCharacter, {
+      client: interaction.client,
+      context: 'crafting'
+    });
+
+    // Update the processing message to show final result, removing any embeds
+    // We edit the same message that was updated earlier to avoid creating duplicates
+    const successMessage = `✅ **Crafting complete! Successfully crafted ${continueData.quantity} "${continueData.itemName}".**`;
+    if (processingMessage) {
+      try {
+        // Edit the message to show completion, explicitly clearing embeds
+        await processingMessage.edit({ 
+          content: successMessage,
+          embeds: [], // Explicitly remove any existing embeds
+          components: [] // Ensure no components remain
+        });
+      } catch (editError) {
+        // If editing fails (e.g., message was deleted), try using interaction.editReply as fallback
+        try {
+          await interaction.editReply({ 
+            content: successMessage,
+            embeds: [],
+            components: []
+          });
+        } catch (editReplyError) {
+          // Last resort: send as followUp only if both edits fail
+          await interaction.followUp({ 
+            content: successMessage, 
+            flags: [MessageFlags.Ephemeral] 
+          });
+        }
+      }
+    } else {
+      // Fallback: send new message if no processing message exists
+      await interaction.followUp({ 
+        content: successMessage, 
+        flags: [MessageFlags.Ephemeral] 
+      });
+    }
+    await interaction.followUp({ embeds: [embed], ephemeral: false });
+
+    // ------------------- Activate and Deactivate Job Voucher -------------------
+    if (continueData.jobVoucher && continueData.jobVoucherJob) {
+      const { fetchJobVoucherItem } = require('../modules/jobVoucherModule');
+      const jobVoucherResult = await fetchJobVoucherItem();
+      if (jobVoucherResult && jobVoucherResult.success) {
+        const activationResult = await activateJobVoucher(freshCharacter, continueData.jobVoucherJob, jobVoucherResult.item, 1, interaction);
+        if (activationResult.success) {
+          await deactivateJobVoucher(freshCharacter._id);
+        }
+      }
+    }
+  } catch (error) {
+    handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: ❌ Error continuing crafting process: ${error.message}`);
+    await interaction.followUp({
+      content: '❌ **An error occurred while completing the crafting process.**',
+      flags: 64
+    });
+  }
+}
+
+// ------------------- Function: handleCraftingCancel -------------------
+// Handles cancellation of crafting material selection
+async function handleCraftingCancel(interaction) {
+  try {
+    const [, selectionId] = interaction.customId.split('|');
+    const TempData = require('../../shared/models/TempDataModel');
+    
+    await TempData.findOneAndDelete({ type: 'craftingMaterialSelection', key: selectionId });
+
+    await interaction.update({
+      content: '❌ **Crafting canceled.**',
+      components: []
+    });
+  } catch (error) {
+    handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: ❌ Error handling crafting cancel: ${error.message}`);
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **Crafting canceled.**',
+          flags: 64
+        });
+      }
+    } catch (replyError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send cancel response: ${replyError.message}`);
     }
   }
 }

@@ -162,8 +162,9 @@ app.use(session({
     secure: isProduction, // true in production (HTTPS required), false in development
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: isProduction ? 'strict' : 'lax',
-    domain: isProduction ? domain : undefined // Set domain in production, undefined for localhost
+    sameSite: 'lax', // Use 'lax' for better compatibility - allows cookies on top-level navigations
+    // Don't set domain explicitly - let browser handle it automatically for better compatibility
+    // Setting domain explicitly can cause issues with cookie scope
   },
   name: 'tinglebot.sid'
 }));
@@ -174,6 +175,14 @@ app.use((req, res, next) => {
   if (req.path.includes('/auth/') && !req.session) {
     logger.warn(`No session found for auth request: ${req.path}`, 'server.js');
   }
+  
+  // Log session cookie info for auth-related requests (development only)
+  if (!isProduction && (req.path.includes('/auth/') || req.path.includes('/api/user/settings'))) {
+    const cookieHeader = req.headers.cookie;
+    const hasSessionCookie = cookieHeader && cookieHeader.includes('tinglebot.sid');
+    logger.debug(`Session check - Path: ${req.path}, Has cookie: ${hasSessionCookie}, Is authenticated: ${req.isAuthenticated ? req.isAuthenticated() : 'N/A'}`, null, 'server.js');
+  }
+  
   next();
 });
 

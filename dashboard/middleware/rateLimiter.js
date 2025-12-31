@@ -27,6 +27,8 @@ function createRateLimiter(options = {}) {
   } = options;
 
   return (req, res, next) => {
+    // Ensure req.user is available if passport has deserialized it
+    // This is safe because passport.session() runs before rate limiting
     const key = keyGenerator(req);
     const now = Date.now();
     
@@ -109,11 +111,20 @@ setInterval(cleanupRateLimitStore, 5 * 60 * 1000);
 
 // ------------------- Pre-configured Rate Limiters -------------------
 
-// General API rate limiter (100 requests per 15 minutes)
+// General API rate limiter - uses user-based tracking for authenticated users, IP for guests
+// Authenticated users get higher limits since they're making legitimate dashboard requests
 const generalLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many API requests, please try again later'
+  max: 300, // Increased from 100 to 300 to handle dashboard page loads with many modules
+  message: 'Too many API requests, please try again later',
+  keyGenerator: (req) => {
+    // Use user ID for authenticated users (allows higher limits per user)
+    // Use IP for unauthenticated requests
+    if (req.user && req.user.discordId) {
+      return `user-${req.user.discordId}`;
+    }
+    return req.ip || req.connection.remoteAddress || 'unknown';
+  }
 });
 
 // Strict rate limiter for authentication endpoints (5 requests per 15 minutes)

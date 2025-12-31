@@ -18,6 +18,8 @@ const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
 const ItemModel = require('../models/ItemModel');
+const { ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, MessageFlags, ButtonBuilder, ButtonStyle } = require('discord.js');
+const TempData = require('../models/TempDataModel');
 
 // ============================================================================
 // ---- Constants ----
@@ -662,6 +664,40 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
   }
 }
 
+// ---- Function: createMaterialSelectionMenu ----
+// Creates a Discord select menu for sequential material selection
+// Shows ALL available items (including different types from general categories)
+// Users select one item at a time (1/3, 2/3, 3/3, etc.)
+const createMaterialSelectionMenu = (materialName, availableItems, requiredQuantity, customId, currentSelection = 0) => {
+  // Show all available items (up to Discord's limit of 25)
+  // Each inventory entry is a separate option
+  const options = availableItems.slice(0, 25).map((item, index) => {
+    const label = `${item.itemName} (Qty: ${item.quantity})`;
+    const value = `${item._id.toString()}|${item.itemName}|${item.quantity}`;
+    
+    // For sequential selection, show which selection this is
+    const isGeneralCategory = generalCategories[materialName];
+    const description = isGeneralCategory 
+      ? `Select from ${materialName} category`
+      : `Select this stack of ${item.itemName}`;
+    
+    return new StringSelectMenuOptionBuilder()
+      .setLabel(label.length > 100 ? label.substring(0, 97) + '...' : label)
+      .setValue(value)
+      .setDescription(description.length > 100 ? description.substring(0, 97) + '...' : description);
+  });
+
+  const progressText = `${currentSelection + 1}/${requiredQuantity}`;
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(customId)
+    .setPlaceholder(`Select item for ${materialName} ${progressText}`)
+    .setMinValues(1)
+    .setMaxValues(1) // Sequential selection: only one item at a time
+    .addOptions(options);
+
+  return new ActionRowBuilder().addComponents(selectMenu);
+};
+
 // ---- Function: processMaterials ----
 // Processes materials needed for crafting an item
 const processMaterials = async (interaction, character, inventory, craftableItem, quantity) => {
@@ -675,7 +711,10 @@ const processMaterials = async (interaction, character, inventory, craftableItem
     let specificItems = [];
     let requiredQuantity = material.quantity * quantity;
 
+    // Get available items for this material
     if (generalCategories[materialName]) {
+      // For general categories (e.g., "Any Raw Meat"), collect ALL items from that category
+      // This allows users to select multiple different item types (e.g., 1 Raw Bird + 1 Raw Prime + 1 Raw Gourmet)
       const result = await promptUserForSpecificItems(
         interaction,
         inventory,
@@ -685,13 +724,35 @@ const processMaterials = async (interaction, character, inventory, craftableItem
       if (result === "canceled") {
         return "canceled";
       }
+      // result contains ALL items from the category that the user owns
+      // Each inventory entry is a separate selectable option
       specificItems = result;
     } else {
-      specificItems = inventory.filter((item) => item.itemName === materialName);
+      // Filter for specific items - check both exact match and case-insensitive
+      specificItems = inventory.filter((item) => 
+        item.itemName.toLowerCase() === materialName.toLowerCase()
+      );
     }
 
-    let totalQuantity = specificItems.reduce(
-      (sum, item) => sum + item.quantity,
+    // Filter out items with 0 or invalid quantities before calculating total
+    const validItems = specificItems.filter(item => {
+      const qty = typeof item.quantity === 'number' 
+        ? (isNaN(item.quantity) ? 0 : item.quantity)
+        : (item.quantity !== null && item.quantity !== undefined 
+          ? (isNaN(parseInt(item.quantity, 10)) ? 0 : parseInt(item.quantity, 10))
+          : 0);
+      return qty > 0;
+    });
+
+    let totalQuantity = validItems.reduce(
+      (sum, item) => {
+        const qty = typeof item.quantity === 'number' 
+          ? (isNaN(item.quantity) ? 0 : item.quantity)
+          : (item.quantity !== null && item.quantity !== undefined 
+            ? (isNaN(parseInt(item.quantity, 10)) ? 0 : parseInt(item.quantity, 10))
+            : 0);
+        return sum + qty;
+      },
       0
     );
     if (totalQuantity < requiredQuantity) {
@@ -715,9 +776,140 @@ const processMaterials = async (interaction, character, inventory, craftableItem
       return "canceled";
     }
 
-    for (const specificItem of specificItems) {
+    // Use validItems (filtered) for selection logic
+    // Check if there are any valid items available
+    if (validItems.length === 0) {
+      if (interaction && interaction.followUp) {
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ No Valid Materials')
+          .setDescription(`You don't have any valid ${materialName} items in your inventory!`)
+          .addFields(
+            { name: 'Required Quantity', value: requiredQuantity.toString(), inline: true },
+            { name: 'Available Quantity', value: '0', inline: true }
+          )
+          .setFooter({ text: 'Try gathering more materials or check your inventory' })
+          .setTimestamp();
+
+        await interaction.followUp({
+          embeds: [errorEmbed],
+          flags: [4096]
+        });
+      }
+      return "canceled";
+    }
+
+    // If user has multiple stacks or it's a general category, prompt for selection
+    // Only auto-select if there's exactly one stack with enough quantity
+    const needsSelection = validItems.length > 1 || 
+                          (validItems.length === 1 && validItems[0].quantity < requiredQuantity) ||
+                          generalCategories[materialName];
+
+    if (needsSelection && interaction) {
+      // Create select menu for user to choose items
+      const selectionId = uuidv4();
+      const customId = `crafting-material|${selectionId}|${materialName}`;
+      
+      // Save crafting state to storage
+      // For sequential selection: track how many items have been selected so far
+      const craftingState = {
+        type: 'craftingMaterialSelection',
+        key: selectionId,
+        data: {
+          selectionId,
+          userId: interaction.user.id,
+          characterId: character._id,
+          characterName: character.name,
+          interactionId: interaction.id,
+          channelId: interaction.channelId,
+          guildId: interaction.guildId,
+          materialName,
+          requiredQuantity,
+          selectedCount: 0, // Track how many items selected so far (for sequential selection)
+          selectedItemsSoFar: [], // Track which items have been selected
+          availableItems: validItems.map(item => ({
+            _id: item._id.toString(),
+            itemName: item.itemName,
+            quantity: typeof item.quantity === 'number' 
+              ? (isNaN(item.quantity) ? 0 : item.quantity)
+              : (item.quantity !== null && item.quantity !== undefined 
+                ? (isNaN(parseInt(item.quantity, 10)) ? 0 : parseInt(item.quantity, 10))
+                : 0)
+          })),
+          craftableItem: {
+            itemName: craftableItem.itemName,
+            craftingMaterial: craftableItem.craftingMaterial,
+            quantity: quantity
+          },
+          materialsUsedSoFar: materialsUsed,
+          currentMaterialIndex: craftableItem.craftingMaterial.findIndex(m => m.itemName === materialName),
+          allMaterials: craftableItem.craftingMaterial,
+          inventory: inventory.map(item => ({
+            _id: item._id.toString(),
+            itemName: item.itemName,
+            quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity, 10) || 0
+          }))
+        },
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+      };
+
+      await TempData.findOneAndUpdate(
+        { type: 'craftingMaterialSelection', key: selectionId },
+        craftingState,
+        { upsert: true, new: true }
+      );
+
+      // Create and send select menu for sequential selection (1/3, 2/3, etc.)
+      // Use validItems instead of specificItems to exclude 0-quantity items
+      const currentSelection = 0; // Starting with first selection
+      const selectMenu = createMaterialSelectionMenu(materialName, validItems, requiredQuantity, customId, currentSelection);
+      
+      // Enhanced description for sequential selection
+      const isGeneralCategory = generalCategories[materialName];
+      const progressText = `**${currentSelection + 1}/${requiredQuantity}**`;
+      const categoryDescription = isGeneralCategory
+        ? `Please select an item for **${materialName}** ${progressText}\n\n**Required:** ${requiredQuantity} total\n\n💡 **Select one item at a time.** You'll be prompted for each item needed.`
+        : `Please select an item for **${materialName}** ${progressText}\n\n**Required:** ${requiredQuantity} total\n\n💡 **Select one item at a time.** You'll be prompted for each item needed.`;
+      
+      const embed = new EmbedBuilder()
+        .setColor(0x00CED1)
+        .setTitle(`📦 Select Materials ${progressText}`)
+        .setDescription(categoryDescription)
+        .setFooter({ text: `Select one item (${currentSelection + 1} of ${requiredQuantity})` })
+        .setTimestamp();
+
+      const cancelButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`crafting-cancel|${selectionId}`)
+          .setLabel('❌ Cancel')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      await interaction.followUp({
+        embeds: [embed],
+        components: [selectMenu, cancelButton],
+        flags: [MessageFlags.Ephemeral]
+      });
+
+      // Return pending state - handler will continue processing
+      return { status: 'pending', selectionId };
+    }
+
+    // Auto-select if only one stack with enough quantity
+    // Use validItems to ensure we only process items with valid quantities
+    for (const specificItem of validItems) {
       if (requiredQuantity <= 0) break;
-      let removeQuantity = Math.min(requiredQuantity, specificItem.quantity);
+      
+      // Ensure quantity is valid
+      const itemQty = typeof specificItem.quantity === 'number' 
+        ? (isNaN(specificItem.quantity) ? 0 : specificItem.quantity)
+        : (specificItem.quantity !== null && specificItem.quantity !== undefined 
+          ? (isNaN(parseInt(specificItem.quantity, 10)) ? 0 : parseInt(specificItem.quantity, 10))
+          : 0);
+      
+      if (itemQty <= 0) continue; // Skip invalid items
+      
+      let removeQuantity = Math.min(requiredQuantity, itemQty);
       await removeItemInventoryDatabase(
         character._id,
         specificItem.itemName,
@@ -734,6 +926,323 @@ const processMaterials = async (interaction, character, inventory, craftableItem
   }
 
   // Log materials to Google Sheets if character has an inventory sheet
+  if (character?.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+    try {
+      const auth = await authorizeSheets();
+      const spreadsheetId = extractSpreadsheetId(character.inventory);
+      const range = 'loggedInventory!A2:M';
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      const formattedDateTime = formatDateTime(new Date());
+
+      await logMaterialsToGoogleSheets(
+        auth,
+        spreadsheetId,
+        range,
+        character,
+        materialsUsed,
+        craftableItem,
+        interactionUrl,
+        formattedDateTime
+      );
+    } catch (error) {
+      handleError(error, 'inventoryUtils.js');
+      console.error(`[inventoryUtils.js]: Error logging materials to sheet: ${error.message}`);
+    }
+  }
+
+  return materialsUsed;
+};
+
+// ---- Function: continueProcessMaterials ----
+// Continues processing materials after user selection
+// Handles general categories correctly - processes different item types from the same category
+// Example: For "Any Raw Meat" x3, user can select 1 Raw Bird + 1 Raw Prime + 1 Raw Gourmet
+const continueProcessMaterials = async (interaction, character, selectedItems, craftingState) => {
+  const { materialName, requiredQuantity, craftableItem, quantity, materialsUsedSoFar, currentMaterialIndex, allMaterials, inventory } = craftingState.data;
+  
+  const materialsUsed = [...materialsUsedSoFar];
+  let remainingQuantity = requiredQuantity;
+
+  // Process selected items - handles sequential selection (one item at a time)
+  // For sequential selection, we use exactly 1 from each selected item
+  // This correctly processes selections like: 1 Raw Bird + 1 Raw Prime + 1 Raw Gourmet = 3 Any Raw Meat
+  for (const selectedValue of selectedItems) {
+    const [itemId, itemName, itemQuantity] = selectedValue.split('|');
+    
+    // Validate parsed values
+    if (!itemId || !itemName || !itemQuantity) {
+      console.error(`[inventoryUtils.js]: Invalid selected value format: ${selectedValue}`);
+      continue;
+    }
+    
+    const parsedQuantity = parseInt(itemQuantity, 10);
+    if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
+      console.error(`[inventoryUtils.js]: Invalid quantity in selected value: ${selectedValue}, parsed: ${parsedQuantity}`);
+      continue;
+    }
+    
+    // For sequential selection, use exactly 1 from each selected item
+    // The itemQuantity in the value is the available quantity, but we only use 1 per selection
+    const quantityToUse = Math.min(remainingQuantity, 1);
+    
+    if (quantityToUse > 0) {
+      await removeItemInventoryDatabase(
+        character._id,
+        itemName,
+        quantityToUse,
+        interaction
+      );
+      materialsUsed.push({
+        itemName: itemName,
+        quantity: quantityToUse,
+        _id: new mongoose.Types.ObjectId(itemId),
+      });
+      remainingQuantity -= quantityToUse;
+    }
+    
+    // Stop processing once we have enough
+    if (remainingQuantity <= 0) break;
+  }
+
+  // Check if there are more materials to process
+  const nextMaterialIndex = currentMaterialIndex + 1;
+  if (nextMaterialIndex < allMaterials.length) {
+    // Continue with next material
+    const nextMaterial = allMaterials[nextMaterialIndex];
+    const materialQty = typeof nextMaterial.quantity === 'number' ? nextMaterial.quantity : parseInt(nextMaterial.quantity, 10);
+    if (isNaN(materialQty) || materialQty <= 0) {
+      console.error(`[inventoryUtils.js]: Invalid material quantity for ${nextMaterial.itemName}: ${nextMaterial.quantity}`);
+      return "canceled";
+    }
+    let nextRequiredQuantity = materialQty * quantity;
+    
+    // Get available items for next material
+    let specificItems = [];
+    if (generalCategories[nextMaterial.itemName]) {
+      const result = await promptUserForSpecificItems(
+        interaction,
+        inventory.map(item => {
+          let quantity;
+          if (typeof item.quantity === 'number') {
+            quantity = isNaN(item.quantity) ? 0 : item.quantity;
+          } else if (item.quantity !== null && item.quantity !== undefined) {
+            const parsed = parseInt(item.quantity, 10);
+            quantity = isNaN(parsed) ? 0 : parsed;
+          } else {
+            quantity = 0;
+          }
+          return {
+            _id: new mongoose.Types.ObjectId(item._id),
+            itemName: item.itemName,
+            quantity: quantity
+          };
+        }),
+        nextMaterial.itemName,
+        nextRequiredQuantity
+      );
+      if (result === "canceled") {
+        return "canceled";
+      }
+      specificItems = result;
+    } else {
+      specificItems = inventory
+        .filter((item) => item.itemName.toLowerCase() === nextMaterial.itemName.toLowerCase())
+        .map(item => {
+          let quantity;
+          if (typeof item.quantity === 'number') {
+            quantity = isNaN(item.quantity) ? 0 : item.quantity;
+          } else if (item.quantity !== null && item.quantity !== undefined) {
+            const parsed = parseInt(item.quantity, 10);
+            quantity = isNaN(parsed) ? 0 : parsed;
+          } else {
+            quantity = 0;
+          }
+          return {
+            _id: new mongoose.Types.ObjectId(item._id),
+            itemName: item.itemName,
+            quantity: quantity
+          };
+        });
+    }
+
+    let totalQuantity = specificItems.reduce((sum, item) => sum + item.quantity, 0);
+    if (totalQuantity < nextRequiredQuantity) {
+      const errorEmbed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Insufficient Materials')
+        .setDescription(`You don't have enough ${nextMaterial.itemName} to craft this item!`)
+        .addFields(
+          { name: 'Required Quantity', value: nextRequiredQuantity.toString(), inline: true },
+          { name: 'Available Quantity', value: totalQuantity.toString(), inline: true }
+        )
+        .setFooter({ text: 'Try gathering more materials or check your inventory' })
+        .setTimestamp();
+
+      await interaction.followUp({
+        embeds: [errorEmbed],
+        flags: [MessageFlags.Ephemeral]
+      });
+      return "canceled";
+    }
+
+    // Check if next material needs selection
+    const needsSelection = specificItems.length > 1 || 
+                          (specificItems.length === 1 && specificItems[0].quantity < nextRequiredQuantity) ||
+                          generalCategories[nextMaterial.itemName];
+
+    if (needsSelection) {
+      const selectionId = uuidv4();
+      const customId = `crafting-material|${selectionId}|${nextMaterial.itemName}`;
+      
+      const nextCraftingState = {
+        type: 'craftingMaterialSelection',
+        key: selectionId,
+        data: {
+          selectionId,
+          userId: interaction.user.id,
+          characterId: character._id,
+          characterName: character.name,
+          interactionId: interaction.id,
+          channelId: interaction.channelId,
+          guildId: interaction.guildId,
+          materialName: nextMaterial.itemName,
+          requiredQuantity: nextRequiredQuantity,
+          availableItems: specificItems.map(item => ({
+            _id: item._id.toString(),
+            itemName: item.itemName,
+            quantity: item.quantity
+          })),
+          craftableItem: {
+            itemName: craftableItem.itemName,
+            craftingMaterial: craftableItem.craftingMaterial,
+            quantity: quantity
+          },
+          materialsUsedSoFar: materialsUsed,
+          currentMaterialIndex: nextMaterialIndex,
+          allMaterials: allMaterials,
+          inventory: inventory.map(item => ({
+            _id: item._id.toString(),
+            itemName: item.itemName,
+            quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity, 10) || 0
+          }))
+        },
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000)
+      };
+
+      await TempData.findOneAndUpdate(
+        { type: 'craftingMaterialSelection', key: selectionId },
+        nextCraftingState,
+        { upsert: true, new: true }
+      );
+
+      const selectMenu = createMaterialSelectionMenu(nextMaterial.itemName, specificItems, nextRequiredQuantity, customId);
+      const embed = new EmbedBuilder()
+        .setColor(0x00CED1)
+        .setTitle('📦 Select Materials')
+        .setDescription(`Please select which items to use for **${nextMaterial.itemName}**\n\n**Required:** ${nextRequiredQuantity}`)
+        .setFooter({ text: 'Select the items you want to use for crafting' })
+        .setTimestamp();
+
+      const cancelButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`crafting-cancel|${selectionId}`)
+          .setLabel('❌ Cancel')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      await interaction.followUp({
+        embeds: [embed],
+        components: [selectMenu, cancelButton],
+        flags: [MessageFlags.Ephemeral]
+      });
+
+      return { status: 'pending', selectionId };
+    } else {
+      // Auto-select next material
+      // First, filter out items with 0 or invalid quantities
+      const validItems = specificItems.filter(item => {
+        let itemQuantity;
+        if (typeof item.quantity === 'number') {
+            itemQuantity = isNaN(item.quantity) ? 0 : item.quantity;
+        } else if (item.quantity !== null && item.quantity !== undefined) {
+            const parsed = parseInt(item.quantity, 10);
+            itemQuantity = isNaN(parsed) ? 0 : parsed;
+        } else {
+            itemQuantity = 0;
+        }
+        return itemQuantity > 0;
+      });
+
+      // Check if we have enough items after filtering
+      const validTotalQuantity = validItems.reduce((sum, item) => {
+        let itemQuantity;
+        if (typeof item.quantity === 'number') {
+            itemQuantity = isNaN(item.quantity) ? 0 : item.quantity;
+        } else if (item.quantity !== null && item.quantity !== undefined) {
+            const parsed = parseInt(item.quantity, 10);
+            itemQuantity = isNaN(parsed) ? 0 : parsed;
+        } else {
+            itemQuantity = 0;
+        }
+        return sum + itemQuantity;
+      }, 0);
+
+      if (validTotalQuantity < nextRequiredQuantity) {
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ Insufficient Materials')
+          .setDescription(`You don't have enough ${nextMaterial.itemName} to craft this item!`)
+          .addFields(
+            { name: 'Required Quantity', value: nextRequiredQuantity.toString(), inline: true },
+            { name: 'Available Quantity', value: validTotalQuantity.toString(), inline: true }
+          )
+          .setFooter({ text: 'Try gathering more materials or check your inventory' })
+          .setTimestamp();
+
+        await interaction.followUp({
+          embeds: [errorEmbed],
+          flags: [MessageFlags.Ephemeral]
+        });
+        return "canceled";
+      }
+
+      // Process valid items
+      for (const specificItem of validItems) {
+        if (nextRequiredQuantity <= 0) break;
+        
+        // Quantity is already validated above, but ensure it's a number
+        let itemQuantity;
+        if (typeof specificItem.quantity === 'number') {
+            itemQuantity = isNaN(specificItem.quantity) ? 0 : specificItem.quantity;
+        } else if (specificItem.quantity !== null && specificItem.quantity !== undefined) {
+            const parsed = parseInt(specificItem.quantity, 10);
+            itemQuantity = isNaN(parsed) ? 0 : parsed;
+        } else {
+            itemQuantity = 0;
+        }
+        
+        if (itemQuantity <= 0) continue; // Should not happen after filtering, but safety check
+        
+        let removeQuantity = Math.min(nextRequiredQuantity, itemQuantity);
+        if (removeQuantity <= 0) continue;
+        
+        await removeItemInventoryDatabase(
+          character._id,
+          specificItem.itemName,
+          removeQuantity,
+          interaction
+        );
+        materialsUsed.push({
+          itemName: specificItem.itemName,
+          quantity: removeQuantity,
+          _id: specificItem._id,
+        });
+        nextRequiredQuantity -= removeQuantity;
+      }
+    }
+  }
+
+  // All materials processed - log to Google Sheets if needed
   if (character?.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
     try {
       const auth = await authorizeSheets();
@@ -931,6 +1440,8 @@ module.exports = {
   addItemInventoryDatabase,
   removeItemInventoryDatabase,
   processMaterials,
+  continueProcessMaterials,
+  createMaterialSelectionMenu,
   createNewItemDatabase,
   createRemovedItemDatabase,
   addItemsToDatabase,

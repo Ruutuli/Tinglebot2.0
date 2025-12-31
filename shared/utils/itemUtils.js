@@ -188,25 +188,46 @@ function sortItemsByRarity(inventoryItems) {
 
 // ------------------- Prompt User for Specific Items -------------------
 // Returns available items from a general category for web dashboard use.
+// Returns ALL items from the category that the user owns, allowing selection of multiple different item types.
 const promptUserForSpecificItems = async (inventory, generalCategoryItemName, requiredQuantity) => {
     if (!generalCategories[generalCategoryItemName]) {
         throw new Error(`❌ **General category ${generalCategoryItemName} is not defined.**`);
     }
 
-    let specificItems = inventory.filter(item => generalCategories[generalCategoryItemName].includes(item.itemName));
+    // Filter inventory for ALL items that match the general category
+    // This includes all different item types from the category (e.g., all types of "Any Raw Meat")
+    let specificItems = inventory.filter(item => 
+        generalCategories[generalCategoryItemName].includes(item.itemName)
+    );
+    
+    // Sort by rarity for better UX (rarer items first)
     specificItems = sortItemsByRarity(specificItems);
 
     if (specificItems.length === 0) {
         throw new Error(`❌ **No available items found for ${generalCategoryItemName}.**`);
     }
 
-    // For web dashboard, return the available items instead of handling Discord interactions
-    return specificItems.map(item => ({
-        itemName: item.itemName,
-        quantity: item.quantity,
-        _id: item._id,
-        itemRarity: item.itemRarity || 1
-    }));
+    // Return ALL matching items - each inventory entry is a separate selectable option
+    // This allows users to select multiple different item types (e.g., 1 Raw Bird + 1 Raw Prime + 1 Raw Gourmet = 3 Any Raw Meat)
+    return specificItems.map(item => {
+        // Ensure quantity is always a number
+        let quantity;
+        if (typeof item.quantity === 'number') {
+            quantity = isNaN(item.quantity) ? 0 : item.quantity;
+        } else if (item.quantity !== null && item.quantity !== undefined) {
+            const parsed = parseInt(item.quantity, 10);
+            quantity = isNaN(parsed) ? 0 : parsed;
+        } else {
+            quantity = 0;
+        }
+        
+        return {
+            itemName: item.itemName,
+            quantity: quantity,
+            _id: item._id,
+            itemRarity: item.itemRarity || 1
+        };
+    });
 };
 
 // ------------------- Process Sheet Data for Database -------------------

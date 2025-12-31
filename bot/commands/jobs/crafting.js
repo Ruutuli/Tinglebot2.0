@@ -445,6 +445,48 @@ module.exports = {
       if (materialsUsed === 'canceled') {
         return interaction.editReply({ content: '❌ **Crafting canceled.**', flags: [MessageFlags.Ephemeral] });
       }
+      // If materials processing is pending user selection, save state and stop here
+      if (materialsUsed && typeof materialsUsed === 'object' && materialsUsed.status === 'pending') {
+        // Save crafting state to continue after material selection
+        const TempData = require('../../../shared/models/TempDataModel');
+        const craftingState = {
+          type: 'craftingContinue',
+          key: materialsUsed.selectionId,
+          data: {
+            userId: interaction.user.id,
+            characterId: character._id,
+            characterName: character.name,
+            itemName: itemName,
+            item: {
+              itemName: item.itemName,
+              emoji: item.emoji,
+              category: item.category,
+              staminaToCraft: item.staminaToCraft
+            },
+            quantity: quantity,
+            flavorText: flavorText,
+            staminaCost: staminaCost,
+            originalStaminaCost: originalStaminaCost,
+            crafterStaminaCost: crafterStaminaCost,
+            teacherStaminaContribution: teacherStaminaContribution,
+            materialSavings: materialSavings,
+            adjustedCraftingMaterials: adjustedCraftingMaterials,
+            interactionId: interaction.id,
+            channelId: interaction.channelId,
+            guildId: interaction.guildId,
+            jobVoucher: character.jobVoucher,
+            jobVoucherJob: character.jobVoucherJob,
+            job: character.job
+          },
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+        };
+        await TempData.findOneAndUpdate(
+          { type: 'craftingContinue', key: materialsUsed.selectionId },
+          craftingState,
+          { upsert: true, new: true }
+        );
+        return; // Handler will continue processing after user selection
+      }
 
       // ------------------- Deduct Stamina -------------------
       let updatedStamina;

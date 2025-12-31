@@ -1759,6 +1759,7 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
       });
 
       // Then filter by inventory availability
+      // Only show items where character has ALL required materials with valid quantities (> 0)
       craftableItems = jobFilteredItems.filter(item => {
         // Check if character has all required materials for at least 1 quantity
         for (const material of item.craftingMaterial) {
@@ -1766,22 +1767,52 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
           let ownedQty = 0;
 
           if (generalCategories[material.itemName]) {
-            // Check category items
-            ownedQty = inventory.filter(invItem => 
-              generalCategories[material.itemName].includes(invItem.itemName)
-            ).reduce((sum, inv) => sum + inv.quantity, 0);
+            // Check category items - only count items with quantity > 0
+            ownedQty = inventory
+              .filter(invItem => {
+                // Ensure quantity is valid and > 0
+                const qty = typeof invItem.quantity === 'number' 
+                  ? (isNaN(invItem.quantity) ? 0 : invItem.quantity)
+                  : (invItem.quantity !== null && invItem.quantity !== undefined 
+                    ? (isNaN(parseInt(invItem.quantity, 10)) ? 0 : parseInt(invItem.quantity, 10))
+                    : 0);
+                return qty > 0 && generalCategories[material.itemName].includes(invItem.itemName);
+              })
+              .reduce((sum, inv) => {
+                const qty = typeof inv.quantity === 'number' 
+                  ? (isNaN(inv.quantity) ? 0 : inv.quantity)
+                  : (inv.quantity !== null && inv.quantity !== undefined 
+                    ? (isNaN(parseInt(inv.quantity, 10)) ? 0 : parseInt(inv.quantity, 10))
+                    : 0);
+                return sum + qty;
+              }, 0);
           } else {
-            // Check specific item
-            ownedQty = inventory.filter(invItem => 
-              invItem.itemName === material.itemName
-            ).reduce((sum, inv) => sum + inv.quantity, 0);
+            // Check specific item - only count items with quantity > 0
+            ownedQty = inventory
+              .filter(invItem => {
+                // Ensure quantity is valid and > 0
+                const qty = typeof invItem.quantity === 'number' 
+                  ? (isNaN(invItem.quantity) ? 0 : invItem.quantity)
+                  : (invItem.quantity !== null && invItem.quantity !== undefined 
+                    ? (isNaN(parseInt(invItem.quantity, 10)) ? 0 : parseInt(invItem.quantity, 10))
+                    : 0);
+                return qty > 0 && invItem.itemName === material.itemName;
+              })
+              .reduce((sum, inv) => {
+                const qty = typeof inv.quantity === 'number' 
+                  ? (isNaN(inv.quantity) ? 0 : inv.quantity)
+                  : (inv.quantity !== null && inv.quantity !== undefined 
+                    ? (isNaN(parseInt(inv.quantity, 10)) ? 0 : parseInt(inv.quantity, 10))
+                    : 0);
+                return sum + qty;
+              }, 0);
           }
 
           if (ownedQty < requiredQty) {
-            return false; // Missing required material
+            return false; // Missing required material or insufficient quantity
           }
         }
-        return true; // Has all required materials
+        return true; // Has all required materials with sufficient quantities
       });
       
       // Don't cache crafting results since inventory changes frequently
