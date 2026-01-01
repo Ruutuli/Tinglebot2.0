@@ -779,55 +779,6 @@ async function checkDeadlineAndMatch(client) {
   }
 }
 
-// ------------------- Function: sendReminders -------------------
-async function sendReminders(client) {
-  const data = await loadSecretSantaData();
-  const now = new Date();
-  const submissionDeadline = new Date(data.settings.submissionDeadline);
-  const daysUntilDeadline = Math.ceil((submissionDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  
-  // Send reminders at 30, 14, 7, 3, 1, and 0 days before deadline
-  const reminderDays = [30, 14, 7, 3, 1, 0];
-  
-  if (reminderDays.includes(daysUntilDeadline) && data.settings.matchesApproved) {
-    logger.info('SECRET_SANTA', `Sending reminder: ${daysUntilDeadline} days until submission deadline`);
-    
-    // Send reminder DMs to all participants who have assignments
-    const participants = await SecretSantaParticipant.find({ 
-      matchedWith: { $ne: null } 
-    }).lean();
-    
-    for (const participant of participants) {
-      try {
-        const user = await client.users.fetch(participant.userId);
-        const { EmbedBuilder } = require('discord.js');
-        
-        const embed = new EmbedBuilder()
-          .setTitle('⏰ Roots Secret Santa Reminder')
-          .setDescription(`**${daysUntilDeadline} day${daysUntilDeadline !== 1 ? 's' : ''} until the submission deadline!**`)
-          .setImage(BORDER_IMAGE)
-          .setColor(0x00AE86)
-          .addFields({
-            name: '📅 Deadline',
-            value: `<t:${Math.floor(submissionDeadline.getTime() / 1000)}:F>`,
-            inline: false
-          })
-          .addFields({
-            name: '💡 Remember',
-            value: `• Send your gift art directly to your giftee\n• If you can't make the deadline, inform us by the first week of January\n• Keep it secret!`,
-            inline: false
-          })
-          .setTimestamp();
-        
-        await user.send({ embeds: [embed] });
-      } catch (error) {
-        if (error.code !== 50007) {
-          logger.error('SECRET_SANTA', `Error sending reminder to ${participant.userId}:`, error.message);
-        }
-      }
-    }
-  }
-}
 
 // ------------------- Function: setupSecretSantaScheduler -------------------
 function setupSecretSantaScheduler(client) {
@@ -849,20 +800,10 @@ function setupSecretSantaScheduler(client) {
     }
   }, 60 * 60 * 1000); // 1 hour
   
-  // Send reminders once per day
-  setInterval(async () => {
-    try {
-      await sendReminders(client);
-    } catch (error) {
-      logger.error('SECRET_SANTA', 'Error sending reminders:', error);
-    }
-  }, 24 * 60 * 60 * 1000); // 24 hours
-  
   // Also check immediately on startup (after a delay to ensure MongoDB is ready)
   setTimeout(async () => {
     try {
       await checkDeadlineAndMatch(client);
-      await sendReminders(client);
     } catch (error) {
       logger.error('SECRET_SANTA', 'Error in startup Secret Santa check:', error);
     }
@@ -888,7 +829,6 @@ module.exports = {
   matchParticipants,
   sendAssignmentDMs,
   checkDeadlineAndMatch,
-  sendReminders,
   setupSecretSantaScheduler,
   initializeBlacklist,
   isBlacklisted

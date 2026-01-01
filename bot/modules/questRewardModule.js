@@ -100,7 +100,17 @@ async function sendIndividualRewardNotification(quest, participant, rewardResult
             });
         }
         
-        if (quest.itemReward && quest.itemRewardQty > 0) {
+        // Display item rewards (prefer itemRewards array, fallback to single item format)
+        if (quest.itemRewards && quest.itemRewards.length > 0) {
+            const itemRewardsText = quest.itemRewards.map(item => 
+                `${item.quantity}x ${item.name}`
+            ).join(', ');
+            rewardFields.push({
+                name: quest.itemRewards.length > 1 ? '📦 Item Rewards' : '📦 Item Reward',
+                value: itemRewardsText,
+                inline: true
+            });
+        } else if (quest.itemReward && quest.itemRewardQty > 0) {
             rewardFields.push({
                 name: '📦 Item Reward',
                 value: `${quest.itemRewardQty}x ${quest.itemReward}`,
@@ -861,7 +871,18 @@ function updateParticipantRewardData(participant, quest, rewardResult, rewardSou
     participant.progress = 'rewarded';
     participant.rewardedAt = new Date();
     participant.tokensEarned = rewardResult.tokensAdded;
-    participant.itemsEarned = quest.itemReward ? [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }] : [];
+    
+    // Use itemsDistributed from rewardResult if available, otherwise use quest.itemRewards or fallback to single item
+    if (rewardResult.itemsDistributed && rewardResult.itemsDistributed.length > 0) {
+        participant.itemsEarned = rewardResult.itemsDistributed;
+    } else if (quest.itemRewards && quest.itemRewards.length > 0) {
+        participant.itemsEarned = quest.itemRewards;
+    } else if (quest.itemReward) {
+        participant.itemsEarned = [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }];
+    } else {
+        participant.itemsEarned = [];
+    }
+    
     participant.rewardProcessed = true;
     participant.lastRewardCheck = new Date();
     participant.rewardSource = rewardSource;
@@ -879,6 +900,7 @@ async function distributeRewards(quest, participant, rewardContext = {}) {
             errors: [],
             tokensAdded: 0,
             itemsAdded: 0,
+            itemsDistributed: [],
             tokenBreakdown: {
                 base: 0
             }
@@ -909,12 +931,20 @@ async function distributeRewards(quest, participant, rewardContext = {}) {
             }
         }
 
-        if (quest.itemReward && quest.itemRewardQty > 0) {
+        // Check for items to distribute (prefer itemRewards array, fallback to single item format)
+        const hasItems = (quest.itemRewards && quest.itemRewards.length > 0) || 
+                         (quest.itemReward && quest.itemRewardQty > 0);
+        
+        if (hasItems) {
             const itemResult = await distributeItems(quest, participant);
             if (itemResult.success) {
                 results.itemsAdded = itemResult.itemsAdded;
+                results.itemsDistributed = itemResult.itemsDistributed || [];
             } else {
                 results.errors.push(itemResult.error);
+            }
+            if (itemResult.errors && itemResult.errors.length > 0) {
+                results.errors.push(...itemResult.errors);
             }
         }
 
@@ -1039,6 +1069,20 @@ async function distributeItems(quest, participant) {
         const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId } = require('../../shared/utils/googleSheetsUtils');
         const { v4: uuidv4 } = require('uuid');
         
+        // Determine which items to distribute
+        let itemsToDistribute = [];
+        
+        if (quest.itemRewards && quest.itemRewards.length > 0) {
+            // Use itemRewards array (multiple items support)
+            itemsToDistribute = quest.itemRewards;
+        } else if (quest.itemReward && quest.itemRewardQty > 0) {
+            // Fallback to single item format (backward compatibility)
+            itemsToDistribute = [{ name: quest.itemReward, quantity: quest.itemRewardQty || 1 }];
+        } else {
+            // No items to distribute
+            return { success: true, itemsAdded: 0, itemsDistributed: [] };
+        }
+        
         // Connect to inventories database
         const inventoriesConnection = await connectToInventories();
         const db = inventoriesConnection.useDb('inventories');
@@ -1047,105 +1091,138 @@ async function distributeItems(quest, participant) {
         const collectionName = character.name.toLowerCase();
         const inventoryCollection = db.collection(collectionName);
         
-        // Find the item in the Item model
-        const item = await Item.findOne({ 
-            itemName: new RegExp(`^${quest.itemReward.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
-        });
+        const distributedItems = [];
+        let totalItemsAdded = 0;
+        const errors = [];
         
-        if (!item) {
-            console.log(`[questRewardModule.js] ⚠️ Item "${quest.itemReward}" not found in Item database`);
-            return { success: false, error: `Item "${quest.itemReward}" not found` };
-        }
+        // Helper function to format date/time
+        const formatDateTime = (date) => {
+            return date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+        };
         
-        // Check if item already exists in inventory
-        const existingItem = await inventoryCollection.findOne({
-            characterId: character._id,
-            itemName: new RegExp(`^${escapeRegExp(item.itemName)}$`, 'i')
-        });
-        
-        if (existingItem) {
-            // Update existing item quantity
-            await inventoryCollection.updateOne(
-                { _id: existingItem._id },
-                { $inc: { quantity: quest.itemRewardQty } }
-            );
-        } else {
-            // Create new inventory entry
-            const newItem = {
-                characterId: character._id,
-                characterName: character.name,
-                itemName: item.itemName,
-                itemId: item._id,
-                quantity: quest.itemRewardQty,
-                category: Array.isArray(item.category) ? item.category.join(', ') : (item.category || 'Misc'),
-                type: Array.isArray(item.type) ? item.type.join(', ') : (item.type || 'Unknown'),
-                subtype: Array.isArray(item.subtype) ? item.subtype.join(', ') : (item.subtype || ''),
-                location: character.currentVillage || character.homeVillage || 'Unknown',
-                date: new Date(),
-                obtain: `Quest: ${quest.title}`
-            };
-            
-            await inventoryCollection.insertOne(newItem);
-        }
-        
-        // Sync to Google Sheets if character has inventory link
-        if (character.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+        // Process each item
+        for (const itemReward of itemsToDistribute) {
             try {
-                const { client } = require('../index.js');
-                const category = Array.isArray(item.category) ? item.category.join(', ') : (item.category || '');
-                const type = Array.isArray(item.type) ? item.type.join(', ') : (item.type || '');
-                const subtype = Array.isArray(item.subtype) ? item.subtype.join(', ') : (item.subtype || '');
+                // Find the item in the Item model
+                const item = await Item.findOne({ 
+                    itemName: new RegExp(`^${escapeRegExp(itemReward.name)}$`, 'i')
+                });
                 
-                // Helper function to format date/time
-                const formatDateTime = (date) => {
-                    return date.toLocaleString('en-US', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
-                };
+                if (!item) {
+                    console.log(`[questRewardModule.js] ⚠️ Item "${itemReward.name}" not found in Item database`);
+                    errors.push(`Item "${itemReward.name}" not found`);
+                    continue;
+                }
                 
-                // Create addition log entry
-                const additionLogEntry = [
-                    character.name, // Character Name (A)
-                    item.itemName, // Item Name (B)
-                    quest.itemRewardQty, // Qty of Item (C) - positive for addition
-                    category, // Category (D)
-                    type, // Type (E)
-                    subtype, // Subtype (F)
-                    `Quest: ${quest.title}`, // Obtain (G)
-                    character.job || '', // Job (H)
-                    character.perk || '', // Perk (I)
-                    character.currentVillage || character.homeVillage || '', // Location (J)
-                    '', // Link (K) - no interaction link for quest rewards
-                    formatDateTime(new Date()), // Date/Time (L)
-                    uuidv4() // Confirmed Sync (M)
-                ];
+                // Check if item already exists in inventory
+                const existingItem = await inventoryCollection.findOne({
+                    characterId: character._id,
+                    itemName: new RegExp(`^${escapeRegExp(item.itemName)}$`, 'i')
+                });
                 
-                // Log to Google Sheets
-                await safeAppendDataToSheet(
-                    character.inventory,
-                    character,
-                    'loggedInventory!A:M',
-                    [additionLogEntry],
-                    client,
-                    { skipValidation: false, context: { commandName: 'questReward', characterName: character.name } }
-                );
+                if (existingItem) {
+                    // Update existing item quantity
+                    await inventoryCollection.updateOne(
+                        { _id: existingItem._id },
+                        { $inc: { quantity: itemReward.quantity } }
+                    );
+                } else {
+                    // Create new inventory entry
+                    const newItem = {
+                        characterId: character._id,
+                        characterName: character.name,
+                        itemName: item.itemName,
+                        itemId: item._id,
+                        quantity: itemReward.quantity,
+                        category: Array.isArray(item.category) ? item.category.join(', ') : (item.category || 'Misc'),
+                        type: Array.isArray(item.type) ? item.type.join(', ') : (item.type || 'Unknown'),
+                        subtype: Array.isArray(item.subtype) ? item.subtype.join(', ') : (item.subtype || ''),
+                        location: character.currentVillage || character.homeVillage || 'Unknown',
+                        date: new Date(),
+                        obtain: `Quest: ${quest.title}`
+                    };
+                    
+                    await inventoryCollection.insertOne(newItem);
+                }
                 
-                console.log(`[questRewardModule.js] 📊 Synced ${quest.itemRewardQty}x ${quest.itemReward} to Google Sheets for ${participant.characterName}`);
-            } catch (sheetError) {
-                // Don't fail the reward if sheet sync fails
-                console.error(`[questRewardModule.js] ⚠️ Failed to sync to Google Sheets: ${sheetError.message}`);
+                distributedItems.push({
+                    name: item.itemName,
+                    quantity: itemReward.quantity
+                });
+                totalItemsAdded += itemReward.quantity;
+                
+                // Sync to Google Sheets if character has inventory link
+                if (character.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+                    try {
+                        const { client } = require('../index.js');
+                        const category = Array.isArray(item.category) ? item.category.join(', ') : (item.category || '');
+                        const type = Array.isArray(item.type) ? item.type.join(', ') : (item.type || '');
+                        const subtype = Array.isArray(item.subtype) ? item.subtype.join(', ') : (item.subtype || '');
+                        
+                        // Create addition log entry
+                        const additionLogEntry = [
+                            character.name, // Character Name (A)
+                            item.itemName, // Item Name (B)
+                            itemReward.quantity, // Qty of Item (C) - positive for addition
+                            category, // Category (D)
+                            type, // Type (E)
+                            subtype, // Subtype (F)
+                            `Quest: ${quest.title}`, // Obtain (G)
+                            character.job || '', // Job (H)
+                            character.perk || '', // Perk (I)
+                            character.currentVillage || character.homeVillage || '', // Location (J)
+                            '', // Link (K) - no interaction link for quest rewards
+                            formatDateTime(new Date()), // Date/Time (L)
+                            uuidv4() // Confirmed Sync (M)
+                        ];
+                        
+                        // Log to Google Sheets
+                        await safeAppendDataToSheet(
+                            character.inventory,
+                            character,
+                            'loggedInventory!A:M',
+                            [additionLogEntry],
+                            client,
+                            { skipValidation: false, context: { commandName: 'questReward', characterName: character.name } }
+                        );
+                        
+                        console.log(`[questRewardModule.js] 📊 Synced ${itemReward.quantity}x ${item.itemName} to Google Sheets for ${participant.characterName}`);
+                    } catch (sheetError) {
+                        // Don't fail the reward if sheet sync fails
+                        console.error(`[questRewardModule.js] ⚠️ Failed to sync to Google Sheets: ${sheetError.message}`);
+                    }
+                }
+                
+                console.log(`[questRewardModule.js] 📦 Added ${itemReward.quantity}x ${item.itemName} to character ${participant.characterName}`);
+                
+            } catch (itemError) {
+                console.error(`[questRewardModule.js] ❌ Error distributing item "${itemReward.name}":`, itemError);
+                errors.push(`Failed to distribute ${itemReward.name}: ${itemError.message}`);
             }
         }
         
-        console.log(`[questRewardModule.js] 📦 Added ${quest.itemRewardQty}x ${quest.itemReward} to character ${participant.characterName}`);
+        if (errors.length > 0 && distributedItems.length === 0) {
+            // All items failed
+            return { success: false, error: errors.join('; '), itemsDistributed: [] };
+        }
         
-        return { success: true, itemsAdded: quest.itemRewardQty };
+        const itemNames = distributedItems.map(i => `${i.quantity}x ${i.name}`).join(', ');
+        console.log(`[questRewardModule.js] 📦 Distributed ${distributedItems.length} item(s) (${itemNames}) to character ${participant.characterName}`);
+        
+        return { 
+            success: true, 
+            itemsAdded: totalItemsAdded,
+            itemsDistributed: distributedItems,
+            errors: errors.length > 0 ? errors : undefined
+        };
     } catch (error) {
         return { success: false, error: `Item distribution failed: ${error.message}` };
     }

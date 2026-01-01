@@ -190,7 +190,8 @@ function appendBotNote(note, msg) {
 
 module.exports = {
     postQuests,
-    appendBotNote
+    appendBotNote,
+    formatQuestEmbed
 };
 
 // ============================================================================
@@ -768,19 +769,57 @@ function sanitizeQuestData(parsedQuest) {
     
     // Parse multiple items if present
     let itemRewards = [];
-    if (parsedQuest.itemReward && parsedQuest.itemReward.includes(';')) {
-        const itemStrings = parsedQuest.itemReward.split(';');
-        for (const itemString of itemStrings) {
-            const trimmed = itemString.trim();
-            if (trimmed.includes(':')) {
-                const [name, qty] = trimmed.split(':').map(s => s.trim());
+    if (parsedQuest.itemReward && parsedQuest.itemReward.trim() !== '' && parsedQuest.itemReward !== 'N/A') {
+        // Handle semicolon-separated items (backward compatibility)
+        if (parsedQuest.itemReward.includes(';')) {
+            const itemStrings = parsedQuest.itemReward.split(';');
+            for (const itemString of itemStrings) {
+                const trimmed = itemString.trim();
+                if (trimmed) {
+                    if (trimmed.includes(':')) {
+                        const [name, qty] = trimmed.split(':').map(s => s.trim());
+                        itemRewards.push({
+                            name: name,
+                            quantity: parseInt(qty, 10) || 1
+                        });
+                    } else {
+                        itemRewards.push({
+                            name: trimmed,
+                            quantity: 1
+                        });
+                    }
+                }
+            }
+        } else {
+            // Handle space-separated items or single item
+            // Split by pattern ":number " (colon + digits + space) to find item boundaries
+            // This handles items with spaces in their names like "Freezard Water:1"
+            const itemRewardStr = parsedQuest.itemReward.trim();
+            const itemPattern = /([^:]+):(\d+)(?:\s|$)/g;
+            let match;
+            const matches = [];
+            
+            while ((match = itemPattern.exec(itemRewardStr)) !== null) {
+                matches.push({
+                    name: match[1].trim(),
+                    quantity: parseInt(match[2], 10) || 1
+                });
+            }
+            
+            // If pattern matching found items, use them
+            if (matches.length > 0) {
+                itemRewards = matches;
+            } else if (itemRewardStr.includes(':')) {
+                // Fallback: single item with quantity
+                const [name, qty] = itemRewardStr.split(':').map(s => s.trim());
                 itemRewards.push({
                     name: name,
                     quantity: parseInt(qty, 10) || 1
                 });
-            } else {
+            } else if (itemRewardStr) {
+                // Fallback: single item without quantity
                 itemRewards.push({
-                    name: trimmed,
+                    name: itemRewardStr,
                     quantity: 1
                 });
             }
@@ -789,6 +828,15 @@ function sanitizeQuestData(parsedQuest) {
     
     // Normalize quest type to valid enum values
     const normalizedQuestType = normalizeQuestType(parsedQuest.questType);
+    
+    // If itemRewards array is populated, use the first item for backward compatibility
+    // Otherwise, use the parsed itemReward from parseItemReward
+    let finalItemReward = itemReward.item;
+    let finalItemRewardQty = itemReward.qty;
+    if (itemRewards.length > 0) {
+        finalItemReward = itemRewards[0].name;
+        finalItemRewardQty = itemRewards[0].quantity;
+    }
     
     return {
         title: parsedQuest.title || 'Untitled Quest',
@@ -799,8 +847,8 @@ function sanitizeQuestData(parsedQuest) {
         minRequirements: parsedQuest.minRequirements || 0,
         tableroll: parsedQuest.tableroll && parsedQuest.tableroll !== 'N/A' && parsedQuest.tableroll !== '' ? parsedQuest.tableroll : null,
         tokenReward: parsedQuest.tokenReward === 'N/A' || !parsedQuest.tokenReward ? 'No reward specified' : parsedQuest.tokenReward,
-        itemReward: itemReward.item,
-        itemRewardQty: itemReward.qty,
+        itemReward: finalItemReward,
+        itemRewardQty: finalItemRewardQty,
         itemRewards: itemRewards,
         signupDeadline: parsedQuest.signupDeadline && parsedQuest.signupDeadline !== 'N/A' ? parsedQuest.signupDeadline : null,
         participantCap: parsedQuest.participantCap === 'N/A' || !parsedQuest.participantCap || parsedQuest.participantCap === 'Unlimited' || parsedQuest.participantCap === 'unlimited' ? null : (() => {
