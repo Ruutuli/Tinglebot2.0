@@ -84,6 +84,10 @@ router.get('/discord/callback', (req, res, next) => {
     // Check if there's a returnTo parameter in the session or query
     const returnTo = req.session.returnTo || req.query.returnTo;
     
+    // Store session ID before login to check if it changes
+    const sessionIdBeforeLogin = req.session.id;
+    logger.debug(`Session ID before req.login: ${sessionIdBeforeLogin}`, null, 'auth.js');
+    
     // Explicitly log the user in to establish the session
     // This is required when using passport.authenticate with a custom callback
     req.login(user, (err) => {
@@ -95,9 +99,11 @@ router.get('/discord/callback', (req, res, next) => {
       
       logger.success(`User authenticated: ${user?.username} (${user?.discordId})`, 'auth.js');
       logger.debug(`Session ID after login: ${req.session.id}`, null, 'auth.js');
+      logger.debug(`Session ID changed after req.login: ${sessionIdBeforeLogin !== req.session.id ? 'YES - WARNING!' : 'No'}`, null, 'auth.js');
       logger.debug(`Passport user in session: ${req.session.passport?.user}`, null, 'auth.js');
       logger.debug(`req.isAuthenticated(): ${req.isAuthenticated()}`, null, 'auth.js');
       logger.debug(`req.user exists: ${!!req.user}`, null, 'auth.js');
+      logger.debug(`req.user details: ${req.user ? `${req.user.username} (${req.user.discordId})` : 'none'}`, null, 'auth.js');
       logger.debug(`Session keys: ${Object.keys(req.session || {}).join(', ')}`, null, 'auth.js');
       
       // Normalize returnTo - handle empty string, '/', or undefined
@@ -115,6 +121,9 @@ router.get('/discord/callback', (req, res, next) => {
       const separator = finalReturnTo.includes('?') ? '&' : '?';
       const redirectUrl = finalReturnTo + separator + 'login=success';
       
+      // Mark session as modified to ensure it's saved
+      req.session.touch();
+      
       // Save session explicitly before redirecting to ensure authentication persists
       req.session.save((err) => {
         if (err) {
@@ -123,12 +132,12 @@ router.get('/discord/callback', (req, res, next) => {
           return res.redirect('/login?error=session_save_failed');
         }
         
-        // Log cookie header that will be sent
-        const setCookieHeader = res.getHeader('Set-Cookie');
-        logger.debug(`Set-Cookie header: ${setCookieHeader ? (Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader) : 'not set'}`, null, 'auth.js');
         logger.debug(`Session ID at redirect: ${req.session.id}`, null, 'auth.js');
         logger.debug(`Passport user at redirect: ${req.session.passport?.user}`, null, 'auth.js');
+        logger.debug(`Session cookie settings: ${JSON.stringify(req.session.cookie)}`, null, 'auth.js');
         logger.info(`Redirecting authenticated user to: ${redirectUrl}`, 'auth.js');
+        
+        // Redirect - express-session will set the cookie automatically when response is sent
         res.redirect(redirectUrl);
       });
     });

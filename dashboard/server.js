@@ -156,7 +156,7 @@ try {
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
   resave: false,
-  saveUninitialized: true, // Allow saving uninitialized sessions
+  saveUninitialized: false, // Don't save uninitialized sessions - only save when we explicitly modify session
   store: sessionStore,
   cookie: {
     secure: isProduction, // true in production (HTTPS required), false in development
@@ -197,6 +197,7 @@ app.use(passport.session());
 // ------------------- Section: Passport Configuration -------------------
 // Serialize user for session
 passport.serializeUser((user, done) => {
+  logger.debug(`Serializing user: ${user?.username} (${user?.discordId})`, null, 'server.js');
   done(null, user.discordId);
 });
 
