@@ -9,7 +9,7 @@ const logger = require('../../shared/utils/logger');
 // ------------------- Function: requireAuth -------------------
 // Middleware to require authentication for protected routes
 function requireAuth(req, res, next) {
-  if (req.isAuthenticated()) {
+  if (req.session.user) {
     return next();
   }
   
@@ -17,12 +17,11 @@ function requireAuth(req, res, next) {
   const cookieHeader = req.headers.cookie || '';
   const hasSessionCookie = cookieHeader.includes('tinglebot.sid');
   const sessionId = req.session?.id || 'no session';
-  const passportUser = req.session?.passport?.user || 'no passport user';
-  const reqUser = req.user ? `${req.user.username} (${req.user.discordId})` : 'no req.user';
+  const sessionUser = req.session?.user ? `${req.session.user.username} (${req.session.user.discordId})` : 'no session user';
   const sessionExists = !!req.session;
   
   logger.warn(`Unauthenticated access attempt to ${req.path}`, 'auth.js');
-  logger.debug(`Auth failure details - Session ID: ${sessionId}, Has cookie: ${hasSessionCookie}, Session exists: ${sessionExists}, Passport user: ${passportUser}, req.user: ${reqUser}`, null, 'auth.js');
+  logger.debug(`Auth failure details - Session ID: ${sessionId}, Has cookie: ${hasSessionCookie}, Session exists: ${sessionExists}, Session user: ${sessionUser}`, null, 'auth.js');
   
   res.status(401).json({ error: 'Authentication required' });
 }
@@ -38,7 +37,7 @@ function optionalAuth(req, res, next) {
 // ------------------- Function: checkAdminAccess -------------------
 // Checks if the authenticated user has admin access via Discord roles
 async function checkAdminAccess(req) {
-  if (!req.isAuthenticated() || !req.user) {
+  if (!req.session.user) {
     return false;
   }
   
@@ -51,7 +50,7 @@ async function checkAdminAccess(req) {
   }
   
   try {
-    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
+    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.session.user.discordId}`, {
       headers: {
         'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
         'Content-Type': 'application/json'
@@ -64,7 +63,7 @@ async function checkAdminAccess(req) {
       const isAdmin = roles.includes(ADMIN_ROLE_ID);
       
       if (isAdmin) {
-        logger.debug(`Admin access granted for user ${req.user.username}`, null, 'auth.js');
+        logger.debug(`Admin access granted for user ${req.session.user.username}`, null, 'auth.js');
       }
       
       return isAdmin;
@@ -79,7 +78,7 @@ async function checkAdminAccess(req) {
 // ------------------- Function: requireAdmin -------------------
 // Middleware that requires admin access
 async function requireAdmin(req, res, next) {
-  if (!req.isAuthenticated() || !req.user) {
+  if (!req.session.user) {
     logger.warn(`Unauthenticated admin access attempt to ${req.path}`, 'auth.js');
     return res.status(401).json({ error: 'Authentication required' });
   }
@@ -87,7 +86,7 @@ async function requireAdmin(req, res, next) {
   const isAdmin = await checkAdminAccess(req);
   
   if (!isAdmin) {
-    logger.warn(`Unauthorized admin access attempt by ${req.user.username} to ${req.path}`, 'auth.js');
+    logger.warn(`Unauthorized admin access attempt by ${req.session.user.username} to ${req.path}`, 'auth.js');
     return res.status(403).json({ error: 'Admin access required' });
   }
   

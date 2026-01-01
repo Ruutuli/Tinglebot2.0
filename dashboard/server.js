@@ -15,8 +15,7 @@ const mongoose = require('mongoose');
 const fetch = require('node-fetch');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
-const passport = require('passport');
-const DiscordStrategy = require('passport-discord').Strategy;
+// Passport.js removed - using direct OAuth2 implementation
 const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
@@ -176,118 +175,44 @@ app.use((req, res, next) => {
     const cookieHeader = req.headers.cookie || '';
     const hasSessionCookie = cookieHeader.includes('tinglebot.sid');
     const sessionId = req.session?.id || 'no session';
-    const passportUser = req.session?.passport?.user || 'no passport user';
-    const isAuth = req.isAuthenticated ? req.isAuthenticated() : false;
+    const sessionUser = req.session?.user ? `${req.session.user.username} (${req.session.user.discordId})` : 'no session user';
+    const isAuth = !!req.session.user;
     const reqUser = req.user ? `${req.user.username} (${req.user.discordId})` : 'no req.user';
     
     if (req.path.includes('/auth/') && !req.session) {
       logger.warn(`No session found for auth request: ${req.path}`, 'server.js');
     }
     
-    logger.debug(`Session state - Path: ${req.path}, Cookie: ${hasSessionCookie}, Session ID: ${sessionId}, Passport user: ${passportUser}, Authenticated: ${isAuth}, req.user: ${reqUser}`, null, 'server.js');
+    logger.debug(`Session state - Path: ${req.path}, Cookie: ${hasSessionCookie}, Session ID: ${sessionId}, Session user: ${sessionUser}, Authenticated: ${isAuth}, req.user: ${reqUser}`, null, 'server.js');
   }
   
   next();
 });
 
-// Initialize Passport and restore authentication state from session
-app.use(passport.initialize());
-app.use(passport.session());
-
-// ------------------- Section: Passport Configuration -------------------
-// Serialize user for session
-passport.serializeUser((user, done) => {
-  logger.debug(`Serializing user: ${user?.username} (${user?.discordId})`, null, 'server.js');
-  done(null, user.discordId);
-});
-
-// Deserialize user from session
-passport.deserializeUser(async (discordId, done) => {
-  logger.debug(`Deserializing user for discordId: ${discordId}`, null, 'server.js');
-  try {
-    const user = await User.findOne({ discordId });
-    if (user) {
-      logger.debug(`User deserialized successfully: ${user.username} (${discordId})`, null, 'server.js');
-      done(null, user);
-    } else {
-      logger.warn(`User not found during deserialization: ${discordId}`, 'server.js');
-      done(null, null);
+// Middleware to populate req.user from req.session.user for backward compatibility
+// This allows existing code using req.user to continue working
+app.use(async (req, res, next) => {
+  if (req.session.user && !req.user) {
+    try {
+      // Load full user object from database
+      const user = await User.findOne({ discordId: req.session.user.discordId });
+      if (user) {
+        req.user = user;
+      }
+    } catch (error) {
+      logger.error('Error loading user from session', error, 'server.js');
     }
-  } catch (error) {
-    logger.error('Error deserializing user', error, 'server.js');
-    logger.error(`Deserialization error details: ${error.message}`, null, 'server.js');
-    done(error, null);
   }
-});
-
-// Discord OAuth Strategy - Use environment variable if set, otherwise construct based on environment
-const callbackURL = process.env.DISCORD_CALLBACK_URL || 
-  ((isProduction && !isLocalhost)
-    ? `https://${domain}/auth/discord/callback`
-    : `http://localhost:5001/auth/discord/callback`);
-
-logger.info('Discord OAuth Configuration:', 'server.js');
-logger.debug(`isProduction: ${isProduction}`, null, 'server.js');
-logger.debug(`domain: ${domain}`, null, 'server.js');
-logger.debug(`callbackURL: ${callbackURL}`, null, 'server.js');
-logger.debug(`DISCORD_CALLBACK_URL env: ${process.env.DISCORD_CALLBACK_URL}`, null, 'server.js');
-
-
-
-passport.use(new DiscordStrategy({
-  clientID: process.env.DISCORD_CLIENT_ID,
-  clientSecret: process.env.DISCORD_CLIENT_SECRET,
-  callbackURL: callbackURL,
-  scope: ['identify', 'email']
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    // Check if database is connected
-    if (mongoose.connection.readyState !== 1) {
-      logger.error('Database not connected during OAuth callback', null, 'server.js');
-      logger.error(`Database state: ${mongoose.connection.readyState}`, null, 'server.js');
-      return done(new Error('Database connection not available. Please try again in a moment.'), null);
-    }
-    
-    // Find or create user in database
-    let user = await User.findOne({ discordId: profile.id });
-    
-    if (!user) {
-      // Create new user
-      user = new User({
-        discordId: profile.id,
-        username: profile.username,
-        email: profile.email,
-        avatar: profile.avatar,
-        discriminator: profile.discriminator,
-        tokens: 0,
-        tokenTracker: '',
-        blightedcharacter: false,
-        characterSlot: 2,
-        status: 'active',
-        statusChangedAt: new Date()
-      });
-      await user.save();
-      logger.success(`Created new user: ${user.username} (${user.discordId})`, 'server.js');
-    } else {
-      // Update existing user's Discord info
-      user.username = profile.username;
-      user.email = profile.email;
-      user.avatar = profile.avatar;
-      user.discriminator = profile.discriminator;
-      user.status = 'active';
-      user.statusChangedAt = new Date();
-      await user.save();
-      logger.debug(`Updated user: ${user.username} (${user.discordId})`, null, 'server.js');
-    }
-    
-    return done(null, user);
-  } catch (error) {
-    logger.error('Error in Discord OAuth callback', error, 'server.js');
-    logger.error(`Error details: ${error.message}`, null, 'server.js');
-    logger.error(`Error stack: ${error.stack}`, null, 'server.js');
-    return done(error, null);
+  
+  // Add isAuthenticated helper for backward compatibility
+  if (!req.isAuthenticated) {
+    req.isAuthenticated = function() {
+      return !!this.session.user;
+    };
   }
-}));
+  
+  next();
+});
 
 // Database connection options
 const connectionOptions = {
@@ -1074,7 +999,7 @@ app.get('/auth/debug', (req, res) => {
 // ------------------- Function: checkAuthStatus -------------------
 // Returns current authentication status
 app.get('/api/auth/status', (req, res) => {
-  if (req.isAuthenticated()) {
+  if (req.session.user && req.user) {
     res.json({
       authenticated: true,
       user: {
@@ -1099,11 +1024,12 @@ app.get('/api/debug/session', (req, res) => {
   res.json({
     session: req.session ? {
       id: req.session.id,
-      passport: req.session.passport,
+      user: req.session.user,
       cookie: req.session.cookie,
-      returnTo: req.session.returnTo
+      returnTo: req.session.returnTo,
+      oauthState: req.session.oauthState ? 'present' : 'not present'
     } : null,
-    isAuthenticated: req.isAuthenticated(),
+    isAuthenticated: !!req.session.user,
     user: req.user ? {
       username: req.user.username,
       discordId: req.user.discordId,
@@ -1184,7 +1110,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/user', async (req, res) => {
   try {
     // Only log authentication issues
-    if (!req.isAuthenticated() && req.session?.passport) {
+    if (!req.session.user && req.session) {
       logger.warn('Session exists but user not authenticated', 'server.js');
     }
     
@@ -1235,7 +1161,10 @@ app.get('/api/user', async (req, res) => {
             },
             session: req.session ? {
               id: req.session.id,
-              passport: req.session.passport
+              user: req.session.user ? {
+                username: req.session.user.username,
+                discordId: req.session.user.discordId
+              } : null
             } : null
           };
           
@@ -1249,7 +1178,7 @@ app.get('/api/user', async (req, res) => {
     
     // Fallback to session data only if not authenticated or DB fetch failed
     const authInfo = {
-      isAuthenticated: req.isAuthenticated(),
+      isAuthenticated: !!req.session.user,
       isAdmin: isAdmin,
       user: req.user ? {
         username: req.user.username,
@@ -1263,7 +1192,10 @@ app.get('/api/user', async (req, res) => {
       } : null,
       session: req.session ? {
         id: req.session.id,
-        passport: req.session.passport
+        user: req.session.user ? {
+          username: req.session.user.username,
+          discordId: req.session.user.discordId
+        } : null
       } : null
     };
     
@@ -8727,7 +8659,7 @@ app.post('/api/suggestions', async (req, res) => {
       console.warn('📝 Title:', title);
       console.warn('📄 Description:', description);
       console.warn('🔍 Session info:', {
-        isAuthenticated: req.isAuthenticated(),
+        isAuthenticated: !!req.session.user,
         hasUser: !!req.user,
         sessionID: req.sessionID,
         userAgent: req.headers['user-agent']
@@ -9035,7 +8967,7 @@ app.post('/api/member-lore', async (req, res) => {
       console.warn('📝 Member Name:', req.body.memberName);
       console.warn('📄 Topic:', req.body.topic);
       console.warn('🔍 Session info:', {
-        isAuthenticated: req.isAuthenticated(),
+        isAuthenticated: !!req.session.user,
         hasUser: !!req.user,
         sessionID: req.sessionID,
         userAgent: req.headers['user-agent']
