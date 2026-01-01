@@ -79,74 +79,61 @@ router.get('/discord/callback', (req, res, next) => {
       return res.redirect('/login?error=auth_failed');
     }
     
-    // Save returnTo before regenerating session (regeneration creates a new session)
+    // Check if there's a returnTo parameter in the session or query
     const returnTo = req.session.returnTo || req.query.returnTo;
     
-    // Regenerate session to prevent session fixation attacks
-    req.session.regenerate((err) => {
+    // Explicitly log the user in to establish the session
+    // This is required when using passport.authenticate with a custom callback
+    req.login(user, (err) => {
       if (err) {
-        logger.error('Error regenerating session', err, 'auth.js');
-        return res.redirect('/login?error=session_regenerate_failed');
+        logger.error('Error logging in user after authentication', err, 'auth.js');
+        return res.redirect('/login?error=login_failed');
       }
       
-      // Explicitly log the user in to establish the session
-      // This is required when using passport.authenticate with a custom callback
-      req.login(user, (err) => {
+      logger.success(`User authenticated: ${user?.username} (${user?.discordId})`, 'auth.js');
+      
+      // Only log debug info in development
+      if (!isProduction) {
+        logger.debug('Discord callback redirect:', null, 'auth.js');
+        logger.debug(`returnTo from session: ${req.session.returnTo}`, null, 'auth.js');
+        logger.debug(`returnTo from query: ${req.query.returnTo}`, null, 'auth.js');
+        logger.debug(`final returnTo: ${returnTo}`, null, 'auth.js');
+        logger.debug(`session ID: ${req.session.id}`, null, 'auth.js');
+        logger.debug(`passport user: ${req.session.passport?.user}`, null, 'auth.js');
+        logger.debug(`session exists: ${!!req.session}`, null, 'auth.js');
+        logger.debug(`session keys: ${Object.keys(req.session || {})}`, null, 'auth.js');
+        logger.debug(`isAuthenticated: ${req.isAuthenticated()}`, null, 'auth.js');
+      }
+      
+      // Normalize returnTo - handle empty string, '/', or undefined
+      let finalReturnTo = returnTo;
+      if (!finalReturnTo || finalReturnTo === '/' || finalReturnTo.trim() === '') {
+        finalReturnTo = '/dashboard';
+      }
+      
+      // Clear the returnTo from session
+      if (req.session.returnTo) {
+        delete req.session.returnTo;
+      }
+      
+      // Build redirect URL - check if returnTo already has query params
+      const separator = finalReturnTo.includes('?') ? '&' : '?';
+      const redirectUrl = finalReturnTo + separator + 'login=success';
+      
+      // Save session explicitly before redirecting to ensure authentication persists
+      req.session.save((err) => {
         if (err) {
-          logger.error('Error logging in user after authentication', err, 'auth.js');
-          return res.redirect('/login?error=login_failed');
+          logger.error('Error saving session after authentication', err, 'auth.js');
+          return res.redirect('/login?error=session_save_failed');
         }
         
-        logger.success(`User authenticated: ${user?.username} (${user?.discordId})`, 'auth.js');
-        
-        // Restore returnTo to the new session (was saved before regeneration)
-        if (returnTo) {
-          req.session.returnTo = returnTo;
-        }
-        
-        // Only log debug info in development
+        // Redirect to the destination after session is saved
         if (!isProduction) {
-          logger.debug('Discord callback redirect:', null, 'auth.js');
-          logger.debug(`returnTo from session: ${req.session.returnTo}`, null, 'auth.js');
-          logger.debug(`returnTo from query: ${req.query.returnTo}`, null, 'auth.js');
-          logger.debug(`final returnTo: ${returnTo}`, null, 'auth.js');
-          logger.debug(`session ID: ${req.session.id}`, null, 'auth.js');
-          logger.debug(`passport user: ${req.session.passport?.user}`, null, 'auth.js');
-          logger.debug(`session exists: ${!!req.session}`, null, 'auth.js');
-          logger.debug(`session keys: ${Object.keys(req.session || {})}`, null, 'auth.js');
-          logger.debug(`isAuthenticated: ${req.isAuthenticated()}`, null, 'auth.js');
+          logger.debug(`Redirecting to: ${redirectUrl}`, null, 'auth.js');
         }
-        
-        // Normalize returnTo - handle empty string, '/', or undefined
-        let finalReturnTo = returnTo;
-        if (!finalReturnTo || finalReturnTo === '/' || finalReturnTo.trim() === '') {
-          finalReturnTo = '/dashboard';
-        }
-        
-        // Clear the returnTo from session
-        if (req.session.returnTo) {
-          delete req.session.returnTo;
-        }
-        
-        // Build redirect URL - check if returnTo already has query params
-        const separator = finalReturnTo.includes('?') ? '&' : '?';
-        const redirectUrl = finalReturnTo + separator + 'login=success';
-        
-        // Save session explicitly before redirecting to ensure authentication persists
-        req.session.save((err) => {
-          if (err) {
-            logger.error('Error saving session after authentication', err, 'auth.js');
-            return res.redirect('/login?error=session_save_failed');
-          }
-          
-          // Redirect to the destination after session is saved
-          if (!isProduction) {
-            logger.debug(`Redirecting to: ${redirectUrl}`, null, 'auth.js');
-          }
-          res.redirect(redirectUrl);
-        });
+        res.redirect(redirectUrl);
       });
-    });
+      });
   })(req, res, next);
 });
 
