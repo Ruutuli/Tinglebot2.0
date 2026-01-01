@@ -150,7 +150,13 @@ router.get('/discord/callback', async (req, res, next) => {
     logger.debug(`Query params - code: ${code ? 'present' : 'missing'}, state: ${state || 'missing'}, error: ${error || 'none'}`, null, 'auth.js');
     logger.debug(`Session ID: ${req.session?.id}`, null, 'auth.js');
     logger.debug(`Session oauthState: ${req.session?.oauthState || 'not set'}`, null, 'auth.js');
+    
+    // Log actual cookie values for debugging
+    const cookies = req.headers.cookie ? req.headers.cookie.split(';').map(c => c.trim()) : [];
+    const sessionCookie = cookies.find(c => c.startsWith('tinglebot.sid='));
     logger.debug(`Cookie header: ${req.headers.cookie ? 'present' : 'missing'}`, null, 'auth.js');
+    logger.debug(`Session cookie from header: ${sessionCookie || 'not found'}`, null, 'auth.js');
+    logger.debug(`All cookies: ${cookies.join(', ')}`, null, 'auth.js');
 
     // Check for OAuth error
     if (error) {
