@@ -100,6 +100,9 @@ async function getUserInfo(accessToken) {
 // Initiates Discord OAuth flow
 router.get('/discord', (req, res, next) => {
   try {
+    logger.info('Initiating Discord OAuth', 'auth.js');
+    logger.debug(`Session ID before state generation: ${req.session?.id}`, null, 'auth.js');
+    
     // Generate random state for CSRF protection
     const state = uuidv4();
     req.session.oauthState = state;
@@ -109,15 +112,26 @@ router.get('/discord', (req, res, next) => {
       req.session.returnTo = req.query.returnTo;
     }
 
-    // Save session before redirect
+    logger.debug(`Generated state: ${state}`, null, 'auth.js');
+    logger.debug(`Session ID after setting state: ${req.session.id}`, null, 'auth.js');
+
+    // Mark session as modified and save before redirect
+    req.session.touch();
     req.session.save((err) => {
       if (err) {
         logger.error('Error saving session before OAuth redirect', err, 'auth.js');
         return next(err);
       }
 
+      logger.debug(`Session saved. Session ID: ${req.session.id}, State in session: ${req.session.oauthState}`, null, 'auth.js');
+      
       const authUrl = generateAuthUrl(state);
       logger.info(`Redirecting to Discord OAuth: ${authUrl}`, 'auth.js');
+      
+      // Log cookie that will be sent
+      const cookieName = 'tinglebot.sid';
+      logger.debug(`Session cookie will be sent: ${cookieName}=${req.session.id}`, null, 'auth.js');
+      
       res.redirect(authUrl);
     });
   } catch (error) {
@@ -132,6 +146,12 @@ router.get('/discord/callback', async (req, res, next) => {
   try {
     const { code, state, error } = req.query;
 
+    logger.info('Discord OAuth callback received', 'auth.js');
+    logger.debug(`Query params - code: ${code ? 'present' : 'missing'}, state: ${state || 'missing'}, error: ${error || 'none'}`, null, 'auth.js');
+    logger.debug(`Session ID: ${req.session?.id}`, null, 'auth.js');
+    logger.debug(`Session oauthState: ${req.session?.oauthState || 'not set'}`, null, 'auth.js');
+    logger.debug(`Cookie header: ${req.headers.cookie ? 'present' : 'missing'}`, null, 'auth.js');
+
     // Check for OAuth error
     if (error) {
       logger.warn(`Discord OAuth error: ${error}`, 'auth.js');
@@ -139,8 +159,18 @@ router.get('/discord/callback', async (req, res, next) => {
     }
 
     // Verify state parameter (CSRF protection)
-    if (!state || state !== req.session.oauthState) {
-      logger.warn('Invalid or missing state parameter in OAuth callback', 'auth.js');
+    if (!state) {
+      logger.warn('Missing state parameter in OAuth callback', 'auth.js');
+      return res.redirect('/login?error=missing_state');
+    }
+
+    if (!req.session || !req.session.oauthState) {
+      logger.warn(`Session oauthState not found. Session ID: ${req.session?.id}, Expected state: ${state}`, 'auth.js');
+      return res.redirect('/login?error=session_state_mismatch');
+    }
+
+    if (state !== req.session.oauthState) {
+      logger.warn(`State mismatch - Received: ${state}, Expected: ${req.session.oauthState}`, 'auth.js');
       return res.redirect('/login?error=invalid_state');
     }
 
