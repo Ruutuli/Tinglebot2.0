@@ -58,12 +58,11 @@ router.get('/discord', (req, res, next) => {
 // ------------------- Function: handleDiscordCallback -------------------
 // Handles Discord OAuth callback
 router.get('/discord/callback', (req, res, next) => {
-  // Log callback received (only in development)
-  if (!isProduction) {
-    logger.debug('Discord callback received', null, 'auth.js');
-    logger.debug(`Query params: ${JSON.stringify(req.query)}`, null, 'auth.js');
-    logger.debug(`Session ID: ${req.session?.id}`, null, 'auth.js');
-  }
+  // Log callback received
+  logger.info('Discord OAuth callback received', 'auth.js');
+  logger.debug(`Query params: ${JSON.stringify(req.query)}`, null, 'auth.js');
+  logger.debug(`Session ID before auth: ${req.session?.id}`, null, 'auth.js');
+  logger.debug(`Cookie header: ${req.headers.cookie ? 'present' : 'missing'}`, null, 'auth.js');
   
   // Use custom callback pattern - user is passed as parameter, not req.user
   passport.authenticate('discord', (err, user, info) => {
@@ -79,6 +78,9 @@ router.get('/discord/callback', (req, res, next) => {
       return res.redirect('/login?error=auth_failed');
     }
     
+    logger.debug(`User object received: ${user?.username} (${user?.discordId})`, null, 'auth.js');
+    logger.debug(`Session ID before login: ${req.session?.id}`, null, 'auth.js');
+    
     // Check if there's a returnTo parameter in the session or query
     const returnTo = req.session.returnTo || req.query.returnTo;
     
@@ -87,23 +89,16 @@ router.get('/discord/callback', (req, res, next) => {
     req.login(user, (err) => {
       if (err) {
         logger.error('Error logging in user after authentication', err, 'auth.js');
+        logger.error(`Login error details: ${err.message}`, null, 'auth.js');
         return res.redirect('/login?error=login_failed');
       }
       
       logger.success(`User authenticated: ${user?.username} (${user?.discordId})`, 'auth.js');
-      
-      // Only log debug info in development
-      if (!isProduction) {
-        logger.debug('Discord callback redirect:', null, 'auth.js');
-        logger.debug(`returnTo from session: ${req.session.returnTo}`, null, 'auth.js');
-        logger.debug(`returnTo from query: ${req.query.returnTo}`, null, 'auth.js');
-        logger.debug(`final returnTo: ${returnTo}`, null, 'auth.js');
-        logger.debug(`session ID: ${req.session.id}`, null, 'auth.js');
-        logger.debug(`passport user: ${req.session.passport?.user}`, null, 'auth.js');
-        logger.debug(`session exists: ${!!req.session}`, null, 'auth.js');
-        logger.debug(`session keys: ${Object.keys(req.session || {})}`, null, 'auth.js');
-        logger.debug(`isAuthenticated: ${req.isAuthenticated()}`, null, 'auth.js');
-      }
+      logger.debug(`Session ID after login: ${req.session.id}`, null, 'auth.js');
+      logger.debug(`Passport user in session: ${req.session.passport?.user}`, null, 'auth.js');
+      logger.debug(`req.isAuthenticated(): ${req.isAuthenticated()}`, null, 'auth.js');
+      logger.debug(`req.user exists: ${!!req.user}`, null, 'auth.js');
+      logger.debug(`Session keys: ${Object.keys(req.session || {}).join(', ')}`, null, 'auth.js');
       
       // Normalize returnTo - handle empty string, '/', or undefined
       let finalReturnTo = returnTo;
@@ -124,16 +119,19 @@ router.get('/discord/callback', (req, res, next) => {
       req.session.save((err) => {
         if (err) {
           logger.error('Error saving session after authentication', err, 'auth.js');
+          logger.error(`Session save error details: ${err.message}`, null, 'auth.js');
           return res.redirect('/login?error=session_save_failed');
         }
         
-        // Redirect to the destination after session is saved
-        if (!isProduction) {
-          logger.debug(`Redirecting to: ${redirectUrl}`, null, 'auth.js');
-        }
+        // Log cookie header that will be sent
+        const setCookieHeader = res.getHeader('Set-Cookie');
+        logger.debug(`Set-Cookie header: ${setCookieHeader ? (Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader) : 'not set'}`, null, 'auth.js');
+        logger.debug(`Session ID at redirect: ${req.session.id}`, null, 'auth.js');
+        logger.debug(`Passport user at redirect: ${req.session.passport?.user}`, null, 'auth.js');
+        logger.info(`Redirecting authenticated user to: ${redirectUrl}`, 'auth.js');
         res.redirect(redirectUrl);
       });
-      });
+    });
   })(req, res, next);
 });
 

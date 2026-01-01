@@ -169,18 +169,22 @@ app.use(session({
   name: 'tinglebot.sid'
 }));
 
-// Add minimal session logging for debugging
+// Add session logging for debugging auth-related requests
 app.use((req, res, next) => {
-  // Only log session issues, not every request
-  if (req.path.includes('/auth/') && !req.session) {
-    logger.warn(`No session found for auth request: ${req.path}`, 'server.js');
-  }
-  
-  // Log session cookie info for auth-related requests (development only)
-  if (!isProduction && (req.path.includes('/auth/') || req.path.includes('/api/user/settings'))) {
-    const cookieHeader = req.headers.cookie;
-    const hasSessionCookie = cookieHeader && cookieHeader.includes('tinglebot.sid');
-    logger.debug(`Session check - Path: ${req.path}, Has cookie: ${hasSessionCookie}, Is authenticated: ${req.isAuthenticated ? req.isAuthenticated() : 'N/A'}`, null, 'server.js');
+  // Log session state for auth-related requests (both dev and production)
+  if (req.path.includes('/auth/') || req.path.includes('/api/user/settings')) {
+    const cookieHeader = req.headers.cookie || '';
+    const hasSessionCookie = cookieHeader.includes('tinglebot.sid');
+    const sessionId = req.session?.id || 'no session';
+    const passportUser = req.session?.passport?.user || 'no passport user';
+    const isAuth = req.isAuthenticated ? req.isAuthenticated() : false;
+    const reqUser = req.user ? `${req.user.username} (${req.user.discordId})` : 'no req.user';
+    
+    if (req.path.includes('/auth/') && !req.session) {
+      logger.warn(`No session found for auth request: ${req.path}`, 'server.js');
+    }
+    
+    logger.debug(`Session state - Path: ${req.path}, Cookie: ${hasSessionCookie}, Session ID: ${sessionId}, Passport user: ${passportUser}, Authenticated: ${isAuth}, req.user: ${reqUser}`, null, 'server.js');
   }
   
   next();
@@ -198,10 +202,19 @@ passport.serializeUser((user, done) => {
 
 // Deserialize user from session
 passport.deserializeUser(async (discordId, done) => {
+  logger.debug(`Deserializing user for discordId: ${discordId}`, null, 'server.js');
   try {
     const user = await User.findOne({ discordId });
-    done(null, user);
+    if (user) {
+      logger.debug(`User deserialized successfully: ${user.username} (${discordId})`, null, 'server.js');
+      done(null, user);
+    } else {
+      logger.warn(`User not found during deserialization: ${discordId}`, 'server.js');
+      done(null, null);
+    }
   } catch (error) {
+    logger.error('Error deserializing user', error, 'server.js');
+    logger.error(`Deserialization error details: ${error.message}`, null, 'server.js');
     done(error, null);
   }
 });

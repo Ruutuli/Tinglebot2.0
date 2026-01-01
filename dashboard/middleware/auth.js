@@ -12,7 +12,18 @@ function requireAuth(req, res, next) {
   if (req.isAuthenticated()) {
     return next();
   }
+  
+  // Detailed logging for authentication failures
+  const cookieHeader = req.headers.cookie || '';
+  const hasSessionCookie = cookieHeader.includes('tinglebot.sid');
+  const sessionId = req.session?.id || 'no session';
+  const passportUser = req.session?.passport?.user || 'no passport user';
+  const reqUser = req.user ? `${req.user.username} (${req.user.discordId})` : 'no req.user';
+  const sessionExists = !!req.session;
+  
   logger.warn(`Unauthenticated access attempt to ${req.path}`, 'auth.js');
+  logger.debug(`Auth failure details - Session ID: ${sessionId}, Has cookie: ${hasSessionCookie}, Session exists: ${sessionExists}, Passport user: ${passportUser}, req.user: ${reqUser}`, null, 'auth.js');
+  
   res.status(401).json({ error: 'Authentication required' });
 }
 
