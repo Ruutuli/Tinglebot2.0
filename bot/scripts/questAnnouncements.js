@@ -463,16 +463,66 @@ function formatLocationText(location) {
 }
 
 // ------------------- formatSignupDeadline -
-function formatSignupDeadline(signupDeadline) {
+function formatSignupDeadline(signupDeadline, questDate = null) {
     if (!signupDeadline || signupDeadline === 'No Deadline') return null;
     
     try {
+        // Try to extract year from quest date if provided
+        let year = null;
+        if (questDate) {
+            if (questDate.includes(' ')) {
+                const parts = questDate.split(' ');
+                if (parts.length >= 2) {
+                    year = parseInt(parts[parts.length - 1]);
+                }
+            } else if (questDate.includes('/')) {
+                const parts = questDate.split('/');
+                if (parts.length >= 2) {
+                    year = parseInt(parts[parts.length - 1]);
+                }
+            }
+        }
+        
+        // If no year extracted, use current year
+        if (!year || isNaN(year)) {
+            year = new Date().getFullYear();
+        }
+        
+        // Try parsing with explicit year if it's just a month and day
+        let dateStr = signupDeadline.trim();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        // Check if it's in format "Month Day" (e.g., "January 8")
+        for (const monthName of monthNames) {
+            if (dateStr.startsWith(monthName)) {
+                const dayMatch = dateStr.match(new RegExp(`${monthName}\\s+(\\d+)`, 'i'));
+                if (dayMatch) {
+                    const day = parseInt(dayMatch[1]);
+                    const monthIndex = monthNames.findIndex(m => m.toLowerCase() === monthName.toLowerCase());
+                    if (monthIndex !== -1) {
+                        // Create date with the year from quest date
+                        const date = new Date(year, monthIndex, day);
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const dayStr = String(date.getDate()).padStart(2, '0');
+                        const yearStr = String(date.getFullYear()).slice(-2);
+                        return `${month}-${dayStr}-${yearStr}`;
+                    }
+                }
+            }
+        }
+        
+        // Try standard Date parsing
         const date = new Date(signupDeadline);
         if (!isNaN(date.getTime())) {
+            // If year seems wrong (like 2001 for "01-08-01"), use quest year
+            if (year && date.getFullYear() < 2000) {
+                date.setFullYear(year);
+            }
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
-            const year = String(date.getFullYear()).slice(-2);
-            return `${month}-${day}-${year}`;
+            const yearStr = String(date.getFullYear()).slice(-2);
+            return `${month}-${day}-${yearStr}`;
         }
     } catch (error) {
         // Keep original format if parsing fails
@@ -596,7 +646,7 @@ function formatQuestEmbed(quest) {
     if (quest.postRequirement) participation.push(`💬 **${quest.postRequirement} posts**`);
     if (quest.minRequirements && quest.minRequirements !== 0) participation.push(`📝 **Min requirement: ${quest.minRequirements}**`);
     
-    const formattedDeadline = formatSignupDeadline(quest.signupDeadline);
+    const formattedDeadline = formatSignupDeadline(quest.signupDeadline, quest.date);
     if (formattedDeadline) participation.push(`📅 **Signup by ${formattedDeadline}**`);
     
     if (participation.length > 0) {
@@ -1166,10 +1216,49 @@ async function postQuests(externalClient = null) {
     }
     
 
-    // Filter unposted quests
-    const unpostedQuests = filterUnpostedQuests(questsForCurrentMonth);
+    // Filter unposted quests and track original row indices from questData
+    const unpostedQuestsWithIndices = [];
+    
+    // Build a map of quests to their original indices in questData
+    questData.forEach((row, originalIndex) => {
+        const parsedRow = parseQuestRow(row);
+        const questDate = parsedRow.date;
+        
+        if (!questDate) return;
+        
+        // Check if this quest is in the current month
+        let questMonth, questYear;
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        if (questDate.includes(' ')) {
+            const parts = questDate.split(' ');
+            const monthName = parts[0];
+            questMonth = monthNames.indexOf(monthName) + 1;
+            questYear = parseInt(parts[1]);
+        } else if (questDate.includes('/')) {
+            const parts = questDate.split('/');
+            questMonth = parseInt(parts[0]);
+            questYear = parseInt(parts[1]);
+        } else {
+            return;
+        }
+        
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1;
+        const currentYear = currentDate.getFullYear();
+        
+        if (questMonth === currentMonth && questYear === currentYear) {
+            // This quest is for the current month, check if it's unposted
+            const sanitizedPosted = parsedRow.posted ? parsedRow.posted.trim().toLowerCase() : '';
+            
+            if (sanitizedPosted !== 'posted' || !parsedRow.questID || parsedRow.questID === 'N/A') {
+                unpostedQuestsWithIndices.push({ quest: row, rowIndex: originalIndex });
+            }
+        }
+    });
 
-    if (!unpostedQuests.length) {
+    if (!unpostedQuestsWithIndices.length) {
         return;
     }
 
@@ -1190,7 +1279,7 @@ async function postQuests(externalClient = null) {
     });
     
     // If no quests have been posted yet this month, post the month image
-    if (!existingQuestsThisMonth && unpostedQuests.length > 0) {
+    if (!existingQuestsThisMonth && unpostedQuestsWithIndices.length > 0) {
         try {
             await questChannel.send(monthImageUrl);
             console.log(`[questAnnouncements.js] ✅ Posted month image for ${monthName}`);
@@ -1199,8 +1288,8 @@ async function postQuests(externalClient = null) {
         }
     }
 
-    // Process each quest
-    for (const [rowIndex, quest] of unpostedQuests.entries()) {
+    // Process each quest with the correct original row index
+    for (const { quest, rowIndex } of unpostedQuestsWithIndices) {
         await processIndividualQuest(quest, guild, questChannel, auth, rowIndex);
     }
        
