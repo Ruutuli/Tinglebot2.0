@@ -88,9 +88,9 @@ router.get('/discord/callback', (req, res, next) => {
     const sessionIdBeforeLogin = req.session.id;
     logger.debug(`Session ID before req.login: ${sessionIdBeforeLogin}`, null, 'auth.js');
     
-    // Explicitly log the user in to establish the session
-    // This is required when using passport.authenticate with a custom callback
-    req.login(user, (err) => {
+    // Use req.login with keepSessionInfo to prevent session regeneration
+    // This ensures the session ID doesn't change and the cookie is properly set
+    req.login(user, { keepSessionInfo: true }, (err) => {
       if (err) {
         logger.error('Error logging in user after authentication', err, 'auth.js');
         logger.error(`Login error details: ${err.message}`, null, 'auth.js');
