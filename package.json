@@ -41,8 +41,6 @@
     "node-cache": "^5.1.2",
     "node-cron": "^3.0.3",
     "node-fetch": "^2.7.0",
-    "passport": "^0.7.0",
-    "passport-discord": "^0.1.4",
     "sharp": "^0.34.1",
     "uuid": "^9.0.1"
   }

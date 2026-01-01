@@ -27,8 +27,7 @@ function createRateLimiter(options = {}) {
   } = options;
 
   return (req, res, next) => {
-    // Ensure req.user is available if passport has deserialized it
-    // This is safe because passport.session() runs before rate limiting
+    // req.user is populated from req.session.user by middleware in server.js
     const key = keyGenerator(req);
     const now = Date.now();
     
