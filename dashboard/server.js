@@ -13,9 +13,6 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
-const session = require('express-session');
-const MongoStore = require('connect-mongo');
-// Passport.js removed - using direct OAuth2 implementation
 const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
@@ -24,6 +21,9 @@ const MessageTracking = require('../shared/models/MessageTrackingModel');
 const compression = require('compression');
 const multer = require('multer');
 const fs = require('fs').promises;
+const crypto = require('crypto');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
 
 // Import database methods from db.js
 const {
@@ -81,7 +81,6 @@ const googleSheets = require('../shared/utils/googleSheetsUtils');
 const { google } = require('googleapis');
 
 // Import route modules
-const authRoutes = require('./routes/auth');
 const characterRoutes = require('./routes/api/characters');
 const itemRoutes = require('./routes/api/items');
 const inventoryRoutes = require('./routes/api/inventory');
@@ -89,130 +88,21 @@ const weatherRoutes = require('./routes/api/weather');
 const statsRoutes = require('./routes/api/stats');
 
 // Import middleware
-const { requireAuth, optionalAuth, checkAdminAccess } = require('./middleware/auth');
 const { errorHandler, asyncHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { requestLogger, errorLogger } = require('./middleware/requestLogger');
-const { generalLimiter, authLimiter } = require('./middleware/rateLimiter');
+const { generalLimiter } = require('./middleware/rateLimiter');
 
 // ------------------- Section: App Configuration -------------------
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// ------------------- Section: Session & Authentication Configuration -------------------
-// Session configuration for Discord OAuth
+// ------------------- Section: Environment Configuration -------------------
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';
-const domain = process.env.DOMAIN || (isProduction ? 'tinglebot.xyz' : 'localhost');
-
-// Force localhost for development if running on localhost
-const isLocalhost = process.env.FORCE_LOCALHOST === 'true' || 
-                   process.env.NODE_ENV === 'development' ||
-                   process.env.USE_LOCALHOST === 'true';
-
-logger.info('Environment Detection', 'server.js');
-logger.debug(`NODE_ENV: ${process.env.NODE_ENV}`, null, 'server.js');
-logger.debug(`RAILWAY_ENVIRONMENT: ${process.env.RAILWAY_ENVIRONMENT}`, null, 'server.js');
-logger.debug(`FORCE_LOCALHOST: ${process.env.FORCE_LOCALHOST}`, null, 'server.js');
-logger.debug(`isProduction: ${isProduction}`, null, 'server.js');
-logger.debug(`isLocalhost: ${isLocalhost}`, null, 'server.js');
 
 // Trust proxy for production environments (Railway, etc.)
 if (isProduction) {
   app.set('trust proxy', 1);
-
 }
-
-
-
-// Create session store with error handling
-let sessionStore;
-try {
-  sessionStore = MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tinglebot',
-    collectionName: 'sessions',
-    ttl: 24 * 60 * 60, // 24 hours in seconds
-    autoRemove: 'native',
-    touchAfter: 24 * 3600 // lazy session update
-  });
-  
-  sessionStore.on('error', (error) => {
-    logger.error('Session store error', error, 'server.js');
-  });
-  
-  sessionStore.on('connected', () => {
-    logger.database('Session store connected to MongoDB', 'server.js');
-  });
-  
-  logger.database('Session store created successfully', 'server.js');
-  logger.debug(`Session store type: ${typeof sessionStore}`, null, 'server.js');
-  logger.debug(`Session store is null: ${sessionStore === null}`, null, 'server.js');
-} catch (error) {
-  logger.error('Failed to create session store', error, 'server.js');
-  // Fallback to memory store (not recommended for production but allows server to start)
-  logger.warn('Using memory store as fallback for development', 'server.js');
-  sessionStore = null;
-}
-
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
-  resave: false,
-  saveUninitialized: false, // Don't save uninitialized sessions - only save when we explicitly modify session
-  store: sessionStore,
-  cookie: {
-    secure: isProduction, // true in production (HTTPS required), false in development
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax', // Use 'lax' for better compatibility - allows cookies on top-level navigations
-    // Don't set domain explicitly - let browser handle it automatically for better compatibility
-    // Setting domain explicitly can cause issues with cookie scope
-  },
-  name: 'tinglebot.sid'
-}));
-
-// Add session logging for debugging auth-related requests
-app.use((req, res, next) => {
-  // Log session state for auth-related requests (both dev and production)
-  if (req.path.includes('/auth/') || req.path.includes('/api/user/settings')) {
-    const cookieHeader = req.headers.cookie || '';
-    const hasSessionCookie = cookieHeader.includes('tinglebot.sid');
-    const sessionId = req.session?.id || 'no session';
-    const sessionUser = req.session?.user ? `${req.session.user.username} (${req.session.user.discordId})` : 'no session user';
-    const isAuth = !!req.session.user;
-    const reqUser = req.user ? `${req.user.username} (${req.user.discordId})` : 'no req.user';
-    
-    if (req.path.includes('/auth/') && !req.session) {
-      logger.warn(`No session found for auth request: ${req.path}`, 'server.js');
-    }
-    
-    logger.debug(`Session state - Path: ${req.path}, Cookie: ${hasSessionCookie}, Session ID: ${sessionId}, Session user: ${sessionUser}, Authenticated: ${isAuth}, req.user: ${reqUser}`, null, 'server.js');
-  }
-  
-  next();
-});
-
-// Middleware to populate req.user from req.session.user for backward compatibility
-// This allows existing code using req.user to continue working
-app.use(async (req, res, next) => {
-  if (req.session.user && !req.user) {
-    try {
-      // Load full user object from database
-      const user = await User.findOne({ discordId: req.session.user.discordId });
-      if (user) {
-        req.user = user;
-      }
-    } catch (error) {
-      logger.error('Error loading user from session', error, 'server.js');
-    }
-  }
-  
-  // Add isAuthenticated helper for backward compatibility
-  if (!req.isAuthenticated) {
-    req.isAuthenticated = function() {
-      return !!this.session.user;
-    };
-  }
-  
-  next();
-});
 
 // Database connection options
 const connectionOptions = {
@@ -432,13 +322,40 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true, // Allow credentials (cookies, authorization headers)
+  credentials: true, // Allow credentials in CORS requests
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ------------------- Session Configuration -------------------
+// Get MongoDB URI for session store (using same connection as Tinglebot database)
+const getMongoUri = () => {
+  return process.env.MONGODB_TINGLEBOT_URI_PROD 
+    || process.env.MONGODB_TINGLEBOT_URI
+    || process.env.MONGODB_URI;
+};
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'default-secret-change-in-production',
+  resave: false,
+  saveUninitialized: true, // Changed to true to ensure session cookie is set immediately
+  name: 'connect.sid', // Use default express-session cookie name
+  store: MongoStore.create({
+    mongoUrl: getMongoUri(),
+    ttl: 30 * 24 * 60 * 60, // 30 days
+    autoRemove: 'native'
+  }),
+  cookie: {
+    secure: false, // Disable secure cookies for localhost (HTTP). Set to true in production with HTTPS
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    sameSite: 'lax', // Use 'lax' for localhost, 'none' only needed for cross-origin in production with HTTPS
+    path: '/' // Ensure cookie is available for all paths
+  }
+}));
 
 // Serve static files (excluding /map route which needs authentication)
 app.use((req, res, next) => {
@@ -549,10 +466,6 @@ if (isProduction) {
   });
 }
 
-// ------------------- Section: Authentication Middleware -------------------
-// Note: Authentication middleware (requireAuth, optionalAuth, checkAdminAccess) 
-// is imported from ./middleware/auth.js above
-
 // ------------------- Section: Page Routes -------------------
 
 // ------------------- Function: serveIndexPage -------------------
@@ -586,11 +499,8 @@ app.use(requestLogger);
 // ------------------- Section: Rate Limiting -------------------
 // Apply rate limiting to API routes
 app.use('/api', generalLimiter);
-app.use('/auth', authLimiter);
-
 // ------------------- Section: Route Mounting -------------------
 // Mount route modules
-app.use('/auth', authRoutes);
 app.use('/api/characters', characterRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/inventory', inventoryRoutes);
@@ -963,122 +873,10 @@ app.get('/contact', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'contact.html'));
 });
 
-// ------------------- Function: serveLoginPage -------------------
-// Serves the login page
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
 // ------------------- Function: serveDashboardPage -------------------
 // Serves the main dashboard page
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// ------------------- Section: Discord OAuth Routes -------------------
-
-// Debug endpoint to check OAuth configuration
-app.get('/auth/debug', (req, res) => {
-  res.json({
-    isProduction,
-    domain,
-    callbackURL,
-    discordCallbackUrl: process.env.DISCORD_CALLBACK_URL,
-    nodeEnv: process.env.NODE_ENV,
-    port: process.env.PORT || 5001
-  });
-});
-
-// Note: Discord OAuth routes are handled by routes/auth.js which is mounted at /auth
-// The routes/auth.js file contains:
-// - /auth/discord (initiate OAuth)
-// - /auth/discord/callback (handle callback)
-// - /auth/logout (logout)
-// - /auth/status (check auth status)
-
-// ------------------- Function: checkAuthStatus -------------------
-// Returns current authentication status
-app.get('/api/auth/status', (req, res) => {
-  if (req.session.user && req.user) {
-    res.json({
-      authenticated: true,
-      user: {
-        discordId: req.user.discordId,
-        username: req.user.username,
-        nickname: req.user.nickname,
-        email: req.user.email,
-        avatar: req.user.avatar,
-        discriminator: req.user.discriminator,
-        tokens: req.user.tokens,
-        characterSlot: req.user.characterSlot
-      }
-    });
-  } else {
-    res.json({ authenticated: false });
-  }
-});
-
-// ------------------- Function: debugSession -------------------
-// Debug endpoint for session troubleshooting
-app.get('/api/debug/session', (req, res) => {
-  res.json({
-    session: req.session ? {
-      id: req.session.id,
-      user: req.session.user,
-      cookie: req.session.cookie,
-      returnTo: req.session.returnTo,
-      oauthState: req.session.oauthState ? 'present' : 'not present'
-    } : null,
-    isAuthenticated: !!req.session.user,
-    user: req.user ? {
-      username: req.user.username,
-      discordId: req.user.discordId,
-      id: req.user._id
-    } : null,
-    headers: {
-      cookie: req.headers.cookie ? 'present' : 'missing',
-      'user-agent': req.headers['user-agent']
-    },
-    environment: {
-      NODE_ENV: process.env.NODE_ENV,
-      RAILWAY_ENVIRONMENT: process.env.RAILWAY_ENVIRONMENT,
-      DOMAIN: process.env.DOMAIN
-    },
-    sessionStore: sessionStore ? 'initialized' : 'null'
-  });
-});
-
-// ------------------- Function: testSession -------------------
-// Simple endpoint to test session persistence
-app.get('/api/test/session', (req, res) => {
-  logger.debug('Session test endpoint called', null, 'server.js');
-  logger.debug(`Session ID: ${req.sessionID}`, null, 'server.js');
-  logger.debug(`Session exists: ${!!req.session}`, null, 'server.js');
-  logger.debug(`Session store: ${sessionStore ? 'MongoDB' : 'Memory'}`, null, 'server.js');
-  
-  if (req.query.test) {
-    req.session.testValue = req.query.test;
-    req.session.save((err) => {
-      if (err) {
-        logger.error('Session save error', err, 'server.js');
-        res.json({ error: 'Failed to save session', details: err.message });
-      } else {
-        logger.debug('Session saved successfully', null, 'server.js');
-        res.json({ 
-          success: true, 
-          message: 'Test value saved', 
-          sessionId: req.session.id,
-          testValue: req.session.testValue
-        });
-      }
-    });
-  } else {
-    res.json({ 
-      sessionId: req.session.id,
-      testValue: req.session.testValue,
-      message: 'No test value provided. Use ?test=something to test session saving.'
-    });
-  }
 });
 
 // ------------------- Section: API Routes -------------------
@@ -1107,104 +905,6 @@ app.get('/api/health', (req, res) => {
 });
 
 // ------------------- User Authentication Status -------------------
-app.get('/api/user', async (req, res) => {
-  try {
-    // Only log authentication issues
-    if (!req.session.user && req.session) {
-      logger.warn('Session exists but user not authenticated', 'server.js');
-    }
-    
-    let isAdmin = false;
-    
-    if (req.isAuthenticated() && req.user) {
-      // Check if user has admin role in Discord
-      const guildId = process.env.PROD_GUILD_ID;
-      if (guildId) {
-        try {
-          const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
-            headers: {
-              'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (response.ok) {
-            const memberData = await response.json();
-            const roles = memberData.roles || [];
-            // Check for admin role - require ADMIN_ROLE_ID to be set
-            const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
-            if (!ADMIN_ROLE_ID) {
-              isAdmin = false;
-            } else {
-              isAdmin = roles.includes(ADMIN_ROLE_ID);
-            }
-          }
-        } catch (error) {
-          logger.error('Error checking admin status', error, 'server.js');
-          isAdmin = false;
-        }
-      }
-      
-      // Fetch full user data from database to get leveling, birthday, helpWanted, etc.
-      try {
-        const dbUser = await User.findOne({ discordId: req.user.discordId })
-          .select('discordId username email avatar discriminator tokens characterSlot status leveling birthday helpWanted quests createdAt nickname')
-          .lean();
-        
-        if (dbUser) {
-          const authInfo = {
-            isAuthenticated: true,
-            isAdmin: isAdmin,
-            user: {
-              ...dbUser,
-              id: dbUser._id
-            },
-            session: req.session ? {
-              id: req.session.id,
-              user: req.session.user ? {
-                username: req.session.user.username,
-                discordId: req.session.user.discordId
-              } : null
-            } : null
-          };
-          
-          return res.json(authInfo);
-        }
-      } catch (dbError) {
-        logger.error('Error fetching user from database', dbError, 'server.js');
-        // Fall through to use session data
-      }
-    }
-    
-    // Fallback to session data only if not authenticated or DB fetch failed
-    const authInfo = {
-      isAuthenticated: !!req.session.user,
-      isAdmin: isAdmin,
-      user: req.user ? {
-        username: req.user.username,
-        discordId: req.user.discordId,
-        id: req.user._id,
-        email: req.user.email,
-        avatar: req.user.avatar,
-        discriminator: req.user.discriminator,
-        tokens: req.user.tokens,
-        characterSlot: req.user.characterSlot
-      } : null,
-      session: req.session ? {
-        id: req.session.id,
-        user: req.session.user ? {
-          username: req.session.user.username,
-          discordId: req.session.user.discordId
-        } : null
-      } : null
-    };
-    
-    res.json(authInfo);
-  } catch (error) {
-    logger.error('Error in user auth endpoint', error, 'server.js');
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // ------------------- Section: User Lookup API Routes -------------------
 
@@ -1818,7 +1518,7 @@ app.get('/api/stats/characters', async (req, res) => {
 
 // ------------------- Function: getStealCooldowns -------------------
 // Returns steal cooldown information for a character
-app.get('/api/steal/cooldowns/:characterId', requireAuth, async (req, res) => {
+app.get('/api/steal/cooldowns/:characterId', async (req, res) => {
   try {
     const { characterId } = req.params;
     const userId = req.user.discordId;
@@ -3034,7 +2734,7 @@ app.get('/api/character/:id', async (req, res) => {
 
 // ------------------- Function: getUserCharacters -------------------
 // Returns all characters belonging to the authenticated user (including mod characters)
-app.get('/api/user/characters', requireAuth, async (req, res) => {
+app.get('/api/user/characters', async (req, res) => {
   try {
     const userId = req.user.discordId;
     
@@ -3068,7 +2768,7 @@ app.get('/api/user/characters', requireAuth, async (req, res) => {
 
 // ------------------- Function: getUserQuestParticipation -------------------
 // Returns quest participation summaries for the authenticated user
-app.get('/api/user/quests', requireAuth, async (req, res) => {
+app.get('/api/user/quests', async (req, res) => {
   try {
     const userId = req.user.discordId;
     const participantField = `participants.${userId}`;
@@ -3159,7 +2859,7 @@ app.get('/api/user/quests', requireAuth, async (req, res) => {
 
 // ------------------- Function: exportCharacterData -------------------
 // Exports all data related to a specific character for backup/download purposes
-app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
+app.get('/api/characters/:id/export', async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.discordId;
@@ -3316,7 +3016,7 @@ app.get('/api/characters/:id/export', requireAuth, async (req, res) => {
 
 // ------------------- Function: exportAllUserData -------------------
 // Exports all data for a user including all their characters
-app.get('/api/user/export-all', requireAuth, async (req, res) => {
+app.get('/api/user/export-all', async (req, res) => {
   try {
     const userId = req.user.discordId;
     
@@ -3476,7 +3176,7 @@ app.get('/api/user/export-all', requireAuth, async (req, res) => {
 
 // ------------------- Function: updateCharacterProfile -------------------
 // Updates character profile information (editable fields only)
-app.patch('/api/characters/:id/profile', requireAuth, upload.single('icon'), async (req, res) => {
+app.patch('/api/characters/:id/profile', upload.single('icon'), async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.discordId;
@@ -3607,7 +3307,7 @@ app.get('/api/character-of-week', async (req, res) => {
 
 // ------------------- Function: setCharacterOfWeek -------------------
 // Sets a new character of the week (admin only)
-app.post('/api/character-of-week', requireAuth, async (req, res) => {
+app.post('/api/character-of-week', async (req, res) => {
   try {
     const { characterId, featuredReason } = req.body;
     
@@ -3690,7 +3390,7 @@ app.post('/api/character-of-week', requireAuth, async (req, res) => {
 
 // ------------------- Function: getRandomCharacterOfWeek -------------------
 // Automatically selects a random character for the week
-app.post('/api/character-of-week/random', requireAuth, async (req, res) => {
+app.post('/api/character-of-week/random', async (req, res) => {
   try {
     // Check if user has admin role in Discord
     let isAdmin = false;
@@ -3743,7 +3443,7 @@ app.post('/api/character-of-week/random', requireAuth, async (req, res) => {
 
 // ------------------- Function: triggerFirstCharacterOfWeek -------------------
 // Manually triggers the first character of the week (for testing)
-app.post('/api/character-of-week/trigger-first', requireAuth, async (req, res) => {
+app.post('/api/character-of-week/trigger-first', async (req, res) => {
   try {
     // Check if user has admin role in Discord
     let isAdmin = false;
@@ -3809,7 +3509,7 @@ app.post('/api/character-of-week/trigger-first', requireAuth, async (req, res) =
 
 // ------------------- Function: getCharacterRelationships -------------------
 // Returns all relationships for a specific character (both directions)
-app.get('/api/relationships/character/:characterId', requireAuth, async (req, res) => {
+app.get('/api/relationships/character/:characterId', async (req, res) => {
   try {
     const { characterId } = req.params;
     const userId = req.user.discordId;
@@ -3888,7 +3588,7 @@ app.get('/api/relationships/character/:characterId', requireAuth, async (req, re
 
 // ------------------- Function: createRelationship -------------------
 // Creates a new relationship between characters
-app.post('/api/relationships', requireAuth, async (req, res) => {
+app.post('/api/relationships', async (req, res) => {
   try {
     const { characterId, targetCharacterId, characterName, targetCharacterName, relationshipType, notes } = req.body;
     const userId = req.user.discordId;
@@ -3974,7 +3674,7 @@ app.post('/api/relationships', requireAuth, async (req, res) => {
 
 // ------------------- Function: updateRelationship -------------------
 // Updates an existing relationship
-app.put('/api/relationships/:relationshipId', requireAuth, async (req, res) => {
+app.put('/api/relationships/:relationshipId', async (req, res) => {
   try {
     const { relationshipId } = req.params;
     const { characterId, targetCharacterId, characterName, targetCharacterName, relationshipType, notes } = req.body;
@@ -4064,7 +3764,7 @@ app.put('/api/relationships/:relationshipId', requireAuth, async (req, res) => {
 
 // ------------------- Function: deleteRelationship -------------------
 // Deletes a relationship
-app.delete('/api/relationships/:relationshipId', requireAuth, async (req, res) => {
+app.delete('/api/relationships/:relationshipId', async (req, res) => {
   try {
     const { relationshipId } = req.params;
     const userId = req.user.discordId;
@@ -4358,7 +4058,7 @@ app.get('/api/map/squares/:squareId', async (req, res) => {
 });
 
 // Get user's pins
-app.get('/api/map/user-pins', requireAuth, async (req, res) => {
+app.get('/api/map/user-pins', async (req, res) => {
   try {
     const userId = req.user.discordId;
     
@@ -4376,7 +4076,7 @@ app.get('/api/map/user-pins', requireAuth, async (req, res) => {
 });
 
 // Create a new user pin
-app.post('/api/map/user-pins', pinImageUpload.single('image'), requireAuth, async (req, res) => {
+app.post('/api/map/user-pins', pinImageUpload.single('image'), async (req, res) => {
   try {
     const userId = req.user.discordId;
     
@@ -4424,7 +4124,7 @@ app.post('/api/map/user-pins', pinImageUpload.single('image'), requireAuth, asyn
 });
 
 // Delete a user pin
-app.delete('/api/map/user-pins/:pinId', requireAuth, async (req, res) => {
+app.delete('/api/map/user-pins/:pinId', async (req, res) => {
   try {
     const userId = req.user.discordId;
     const { pinId } = req.params;
@@ -4850,7 +4550,7 @@ app.get('/api/character-of-week/rotation-status', async (req, res) => {
 
 // ------------------- Function: getGuildMemberInfo -------------------
 // Returns Discord guild member information including join date
-app.get('/api/user/guild-info', requireAuth, async (req, res) => {
+app.get('/api/user/guild-info', async (req, res) => {
   try {
     const userId = req.user.discordId;
     const guildId = process.env.PROD_GUILD_ID;
@@ -6456,7 +6156,7 @@ function buildItemNameQuery(itemName) {
   return { itemName: { $regex: new RegExp(`^${safeName}$`, 'i') } };
 }
 
-app.get('/api/inventories/me', requireAuth, async (req, res) => {
+app.get('/api/inventories/me', async (req, res) => {
   try {
     const payload = await buildUserInventoryResponse(req.user.discordId);
     res.json(payload);
@@ -6466,7 +6166,7 @@ app.get('/api/inventories/me', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/inventories/transfer', requireAuth, async (req, res) => {
+app.post('/api/inventories/transfer', async (req, res) => {
   try {
     const { sourceCharacterId, targetCharacterId, itemId, quantity } = req.body;
 
@@ -6589,7 +6289,7 @@ function mergeObtainValue(existingValue, note) {
   return note;
 }
 
-app.patch('/api/inventories/:characterId/items/:itemId', requireAuth, async (req, res) => {
+app.patch('/api/inventories/:characterId/items/:itemId', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -6672,7 +6372,7 @@ app.patch('/api/inventories/:characterId/items/:itemId', requireAuth, async (req
   }
 });
 
-app.delete('/api/inventories/:characterId/items/:itemId', requireAuth, async (req, res) => {
+app.delete('/api/inventories/:characterId/items/:itemId', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -6707,7 +6407,7 @@ app.delete('/api/inventories/:characterId/items/:itemId', requireAuth, async (re
   }
 });
 
-app.patch('/api/characters/:characterId/gear', requireAuth, async (req, res) => {
+app.patch('/api/characters/:characterId/gear', async (req, res) => {
   try {
     const { characterId } = req.params;
     const { slot, inventoryId } = req.body || {};
@@ -7050,7 +6750,7 @@ app.get('/api/characters/list', async (req, res) => {
 
 // ------------------- Function: getVendingInventory -------------------
 // Returns vending inventory for a character from vendingInventories collection
-app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) => {
+app.get('/api/characters/:characterId/vending', async (req, res) => {
   try {
     const { characterId } = req.params;
     const userId = req.user.discordId;
@@ -7135,7 +6835,7 @@ app.get('/api/characters/:characterId/vending', requireAuth, async (req, res) =>
 
 // ------------------- Function: setupVendingShop -------------------
 // One-time setup endpoint to import vending data from old method
-app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, res) => {
+app.post('/api/characters/:characterId/vending/setup', async (req, res) => {
   try {
     const { characterId } = req.params;
     const userId = req.user.discordId;
@@ -7401,7 +7101,7 @@ app.post('/api/characters/:characterId/vending/setup', requireAuth, async (req, 
 
 // ------------------- Function: addVendingItem -------------------
 // Adds an item to vending inventory and removes it from character inventory
-app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, res) => {
+app.post('/api/characters/:characterId/vending/items', async (req, res) => {
   try {
     const { characterId } = req.params;
     const userId = req.user.discordId;
@@ -7591,7 +7291,7 @@ app.post('/api/characters/:characterId/vending/items', requireAuth, async (req, 
 
 // ------------------- Function: restockVendingItem -------------------
 // Restocks an existing vending item using vending points, or creates it from vending stock if it doesn't exist
-app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req, res) => {
+app.post('/api/characters/:characterId/vending/restock', async (req, res) => {
   try {
     const { characterId } = req.params;
     const userId = req.user.discordId;
@@ -8137,7 +7837,7 @@ app.post('/api/characters/:characterId/vending/restock', requireAuth, async (req
 
 // ------------------- Function: updateVendingItem -------------------
 // Updates an existing vending item
-app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, async (req, res) => {
+app.patch('/api/characters/:characterId/vending/items/:itemId', async (req, res) => {
   try {
     const { characterId, itemId } = req.params;
     const userId = req.user.discordId;
@@ -8267,7 +7967,7 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', requireAuth, asy
 
 // ------------------- Function: deleteVendingItem -------------------
 // Deletes a vending item
-app.delete('/api/characters/:characterId/vending/items/:itemId', requireAuth, async (req, res) => {
+app.delete('/api/characters/:characterId/vending/items/:itemId', async (req, res) => {
   try {
     const { characterId, itemId } = req.params;
     const userId = req.user.discordId;
@@ -8321,7 +8021,7 @@ app.delete('/api/characters/:characterId/vending/items/:itemId', requireAuth, as
 
 // ------------------- Function: updateShopImage -------------------
 // Updates the shop banner image for a character
-app.patch('/api/characters/:characterId/vending/shop-image', requireAuth, async (req, res) => {
+app.patch('/api/characters/:characterId/vending/shop-image', async (req, res) => {
   try {
     const { characterId } = req.params;
     const userId = req.user.discordId;
@@ -9459,7 +9159,7 @@ function getSeverity(patternName) {
 }
 
 // Admin endpoint to run security audit
-app.get('/api/admin/security-audit', requireAuth, async (req, res) => {
+app.get('/api/admin/security-audit', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -9662,7 +9362,7 @@ async function cleanupMaliciousContent(issues) {
 }
 
 // Admin endpoint to clean up malicious content
-app.post('/api/admin/security-cleanup', requireAuth, async (req, res) => {
+app.post('/api/admin/security-cleanup', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -9720,7 +9420,7 @@ app.post('/api/admin/security-cleanup', requireAuth, async (req, res) => {
 });
 
 // Combined security audit endpoint
-app.get('/api/admin/security-audit-full', requireAuth, async (req, res) => {
+app.get('/api/admin/security-audit-full', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -10056,7 +9756,7 @@ async function performAccessAudit() {
 }
 
 // Credential rotation and access management
-app.get('/api/admin/credential-audit', requireAuth, async (req, res) => {
+app.get('/api/admin/credential-audit', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -10153,7 +9853,7 @@ app.get('/api/admin/credential-audit', requireAuth, async (req, res) => {
 });
 
 // Combined comprehensive security check
-app.get('/api/admin/security-comprehensive', requireAuth, async (req, res) => {
+app.get('/api/admin/security-comprehensive', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -10293,12 +9993,200 @@ setInterval(async () => {
   }
 }, 24 * 60 * 60 * 1000); // Run every 24 hours
 
+// ------------------- Section: Authentication Routes -------------------
+// Discord OAuth Login
+app.get('/auth/discord', (req, res) => {
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  if (!clientId) {
+    logger.error('DISCORD_CLIENT_ID not configured', 'server.js');
+    return res.status(500).json({ error: 'OAuth not configured' });
+  }
+
+  const redirectUri = `${req.protocol}://${req.get('host')}/auth/discord/callback`;
+  const state = crypto.randomBytes(16).toString('hex');
+  
+  // Ensure session exists before setting state
+  if (!req.session) {
+    logger.error('[OAuth Init] No session object available', 'server.js');
+    return res.status(500).json({ error: 'Session not available' });
+  }
+  
+  req.session.oauthState = state;
+  
+  logger.info(`[OAuth Init] Setting OAuth state: ${state}`, 'server.js');
+  logger.info(`[OAuth Init] Session ID: ${req.sessionID}`, 'server.js');
+  logger.info(`[OAuth Init] Cookie will be set: ${JSON.stringify(req.session.cookie)}`, 'server.js');
+  logger.info(`[OAuth Init] Redirect URI: ${redirectUri}`, 'server.js');
+
+  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?` +
+    `client_id=${encodeURIComponent(clientId)}&` +
+    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+    `response_type=code&` +
+    `scope=${encodeURIComponent('identify email')}&` +
+    `state=${state}`;
+
+  // Save session before redirecting
+  req.session.save((err) => {
+    if (err) {
+      logger.error('[OAuth Init] Failed to save session before redirect', err, 'server.js');
+      return res.status(500).json({ error: 'Failed to initialize session' });
+    }
+    logger.info(`[OAuth Init] Session saved successfully. Session ID: ${req.sessionID}`, 'server.js');
+    res.redirect(discordAuthUrl);
+  });
+});
+
+// Discord OAuth Callback
+app.get('/auth/discord/callback', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+
+    logger.info(`[OAuth Callback] Received callback with code: ${code ? 'present' : 'missing'}, state: ${state || 'missing'}`, 'server.js');
+    logger.info(`[OAuth Callback] Session ID: ${req.sessionID}`, 'server.js');
+    logger.info(`[OAuth Callback] Cookies received: ${req.headers.cookie || 'none'}`, 'server.js');
+    logger.info(`[OAuth Callback] Session exists: ${!!req.session}`, 'server.js');
+    logger.info(`[OAuth Callback] Stored OAuth state: ${req.session?.oauthState || 'missing'}`, 'server.js');
+
+    if (!code) {
+      logger.warn('[OAuth Callback] No authorization code received', 'server.js');
+      return res.redirect('/?error=no_code');
+    }
+
+    // Verify state to prevent CSRF attacks
+    if (!state || state !== req.session.oauthState) {
+      logger.warn(`[OAuth Callback] Invalid OAuth state parameter. Expected: ${req.session.oauthState || 'none'}, Received: ${state || 'none'}`, 'server.js');
+      logger.warn(`[OAuth Callback] Session exists: ${!!req.session}, Session keys: ${req.session ? Object.keys(req.session).join(', ') : 'none'}`, 'server.js');
+      return res.redirect('/?error=invalid_state');
+    }
+
+    logger.info('[OAuth Callback] State validation passed', 'server.js');
+
+    // Clear the state from session
+    delete req.session.oauthState;
+
+    if (!clientId || !clientSecret) {
+      logger.error('Discord OAuth credentials not configured', 'server.js');
+      return res.redirect('/?error=oauth_not_configured');
+    }
+
+    const redirectUri = `${req.protocol}://${req.get('host')}/auth/discord/callback`;
+
+    // Exchange authorization code for access token
+    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      logger.error(`Discord token exchange failed: ${errorText}`, 'server.js');
+      return res.redirect('/?error=token_exchange_failed');
+    }
+
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+    logger.info('[OAuth Callback] Successfully exchanged code for access token', 'server.js');
+
+    // Fetch user info from Discord
+    const userResponse = await fetch('https://discord.com/api/users/@me', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!userResponse.ok) {
+      const errorText = await userResponse.text();
+      logger.error(`[OAuth Callback] Failed to fetch user info from Discord: ${errorText}`, 'server.js');
+      return res.redirect('/?error=fetch_user_failed');
+    }
+
+    const userData = await userResponse.json();
+    logger.info(`[OAuth Callback] Successfully fetched user data for Discord ID: ${userData.id}, Username: ${userData.username}`, 'server.js');
+
+    // Store user data in session
+    req.session.user = {
+      discordId: userData.id,
+      username: userData.username,
+      discriminator: userData.discriminator,
+      avatar: userData.avatar,
+      email: userData.email,
+      globalName: userData.global_name
+    };
+    logger.info(`[OAuth Callback] Stored user data in session. Session ID: ${req.sessionID}`, 'server.js');
+
+    // Save session before redirect
+    req.session.save((err) => {
+      if (err) {
+        logger.error('[OAuth Callback] Failed to save session', err, 'server.js');
+        return res.redirect('/?error=session_save_failed');
+      }
+      logger.info('[OAuth Callback] Session saved successfully, redirecting to home', 'server.js');
+      res.redirect('/');
+    });
+  } catch (error) {
+    logger.error('OAuth callback error', error, 'server.js');
+    res.redirect('/?error=oauth_error');
+  }
+});
+
+// Logout route
+app.get('/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      logger.error('Failed to destroy session', err, 'server.js');
+      return res.redirect('/?error=logout_failed');
+    }
+    res.redirect('/');
+  });
+});
+
 // ------------------- Section: User Settings API Routes -------------------
 
-// Get user settings
-app.get('/api/user/settings', requireAuth, async (req, res) => {
+// Get current user
+app.get('/api/user', (req, res) => {
+  logger.info(`[API /api/user] Session ID: ${req.sessionID}, Has user: ${!!req.session.user}`, 'server.js');
+  if (req.session.user) {
+    logger.info(`[API /api/user] Returning authenticated user: ${req.session.user.discordId}`, 'server.js');
+    res.json({
+      isAuthenticated: true,
+      user: req.session.user
+    });
+  } else {
+    logger.info('[API /api/user] No user in session, returning unauthenticated', 'server.js');
+    res.json({
+      isAuthenticated: false,
+      user: null
+    });
+  }
+});
+
+// NOTE: User settings routes removed - authentication system removed
+// These routes require req.user which no longer exists after auth removal
+
+app.get('/api/user/settings', (req, res) => {
+  res.status(401).json({ error: 'Authentication required' });
+});
+
+app.put('/api/user/settings', (req, res) => {
+  res.status(401).json({ error: 'Authentication required' });
+});
+
+/* COMMENTED OUT - AUTH REMOVED
+// Original user settings routes commented out since authentication removed
+app.get('/api/user/settings', async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await User.findOne({ discordId: req.user?.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -10337,7 +10225,7 @@ app.get('/api/user/settings', requireAuth, async (req, res) => {
 });
 
 // Update user settings
-app.put('/api/user/settings', requireAuth, async (req, res) => {
+app.put('/api/user/settings', async (req, res) => {
   try {
     const { settings } = req.body;
     
@@ -10426,9 +10314,10 @@ app.put('/api/user/settings', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to update user settings' });
   }
 });
+*/
 
 // Update user nickname
-app.patch('/api/user/nickname', requireAuth, async (req, res) => {
+app.patch('/api/user/nickname', async (req, res) => {
   try {
     const { nickname } = req.body;
     
@@ -10471,7 +10360,7 @@ app.patch('/api/user/nickname', requireAuth, async (req, res) => {
 // ------------------- Section: Blupee Hunt System -------------------
 
 // Claim blupee reward
-app.post('/api/blupee/claim', requireAuth, async (req, res) => {
+app.post('/api/blupee/claim', async (req, res) => {
   try {
     const user = await User.findOne({ discordId: req.user.discordId });
     
@@ -10625,7 +10514,7 @@ app.post('/api/blupee/claim', requireAuth, async (req, res) => {
 });
 
 // Get blupee status (check if user can claim)
-app.get('/api/blupee/status', requireAuth, async (req, res) => {
+app.get('/api/blupee/status', async (req, res) => {
   try {
     const user = await User.findOne({ discordId: req.user.discordId });
     
@@ -10717,7 +10606,7 @@ app.get('/api/blupee/status', requireAuth, async (req, res) => {
 const notificationService = require('../shared/utils/notificationService');
 
 // Send Blood Moon alerts
-app.post('/api/notifications/blood-moon', requireAuth, async (req, res) => {
+app.post('/api/notifications/blood-moon', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -10762,7 +10651,7 @@ app.post('/api/notifications/blood-moon', requireAuth, async (req, res) => {
 });
 
 // Send Daily Reset reminders
-app.post('/api/notifications/daily-reset', requireAuth, async (req, res) => {
+app.post('/api/notifications/daily-reset', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -10802,7 +10691,7 @@ app.post('/api/notifications/daily-reset', requireAuth, async (req, res) => {
 });
 
 // Send Weather notifications
-app.post('/api/notifications/weather', requireAuth, async (req, res) => {
+app.post('/api/notifications/weather', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -10850,7 +10739,7 @@ app.post('/api/notifications/weather', requireAuth, async (req, res) => {
 });
 
 // Send Character of Week notifications
-app.post('/api/notifications/character-of-week', requireAuth, async (req, res) => {
+app.post('/api/notifications/character-of-week', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -11015,7 +10904,7 @@ app.get('/api/user/export-all', async (req, res) => {
 // ------------------- Section: Leveling System API Routes -------------------
 
 // Get user's level and rank information
-app.get('/api/user/levels/rank', requireAuth, async (req, res) => {
+app.get('/api/user/levels/rank', async (req, res) => {
   try {
     const user = await User.findOne({ discordId: req.user.discordId });
     
@@ -11211,7 +11100,7 @@ async function readTransactionsFromGoogleSheets(userId, tokenTrackerUrl) {
 }
 
 // Get user's token transaction summary
-app.get('/api/tokens/summary', requireAuth, async (req, res) => {
+app.get('/api/tokens/summary', async (req, res) => {
   try {
     const user = await User.findOne({ discordId: req.user.discordId });
     
@@ -11269,7 +11158,7 @@ app.get('/api/tokens/summary', requireAuth, async (req, res) => {
 });
 
 // Get user's token transactions
-app.get('/api/tokens/transactions', requireAuth, async (req, res) => {
+app.get('/api/tokens/transactions', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const skip = parseInt(req.query.skip) || 0;
@@ -11428,7 +11317,7 @@ app.get('/api/vending/months', async (req, res) => {
   }
 });
 
-app.get('/api/vending/transactions', requireAuth, async (req, res) => {
+app.get('/api/vending/transactions', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const skip = parseInt(req.query.skip) || 0;
@@ -11532,7 +11421,7 @@ app.get('/api/vending/transactions', requireAuth, async (req, res) => {
 });
 
 // Get global token statistics (admin only)
-app.get('/api/tokens/global-stats', requireAuth, async (req, res) => {
+app.get('/api/tokens/global-stats', async (req, res) => {
   try {
     // Check if user is admin
     const guildId = process.env.PROD_GUILD_ID;
@@ -11685,7 +11574,7 @@ app.get('/api/levels/user/:discordId', async (req, res) => {
 });
 
 // Get exchange status and perform exchange
-app.post('/api/user/levels/exchange', requireAuth, async (req, res) => {
+app.post('/api/user/levels/exchange', async (req, res) => {
   try {
     const user = await User.findOne({ discordId: req.user.discordId });
     
@@ -11715,7 +11604,7 @@ app.post('/api/user/levels/exchange', requireAuth, async (req, res) => {
 });
 
 // Get exchange status only (no exchange)
-app.get('/api/user/levels/exchange-status', requireAuth, async (req, res) => {
+app.get('/api/user/levels/exchange-status', async (req, res) => {
   try {
     const user = await User.findOne({ discordId: req.user.discordId });
     
@@ -11740,7 +11629,7 @@ app.get('/api/user/levels/exchange-status', requireAuth, async (req, res) => {
 // ------------------- Section: Village Shops Management API -------------------
 
 // ------------------- Endpoint: Get village shop items for restocking -------------------
-app.get('/api/village-shops/:village', requireAuth, async (req, res) => {
+app.get('/api/village-shops/:village', async (req, res) => {
   try {
     const { village } = req.params;
     const normalizedVillage = village.toLowerCase().trim();
@@ -11793,7 +11682,7 @@ app.get('/api/village-shops/:village', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Get all village shop items -------------------
-app.get('/api/admin/village-shops', requireAuth, async (req, res) => {
+app.get('/api/admin/village-shops', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -11848,7 +11737,7 @@ app.get('/api/admin/village-shops', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Get single village shop item -------------------
-app.get('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
+app.get('/api/admin/village-shops/:id', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -11869,7 +11758,7 @@ app.get('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Create new village shop item -------------------
-app.post('/api/admin/village-shops', requireAuth, async (req, res) => {
+app.post('/api/admin/village-shops', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -11917,7 +11806,7 @@ app.post('/api/admin/village-shops', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Update village shop item -------------------
-app.put('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
+app.put('/api/admin/village-shops/:id', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -11964,7 +11853,7 @@ app.put('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Delete village shop item -------------------
-app.delete('/api/admin/village-shops/:id', requireAuth, async (req, res) => {
+app.delete('/api/admin/village-shops/:id', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12085,7 +11974,7 @@ const getModelForAdmin = (modelName) => {
 };
 
 // ------------------- Endpoint: Get all available models -------------------
-app.get('/api/admin/db/models', requireAuth, async (req, res) => {
+app.get('/api/admin/db/models', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12101,7 +11990,7 @@ app.get('/api/admin/db/models', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Get model schema -------------------
-app.get('/api/admin/db/schema/:modelName', requireAuth, async (req, res) => {
+app.get('/api/admin/db/schema/:modelName', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12144,7 +12033,7 @@ app.get('/api/admin/db/schema/:modelName', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: List records (with pagination) -------------------
-app.get('/api/admin/db/:modelName', requireAuth, async (req, res) => {
+app.get('/api/admin/db/:modelName', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12284,7 +12173,7 @@ app.get('/api/admin/db/:modelName', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Get single record by ID -------------------
-app.get('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
+app.get('/api/admin/db/:modelName/:id', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12343,7 +12232,7 @@ app.get('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Create new record -------------------
-app.post('/api/admin/db/:modelName', requireAuth, async (req, res) => {
+app.post('/api/admin/db/:modelName', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12377,7 +12266,7 @@ app.post('/api/admin/db/:modelName', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Update record -------------------
-app.put('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
+app.put('/api/admin/db/:modelName/:id', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12444,7 +12333,7 @@ app.put('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
 });
 
 // ------------------- Endpoint: Delete record -------------------
-app.delete('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
+app.delete('/api/admin/db/:modelName/:id', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12482,7 +12371,7 @@ app.delete('/api/admin/db/:modelName/:id', requireAuth, async (req, res) => {
 // ------------------- Special Inventory Item Endpoints -------------------
 
 // Update a single inventory item
-app.put('/api/admin/db/Inventory/item/:characterId/:itemId', requireAuth, async (req, res) => {
+app.put('/api/admin/db/Inventory/item/:characterId/:itemId', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -12529,7 +12418,7 @@ app.put('/api/admin/db/Inventory/item/:characterId/:itemId', requireAuth, async 
 });
 
 // Delete a single inventory item
-app.delete('/api/admin/db/Inventory/item/:characterId/:itemId', requireAuth, async (req, res) => {
+app.delete('/api/admin/db/Inventory/item/:characterId/:itemId', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
@@ -13287,9 +13176,4 @@ app.get('/api/test-blood-moon', async (req, res) => {
 // ------------------- Section: Admin Database Management -------------------
 // Provides CRUD operations for all database models (admin-only)
 // ============================================================================
-
-// ------------------- Function: checkAdminAccess -------------------
-// Note: checkAdminAccess is now imported from ./middleware/auth.js
-// This function has been moved to the middleware module for better organization
-
 

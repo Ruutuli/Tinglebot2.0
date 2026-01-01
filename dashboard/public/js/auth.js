@@ -1,432 +1,160 @@
-/* ============================================================================
- * File: auth.js
- * Purpose: Handles user authentication state and user menu functionality.
- * ============================================================================ */
+// ------------------- Auth Module -------------------
+// Handles Discord OAuth authentication
 
-// ============================================================================
-// ------------------- Section: Authentication State -------------------
-// Manages current user authentication status and data
-// ============================================================================
+// Current user state
+export let currentUser = null;
 
-let currentUser = null;
-let isAuthenticated = false;
-let isAdminUser = false;
-let userDropdown = null; // Global reference to user dropdown element
+// Authentication status
+export let isAuthenticated = false;
 
-// ============================================================================
-// ------------------- Section: Initialization -------------------
-// Sets up authentication checking and user menu functionality
-// ============================================================================
-
-document.addEventListener('DOMContentLoaded', initUserAuth);
-
-// ------------------- Function: initUserAuth -------------------
-// Initializes user authentication and menu functionality
-async function initUserAuth() {
-  try {
-    
-    // Check if user just logged in (check URL parameters)
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('login') === 'success') {
-      
-      // Check if there's a returnTo hash stored
-      const returnTo = sessionStorage.getItem('returnTo');
-      if (returnTo) {
-        sessionStorage.removeItem('returnTo');
-        // Update URL without the login parameter and with the saved hash
-        window.history.replaceState({}, document.title, window.location.pathname + returnTo);
-        window.location.hash = returnTo;
-      } else {
-        // Remove the parameter from URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-      
-      // Wait a moment for server to process login
-      setTimeout(async () => {
-        await checkUserAuthStatus();
-      }, 500);
-    } else {
-      // Check authentication status
-      await checkUserAuthStatus();
+// Update user menu UI based on authentication status
+export function updateUserMenu() {
+  const usernameEl = document.getElementById('username');
+  const userInfoEl = document.getElementById('user-info');
+  const guestInfoEl = document.getElementById('guest-info');
+  const userDropdown = document.getElementById('user-dropdown');
+  
+  if (isAuthenticated && currentUser) {
+    // Update username
+    if (usernameEl) {
+      usernameEl.textContent = currentUser.globalName || currentUser.username || 'User';
     }
     
-    // Set up user menu interactions
-    setupUserMenu();
+    // Update user info section
+    const userNameEl = document.getElementById('user-name');
+    const userDiscriminatorEl = document.getElementById('user-discriminator');
+    const userDropdownAvatar = document.getElementById('user-dropdown-avatar');
+    const userAvatar = document.getElementById('user-avatar');
     
-    // Set up periodic refresh (every 30 seconds)
-    setInterval(async () => {
-      if (isAuthenticated) {
-        await refreshUserData();
-      }
-    }, 30000);
+    if (userNameEl) {
+      userNameEl.textContent = currentUser.globalName || currentUser.username || 'User';
+    }
     
-  } catch (error) {
-    console.error('[auth.js]: ❌ Error initializing user auth:', error);
-    showGuestUser();
+    if (userDiscriminatorEl && currentUser.discriminator && currentUser.discriminator !== '0') {
+      userDiscriminatorEl.textContent = `#${currentUser.discriminator}`;
+    } else if (userDiscriminatorEl) {
+      userDiscriminatorEl.textContent = '';
+    }
+    
+    // Update avatars
+    const avatarUrl = currentUser.avatar 
+      ? `https://cdn.discordapp.com/avatars/${currentUser.discordId}/${currentUser.avatar}.png`
+      : '/images/ankleicon.png';
+    
+    if (userDropdownAvatar) {
+      userDropdownAvatar.src = avatarUrl;
+      userDropdownAvatar.onerror = () => { userDropdownAvatar.src = '/images/ankleicon.png'; };
+    }
+    
+    if (userAvatar) {
+      userAvatar.src = avatarUrl;
+      userAvatar.onerror = () => { userAvatar.src = '/images/ankleicon.png'; };
+    }
+    
+    // Show user info, hide guest info
+    if (userInfoEl) userInfoEl.style.display = 'flex';
+    if (guestInfoEl) guestInfoEl.style.display = 'none';
+  } else {
+    // Update username to show guest state
+    if (usernameEl) {
+      usernameEl.textContent = 'Guest';
+    }
+    
+    // Show guest info, hide user info
+    if (userInfoEl) userInfoEl.style.display = 'none';
+    if (guestInfoEl) guestInfoEl.style.display = 'flex';
   }
 }
 
-// ------------------- Function: redirectToLogin -------------------
-// Redirects to login page while preserving current location
-window.redirectToLogin = function() {
-  // Get current page path
-  const currentPath = window.location.pathname + window.location.hash;
+// Initialize user menu dropdown click handler
+export function initUserMenu() {
+  const userMenu = document.getElementById('user-menu');
+  const userDropdown = document.getElementById('user-dropdown');
   
-  // If we're on the map page, redirect directly to Discord auth with return URL
-  if (currentPath.includes('/map')) {
-    window.location.href = `/auth/discord?returnTo=${encodeURIComponent(currentPath)}`;
-  } else {
-    // For other pages, save to session storage and go to login page
-    const currentHash = window.location.hash;
-    if (currentHash && currentHash !== '#' && currentHash !== '#dashboard-section') {
-      sessionStorage.setItem('returnTo', currentHash);
+  if (!userMenu || !userDropdown) return;
+  
+  // Toggle dropdown on click
+  userMenu.addEventListener('click', (e) => {
+    e.stopPropagation();
+    userDropdown.classList.toggle('show');
+  });
+  
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!userMenu.contains(e.target) && !userDropdown.contains(e.target)) {
+      userDropdown.classList.remove('show');
     }
-    
-    // Redirect to login page
-    window.location.href = '/login';
+  });
+  
+  // Close dropdown when clicking inside the dropdown (for links)
+  userDropdown.addEventListener('click', (e) => {
+    // Only close if clicking on a link/button, not on the dropdown container itself
+    if (e.target.closest('a, button')) {
+      setTimeout(() => {
+        userDropdown.classList.remove('show');
+      }, 100);
+    }
+  });
+}
+
+// Check user authentication status
+export async function checkUserAuthStatus() {
+  try {
+    const response = await fetch('/api/user', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      isAuthenticated = data.isAuthenticated || false;
+      currentUser = data.user || null;
+    } else {
+      isAuthenticated = false;
+      currentUser = null;
+    }
+  } catch (error) {
+    console.warn('[auth.js]: Failed to check auth status:', error);
+    isAuthenticated = false;
+    currentUser = null;
   }
+  
+  // Update UI after checking auth status
+  updateUserMenu();
+  
+  return { isAuthenticated, currentUser };
+}
+
+// Redirect to Discord OAuth login
+export function login() {
+  window.location.href = '/auth/discord';
+}
+
+// Logout user
+export function logout() {
+  window.location.href = '/auth/logout';
+}
+
+// Make login function globally available for inline onclick handlers
+window.redirectToLogin = function() {
+  window.location.href = '/auth/discord';
 };
 
-// ============================================================================
-// ------------------- Section: Authentication Status -------------------
-// Handles checking and updating authentication state
-// ============================================================================
-
-// ------------------- Function: checkUserAuthStatus -------------------
-// Checks current user authentication status from server
-async function checkUserAuthStatus() {
-  try {
-    const response = await fetch('/api/user', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include'
-    });
-    
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch user data: ${response.status} ${response.statusText}`);
-    }
-    
-    const userData = await response.json();
-    
-    if (userData.isAuthenticated) {
-      currentUser = userData.user;
-      isAuthenticated = true;
-      isAdminUser = Boolean(userData.isAdmin);
-      updateUserMenu(userData.user);
-      
-      // Handle admin area visibility
-      if (userData.isAdmin) {
-        showAdminArea();
-      } else {
-        hideAdminArea();
-      }
-    } else {
-      currentUser = null;
-      isAuthenticated = false;
-      isAdminUser = false;
-      showGuestUser();
-      hideAdminArea();
-    }
-  } catch (error) {
-    console.error('[auth.js]: ❌ Error checking auth status:', error);
-    showGuestUser();
-    isAdminUser = false;
-  }
+// Check if current user is an admin (placeholder - implement based on your admin logic)
+export function isAdminUser() {
+  // TODO: Implement admin check logic if needed
+  // For example: check if user.discordId is in admin list
+  return false;
 }
 
-// ============================================================================
-// ------------------- Section: User Menu Management -------------------
-// Handles user menu display and interactions
-// ============================================================================
+// Initialize auth status on module load
+checkUserAuthStatus().then(() => {
+  initUserMenu();
+}).catch(err => {
+  console.warn('[auth.js]: Failed to initialize auth status:', err);
+  initUserMenu(); // Still initialize menu even if auth check fails
+});
 
-// ------------------- Function: setupUserMenu -------------------
-// Sets up user menu click handlers and interactions
-function setupUserMenu() {
-  const userMenu = document.getElementById('user-menu');
-  userDropdown = document.getElementById('user-dropdown'); // Assign to global variable
-  
-  if (!userMenu || !userDropdown) {
-    console.error('[auth.js]: ❌ User menu elements not found');
-    return;
-  }
-
-  // User menu click handler
-  userMenu.addEventListener('click', function(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    // Toggle dropdown
-    if (userDropdown.classList.contains('show')) {
-        closeUserDropdown('userMenu click');
-    } else {
-        openUserDropdown('userMenu click');
-    }
-  });
-
-  // Close dropdown when clicking outside
-  document.addEventListener('click', function(event) {
-    if (!userMenu.contains(event.target) && !userDropdown.contains(event.target)) {
-        closeUserDropdown('outside click');
-    }
-  });
-
-  // Close dropdown when window loses focus
-  window.addEventListener('blur', function() {
-    closeUserDropdown('window blur');
-  });
-
-  // Close dropdown when pressing Escape key
-  document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape' && userDropdown.classList.contains('show')) {
-        closeUserDropdown('escape key');
-    }
-  });
-
-  // Handle logout button click
-  const logoutButton = userDropdown.querySelector('.logout-button');
-  if (logoutButton) {
-    logoutButton.addEventListener('click', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      closeUserDropdown('logout button');
-      await logout();
-    });
-  }
-
-  // Handle profile button click
-  const profileButton = userDropdown.querySelector('.profile-button');
-  if (profileButton) {
-    profileButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      closeUserDropdown('profile button');
-      // Navigate to profile section
-      const profileLink = document.querySelector('a[data-section="profile-section"]');
-      if (profileLink) {
-        profileLink.click();
-      }
-    });
-  }
-
-  // Handle login button click in guest info
-  const loginButton = userDropdown.querySelector('.login-button');
-  if (loginButton) {
-    loginButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      closeUserDropdown('login button');
-      
-      // Navigate to login page
-      window.location.href = '/login';
-    });
-  }
-
-}
-
-// ------------------- Function: openUserDropdown -------------------
-// Opens the user dropdown menu
-function openUserDropdown(source = 'unknown') {
-  // Get userDropdown element if not already initialized
-  const dropdown = userDropdown || document.getElementById('user-dropdown');
-  if (!dropdown) {
-    console.error('[auth.js]: ❌ User dropdown element not found');
-    return;
-  }
-  
-  dropdown.classList.add('show');
-  dropdown.setAttribute('aria-expanded', 'true');
-}
-
-// ------------------- Function: closeUserDropdown -------------------
-// Closes the user dropdown menu
-function closeUserDropdown(source = 'unknown') {
-  // Get userDropdown element if not already initialized
-  const dropdown = userDropdown || document.getElementById('user-dropdown');
-  if (!dropdown || !dropdown.classList.contains('show')) {
-    return;
-  }
-  
-  dropdown.classList.remove('show');
-  dropdown.setAttribute('aria-expanded', 'false');
-}
-
-// ------------------- Function: updateUserMenu -------------------
-// Updates user menu with authenticated user data
-function updateUserMenu(userData) {
-  const usernameElement = document.getElementById('username');
-  const userAvatar = document.getElementById('user-avatar');
-  const userDropdownAvatar = document.getElementById('user-dropdown-avatar');
-  const userName = document.getElementById('user-name');
-  const userDiscriminator = document.getElementById('user-discriminator');
-  const userTokens = document.getElementById('user-tokens');
-  const userSlots = document.getElementById('user-slots');
-  const userInfo = document.getElementById('user-info');
-  const guestInfo = document.getElementById('guest-info');
-  
-  if (!usernameElement || !userAvatar || !userDropdownAvatar || !userName || 
-      !userDiscriminator || !userTokens || !userSlots || !userInfo || !guestInfo) {
-    console.error('[auth.js]: ❌ User menu elements not found');
-    return;
-  }
-  
-  // Update main username display (use nickname if available)
-  const displayName = userData.nickname || userData.username || 'User';
-  usernameElement.textContent = displayName;
-  
-  // Update avatars
-  const avatarUrl = userData.avatar ? `https://cdn.discordapp.com/avatars/${userData.discordId}/${userData.avatar}.png` : '/images/ankleicon.png';
-  userAvatar.src = avatarUrl;
-  userDropdownAvatar.src = avatarUrl;
-  
-  // Update dropdown user info
-  userName.textContent = displayName;
-  userDiscriminator.textContent = userData.discriminator ? `#${userData.discriminator}` : '';
-  userTokens.textContent = userData.tokens || 0;
-  userSlots.textContent = userData.characterSlot !== undefined && userData.characterSlot !== null ? userData.characterSlot : 2;
-  
-  // Show user info, hide guest info
-  userInfo.style.display = 'flex';
-  guestInfo.style.display = 'none';
-
-  toggleInventoriesNav(true);
-}
-
-// ------------------- Function: showGuestUser -------------------
-// Shows guest user interface when not authenticated
-function showGuestUser() {
-  const usernameElement = document.getElementById('username');
-  const userAvatar = document.getElementById('user-avatar');
-  const userInfo = document.getElementById('user-info');
-  const guestInfo = document.getElementById('guest-info');
-  
-  if (!usernameElement || !userAvatar || !userInfo || !guestInfo) {
-    console.error('[auth.js]: ❌ User menu elements not found');
-    return;
-  }
-  
-  // Update main display
-  usernameElement.textContent = 'Login';
-  userAvatar.src = '/images/ankleicon.png';
-  
-  // Show guest info, hide user info
-  userInfo.style.display = 'none';
-  guestInfo.style.display = 'flex';
-
-  toggleInventoriesNav(false);
-}
-
-// ============================================================================
-// ------------------- Section: Data Refresh -------------------
-// Handles periodic data refresh for authenticated users
-// ============================================================================
-
-// ------------------- Function: refreshUserData -------------------
-// Refreshes user data periodically
-async function refreshUserData() {
-  try {
-    const response = await fetch('/api/user', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include'
-    });
-    
-    if (response.ok) {
-      const userData = await response.json();
-      if (userData.isAuthenticated && userData.user) {
-        currentUser = userData.user;
-        isAdminUser = Boolean(userData.isAdmin);
-        updateUserMenu(userData.user);
-      }
-    }
-  } catch (error) {
-    console.error('[auth.js]: ❌ Error refreshing user data:', error);
-  }
-}
-
-// ============================================================================
-// ------------------- Section: Logout -------------------
-// Handles user logout functionality
-// ============================================================================
-
-// ------------------- Function: logout -------------------
-// Handles user logout
-async function logout() {
-  try {
-    const response = await fetch('/auth/logout', {
-      method: 'GET',
-      credentials: 'include'
-    });
-    
-    
-    if (response.ok) {  
-      currentUser = null;
-      isAuthenticated = false;
-      showGuestUser();
-      
-      // Close dropdown using global variable
-      if (userDropdown) {
-        userDropdown.classList.remove('show');
-      }
-    } else {
-      console.error('[auth.js]: ❌ Logout failed');
-    }
-  } catch (error) {
-    console.error('[auth.js]: ❌ Error during logout:', error);
-  }
-}
-
-// ============================================================================
-// ------------------- Section: Admin Area Management -------------------
-// Handles showing/hiding admin area based on user permissions
-// ============================================================================
-
-// ------------------- Function: showAdminArea -------------------
-// Shows the admin area for users with admin privileges
-function showAdminArea() {
-  const adminNavItem = document.getElementById('admin-area-nav-item');
-  if (adminNavItem) {
-    adminNavItem.style.display = 'block';
-  }
-}
-
-// ------------------- Function: hideAdminArea -------------------
-// Hides the admin area for non-admin users
-function hideAdminArea() {
-  const adminNavItem = document.getElementById('admin-area-nav-item');
-  if (adminNavItem) {
-    adminNavItem.style.display = 'none';
-  }
-}
-
-function toggleInventoriesNav(isVisible) {
-  const navItem = document.getElementById('inventories-nav-item');
-  if (!navItem) {
-    return;
-  }
-  navItem.style.display = isVisible ? 'block' : 'none';
-}
-
-// ============================================================================
-// ------------------- Section: Public API -------------------
-// Exports functions for use in other modules
-// ============================================================================
-
-export {
-  currentUser,
-  isAuthenticated,
-  isAdminUser,
-  checkUserAuthStatus,
-  updateUserMenu,
-  showGuestUser,
-  refreshUserData,
-  logout,
-  openUserDropdown,
-  closeUserDropdown,
-  showAdminArea,
-  hideAdminArea
-}; 

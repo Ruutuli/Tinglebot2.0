@@ -7,7 +7,7 @@
     "start": "cd bot && npm run start",
     "dev": "concurrently \"npm run dev:bot\" \"npm run dev:dashboard\"",
     "dev:bot": "nodemon --watch bot --watch shared --exec \"node bot/index.js\"",
-    "dev:dashboard": "nodemon --watch dashboard --watch shared --exec \"node dashboard/server.js\"",
+    "dev:dashboard": "nodemon dashboard/server.js --watch dashboard --watch shared",
     "deploy:commands": "node bot/scripts/deploy-commands.js",
     "install:dashboard": "cd dashboard && npm install"
   },

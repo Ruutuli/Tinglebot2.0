@@ -293,6 +293,53 @@ async function fetchQuestData() {
 // ------------------- Validation Functions -------------------
 // ============================================================================
 
+// ------------------- normalizeQuestType -
+function normalizeQuestType(questType) {
+    if (!questType) return 'General';
+    
+    const normalized = questType.trim();
+    
+    // Handle combined types that need to be normalized to valid enum values
+    if (normalized.includes(',')) {
+        // Split by comma and trim each part
+        const parts = normalized.split(',').map(p => p.trim());
+        const lowerParts = parts.map(p => p.toLowerCase());
+        
+        // Handle "Interactive, RP" -> "Interactive"
+        if (lowerParts.includes('interactive') && lowerParts.includes('rp')) {
+            return 'Interactive';
+        }
+        
+        // Handle "Writing, Art" or "Art, Writing" -> "Art / Writing"
+        if ((lowerParts.includes('writing') && lowerParts.includes('art')) ||
+            (lowerParts.includes('art') && lowerParts.includes('writing'))) {
+            return 'Art / Writing';
+        }
+    }
+    
+    // Handle slash-separated types
+    if (normalized.includes('/')) {
+        const parts = normalized.split('/').map(p => p.trim());
+        const lowerParts = parts.map(p => p.toLowerCase());
+        
+        // Handle "Art / Writing" or "Writing / Art" -> "Art / Writing"
+        if ((lowerParts.includes('writing') && lowerParts.includes('art'))) {
+            return 'Art / Writing';
+        }
+    }
+    
+    // Direct mapping to valid enum values (case-insensitive)
+    const lower = normalized.toLowerCase();
+    if (lower === 'art') return 'Art';
+    if (lower === 'writing') return 'Writing';
+    if (lower === 'interactive') return 'Interactive';
+    if (lower === 'rp') return 'RP';
+    if (lower === 'art / writing' || lower === 'art/writing') return 'Art / Writing';
+    
+    // Return original if no match (will fail validation, but preserves original value for debugging)
+    return normalized;
+}
+
 // ------------------- validateRPThreadRequirements -
 async function validateRPThreadRequirements(quest, guild) {
     const errors = [];
@@ -690,10 +737,13 @@ function sanitizeQuestData(parsedQuest) {
         }
     }
     
+    // Normalize quest type to valid enum values
+    const normalizedQuestType = normalizeQuestType(parsedQuest.questType);
+    
     return {
         title: parsedQuest.title || 'Untitled Quest',
         description: parsedQuest.description || 'No description provided.',
-        questType: parsedQuest.questType || 'General',
+        questType: normalizedQuestType,
         location: parsedQuest.location || 'Quest Location',
         timeLimit: parsedQuest.timeLimit || 'No time limit',
         minRequirements: parsedQuest.minRequirements || 0,

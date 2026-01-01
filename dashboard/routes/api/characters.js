@@ -7,7 +7,6 @@ const express = require('express');
 const router = express.Router();
 const Character = require('../../../shared/models/CharacterModel');
 const ModCharacter = require('../../../shared/models/ModCharacterModel');
-const { requireAuth } = require('../../middleware/auth');
 const { asyncHandler, NotFoundError } = require('../../middleware/errorHandler');
 const { validateObjectId } = require('../../middleware/validation');
 const logger = require('../../../shared/utils/logger');
@@ -40,8 +39,8 @@ router.get('/:id', validateObjectId('id'), asyncHandler(async (req, res) => {
 
 // ------------------- Function: getUserCharacters -------------------
 // Returns all characters belonging to the authenticated user (including mod characters)
-router.get('/user/characters', requireAuth, asyncHandler(async (req, res) => {
-  const userId = req.user.discordId;
+router.get('/user/characters', asyncHandler(async (req, res) => {
+  const userId = req.user?.discordId;
   
   const regularCharacters = await Character.find({ userId }).lean();
   const modCharacters = await ModCharacter.find({ userId }).lean();
