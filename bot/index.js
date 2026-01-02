@@ -676,24 +676,25 @@ async function initializeClient() {
     // --------------------------------------------------------------------------
     // Raid Thread Slow Mode Management
     // --------------------------------------------------------------------------
-    // Enable slow mode on raid threads when they're created
+    // Enable slow mode on raid and wave threads when they're created
     client.on("threadCreate", async (thread) => {
       try {
-        // Check if this thread is associated with a raid (thread name contains raid indicators)
+        // Check if this thread is associated with a raid or wave (thread name contains indicators)
         const threadName = thread.name.toLowerCase();
-        const isRaidThread = threadName.includes('🛡️') || 
-                             threadName.includes('raid') || 
-                             threadName.includes('rudania') || 
-                             threadName.includes('inariko') || 
-                             threadName.includes('vhintl');
+        const isWaveThread = threadName.includes('🌊') || threadName.includes('wave');
+        const isRaidThread = threadName.includes('🛡️') || threadName.includes('raid');
         
-        if (isRaidThread) {
-          // Enable 10-second slow mode on the thread
+        if (isWaveThread) {
+          // Enable 20-second slow mode on wave threads
+          await thread.setRateLimitPerUser(20);
+          console.log(`[index.js]: ⏰ Enabled 20-second slow mode on wave thread: ${thread.name} (${thread.id})`);
+        } else if (isRaidThread) {
+          // Enable 10-second slow mode on raid threads
           await thread.setRateLimitPerUser(10);
           console.log(`[index.js]: ⏰ Enabled 10-second slow mode on raid thread: ${thread.name} (${thread.id})`);
         }
       } catch (error) {
-        console.error(`[index.js]: ❌ Error enabling slow mode on raid thread:`, error);
+        console.error(`[index.js]: ❌ Error enabling slow mode on thread:`, error);
       }
     });
 

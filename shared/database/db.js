@@ -1057,7 +1057,9 @@ const fetchItemsByMonster = async (monsterName) => {
                 'Gloom Hands': 'gloomHands',
                 'Boss Bokoblin': 'bossBokoblin',
                 'Moth Gibdo': 'mothGibdo',
-                'Little Frox': 'littleFrox'
+                'Little Frox': 'littleFrox',
+                'Yiga Blademaster': 'yigaBlademaster',
+                'Yiga Footsoldier': 'yigaFootsoldier'
             };
             fieldName = manualMapping[monsterName] || toCamelCase(monsterName);
         }

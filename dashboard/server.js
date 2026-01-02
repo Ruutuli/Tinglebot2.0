@@ -6103,10 +6103,11 @@ function buildCharacterGearClearUpdate(slotKey) {
     throw new Error(`Unsupported gear slot: ${slotKey}`);
   }
 
+  const update = {};
+  update[fieldPath] = null;
+
   return {
-    $unset: {
-      [fieldPath]: ''
-    }
+    $unset: update
   };
 }
 
@@ -6608,6 +6609,9 @@ app.patch('/api/characters/:characterId/gear', async (req, res) => {
     await Character.updateOne({ _id: character._id }, gearUpdate);
 
     const refreshedCharacter = await fetchCharacterById(character._id);
+    if (!refreshedCharacter) {
+      return res.status(404).json({ error: 'Character not found after update' });
+    }
 
     res.json({
       success: true,
@@ -6618,6 +6622,8 @@ app.patch('/api/characters/:characterId/gear', async (req, res) => {
     });
   } catch (error) {
     console.error('[server.js]: ❌ Error equipping gear:', error);
+    console.error('[server.js]: Error stack:', error.stack);
+    console.error('[server.js]: Request params:', { characterId: req.params.characterId, slot: req.body?.slot, inventoryId: req.body?.inventoryId });
     res.status(500).json({ error: 'Failed to update gear', details: error.message });
   }
 });

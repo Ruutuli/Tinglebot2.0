@@ -3044,6 +3044,108 @@ const createRaidVictoryEmbed = (monsterName, monsterImage = null) => {
   return embed;
 };
 
+// ------------------- Function: createWaveEmbed -------------------
+// Creates an embed for displaying wave information
+const createWaveEmbed = (wave) => {
+  const { getVillageEmojiByName } = require('../modules/locationsModule');
+  const { capitalizeVillageName } = require('../../shared/utils/stringUtils');
+  const { WAVE_DIFFICULTY_GROUPS } = require('../modules/waveModule');
+  
+  const villageName = capitalizeVillageName(wave.village);
+  const villageEmoji = getVillageEmojiByName(wave.village) || '';
+  const difficultyGroup = WAVE_DIFFICULTY_GROUPS[wave.analytics.difficultyGroup];
+  const difficultyName = difficultyGroup ? difficultyGroup.name : wave.analytics.difficultyGroup;
+  
+  // Get first monster image for thumbnail
+  const firstMonster = wave.monsters[0];
+  const monsterDetails = monsterMapping && monsterMapping[firstMonster.nameMapping]
+    ? monsterMapping[firstMonster.nameMapping]
+    : { image: firstMonster.image };
+  const monsterImage = monsterDetails.image || firstMonster.image;
+
+  const embed = new EmbedBuilder()
+    .setColor('#0099FF')
+    .setTitle('🌊 Monster Wave!')
+    .setDescription(
+      `**A wave of ${wave.analytics.totalMonsters} monsters approaches ${villageName}!**\n` +
+      `*Difficulty: ${difficultyName}*\n\n` +
+      `🌊 **Waves are like raids, but with multiple monsters in sequence!**\n` +
+      `• Fight through all ${wave.analytics.totalMonsters} monsters to win\n` +
+      `• Loot is distributed at the end (only for those who joined at the start)\n` +
+      `• You must be in ${villageName} to participate\n\n` +
+      `</wave:1456463356515979308> to join the fight!\n` +
+      `</item:1379838613067530385> to heal during the wave!`
+    )
+    .addFields(
+      {
+        name: `__Wave Details__`,
+        value: `👹 **Monsters:** ${wave.analytics.totalMonsters}\n⭐ **Difficulty:** ${difficultyName}\n📍 **Location:** ${villageEmoji} ${villageName}`,
+        inline: false
+      },
+      {
+        name: `__Wave ID__`,
+        value: `\`\`\`${wave.waveId}\`\`\``,
+        inline: false
+      }
+    )
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+    .setTimestamp();
+
+  // Add first monster image as thumbnail if available
+  if (monsterImage && monsterImage !== 'No Image' && isValidImageUrl(monsterImage)) {
+    embed.setThumbnail(monsterImage);
+  }
+
+  return embed;
+};
+
+// ------------------- Function: createWaveVictoryEmbed -------------------
+// Creates an embed for when all wave monsters are defeated
+const createWaveVictoryEmbed = (wave) => {
+  const embed = new EmbedBuilder()
+    .setTitle(`🎉 Wave Complete!`)
+    .setDescription(`All **${wave.analytics.totalMonsters} monsters** have been defeated! Processing loot distribution... Please stop rolling! ⏳`)
+    .setColor('#FFD700')
+    .addFields(
+      {
+        name: `__Wave Summary__`,
+        value: `👹 **Monsters Defeated:** ${wave.analytics.totalMonsters}\n👥 **Participants:** ${wave.analytics.participantCount}\n⚔️ **Total Damage:** ${wave.analytics.totalDamage} hearts`,
+        inline: false
+      }
+    )
+    .setFooter({ text: 'Loot processing in progress...' })
+    .setTimestamp()
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+
+  return embed;
+};
+
+// ------------------- Function: createWaveFailureEmbed -------------------
+// Creates an embed for when a wave fails (all participants KO'd)
+const createWaveFailureEmbed = (wave) => {
+  const embed = new EmbedBuilder()
+    .setColor('#FF0000')
+    .setTitle('💥 Wave Failed!')
+    .setDescription(`The wave has been defeated!\n\nAll participants have been knocked out! 💀`)
+    .addFields(
+      {
+        name: `__Wave Summary__`,
+        value: `👹 **Monsters Remaining:** ${wave.monsters.length - wave.defeatedMonsters.length}/${wave.analytics.totalMonsters}\n👥 **Participants:** ${wave.analytics.participantCount}\n⚔️ **Total Damage:** ${wave.analytics.totalDamage} hearts`,
+        inline: false
+      },
+      {
+        name: `__Failure__`,
+        value: `All participants have been knocked out! 💀`,
+        inline: false
+      }
+    )
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+    .setFooter({ text: `Wave ID: ${wave.waveId}` })
+    .setTimestamp();
+
+  return embed;
+};
+
 // ------------------- Function: createDailyRollsResetEmbed -------------------
 // Creates an embed for when a character's daily rolls have been reset
 const createDailyRollsResetEmbed = (characterName, rollTypesList) => {
@@ -3215,6 +3317,9 @@ module.exports = {
  updateBoostRequestEmbed,
  createBoostAppliedEmbed,
  createRaidVictoryEmbed,
+ createWaveEmbed,
+ createWaveVictoryEmbed,
+ createWaveFailureEmbed,
  createDailyRollsResetEmbed,
  createEquippedItemErrorEmbed,
  createWeatherTravelRestrictionEmbed,

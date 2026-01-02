@@ -241,7 +241,24 @@ async function triggerRandomEncounter(channel, selectedVillage) {
     }
 
     // Select a monster above tier 5 from the region.
-    const monster = await getMonstersAboveTierByRegion(5, villageRegion);
+    // Filter out Yiga monsters - they should not appear in regular raids
+    const Monster = require('../../shared/models/MonsterModel');
+    const monsters = await Monster.find({
+      tier: { $gte: 5 },
+      [villageRegion.toLowerCase()]: true,
+      $or: [
+        { species: { $exists: false } },
+        { species: { $ne: 'Yiga' } }
+      ]
+    }).exec();
+    
+    if (!monsters || monsters.length === 0) {
+      console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters (excluding Yiga) found for region: ${villageRegion}`);
+      await channel.send(`❌ **No tier 5+ monsters (excluding Yiga) found in ${villageRegion} region for ${selectedVillage}.**`);
+      return;
+    }
+    
+    const monster = monsters[Math.floor(Math.random() * monsters.length)];
     if (!monster || !monster.name || !monster.tier) {
       console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters found for region: ${villageRegion}`);
       await channel.send(`❌ **No tier 5+ monsters found in ${villageRegion} region for ${selectedVillage}.**`);

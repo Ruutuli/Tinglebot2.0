@@ -7,6 +7,7 @@ const { generateUniqueId } = require('../../shared/utils/uniqueIdUtils');
 const { calculateFinalValue, calculateRaidFinalValue } = require('./rngModule');
 const { EmbedBuilder } = require('discord.js');
 const { 
+  getEncounterOutcome,
   getTier5EncounterOutcome,
   getTier6EncounterOutcome,
   getTier7EncounterOutcome,
@@ -110,27 +111,109 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       // Create a copy of the monster to avoid modifying the shared raid monster object
       const monsterCopy = { ...monster };
       
-      switch (monster.tier) {
-      case 5:
-        outcome = await getTier5EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-        break;
-      case 6:
-        outcome = await getTier6EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-        break;
-      case 7:
-        outcome = await getTier7EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-        break;
-      case 8:
-        outcome = await getTier8EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-        break;
-      case 9:
-        outcome = await getTier9EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-        break;
-      case 10:
-        outcome = await getTier10EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-        break;
-      default:
-        throw new Error(`Unsupported monster tier for raid: ${monster.tier}`);
+      // Handle tiers 1-4 using getEncounterOutcome, tiers 5-10 using tier-specific functions
+      if (monster.tier <= 4) {
+        const encounterOutcome = await getEncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        
+        // getEncounterOutcome already saved character damage via useHearts
+        // Reload character to get updated hearts
+        const { fetchCharacterById } = require('../../shared/database/db');
+        const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
+        if (updatedCharacter) {
+          Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
+        }
+        
+        // Convert outcome format: getEncounterOutcome uses 'hearts' for character damage,
+        // but we need 'hearts' for monster damage in raid/wave context
+        const characterDamage = encounterOutcome.hearts || 0;
+        const currentMonsterHearts = monster.currentHearts || monster.maxHearts || monster.hearts || 0;
+        let monsterDamage = 0;
+        let newMonsterHearts = currentMonsterHearts;
+        let outcomeText = '';
+        
+        // Calculate monster damage incrementally (like tiers 5+)
+        // For raids/waves, we want incremental damage, not instant defeats
+        // Generate flavor text based on the outcome
+        const { generateDamageDealtMessage, generateDamageMessage } = require('./flavorTextModule');
+        
+        // Calculate incremental damage based on roll value (similar to tier 5+)
+        // Use ranges similar to tier 5 but scaled for lower tiers
+        if (defenseSuccess) {
+          // Defense success: deal 2 hearts (dodge and counter)
+          monsterDamage = Math.min(2, currentMonsterHearts);
+          newMonsterHearts = Math.max(0, currentMonsterHearts - monsterDamage);
+          outcomeText = `💥💀 The monster ${monster.name} attacks! But ${character.name} dodges! 💨\n${generateDamageDealtMessage(monsterDamage)}`;
+        } else if (characterDamage > 0) {
+          // Character takes damage - monster may deal some damage back
+          if (adjustedRandomValue >= 60) {
+            // Medium-high roll: deal 1 heart to monster even when taking damage
+            monsterDamage = Math.min(1, currentMonsterHearts);
+            newMonsterHearts = Math.max(0, currentMonsterHearts - monsterDamage);
+            outcomeText = `${generateDamageMessage(characterDamage)}\n${generateDamageDealtMessage(monsterDamage)}`;
+          } else {
+            // Low roll: no damage to monster (character takes damage)
+            monsterDamage = 0;
+            outcomeText = generateDamageMessage(characterDamage);
+          }
+        } else if (adjustedRandomValue >= 80) {
+          // High roll: deal 2 hearts
+          monsterDamage = Math.min(2, currentMonsterHearts);
+          newMonsterHearts = Math.max(0, currentMonsterHearts - monsterDamage);
+          outcomeText = generateDamageDealtMessage(monsterDamage);
+        } else if (adjustedRandomValue >= 60) {
+          // Medium-high roll: deal 1 heart
+          monsterDamage = Math.min(1, currentMonsterHearts);
+          newMonsterHearts = Math.max(0, currentMonsterHearts - monsterDamage);
+          outcomeText = generateDamageDealtMessage(monsterDamage);
+        } else {
+          // Low roll: no damage dealt by either side (similar to tier 5+ "dodge" outcome)
+          monsterDamage = 0;
+          outcomeText = `⚔️🏹 ${character.name} attacks! But the monster dodges. 💫`;
+        }
+        
+        // Format outcome to match tier 5+ format
+        // Mark that damage was already saved so processRaidBattle doesn't save again
+        outcome = {
+          result: outcomeText,
+          hearts: monsterDamage, // Damage dealt to monster (used for tracking)
+          playerHearts: {
+            current: character.currentHearts, // Already updated by getEncounterOutcome
+            max: character.maxHearts
+          },
+          monsterHearts: {
+            current: newMonsterHearts,
+            max: monster.maxHearts || monster.hearts
+          },
+          damageValue: damageValue,
+          adjustedRandomValue: adjustedRandomValue,
+          attackSuccess: attackSuccess,
+          defenseSuccess: defenseSuccess,
+          canLoot: newMonsterHearts <= 0, // Can loot when monster is defeated
+          damageAlreadySaved: true // Flag to prevent double-saving damage
+        };
+      } else {
+        switch (monster.tier) {
+        case 5:
+          outcome = await getTier5EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+          break;
+        case 6:
+          outcome = await getTier6EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+          break;
+        case 7:
+          outcome = await getTier7EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+          break;
+        case 8:
+          outcome = await getTier8EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+          break;
+        case 9:
+          outcome = await getTier9EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+          break;
+        case 10:
+          outcome = await getTier10EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+          break;
+        default:
+          throw new Error(`Unsupported monster tier for raid: ${monster.tier}`);
+        }
       }
     }
 
@@ -217,13 +300,17 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     }
 
     // ------------------- Apply Entertainer Boost (Damage Reduction) -------------------
-    // Calculate actual damage taken (hearts were modified in memory by encounter module, but not saved to DB)
-    // In raid context, the encounter module modifies character.currentHearts in memory but doesn't call useHearts
+    // Calculate actual damage taken
+    // For tiers 1-4, getEncounterOutcome already saved damage, so we skip damage saving
+    // For tiers 5+, the encounter module modifies character.currentHearts in memory but doesn't call useHearts
     const characterDamage = characterHeartsBefore - (outcome.playerHearts?.current || character.currentHearts);
     let finalDamage = characterDamage;
+    const damageAlreadySaved = outcome.damageAlreadySaved || false;
     
     // Apply boost damage reduction using unified boost system BEFORE saving to database
-    if (character.boostedBy && characterDamage > 0) {
+    // Note: For tiers 1-4, damage was already saved by getEncounterOutcome, so boosts can't reduce it
+    // This is acceptable since tiers 1-4 are simpler encounters
+    if (character.boostedBy && characterDamage > 0 && !damageAlreadySaved) {
       const { applyLootingDamageBoost } = require('./boostIntegration');
       const monsterTier = monster.tier || 5;
       finalDamage = await applyLootingDamageBoost(character.name, characterDamage, monsterTier);
@@ -235,9 +322,10 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     }
 
     // ------------------- Apply Damage to Database -------------------
-    // In raid context, the encounter module doesn't save hearts to DB, so we need to do it here
+    // For tiers 1-4, damage was already saved by getEncounterOutcome, so skip saving here
+    // For tiers 5+, the encounter module doesn't save hearts to DB, so we need to do it here
     // Apply the final damage (after boost reduction) to the database
-    if (finalDamage > 0) {
+    if (finalDamage > 0 && !damageAlreadySaved) {
       const { useHearts } = require('./characterStatsModule');
       const { createEncounterContext } = require('./encounterModule');
       // Calculate final hearts after damage
@@ -1183,6 +1271,7 @@ module.exports = {
   startRaid,
   joinRaid,
   processRaidTurn,
+  processRaidBattle,
   checkRaidExpiration,
   createRaidEmbed,
   createRaidThread,

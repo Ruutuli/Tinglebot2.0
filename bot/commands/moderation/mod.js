@@ -122,6 +122,12 @@ const {
 } = require('../../modules/raidModule');
 
 const {
+  startWave,
+  createWaveThread,
+  WAVE_DIFFICULTY_GROUPS
+} = require('../../modules/waveModule');
+
+const {
   generateBlightRollFlavorText,
   generateBlightVictoryFlavorText,
   generateBlightLootFlavorText,
@@ -1048,6 +1054,56 @@ const modCommand = new SlashCommandBuilder()
         .setAutocomplete(true)
     )
 )
+// ------------------- Subcommand: wavestart -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('wavestart')
+    .setDescription('🌊 Start a new monster wave')
+    .addStringOption(opt =>
+      opt
+        .setName('village')
+        .setDescription('Village for the wave')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Rudania', value: 'rudania' },
+          { name: 'Inariko', value: 'inariko' },
+          { name: 'Vhintl', value: 'vhintl' }
+        )
+    )
+    .addIntegerOption(opt =>
+      opt
+        .setName('monstercount')
+        .setDescription('Number of monsters (5-15)')
+        .setRequired(true)
+        .setMinValue(5)
+        .setMaxValue(15)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName('difficulty')
+        .setDescription('Difficulty group')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Beginner (Tiers 1-4)', value: 'beginner' },
+          { name: 'Beginner+ (Tiers 1-5)', value: 'beginner+' },
+          { name: 'Easy (Tiers 2-5)', value: 'easy' },
+          { name: 'Easy+ (Tiers 2-6)', value: 'easy+' },
+          { name: 'Mixed (Low) (Tiers 2-7)', value: 'mixed-low' },
+          { name: 'Mixed (Medium) (Tiers 2-10)', value: 'mixed-medium' },
+          { name: 'Intermediate (Tiers 3-6)', value: 'intermediate' },
+          { name: 'Intermediate+ (Tiers 3-8)', value: 'intermediate+' },
+          { name: 'Advanced (Tiers 4-7)', value: 'advanced' },
+          { name: 'Advanced+ (Tiers 4-9)', value: 'advanced+' },
+          { name: 'Tier 5 Boss (1 T5 + rest T1-4)', value: 'tier5-boss' },
+          { name: 'Tier 6 Boss (1 T6 + rest T1-4)', value: 'tier6-boss' },
+          { name: 'Tier 7 Boss (1 T7 + rest T1-4)', value: 'tier7-boss' },
+          { name: 'Tier 8 Boss (1 T8 + rest T1-4)', value: 'tier8-boss' },
+          { name: 'Tier 9 Boss (1 T9 + rest T1-4)', value: 'tier9-boss' },
+          { name: 'Tier 10 Boss (1 T10 + rest T1-4)', value: 'tier10-boss' },
+          { name: 'Yiga', value: 'yiga' }
+        )
+    )
+)
 // ------------------- Subcommand: blight -------------------
 .addSubcommand(sub =>
   sub
@@ -1318,6 +1374,8 @@ async function execute(interaction) {
         return await handleShopAdd(interaction);
     } else if (subcommand === 'trigger-raid') {
         return await handleTriggerRaid(interaction);
+    } else if (subcommand === 'wavestart') {
+        return await handleWaveStart(interaction);
     } else if (subcommand === 'blight') {
         return await handleBlight(interaction);
     } else if (subcommand === 'debuff') {
@@ -3162,6 +3220,128 @@ async function handleShopAdd(interaction) {
   }
 }
 
+// ------------------- Function: handleWaveStart -------------------
+// Starts a new monster wave
+async function handleWaveStart(interaction) {
+  const village = interaction.options.getString('village');
+  const monsterCount = interaction.options.getInteger('monstercount');
+  const difficultyGroup = interaction.options.getString('difficulty');
+
+  try {
+    // Capitalize village name
+    const capitalizedVillage = village.charAt(0).toUpperCase() + village.slice(1);
+    
+    // Validate difficulty group
+    if (!WAVE_DIFFICULTY_GROUPS[difficultyGroup]) {
+      return interaction.editReply({ content: `❌ **Invalid difficulty group: ${difficultyGroup}**` });
+    }
+
+    // ------------------- Determine Correct Channel -------------------
+    // Map village names to their respective town hall channel IDs
+    const villageChannelMap = {
+      'rudania': process.env.RUDANIA_TOWNHALL,
+      'inariko': process.env.INARIKO_TOWNHALL,
+      'vhintl': process.env.VHINTL_TOWNHALL
+    };
+    const targetChannelId = villageChannelMap[village.toLowerCase()];
+    
+    if (!targetChannelId) {
+      return interaction.editReply({ content: `❌ **Invalid village: ${capitalizedVillage}**` });
+    }
+
+    // Get the target channel
+    const targetChannel = interaction.client.channels.cache.get(targetChannelId);
+    if (!targetChannel) {
+      return interaction.editReply({ content: `❌ **Could not find town hall channel for ${capitalizedVillage}.**` });
+    }
+
+    console.log(`[mod.js]: 🌊 Starting wave for ${capitalizedVillage} - ${monsterCount} monsters (${difficultyGroup})`);
+    console.log(`[mod.js]: 📍 Target channel ID: ${targetChannelId}`);
+    console.log(`[mod.js]: 📍 Target channel name: ${targetChannel.name}`);
+    
+    // Create a modified interaction object that points to the correct channel
+    const modifiedInteraction = {
+      ...interaction,
+      channel: targetChannel,
+      client: interaction.client,
+      user: interaction.user,
+      guild: interaction.guild,
+      // Add the followUp method to prevent errors
+      followUp: async (options) => {
+        return await targetChannel.send(options);
+      }
+    };
+    
+    // Start the wave
+    const { waveId, waveData } = await startWave(capitalizedVillage, monsterCount, difficultyGroup, modifiedInteraction);
+
+    // Create announcement embed (will be created in embed functions)
+    const { createWaveEmbed } = require('../../embeds/embeds.js');
+    const embed = createWaveEmbed(waveData);
+    
+    // Send the wave announcement
+    console.log(`[mod.js]: 📤 Sending wave announcement message to channel ${targetChannel.id}...`);
+    const waveMessage = await targetChannel.send({
+      content: `🌊 **MONSTER WAVE TRIGGERED!** 🌊`,
+      embeds: [embed]
+    });
+    console.log(`[mod.js]: ✅ Wave announcement message sent - Message ID: ${waveMessage.id}`);
+
+    // Fetch the message to ensure it's fully resolved (sometimes needed for thread creation)
+    let messageForThread = waveMessage;
+    try {
+      const fetchedMessage = await targetChannel.messages.fetch(waveMessage.id);
+      if (fetchedMessage) {
+        messageForThread = fetchedMessage;
+        console.log(`[mod.js]: ✅ Fetched wave message for thread creation`);
+      }
+    } catch (fetchError) {
+      console.warn(`[mod.js]: ⚠️ Could not fetch message (using original): ${fetchError.message}`);
+      // Continue with original message
+    }
+
+    // Create thread for the wave
+    console.log(`[mod.js]: 🧵 Creating thread from message ${messageForThread.id}...`);
+    const thread = await createWaveThread(messageForThread, waveData);
+    
+    if (thread) {
+      console.log(`[mod.js]: 💬 Wave thread created: ${thread.name} (${thread.id})`);
+    } else {
+      console.warn(`[mod.js]: ⚠️ Failed to create wave thread for ${waveId}`);
+    }
+    
+    // Update wave with channel ID (thread and message IDs already set by createWaveThread)
+    waveData.channelId = targetChannel.id;
+    await waveData.save();
+
+    console.log(`[mod.js]: ✅ Wave started successfully in ${capitalizedVillage} town hall`);
+    
+    // Send confirmation message to the mod
+    return interaction.editReply({ 
+      content: `✅ **Wave started successfully!** The wave embed has been posted in ${capitalizedVillage} town hall.\n\n**Wave ID:** \`${waveId}\`\n**Monsters:** ${monsterCount}\n**Difficulty:** ${WAVE_DIFFICULTY_GROUPS[difficultyGroup].name}`,
+      ephemeral: true
+    });
+
+  } catch (error) {
+    handleInteractionError(error, 'mod.js', {
+      commandName: '/mod wavestart',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      options: {
+        village: village,
+        monsterCount: monsterCount,
+        difficultyGroup: difficultyGroup
+      }
+    });
+    
+    console.error('[mod.js]: Error starting wave:', error);
+    return interaction.editReply({ 
+      content: `⚠️ **An error occurred while starting the wave:** ${error.message}`,
+      ephemeral: true
+    });
+  }
+}
+
 // ------------------- Function: handleBlightOverride -------------------
 // Admin override for blight healing in emergencies
 async function handleBlightOverride(interaction) {
@@ -3471,13 +3651,32 @@ async function handleTriggerRaid(interaction) {
       if (monster.tier < 5) {
         return interaction.editReply({ content: `❌ **${monster.name} is tier ${monster.tier}. Only tier 5+ monsters can be used for triggered raids.**` });
       }
+      // Check if monster is Yiga - Yiga monsters should not be used in regular raids
+      if (monster.species && monster.species.toLowerCase() === 'yiga') {
+        return interaction.editReply({ content: `❌ **${monster.name} is a Yiga monster. Yiga monsters cannot be used in regular raids.**` });
+      }
       // Check if monster is from the correct region
       if (!isMonsterInRegion(monster, villageRegion)) {
         return interaction.editReply({ content: `❌ **${monster.name} is not found in ${villageRegion} region, but you're trying to trigger a raid in ${capitalizedVillage}.**` });
       }
     } else {
       // Get a random monster from the village's region (tier 5 and above only)
-      monster = await getMonstersAboveTierByRegion(5, villageRegion);
+      // Filter out Yiga monsters - they should not appear in regular raids
+      const Monster = require('../../../shared/models/MonsterModel');
+      const monsters = await Monster.find({
+        tier: { $gte: 5 },
+        [villageRegion.toLowerCase()]: true,
+        $or: [
+          { species: { $exists: false } },
+          { species: { $ne: 'Yiga' } }
+        ]
+      }).exec();
+      
+      if (!monsters || monsters.length === 0) {
+        return interaction.editReply({ content: `❌ **No tier 5+ monsters (excluding Yiga) found in ${villageRegion} region for ${capitalizedVillage}.**` });
+      }
+      
+      monster = monsters[Math.floor(Math.random() * monsters.length)];
       if (!monster || !monster.name || !monster.tier) {
         return interaction.editReply({ content: `❌ **No tier 5+ monsters found in ${villageRegion} region for ${capitalizedVillage}.**` });
       }

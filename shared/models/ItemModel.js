@@ -227,6 +227,8 @@ const ItemSchema = new Schema(
     bossBokoblin: { type: Boolean, default: false },
     mothGibdo: { type: Boolean, default: false },
     littleFrox: { type: Boolean, default: false },
+    yigaBlademaster: { type: Boolean, default: false },
+    yigaFootsoldier: { type: Boolean, default: false },
 
     // Normal-tier variants for monsters (compatibility)
     normalBokoblin: { type: Boolean, default: false },

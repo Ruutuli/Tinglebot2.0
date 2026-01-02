@@ -128,6 +128,8 @@ const monsterMapping = {
   bossBokoblin: { name: 'Boss Bokoblin', image: 'https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Bokoblin_Boss.png' },
   mothGibdo: { name: 'Moth Gibdo', image: 'https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Gibdo_Moth.png' },
   littleFrox: { name: 'Little Frox', image: 'https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Frox.png' },
+  yigaBlademaster: { name: 'Yiga Blademaster', image: 'https://storage.googleapis.com/tinglebot/Monsters/Monsters_Yiga_Blademaster.png' },
+  yigaFootsoldier: { name: 'Yiga Footsoldier', image: 'https://storage.googleapis.com/tinglebot/Monsters/Monsters_Yiga_Footsoldier.png' },
 };
 
 module.exports = mongoose.model('Monster', MonsterSchema);

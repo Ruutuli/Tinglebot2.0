@@ -160,6 +160,61 @@ const COMBAT_MESSAGES = {
       ],
     },
   },
+  damageDealt: {
+    1: [
+      "⚔️💥 Your strike lands! The monster takes 💙 1 heart of damage!",
+      "🗡️✨ A clean hit! You dealt 💙 1 heart of damage!",
+      "⚔️🔥 Your attack connects! The monster loses 💙 1 heart!",
+      "💫⚔️ A solid strike! You dealt 💙 1 heart of damage!",
+      "⚔️💪 Your weapon finds its mark! The monster takes 💙 1 heart!",
+      "🎯⚔️ A precise blow! You dealt 💙 1 heart of damage!",
+    ],
+    2: [
+      "⚔️💥 A powerful strike! The monster takes 💙💙 2 hearts of damage!",
+      "🗡️🔥 Your attack hits hard! You dealt 💙💙 2 hearts of damage!",
+      "⚔️💫 A devastating blow! The monster loses 💙💙 2 hearts!",
+      "💪⚔️ Your strength shows! You dealt 💙💙 2 hearts of damage!",
+      "⚔️🌟 A fierce attack! The monster takes 💙💙 2 hearts!",
+      "🗡️💥 Your strike lands true! You dealt 💙💙 2 hearts of damage!",
+    ],
+    3: [
+      "⚔️💥 An overwhelming strike! The monster takes 💙💙💙 3 hearts of damage!",
+      "🗡️🔥 A crushing blow! You dealt 💙💙💙 3 hearts of damage!",
+      "⚔️💫 The monster reels from your attack! It loses 💙💙💙 3 hearts!",
+      "💪⚔️ Your might is felt! You dealt 💙💙💙 3 hearts of damage!",
+      "⚔️🌟 A brutal assault! The monster takes 💙💙💙 3 hearts!",
+      "🗡️💥 The monster staggers! You dealt 💙💙💙 3 hearts of damage!",
+    ],
+    4: [
+      "⚔️💥 A cataclysmic strike! The monster takes 💙💙💙💙 4 hearts of damage!",
+      "🗡️🔥 An earth-shattering blow! You dealt 💙💙💙💙 4 hearts of damage!",
+      "⚔️💫 The monster is battered! It loses 💙💙💙💙 4 hearts!",
+      "💪⚔️ Your power overwhelms! You dealt 💙💙💙💙 4 hearts of damage!",
+      "⚔️🌟 A devastating attack! The monster takes 💙💙💙💙 4 hearts!",
+      "🗡️💥 The monster can barely stand! You dealt 💙💙💙💙 4 hearts of damage!",
+    ],
+    5: [
+      "⚔️💥 An obliterating strike! The monster takes 💙💙💙💙💙 5 hearts of damage!",
+      "🗡️🔥 A world-ending blow! You dealt 💙💙💙💙💙 5 hearts of damage!",
+      "⚔️💫 The monster is overwhelmed! It loses 💙💙💙💙💙 5 hearts!",
+      "💪⚔️ Your fury knows no bounds! You dealt 💙💙💙💙💙 5 hearts of damage!",
+      "⚔️🌟 A catastrophic attack! The monster takes 💙💙💙💙💙 5 hearts!",
+      "🗡️💥 The monster crumbles! You dealt 💙💙💙💙💙 5 hearts of damage!",
+    ],
+    6: [
+      "⚔️💥 An annihilation-level strike! The monster takes 💙💙💙💙💙💙 6 hearts of damage!",
+      "🗡️🔥 A universe-shattering blow! You dealt 💙💙💙💙💙💙 6 hearts of damage!",
+      "⚔️💫 The monster is nearly destroyed! It loses 💙💙💙💙💙💙 6 hearts!",
+      "💪⚔️ Your power defies reality! You dealt 💙💙💙💙💙💙 6 hearts of damage!",
+      "⚔️🌟 An apocalyptic attack! The monster takes 💙💙💙💙💙💙 6 hearts!",
+      "🗡️💥 The monster's existence trembles! You dealt 💙💙💙💙💙💙 6 hearts of damage!",
+    ],
+    default: [
+      "⚔️💥 Your attack lands! The monster takes damage!",
+      "🗡️✨ You strike the monster!",
+      "⚔️🔥 Your weapon finds its target!",
+    ],
+  },
   victory: {
     normal: [
       "😓⚔️ You barely scraped through, but it's a win!",
@@ -304,6 +359,12 @@ const generateHelpWantedDamageMessage = (damage) => {
   
   const baseMessage = getRandomMessage(baseMessages[damage] || baseMessages[1]);
   return `${baseMessage} ${victoryEnding}`;
+};
+
+// Damage Dealt Messages
+const generateDamageDealtMessage = (damage) => {
+  const messages = COMBAT_MESSAGES.damageDealt[damage] || COMBAT_MESSAGES.damageDealt.default;
+  return getRandomMessage(messages);
 };
 
 // Victory Messages
@@ -1288,6 +1349,7 @@ module.exports = {
   // Damage
   generateDamageMessage,
   generateHelpWantedDamageMessage,
+  generateDamageDealtMessage,
   // Victory
   generateVictoryMessage,
   generateModCharacterVictoryMessage,

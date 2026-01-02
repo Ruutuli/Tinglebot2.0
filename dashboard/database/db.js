@@ -935,7 +935,9 @@ const fetchItemsByMonster = async (monsterName) => {
         // Map monster names to their corresponding item field names
         const monsterToFieldMap = {
             'Frox': 'littleFrox',
-            'Little Frox': 'littleFrox'
+            'Little Frox': 'littleFrox',
+            'Yiga Blademaster': 'yigaBlademaster',
+            'Yiga Footsoldier': 'yigaFootsoldier'
         };
         
         const fieldName = monsterToFieldMap[monsterName] || monsterName;

@@ -244,14 +244,6 @@ async function handleAutocomplete(interaction) {
             return;
         }
 
-        // Log autocomplete request for debugging (non-blocking)
-        try {
-            logger.info('AUTOCOMPLETE', `Handling autocomplete for command: ${commandName}, option: ${focusedOption?.name || 'unknown'}, userId: ${interaction.user?.id || 'unknown'}`);
-        } catch (logError) {
-            // Ignore logging errors, don't block autocomplete
-            console.error('[handleAutocomplete]: Logging error (non-fatal):', logError);
-        }
-
         // Route to internal handler
         await handleAutocompleteInternal(interaction, commandName, focusedOption);
     } catch (error) {
@@ -569,6 +561,15 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               await handleRaidIdAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "charactername") {
               await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "raid");
+            }
+            break;
+
+          // ------------------- Wave Command -------------------
+          case "wave":
+            if (focusedOption.name === "id") {
+              await handleWaveIdAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "charactername") {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "wave");
             }
             break;
 
@@ -5769,19 +5770,6 @@ async function handleModCharacterNameAutocomplete(interaction, focusedOption) {
   }
 }
 
-// ------------------- Mod Character Functions -------------------
-handleModCharacterJobAutocomplete,
-handleModCharacterNameAutocomplete,
-
-// ------------------- Raid Functions -------------------
-handleRaidIdAutocomplete,
-
-// ------------------- Table Roll Functions -------------------
-handleTableRollNameAutocomplete,
-
-// ------------------- Submit Functions -------------------
-handleSubmitCollabAutocomplete,
-
 module.exports = {
  handleAutocomplete,
  handleEconomyAutocomplete,
@@ -6021,6 +6009,53 @@ async function handleRaidIdAutocomplete(interaction, focusedOption) {
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleRaidIdAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleWaveIdAutocomplete -------------------
+async function handleWaveIdAutocomplete(interaction, focusedOption) {
+  try {
+    // Import the Wave model
+    const Wave = require('../../shared/models/WaveModel');
+    
+    // Get the search query from the focused option
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    
+    // Find active waves
+    const activeWaves = await Wave.find({ 
+      status: 'active'
+    }).select('waveId village currentMonster.name currentMonster.tier currentMonsterIndex monsters createdAt').limit(25);
+    
+    if (!activeWaves || activeWaves.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Map waves to autocomplete choices
+    const choices = activeWaves.map((wave) => {
+      const villageName = wave.village;
+      const monsterName = wave.currentMonster.name;
+      const tier = wave.currentMonster.tier;
+      const waveId = wave.waveId;
+      const currentMonsterNumber = wave.currentMonsterIndex + 1;
+      const totalMonsters = wave.monsters.length;
+      
+      return {
+        name: `${waveId} | ${villageName} - ${monsterName} (Monster ${currentMonsterNumber} of ${totalMonsters})`,
+        value: waveId,
+      };
+    });
+
+    // Filter based on user input (search by wave ID, monster name, or village)
+    const filteredChoices = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchQuery) ||
+      choice.value.toLowerCase().includes(searchQuery)
+    );
+
+    await interaction.respond(filteredChoices.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleWaveIdAutocomplete]: Error:", error);
     await safeRespondWithError(interaction);
   }
 }
