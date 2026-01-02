@@ -103,6 +103,7 @@ function getBloodMoonCycleDay(hyruleanDate) {
 
 // ------------------- Export the functions -------------------
 module.exports = {
+    hyruleanCalendar,
     bloodmoonDates,
     getHyruleanMonth,
     isBloodmoon,

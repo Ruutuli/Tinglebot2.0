@@ -15,6 +15,8 @@
    - Enhanced robustness with null checks and fallbacks
 ============================================================================ */
 
+import { updateActiveNavState, updateBreadcrumb } from './modules/navigation.js';
+
 // ============================================================================
 // ------------------- Centralized Relationship Configuration -------------------
 // ============================================================================
@@ -236,24 +238,10 @@ async function showRelationshipsSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'relationships-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('relationships-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Relationships';
-  }
+  updateBreadcrumb('Relationships');
   
   try {
     // Check if user is authenticated
@@ -281,11 +269,22 @@ async function showRelationshipsSection() {
 async function checkAuthentication() {
   try {
     console.log('🔐 Fetching auth status...');
-    const response = await fetch('/api/auth/status');
+    const response = await fetch('/api/user', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
     console.log('🔐 Auth status response:', response.status, response.statusText);
-    const data = await response.json();
-    console.log('🔐 Auth status data:', data);
-    return data.authenticated;
+    if (response.ok) {
+      const data = await response.json();
+      console.log('🔐 Auth status data:', data);
+      return data.isAuthenticated || false;
+    } else {
+      console.log('🔐 Auth response not OK, user not authenticated');
+      return false;
+    }
   } catch (error) {
     console.error('❌ Error checking authentication:', error);
     return false;

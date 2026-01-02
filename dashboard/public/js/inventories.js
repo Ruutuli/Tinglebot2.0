@@ -1,4 +1,4 @@
-import { checkUserAuthStatus, isAuthenticated as authState, isAdminUser } from './auth.js';
+import { checkUserAuthStatus, isAdminUser } from './auth.js';
 
 const inventoryState = {
   loading: false,
@@ -579,11 +579,11 @@ function markInventoryEquippedFromGear(normalizedInventory = [], gear = {}) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await checkUserAuthStatus();
-  canManageInventory = Boolean(isAdminUser);
+  const { isAuthenticated } = await checkUserAuthStatus();
+  canManageInventory = Boolean(isAdminUser());
 
-  if (!authState) {
-    window.location.href = '/login?returnTo=/inventories';
+  if (!isAuthenticated) {
+    window.location.href = '/auth/discord';
     return;
   }
 
@@ -725,7 +725,7 @@ async function loadInventories(showLoader = true) {
     const response = await fetch('/api/inventories/me', { credentials: 'include' });
 
     if (response.status === 401) {
-      window.location.href = '/login?returnTo=/inventories';
+      window.location.href = '/auth/discord';
       return;
     }
 

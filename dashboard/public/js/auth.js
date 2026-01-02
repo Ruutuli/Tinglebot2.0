@@ -7,12 +7,40 @@ export let currentUser = null;
 // Authentication status
 export let isAuthenticated = false;
 
+// Admin status
+export let isAdmin = false;
+
 // Update user menu UI based on authentication status
 export function updateUserMenu() {
   const usernameEl = document.getElementById('username');
   const userInfoEl = document.getElementById('user-info');
   const guestInfoEl = document.getElementById('guest-info');
   const userDropdown = document.getElementById('user-dropdown');
+  const adminAreaNavItem = document.getElementById('admin-area-nav-item');
+  const inventoriesNavItem = document.getElementById('inventories-nav-item');
+  
+  // Show/hide admin navigation based on admin status
+  if (adminAreaNavItem) {
+    const shouldShow = isAuthenticated && isAdmin;
+    adminAreaNavItem.style.display = shouldShow ? 'block' : 'none';
+    console.log('[auth.js] updateUserMenu - Admin nav:', {
+      isAuthenticated,
+      isAdmin,
+      shouldShow,
+      display: adminAreaNavItem.style.display
+    });
+  } else {
+    console.warn('[auth.js] updateUserMenu - Admin nav item not found in DOM');
+  }
+  
+  // Show/hide inventories navigation based on authentication status
+  if (inventoriesNavItem) {
+    inventoriesNavItem.style.display = isAuthenticated ? 'block' : 'none';
+    console.log('[auth.js] updateUserMenu - Inventories nav:', {
+      isAuthenticated,
+      display: inventoriesNavItem.style.display
+    });
+  }
   
   if (isAuthenticated && currentUser) {
     // Update username
@@ -112,18 +140,40 @@ export async function checkUserAuthStatus() {
       const data = await response.json();
       isAuthenticated = data.isAuthenticated || false;
       currentUser = data.user || null;
+      isAdmin = data.isAdmin || false;
+      
+      console.log('[auth.js] Auth status check:', {
+        isAuthenticated,
+        userId: currentUser?.discordId,
+        isAdmin,
+        adminFromAPI: data.isAdmin
+      });
     } else {
+      console.warn('[auth.js] Auth check failed with status:', response.status);
       isAuthenticated = false;
       currentUser = null;
+      isAdmin = false;
     }
   } catch (error) {
     console.warn('[auth.js]: Failed to check auth status:', error);
     isAuthenticated = false;
     currentUser = null;
+    isAdmin = false;
   }
   
   // Update UI after checking auth status
   updateUserMenu();
+  
+  // Log admin nav item state for debugging
+  const adminAreaNavItem = document.getElementById('admin-area-nav-item');
+  if (adminAreaNavItem) {
+    console.log('[auth.js] Admin nav item visibility:', {
+      display: adminAreaNavItem.style.display,
+      isAuthenticated,
+      isAdmin,
+      shouldShow: isAuthenticated && isAdmin
+    });
+  }
   
   return { isAuthenticated, currentUser };
 }
@@ -143,11 +193,9 @@ window.redirectToLogin = function() {
   window.location.href = '/auth/discord';
 };
 
-// Check if current user is an admin (placeholder - implement based on your admin logic)
+// Check if current user is an admin
 export function isAdminUser() {
-  // TODO: Implement admin check logic if needed
-  // For example: check if user.discordId is in admin list
-  return false;
+  return isAdmin;
 }
 
 // Initialize auth status on module load

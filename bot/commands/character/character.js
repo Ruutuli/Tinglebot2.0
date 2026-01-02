@@ -32,6 +32,7 @@ const {
  createCharacterInventory,
  getCharacterInventoryCollection,
 } = require('../../../shared/database/db');
+const dbConfig = require('../../../shared/config/database');
 const {
  getVillageColorByName,
  getVillageEmojiByName,
@@ -1911,12 +1912,24 @@ async function handleChangeJob(interaction) {
     // ------------------- Reset Vending on Invalid Job -------------------
     console.log('[handleChangeJob] Resetting vending data (non-vendor job)');
     try {
-      const vendingUri = process.env.NODE_ENV === 'production' 
-        ? process.env.MONGODB_VENDING_URI_PROD 
-        : process.env.MONGODB_VENDING_URI_DEV;
+      // Try to get vending URI from shared config first, then fall back to environment variables
+      const vendingUri = dbConfig.vending 
+        || (process.env.NODE_ENV === 'production' 
+            ? process.env.MONGODB_VENDING_URI_PROD 
+            : process.env.MONGODB_VENDING_URI_DEV)
+        || process.env.MONGODB_VENDING_URI;
 
       if (!vendingUri) {
-        throw new Error('MongoDB vending URI is not defined in environment variables');
+        console.warn('[handleChangeJob] Vending URI not configured. Skipping vending reset.');
+        // Reset character vending fields even if database connection fails
+        character.vendingPoints = 0;
+        character.vendingSetup = null;
+        character.vendingSync = false;
+        character.shopLink = null;
+        character.shopPouch = null;
+        character.pouchSize = 0;
+        character.vendorType = null;
+        return; // Exit early without database operations
       }
 
       const vendingClient = new MongoClient(vendingUri);

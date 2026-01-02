@@ -2,6 +2,8 @@
 // Guilds Module - Handles guild information and actions
 // ============================================================================
 
+import { updateActiveNavState, updateBreadcrumb } from './modules/navigation.js';
+
 // Global variables
 let guildData = null;
 let announcementsData = [];
@@ -359,24 +361,10 @@ function showGuildSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'guilds-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('guilds-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Guilds';
-  }
+  updateBreadcrumb('Guilds');
 }
 
 // ------------------- Function: initGuildPage -------------------

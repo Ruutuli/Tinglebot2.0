@@ -31,6 +31,9 @@ let currentSearch = '';
 let currentSchema = null;
 let editingRecordId = null;
 let allRecords = [];
+let selectedRecordIds = new Set();
+let originalRecordState = null; // Store original record state for conflict detection
+let isDirty = false; // Track if form has unsaved changes
 
 // ============================================================================
 // ------------------- Initialization -------------------
@@ -217,7 +220,7 @@ async function handleModelChange(event) {
   if (!modelName) {
     setElementDisplay('records-container', 'none');
     setElementDisplay('empty-state', 'block');
-    setElementDisplay('create-record-btn', 'none');
+    setElementDisplay('model-action-buttons', 'none');
     currentModel = null;
     return;
   }
@@ -228,7 +231,7 @@ async function handleModelChange(event) {
   currentSearch = '';
   document.getElementById('db-search-input').value = '';
   
-  setElementDisplay('create-record-btn', 'inline-flex');
+  setElementDisplay('model-action-buttons', 'flex');
   
   await Promise.all([
     loadSchema(modelName),
@@ -271,6 +274,12 @@ async function loadRecords(modelName, page = 1, search = '') {
     
     const data = await response.json();
     allRecords = data.records;
+    
+    // Clear selection when loading new records
+    clearSelection();
+    
+    // Clear selection when loading new records
+    clearSelection();
     
     renderRecordsTable(data.records);
     updatePagination(data.pagination);
@@ -333,10 +342,22 @@ function getDisplayFields(record) {
 }
 
 // ------------------- createHeaderRow -------------------
-// Build table header row with actions column and field columns
+// Build table header row with checkbox, actions column and field columns
 //
 function createHeaderRow(displayFields) {
   const headerRow = document.createElement('tr');
+  
+  // Checkbox column header
+  const checkboxHeader = document.createElement('th');
+  checkboxHeader.style.width = '40px';
+  checkboxHeader.style.textAlign = 'center';
+  const selectAllCheckbox = document.createElement('input');
+  selectAllCheckbox.type = 'checkbox';
+  selectAllCheckbox.id = 'select-all-checkbox';
+  selectAllCheckbox.title = 'Select all records on this page';
+  selectAllCheckbox.addEventListener('change', handleSelectAll);
+  checkboxHeader.appendChild(selectAllCheckbox);
+  headerRow.appendChild(checkboxHeader);
   
   const actionsHeader = document.createElement('th');
   actionsHeader.textContent = 'Actions';
@@ -353,13 +374,25 @@ function createHeaderRow(displayFields) {
 }
 
 // ------------------- createDataRow -------------------
-// Build table data row with edit button and field values
+// Build table data row with checkbox, edit button and field values
 //
 function createDataRow(record, displayFields, index) {
   const row = document.createElement('tr');
   row.setAttribute('data-record-id', record._id);
   
   if (index % 2 === 0) row.classList.add('even-row');
+  
+  // Checkbox cell
+  const checkboxCell = document.createElement('td');
+  checkboxCell.style.textAlign = 'center';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'record-checkbox';
+  checkbox.setAttribute('data-record-id', record._id);
+  checkbox.checked = selectedRecordIds.has(String(record._id));
+  checkbox.addEventListener('change', handleRecordSelection);
+  checkboxCell.appendChild(checkbox);
+  row.appendChild(checkboxCell);
   
   row.appendChild(createActionsCell(record));
   
@@ -588,6 +621,13 @@ function hideLoadingModal() {
 //
 async function openEditModal(recordId) {
   
+  // Guard: Ensure currentModel is set
+  if (!currentModel) {
+    console.error('[databaseEditor.js]: ❌ Cannot edit record: no model selected');
+    showNotification('Please select a model first', 'error');
+    return;
+  }
+  
   // Show loading modal
   showLoadingModal();
   
@@ -600,6 +640,13 @@ async function openEditModal(recordId) {
     const record = data.record;
     
     editingRecordId = recordId;
+    
+    // Store original record state for conflict detection (deep clone)
+    originalRecordState = JSON.parse(JSON.stringify(record));
+    
+    // Reset dirty state when opening a record
+    isDirty = false;
+    updateDirtyIndicator();
     
     // For Inventory, show character name and inventory
     let recordName = record.name || record.title || record.itemName || record.species || 'Record';
@@ -650,6 +697,10 @@ async function openCreateModal() {
   try {
     editingRecordId = null;
     
+    // Reset dirty state for new records
+    isDirty = false;
+    updateDirtyIndicator();
+    
     document.getElementById('modal-title').textContent = `Create ${currentModel}`;
     
     document.getElementById('modal-delete-btn').style.display = 'none';
@@ -683,10 +734,18 @@ async function openCreateModal() {
 // ------------------- dbEditorCloseModal -------------------
 // Close the database editor modal and clean up
 //
-function dbEditorCloseModal(e) {
+async function dbEditorCloseModal(e) {
   if (e) {
     e.preventDefault();
     e.stopPropagation();
+  }
+  
+  // Check for unsaved changes
+  if (isDirty) {
+    const shouldClose = await confirmUnsavedChanges();
+    if (!shouldClose) {
+      return; // User cancelled, don't close modal
+    }
   }
   
   // Hide loading modal if still showing
@@ -703,6 +762,9 @@ function dbEditorCloseModal(e) {
   
   // Reset state
   editingRecordId = null;
+  originalRecordState = null;
+  isDirty = false;
+  updateDirtyIndicator();
   
   // Cleanup floating search panels
   document.querySelectorAll('.item-search-panel, .item-search-backdrop').forEach(element => {
@@ -716,6 +778,11 @@ function dbEditorCloseModal(e) {
   if (form) {
     form.reset();
     form.innerHTML = ''; // Clear dynamic content
+  }
+  
+  // Clear auto-generated fields map
+  if (window.autoGeneratedFields) {
+    window.autoGeneratedFields.clear();
   }
 }
 
@@ -1709,6 +1776,12 @@ async function generateForm(record) {
       form.appendChild(fieldGroup);
     }
   }
+  
+  // Initialize auto-generated fields after all fields are rendered
+  setTimeout(() => {
+    updateLocationArrays();
+    updateJobArrays();
+  }, 0);
 }
 
 // ------------------- generateInventoryItemsTable -------------------
@@ -2111,6 +2184,20 @@ async function createFieldGroup(fieldInfo, record) {
   if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA' || input.tagName === 'SELECT') {
     input.id = `field-${fieldName}`;
     input.name = fieldName;
+    
+    // Add event listeners
+    const markDirty = () => {
+      isDirty = true;
+      updateDirtyIndicator();
+      clearFieldError(fieldName);
+    };
+    
+    input.addEventListener('input', markDirty);
+    input.addEventListener('change', () => {
+      markDirty();
+      // Update auto-generated fields if this is a contributing checkbox
+      updateAutoGeneratedFields(fieldName, input);
+    });
   }
   // For containers (like item picker), the id/name are already set internally
   
@@ -2230,6 +2317,387 @@ function getFieldGuidance(fieldType, fieldNameLower) {
     default:
       return '';
   }
+}
+
+// ------------------- updateAutoGeneratedFields -------------------
+// Update auto-generated array fields when contributing checkboxes change
+//
+function updateAutoGeneratedFields(checkboxFieldName, checkboxElement) {
+  if (!window.autoGeneratedFields) return;
+  
+  const fieldNameLower = checkboxFieldName.toLowerCase();
+  
+  // Location fields - check if this field contributes to locations
+  const locationKeywords = ['centralhyrule', 'eldin', 'faron', 'gerudo', 'hebra', 'lanayru', 'pathofscarletleaves', 'leafdewway', 'central', 'hyrule'];
+  if (locationKeywords.some(key => fieldNameLower.includes(key))) {
+    updateLocationArrays();
+    return;
+  }
+  
+  // Job fields - check if this field contributes to jobs
+  const jobKeywords = ['adventurer', 'artist', 'beekeeper', 'blacksmith', 'cook', 'craftsman', 'farmer', 'fisherman', 'forager', 'gravekeeper', 'graveskeeper', 'guard', 'maskmaker', 'rancher', 'herbalist', 'hunter', 'mercenary', 'miner', 'researcher', 'scout', 'weaver', 'witch'];
+  if (jobKeywords.some(key => fieldNameLower.includes(key))) {
+    updateJobArrays();
+    return;
+  }
+  
+  // Check if this is the crafting/gathering/looting checkbox itself
+  if (fieldNameLower === 'crafting' || fieldNameLower === 'gathering' || fieldNameLower === 'looting') {
+    updateJobArrays();
+    // Also update obtain array based on boolean state
+    const checkbox = checkboxElement || document.querySelector(`#field-${checkboxFieldName}`) || document.querySelector(`[name="${checkboxFieldName}"]`);
+    if (checkbox) {
+      const isChecked = checkbox.type === 'select-one' 
+        ? checkbox.value === 'true'
+        : (checkbox.checked === true || checkbox.value === 'true');
+      updateRelatedFields(checkboxFieldName, isChecked);
+    }
+  }
+}
+
+// ------------------- updateLocationArrays -------------------
+// Update all location-related auto-generated arrays
+//
+function updateLocationArrays() {
+  if (!window.autoGeneratedFields) return;
+  
+  const locationMap = {
+    'centralHyrule': 'Central Hyrule',
+    'eldin': 'Eldin',
+    'faron': 'Faron',
+    'gerudo': 'Gerudo',
+    'hebra': 'Hebra',
+    'lanayru': 'Lanayru',
+    'pathOfScarletLeaves': 'Path of Scarlet Leaves',
+    'leafDewWay': 'Leaf Dew Way'
+  };
+  
+  const locations = [];
+  for (const [key, displayName] of Object.entries(locationMap)) {
+    // Try multiple selector patterns
+    const checkbox = document.querySelector(`#field-${key}`) || 
+                     document.querySelector(`[name="${key}"]`) ||
+                     document.querySelector(`[name="field-${key}"]`);
+    if (checkbox) {
+      const isChecked = checkbox.type === 'select-one' 
+        ? checkbox.value === 'true'
+        : (checkbox.checked === true || checkbox.value === 'true');
+      if (isChecked) {
+        locations.push(displayName);
+      }
+    }
+  }
+  
+  // Update locations field (case-insensitive matching)
+  for (const [fieldKey, fieldElement] of window.autoGeneratedFields.entries()) {
+    const fieldKeyLower = fieldKey.toLowerCase();
+    if (fieldKeyLower === 'locations' || fieldKeyLower === 'locationstags') {
+      fieldElement.value = JSON.stringify(locations, null, 2);
+    }
+  }
+}
+
+// ------------------- updateJobArrays -------------------
+// Update all job-related auto-generated arrays
+//
+function updateJobArrays() {
+  if (!window.autoGeneratedFields) return;
+  
+  const jobMap = {
+    'adventurer': 'Adventurer',
+    'artist': 'Artist',
+    'beekeeper': 'Beekeeper',
+    'blacksmith': 'Blacksmith',
+    'cook': 'Cook',
+    'craftsman': 'Craftsman',
+    'farmer': 'Farmer',
+    'fisherman': 'Fisherman',
+    'forager': 'Forager',
+    'gravekeeper': 'Graveskeeper',
+    'guard': 'Guard',
+    'maskMaker': 'Mask Maker',
+    'rancher': 'Rancher',
+    'herbalist': 'Herbalist',
+    'hunter': 'Hunter',
+    'hunterLooting': 'Hunter Looting',
+    'mercenary': 'Mercenary',
+    'miner': 'Miner',
+    'researcher': 'Researcher',
+    'scout': 'Scout',
+    'weaver': 'Weaver',
+    'witch': 'Witch'
+  };
+  
+  // Get all checked jobs
+  const allJobs = [];
+  for (const [key, displayName] of Object.entries(jobMap)) {
+    // Try multiple selector patterns
+    const checkbox = document.querySelector(`#field-${key}`) || 
+                     document.querySelector(`[name="${key}"]`) ||
+                     document.querySelector(`[name="field-${key}"]`);
+    if (checkbox) {
+      const isChecked = checkbox.type === 'select-one' 
+        ? checkbox.value === 'true'
+        : (checkbox.checked === true || checkbox.value === 'true');
+      if (isChecked) {
+        allJobs.push(displayName);
+      }
+    }
+  }
+  
+  // Update allJobs and allJobsTags fields (case-insensitive matching)
+  for (const [fieldKey, fieldElement] of window.autoGeneratedFields.entries()) {
+    const fieldKeyLower = fieldKey.toLowerCase();
+    if (fieldKeyLower === 'alljobs' || fieldKeyLower === 'alljobstags') {
+      fieldElement.value = JSON.stringify(allJobs, null, 2);
+    }
+  }
+  
+  // Update craftingJobs if crafting is checked
+  const craftingCheckbox = document.querySelector('#field-crafting') || document.querySelector('[name="crafting"]');
+  if (craftingCheckbox) {
+    const isCrafting = craftingCheckbox.type === 'select-one' 
+      ? craftingCheckbox.value === 'true'
+      : (craftingCheckbox.checked === true || craftingCheckbox.value === 'true');
+    const craftingJobsField = window.autoGeneratedFields.get('craftingJobs');
+    if (craftingJobsField) {
+      craftingJobsField.value = JSON.stringify(isCrafting ? allJobs : [], null, 2);
+    }
+  }
+  
+  // Update gatheringJobs if gathering is checked
+  const gatheringCheckbox = document.querySelector('#field-gathering') || document.querySelector('[name="gathering"]');
+  if (gatheringCheckbox) {
+    const isGathering = gatheringCheckbox.type === 'select-one' 
+      ? gatheringCheckbox.value === 'true'
+      : (gatheringCheckbox.checked === true || gatheringCheckbox.value === 'true');
+    const gatheringJobsField = window.autoGeneratedFields.get('gatheringJobs');
+    if (gatheringJobsField) {
+      gatheringJobsField.value = JSON.stringify(isGathering ? allJobs : [], null, 2);
+    }
+  }
+  
+  // Update lootingJobs if looting is checked
+  const lootingCheckbox = document.querySelector('#field-looting') || document.querySelector('[name="looting"]');
+  if (lootingCheckbox) {
+    const isLooting = lootingCheckbox.type === 'select-one' 
+      ? lootingCheckbox.value === 'true'
+      : (lootingCheckbox.checked === true || lootingCheckbox.value === 'true');
+    const lootingJobsField = window.autoGeneratedFields.get('lootingJobs');
+    if (lootingJobsField) {
+      lootingJobsField.value = JSON.stringify(isLooting ? allJobs : [], null, 2);
+    }
+  }
+}
+
+// Track which field is currently being updated to prevent circular updates
+let updatingField = null;
+
+// ------------------- updateRelatedFields -------------------
+// Update all related/connected fields when any field changes
+// Handles: tags ↔ jobs, tags ↔ obtain, boolean ↔ obtain, tags ↔ tags
+//
+function updateRelatedFields(fieldName, value) {
+  // Prevent circular updates
+  if (updatingField === fieldName) return;
+  
+  const fieldNameLower = fieldName.toLowerCase();
+  updatingField = fieldName;
+  
+  // Helper to get array value from a field (handles both multi-select and textarea)
+  const getArrayValue = (fieldName) => {
+    const input = document.querySelector(`#field-${fieldName}`) || document.querySelector(`[name="${fieldName}"]`);
+    if (!input) return [];
+    try {
+      const val = input.value.trim();
+      if (!val) return [];
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  };
+  
+  // Helper to set array value in a field
+  const setArrayValue = (fieldName, arrayValue) => {
+    const input = document.querySelector(`#field-${fieldName}`) || document.querySelector(`[name="${fieldName}"]`);
+    if (input) {
+      const currentValue = input.value.trim();
+      const newValue = JSON.stringify(arrayValue);
+      // Only update if the value actually changed
+      if (currentValue !== newValue) {
+        input.value = newValue;
+        // Trigger input event first, then change event to update visual chips if it's a multi-select
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+  };
+  
+  // Helper to add/remove item from obtain array
+  const updateObtainArray = (item, shouldAdd) => {
+    const obtainArray = getArrayValue('obtain');
+    const hasItem = obtainArray.includes(item);
+    if (shouldAdd && !hasItem) {
+      obtainArray.push(item);
+      setArrayValue('obtain', obtainArray);
+    } else if (!shouldAdd && hasItem) {
+      const filtered = obtainArray.filter(i => i !== item);
+      setArrayValue('obtain', filtered);
+    }
+  };
+  
+  // Handle tag fields (gatheringTags, lootingTags, craftingTags)
+  if (fieldNameLower === 'gatheringtags' || fieldNameLower === 'lootingtags' || fieldNameLower === 'craftingtags') {
+    const selectedItems = Array.isArray(value) ? value : getArrayValue(fieldName);
+    const activityName = fieldNameLower.includes('gathering') ? 'Gathering' : 
+                         fieldNameLower.includes('looting') ? 'Looting' : 'Crafting';
+    const jobsFieldName = fieldNameLower.includes('gathering') ? 'gatheringJobs' :
+                          fieldNameLower.includes('looting') ? 'lootingJobs' : 'craftingJobs';
+    
+    // Update obtain array
+    updateObtainArray(activityName, selectedItems.length > 0);
+    
+    // Update corresponding Jobs field
+    if (window.autoGeneratedFields) {
+      const jobsField = window.autoGeneratedFields.get(jobsFieldName);
+      if (jobsField) {
+        jobsField.value = JSON.stringify(selectedItems, null, 2);
+      }
+    }
+    
+    // Update corresponding boolean checkboxes based on selected tags
+    // Map display names back to field names
+    const displayNameToFieldMap = {
+      'Adventurer': 'adventurer',
+      'Artist': 'artist',
+      'Beekeeper': 'beekeeper',
+      'Blacksmith': 'blacksmith',
+      'Cook': 'cook',
+      'Craftsman': 'craftsman',
+      'Farmer': 'farmer',
+      'Fisherman': 'fisherman',
+      'Forager': 'forager',
+      'Graveskeeper': 'gravekeeper',
+      'Guard': 'guard',
+      'Mask Maker': 'maskMaker',
+      'Rancher': 'rancher',
+      'Herbalist': 'herbalist',
+      'Hunter': 'hunter',
+      'Hunter Looting': 'hunterLooting',
+      'Mercenary': 'mercenary',
+      'Miner': 'miner',
+      'Researcher': 'researcher',
+      'Scout': 'scout',
+      'Weaver': 'weaver',
+      'Witch': 'witch'
+    };
+    
+    // Get all currently checked job booleans to compare
+    const allJobFields = Object.values(displayNameToFieldMap);
+    
+    // Update each job checkbox based on whether it's in the selected tags
+    allJobFields.forEach(fieldKey => {
+      const displayName = Object.keys(displayNameToFieldMap).find(key => displayNameToFieldMap[key] === fieldKey);
+      if (displayName) {
+        const checkbox = document.querySelector(`#field-${fieldKey}`) || 
+                         document.querySelector(`[name="${fieldKey}"]`) ||
+                         document.querySelector(`[name="field-${fieldKey}"]`);
+        if (checkbox) {
+          const shouldBeChecked = selectedItems.includes(displayName);
+          const isCurrentlyChecked = checkbox.type === 'select-one' 
+            ? checkbox.value === 'true'
+            : (checkbox.checked === true || checkbox.value === 'true');
+          
+          // Only update if the state needs to change
+          if (shouldBeChecked !== isCurrentlyChecked) {
+            if (checkbox.type === 'select-one') {
+              checkbox.value = shouldBeChecked ? 'true' : 'false';
+              // Trigger change event to update related arrays
+              checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            } else {
+              checkbox.checked = shouldBeChecked;
+              checkbox.value = shouldBeChecked ? 'true' : 'false';
+              // Trigger change event to update related arrays
+              checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }
+        }
+      }
+    });
+  }
+  
+  // Handle boolean checkboxes (crafting, gathering, looting)
+  if (fieldNameLower === 'crafting' || fieldNameLower === 'gathering' || fieldNameLower === 'looting') {
+    const isChecked = value === true || value === 'true';
+    const activityName = fieldNameLower === 'crafting' ? 'Crafting' :
+                         fieldNameLower === 'gathering' ? 'Gathering' : 'Looting';
+    
+    // Update obtain array
+    updateObtainArray(activityName, isChecked);
+    
+    // Jobs arrays are already updated by updateJobArrays() which is called from updateAutoGeneratedFields
+  }
+  
+  // Handle bidirectional sync: obtainTags ↔ obtain
+  if (fieldNameLower === 'obtaintags') {
+    const selectedItems = Array.isArray(value) ? value : getArrayValue('obtainTags');
+    setArrayValue('obtain', selectedItems);
+  }
+  if (fieldNameLower === 'obtain') {
+    // Use the value parameter if it's an array, otherwise read from the field
+    let selectedItems;
+    if (Array.isArray(value)) {
+      selectedItems = value;
+    } else {
+      selectedItems = getArrayValue('obtain');
+    }
+    if (selectedItems && selectedItems.length >= 0) {
+      setArrayValue('obtainTags', selectedItems);
+    }
+  }
+  
+  // Handle bidirectional sync: locationsTags ↔ locations
+  if (fieldNameLower === 'locationstags') {
+    const selectedItems = Array.isArray(value) ? value : getArrayValue('locationsTags');
+    if (window.autoGeneratedFields) {
+      const locationsField = window.autoGeneratedFields.get('locations');
+      if (locationsField) {
+        locationsField.value = JSON.stringify(selectedItems, null, 2);
+      }
+    }
+  }
+  if (fieldNameLower === 'locations') {
+    const selectedItems = Array.isArray(value) ? value : getArrayValue('locations');
+    setArrayValue('locationsTags', selectedItems);
+  }
+  
+  // Handle bidirectional sync: allJobsTags ↔ allJobs
+  if (fieldNameLower === 'alljobstags') {
+    const selectedItems = Array.isArray(value) ? value : getArrayValue('allJobsTags');
+    if (window.autoGeneratedFields) {
+      const allJobsField = window.autoGeneratedFields.get('allJobs');
+      if (allJobsField) {
+        allJobsField.value = JSON.stringify(selectedItems, null, 2);
+      }
+    }
+  }
+  if (fieldNameLower === 'alljobs') {
+    const selectedItems = Array.isArray(value) ? value : getArrayValue('allJobs');
+    setArrayValue('allJobsTags', selectedItems);
+  }
+  
+  // Clear the updating flag after a short delay to allow the update to complete
+  setTimeout(() => {
+    updatingField = null;
+  }, 100);
+}
+
+// ------------------- updateTagBasedFields -------------------
+// Legacy function name - now calls updateRelatedFields
+//
+function updateTagBasedFields(fieldName, selectedItems) {
+  updateRelatedFields(fieldName, selectedItems);
 }
 
 // ------------------- createInputForField -------------------
@@ -2389,7 +2857,9 @@ function createEnumSelect(enumValues, value) {
 //
 async function createArrayTextarea(fieldName, value) {
   const fieldNameLower = fieldName.toLowerCase();
-  const isAutoGenerated = fieldNameLower.includes('location') || fieldNameLower.includes('job');
+  // Auto-generated fields: locations, locationsTags, allJobs, allJobsTags, craftingJobs, gatheringJobs, lootingJobs
+  const autoGeneratedFieldNames = ['locations', 'locationstags', 'alljobs', 'alljobstags', 'craftingjobs', 'gatheringjobs', 'lootingjobs'];
+  const isAutoGenerated = autoGeneratedFieldNames.includes(fieldNameLower);
   
   // Special handling for validItems array - create item picker from Items database
   if (fieldNameLower === 'validitems') {
@@ -2411,7 +2881,7 @@ async function createArrayTextarea(fieldName, value) {
     return await createMultiSelectDropdown(fieldName, value);
   }
   
-  // Auto-generated fields (read-only)
+  // Auto-generated fields (read-only, but updated dynamically)
   if (isAutoGenerated) {
     const textarea = document.createElement('textarea');
     textarea.rows = 4;
@@ -2421,6 +2891,14 @@ async function createArrayTextarea(fieldName, value) {
     textarea.style.color = 'rgba(203, 182, 135, 0.8)';
     textarea.style.cursor = 'not-allowed';
     textarea.value = value ? JSON.stringify(value, null, 2) : '[]';
+    textarea.setAttribute('data-auto-generated-field', fieldName);
+    
+    // Store the field name for later updates
+    if (!window.autoGeneratedFields) {
+      window.autoGeneratedFields = new Map();
+    }
+    window.autoGeneratedFields.set(fieldName, textarea);
+    
     return textarea;
   }
   
@@ -3756,8 +4234,36 @@ async function createMultiSelectDropdown(fieldName, value) {
   // Update hidden input value
   const updateHiddenInput = () => {
     hiddenInput.value = JSON.stringify(selectedItems);
+    // Trigger change event for related field updates
+    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
   };
   updateHiddenInput();
+  
+  // Listen for external changes to the hidden input (e.g., from updateRelatedFields)
+  hiddenInput.addEventListener('change', () => {
+    try {
+      const newValue = hiddenInput.value.trim();
+      if (newValue) {
+        const parsed = JSON.parse(newValue);
+        if (Array.isArray(parsed)) {
+          // Only update if the value actually changed (avoid infinite loops)
+          const currentStr = JSON.stringify(selectedItems);
+          const newStr = JSON.stringify(parsed);
+          if (currentStr !== newStr) {
+            selectedItems = parsed;
+            renderSelectedChips();
+            renderCheckboxes();
+          }
+        }
+      } else if (selectedItems.length > 0) {
+        selectedItems = [];
+        renderSelectedChips();
+        renderCheckboxes();
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  });
   
   // Container for selected items (chips)
   const selectedContainer = document.createElement('div');
@@ -3814,6 +4320,8 @@ async function createMultiSelectDropdown(fieldName, value) {
         updateHiddenInput();
         renderSelectedChips();
         renderCheckboxes();
+        // Update all related/connected fields
+        updateRelatedFields(fieldName, selectedItems);
       });
       
       selectedContainer.appendChild(chip);
@@ -3970,6 +4478,8 @@ async function createMultiSelectDropdown(fieldName, value) {
         }
         updateHiddenInput();
         renderSelectedChips();
+        // Update all related/connected fields
+        updateRelatedFields(fieldName, selectedItems);
       });
       
       label.addEventListener('mouseenter', () => {
@@ -4044,6 +4554,8 @@ async function createMultiSelectDropdown(fieldName, value) {
       updateHiddenInput();
       renderSelectedChips();
       renderCheckboxes();
+      // Update all related/connected fields
+      updateRelatedFields(fieldName, selectedItems);
       customInput.value = '';
       customInputContainer.style.display = 'none';
     }
@@ -5470,6 +5982,534 @@ function createTextInput(fieldName, value) {
 // ------------------- Save & Delete Operations -------------------
 // ============================================================================
 
+// ------------------- displayFieldError -------------------
+// Display error message for a specific field
+//
+function displayFieldError(fieldName, errorMessage) {
+  // Handle nested field names (e.g., gearArmor.head or locations[0])
+  const baseFieldName = fieldName.replace(/\[.*?\]/g, '').split('.')[0];
+  const fieldElement = document.getElementById(`field-${baseFieldName}`);
+  
+  if (!fieldElement) {
+    // Try to find by name attribute
+    const fieldByName = document.querySelector(`[name="${baseFieldName}"]`);
+    if (fieldByName) {
+      addErrorStyling(fieldByName, errorMessage);
+      return;
+    }
+    console.warn(`[databaseEditor.js]: Field element not found for: ${fieldName}`);
+    return;
+  }
+  
+  addErrorStyling(fieldElement, errorMessage);
+}
+
+// ------------------- addErrorStyling -------------------
+// Add error styling and message to a field element
+//
+function addErrorStyling(fieldElement, errorMessage) {
+  // Add error class to field
+  fieldElement.classList.add('field-error');
+  
+  // Remove existing error message if present
+  const existingError = fieldElement.parentElement?.querySelector('.field-error-message');
+  if (existingError) {
+    existingError.remove();
+  }
+  
+  // Find the field group container
+  const fieldGroup = fieldElement.closest('.form-field-group');
+  if (fieldGroup) {
+    // Create error message element
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'field-error-message';
+    errorDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${errorMessage}`;
+    
+    // Insert after the input element
+    fieldElement.parentNode.insertBefore(errorDiv, fieldElement.nextSibling);
+  }
+}
+
+// ------------------- clearFieldError -------------------
+// Clear error styling and message for a specific field
+//
+function clearFieldError(fieldName) {
+  const baseFieldName = fieldName.replace(/\[.*?\]/g, '').split('.')[0];
+  const fieldElement = document.getElementById(`field-${baseFieldName}`);
+  
+  if (!fieldElement) {
+    const fieldByName = document.querySelector(`[name="${baseFieldName}"]`);
+    if (fieldByName) {
+      removeErrorStyling(fieldByName);
+      return;
+    }
+    return;
+  }
+  
+  removeErrorStyling(fieldElement);
+}
+
+// ------------------- removeErrorStyling -------------------
+// Remove error styling and message from a field element
+//
+function removeErrorStyling(fieldElement) {
+  fieldElement.classList.remove('field-error');
+  
+  const fieldGroup = fieldElement.closest('.form-field-group');
+  if (fieldGroup) {
+    const errorMessage = fieldGroup.querySelector('.field-error-message');
+    if (errorMessage) {
+      errorMessage.remove();
+    }
+  }
+}
+
+// ------------------- updateDirtyIndicator -------------------
+// Update visual indicators for unsaved changes
+//
+function updateDirtyIndicator() {
+  const modalTitle = document.getElementById('modal-title');
+  if (modalTitle) {
+    if (isDirty) {
+      if (!modalTitle.textContent.includes('*')) {
+        modalTitle.textContent = modalTitle.textContent + ' *';
+      }
+    } else {
+      modalTitle.textContent = modalTitle.textContent.replace(' *', '');
+    }
+  }
+  
+  // Update cancel button text
+  const cancelBtn = document.getElementById('modal-cancel-btn');
+  if (cancelBtn) {
+    if (isDirty) {
+      cancelBtn.innerHTML = '<i class="fas fa-times"></i> Discard Changes';
+    } else {
+      cancelBtn.innerHTML = 'Cancel';
+    }
+  }
+}
+
+// ------------------- confirmUnsavedChanges -------------------
+// Show confirmation dialog for unsaved changes
+//
+function confirmUnsavedChanges() {
+  return new Promise((resolve) => {
+    if (!isDirty) {
+      resolve(true);
+      return;
+    }
+    
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'unsaved-changes-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20000;
+      animation: fadeIn 0.2s ease-in-out;
+    `;
+    
+    // Create modal container
+    const modal = document.createElement('div');
+    modal.className = 'unsaved-changes-modal';
+    modal.style.cssText = `
+      background: linear-gradient(135deg, #2a1810 0%, #1a1410 100%);
+      border: 2px solid #ff9800;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 10px 40px rgba(255, 152, 0, 0.5);
+      animation: slideDown 0.3s ease-out;
+    `;
+    
+    modal.innerHTML = `
+      <div style="text-align: center; margin-bottom: 25px;">
+        <div style="font-size: 60px; margin-bottom: 15px;">⚠️</div>
+        <h2 style="color: #ff9800; margin: 0 0 10px 0; font-size: 24px;">UNSAVED CHANGES</h2>
+        <div style="height: 2px; background: linear-gradient(90deg, transparent, #ff9800, transparent); margin: 15px 0;"></div>
+      </div>
+      
+      <div style="color: #cbb687; margin-bottom: 25px; line-height: 1.6;">
+        <p style="margin: 0 0 15px 0; font-size: 16px;">
+          You have unsaved changes. Are you sure you want to discard them?
+        </p>
+      </div>
+      
+      <div style="display: flex; gap: 15px; margin-top: 25px;">
+        <button class="keep-editing-btn" style="
+          flex: 1;
+          padding: 12px 24px;
+          background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+          border: 1px solid #718096;
+          color: #cbb687;
+          border-radius: 6px;
+          font-size: 16px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          Keep Editing
+        </button>
+        <button class="discard-changes-btn" style="
+          flex: 1;
+          padding: 12px 24px;
+          background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+          border: 1px solid #ff9800;
+          color: white;
+          border-radius: 6px;
+          font-size: 16px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          Discard Changes
+        </button>
+      </div>
+    `;
+    
+    // Add event listeners
+    const keepBtn = modal.querySelector('.keep-editing-btn');
+    const discardBtn = modal.querySelector('.discard-changes-btn');
+    
+    const cleanup = () => {
+      overlay.remove();
+    };
+    
+    keepBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(false);
+    });
+    
+    discardBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(true);
+    });
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  });
+}
+
+// ------------------- clearAllFieldErrors -------------------
+// Clear all field errors from the form
+//
+function clearAllFieldErrors() {
+  const form = document.getElementById('record-form');
+  if (!form) return;
+  
+  const errorFields = form.querySelectorAll('.field-error');
+  errorFields.forEach(field => {
+    removeErrorStyling(field);
+  });
+  
+  const errorMessages = form.querySelectorAll('.field-error-message');
+  errorMessages.forEach(msg => msg.remove());
+}
+
+// ------------------- handleSelectAll -------------------
+// Handle select all checkbox change
+//
+function handleSelectAll(event) {
+  const isChecked = event.target.checked;
+  const checkboxes = document.querySelectorAll('.record-checkbox');
+  
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = isChecked;
+    const recordId = checkbox.getAttribute('data-record-id');
+    if (isChecked) {
+      selectedRecordIds.add(recordId);
+    } else {
+      selectedRecordIds.delete(recordId);
+    }
+  });
+  
+  updateBulkActionToolbar();
+}
+
+// ------------------- handleRecordSelection -------------------
+// Handle individual record checkbox change
+//
+function handleRecordSelection(event) {
+  const checkbox = event.target;
+  const recordId = checkbox.getAttribute('data-record-id');
+  
+  if (checkbox.checked) {
+    selectedRecordIds.add(recordId);
+  } else {
+    selectedRecordIds.delete(recordId);
+  }
+  
+  // Update select all checkbox state
+  updateSelectAllCheckbox();
+  updateBulkActionToolbar();
+}
+
+// ------------------- updateSelectAllCheckbox -------------------
+// Update select all checkbox to reflect current selection state
+//
+function updateSelectAllCheckbox() {
+  const selectAllCheckbox = document.getElementById('select-all-checkbox');
+  if (!selectAllCheckbox) return;
+  
+  const checkboxes = document.querySelectorAll('.record-checkbox');
+  const checkedCount = document.querySelectorAll('.record-checkbox:checked').length;
+  
+  if (checkedCount === 0) {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
+  } else if (checkedCount === checkboxes.length) {
+    selectAllCheckbox.checked = true;
+    selectAllCheckbox.indeterminate = false;
+  } else {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = true;
+  }
+}
+
+// ------------------- updateBulkActionToolbar -------------------
+// Show/hide bulk action toolbar based on selection
+//
+function updateBulkActionToolbar() {
+  const toolbar = document.getElementById('bulk-action-toolbar');
+  if (!toolbar) return;
+  
+  if (selectedRecordIds.size > 0) {
+    toolbar.style.display = 'flex';
+    const countSpan = toolbar.querySelector('.selected-count');
+    if (countSpan) {
+      countSpan.textContent = selectedRecordIds.size;
+    }
+  } else {
+    toolbar.style.display = 'none';
+  }
+}
+
+// ------------------- clearSelection -------------------
+// Clear all selected records
+//
+function clearSelection() {
+  selectedRecordIds.clear();
+  const checkboxes = document.querySelectorAll('.record-checkbox');
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  updateSelectAllCheckbox();
+  updateBulkActionToolbar();
+}
+
+// ------------------- detectConflicts -------------------
+// Detect conflicts between original and current record state
+//
+function detectConflicts(original, current) {
+  const conflicts = [];
+  
+  // Fields to ignore in conflict detection (internal/metadata fields)
+  const ignoreFields = ['__v', '_id'];
+  
+  // Get all keys from both objects
+  const allKeys = new Set([...Object.keys(original || {}), ...Object.keys(current || {})]);
+  
+  for (const key of allKeys) {
+    if (ignoreFields.includes(key)) continue;
+    
+    const originalValue = original[key];
+    const currentValue = current[key];
+    
+    // Deep comparison (simplified - just JSON stringify for basic types)
+    const originalStr = JSON.stringify(originalValue);
+    const currentStr = JSON.stringify(currentValue);
+    
+    if (originalStr !== currentStr && originalValue !== undefined && currentValue !== undefined) {
+      conflicts.push({
+        field: key,
+        original: originalValue,
+        current: currentValue
+      });
+    }
+  }
+  
+  return conflicts;
+}
+
+// ------------------- showConflictResolutionDialog -------------------
+// Show conflict resolution dialog and return whether to proceed
+//
+function showConflictResolutionDialog(conflicts, originalRecord, currentRecord) {
+  return new Promise((resolve) => {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'conflict-resolution-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20000;
+      animation: fadeIn 0.2s ease-in-out;
+    `;
+    
+    // Create modal container
+    const modal = document.createElement('div');
+    modal.className = 'conflict-resolution-modal';
+    modal.style.cssText = `
+      background: linear-gradient(135deg, #2a1810 0%, #1a1410 100%);
+      border: 2px solid #ff9800;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 800px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 40px rgba(255, 152, 0, 0.5);
+      animation: slideDown 0.3s ease-out;
+    `;
+    
+    // Build conflict list HTML
+    const conflictsHtml = conflicts.slice(0, 10).map(conflict => {
+      const origDisplay = typeof conflict.original === 'object' 
+        ? JSON.stringify(conflict.original).substring(0, 100) 
+        : String(conflict.original);
+      const currDisplay = typeof conflict.current === 'object'
+        ? JSON.stringify(conflict.current).substring(0, 100)
+        : String(conflict.current);
+      
+      return `
+        <div style="margin-bottom: 1rem; padding: 1rem; background: rgba(255, 152, 0, 0.1); border-radius: 8px; border-left: 3px solid #ff9800;">
+          <strong style="color: #ff9800;">${conflict.field}:</strong>
+          <div style="margin-top: 0.5rem;">
+            <div style="color: #ff6b6b;"><strong>Current (in database):</strong> ${currDisplay}</div>
+            <div style="color: #4ecdc4; margin-top: 0.25rem;"><strong>Your changes:</strong> ${origDisplay}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    modal.innerHTML = `
+      <div style="text-align: center; margin-bottom: 25px;">
+        <div style="font-size: 60px; margin-bottom: 15px;">⚠️</div>
+        <h2 style="color: #ff9800; margin: 0 0 10px 0; font-size: 24px;">CONFLICT DETECTED</h2>
+        <div style="height: 2px; background: linear-gradient(90deg, transparent, #ff9800, transparent); margin: 15px 0;"></div>
+      </div>
+      
+      <div style="color: #cbb687; margin-bottom: 25px; line-height: 1.6;">
+        <p style="margin: 0 0 15px 0; font-size: 16px;">
+          This record has been modified by someone else since you opened it. The following fields have changed:
+        </p>
+        <div style="max-height: 300px; overflow-y: auto;">
+          ${conflictsHtml}
+          ${conflicts.length > 10 ? `<p style="color: #ff9800; margin-top: 1rem;">... and ${conflicts.length - 10} more conflicts</p>` : ''}
+        </div>
+        <p style="margin: 15px 0 0 0; color: #ff6b6b; font-size: 14px;">
+          <strong>What would you like to do?</strong>
+        </p>
+      </div>
+      
+      <div style="display: flex; gap: 15px; margin-top: 25px;">
+        <button class="conflict-cancel-btn" style="
+          flex: 1;
+          padding: 12px 24px;
+          background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+          border: 1px solid #718096;
+          color: #cbb687;
+          border-radius: 6px;
+          font-size: 16px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          Cancel & Reload
+        </button>
+        <button class="conflict-overwrite-btn" style="
+          flex: 1;
+          padding: 12px 24px;
+          background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+          border: 1px solid #ff9800;
+          color: white;
+          border-radius: 6px;
+          font-size: 16px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          Overwrite & Save
+        </button>
+      </div>
+    `;
+    
+    // Add event listeners
+    const cancelBtn = modal.querySelector('.conflict-cancel-btn');
+    const overwriteBtn = modal.querySelector('.conflict-overwrite-btn');
+    
+    const cleanup = () => {
+      overlay.remove();
+    };
+    
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(false);
+    });
+    
+    overwriteBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(true);
+    });
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  });
+}
+
+// ------------------- formatErrorMessage -------------------
+// Format error message for user-friendly display with actionable guidance
+//
+function formatErrorMessage(errorData) {
+  if (!errorData) {
+    return 'An unknown error occurred';
+  }
+  
+  const code = errorData.code || 'UNKNOWN_ERROR';
+  const baseMessage = errorData.error || errorData.details || 'An error occurred';
+  
+  // Provide user-friendly messages based on error code
+  const errorMessages = {
+    'VALIDATION_ERROR': 'Validation failed. Please check the highlighted fields below.',
+    'REFERENCE_ERROR': 'Some referenced records do not exist. Please check the highlighted fields.',
+    'PERMISSION_ERROR': 'You do not have permission to perform this action.',
+    'MODEL_NOT_FOUND': 'The requested model was not found.',
+    'RECORD_NOT_FOUND': 'The record you are trying to edit was not found.',
+    'SERVER_ERROR': 'A server error occurred. Please try again later.',
+    'UNKNOWN_ERROR': baseMessage
+  };
+  
+  let message = errorMessages[code] || baseMessage;
+  
+  // Add suggestions if provided
+  if (errorData.suggestions && errorData.suggestions.length > 0) {
+    message += '\n\nSuggestions:\n• ' + errorData.suggestions.join('\n• ');
+  }
+  
+  // Add details if available and not already in the message
+  if (errorData.details && !message.includes(errorData.details)) {
+    message += `\n\nDetails: ${errorData.details}`;
+  }
+  
+  return message;
+}
+
 // ------------------- handleSaveRecord -------------------
 // Validate and save record (create or update)
 //
@@ -5522,6 +6562,31 @@ async function handleSaveRecord() {
     return;
   }
   
+  // For updates, check for concurrent modifications
+  if (editingRecordId && originalRecordState) {
+    try {
+      const currentResponse = await fetchAPI(`/api/admin/db/${currentModel}/${editingRecordId}`, { method: 'GET' });
+      if (currentResponse.ok) {
+        const currentData = await currentResponse.json();
+        const currentRecord = currentData.record;
+        
+        // Check for conflicts by comparing key fields
+        const conflicts = detectConflicts(originalRecordState, currentRecord);
+        if (conflicts.length > 0) {
+          // Show conflict resolution dialog
+          const shouldProceed = await showConflictResolutionDialog(conflicts, originalRecordState, currentRecord);
+          if (!shouldProceed) {
+            return; // User chose to cancel
+          }
+          // User chose to overwrite, update original state to current
+          originalRecordState = JSON.parse(JSON.stringify(currentRecord));
+        }
+      }
+    } catch (error) {
+      console.warn('[databaseEditor.js]: Could not check for conflicts:', error);
+      // Continue with save even if conflict check fails
+    }
+  }
   
   try {
     const url = editingRecordId 
@@ -5543,13 +6608,38 @@ async function handleSaveRecord() {
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      console.error('[databaseEditor.js]: ❌ Save failed:', error);
-      throw new Error(error.details || error.error || 'Failed to save record');
+      const errorData = await response.json();
+      console.error('[databaseEditor.js]: ❌ Save failed:', errorData);
+      
+      // Clear previous field errors
+      clearAllFieldErrors();
+      
+      // Display field-level errors if present
+      if (errorData.fieldErrors && Object.keys(errorData.fieldErrors).length > 0) {
+        console.log('[databaseEditor.js]: Validation errors:', errorData.fieldErrors);
+        Object.keys(errorData.fieldErrors).forEach(fieldName => {
+          console.log(`[databaseEditor.js]: Field error - ${fieldName}:`, errorData.fieldErrors[fieldName]);
+          displayFieldError(fieldName, errorData.fieldErrors[fieldName]);
+        });
+        const errorMessage = formatErrorMessage(errorData);
+        showNotification(`❌ ${errorMessage.split('\n')[0]}`, 'error');
+      } else {
+        // Generic error message with formatting
+        const errorMessage = formatErrorMessage(errorData);
+        showNotification(`Failed to save: ${errorMessage.split('\n')[0]}`, 'error');
+      }
+      return;
     }
     
     const result = await response.json();
     console.log(`[databaseEditor.js]: ✅ Successfully saved ${currentModel} record:`, result);
+    
+    // Clear any field errors on successful save
+    clearAllFieldErrors();
+    
+    // Clear dirty state on successful save
+    isDirty = false;
+    updateDirtyIndicator();
     
     showNotification('Record saved successfully', 'success');
     dbEditorCloseModal();
@@ -5558,6 +6648,228 @@ async function handleSaveRecord() {
   } catch (error) {
     console.error('[databaseEditor.js]: ❌ Error saving record:', error);
     showNotification(`Failed to save: ${error.message}`, 'error');
+  }
+}
+
+// ------------------- handleBulkDelete -------------------
+// Handle bulk delete of selected records
+//
+async function handleBulkDelete() {
+  if (selectedRecordIds.size === 0) {
+    showNotification('No records selected', 'error');
+    return;
+  }
+  
+  const count = selectedRecordIds.size;
+  const recordName = count === 1 ? 'this record' : `these ${count} records`;
+  
+  showDeleteConfirmation(recordName, async () => {
+    try {
+      const recordIds = Array.from(selectedRecordIds);
+      
+      const response = await fetchAPI(`/api/admin/db/${currentModel}/bulk-delete`, {
+        method: 'POST',
+        body: JSON.stringify({ recordIds })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete records');
+      }
+      
+      const result = await response.json();
+      const successCount = result.deleted || count;
+      
+      showNotification(`Successfully deleted ${successCount} record(s)`, 'success');
+      clearSelection();
+      loadRecords(currentModel, currentPage, currentSearch);
+    } catch (error) {
+      console.error('[databaseEditor.js]: ❌ Error bulk deleting records:', error);
+      showNotification(`Failed to delete records: ${error.message}`, 'error');
+    }
+  });
+}
+
+// ------------------- handleExportRecords -------------------
+// Export current records as JSON or CSV
+//
+async function handleExportRecords() {
+  try {
+    if (!currentModel || allRecords.length === 0) {
+      showNotification('No records to export', 'error');
+      return;
+    }
+    
+    // Get all records (current page only, or we could fetch all)
+    const exportData = {
+      model: currentModel,
+      exportedAt: new Date().toISOString(),
+      count: allRecords.length,
+      records: allRecords
+    };
+    
+    // Create JSON blob
+    const jsonString = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    // Create download link
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentModel}_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showNotification(`Exported ${allRecords.length} record(s)`, 'success');
+  } catch (error) {
+    console.error('[databaseEditor.js]: ❌ Error exporting records:', error);
+    showNotification('Failed to export records', 'error');
+  }
+}
+
+// ------------------- handleImportRecords -------------------
+// Handle import of records from JSON file
+//
+function handleImportRecords() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      
+      // Validate import data structure
+      if (!data.records || !Array.isArray(data.records)) {
+        showNotification('Invalid import file format. Expected JSON with records array.', 'error');
+        return;
+      }
+      
+      // Show import preview
+      const shouldProceed = await showImportPreview(data.records);
+      if (!shouldProceed) {
+        return;
+      }
+      
+      // Proceed with import
+      await performImport(data.records);
+    } catch (error) {
+      console.error('[databaseEditor.js]: ❌ Error importing records:', error);
+      showNotification(`Failed to import: ${error.message}`, 'error');
+    }
+  };
+  
+  input.click();
+}
+
+// ------------------- showImportPreview -------------------
+// Show preview of records to be imported
+//
+function showImportPreview(records) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'import-preview-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20000;
+      animation: fadeIn 0.2s ease-in-out;
+    `;
+    
+    const modal = document.createElement('div');
+    modal.className = 'import-preview-modal';
+    modal.style.cssText = `
+      background: linear-gradient(135deg, #2a1810 0%, #1a1410 100%);
+      border: 2px solid var(--db-modal-primary);
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 900px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: var(--db-modal-shadow);
+    `;
+    
+    const previewRows = records.slice(0, 10).map((record, index) => {
+      const preview = JSON.stringify(record).substring(0, 200);
+      return `<div style="padding: 0.5rem; background: rgba(203, 182, 135, 0.05); margin-bottom: 0.5rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">${index + 1}. ${preview}${JSON.stringify(record).length > 200 ? '...' : ''}</div>`;
+    }).join('');
+    
+    modal.innerHTML = `
+      <h2 style="color: var(--db-modal-primary); margin-bottom: 1rem;">Import Preview</h2>
+      <p style="color: #cbb687; margin-bottom: 1rem;">Ready to import <strong>${records.length}</strong> record(s) into ${currentModel}</p>
+      <div style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px;">
+        ${previewRows}
+        ${records.length > 10 ? `<p style="color: #cbb687; margin-top: 0.5rem;">... and ${records.length - 10} more records</p>` : ''}
+      </div>
+      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+        <button class="import-cancel-btn" style="flex: 1; padding: 0.75rem; background: rgba(203, 182, 135, 0.2); border: 1px solid var(--db-modal-primary); color: var(--db-modal-primary); border-radius: 6px; cursor: pointer; font-weight: bold;">Cancel</button>
+        <button class="import-confirm-btn" style="flex: 1; padding: 0.75rem; background: linear-gradient(135deg, #49d59c 0%, #3bae7e 100%); border: none; color: #1a1410; border-radius: 6px; cursor: pointer; font-weight: bold;">Import ${records.length} Records</button>
+      </div>
+    `;
+    
+    const cancelBtn = modal.querySelector('.import-cancel-btn');
+    const confirmBtn = modal.querySelector('.import-confirm-btn');
+    
+    const cleanup = () => overlay.remove();
+    
+    cancelBtn.onclick = () => {
+      cleanup();
+      resolve(false);
+    };
+    
+    confirmBtn.onclick = () => {
+      cleanup();
+      resolve(true);
+    };
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  });
+}
+
+// ------------------- performImport -------------------
+// Perform the actual import
+//
+async function performImport(records) {
+  try {
+    showNotification('Importing records...', 'info');
+    
+    const response = await fetchAPI(`/api/admin/db/${currentModel}/import`, {
+      method: 'POST',
+      body: JSON.stringify({ records })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Import failed');
+    }
+    
+    const result = await response.json();
+    
+    if (result.failed && result.failed.length > 0) {
+      showNotification(`Imported ${result.imported} records, ${result.failed.length} failed`, 'error');
+    } else {
+      showNotification(`Successfully imported ${result.imported} record(s)`, 'success');
+    }
+    
+    // Reload records
+    loadRecords(currentModel, currentPage, currentSearch);
+  } catch (error) {
+    console.error('[databaseEditor.js]: ❌ Error performing import:', error);
+    showNotification(`Import failed: ${error.message}`, 'error');
   }
 }
 

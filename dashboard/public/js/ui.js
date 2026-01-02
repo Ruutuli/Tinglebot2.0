@@ -3,6 +3,8 @@
  * Description: Manages scroll-to-top functionality and both client-side and server-side pagination UI.
  * ====================================================================== */
 
+import { updateActiveNavState, updateBreadcrumb } from './modules/navigation.js';
+
 // ============================================================================
 // ------------------- Section: Scroll Utility -------------------
 // Handles "back to top" button visibility and behavior
@@ -882,19 +884,10 @@ function showDashboard() {
   }
   
   // Update active navigation
-  const navItems = document.querySelectorAll('.sidebar-nav li');
-  navItems.forEach(item => item.classList.remove('active'));
-  
-  const dashboardNav = document.querySelector('.sidebar-nav a[href="#dashboard"]');
-  if (dashboardNav) {
-    dashboardNav.parentElement.classList.add('active');
-  }
+  updateActiveNavState('dashboard-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Dashboard';
-  }
+  updateBreadcrumb('Dashboard');
 }
 
 // Initialize mobile enhancements when DOM is loaded

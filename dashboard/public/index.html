@@ -1039,6 +1039,103 @@
               </div>
             </div>
           </div>
+
+          <!-- Audit Log Viewer -->
+          <div class="admin-tool-card">
+            <div class="admin-tool-header">
+              <i class="fas fa-history"></i>
+              <h3>Audit Log</h3>
+            </div>
+            <div class="admin-tool-content">
+              <p>View all database changes and admin actions</p>
+              <div class="admin-tool-actions">
+                <button class="admin-action-btn primary" id="audit-log-btn">
+                  <i class="fas fa-list-alt"></i>
+                  View Audit Log
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audit Log Viewer Section -->
+        <div id="audit-log-section" style="display: none;">
+          <div class="database-editor-header">
+            <button class="back-button" id="back-to-admin-from-audit-btn">
+              <i class="fas fa-arrow-left"></i>
+              Back to Admin Tools
+            </button>
+            <h2><i class="fas fa-history"></i> Audit Log</h2>
+          </div>
+
+          <!-- Filters -->
+          <div class="audit-log-filters">
+            <div class="filter-group">
+              <label>Model:</label>
+              <select id="audit-filter-model">
+                <option value="">All Models</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>Action:</label>
+              <select id="audit-filter-action">
+                <option value="">All Actions</option>
+                <option value="CREATE">Create</option>
+                <option value="UPDATE">Update</option>
+                <option value="DELETE">Delete</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>Admin:</label>
+              <input type="text" id="audit-filter-admin" placeholder="Filter by admin username">
+            </div>
+            <div class="filter-group">
+              <label>Start Date:</label>
+              <input type="date" id="audit-filter-start-date">
+            </div>
+            <div class="filter-group">
+              <label>End Date:</label>
+              <input type="date" id="audit-filter-end-date">
+            </div>
+            <button id="audit-apply-filters-btn" class="search-btn">
+              <i class="fas fa-filter"></i> Apply Filters
+            </button>
+            <button id="audit-clear-filters-btn" class="search-btn secondary">
+              <i class="fas fa-times"></i> Clear
+            </button>
+          </div>
+
+          <!-- Audit Log Table -->
+          <div class="audit-log-table-wrapper">
+            <table id="audit-log-table" class="db-records-table">
+              <thead id="audit-log-table-head">
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Admin</th>
+                  <th>Action</th>
+                  <th>Model</th>
+                  <th>Record</th>
+                  <th>Changes</th>
+                </tr>
+              </thead>
+              <tbody id="audit-log-table-body">
+                <!-- Dynamic rows will be inserted here -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div class="pagination-controls">
+            <button id="audit-prev-page-btn" class="pagination-btn">
+              <i class="fas fa-chevron-left"></i>
+              Previous
+            </button>
+            <span id="audit-pagination-info" class="pagination-info">Page 1 of 1</span>
+            <button id="audit-next-page-btn" class="pagination-btn">
+              Next
+              <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
         </div>
 
         <!-- Database Editor Section -->
@@ -1067,10 +1164,38 @@
               </button>
             </div>
 
-            <button id="create-record-btn" class="create-btn" style="display: none;">
-              <i class="fas fa-plus"></i>
-              Create New
-            </button>
+            <div class="action-buttons-group" style="display: none;" id="model-action-buttons">
+              <button id="create-record-btn" class="create-btn">
+                <i class="fas fa-plus"></i>
+                Create New
+              </button>
+              <button id="export-records-btn" class="export-btn">
+                <i class="fas fa-download"></i>
+                Export
+              </button>
+              <button id="import-records-btn" class="import-btn">
+                <i class="fas fa-upload"></i>
+                Import
+              </button>
+            </div>
+          </div>
+
+          <!-- Bulk Action Toolbar -->
+          <div id="bulk-action-toolbar" class="bulk-action-toolbar" style="display: none;">
+            <div class="bulk-action-info">
+              <i class="fas fa-check-circle"></i>
+              <span><span class="selected-count">0</span> record(s) selected</span>
+            </div>
+            <div class="bulk-action-buttons">
+              <button id="bulk-delete-btn" class="bulk-action-btn bulk-delete-btn">
+                <i class="fas fa-trash"></i>
+                Delete Selected
+              </button>
+              <button id="clear-selection-btn" class="bulk-action-btn bulk-clear-btn">
+                <i class="fas fa-times"></i>
+                Clear Selection
+              </button>
+            </div>
           </div>
 
           <!-- Records Table -->
@@ -2895,6 +3020,7 @@
   <script type="module" src="js/calendar.js"></script>
   <script type="module" src="js/index.js?v=20251114"></script>
   <script src="js/databaseEditor.js"></script>
+  <script src="js/auditLogViewer.js"></script>
   <script src="js/villageShopsAdmin.js"></script>
   <script src="js/countdown.js"></script>
   <script src="js/debug.js"></script>

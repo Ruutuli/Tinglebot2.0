@@ -1246,6 +1246,24 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         this.completedAt = new Date();
         this.completionReason = COMPLETION_REASONS.TIME_EXPIRED;
         this.completionProcessed = false; // Mark for reward processing
+        
+        // Mark all remaining active participants as failed since quest expired
+        let failedCount = 0;
+        for (const [userId, participant] of this.participants) {
+            if (participant.progress === PROGRESS_STATUS.ACTIVE) {
+                // If they don't meet requirements, mark as failed
+                if (!meetsRequirements(participant, this)) {
+                    participant.progress = PROGRESS_STATUS.FAILED;
+                    failedCount++;
+                    console.log(`[QuestModel.js] ❌ Marked participant ${participant.characterName} as failed (quest expired without meeting requirements)`);
+                }
+            }
+        }
+        
+        if (failedCount > 0) {
+            console.log(`[QuestModel.js] ⚠️ Marked ${failedCount} participants as failed due to quest expiration`);
+        }
+        
         await this.save();
         
         // Don't send summary here - it will be sent after rewards are processed

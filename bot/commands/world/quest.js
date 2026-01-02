@@ -946,9 +946,23 @@ formatQuestCount(count = 0) {
   }
  },
 
+ // ============================================================================
+ // ------------------- Helper: Get Participants Array -------------------
+ // ============================================================================
+ getParticipantsArray(quest) {
+  if (!quest.participants) return [];
+  // Handle both Map (from Mongoose) and plain object (from MongoDB) cases
+  if (quest.participants instanceof Map) {
+   return Array.from(quest.participants.values());
+  } else if (typeof quest.participants === 'object' && quest.participants !== null) {
+   return Object.values(quest.participants);
+  }
+  return [];
+ },
+
  async updateParticipantFields(quest, client, embed) {
   try {
-   const participants = quest.participants ? Array.from(quest.participants.values()) : [];
+   const participants = this.getParticipantsArray(quest);
    
    // Create participant list
    const participantList = await Promise.all(
@@ -1040,7 +1054,7 @@ formatQuestCount(count = 0) {
 
    if (rpFieldIndex >= 0) {
     const postRequirement = quest.postRequirement || 15;
-    const participants = quest.participants ? Array.from(quest.participants.values()) : [];
+    const participants = this.getParticipantsArray(quest);
     
     const rpStatus = participants.map(p => 
      `${p.characterName}: ${p.rpPostCount || 0}/${postRequirement}`
@@ -1068,7 +1082,7 @@ formatQuestCount(count = 0) {
 
     if (tableRollFieldIndex >= 0) {
      const requiredRolls = quest.requiredRolls || 1;
-     const participants = quest.participants ? Array.from(quest.participants.values()) : [];
+     const participants = this.getParticipantsArray(quest);
      
      const rollStatus = participants.map(p => {
       const successfulRolls = p.successfulRolls || 0;
@@ -1209,7 +1223,7 @@ formatQuestCount(count = 0) {
     });
    }
 
-   const participants = Array.from(quest.participants.values());
+   const participants = this.getParticipantsArray(quest);
    if (participants.length === 0) {
     return interaction.reply({
      content: "[quest.js]❌ No participants found for this quest.",

@@ -133,6 +133,9 @@ const {
   spiritOrbCache
 } = require('../shared/utils/cache');
 
+// Cache duration constants (in milliseconds)
+const SPIRIT_ORB_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
 // Legacy cache structure for backward compatibility (will be migrated gradually)
 // These are now managed by the Cache utility above
 
@@ -235,7 +238,7 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       "default-src": ["'self'"],
-      "script-src": ["'self'", "https://kit.fontawesome.com", "https://cdn.jsdelivr.net", "https://unpkg.com"],
+      "script-src": ["'self'", "'unsafe-inline'", "https://kit.fontawesome.com", "https://cdn.jsdelivr.net", "https://unpkg.com"],
       "style-src": ["'self'", "'unsafe-inline'", "https://kit.fontawesome.com", "https://ka-f.fontawesome.com", "https://use.fontawesome.com", "https://cdnjs.cloudflare.com", "https://unpkg.com"],
       "img-src": ["'self'", "data:", "https://kit.fontawesome.com", "https://ka-f.fontawesome.com", "https://use.fontawesome.com", "https://cdn.discordapp.com", "https://storage.googleapis.com", "https://static.wixstatic.com", "https://cdnjs.cloudflare.com", "https://unpkg.com"],
       "font-src": ["'self'", "data:", "https://kit.fontawesome.com", "https://ka-f.fontawesome.com", "https://use.fontawesome.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"],
@@ -1104,12 +1107,17 @@ app.get('/api/activities', (_, res) => {
 // Returns statistics for Roots of the Wild game data
 app.get('/api/rootsofthewild/stats', async (req, res) => {
   try {
-    const [totalCharacters, activeQuests, totalItems, activeMonsters] = await Promise.all([
+    // Count active quests that haven't expired
+    const allActiveQuests = await Quest.find({ status: 'active' }).select('timeLimit postedAt createdAt').lean();
+    const trulyActiveQuests = allActiveQuests.filter(quest => !checkQuestExpiration(quest));
+    
+    const [totalCharacters, totalItems, activeMonsters] = await Promise.all([
       Character.countDocuments({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
-      Quest.countDocuments({ status: 'active' }),
       Item.countDocuments(),
       Monster.countDocuments({ isActive: true })
     ]);
+    
+    const activeQuests = trulyActiveQuests.length;
     res.json({ totalCharacters, activeQuests, totalItems, activeMonsters });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch RootsOfTheWild stats' });
@@ -2219,6 +2227,9 @@ app.get('/api/models/:modelType', async (req, res) => {
         break;
       case 'quest':
         Model = Quest;
+        // Filter out completed and expired quests for dashboard display
+        // Only show active quests that haven't expired
+        query = { status: 'active' };
         break;
       case 'helpwantedquest':
       case 'HelpWantedQuest':
@@ -2427,7 +2438,13 @@ app.get('/api/models/:modelType', async (req, res) => {
         allItemsData = await Model.find(query)
           .sort(modelType === 'item' ? { itemName: 1 } : {})
           .lean();
-        filteredData = allItemsData;
+        
+        // For quests, filter out expired quests
+        if (modelType === 'quest') {
+          filteredData = allItemsData.filter(quest => !checkQuestExpiration(quest));
+        } else {
+          filteredData = allItemsData;
+        }
       }
       
       // For characters, we need to populate user information even for all=true requests
@@ -2555,6 +2572,11 @@ app.get('/api/models/:modelType', async (req, res) => {
       .skip(skip)
       .limit(limit)
       .lean();
+    
+    // For quests, filter out expired quests even in paginated requests
+    if (modelType === 'quest') {
+      data = data.filter(quest => !checkQuestExpiration(quest));
+    }
 
 
 
@@ -2736,7 +2758,12 @@ app.get('/api/character/:id', async (req, res) => {
 // Returns all characters belonging to the authenticated user (including mod characters)
 app.get('/api/user/characters', async (req, res) => {
   try {
-    const userId = req.user.discordId;
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const userId = req.session.user.discordId;
     
     const regularCharacters = await Character.find({ userId }).lean();
     const modCharacters = await ModCharacter.find({ userId }).lean();
@@ -2766,17 +2793,66 @@ app.get('/api/user/characters', async (req, res) => {
   }
 });
 
+// ------------------- Function: checkQuestExpiration -------------------
+// Helper function to check if a quest has expired based on timeLimit and postedAt/createdAt
+// Works with plain objects (from .lean() queries)
+function checkQuestExpiration(quest) {
+  if (!quest.timeLimit) {
+    return false;
+  }
+  
+  const startDate = quest.postedAt || quest.createdAt;
+  if (!startDate) {
+    return false;
+  }
+  
+  const now = new Date();
+  const startDateTime = new Date(startDate);
+  const timeLimit = quest.timeLimit.toLowerCase();
+  
+  const TIME_MULTIPLIERS = {
+    HOUR: 60 * 60 * 1000,
+    DAY: 24 * 60 * 60 * 1000,
+    WEEK: 7 * 24 * 60 * 60 * 1000,
+    MONTH: 30 * 24 * 60 * 60 * 1000
+  };
+  
+  let durationMs = 0;
+  
+  if (timeLimit.includes('month')) {
+    const months = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+    durationMs = months * TIME_MULTIPLIERS.MONTH;
+  } else if (timeLimit.includes('week')) {
+    const weeks = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+    durationMs = weeks * TIME_MULTIPLIERS.WEEK;
+  } else if (timeLimit.includes('day')) {
+    const days = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+    durationMs = days * TIME_MULTIPLIERS.DAY;
+  } else if (timeLimit.includes('hour')) {
+    const hours = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+    durationMs = hours * TIME_MULTIPLIERS.HOUR;
+  }
+  
+  const expirationTime = new Date(startDateTime.getTime() + durationMs);
+  return now > expirationTime;
+}
+
 // ------------------- Function: getUserQuestParticipation -------------------
 // Returns quest participation summaries for the authenticated user
 app.get('/api/user/quests', async (req, res) => {
   try {
-    const userId = req.user.discordId;
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const userId = req.session.user.discordId;
     const participantField = `participants.${userId}`;
 
     const quests = await Quest.find({
       [participantField]: { $exists: true }
     })
-      .select('questID title questType status location date timeLimit postedAt updatedAt completionReason participants requiredVillage tokenReward collabAllowed')
+      .select('questID title questType status location date timeLimit postedAt createdAt updatedAt completionReason participants requiredVillage tokenReward collabAllowed')
       .sort({ updatedAt: -1 })
       .limit(30)
       .lean();
@@ -2807,6 +2883,7 @@ app.get('/api/user/quests', async (req, res) => {
           timeLimit: quest.timeLimit,
           requiredVillage: participant.requiredVillage || quest.requiredVillage || null,
           postedAt: quest.postedAt,
+          createdAt: quest.createdAt,
           completionReason: quest.completionReason || null,
           tokenReward: quest.tokenReward,
           collabAllowed: quest.collabAllowed,
@@ -2830,8 +2907,20 @@ app.get('/api/user/quests', async (req, res) => {
 
     const toTimestamp = (value) => (value ? new Date(value).getTime() : 0);
 
+    // Filter out expired quests - only show truly active quests
     const activeQuests = participationEntries
-      .filter((entry) => entry.participant.status === 'active' && entry.questStatus === 'active')
+      .filter((entry) => {
+        // Check participant status and quest status
+        const isParticipantActive = entry.participant.status === 'active';
+        const isQuestActive = entry.questStatus === 'active';
+        
+        // Check if quest has expired based on time limit
+        const questData = quests.find(q => q._id.toString() === entry.id.toString());
+        const isExpired = questData ? checkQuestExpiration(questData) : false;
+        
+        // Only include if participant is active, quest is active, AND quest hasn't expired
+        return isParticipantActive && isQuestActive && !isExpired;
+      })
       .sort((a, b) => toTimestamp(b.participant.joinedAt || b.postedAt || b.date) - toTimestamp(a.participant.joinedAt || a.postedAt || a.date))
       .slice(0, 5);
 
@@ -2844,12 +2933,23 @@ app.get('/api/user/quests', async (req, res) => {
       (entry) => entry.participant.status === 'completed' && !entry.participant.rewardedAt
     ).length;
 
+    // Filter participations to exclude expired or inactive quests for active display
+    // This ensures the frontend only shows truly active quests when grouping by date
+    const activeParticipations = participationEntries.filter((entry) => {
+      const isParticipantActive = entry.participant.status === 'active';
+      const isQuestActive = entry.questStatus === 'active';
+      const questData = quests.find(q => q._id.toString() === entry.id.toString());
+      const isExpired = questData ? checkQuestExpiration(questData) : false;
+      return isParticipantActive && isQuestActive && !isExpired;
+    });
+
     res.json({
       totalParticipations: participationEntries.length,
       pendingRewards,
       activeQuests,
       recentCompletions,
-      participations: participationEntries
+      participations: participationEntries,
+      activeParticipations: activeParticipations // Add filtered list for frontend
     });
   } catch (error) {
     logger.error('Error fetching user quests', error, 'server.js');
@@ -4552,7 +4652,12 @@ app.get('/api/character-of-week/rotation-status', async (req, res) => {
 // Returns Discord guild member information including join date
 app.get('/api/user/guild-info', async (req, res) => {
   try {
-    const userId = req.user.discordId;
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const userId = req.session.user.discordId;
     const guildId = process.env.PROD_GUILD_ID;
     
     if (!guildId) {
@@ -6158,7 +6263,12 @@ function buildItemNameQuery(itemName) {
 
 app.get('/api/inventories/me', async (req, res) => {
   try {
-    const payload = await buildUserInventoryResponse(req.user.discordId);
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const payload = await buildUserInventoryResponse(req.session.user.discordId);
     res.json(payload);
   } catch (error) {
     console.error('[server.js]: ❌ Error fetching user inventories:', error);
@@ -6168,6 +6278,11 @@ app.get('/api/inventories/me', async (req, res) => {
 
 app.post('/api/inventories/transfer', async (req, res) => {
   try {
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     const { sourceCharacterId, targetCharacterId, itemId, quantity } = req.body;
 
     if (!sourceCharacterId || !targetCharacterId || !itemId) {
@@ -6183,7 +6298,7 @@ app.post('/api/inventories/transfer', async (req, res) => {
       return res.status(400).json({ error: 'Quantity must be a positive number' });
     }
 
-    const userId = req.user.discordId;
+    const userId = req.session.user.discordId;
     const [sourceResult, targetResult] = await Promise.all([
       getOwnedCharacter(sourceCharacterId, userId),
       getOwnedCharacter(targetCharacterId, userId)
@@ -6691,60 +6806,6 @@ app.get('/api/inventory/characters', async (req, res) => {
   } catch (error) {
     logger.error('Error fetching character inventory data', error, 'server.js');
     res.status(500).json({ error: 'Failed to fetch character inventory data', details: error.message });
-  }
-});
-
-// ------------------- Function: getCharacterList -------------------
-// Returns basic character info without inventory data (fast loading, including mod characters)
-app.get('/api/characters/list', async (req, res) => {
-  try {
-    const regularCharacters = await Character.find({}, {
-      name: 1,
-      icon: 1,
-      race: 1,
-      job: 1,
-      homeVillage: 1,
-      currentVillage: 1,
-      isModCharacter: 1
-    }).lean();
-    
-    const modCharacters = await ModCharacter.find({}, {
-      name: 1,
-      icon: 1,
-      race: 1,
-      job: 1,
-      homeVillage: 1,
-      currentVillage: 1,
-      isModCharacter: 1,
-      modTitle: 1,
-      modType: 1
-    }).lean();
-    
-    // Combine both character types
-    const allCharacters = [...regularCharacters, ...modCharacters];
-    
-    // Filter out excluded characters
-    const excludedCharacters = ['Tingle', 'Tingle test', 'John'];
-    const filteredCharacters = allCharacters.filter(char => 
-      !excludedCharacters.includes(char.name)
-    );
-    
-    const characterList = filteredCharacters.map(char => ({
-      characterName: char.name,
-      icon: char.icon,
-      race: char.race,
-      job: char.job,
-      homeVillage: char.homeVillage,
-      currentVillage: char.currentVillage,
-      isModCharacter: char.isModCharacter || false,
-      modTitle: char.modTitle || null,
-      modType: char.modType || null
-    }));
-    
-    res.json({ data: characterList });
-  } catch (error) {
-    console.error('[server.js]: ❌ Error fetching character list:', error);
-    res.status(500).json({ error: 'Failed to fetch character list', details: error.message });
   }
 });
 
@@ -10151,22 +10212,132 @@ app.get('/auth/logout', (req, res) => {
   });
 });
 
+// ------------------- Section: Admin Access Helper -------------------
+
+// ------------------- Function: checkAdminAccess -------------------
+// Checks if the user in the request has admin privileges
+// Uses session caching to reduce Discord API calls and handle rate limits
+async function checkAdminAccess(req) {
+  try {
+    // Check if user is authenticated
+    const user = req.session?.user || req.user;
+    if (!user || !user.discordId) {
+      logger.info('[checkAdminAccess] No user or discordId in request', 'server.js');
+      return false;
+    }
+
+    const guildId = process.env.PROD_GUILD_ID;
+    const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
+
+    if (!guildId || !ADMIN_ROLE_ID) {
+      logger.warn(`[checkAdminAccess] Missing config: guildId=${!!guildId}, ADMIN_ROLE_ID=${!!ADMIN_ROLE_ID}`, 'server.js');
+      return false;
+    }
+
+    // Check session cache first (cache for 5 minutes to reduce API calls)
+    const cacheKey = `adminStatus_${user.discordId}`;
+    const cacheTimestampKey = `adminStatusTimestamp_${user.discordId}`;
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+    
+    if (req.session[cacheKey] !== undefined) {
+      const cacheTime = req.session[cacheTimestampKey] || 0;
+      const now = Date.now();
+      
+      // If cache is still valid, return cached value
+      if (now - cacheTime < CACHE_DURATION) {
+        logger.info(`[checkAdminAccess] Using cached admin status for user ${user.discordId}: ${req.session[cacheKey]}`, 'server.js');
+        return req.session[cacheKey];
+      }
+    }
+
+    // Fetch user's roles from Discord
+    try {
+      const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${user.discordId}`, {
+        headers: {
+          'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const memberData = await response.json();
+        const roles = memberData.roles || [];
+        // Convert both to strings for reliable comparison
+        const adminRoleIdStr = String(ADMIN_ROLE_ID);
+        const hasAdminRole = roles.some(roleId => String(roleId) === adminRoleIdStr);
+        
+        // Cache the result in session
+        req.session[cacheKey] = hasAdminRole;
+        req.session[cacheTimestampKey] = Date.now();
+        
+        logger.info(`[checkAdminAccess] User ${user.discordId} admin check: ${hasAdminRole} (roles: ${roles.length}, looking for: ${adminRoleIdStr})`, 'server.js');
+        return hasAdminRole;
+      } else if (response.status === 429) {
+        // Rate limited - use cached value if available, otherwise return false
+        const errorData = await response.json().catch(() => ({}));
+        const retryAfter = errorData.retry_after || 1;
+        
+        logger.warn(`[checkAdminAccess] Discord API rate limited (429). Retry after: ${retryAfter}s. Using cached value if available.`, 'server.js');
+        
+        // If we have a cached value, use it even if expired
+        if (req.session[cacheKey] !== undefined) {
+          logger.info(`[checkAdminAccess] Using expired cache due to rate limit for user ${user.discordId}: ${req.session[cacheKey]}`, 'server.js');
+          return req.session[cacheKey];
+        }
+        
+        // No cache available, return false
+        return false;
+      } else {
+        const errorText = await response.text();
+        logger.warn(`[checkAdminAccess] Discord API error: ${response.status} ${response.statusText} - ${errorText}`, 'server.js');
+        
+        // On other errors, use cached value if available
+        if (req.session[cacheKey] !== undefined) {
+          logger.info(`[checkAdminAccess] Using cached value due to API error for user ${user.discordId}: ${req.session[cacheKey]}`, 'server.js');
+          return req.session[cacheKey];
+        }
+        
+        return false;
+      }
+    } catch (error) {
+      logger.error(`[checkAdminAccess] Error checking admin status: ${error.message}`, 'server.js');
+      
+      // On network errors, use cached value if available
+      if (req.session[cacheKey] !== undefined) {
+        logger.info(`[checkAdminAccess] Using cached value due to network error for user ${user.discordId}: ${req.session[cacheKey]}`, 'server.js');
+        return req.session[cacheKey];
+      }
+      
+      return false;
+    }
+  } catch (error) {
+    logger.error(`[checkAdminAccess] Error in checkAdminAccess: ${error.message}`, 'server.js');
+    return false;
+  }
+}
+
 // ------------------- Section: User Settings API Routes -------------------
 
 // Get current user
-app.get('/api/user', (req, res) => {
+app.get('/api/user', async (req, res) => {
   logger.info(`[API /api/user] Session ID: ${req.sessionID}, Has user: ${!!req.session.user}`, 'server.js');
   if (req.session.user) {
     logger.info(`[API /api/user] Returning authenticated user: ${req.session.user.discordId}`, 'server.js');
+    
+    // Check admin status
+    const isAdmin = await checkAdminAccess(req);
+    
     res.json({
       isAuthenticated: true,
-      user: req.session.user
+      user: req.session.user,
+      isAdmin: isAdmin
     });
   } else {
     logger.info('[API /api/user] No user in session, returning unauthenticated', 'server.js');
     res.json({
       isAuthenticated: false,
-      user: null
+      user: null,
+      isAdmin: false
     });
   }
 });
@@ -10362,7 +10533,12 @@ app.patch('/api/user/nickname', async (req, res) => {
 // Claim blupee reward
 app.post('/api/blupee/claim', async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const user = await User.findOne({ discordId: req.session.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -10516,7 +10692,12 @@ app.post('/api/blupee/claim', async (req, res) => {
 // Get blupee status (check if user can claim)
 app.get('/api/blupee/status', async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const user = await User.findOne({ discordId: req.session.user.discordId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -11880,6 +12061,9 @@ app.delete('/api/admin/village-shops/:id', async (req, res) => {
 
 // ------------------- Section: Admin Database Editor -------------------
 
+// ------------------- Import AuditLog model for audit logging -------------------
+const AuditLog = require('../shared/models/AuditLogModel');
+
 // ------------------- Import all remaining models for database management -------------------
 const ApprovedSubmission = require('../shared/models/ApprovedSubmissionModel');
 const BloodMoonTracking = require('../shared/models/BloodMoonTrackingModel');
@@ -11973,6 +12157,288 @@ const getModelForAdmin = (modelName) => {
   return MODEL_REGISTRY[modelName];
 };
 
+// ------------------- Helper: Validate Record Data -------------------
+// Comprehensive validation for record data before create/update
+//
+async function validateRecordData(modelName, recordData, schema, isUpdate = false) {
+  const errors = {};
+  const fieldErrors = {};
+  
+  // Fields to exclude from required validation (handled specially)
+  const excludedFromRequired = ['pronouns', 'race', 'homeVillage', 'job', 'jobVoucher'];
+  
+  // Iterate through schema paths
+  schema.eachPath((pathname, schematype) => {
+    // Skip internal mongoose fields
+    if (pathname === '_id' || pathname === '__v') return;
+    
+    const value = recordData[pathname];
+    const isRequired = schematype.isRequired;
+    const hasValue = value !== null && value !== undefined && value !== '';
+    const hasDefault = schematype.defaultValue !== undefined;
+    
+    // Check required fields (unless excluded or has default)
+    if (isRequired && !hasValue && !hasDefault && !excludedFromRequired.includes(pathname)) {
+      if (!isUpdate || (isUpdate && hasValue === false)) {
+        fieldErrors[pathname] = `${pathname} is required`;
+        return;
+      }
+    }
+    
+    // Skip validation if field is not provided in update
+    if (isUpdate && !hasValue && !isRequired) {
+      return;
+    }
+    
+    // Skip validation if value is empty and field is optional
+    if (!hasValue && !isRequired) {
+      return;
+    }
+    
+    // Validate based on type
+    const instanceType = schematype.instance;
+    const enumValues = schematype.enumValues;
+    
+    // Validate enum values
+    if (enumValues && enumValues.length > 0 && hasValue) {
+      if (!enumValues.includes(value)) {
+        fieldErrors[pathname] = `${pathname} must be one of: ${enumValues.join(', ')}`;
+        return;
+      }
+    }
+    
+    // Validate by type
+    switch (instanceType) {
+      case 'String':
+        if (hasValue && typeof value !== 'string') {
+          fieldErrors[pathname] = `${pathname} must be a string`;
+        } else if (hasValue && typeof value === 'string') {
+          // Check minlength/maxlength if specified in schema options
+          const options = schematype.options || {};
+          if (options.minlength !== undefined && value.length < options.minlength) {
+            fieldErrors[pathname] = `${pathname} must be at least ${options.minlength} characters`;
+          }
+          if (options.maxlength !== undefined && value.length > options.maxlength) {
+            fieldErrors[pathname] = `${pathname} must be no more than ${options.maxlength} characters`;
+          }
+        }
+        break;
+        
+      case 'Number':
+        if (hasValue && (typeof value !== 'number' || isNaN(value))) {
+          fieldErrors[pathname] = `${pathname} must be a valid number`;
+        } else if (hasValue && typeof value === 'number') {
+          // Check min/max if specified in schema options
+          const options = schematype.options || {};
+          if (options.min !== undefined && value < options.min) {
+            fieldErrors[pathname] = `${pathname} must be at least ${options.min}`;
+          }
+          if (options.max !== undefined && value > options.max) {
+            fieldErrors[pathname] = `${pathname} must be no more than ${options.max}`;
+          }
+        }
+        break;
+        
+      case 'Boolean':
+        if (hasValue && typeof value !== 'boolean') {
+          // Try to coerce string booleans
+          if (value === 'true' || value === 'false') {
+            // Will be handled by mongoose
+          } else {
+            fieldErrors[pathname] = `${pathname} must be a boolean`;
+          }
+        }
+        break;
+        
+      case 'Date':
+        if (hasValue) {
+          const date = new Date(value);
+          if (isNaN(date.getTime())) {
+            fieldErrors[pathname] = `${pathname} must be a valid date`;
+          }
+        }
+        break;
+        
+      case 'ObjectID':
+        if (hasValue) {
+          if (!mongoose.Types.ObjectId.isValid(value)) {
+            fieldErrors[pathname] = `${pathname} must be a valid ObjectId`;
+          }
+        }
+        break;
+        
+      case 'Array':
+        if (hasValue && !Array.isArray(value)) {
+          fieldErrors[pathname] = `${pathname} must be an array`;
+        }
+        break;
+        
+      case 'Map':
+      case 'Object':
+        // These types require objects
+        if (hasValue && typeof value !== 'object' || Array.isArray(value)) {
+          fieldErrors[pathname] = `${pathname} must be an object`;
+        }
+        break;
+        
+      case 'Mixed':
+        // Mixed type accepts any value (number, string, boolean, object, array, null)
+        // No validation needed - it's intentionally flexible
+        break;
+    }
+  });
+  
+  // Return validation result
+  if (Object.keys(fieldErrors).length > 0) {
+    errors.fieldErrors = fieldErrors;
+    errors.hasErrors = true;
+  } else {
+    errors.hasErrors = false;
+  }
+  
+  return errors;
+}
+
+// ------------------- Helper: Validate References -------------------
+// Validate that ObjectId references point to existing records
+//
+async function validateReferences(modelName, recordData, schema) {
+  const errors = {};
+  const fieldErrors = {};
+  const validationPromises = [];
+  
+  // Iterate through schema paths to find reference fields
+  schema.eachPath((pathname, schematype) => {
+    if (pathname === '_id' || pathname === '__v') return;
+    
+    const value = recordData[pathname];
+    const hasValue = value !== null && value !== undefined && value !== '';
+    
+    // Check if this field has a ref (reference to another model)
+    const refModelName = schematype.options?.ref;
+    if (refModelName && hasValue) {
+      // Handle array of references
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          if (item && mongoose.Types.ObjectId.isValid(item)) {
+            const refModel = MODEL_REGISTRY[refModelName];
+            if (refModel) {
+              validationPromises.push(
+                refModel.findById(item).lean().then(found => {
+                  if (!found) {
+                    fieldErrors[`${pathname}[${index}]`] = `Referenced ${refModelName} with ID ${item} does not exist`;
+                  }
+                }).catch(() => {
+                  fieldErrors[`${pathname}[${index}]`] = `Invalid ${refModelName} reference: ${item}`;
+                })
+              );
+            }
+          }
+        });
+      } else if (mongoose.Types.ObjectId.isValid(value)) {
+        // Single reference
+        const refModel = MODEL_REGISTRY[refModelName];
+        if (refModel) {
+          validationPromises.push(
+            refModel.findById(value).lean().then(found => {
+              if (!found) {
+                fieldErrors[pathname] = `Referenced ${refModelName} with ID ${value} does not exist`;
+              }
+            }).catch(() => {
+              fieldErrors[pathname] = `Invalid ${refModelName} reference: ${value}`;
+            })
+          );
+        }
+      }
+    }
+  });
+  
+  // Wait for all reference validations to complete
+  await Promise.all(validationPromises);
+  
+  if (Object.keys(fieldErrors).length > 0) {
+    errors.fieldErrors = fieldErrors;
+    errors.hasErrors = true;
+  } else {
+    errors.hasErrors = false;
+  }
+  
+  return errors;
+}
+
+// ------------------- Helper: Log Admin Action -------------------
+// Log admin actions to audit trail
+//
+async function logAdminAction(req, action, modelName, recordId, changes, recordName = null) {
+  try {
+    const user = req.user || req.session?.user;
+    if (!user) {
+      console.warn('[server.js]: ⚠️ Cannot log admin action: no user in request');
+      return;
+    }
+    
+    // Get the user's Discord ID
+    const discordId = user.discordId || user.id;
+    if (!discordId) {
+      console.warn('[server.js]: ⚠️ Cannot log admin action: no discordId in user object');
+      return;
+    }
+    
+    // Get or create the user in database to ensure we have a MongoDB _id
+    let dbUser = null;
+    try {
+      dbUser = await getOrCreateUser(discordId, user.username || user.global_name || 'Unknown');
+      if (!dbUser || !dbUser._id) {
+        console.warn('[server.js]: ⚠️ Could not get or create user for audit log');
+        return;
+      }
+    } catch (dbError) {
+      console.warn('[server.js]: ⚠️ Could not get or create user for audit log:', dbError.message);
+      return;
+    }
+    
+    const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    
+    const auditLog = new AuditLog({
+      adminUserId: dbUser._id,
+      adminUsername: user.username || user.global_name || dbUser.username || 'unknown',
+      adminDiscordId: discordId,
+      action: action,
+      modelName: modelName,
+      recordId: recordId,
+      recordName: recordName,
+      changes: changes,
+      ipAddress: ipAddress,
+      userAgent: userAgent,
+      timestamp: new Date()
+    });
+    
+    await auditLog.save();
+    console.log(`[server.js]: 📝 Audit log created for ${action} on ${modelName}/${recordId} by ${user.username || user.global_name || discordId}`);
+  } catch (error) {
+    // Don't fail the request if audit logging fails, but log the error
+    console.error('[server.js]: ❌ Error creating audit log:', error);
+  }
+}
+
+// ------------------- Helper: Get Record Name/Identifier -------------------
+// Get a human-readable identifier for a record (for audit logs)
+//
+function getRecordIdentifier(record, modelName) {
+  // Try common identifier fields
+  const identifierFields = ['name', 'title', 'username', 'itemName', 'characterName'];
+  
+  for (const field of identifierFields) {
+    if (record[field]) {
+      return String(record[field]);
+    }
+  }
+  
+  // Fallback to ID
+  return record._id ? String(record._id) : null;
+}
+
 // ------------------- Endpoint: Get all available models -------------------
 app.get('/api/admin/db/models', async (req, res) => {
   try {
@@ -11986,6 +12452,88 @@ app.get('/api/admin/db/models', async (req, res) => {
   } catch (error) {
     console.error('[server.js]: ❌ Error fetching models:', error);
     res.status(500).json({ error: 'Failed to fetch models' });
+  }
+});
+
+// ------------------- Endpoint: Get audit logs -------------------
+// IMPORTANT: This route must come BEFORE /api/admin/db/:modelName to avoid route conflicts
+app.get('/api/admin/db/audit-logs', async (req, res) => {
+  try {
+    const isAdmin = await checkAdminAccess(req);
+    if (!isAdmin) {
+      return res.status(403).json({ 
+        error: 'Admin access required',
+        code: 'PERMISSION_ERROR'
+      });
+    }
+    
+    const {
+      adminUserId,
+      adminUsername,
+      modelName,
+      action,
+      recordId,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 50
+    } = req.query;
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const filters = {
+      adminUserId,
+      adminUsername,
+      modelName,
+      action,
+      recordId,
+      startDate,
+      endDate,
+      limit: parseInt(limit),
+      skip
+    };
+    
+    // Remove undefined filters
+    Object.keys(filters).forEach(key => {
+      if (filters[key] === undefined || filters[key] === '') {
+        delete filters[key];
+      }
+    });
+    
+    const logs = await AuditLog.getAuditLogs(filters);
+    
+    // Get total count for pagination
+    const countQuery = {};
+    if (adminUserId) countQuery.adminUserId = adminUserId;
+    if (adminUsername) countQuery.adminUsername = { $regex: adminUsername, $options: 'i' };
+    if (modelName) countQuery.modelName = modelName;
+    if (action) countQuery.action = action;
+    if (recordId) countQuery.recordId = recordId;
+    if (startDate || endDate) {
+      countQuery.timestamp = {};
+      if (startDate) countQuery.timestamp.$gte = new Date(startDate);
+      if (endDate) countQuery.timestamp.$lte = new Date(endDate);
+    }
+    
+    const total = await AuditLog.countDocuments(countQuery);
+    
+    res.json({
+      success: true,
+      logs,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error fetching audit logs:', error);
+    res.status(500).json({
+      error: 'Failed to fetch audit logs',
+      code: 'SERVER_ERROR',
+      details: error.message
+    });
   }
 });
 
@@ -12236,31 +12784,82 @@ app.post('/api/admin/db/:modelName', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
+      return res.status(403).json({ 
+        error: 'Admin access required',
+        code: 'PERMISSION_ERROR'
+      });
     }
     
     const { modelName } = req.params;
     const Model = getModelForAdmin(modelName);
     
     if (!Model) {
-      return res.status(404).json({ error: 'Model not found' });
+      return res.status(404).json({ 
+        error: 'Model not found',
+        code: 'MODEL_NOT_FOUND'
+      });
+    }
+    
+    const schema = Model.schema;
+    
+    // Validate record data
+    const validationErrors = await validateRecordData(modelName, req.body, schema, false);
+    if (validationErrors.hasErrors) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: 'One or more fields failed validation',
+        fieldErrors: validationErrors.fieldErrors
+      });
+    }
+    
+    // Validate references
+    const referenceErrors = await validateReferences(modelName, req.body, schema);
+    if (referenceErrors.hasErrors) {
+      return res.status(400).json({
+        error: 'Reference validation failed',
+        code: 'REFERENCE_ERROR',
+        details: 'One or more referenced records do not exist',
+        fieldErrors: referenceErrors.fieldErrors
+      });
     }
     
     const record = new Model(req.body);
     await record.save();
     
+    const recordObj = record.toObject();
+    const recordName = getRecordIdentifier(recordObj, modelName);
+    
+    // Log audit action
+    await logAdminAction(req, 'CREATE', modelName, record._id, recordObj, recordName);
+    
     console.log(`[server.js]: ✅ Admin ${req.user.username} created ${modelName} record:`, record._id);
     
     res.status(201).json({ 
       success: true,
-      record: record.toObject() 
+      record: recordObj
     });
   } catch (error) {
     console.error('[server.js]: ❌ Error creating record:', error);
+    
+    // Handle mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const fieldErrors = {};
+      Object.keys(error.errors || {}).forEach(key => {
+        fieldErrors[key] = error.errors[key].message;
+      });
+      return res.status(400).json({
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: error.message,
+        fieldErrors
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Failed to create record', 
-      details: error.message,
-      validationErrors: error.errors 
+      code: 'SERVER_ERROR',
+      details: error.message
     });
   }
 });
@@ -12270,26 +12869,41 @@ app.put('/api/admin/db/:modelName/:id', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
+      return res.status(403).json({ 
+        error: 'Admin access required',
+        code: 'PERMISSION_ERROR'
+      });
     }
     
     const { modelName, id } = req.params;
     const Model = getModelForAdmin(modelName);
     
     if (!Model) {
-      return res.status(404).json({ error: 'Model not found' });
+      return res.status(404).json({ 
+        error: 'Model not found',
+        code: 'MODEL_NOT_FOUND'
+      });
     }
     
     // Log what we're updating
-    console.log(`[server.js]: 📝 Admin ${req.user.username} updating ${modelName} record:`, id);
+    const user = req.user || req.session?.user;
+    const username = user?.username || 'unknown';
+    console.log(`[server.js]: 📝 Admin ${username} updating ${modelName} record:`, id);
     console.log(`[server.js]: 📝 Update payload:`, JSON.stringify(req.body, null, 2));
     
     // Find the record first
     const record = await Model.findById(id);
     
     if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
+      return res.status(404).json({ 
+        error: 'Record not found',
+        code: 'RECORD_NOT_FOUND'
+      });
     }
+    
+    // Store before state for audit log
+    const beforeState = record.toObject();
+    const recordName = getRecordIdentifier(beforeState, modelName);
     
     // For Character model, handle currentVillage specially to prevent default function from overriding
     if (modelName === 'Character' && req.body.currentVillage !== undefined) {
@@ -12300,15 +12914,56 @@ app.put('/api/admin/db/:modelName/:id', async (req, res) => {
       }
     }
     
-    // Update all provided fields
+    const schema = Model.schema;
+    
+    // Prepare update data (only fields that are being updated)
+    const updateData = {};
     Object.keys(req.body).forEach(key => {
       if (key !== '_id' && key !== '__v') {
-        record.set(key, req.body[key]);
+        updateData[key] = req.body[key];
       }
+    });
+    
+    // Validate update data
+    const validationErrors = await validateRecordData(modelName, updateData, schema, true);
+    if (validationErrors.hasErrors) {
+      console.log('[server.js]: ❌ Validation failed for', modelName, ':', validationErrors.fieldErrors);
+      return res.status(400).json({
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: 'One or more fields failed validation',
+        fieldErrors: validationErrors.fieldErrors
+      });
+    }
+    
+    // Validate references in update data
+    const referenceErrors = await validateReferences(modelName, updateData, schema);
+    if (referenceErrors.hasErrors) {
+      return res.status(400).json({
+        error: 'Reference validation failed',
+        code: 'REFERENCE_ERROR',
+        details: 'One or more referenced records do not exist',
+        fieldErrors: referenceErrors.fieldErrors
+      });
+    }
+    
+    // Update all provided fields
+    Object.keys(updateData).forEach(key => {
+      record.set(key, updateData[key]);
     });
     
     // Explicitly save the record to ensure it's persisted
     await record.save();
+    
+    // Get after state for audit log
+    const afterState = record.toObject();
+    const changes = {
+      before: beforeState,
+      after: afterState
+    };
+    
+    // Log audit action
+    await logAdminAction(req, 'UPDATE', modelName, id, changes, recordName);
     
     console.log(`[server.js]: ✅ Successfully updated ${modelName} record:`, id);
     if (modelName === 'Character' && req.body.currentVillage !== undefined) {
@@ -12324,10 +12979,25 @@ app.put('/api/admin/db/:modelName/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('[server.js]: ❌ Error updating record:', error);
+    
+    // Handle mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const fieldErrors = {};
+      Object.keys(error.errors || {}).forEach(key => {
+        fieldErrors[key] = error.errors[key].message;
+      });
+      return res.status(400).json({
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: error.message,
+        fieldErrors
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Failed to update record', 
-      details: error.message,
-      validationErrors: error.errors 
+      code: 'SERVER_ERROR',
+      details: error.message
     });
   }
 });
@@ -12337,21 +13007,39 @@ app.delete('/api/admin/db/:modelName/:id', async (req, res) => {
   try {
     const isAdmin = await checkAdminAccess(req);
     if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
+      return res.status(403).json({ 
+        error: 'Admin access required',
+        code: 'PERMISSION_ERROR'
+      });
     }
     
     const { modelName, id } = req.params;
     const Model = getModelForAdmin(modelName);
     
     if (!Model) {
-      return res.status(404).json({ error: 'Model not found' });
+      return res.status(404).json({ 
+        error: 'Model not found',
+        code: 'MODEL_NOT_FOUND'
+      });
     }
     
-    const record = await Model.findByIdAndDelete(id);
+    // Get record before deleting for audit log
+    const record = await Model.findById(id).lean();
     
     if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
+      return res.status(404).json({ 
+        error: 'Record not found',
+        code: 'RECORD_NOT_FOUND'
+      });
     }
+    
+    const recordName = getRecordIdentifier(record, modelName);
+    
+    // Delete the record
+    await Model.findByIdAndDelete(id);
+    
+    // Log audit action (log the deleted record data)
+    await logAdminAction(req, 'DELETE', modelName, id, record, recordName);
     
     console.log(`[server.js]: ⚠️ Admin ${req.user.username} deleted ${modelName} record:`, id);
     
@@ -12363,7 +13051,183 @@ app.delete('/api/admin/db/:modelName/:id', async (req, res) => {
     console.error('[server.js]: ❌ Error deleting record:', error);
     res.status(500).json({ 
       error: 'Failed to delete record', 
+      code: 'SERVER_ERROR',
       details: error.message 
+    });
+  }
+});
+
+// ------------------- Endpoint: Bulk Delete records -------------------
+app.post('/api/admin/db/:modelName/bulk-delete', async (req, res) => {
+  try {
+    const isAdmin = await checkAdminAccess(req);
+    if (!isAdmin) {
+      return res.status(403).json({ 
+        error: 'Admin access required',
+        code: 'PERMISSION_ERROR'
+      });
+    }
+    
+    const { modelName } = req.params;
+    const { recordIds } = req.body;
+    
+    if (!Array.isArray(recordIds) || recordIds.length === 0) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        code: 'VALIDATION_ERROR',
+        details: 'recordIds must be a non-empty array'
+      });
+    }
+    
+    const Model = getModelForAdmin(modelName);
+    
+    if (!Model) {
+      return res.status(404).json({ 
+        error: 'Model not found',
+        code: 'MODEL_NOT_FOUND'
+      });
+    }
+    
+    // Validate all IDs exist and get records for audit logging
+    const records = await Model.find({ _id: { $in: recordIds } }).lean();
+    const foundIds = records.map(r => String(r._id));
+    const notFoundIds = recordIds.filter(id => !foundIds.includes(String(id)));
+    
+    if (notFoundIds.length > 0) {
+      return res.status(404).json({
+        error: 'Some records not found',
+        code: 'RECORD_NOT_FOUND',
+        details: `${notFoundIds.length} record(s) not found`,
+        notFoundIds
+      });
+    }
+    
+    // Delete all records
+    const deleteResult = await Model.deleteMany({ _id: { $in: recordIds } });
+    
+    // Log audit action for each deleted record
+    for (const record of records) {
+      const recordName = getRecordIdentifier(record, modelName);
+      await logAdminAction(req, 'DELETE', modelName, record._id, record, recordName);
+    }
+    
+    console.log(`[server.js]: ⚠️ Admin ${req.user.username} bulk deleted ${deleteResult.deletedCount} ${modelName} record(s)`);
+    
+    res.json({
+      success: true,
+      deleted: deleteResult.deletedCount,
+      message: `Successfully deleted ${deleteResult.deletedCount} record(s)`
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error bulk deleting records:', error);
+    res.status(500).json({
+      error: 'Failed to bulk delete records',
+      code: 'SERVER_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// ------------------- Endpoint: Import records -------------------
+app.post('/api/admin/db/:modelName/import', async (req, res) => {
+  try {
+    const isAdmin = await checkAdminAccess(req);
+    if (!isAdmin) {
+      return res.status(403).json({ 
+        error: 'Admin access required',
+        code: 'PERMISSION_ERROR'
+      });
+    }
+    
+    const { modelName } = req.params;
+    const { records } = req.body;
+    
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        code: 'VALIDATION_ERROR',
+        details: 'records must be a non-empty array'
+      });
+    }
+    
+    const Model = getModelForAdmin(modelName);
+    
+    if (!Model) {
+      return res.status(404).json({ 
+        error: 'Model not found',
+        code: 'MODEL_NOT_FOUND'
+      });
+    }
+    
+    const schema = Model.schema;
+    const results = {
+      imported: 0,
+      failed: []
+    };
+    
+    // Validate and import each record
+    for (let i = 0; i < records.length; i++) {
+      const recordData = records[i];
+      
+      try {
+        // Remove _id if present (to allow creating new records)
+        delete recordData._id;
+        delete recordData.__v;
+        
+        // Validate record data
+        const validationErrors = await validateRecordData(modelName, recordData, schema, false);
+        if (validationErrors.hasErrors) {
+          results.failed.push({
+            index: i,
+            error: 'Validation failed',
+            fieldErrors: validationErrors.fieldErrors
+          });
+          continue;
+        }
+        
+        // Validate references
+        const referenceErrors = await validateReferences(modelName, recordData, schema);
+        if (referenceErrors.hasErrors) {
+          results.failed.push({
+            index: i,
+            error: 'Reference validation failed',
+            fieldErrors: referenceErrors.fieldErrors
+          });
+          continue;
+        }
+        
+        // Create record
+        const record = new Model(recordData);
+        await record.save();
+        
+        // Log audit action
+        const recordObj = record.toObject();
+        const recordName = getRecordIdentifier(recordObj, modelName);
+        await logAdminAction(req, 'CREATE', modelName, record._id, recordObj, recordName);
+        
+        results.imported++;
+      } catch (error) {
+        results.failed.push({
+          index: i,
+          error: error.message || 'Unknown error'
+        });
+      }
+    }
+    
+    console.log(`[server.js]: ✅ Admin ${req.user.username} imported ${results.imported} ${modelName} record(s), ${results.failed.length} failed`);
+    
+    res.json({
+      success: true,
+      imported: results.imported,
+      failed: results.failed.length,
+      failedRecords: results.failed
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error importing records:', error);
+    res.status(500).json({
+      error: 'Failed to import records',
+      code: 'SERVER_ERROR',
+      details: error.message
     });
   }
 });
@@ -12479,7 +13343,9 @@ const Pin = require('../shared/models/PinModel');
 // ------------------- Function: checkUserAccess -------------------
 // Helper function to check if user has access to pin operations
 async function checkUserAccess(req) {
-  if (!req.isAuthenticated() || !req.user) {
+  // Check if user is authenticated (same pattern as checkAdminAccess)
+  const user = req.session?.user || req.user;
+  if (!user || !user.discordId) {
     return { hasAccess: false, error: 'Authentication required' };
   }
   
@@ -12489,7 +13355,7 @@ async function checkUserAccess(req) {
   }
   
   try {
-    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
+    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${user.discordId}`, {
       headers: {
         'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
         'Content-Type': 'application/json'
@@ -12519,7 +13385,8 @@ app.get('/api/pins', async (req, res) => {
       return res.status(403).json({ error: accessCheck.error });
     }
     
-    const pins = await Pin.getUserPins(req.user.discordId, true);
+    const user = req.session?.user || req.user;
+    const pins = await Pin.getUserPins(user.discordId, true);
     res.json({ success: true, pins });
   } catch (error) {
     console.error('[server.js]: ❌ Error fetching pins:', error);
@@ -12536,7 +13403,8 @@ app.get('/api/pins/user', async (req, res) => {
       return res.status(403).json({ error: accessCheck.error });
     }
     
-    const pins = await Pin.getUserPins(req.user.discordId, false);
+    const user = req.session?.user || req.user;
+    const pins = await Pin.getUserPins(user.discordId, false);
     res.json({ success: true, pins });
   } catch (error) {
     console.error('[server.js]: ❌ Error fetching user pins:', error);
@@ -12584,6 +13452,7 @@ app.post('/api/pins', pinImageUpload.single('image'), async (req, res) => {
     }
     
     // Create new pin
+    const user = req.session?.user || req.user;
     const pin = new Pin({
       name: name.trim(),
       description: description ? description.trim() : '',
@@ -12595,8 +13464,8 @@ app.post('/api/pins', pinImageUpload.single('image'), async (req, res) => {
       color: color || '#00A3DA',
       category: normalizedCategory || 'homes',
       isPublic: isPublic !== false, // Default to true
-      createdBy: req.user._id,
-      discordId: req.user.discordId
+      createdBy: user._id,
+      discordId: user.discordId
     });
     
     // Manually calculate and set gridLocation as backup
@@ -12658,7 +13527,8 @@ app.put('/api/pins/:id', pinImageUpload.single('image'), async (req, res) => {
     }
     
     // Check if user can modify this pin
-    if (!pin.canUserModify(req.user.discordId)) {
+    const user = req.session?.user || req.user;
+    if (!pin.canUserModify(user.discordId)) {
       return res.status(403).json({ error: 'You can only edit your own pins' });
     }
     
@@ -12722,7 +13592,8 @@ app.put('/api/pins/:id/coordinates', async (req, res) => {
     }
     
     // Check if user can modify this pin
-    if (!pin.canUserModify(req.user.discordId)) {
+    const user = req.session?.user || req.user;
+    if (!pin.canUserModify(user.discordId)) {
       return res.status(403).json({ error: 'You can only edit your own pins' });
     }
     
@@ -12789,7 +13660,8 @@ app.delete('/api/pins/:id', async (req, res) => {
     }
     
     // Check if user can modify this pin
-    if (!pin.canUserModify(req.user.discordId)) {
+    const user = req.session?.user || req.user;
+    if (!pin.canUserModify(user.discordId)) {
       return res.status(403).json({ error: 'You can only delete your own pins' });
     }
     
@@ -13042,7 +13914,8 @@ async function countSpiritOrbsBatch(characterNames) {
   const uncachedCharacters = [];
   for (const characterName of characterNames) {
     const cached = spiritOrbCache.get(characterName);
-    if (cached && (now - cached.timestamp) < SPIRIT_ORB_CACHE_DURATION) {
+    // Cache class handles TTL automatically, so if cached exists, it's valid
+    if (cached && cached.timestamp && (now - cached.timestamp) < SPIRIT_ORB_CACHE_DURATION) {
       spiritOrbCounts[characterName] = cached.count;
     } else {
       uncachedCharacters.push(characterName);

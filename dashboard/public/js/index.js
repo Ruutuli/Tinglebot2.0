@@ -24,6 +24,7 @@ import * as pets from './pets.js';
 import * as starterGear from './starterGear.js';
 import * as quests from './quests.js';
 import { createPagination, setupBackToTopButton, scrollToTop, createSearchFilterBar } from './ui.js';
+import { updateActiveNavState, updateBreadcrumb, clearActiveNavState, navigateToDashboard } from './modules/navigation.js';
 
 // Import specific functions from characters module
 const { renderCharacterCards } = characters;
@@ -67,7 +68,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Scroll to top on page load
     scrollToTop();
     
+    // Check for login redirect - add small delay to ensure session is ready
+    const urlParams = new URLSearchParams(window.location.search);
+    const isLoginRedirect = urlParams.has('error') === false && document.referrer.includes('/auth/discord');
+    
+    // If this might be a login redirect, wait a bit for session to be ready
+    if (isLoginRedirect) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
     await auth.checkUserAuthStatus();
+    
+    // Re-check auth status after a short delay if we just logged in
+    // This ensures admin status is properly loaded
+    if (isLoginRedirect) {
+      setTimeout(async () => {
+        console.log('[index.js] Re-checking auth status after login redirect');
+        await auth.checkUserAuthStatus();
+      }, 1000);
+    }
     
     const backToTopButton = document.getElementById('backToTop');
     
@@ -76,7 +95,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupModelCards();
     
     // Check for login success and refresh suggestion box if needed
-    const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('login') === 'success') {
       // Small delay to ensure auth state is fully updated
       setTimeout(() => {
@@ -116,9 +134,16 @@ function setupModelCards() {
     card.addEventListener('click', async (event) => {
       event.preventDefault(); // Prevent default button behavior
 
+      // Clear sidebar active states when navigating to a model
+      clearActiveNavState();
+      
       // Update URL with hash
       const hash = `#${modelName}`;
       window.history.pushState({ model: modelName }, '', hash);
+      
+      // Update breadcrumb to show model name
+      const modelDisplayName = modelName.charAt(0).toUpperCase() + modelName.slice(1);
+      updateBreadcrumb(modelDisplayName);
       
       // Reinitialize blupee system when viewing a model
       if (window.reinitializeBlupee) {
@@ -171,16 +196,8 @@ function setupModelCards() {
 
         // Setup back button handler
         backButton.onclick = () => {
-          // Update URL to go back to dashboard
-          window.history.pushState({ section: 'dashboard-section' }, '', '/');
-          
-          // Reinitialize blupee system when going back
-          if (window.reinitializeBlupee) {
-            window.reinitializeBlupee();
-          }
-          
-          // Scroll to top when going back to dashboard
-          scrollToTop();
+          // Use centralized navigation to go back to dashboard
+          navigateToDashboard();
           
           modelDetailsPage.style.display = 'none';
           dashboardSection.style.display = 'block';
@@ -673,6 +690,17 @@ function showSection(sectionId) {
       section.style.display = 'none';
     }
   });
+  
+  // Update active state in sidebar
+  updateActiveNavState(sectionId);
+  
+  // Update breadcrumb - derive from sectionId
+  const breadcrumbText = sectionId
+    .replace('-section', '')
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+  updateBreadcrumb(breadcrumbText);
 }
 
 // ============================================================================
@@ -780,6 +808,11 @@ function setupSidebarNavigation() {
       // Update URL
       const newUrl = sectionId === 'dashboard-section' ? '/' : `#${sectionId}`;
       window.history.pushState({ section: sectionId }, '', newUrl);
+      
+      // Ensure URL is correct (replace #dashboard with / if it somehow got set)
+      if (sectionId === 'dashboard-section' && window.location.hash === '#dashboard') {
+        window.history.replaceState({ section: sectionId }, '', '/');
+      }
       
       // Reinitialize blupee system when navigating to a new section
       if (window.reinitializeBlupee) {
@@ -954,8 +987,12 @@ function setupSidebarNavigation() {
     } else if (hashValue === 'stats-section') {
       showStatsSection();
       openDropdownForSection('stats-section');
-    } else if (hashValue === 'dashboard-section') {
+    } else if (hashValue === 'dashboard' || hashValue === 'dashboard-section') {
       showDashboardSection();
+      // Normalize URL to / instead of #dashboard
+      if (window.location.hash === '#dashboard') {
+        window.history.replaceState({ section: 'dashboard-section' }, '', '/');
+      }
     } else if (hashValue === 'profile-section') {
       showProfileSection();
       openDropdownForSection('profile-section');
@@ -1284,24 +1321,10 @@ function showStatsSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'stats-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('stats-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Stats';
-  }
+  updateBreadcrumb('Stats');
 }
 
 function showDashboardSection() { 
@@ -1391,24 +1414,10 @@ function showDashboardSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'dashboard-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('dashboard-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Dashboard';
-  }
+  updateBreadcrumb('Dashboard');
 }
 
 
@@ -1456,24 +1465,10 @@ function showVendingSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'vending-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('vending-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Vending Management';
-  }
+  updateBreadcrumb('Vending Management');
 }
 
 // ------------------- Function: showVendorDashboardSection -------------------
@@ -1506,24 +1501,10 @@ function showVendorDashboardSection(characterId) {
   }
   
   // Update active state in sidebar - keep vending section active
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'vending-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('vending-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Vendor Dashboard';
-  }
+  updateBreadcrumb('Vendor Dashboard');
   
   // Setup back button
   const backBtn = document.getElementById('vendor-dashboard-back-btn');
@@ -1565,24 +1546,10 @@ function showTokensSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'tokens-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('tokens-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Token Tracking';
-  }
+  updateBreadcrumb('Token Tracking');
 }
 
 function showProfileSection() {
@@ -1613,24 +1580,10 @@ function showProfileSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'profile-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('profile-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Profile';
-  }
+  updateBreadcrumb('Profile');
 }
 
 // ============================================================================
@@ -1661,24 +1614,10 @@ function showGuildSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'guilds-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('guilds-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Guilds';
-  }
+  updateBreadcrumb('Guilds');
 }
 
 // ============================================================================
@@ -1712,24 +1651,10 @@ function showCalendarSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'calendar-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('calendar-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Calendar';
-  }
+  updateBreadcrumb('Calendar');
 }
 
 // ============================================================================
@@ -1768,24 +1693,10 @@ function showUsersSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'users-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('users-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Users';
-  }
+  updateBreadcrumb('Users');
 }
 
 // ============================================================================
@@ -1824,24 +1735,10 @@ function showSettingsSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'settings-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('settings-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Settings';
-  }
+  updateBreadcrumb('Settings');
 }
 
 // ============================================================================
@@ -1874,24 +1771,10 @@ function showSuggestionBoxSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'suggestion-box-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('suggestion-box-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Suggestion Box';
-  }
+  updateBreadcrumb('Suggestion Box');
 }
 
 // ============================================================================
@@ -1924,24 +1807,10 @@ function showMemberLoreSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'member-lore-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('member-lore-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Member Lore';
-  }
+  updateBreadcrumb('Member Lore');
 }
 
 // ============================================================================
@@ -1974,24 +1843,10 @@ function showLevelsSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'levels-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('levels-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Levels';
-  }
+  updateBreadcrumb('Levels');
 }
 
 // ============================================================================
@@ -2022,24 +1877,10 @@ function showAdminAreaSection() {
   }
   
   // Update active state in sidebar
-  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-  sidebarLinks.forEach(link => {
-    const linkSection = link.getAttribute('data-section');
-    const listItem = link.closest('li');
-    if (listItem) {
-      if (linkSection === 'admin-area-section') {
-        listItem.classList.add('active');
-      } else {
-        listItem.classList.remove('active');
-      }
-    }
-  });
+  updateActiveNavState('admin-area-section');
   
   // Update breadcrumb
-  const breadcrumb = document.querySelector('.breadcrumb');
-  if (breadcrumb) {
-    breadcrumb.textContent = 'Admin Area';
-  }
+  updateBreadcrumb('Admin Area');
 }
 
 // ============================================================================

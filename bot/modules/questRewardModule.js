@@ -1241,6 +1241,29 @@ function escapeRegExp(string) {
 async function markQuestAsCompleted(quest) {
     try {
         quest.status = 'completed';
+        
+        // Mark all remaining active participants appropriately
+        let failedCount = 0;
+        let completedCount = 0;
+        
+        for (const [userId, participant] of quest.participants) {
+            if (participant.progress === PROGRESS_STATUS.ACTIVE) {
+                // Check if they meet requirements
+                if (meetsRequirements(participant, quest)) {
+                    participant.progress = PROGRESS_STATUS.COMPLETED;
+                    participant.completedAt = participant.completedAt || new Date();
+                    completedCount++;
+                } else {
+                    participant.progress = PROGRESS_STATUS.FAILED;
+                    failedCount++;
+                }
+            }
+        }
+        
+        if (failedCount > 0 || completedCount > 0) {
+            console.log(`[questRewardModule.js] 📊 Updated participant statuses: ${completedCount} completed, ${failedCount} failed`);
+        }
+        
         await quest.save();
         
         console.log(`[questRewardModule.js] ✅ Quest ${quest.questID} marked as completed`);

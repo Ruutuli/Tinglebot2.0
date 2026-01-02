@@ -27,16 +27,6 @@ router.get('/count', asyncHandler(async (req, res) => {
   res.json({ count: regularCount + modCount });
 }));
 
-// ------------------- Function: getCharacterById -------------------
-// Returns character data by character ID
-router.get('/:id', validateObjectId('id'), asyncHandler(async (req, res) => {
-  const char = await Character.findById(req.params.id);
-  if (!char) {
-    throw new NotFoundError('Character not found');
-  }
-  res.json({ ...char.toObject(), icon: char.icon });
-}));
-
 // ------------------- Function: getUserCharacters -------------------
 // Returns all characters belonging to the authenticated user (including mod characters)
 router.get('/user/characters', asyncHandler(async (req, res) => {
@@ -63,25 +53,6 @@ router.get('/user/characters', asyncHandler(async (req, res) => {
   });
   
   res.json({ data: characters });
-}));
-
-// ------------------- Function: getAllCharacters -------------------
-// Returns all characters for relationship selection (including mod characters)
-router.get('/', asyncHandler(async (req, res) => {
-  const regularCharacters = await Character.find({})
-    .select('name race job currentVillage homeVillage icon userId isModCharacter')
-    .sort({ name: 1 })
-    .lean();
-  
-  const modCharacters = await ModCharacter.find({})
-    .select('name race job currentVillage homeVillage icon userId isModCharacter modTitle modType')
-    .sort({ name: 1 })
-    .lean();
-  
-  // Combine both character types
-  const characters = [...regularCharacters, ...modCharacters];
-  
-  res.json({ characters });
 }));
 
 // ------------------- Function: getCharacterList -------------------
@@ -131,6 +102,36 @@ router.get('/list', asyncHandler(async (req, res) => {
   }));
   
   res.json({ data: characterList });
+}));
+
+// ------------------- Function: getAllCharacters -------------------
+// Returns all characters for relationship selection (including mod characters)
+router.get('/', asyncHandler(async (req, res) => {
+  const regularCharacters = await Character.find({})
+    .select('name race job currentVillage homeVillage icon userId isModCharacter')
+    .sort({ name: 1 })
+    .lean();
+  
+  const modCharacters = await ModCharacter.find({})
+    .select('name race job currentVillage homeVillage icon userId isModCharacter modTitle modType')
+    .sort({ name: 1 })
+    .lean();
+  
+  // Combine both character types
+  const characters = [...regularCharacters, ...modCharacters];
+  
+  res.json({ characters });
+}));
+
+// ------------------- Function: getCharacterById -------------------
+// Returns character data by character ID
+// NOTE: This must be defined LAST to avoid matching specific routes like /list, /count, etc.
+router.get('/:id', validateObjectId('id'), asyncHandler(async (req, res) => {
+  const char = await Character.findById(req.params.id);
+  if (!char) {
+    throw new NotFoundError('Character not found');
+  }
+  res.json({ ...char.toObject(), icon: char.icon });
 }));
 
 module.exports = router;
