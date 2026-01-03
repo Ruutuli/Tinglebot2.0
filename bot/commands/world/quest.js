@@ -1620,7 +1620,8 @@ formatQuestCount(count = 0) {
    return { success: false };
   }
 
-  const characterName = quest.participants.get(userID);
+  const participant = quest.participants.get(userID);
+  const characterName = participant?.characterName;
   return { success: true, quest, characterName };
  },
 

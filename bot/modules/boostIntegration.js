@@ -148,6 +148,7 @@ async function applyHealingStaminaBoost(characterName, baseStaminaCost) {
 
 // Apply post-healing effects (Priest, Scholar, Teacher)
 async function applyPostHealingBoosts(healerName, patientName) {
+  // Check if HEALER has an active boost (healer is the one who receives the boost)
   const hasBoost = await checkBoostActive(healerName, 'Healers');
   if (!hasBoost) return null;
   
@@ -157,14 +158,41 @@ async function applyPostHealingBoosts(healerName, patientName) {
   const { fetchCharacterByName } = require('../../shared/database/db');
   const patient = await fetchCharacterByName(patientName);
   
-  if (!patient) return null;
+  if (!patient) {
+    // Fallback: if patient fetch fails, return null (don't break healing flow)
+    return null;
+  }
   
-  // Priest: Spiritual Cleanse (remove debuffs)
+  // Priest: Spiritual Cleanse (remove debuffs from patient)
+  // The healer is boosted by a Priest, so the healer can remove debuffs from any patient
   if (booster.job === 'Priest') {
-    const cleansedPatient = await applyBoostEffect('Priest', 'Healers', patient);
-    if (cleansedPatient && cleansedPatient._id) {
-      await cleansedPatient.save();
-      return { type: 'Priest', patient: cleansedPatient };
+    try {
+      // Capture debuff state before removal (for logging)
+      const hadDebuff = patient.debuff?.active || false;
+      
+      const cleansedPatient = await applyBoostEffect('Priest', 'Healers', patient);
+      if (cleansedPatient && cleansedPatient._id) {
+        try {
+          await cleansedPatient.save();
+          // Log if debuff was removed
+          const logger = require('../../shared/utils/logger');
+          if (hadDebuff && !cleansedPatient.debuff?.active) {
+            logger.info('BOOST', `Priest boost - Spiritual Cleanse removed debuff from ${patientName} (healer: ${healerName})`);
+          }
+          return { type: 'Priest', patient: cleansedPatient };
+        } catch (saveError) {
+          // Fallback: if save fails, log error but don't break healing flow
+          const logger = require('../../shared/utils/logger');
+          logger.error('BOOST', `Error saving patient after Priest boost debuff removal: ${saveError.message}`);
+          // Return the cleansed patient object anyway (changes are in memory, just not persisted)
+          return { type: 'Priest', patient: cleansedPatient };
+        }
+      }
+    } catch (error) {
+      // Fallback: if boost application fails, log error but don't break healing
+      const logger = require('../../shared/utils/logger');
+      logger.error('BOOST', `Error applying Priest boost to remove debuff from ${patientName}: ${error.message}`);
+      return null;
     }
   }
   

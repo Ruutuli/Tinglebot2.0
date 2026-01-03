@@ -903,63 +903,6 @@ async function processTravelDay(day, context) {
       const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
     
-      // ------------------- Assign Village Role -------------------
-      try {
-        const member = await interaction.guild.members.fetch(interaction.user.id);
-        const destinationRoleId = VILLAGE_VISITING_ROLES[capitalizeFirstLetter(destination)];
-        const isHomeVillage = character.homeVillage.toLowerCase() === destination.toLowerCase();
-        
-        if (destinationRoleId) {
-          // Check if bot has manage roles permission
-          const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
-          if (botMember.permissions.has('ManageRoles')) {
-            // Remove all village visiting roles first
-            const visitingRoleIds = Object.values(VILLAGE_VISITING_ROLES);
-            let rolesRemoved = 0;
-            let rolesAdded = 0;
-            
-            for (const roleId of visitingRoleIds) {
-              if (member.roles.cache.has(roleId)) {
-                try {
-                  await member.roles.remove(roleId);
-                  rolesRemoved++;
-                } catch (error) {
-                  console.warn(`[travel.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
-                }
-              }
-            }
-        
-            // Only add visiting role if not returning to home village
-            if (!isHomeVillage) {
-              if (!member.roles.cache.has(destinationRoleId)) {
-                try {
-                  await member.roles.add(destinationRoleId);
-                  rolesAdded++;
-                } catch (error) {
-                  console.warn(`[travel.js]: ⚠️ Failed to add ${capitalizeFirstLetter(destination)} visiting role: ${error.message}`);
-                }
-              }
-            }
-            
-            // Log role changes summary
-            if (rolesRemoved > 0 || rolesAdded > 0) {
-              console.log(`[travel.js]: 🔄 Role management: ${rolesRemoved} removed, ${rolesAdded} added for ${interaction.user.tag}`);
-            } else if (!isHomeVillage) {
-              console.log(`[travel.js]: ℹ️ ${interaction.user.tag} already has ${capitalizeFirstLetter(destination)} visiting role`);
-            } else {
-              console.log(`[travel.js]: ℹ️ ${interaction.user.tag} returned to home village ${capitalizeFirstLetter(destination)}`);
-            }
-          } else {
-            console.warn('[travel.js]: ⚠️ Bot lacks ManageRoles permission - skipping role management');
-          }
-        } else {
-          console.warn(`[travel.js]: ⚠️ No role ID found for destination: ${capitalizeFirstLetter(destination)}`);
-        }
-      } catch (error) {
-        console.warn(`[travel.js]: ⚠️ Role management failed: ${error.message}`);
-        // Continue with travel completion even if role management fails
-      }
-    
       // Check destination for blight rain after arrival
       const destinationWeather = await getWeatherWithoutGeneration(destination);
       if (destinationWeather?.special?.label === 'Blight Rain') {
@@ -1221,8 +1164,17 @@ async function processTravelDay(day, context) {
         handleInteractionError(error, 'travel.js');
         await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
       }
+      // Clean up any remaining traveling messages
       for (const msg of travelingMessages) {
-        await msg.delete();
+        try {
+          if (msg && !msg.deleted && typeof msg.delete === 'function') {
+            await msg.delete().catch(() => {
+              // Message may have already been deleted, ignore
+            });
+          }
+        } catch (error) {
+          // Ignore deletion errors
+        }
       }
       return;
     }
@@ -1275,6 +1227,23 @@ async function processTravelDay(day, context) {
       if (character.blighted && character.blightStage >= 3) {
         // Skip monster encounter for blight stage 3+ characters
         dailyLogEntry += `🧿 No monsters encountered due to blight stage ${character.blightStage}.\n`;
+        
+        // Delete traveling message immediately after skipping encounter
+        try {
+          if (travelingMessage && typeof travelingMessage.delete === 'function') {
+            await travelingMessage.delete().catch(err => {
+              console.warn(`[travel.js]: ⚠️ Could not delete traveling message: ${err.message}`);
+            });
+          }
+        } catch (error) {
+          console.warn(`[travel.js]: ⚠️ Error deleting traveling message after blight skip: ${error.message}`);
+        }
+        
+        // Continue to next day
+        if (await checkAndHandleKO(character, channel, startingVillage)) return;
+        context.travelLog.push(dailyLogEntry);
+        await processTravelDay(day + 1, { ...context, channel });
+        return;
       } else {
         // ------------------- Monster Encounter -------------------
         const monsters = await getMonstersByPath(currentPath);
@@ -1305,6 +1274,18 @@ async function processTravelDay(day, context) {
           new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(character.currentStamina === 0)
         );
         const encounterMessage = await channel.send({ embeds: [encounterEmbed], components: [buttons] });
+        
+        // Delete traveling message immediately after encounter is posted
+        try {
+          if (travelingMessage && typeof travelingMessage.delete === 'function') {
+            await travelingMessage.delete().catch(err => {
+              console.warn(`[travel.js]: ⚠️ Could not delete traveling message: ${err.message}`);
+            });
+          }
+        } catch (error) {
+          console.warn(`[travel.js]: ⚠️ Error deleting traveling message after encounter: ${error.message}`);
+        }
+        
         let encounterInteractionProcessed = false; // Flag to prevent multiple interactions
         const collector = encounterMessage.createMessageComponentCollector({ 
           filter: i => {
@@ -1392,6 +1373,25 @@ async function processTravelDay(day, context) {
             await processTravelDay(day + 1, { ...context, channel });
           }
         });
+        } else {
+          // No monsters available for this path
+          dailyLogEntry += `⚠️ No monsters found on this path.\n`;
+          
+          // Delete traveling message
+          try {
+            if (travelingMessage && typeof travelingMessage.delete === 'function') {
+              await travelingMessage.delete().catch(err => {
+                console.warn(`[travel.js]: ⚠️ Could not delete traveling message: ${err.message}`);
+              });
+            }
+          } catch (error) {
+            console.warn(`[travel.js]: ⚠️ Error deleting traveling message after empty monsters: ${error.message}`);
+          }
+          
+          // Continue to next day
+          if (await checkAndHandleKO(character, channel, startingVillage)) return;
+          context.travelLog.push(dailyLogEntry);
+          await processTravelDay(day + 1, { ...context, channel });
         } // Close the else block for blight stage 3 check
       }
     } else {
@@ -1412,6 +1412,18 @@ async function processTravelDay(day, context) {
       const doNothingFlavor = doNothingFlavorTexts[Math.floor(Math.random() * doNothingFlavorTexts.length)];
       const safeEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
       const safeMessage = await channel.send({ embeds: [safeEmbed] });
+      
+      // Delete traveling message immediately after safe day embed is posted
+      try {
+        if (travelingMessage && typeof travelingMessage.delete === 'function') {
+          await travelingMessage.delete().catch(err => {
+            console.warn(`[travel.js]: ⚠️ Could not delete traveling message: ${err.message}`);
+          });
+        }
+      } catch (error) {
+        console.warn(`[travel.js]: ⚠️ Error deleting traveling message after safe day: ${error.message}`);
+      }
+      
       const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(character.currentHearts >= character.maxHearts || character.currentStamina === 0),
         new ButtonBuilder().setCustomId('gather').setLabel('🌿 Gather').setStyle(ButtonStyle.Success).setDisabled(character.currentStamina === 0),
