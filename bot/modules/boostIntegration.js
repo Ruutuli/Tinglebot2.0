@@ -154,27 +154,44 @@ async function applyPostHealingBoosts(healerName, patientName) {
   
   if (!patient) {
     // Fallback: if patient fetch fails, return null (don't break healing flow)
+    logger.warn('BOOST', `[applyPostHealingBoosts] Could not fetch patient ${patientName} for debuff removal`);
     return null;
   }
   
   // Check if HEALER has ANY active boost (any category)
-  // Debuffed characters can only be healed by boosted healers, and any boosted healer can remove debuffs
+  // Note: Any boosted healer can remove debuffs (not just Priest), as validated in heal.js
+  // The "Spiritual Cleanse" boost description is Priest-specific, but the implementation
+  // allows any boosted healer to remove debuffs for consistency with validation logic
   const booster = await getBoosterInfo(healerName);
   let debuffRemoved = false;
   let resultType = null;
   
   if (booster) {
-    // Any boosted healer can remove debuffs
+    // Check if patient has an active debuff that needs to be removed
     if (patient.debuff?.active) {
+      // Check if debuff has expired (edge case: expired but not yet cleaned up by scheduler)
+      const debuffEndDate = patient.debuff.endDate ? new Date(patient.debuff.endDate) : null;
+      const now = new Date();
+      const isExpired = debuffEndDate ? debuffEndDate <= now : false;
+      
+      // Remove debuff regardless of expiration status (clean up expired, remove active)
       try {
         patient.debuff.active = false;
         patient.debuff.endDate = null;
         await patient.save();
-        debuffRemoved = true;
-        logger.info('BOOST', `Boosted healer ${healerName} (boosted by ${booster.name} - ${booster.job}) removed debuff from ${patientName}`);
-        resultType = booster.job === 'Priest' ? 'Priest' : 'BoostedHealer';
+        
+        if (isExpired) {
+          // Debuff was already expired, just cleaning it up
+          logger.info('BOOST', `Cleaned up expired debuff for ${patientName} during healing by ${healerName}`);
+        } else {
+          // Debuff was active and removed by boosted healer
+          debuffRemoved = true;
+          logger.info('BOOST', `Boosted healer ${healerName} (boosted by ${booster.name} - ${booster.job}) removed debuff from ${patientName}`);
+          resultType = booster.job === 'Priest' ? 'Priest' : 'BoostedHealer';
+        }
       } catch (error) {
-        logger.error('BOOST', `Error removing debuff from ${patientName}: ${error.message}`);
+        logger.error('BOOST', `[applyPostHealingBoosts] Failed to save debuff removal for ${patientName}: ${error.message}. Stack: ${error.stack}`);
+        // Don't throw - healing was successful, debuff removal failure shouldn't break the flow
       }
     }
   }
@@ -182,7 +199,7 @@ async function applyPostHealingBoosts(healerName, patientName) {
   // Apply job-specific post-healing effects if healer has "Healers" category boost
   const hasHealersBoost = await checkBoostActive(healerName, 'Healers');
   if (hasHealersBoost && booster) {
-    // Priest: Spiritual Cleanse (already handled above, but keep for flavor text)
+    // Priest: Spiritual Cleanse (debuff removal handled above, this is for flavor text/type identification)
     if (booster.job === 'Priest' && debuffRemoved) {
       return { type: 'Priest', patient: patient, debuffRemoved: true };
     }
