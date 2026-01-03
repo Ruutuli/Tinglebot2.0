@@ -475,13 +475,17 @@ const healKoCharacter = async (characterId, healerId = null) => {
     }
 
     await updateCurrentHearts(characterId, 1);
-    await Character.updateOne({ _id: characterId }, { 
-      $set: { 
-        ko: false,
-        'debuff.active': false,
-        'debuff.endDate': null
-      } 
-    });
+    
+    // Only remove debuff if a healer is performing the healing
+    // Fairies and items should NOT be able to remove debuffs
+    const updateData = { ko: false };
+    if (healerId) {
+      // Healer is performing the healing - debuff removal happens in healing flow
+      // Don't remove debuff here, let the healing system handle it (especially Priest boost)
+      // This prevents fairies from accidentally clearing debuffs
+    }
+    
+    await Character.updateOne({ _id: characterId }, { $set: updateData });
     return createSimpleCharacterEmbed(character, `❤️ ${character.name} has been revived.`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {

@@ -1134,8 +1134,10 @@ module.exports = {
           character.debuff.endDate = null;
           await character.save();
         } else {
-          // Debuff is still active
+          // Debuff is still active - block item/fairy healing
+          // Debuffed characters can ONLY be healed by boosted healers
           const debuffEmbed = createDebuffEmbed(character);
+          debuffEmbed.setDescription(`**${character.name}** is currently debuffed and cannot use items or fairies to heal.\n\nDebuffed characters can only be healed by **boosted Healers**. Find a boosted Healer to remove the debuff!`);
           return void await interaction.editReply({ embeds: [debuffEmbed] });
         }
       }
@@ -1227,8 +1229,29 @@ module.exports = {
       }
 
       // ------------------- KO Revival Logic -------------------
-      // Allow fairies to revive KO'd characters.
+      // Allow fairies to revive KO'd characters, BUT NOT if character is debuffed
+      // Debuffed characters can ONLY be healed by boosted healers
       if (character.ko && item.itemName.toLowerCase() === 'fairy') {
+        // Double-check debuff status before allowing fairy healing
+        // This ensures debuffed characters can only be healed by boosted healers
+        if (character.debuff?.active) {
+          const debuffEndDate = new Date(character.debuff.endDate);
+          const now = new Date();
+          
+          // Check if debuff has actually expired
+          if (debuffEndDate <= now) {
+            // Debuff has expired, clear it
+            character.debuff.active = false;
+            character.debuff.endDate = null;
+            await character.save();
+          } else {
+            // Debuff is active - block fairy healing
+            const debuffEmbed = createDebuffEmbed(character);
+            debuffEmbed.setDescription(`**${character.name}** is currently debuffed and cannot be healed with items or fairies.\n\nDebuffed characters can only be healed by **boosted Healers**. Find a boosted Healer to remove the debuff!`);
+            return void await interaction.editReply({ embeds: [debuffEmbed] });
+          }
+        }
+        
         await healKoCharacter(character._id);
         character.currentHearts = character.maxHearts;
         await updateCurrentHearts(character._id, character.currentHearts);

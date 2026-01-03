@@ -865,6 +865,14 @@ async function handleBoostRequest(interaction) {
   const expiresAt = activeBoost?.boostExpiresAt ? Math.floor(activeBoost.boostExpiresAt / 1000) : null;
   const requestId = activeBoost?.boostRequestId;
 
+  // Get boost effect information
+  const boosterChar = await fetchCharacterByNameWithFallback(boosterName);
+  const boosterJob = boosterChar?.job || activeBoost?.boosterJob || "Unknown";
+  const boostEffect = getBoostEffect(boosterJob, boostCategory);
+  const storedEffect = parseStoredBoostEffect(activeBoost?.boostEffect);
+  const boostName = boostEffect?.name || storedEffect.name;
+  const boostDescription = boostEffect?.description || storedEffect.description;
+
   const descriptionLines = [
     `**${targetCharacter.name}** is already boosted by **${boosterName}** for **${boostCategory}**.`,
     "",
@@ -872,6 +880,16 @@ async function handleBoostRequest(interaction) {
   ];
 
   const fields = [];
+  
+  // Add boost effect information
+  if (boostName && boostName !== 'Unknown') {
+    fields.push({ 
+      name: "✨ Active Boost", 
+      value: `**${boostName}**\n${boostDescription}`, 
+      inline: false 
+    });
+  }
+  
   if (requestId) {
     fields.push({ name: "Cancel the Boost", value: `Run ${BOOSTING_CANCEL_COMMAND_MENTION} with **Request ID:** \`${requestId}\``, inline: false });
   } else {

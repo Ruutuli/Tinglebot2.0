@@ -146,16 +146,10 @@ async function applyHealingStaminaBoost(characterName, baseStaminaCost) {
   return baseStaminaCost;
 }
 
-// Apply post-healing effects (Priest, Scholar, Teacher)
+// Apply post-healing effects (debuff removal, Scholar, Teacher, etc.)
 async function applyPostHealingBoosts(healerName, patientName) {
-  // Check if HEALER has an active boost (healer is the one who receives the boost)
-  const hasBoost = await checkBoostActive(healerName, 'Healers');
-  if (!hasBoost) return null;
-  
-  const booster = await getBoosterInfo(healerName);
-  if (!booster) return null;
-  
   const { fetchCharacterByName } = require('../../shared/database/db');
+  const logger = require('../../shared/utils/logger');
   const patient = await fetchCharacterByName(patientName);
   
   if (!patient) {
@@ -163,37 +157,40 @@ async function applyPostHealingBoosts(healerName, patientName) {
     return null;
   }
   
-  // Priest: Spiritual Cleanse (remove debuffs from patient)
-  // The healer is boosted by a Priest, so the healer can remove debuffs from any patient
-  if (booster.job === 'Priest') {
-    try {
-      // Capture debuff state before removal (for logging)
-      const hadDebuff = patient.debuff?.active || false;
-      
-      const cleansedPatient = await applyBoostEffect('Priest', 'Healers', patient);
-      if (cleansedPatient && cleansedPatient._id) {
-        try {
-          await cleansedPatient.save();
-          // Log if debuff was removed
-          const logger = require('../../shared/utils/logger');
-          if (hadDebuff && !cleansedPatient.debuff?.active) {
-            logger.info('BOOST', `Priest boost - Spiritual Cleanse removed debuff from ${patientName} (healer: ${healerName})`);
-          }
-          return { type: 'Priest', patient: cleansedPatient };
-        } catch (saveError) {
-          // Fallback: if save fails, log error but don't break healing flow
-          const logger = require('../../shared/utils/logger');
-          logger.error('BOOST', `Error saving patient after Priest boost debuff removal: ${saveError.message}`);
-          // Return the cleansed patient object anyway (changes are in memory, just not persisted)
-          return { type: 'Priest', patient: cleansedPatient };
-        }
+  // Check if HEALER has ANY active boost (any category)
+  // Debuffed characters can only be healed by boosted healers, and any boosted healer can remove debuffs
+  const booster = await getBoosterInfo(healerName);
+  let debuffRemoved = false;
+  let resultType = null;
+  
+  if (booster) {
+    // Any boosted healer can remove debuffs
+    if (patient.debuff?.active) {
+      try {
+        patient.debuff.active = false;
+        patient.debuff.endDate = null;
+        await patient.save();
+        debuffRemoved = true;
+        logger.info('BOOST', `Boosted healer ${healerName} (boosted by ${booster.name} - ${booster.job}) removed debuff from ${patientName}`);
+        resultType = booster.job === 'Priest' ? 'Priest' : 'BoostedHealer';
+      } catch (error) {
+        logger.error('BOOST', `Error removing debuff from ${patientName}: ${error.message}`);
       }
-    } catch (error) {
-      // Fallback: if boost application fails, log error but don't break healing
-      const logger = require('../../shared/utils/logger');
-      logger.error('BOOST', `Error applying Priest boost to remove debuff from ${patientName}: ${error.message}`);
-      return null;
     }
+  }
+  
+  // Apply job-specific post-healing effects if healer has "Healers" category boost
+  const hasHealersBoost = await checkBoostActive(healerName, 'Healers');
+  if (hasHealersBoost && booster) {
+    // Priest: Spiritual Cleanse (already handled above, but keep for flavor text)
+    if (booster.job === 'Priest' && debuffRemoved) {
+      return { type: 'Priest', patient: patient, debuffRemoved: true };
+    }
+  }
+  
+  // Return result if debuff was removed, otherwise return null (other boosts handled separately)
+  if (debuffRemoved) {
+    return { type: resultType || 'BoostedHealer', patient: patient, debuffRemoved: true };
   }
   
   return null;

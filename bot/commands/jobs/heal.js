@@ -115,9 +115,28 @@ async function checkDebuff(character) {
     // Use the original endDate timestamp directly for Discord display
     const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
     
+    // Create embed for debuff error
+    const debuffEmbed = createErrorEmbed(
+      'Debuff Active',
+      `**${character.name}** is currently affected by a debuff and cannot receive healing requests.`,
+      [
+        {
+          name: '🕒 Debuff Expires',
+          value: `<t:${unixTimestamp}:D> (<t:${unixTimestamp}:R>)`,
+          inline: false
+        },
+        {
+          name: '💡 __What You Can Do__',
+          value: `> • Wait until the debuff expires\n> • Find a **boosted Healer** to remove the debuff during healing`,
+          inline: false
+        }
+      ],
+      'Debuff System'
+    );
+    
     return {
       hasDebuff: true,
-      message: `❌ **Error:** Healing cannot be requested because **${character.name}** is currently affected by a debuff. Please wait until the debuff expires.\n🕒 **Debuff Expires:** <t:${unixTimestamp}:D>`
+      message: debuffEmbed
     };
   }
   return { hasDebuff: false };
@@ -273,32 +292,23 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
   // Check debuffs on target character
   const targetDebuff = await checkDebuff(characterToHeal);
   if (targetDebuff.hasDebuff) {
-    // If target has debuff, check if HEALER has Priest boost (which can remove debuffs)
-    // Priest boost (Spiritual Cleanse): when healer is boosted by a Priest, they can remove debuffs from patients
-    // Must check BOTH the character's boostedBy field AND TempData to ensure boost is truly active
+    // Debuffed characters can ONLY be healed by boosted healers
+    // Check if HEALER has ANY active boost (regardless of category or job)
     if (!healerCharacter) {
       // No healer character provided - can't heal debuffed character
       return { valid: false, message: targetDebuff.message };
     }
     
-    const { isBoostActive } = require('./boosting');
     const { getBoosterInfo } = require('../../modules/boostIntegration');
     
-    // Check if HEALER has an active Priest boost
-    const hasHealerBoost = await isBoostActive(healerCharacter.name, 'Healers');
+    // Check if HEALER has any active boost
+    const boosterInfo = await getBoosterInfo(healerCharacter.name);
     
-    if (hasHealerBoost) {
-      // Get the booster info to check if it's a Priest
-      const boosterInfo = await getBoosterInfo(healerCharacter.name);
-      if (boosterInfo && boosterInfo.job === 'Priest') {
-        // Healer has Priest boost - debuff will be removed during healing (Spiritual Cleanse)
-        // Allow healing to proceed - the debuff removal happens in applyPostHealingBoosts
-        logger.info('HEAL', `Allowing healing of debuffed ${characterToHeal.name} because healer ${healerCharacter.name} has Priest boost (Spiritual Cleanse)`);
-        // Continue past debuff check - healing is allowed
-      } else {
-        // Healer has boost but not Priest - still block healing debuffed character
-        return { valid: false, message: targetDebuff.message };
-      }
+    if (boosterInfo) {
+      // Healer has an active boost - allow healing to proceed
+      // The debuff removal will happen during the healing process
+      logger.info('HEAL', `Allowing healing of debuffed ${characterToHeal.name} because healer ${healerCharacter.name} has an active boost from ${boosterInfo.name} (${boosterInfo.job})`);
+      // Continue past debuff check - healing is allowed
     } else {
       // No boost on healer - block healing debuffed character
       return { valid: false, message: targetDebuff.message };
@@ -896,17 +906,19 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     const healerAfterStaminaUse = await fetchCharacterByName(healerCharacter.name);
     const recipientAfterHealing = await fetchCharacterByName(characterToHeal.name);
     
-    // Check if patient had a debuff before applying Priest boost
+    // Check if patient had a debuff before applying post-healing boosts
     const hadDebuff = characterToHeal.debuff?.active || false;
     
-    // Priest: Spiritual Cleanse (remove active debuffs)
-    const priestResult = await applyPostHealingBoosts(healerCharacter.name, characterToHeal.name);
+    // Any boosted healer can remove debuffs
+    const postHealingResult = await applyPostHealingBoosts(healerCharacter.name, characterToHeal.name);
     let debuffRemoved = false;
-    if (priestResult && priestResult.type === 'Priest') {
-      // Check if debuff was actually removed
-      const refreshedPatient = await fetchCharacterByName(characterToHeal.name);
-      debuffRemoved = hadDebuff && (!refreshedPatient.debuff?.active);
-      logger.info('BOOST', `Priest boost - Spiritual Cleanse (debuff removed from ${characterToHeal.name})`);
+    if (postHealingResult && postHealingResult.debuffRemoved) {
+      debuffRemoved = true;
+      if (postHealingResult.type === 'Priest') {
+        logger.info('BOOST', `Priest boost - Spiritual Cleanse (debuff removed from ${characterToHeal.name})`);
+      } else {
+        logger.info('BOOST', `Boosted healer removed debuff from ${characterToHeal.name}`);
+      }
     }
     
     // Scholar: Efficient Recovery (+1 stamina to both healer and recipient)
@@ -1253,17 +1265,19 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
     const healerAfterStaminaUse = await fetchCharacterByName(healerCharacter.name);
     const recipientAfterHealing = await fetchCharacterByName(characterToHeal.name);
     
-    // Check if patient had a debuff before applying Priest boost
+    // Check if patient had a debuff before applying post-healing boosts
     const hadDebuff = characterToHeal.debuff?.active || false;
     
-    // Priest: Spiritual Cleanse (remove active debuffs)
-    const priestResult = await applyPostHealingBoosts(healerCharacter.name, characterToHeal.name);
+    // Any boosted healer can remove debuffs
+    const postHealingResult = await applyPostHealingBoosts(healerCharacter.name, characterToHeal.name);
     let debuffRemoved = false;
-    if (priestResult && priestResult.type === 'Priest') {
-      // Check if debuff was actually removed
-      const refreshedPatient = await fetchCharacterByName(characterToHeal.name);
-      debuffRemoved = hadDebuff && (!refreshedPatient.debuff?.active);
-      logger.info('BOOST', `Priest boost - Spiritual Cleanse (debuff removed from ${characterToHeal.name})`);
+    if (postHealingResult && postHealingResult.debuffRemoved) {
+      debuffRemoved = true;
+      if (postHealingResult.type === 'Priest') {
+        logger.info('BOOST', `Priest boost - Spiritual Cleanse (debuff removed from ${characterToHeal.name})`);
+      } else {
+        logger.info('BOOST', `Boosted healer removed debuff from ${characterToHeal.name}`);
+      }
     }
     
     // Scholar: Efficient Recovery (+1 stamina to both healer and recipient)
