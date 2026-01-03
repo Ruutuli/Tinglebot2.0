@@ -118,7 +118,7 @@ async function checkDebuff(character) {
     // Create embed for debuff error
     const debuffEmbed = createErrorEmbed(
       'Debuff Active',
-      `**${character.name}** is currently affected by a debuff and cannot receive healing requests.`,
+      `**${character.name}** is currently affected by a debuff and cannot receive healing.`,
       [
         {
           name: '🕒 Debuff Expires',
