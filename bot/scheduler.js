@@ -69,6 +69,7 @@ const { handleError } = require("../shared/utils/globalErrorHandler");
 const { sendUserDM } = require("../shared/utils/messageUtils");
 const { checkExpiredRequests } = require("../shared/utils/expirationHandler");
 const { isValidImageUrl } = require("../shared/utils/validation");
+const notificationService = require("../shared/utils/notificationService");
 const logger = require("../shared/utils/logger");
 const {
  cleanupExpiredEntries,
@@ -262,6 +263,7 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
   const villages = Object.keys(TOWNHALL_CHANNELS);
   let postedCount = 0;
   const results = [];
+  const weatherDataForNotifications = [];
 
   for (const village of villages) {
    try {
@@ -269,6 +271,24 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
     if (posted) {
      postedCount++;
      results.push({ village, success: true });
+     
+     // Collect weather data for notifications (only for daily update, not backup checks)
+     if (context === 'update' || context === '') {
+      try {
+       const weather = await getWeatherWithoutGeneration(village);
+       if (weather) {
+        // Determine weather type (special weather or normal)
+        const weatherType = weather.special || weather.precipitation || 'Clear';
+        weatherDataForNotifications.push({
+          village: village,
+          weather: weatherType,
+          type: weatherType
+        });
+       }
+      } catch (weatherError) {
+       logger.warn('WEATHER', `Failed to get weather data for notifications for ${village}: ${weatherError.message}`);
+      }
+     }
     } else {
      results.push({ village, success: false, reason: 'postWeatherForVillage returned false' });
     }
@@ -287,6 +307,18 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
   
   if (postedCount > 0) {
    logger.success('WEATHER', `Successfully processed ${postedCount}/${villages.length} villages${context ? ` (${context})` : ''}`);
+   
+   // Send daily weather notifications if this was a daily update
+   if ((context === 'update' || context === '') && weatherDataForNotifications.length > 0) {
+    try {
+     await notificationService.sendDailyWeatherNotifications({
+       villages: weatherDataForNotifications
+     });
+    } catch (notificationError) {
+     logger.error('WEATHER', `Failed to send daily weather notifications: ${notificationError.message}`);
+     // Don't throw - notification failures shouldn't break weather posting
+    }
+   }
   } else if (failedVillages.length === villages.length && villages.length > 0) {
    logger.error('WEATHER', `No weather posted - all villages failed${context ? ` (${context})` : ''}`);
   }
@@ -1319,14 +1351,23 @@ async function handleDebuffExpiry(client) {
       character.debuff.endDate = null;
       await character.save();
 
-      const dmSent = await sendUserDM(
-        character.userId,
-        `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`,
-        client
-      );
-      
-      if (!dmSent) {
-        logger.info('CLEANUP', `Could not send debuff expiry DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
+      // Send notification via notification service (checks user preferences)
+      try {
+        await notificationService.sendDebuffEndNotification(character.userId, {
+          name: character.name
+        });
+      } catch (error) {
+        logger.error('CLEANUP', `Error sending debuff end notification for ${character.name}: ${error.message}`);
+        // Fallback to direct DM if notification service fails
+        const dmSent = await sendUserDM(
+          character.userId,
+          `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`,
+          client
+        );
+        
+        if (!dmSent) {
+          logger.info('CLEANUP', `Could not send debuff expiry DM to user ${character.userId} for ${character.name} - user may have blocked DMs`);
+        }
       }
     }
   }

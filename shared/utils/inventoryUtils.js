@@ -848,6 +848,7 @@ const processMaterials = async (interaction, character, inventory, craftableItem
             craftingMaterial: craftableItem.craftingMaterial,
             quantity: quantity
           },
+          quantity: quantity, // Store at top level for easier access
           materialsUsedSoFar: materialsUsed,
           currentMaterialIndex: craftableItem.craftingMaterial.findIndex(m => m.itemName === materialName),
           allMaterials: craftableItem.craftingMaterial,
@@ -965,7 +966,10 @@ const processMaterials = async (interaction, character, inventory, craftableItem
 // Handles general categories correctly - processes different item types from the same category
 // Example: For "Any Raw Meat" x3, user can select 1 Raw Bird + 1 Raw Prime + 1 Raw Gourmet
 const continueProcessMaterials = async (interaction, character, selectedItems, craftingState) => {
-  const { materialName, requiredQuantity, craftableItem, quantity, materialsUsedSoFar, currentMaterialIndex, allMaterials, inventory } = craftingState.data;
+  const { materialName, requiredQuantity, craftableItem, quantity: quantityParam, materialsUsedSoFar, currentMaterialIndex, allMaterials, inventory } = craftingState.data;
+  
+  // Get quantity from top level or from craftableItem as fallback (for backwards compatibility)
+  const quantity = quantityParam !== undefined ? quantityParam : (craftableItem?.quantity || 1);
   
   const materialsUsed = [...materialsUsedSoFar];
   let remainingQuantity = requiredQuantity;
@@ -1157,6 +1161,7 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
             craftingMaterial: craftableItem.craftingMaterial,
             quantity: quantity
           },
+          quantity: quantity, // Store at top level for easier access
           materialsUsedSoFar: materialsUsed,
           currentMaterialIndex: currentProcessIndex,
           allMaterials: allMaterials,

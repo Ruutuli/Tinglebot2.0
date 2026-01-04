@@ -7,12 +7,13 @@ const User = require('../models/UserModel');
 const logger = require('./logger');
 
 /**
- * Sends a Discord DM to a user
+ * Sends a Discord DM to a user with retry logic
  * @param {string} userId - Discord user ID
  * @param {object} embed - Discord embed object
+ * @param {number} retries - Number of retries remaining (default: 2)
  * @returns {Promise<boolean>} - Whether the DM was sent successfully
  */
-async function sendDiscordDM(userId, embed) {
+async function sendDiscordDM(userId, embed, retries = 2) {
   try {
     const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
     
@@ -35,6 +36,18 @@ async function sendDiscordDM(userId, embed) {
 
     if (!dmChannelResponse.ok) {
       const errorData = await dmChannelResponse.json();
+      // Don't retry on user-not-found or DM disabled errors (50007)
+      if (errorData.code === 50007 || errorData.code === 10007) {
+        logger.warn(`Cannot send DM to user ${userId}: ${errorData.message || 'User has DMs disabled or not found'}`, 'notificationService');
+        return false;
+      }
+      
+      // Retry on other errors
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return sendDiscordDM(userId, embed, retries - 1);
+      }
+      
       logger.warn(`Failed to create DM channel: ${errorData.message || 'Unknown error'} (User: ${userId})`, 'notificationService');
       return false;
     }
@@ -55,6 +68,18 @@ async function sendDiscordDM(userId, embed) {
 
     if (!messageResponse.ok) {
       const errorData = await messageResponse.json();
+      // Don't retry on user-not-found or DM disabled errors
+      if (errorData.code === 50007 || errorData.code === 10007) {
+        logger.warn(`Cannot send DM to user ${userId}: ${errorData.message || 'User has DMs disabled or not found'}`, 'notificationService');
+        return false;
+      }
+      
+      // Retry on other errors
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return sendDiscordDM(userId, embed, retries - 1);
+      }
+      
       logger.warn(`Failed to send DM: ${errorData.message || 'Unknown error'} (User: ${userId})`, 'notificationService');
       return false;
     }
@@ -62,6 +87,12 @@ async function sendDiscordDM(userId, embed) {
     logger.success(`Sent notification to user ${userId}`, 'notificationService');
     return true;
   } catch (error) {
+    // Retry on network errors
+    if (retries > 0 && (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.message.includes('fetch'))) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return sendDiscordDM(userId, embed, retries - 1);
+    }
+    
     logger.error(`Error sending DM to user ${userId}`, error, 'notificationService');
     return false;
   }
@@ -87,6 +118,9 @@ async function sendBloodMoonAlerts(bloodMoonData = {}) {
       color: 0x8B0000, // Dark red
       fields: bloodMoonData.fields || [],
       timestamp: new Date().toISOString(),
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
       footer: {
         text: 'Roots of the Wild • Blood Moon Event'
       }
@@ -150,6 +184,9 @@ async function sendDailyResetReminders() {
         }
       ],
       timestamp: new Date().toISOString(),
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
       footer: {
         text: 'Roots of the Wild • Daily Reset'
       }
@@ -239,6 +276,9 @@ async function sendWeatherNotifications(weatherData = {}) {
         }
       ],
       timestamp: new Date().toISOString(),
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
       footer: {
         text: 'Roots of the Wild • Weather Event'
       }
@@ -292,6 +332,9 @@ async function sendCharacterOfWeekNotifications(characterData = {}) {
       color: 0xFFD700, // Gold
       fields: characterData.fields || [],
       timestamp: new Date().toISOString(),
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
       footer: {
         text: 'Roots of the Wild • Character of the Week'
       }
@@ -333,6 +376,270 @@ async function sendCharacterOfWeekNotifications(characterData = {}) {
 }
 
 /**
+ * Sends Blight Call notifications to users who have enabled this notification
+ * @returns {Promise<object>} - Stats about notifications sent
+ */
+async function sendBlightCallNotifications() {
+  try {
+    logger.custom('📢', 'Sending Blight Call notifications...', '\x1b[35m', 'notificationService');
+    
+    // Find all users who have Blight Call notifications enabled
+    const users = await User.find({ 'settings.blightCallNotifications': true });
+    
+    logger.info(`Found ${users.length} users with Blight Call notifications enabled`, 'notificationService');
+    
+    const embed = {
+      title: '📢 Blight Roll Call Reminder!',
+      description: 'The daily Blight roll call will begin in **15 minutes** at 8:00 PM EST!',
+      color: 0xAD1457, // Blight pink/magenta
+      fields: [
+        {
+          name: '⏰ Time Remaining',
+          value: '15 minutes until the Blight roll call',
+          inline: false
+        },
+        {
+          name: '🎲 Command',
+          value: 'Use `/blight roll character_name` when the call starts!',
+          inline: false
+        },
+        {
+          name: '⚠️ Important',
+          value: 'If you miss a roll, your character will automatically progress to the next Blight stage.',
+          inline: false
+        }
+      ],
+      timestamp: new Date().toISOString(),
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
+      footer: {
+        text: 'Roots of the Wild • Blight Roll Call'
+      }
+    };
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const user of users) {
+      try {
+        // Validate user exists and has discordId
+        if (!user || !user.discordId) {
+          logger.warn(`Skipping invalid user in Blight Call notifications`, 'notificationService');
+          failCount++;
+          continue;
+        }
+        
+        const success = await sendDiscordDM(user.discordId, embed);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+        
+        // Add a small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        logger.error(`Error sending Blight Call notification to user ${user?.discordId || 'unknown'}`, error, 'notificationService');
+        failCount++;
+      }
+    }
+
+    logger.success(`Blight Call notifications sent: ${successCount} successful, ${failCount} failed`, 'notificationService');
+    
+    return {
+      total: users.length,
+      success: successCount,
+      failed: failCount
+    };
+  } catch (error) {
+    logger.error('Error sending Blight Call notifications', error, 'notificationService');
+    throw error;
+  }
+}
+
+/**
+ * Sends Debuff End notification to a specific user when their character's debuff expires
+ * @param {string} userId - Discord user ID
+ * @param {object} characterData - Information about the character whose debuff expired
+ * @returns {Promise<boolean>} - Whether the DM was sent successfully
+ */
+async function sendDebuffEndNotification(userId, characterData = {}) {
+  try {
+    // Check if user has debuff end notifications enabled
+    const user = await User.findOne({ discordId: userId });
+    if (!user || !user.settings?.debuffEndNotifications) {
+      return false; // User doesn't have this notification enabled
+    }
+
+    const characterName = characterData.name || 'your character';
+    
+    const embed = {
+      title: '✅ Debuff Ended!',
+      description: `**${characterName}**'s debuff has ended! You can now heal them with items or a Healer.`,
+      color: 0x00FF00, // Green
+      fields: [
+        {
+          name: '💚 Healing Available',
+          value: 'Your character can now receive healing through items or Healers.',
+          inline: false
+        },
+        {
+          name: '💊 Use Items',
+          value: 'Use healing items or visit a Healer to restore your character\'s hearts.',
+          inline: false
+        }
+      ],
+      timestamp: new Date().toISOString(),
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
+      footer: {
+        text: 'Roots of the Wild • Debuff System'
+      }
+    };
+
+    const success = await sendDiscordDM(userId, embed);
+    
+    if (success) {
+      logger.success(`Sent debuff end notification to user ${userId} for ${characterName}`, 'notificationService');
+    }
+    
+    return success;
+  } catch (error) {
+    logger.error(`Error sending debuff end notification to user ${userId}`, error, 'notificationService');
+    return false;
+  }
+}
+
+/**
+ * Sends Daily Weather notifications to users who have enabled this notification
+ * @param {object} weatherData - Information about the daily weather (can contain multiple villages)
+ * @returns {Promise<object>} - Stats about notifications sent
+ */
+async function sendDailyWeatherNotifications(weatherData = {}) {
+  try {
+    logger.custom('🌤️', 'Sending Daily Weather notifications...', '\x1b[36m', 'notificationService');
+    
+    // Find all users who have Daily Weather notifications enabled
+    const users = await User.find({ 'settings.dailyWeatherNotifications': true });
+    
+    logger.info(`Found ${users.length} users with Daily Weather notifications enabled`, 'notificationService');
+    
+    const weatherEmojis = {
+      'blightrain': '☠️',
+      'blizzard': '❄️',
+      'cinderstorm': '🔥',
+      'cloudy': '☁️',
+      'drought': '🌵',
+      'fairycircle': '🧚',
+      'flowerbloom': '🌸',
+      'fog': '🌫️',
+      'hail': '🧊',
+      'heatlightning': '⚡',
+      'jubilee': '🎉',
+      'meteorshower': '☄️',
+      'rain': '🌧️',
+      'rainbow': '🌈',
+      'rockslide': '🪨',
+      'sleet': '🌨️',
+      'snow': '❄️',
+      'thundersnow': '⛈️',
+      'thunderstorm': '⛈️',
+      'sunny': '☀️',
+      'clear': '☀️'
+    };
+
+    // Build weather summary text
+    let weatherSummary = 'Daily weather has been updated for all villages!';
+    const weatherFields = [];
+    
+    if (weatherData.villages && Array.isArray(weatherData.villages)) {
+      // Multiple villages with weather data
+      weatherData.villages.forEach(villageWeather => {
+        const village = villageWeather.village || 'Unknown';
+        const weatherType = villageWeather.weather || villageWeather.type || 'Clear';
+        const emoji = weatherEmojis[weatherType.toLowerCase()] || '🌤️';
+        weatherFields.push({
+          name: `${emoji} ${village}`,
+          value: weatherType,
+          inline: true
+        });
+      });
+    } else if (weatherData.village && weatherData.type) {
+      // Single village
+      const emoji = weatherEmojis[weatherData.type.toLowerCase()] || '🌤️';
+      weatherFields.push({
+        name: `${emoji} ${weatherData.village}`,
+        value: weatherData.type,
+        inline: true
+      });
+    }
+    
+    // If no specific weather data, provide generic message
+    if (weatherFields.length === 0) {
+      weatherFields.push({
+        name: '🌤️ Daily Weather Update',
+        value: 'Check your village channels for today\'s weather!',
+        inline: false
+      });
+    }
+    
+    const embed = {
+      title: '🌤️ Daily Weather Update!',
+      description: weatherSummary,
+      color: 0x87CEEB, // Sky blue
+      fields: weatherFields,
+      timestamp: new Date().toISOString(),
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
+      footer: {
+        text: 'Roots of the Wild • Daily Weather'
+      }
+    };
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const user of users) {
+      try {
+        // Validate user exists and has discordId
+        if (!user || !user.discordId) {
+          logger.warn(`Skipping invalid user in Daily Weather notifications`, 'notificationService');
+          failCount++;
+          continue;
+        }
+        
+        const success = await sendDiscordDM(user.discordId, embed);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+        
+        // Add a small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        logger.error(`Error sending Daily Weather notification to user ${user?.discordId || 'unknown'}`, error, 'notificationService');
+        failCount++;
+      }
+    }
+
+    logger.success(`Daily Weather notifications sent: ${successCount} successful, ${failCount} failed`, 'notificationService');
+    
+    return {
+      total: users.length,
+      success: successCount,
+      failed: failCount
+    };
+  } catch (error) {
+    logger.error('Error sending Daily Weather notifications', error, 'notificationService');
+    throw error;
+  }
+}
+
+/**
  * Sends a confirmation DM when a user enables a notification setting
  * @param {string} userId - Discord user ID
  * @param {string} notificationType - Type of notification enabled
@@ -364,6 +671,24 @@ async function sendNotificationEnabledConfirmation(userId, notificationType) {
         title: 'Character of the Week Alerts Enabled!',
         description: 'You will now be notified when the Character of the Week changes.',
         details: 'Be the first to know about featured characters!'
+      },
+      blightCallNotifications: {
+        emoji: '📢',
+        title: 'Blight Call Notifications Enabled!',
+        description: 'You will now receive reminders 15 minutes before the daily Blight roll call.',
+        details: 'Never miss a Blight roll call! You\'ll be notified at 7:45 PM EST daily.'
+      },
+      debuffEndNotifications: {
+        emoji: '✅',
+        title: 'Debuff End Notifications Enabled!',
+        description: 'You will now be notified when your character\'s debuff expires.',
+        details: 'Get notified as soon as your character can be healed again!'
+      },
+      dailyWeatherNotifications: {
+        emoji: '🌤️',
+        title: 'Daily Weather Notifications Enabled!',
+        description: 'You will now receive notifications about daily weather updates at 8 AM EST.',
+        details: 'Stay informed about the weather in all villages every day!'
       }
     };
 
@@ -391,6 +716,9 @@ async function sendNotificationEnabledConfirmation(userId, notificationType) {
         }
       ],
       timestamp: new Date().toISOString(),
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
       footer: {
         text: 'Roots of the Wild • Notification Settings'
       }
@@ -415,6 +743,9 @@ module.exports = {
   sendDailyResetReminders,
   sendWeatherNotifications,
   sendCharacterOfWeekNotifications,
+  sendBlightCallNotifications,
+  sendDebuffEndNotification,
+  sendDailyWeatherNotifications,
   sendNotificationEnabledConfirmation
 };
 

@@ -2914,7 +2914,7 @@
                   <input type="checkbox" id="blood-moon-alerts" class="toggle-input">
                   <span class="toggle-slider"></span>
                 </div>
-                <small>Get notified at midnight the day before Blood Moon starts at 8pm</small>
+                <small>Get notified at midnight the day before Blood Moon starts at 8pm EST</small>
               </div>
               <div class="setting-item">
                 <label for="daily-reset-reminders">Daily Reset Reminders</label>
@@ -2930,7 +2930,7 @@
                   <input type="checkbox" id="weather-notifications" class="toggle-input">
                   <span class="toggle-slider"></span>
                 </div>
-                <small>Notify about special weather events</small>
+                <small>Get notified about special weather events</small>
               </div>
               <div class="setting-item">
                 <label for="character-week-updates">Character of the Week</label>
@@ -2940,19 +2940,37 @@
                 </div>
                 <small>Get notified when Character of the Week changes</small>
               </div>
+              <div class="setting-item">
+                <label for="blight-call-notifications">Blight Call Notifications</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="blight-call-notifications" class="toggle-input">
+                  <span class="toggle-slider"></span>
+                </div>
+                <small>Get notified 15 minutes before daily blight roll call at 8pm EST</small>
+              </div>
+              <div class="setting-item">
+                <label for="debuff-end-notifications">Debuff End Notifications</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="debuff-end-notifications" class="toggle-input">
+                  <span class="toggle-slider"></span>
+                </div>
+                <small>Get notified when your character's debuff expires</small>
+              </div>
+              <div class="setting-item">
+                <label for="daily-weather-notifications">Daily Weather Notifications</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="daily-weather-notifications" class="toggle-input">
+                  <span class="toggle-slider"></span>
+                </div>
+                <small>Get notified about daily weather updates at 8am EST</small>
+              </div>
             </div>
             <div class="notification-dm-warning">
               <i class="fas fa-info-circle"></i>
               <div>
                 <strong>Important:</strong> Discord DMs must be enabled to receive notifications. 
-                If you don't receive a confirmation message when enabling these settings, the bot cannot send you DMs. 
-                This usually happens if:
-                <ul>
-                  <li>You have DMs disabled in your Discord privacy settings</li>
-                  <li>You've blocked DMs from this server</li>
-                  <li>You're not in the Roots of the Wild server</li>
-                </ul>
-                To fix: Go to Server Settings → Privacy Settings → Enable "Allow direct messages from server members"
+                If you don't receive a confirmation message when enabling these settings, the bot cannot send you DMs.
+                <p style="margin-top: 8px; margin-bottom: 4px;"><strong>To enable DMs:</strong> Go to Server Settings → Privacy Settings → Enable "Allow direct messages from server members"</p>
               </div>
             </div>
           </div>

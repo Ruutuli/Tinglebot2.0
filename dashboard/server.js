@@ -4424,6 +4424,65 @@ const setupBloodMoonAlerts = () => {
   scheduleNextMidnightBloodMoonCheck();
 };
 
+// ============================================================================
+// ------------------- Section: Blight Call Notification Scheduler -------------------
+// Sends blight call notifications 15 minutes before the daily blight call at 8pm EST
+// ============================================================================
+
+// ------------------- Function: getNext745pmEST -------------------
+// Gets the next 7:45pm EST from current time
+const getNext745pmEST = (fromDate) => {
+  const date = new Date(fromDate);
+  
+  // 7:45 PM EST = 12:45 AM UTC next day (during standard time, UTC-5)
+  // 7:45 PM EDT = 11:45 PM UTC (during daylight saving, UTC-4)
+  // We'll use 0:45 UTC (12:45 AM) = 7:45 PM EST for consistency
+  const next745pm = new Date(date);
+  next745pm.setUTCHours(0, 45, 0, 0); // 0:45 UTC = 7:45 PM EST (or 8:45 PM EDT)
+  
+  // If we've already passed 7:45pm today, schedule for tomorrow
+  if (date >= next745pm) {
+    next745pm.setUTCDate(next745pm.getUTCDate() + 1);
+  }
+  
+  return next745pm;
+};
+
+// ------------------- Function: scheduleNextBlightCallNotification -------------------
+// Schedules the next blight call notification for 7:45pm EST (15 minutes before 8pm)
+const scheduleNextBlightCallNotification = () => {
+  const now = new Date();
+  const next745pm = getNext745pmEST(now);
+  
+  const timeUntilNext745pm = next745pm.getTime() - now.getTime();
+  
+  const hours = Math.floor(timeUntilNext745pm / (1000 * 60 * 60));
+  const minutes = Math.floor((timeUntilNext745pm % (1000 * 60 * 60)) / (1000 * 60));
+  logger.schedule(`Next blight call notification: ${next745pm.toLocaleString('en-US', { timeZone: 'America/New_York' })} (${hours}h ${minutes}m)`);
+  
+  setTimeout(async () => {
+    try {
+      logger.event('Executing scheduled blight call notification');
+      await notificationService.sendBlightCallNotifications();
+      
+      // Schedule the next notification
+      scheduleNextBlightCallNotification();
+      
+    } catch (error) {
+      logger.error('Error in scheduled blight call notification', error);
+      // Schedule next notification even if this one failed
+      scheduleNextBlightCallNotification();
+    }
+  }, timeUntilNext745pm);
+};
+
+// ------------------- Function: setupBlightCallNotifications -------------------
+// Sets up the blight call notification scheduler
+const setupBlightCallNotifications = () => {
+  logger.schedule('Setting up blight call notification scheduler (7:45pm EST)');
+  scheduleNextBlightCallNotification();
+};
+
 // ------------------- Function: rotateCharacterOfWeek -------------------
 // Helper function to rotate the character of the week
 const rotateCharacterOfWeek = async () => {
@@ -10386,6 +10445,9 @@ app.get('/api/user/settings', async (req, res) => {
       dailyResetReminders: false,
       weatherNotifications: false,
       characterWeekUpdates: false,
+      blightCallNotifications: false,
+      debuffEndNotifications: false,
+      dailyWeatherNotifications: false,
       activityLogging: true,
       dataRetention: 90,
       profileVisibility: 'friends'
@@ -10425,17 +10487,18 @@ app.put('/api/user/settings', async (req, res) => {
       'dateFormat', 'timezone', 'currencyFormat', 'numberFormat',
       'itemsPerPage', 'defaultSort',
       'bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates',
+      'blightCallNotifications', 'debuffEndNotifications', 'dailyWeatherNotifications',
       'activityLogging', 'dataRetention', 'profileVisibility'
     ];
     
     const settingsToUpdate = {};
-    const notificationTypes = ['bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates'];
+    const notificationTypes = ['bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates', 'blightCallNotifications', 'debuffEndNotifications', 'dailyWeatherNotifications'];
     const notificationsEnabled = [];
     
     for (const key of validSettings) {
       if (key in settings) {
         // Type conversion based on field
-        if (['highContrast', 'bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates', 'activityLogging'].includes(key)) {
+        if (['highContrast', 'bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates', 'blightCallNotifications', 'debuffEndNotifications', 'dailyWeatherNotifications', 'activityLogging'].includes(key)) {
           settingsToUpdate[`settings.${key}`] = Boolean(settings[key]);
           
           // Check if notification was just enabled (changed from false to true)
@@ -13847,7 +13910,8 @@ const startServer = async () => {
   Promise.all([
     setupWeeklyCharacterRotation(),
     Promise.resolve(setupDailyResetReminders()),
-    Promise.resolve(setupBloodMoonAlerts())
+    Promise.resolve(setupBloodMoonAlerts()),
+    Promise.resolve(setupBlightCallNotifications())
   ]).then(() => {
     logger.divider('SCHEDULERS INITIALIZED');
   }).catch(err => {
