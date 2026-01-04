@@ -632,23 +632,50 @@ for (const { name } of cleanedItems) {
   }
 
   for (const { name, quantity } of aggregatedItems) {
+   // Extract the base item name by removing any quantity in parentheses
+   const baseItemName = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
+
+   // Find the canonical item name from the database first
    // Handle items with + in their names by using exact match instead of regex
-   let fromInventory;
-   if (name.includes('+')) {
-     fromInventory = await fromInventoryCollection.findOne({
-       itemName: name
-     });
+   let itemDetails;
+   if (baseItemName.includes('+')) {
+     itemDetails = await ItemModel.findOne({
+       itemName: baseItemName
+     }).exec();
    } else {
-     fromInventory = await fromInventoryCollection.findOne({
-       itemName: { $regex: new RegExp(`^${escapeRegExp(name)}$`, "i") }
-     });
+     itemDetails = await ItemModel.findOne({
+       itemName: { $regex: new RegExp(`^${escapeRegExp(baseItemName)}$`, "i") }
+     }).exec();
    }
 
-   if (!fromInventory || fromInventory.quantity < quantity) {
-    allItemsAvailable = false;
-    unavailableItems.push(
-     `${name} - QTY:${fromInventory ? fromInventory.quantity : 0}`
-    );
+   if (!itemDetails) {
+     unavailableItems.push(`${baseItemName} - Not Found`);
+     allItemsAvailable = false;
+     continue;
+   }
+
+   // Use the canonical item name from the database
+   const canonicalName = itemDetails.itemName;
+
+   // Handle items with + in their names by using exact match instead of regex
+   // Use find().toArray() to get all matching entries and aggregate quantities
+   let fromInventoryEntries;
+   if (canonicalName.includes('+')) {
+     fromInventoryEntries = await fromInventoryCollection
+      .find({ itemName: canonicalName })
+      .toArray();
+   } else {
+     fromInventoryEntries = await fromInventoryCollection
+      .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalName)}$`, "i") } })
+      .toArray();
+   }
+   const totalQuantity = fromInventoryEntries.reduce(
+    (sum, entry) => sum + (entry.quantity || 0),
+    0
+   );
+   if (totalQuantity < quantity) {
+     unavailableItems.push(`${canonicalName} - QTY:${totalQuantity}`);
+     allItemsAvailable = false;
    }
   }
 

@@ -36,6 +36,7 @@ const {
  checkExpiringBlightRequests,
  sendBlightReminders,
  checkMissedRolls,
+ checkAndPostMissedBlightPing,
 } = require("./handlers/blightHandler");
 
 // Scripts
@@ -1506,6 +1507,21 @@ function setupBlightScheduler(client) {
     }
   }
  );
+
+ // Periodic check to ensure blight ping was sent (fallback mechanism)
+ // Runs every hour to catch any missed pings
+ createCronJob(
+  "0 * * * *",
+  "Check Missed Blight Ping",
+  async () => {
+    try {
+      await checkAndPostMissedBlightPing(client);
+    } catch (error) {
+      handleError(error, 'scheduler.js');
+      logger.error('BLIGHT', 'Error during missed blight ping check', error.message);
+    }
+  }
+ );
 }
 
 // ============================================================================
@@ -2281,6 +2297,9 @@ async function runStartupChecks(client) {
    checkAndPostMissedQuests(client),
    handleQuestExpirationAtMidnight(client)
   ]);
+
+  // Check if blight ping was missed (fallback mechanism)
+  await checkAndPostMissedBlightPing(client);
 
   logger.separator('═', 60);
   logger.success('SCHEDULER', '✨ Startup checks complete');

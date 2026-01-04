@@ -1052,7 +1052,7 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
       return "canceled";
     }
     
-    const nextRequiredQuantity = materialQty * quantity;
+    let nextRequiredQuantity = materialQty * quantity;
     
     // Validate nextRequiredQuantity is a valid number (should never be NaN after validations above)
     if (isNaN(nextRequiredQuantity) || nextRequiredQuantity <= 0) {

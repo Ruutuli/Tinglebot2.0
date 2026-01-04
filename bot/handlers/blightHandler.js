@@ -2262,6 +2262,124 @@ async function postBlightRollCall(client) {
   }
 }
 
+// ============================================================================
+// ------------------- Function: checkAndPostMissedBlightPing -------------------
+// Checks if the blight ping was sent since the last 8pm EST boundary.
+// If not, and we're past that boundary, posts the ping.
+// This is a fallback mechanism to ensure the ping is sent even if the bot was offline.
+// ============================================================================
+
+async function checkAndPostMissedBlightPing(client) {
+  try {
+    const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
+    
+    if (!client || !client.channels) {
+      console.error('[blightHandler]: Invalid Discord client in checkAndPostMissedBlightPing');
+      logger.error('BLIGHT', 'Invalid Discord client in checkAndPostMissedBlightPing');
+      return;
+    }
+    
+    if (!channelId) {
+      console.error('[blightHandler]: BLIGHT_NOTIFICATIONS_CHANNEL_ID not set in environment variables.');
+      logger.error('BLIGHT', 'BLIGHT_NOTIFICATIONS_CHANNEL_ID not configured');
+      return;
+    }
+    
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) {
+      console.error('[blightHandler]: Channel not found for checking blight ping.');
+      logger.error('BLIGHT', `Channel not found: ${channelId}`);
+      return;
+    }
+    
+    // Check if bot has permission to read message history
+    if (!channel.permissionsFor(client.user)?.has(['ReadMessageHistory', 'ViewChannel'])) {
+      console.error('[blightHandler]: Bot lacks permissions to read message history in blight notifications channel.');
+      logger.error('BLIGHT', `Bot lacks permissions to read messages in channel: ${channelId}`);
+      return;
+    }
+    
+    // Calculate the last 8pm EST boundary
+    const now = new Date();
+    const estHour = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      hour12: false
+    }).formatToParts(now).find(p => p.type === 'hour').value);
+    
+    // Calculate today's 8 PM EST/EDT in UTC
+    const today8PMUTC = get8PMESTInUTC(now);
+    
+    // Determine the last 8pm EST boundary
+    let last8PMBoundary;
+    if (estHour < 20) {
+      // Before 8 PM today - check against yesterday's 8 PM
+      const yesterday = new Date(now);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      last8PMBoundary = get8PMESTInUTC(yesterday);
+    } else {
+      // After 8 PM today - check against today's 8 PM
+      last8PMBoundary = today8PMUTC;
+    }
+    
+    // Only proceed if we're past the last 8pm boundary
+    if (now < last8PMBoundary) {
+      logger.info('BLIGHT', 'Not yet past last 8pm EST boundary - skipping check');
+      return;
+    }
+    
+      // Fetch recent messages from the channel (last 50 messages should be enough)
+      // We'll look for messages from the bot that contain the blight ping
+      try {
+        const messages = await channel.messages.fetch({ limit: 50 });
+        
+        // Filter messages from the bot that match the blight ping pattern
+        // Look for messages with role ping or embed with the blight roll call title
+        const botMessages = messages.filter(msg => msg.author.id === client.user.id);
+        const blightPingMessages = botMessages.filter(msg => {
+          // Check if message contains role ping
+          if (msg.content && msg.content.includes('<@&')) {
+            return true;
+          }
+          
+          // Check if message has embed with blight roll call title
+          if (msg.embeds && msg.embeds.length > 0) {
+            const embed = msg.embeds[0];
+            if (embed.title && embed.title.includes('Daily Blight Roll Call')) {
+              return true;
+            }
+          }
+          
+          return false;
+        });
+        
+        // Check if any blight ping message was sent after the last 8pm boundary
+        const pingSentAfterBoundary = blightPingMessages.some(msg => 
+          msg.createdTimestamp >= last8PMBoundary.getTime()
+        );
+        
+        if (pingSentAfterBoundary) {
+          logger.info('BLIGHT', 'Blight ping was already sent since last 8pm EST boundary');
+          return;
+        }
+        
+        // Blight ping was not sent since the last 8pm boundary - send it now
+        logger.info('BLIGHT', 'Blight ping was not sent since last 8pm EST boundary - posting now (fallback)');
+        await postBlightRollCall(client);
+      
+    } catch (fetchError) {
+      console.error('[blightHandler]: Error fetching messages in checkAndPostMissedBlightPing:', fetchError);
+      logger.error('BLIGHT', `Error fetching messages: ${fetchError.message}`);
+      // Don't throw - just log the error
+    }
+    
+  } catch (error) {
+    console.error('[blightHandler]: Error in checkAndPostMissedBlightPing:', error);
+    logger.error('BLIGHT', `Error in checkAndPostMissedBlightPing: ${error.message}`);
+    // Don't throw - this is a fallback check, shouldn't crash the bot
+  }
+}
+
 // ------------------- Function: viewBlightStatus -------------------
 // Displays current blight status, submission progress, and deadlines for a character.
 async function viewBlightStatus(interaction, characterName) {
@@ -3670,5 +3788,6 @@ module.exports = {
   validateCharacterOwnership,
   checkMissedRolls,
   getCharacterBlightHistory,
-  completeBlightHealing
+  completeBlightHealing,
+  checkAndPostMissedBlightPing
 };
