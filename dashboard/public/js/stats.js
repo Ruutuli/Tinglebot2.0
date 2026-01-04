@@ -2211,8 +2211,16 @@ function renderQuestOverview(questData) {
                     </thead>
                     <tbody>
                         <tr>
-                            <td><strong>Total Quests</strong></td>
+                            <td><strong>Total Quests (Tracked)</strong></td>
                             <td>${questData.totalQuests || 0}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Legacy Quests</strong></td>
+                            <td>${questData.totalLegacyQuests || 0}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>All-Time Total</strong></td>
+                            <td>${questData.totalAllTimeQuests || 0}</td>
                         </tr>
                         <tr>
                             <td><strong>Active</strong></td>

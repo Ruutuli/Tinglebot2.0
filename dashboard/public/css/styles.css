@@ -120,6 +120,13 @@ body {
   min-height: 100vh;
 }
 
+/* Ensure light theme body styling is explicit */
+html[data-theme="light"] body,
+[data-theme="light"] body {
+  color: var(--text-primary) !important;
+  background: var(--bg-primary) !important;
+}
+
 /* Links */
 a {
   color: var(--totk-light-green);

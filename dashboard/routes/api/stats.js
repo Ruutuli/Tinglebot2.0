@@ -438,7 +438,18 @@ router.get('/quests', asyncHandler(async (req, res) => {
     // Get all quests
     const allQuests = await Quest.find({}).lean();
     
+    // Get total legacy quests from all users
+    const usersWithLegacy = await User.find({
+      'quests.legacy.totalTransferred': { $gt: 0 }
+    }).select('quests.legacy.totalTransferred').lean();
+    
+    const totalLegacyQuests = usersWithLegacy.reduce((sum, user) => {
+      const legacyCount = user.quests?.legacy?.totalTransferred || 0;
+      return sum + legacyCount;
+    }, 0);
+    
     const totalQuests = allQuests.length;
+    const totalAllTimeQuests = totalQuests + totalLegacyQuests;
     const activeQuests = allQuests.filter(q => q.status === 'active').length;
     const completedQuests = allQuests.filter(q => q.status === 'completed').length;
     
@@ -553,6 +564,8 @@ router.get('/quests', asyncHandler(async (req, res) => {
     
     res.json({
       totalQuests,
+      totalLegacyQuests,
+      totalAllTimeQuests,
       activeQuests,
       completedQuests,
       questsPerType,
