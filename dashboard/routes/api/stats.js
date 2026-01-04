@@ -11,6 +11,7 @@ const User = require('../../../shared/models/UserModel');
 const Pet = require('../../../shared/models/PetModel');
 const Mount = require('../../../shared/models/MountModel');
 const VillageShops = require('../../../shared/models/VillageShopsModel');
+const Quest = require('../../../shared/models/QuestModel');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const logger = require('../../../shared/utils/logger');
 const { getCharacterInventoryCollection } = require('../../../shared/database/db');
@@ -397,6 +398,14 @@ router.get('/characters', asyncHandler(async (req, res) => {
     }
   });
 
+  // Prepare allCharacters with only necessary fields for detail views
+  const allCharactersData = allCharacters.map(char => ({
+    name: char.name,
+    homeVillage: char.homeVillage,
+    race: char.race,
+    job: char.job
+  }));
+
   res.json({
     totalCharacters,
     charactersPerVillage,
@@ -417,8 +426,148 @@ router.get('/characters', asyncHandler(async (req, res) => {
     blightedCharacters,
     jailedCharacters,
     modCharacterStats,
+    allCharacters: allCharactersData,
     timestamp: Date.now()
   });
+}));
+
+// ------------------- Function: getQuestStats -------------------
+// Returns comprehensive quest statistics and analytics
+router.get('/quests', asyncHandler(async (req, res) => {
+  try {
+    // Get all quests
+    const allQuests = await Quest.find({}).lean();
+    
+    const totalQuests = allQuests.length;
+    const activeQuests = allQuests.filter(q => q.status === 'active').length;
+    const completedQuests = allQuests.filter(q => q.status === 'completed').length;
+    
+    // Quests per type
+    const questsPerType = {};
+    const questsByType = {};
+    allQuests.forEach(q => {
+      if (q.questType) {
+        questsPerType[q.questType] = (questsPerType[q.questType] || 0) + 1;
+        if (!questsByType[q.questType]) {
+          questsByType[q.questType] = [];
+        }
+        questsByType[q.questType].push({
+          questID: q.questID,
+          title: q.title,
+          questType: q.questType,
+          location: q.location,
+          status: q.status,
+          date: q.date,
+          postedAt: q.postedAt,
+          createdAt: q.createdAt,
+          participantCount: q.participants ? (typeof q.participants === 'object' && q.participants.size !== undefined ? q.participants.size : Object.keys(q.participants || {}).length) : 0
+        });
+      }
+    });
+    
+    // Completion rates by type
+    const completionRateByType = {};
+    Object.keys(questsPerType).forEach(type => {
+      const typeQuests = allQuests.filter(q => q.questType === type);
+      const typeCompleted = typeQuests.filter(q => q.status === 'completed').length;
+      completionRateByType[type] = typeQuests.length > 0
+        ? ((typeCompleted / typeQuests.length) * 100).toFixed(1)
+        : 0;
+    });
+    
+    // Average participants per quest
+    let totalParticipants = 0;
+    allQuests.forEach(q => {
+      if (q.participants) {
+        const participantCount = typeof q.participants === 'object' && q.participants.size !== undefined 
+          ? q.participants.size 
+          : Object.keys(q.participants || {}).length;
+        totalParticipants += participantCount;
+      }
+    });
+    const avgParticipants = totalQuests > 0 ? (totalParticipants / totalQuests).toFixed(2) : 0;
+    
+    // Quest participation leaderboard (users with most quest participations)
+    const userParticipationCount = {};
+    allQuests.forEach(q => {
+      if (q.participants) {
+        const participants = typeof q.participants === 'object' && q.participants.size !== undefined
+          ? Array.from(q.participants.values())
+          : Object.values(q.participants || {});
+        
+        participants.forEach(participant => {
+          if (participant && participant.userId) {
+            userParticipationCount[participant.userId] = (userParticipationCount[participant.userId] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    const topParticipants = Object.entries(userParticipationCount)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([userId, count]) => ({ userId, count }));
+    
+    // Fetch usernames for top participants
+    const topParticipantUserIds = topParticipants.map(t => t.userId);
+    const users = await User.find({ discordId: { $in: topParticipantUserIds } })
+      .select('discordId username nickname')
+      .lean();
+    
+    const userMap = {};
+    users.forEach(u => {
+      userMap[u.discordId] = u.nickname || u.username || u.discordId;
+    });
+    
+    const topParticipantsWithDetails = topParticipants.map(t => ({
+      userId: t.userId,
+      username: userMap[t.userId] || 'Unknown User',
+      count: t.count
+    }));
+    
+    // Quests by location/village
+    const questsByLocation = {};
+    allQuests.forEach(q => {
+      if (q.location) {
+        questsByLocation[q.location] = (questsByLocation[q.location] || 0) + 1;
+      }
+    });
+    
+    // Recent quests (last 20)
+    const recentQuests = allQuests
+      .sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+        const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+        return dateB - dateA;
+      })
+      .slice(0, 20)
+      .map(q => ({
+        questID: q.questID,
+        title: q.title,
+        questType: q.questType,
+        location: q.location,
+        status: q.status,
+        date: q.date,
+        createdAt: q.createdAt
+      }));
+    
+    res.json({
+      totalQuests,
+      activeQuests,
+      completedQuests,
+      questsPerType,
+      questsByType,
+      completionRateByType,
+      avgParticipants: parseFloat(avgParticipants),
+      topParticipants: topParticipantsWithDetails,
+      questsByLocation,
+      recentQuests,
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    logger.error('Error fetching quest stats', error, 'stats.js');
+    res.status(500).json({ error: 'Failed to fetch quest stats' });
+  }
 }));
 
 module.exports = router;

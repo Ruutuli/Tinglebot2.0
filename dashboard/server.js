@@ -1820,6 +1820,42 @@ app.get('/api/stats/hwqs', async (req, res) => {
         : 0;
     });
     
+    // Group quests by type for detail views
+    const questsByType = {};
+    allHWQs.forEach(q => {
+      if (q.type) {
+        if (!questsByType[q.type]) {
+          questsByType[q.type] = [];
+        }
+        questsByType[q.type].push({
+          questId: q.questId,
+          village: q.village,
+          npcName: q.npcName,
+          type: q.type,
+          completed: q.completed || false,
+          date: q.date
+        });
+      }
+    });
+    
+    // Group quests by NPC for detail views
+    const questsByNPC = {};
+    allHWQs.forEach(q => {
+      if (q.npcName) {
+        if (!questsByNPC[q.npcName]) {
+          questsByNPC[q.npcName] = [];
+        }
+        questsByNPC[q.npcName].push({
+          questId: q.questId,
+          village: q.village,
+          npcName: q.npcName,
+          type: q.type,
+          completed: q.completed || false,
+          date: q.date
+        });
+      }
+    });
+    
     res.json({
       totalQuests,
       completedQuests,
@@ -1828,6 +1864,8 @@ app.get('/api/stats/hwqs', async (req, res) => {
       uniqueCompleterCount,
       questsPerVillage,
       questsPerType,
+      questsByType,
+      questsByNPC,
       topNPCs,
       topCompleters: topCompletersWithDetails,
       completionRateByVillage,

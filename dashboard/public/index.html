@@ -616,7 +616,49 @@
             </div>
           </div>
         </div>
+
+        <!-- Quest Stats Section -->
+        <div class="stats-card-wide quest-stats-section">
+          <h3><i class="fas fa-scroll"></i> Quest Statistics</h3>
+          <div id="quest-stats-overview"></div>
+        </div>
+
+        <div class="stats-card-wide">
+          <h3>Quests per Type</h3>
+          <div class="chart-container" style="position: relative; min-height: 300px; display: flex; align-items: center; justify-content: center;">
+            <div class="chart-loading" style="position: absolute; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-color);"></i>
+              <p style="color: var(--text-secondary); margin: 0;">Loading chart...</p>
+            </div>
+            <canvas id="questTypeChart"></canvas>
+          </div>
+        </div>
+
+        <div class="stats-card-wide">
+          <h3><i class="fas fa-trophy"></i> Top Quest Participants</h3>
+          <div id="quest-top-participants" style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-color);"></i>
+              <p style="color: var(--text-secondary); margin: 0;">Loading leaderboard...</p>
+            </div>
+          </div>
+        </div>
       </section>
+
+      <!-- Stats Detail Modal -->
+      <div id="stats-detail-modal" class="hidden">
+        <div class="stats-modal-content">
+          <div class="stats-modal-header">
+            <h3 id="stats-detail-modal-title">Chart Details</h3>
+            <button class="stats-modal-close" id="stats-detail-modal-close" aria-label="Close">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="stats-modal-body" id="stats-detail-modal-body">
+            <!-- Dynamic content will be inserted here -->
+          </div>
+        </div>
+      </div>
 
       <!-- Profile Section -->
       <section id="profile-section" style="display:none;">

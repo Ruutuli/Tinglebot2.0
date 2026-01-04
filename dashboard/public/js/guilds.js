@@ -770,7 +770,7 @@ function displayAnnouncements(announcements) {
     const parsedPreview = parseDiscordMarkdown(previewContent);
     
     return `
-      <div class="announcement-card ${announcement.isTruncated ? 'clickable' : ''}" data-announcement-index="${index}">
+      <div class="announcement-card clickable" data-announcement-index="${index}">
         <div class="announcement-header">
           <div class="announcement-author">
             <img 

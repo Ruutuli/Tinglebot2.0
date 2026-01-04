@@ -20,6 +20,7 @@ let raceChart = null;
 let jobChart = null;
 let hwqTypeChart = null;
 let hwqNPCChart = null;
+let questTypeChart = null;
 
 // ============================================================================
 // ------------------- Utility Functions -------------------
@@ -233,7 +234,8 @@ function createBarChart(ctx, data, options = {}) {
     const {
         labelTransform = v => v,
         colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
-        yMax = null
+        yMax = null,
+        onClick = null
     } = options;
 
     const cleanedData = cleanDataObject(data, 'chart');
@@ -249,6 +251,25 @@ function createBarChart(ctx, data, options = {}) {
     const isMobile = isMobileDevice();
     const isTablet = isTabletDevice();
 
+    const chartOptions = getResponsiveChartOptions();
+    
+    // Add onClick handler if provided
+    if (onClick) {
+        chartOptions.onClick = (event, activeElements, chart) => {
+            if (activeElements && activeElements.length > 0) {
+                const index = activeElements[0].index;
+                const label = labels[index];
+                const originalLabel = Object.keys(cleanedData)[index];
+                onClick(originalLabel, label, index);
+            }
+        };
+        chartOptions.interaction = {
+            ...chartOptions.interaction,
+            intersect: true,
+            mode: 'point'
+        };
+    }
+
     const chartConfig = {
         type: 'bar',
         data: {
@@ -261,7 +282,7 @@ function createBarChart(ctx, data, options = {}) {
                 categoryPercentage: isMobile ? 0.9 : (isTablet ? 0.88 : 0.85)
             }]
         },
-        options: getResponsiveChartOptions()
+        options: chartOptions
     };
 
     // Override y-axis max if specified
@@ -301,7 +322,8 @@ function createBarChart(ctx, data, options = {}) {
 function createPieChart(ctx, data, options = {}) {
     const {
         labelTransform = v => v,
-        colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
+        colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
+        onClick = null
     } = options;
 
     const cleanedData = cleanDataObject(data, 'pie');
@@ -309,6 +331,25 @@ function createPieChart(ctx, data, options = {}) {
     const values = Object.values(cleanedData);
     const isMobile = isMobileDevice();
     const isTablet = isTabletDevice();
+
+    const chartOptions = getResponsivePieChartOptions();
+    
+    // Add onClick handler if provided
+    if (onClick) {
+        chartOptions.onClick = (event, activeElements, chart) => {
+            if (activeElements && activeElements.length > 0) {
+                const index = activeElements[0].index;
+                const label = labels[index];
+                const originalLabel = Object.keys(cleanedData)[index];
+                onClick(originalLabel, label, index);
+            }
+        };
+        chartOptions.interaction = {
+            ...chartOptions.interaction,
+            intersect: true,
+            mode: 'point'
+        };
+    }
 
     const chartConfig = {
         type: 'pie',
@@ -321,7 +362,7 @@ function createPieChart(ctx, data, options = {}) {
                 borderColor: '#1a1a1a'
             }]
         },
-        options: getResponsivePieChartOptions()
+        options: chartOptions
     };
 
     // Add datalabels plugin with bigger, bolder text
@@ -899,6 +940,616 @@ function generateJailStatusSection(data) {
 }
 
 // ============================================================================
+// ------------------- Modal Management Functions -------------------
+// ============================================================================
+
+// Function: Show chart detail modal
+function showChartDetailModal(chartType, selectedItem, data) {
+    const modal = document.getElementById('stats-detail-modal');
+    const modalTitle = document.getElementById('stats-detail-modal-title');
+    const modalBody = document.getElementById('stats-detail-modal-body');
+    
+    if (!modal || !modalTitle || !modalBody) {
+        console.error('Stats detail modal elements not found');
+        return;
+    }
+    
+    // Generate detail view based on chart type
+    let title = '';
+    let content = '';
+    
+    switch (chartType) {
+        case 'village':
+            title = `${selectedItem.charAt(0).toUpperCase() + selectedItem.slice(1)} - Character Details`;
+            content = generateVillageDetailView(selectedItem, data);
+            break;
+        case 'race':
+            title = `${selectedItem} - Character Details`;
+            content = generateRaceDetailView(selectedItem, data);
+            break;
+        case 'job':
+            title = `${selectedItem} - Character Details`;
+            content = generateJobDetailView(selectedItem, data);
+            break;
+        case 'hwq-type':
+            title = `${selectedItem.charAt(0).toUpperCase() + selectedItem.slice(1)} Quests - Details`;
+            content = generateHWQTypeDetailView(selectedItem, data);
+            break;
+        case 'hwq-npc':
+            title = `${selectedItem} - Quest Details`;
+            content = generateHWQNPCDetailView(selectedItem, data);
+            break;
+        case 'quest-type':
+            title = `${selectedItem} Quests - Details`;
+            content = generateQuestTypeDetailView(selectedItem, data);
+            break;
+        default:
+            title = 'Chart Details';
+            content = '<div class="stats-detail-empty">No details available</div>';
+    }
+    
+    modalTitle.textContent = title;
+    modalBody.innerHTML = content;
+    
+    // Show modal
+    modal.classList.remove('hidden');
+    modal.classList.add('show');
+    
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+    
+    // Setup close handlers
+    setupModalCloseHandlers();
+}
+
+// Function: Hide chart detail modal
+function hideChartDetailModal() {
+    const modal = document.getElementById('stats-detail-modal');
+    if (!modal) return;
+    
+    modal.classList.remove('show');
+    modal.classList.add('hidden');
+    
+    // Restore body scroll
+    document.body.style.overflow = '';
+}
+
+// Function: Setup modal close handlers
+function setupModalCloseHandlers() {
+    const modal = document.getElementById('stats-detail-modal');
+    const closeBtn = document.getElementById('stats-detail-modal-close');
+    
+    if (!modal || !closeBtn) return;
+    
+    // Remove existing listeners (if any) by cloning
+    const newCloseBtn = closeBtn.cloneNode(true);
+    closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+    
+    // Add close button click handler
+    newCloseBtn.addEventListener('click', hideChartDetailModal);
+    
+    // Add backdrop click handler
+    const backdropHandler = (e) => {
+        if (e.target === modal) {
+            hideChartDetailModal();
+        }
+    };
+    modal.addEventListener('click', backdropHandler);
+    
+    // Add escape key handler
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('show')) {
+            hideChartDetailModal();
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+}
+
+// ============================================================================
+// ------------------- Detail View Generation Functions -------------------
+// ============================================================================
+
+// Function: Generate village detail view
+function generateVillageDetailView(villageName, data) {
+    const village = villageName.toLowerCase();
+    const allCharacters = data.allCharacters || [];
+    
+    // Filter characters by village
+    const villageCharacters = allCharacters.filter(char => 
+        char && char.homeVillage && char.homeVillage.toLowerCase() === village
+    );
+    
+    // Group by race
+    const raceBreakdown = {};
+    const jobBreakdown = {};
+    
+    villageCharacters.forEach(char => {
+        if (char.race) {
+            raceBreakdown[char.race] = (raceBreakdown[char.race] || 0) + 1;
+        }
+        if (char.job) {
+            const job = char.job.charAt(0).toUpperCase() + char.job.slice(1);
+            jobBreakdown[job] = (jobBreakdown[job] || 0) + 1;
+        }
+    });
+    
+    let html = `<div class="stats-detail-section">
+        <h4><i class="fas fa-users"></i> Characters in ${villageName.charAt(0).toUpperCase() + villageName.slice(1)}</h4>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Total: ${villageCharacters.length} characters</p>
+    `;
+    
+    // Race breakdown
+    if (Object.keys(raceBreakdown).length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-chart-bar"></i> Breakdown by Race</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Race</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        const sortedRaces = Object.entries(raceBreakdown).sort((a, b) => b[1] - a[1]);
+        sortedRaces.forEach(([race, count]) => {
+            const percentage = ((count / villageCharacters.length) * 100).toFixed(1);
+            html += `<tr>
+                <td>${race}</td>
+                <td>${count}</td>
+                <td>${percentage}%</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    }
+    
+    // Job breakdown
+    if (Object.keys(jobBreakdown).length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-briefcase"></i> Breakdown by Job</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Job</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        const sortedJobs = Object.entries(jobBreakdown).sort((a, b) => b[1] - a[1]);
+        sortedJobs.forEach(([job, count]) => {
+            const percentage = ((count / villageCharacters.length) * 100).toFixed(1);
+            html += `<tr>
+                <td>${job}</td>
+                <td>${count}</td>
+                <td>${percentage}%</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    }
+    
+    // Character list
+    if (villageCharacters.length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-list"></i> Character List</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Character Name</th>
+                        <th>Race</th>
+                        <th>Job</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        villageCharacters.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(char => {
+            html += `<tr>
+                <td>${char.name || 'Unknown'}</td>
+                <td>${char.race || '—'}</td>
+                <td>${char.job ? (char.job.charAt(0).toUpperCase() + char.job.slice(1)) : '—'}</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    } else {
+        html += `<div class="stats-detail-empty">No characters found in ${villageName.charAt(0).toUpperCase() + villageName.slice(1)}</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+// Function: Generate race detail view
+function generateRaceDetailView(raceName, data) {
+    const allCharacters = data.allCharacters || [];
+    
+    // Filter characters by race
+    const raceCharacters = allCharacters.filter(char => 
+        char && char.race && char.race.toLowerCase() === raceName.toLowerCase()
+    );
+    
+    // Group by village and job
+    const villageBreakdown = {};
+    const jobBreakdown = {};
+    
+    raceCharacters.forEach(char => {
+        if (char.homeVillage) {
+            const village = char.homeVillage.toLowerCase();
+            villageBreakdown[village] = (villageBreakdown[village] || 0) + 1;
+        }
+        if (char.job) {
+            const job = char.job.charAt(0).toUpperCase() + char.job.slice(1);
+            jobBreakdown[job] = (jobBreakdown[job] || 0) + 1;
+        }
+    });
+    
+    let html = `<div class="stats-detail-section">
+        <h4><i class="fas fa-users"></i> ${raceName} Characters</h4>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Total: ${raceCharacters.length} characters</p>
+    `;
+    
+    // Village breakdown
+    if (Object.keys(villageBreakdown).length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-map-marker-alt"></i> Breakdown by Village</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Village</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        const sortedVillages = Object.entries(villageBreakdown).sort((a, b) => b[1] - a[1]);
+        sortedVillages.forEach(([village, count]) => {
+            const percentage = ((count / raceCharacters.length) * 100).toFixed(1);
+            html += `<tr>
+                <td>${village.charAt(0).toUpperCase() + village.slice(1)}</td>
+                <td>${count}</td>
+                <td>${percentage}%</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    }
+    
+    // Job breakdown
+    if (Object.keys(jobBreakdown).length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-briefcase"></i> Breakdown by Job</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Job</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        const sortedJobs = Object.entries(jobBreakdown).sort((a, b) => b[1] - a[1]);
+        sortedJobs.forEach(([job, count]) => {
+            const percentage = ((count / raceCharacters.length) * 100).toFixed(1);
+            html += `<tr>
+                <td>${job}</td>
+                <td>${count}</td>
+                <td>${percentage}%</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    }
+    
+    // Character list
+    if (raceCharacters.length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-list"></i> Character List</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Character Name</th>
+                        <th>Village</th>
+                        <th>Job</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        raceCharacters.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(char => {
+            html += `<tr>
+                <td>${char.name || 'Unknown'}</td>
+                <td>${char.homeVillage ? (char.homeVillage.charAt(0).toUpperCase() + char.homeVillage.slice(1)) : '—'}</td>
+                <td>${char.job ? (char.job.charAt(0).toUpperCase() + char.job.slice(1)) : '—'}</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    } else {
+        html += `<div class="stats-detail-empty">No characters found with race ${raceName}</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+// Function: Generate job detail view
+function generateJobDetailView(jobName, data) {
+    const allCharacters = data.allCharacters || [];
+    const jobLower = jobName.toLowerCase();
+    
+    // Filter characters by job
+    const jobCharacters = allCharacters.filter(char => 
+        char && char.job && char.job.toLowerCase() === jobLower
+    );
+    
+    // Group by village and race
+    const villageBreakdown = {};
+    const raceBreakdown = {};
+    
+    jobCharacters.forEach(char => {
+        if (char.homeVillage) {
+            const village = char.homeVillage.toLowerCase();
+            villageBreakdown[village] = (villageBreakdown[village] || 0) + 1;
+        }
+        if (char.race) {
+            raceBreakdown[char.race] = (raceBreakdown[char.race] || 0) + 1;
+        }
+    });
+    
+    let html = `<div class="stats-detail-section">
+        <h4><i class="fas fa-briefcase"></i> ${jobName} Characters</h4>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Total: ${jobCharacters.length} characters</p>
+    `;
+    
+    // Village breakdown
+    if (Object.keys(villageBreakdown).length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-map-marker-alt"></i> Breakdown by Village</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Village</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        const sortedVillages = Object.entries(villageBreakdown).sort((a, b) => b[1] - a[1]);
+        sortedVillages.forEach(([village, count]) => {
+            const percentage = ((count / jobCharacters.length) * 100).toFixed(1);
+            html += `<tr>
+                <td>${village.charAt(0).toUpperCase() + village.slice(1)}</td>
+                <td>${count}</td>
+                <td>${percentage}%</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    }
+    
+    // Race breakdown
+    if (Object.keys(raceBreakdown).length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-chart-bar"></i> Breakdown by Race</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Race</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        const sortedRaces = Object.entries(raceBreakdown).sort((a, b) => b[1] - a[1]);
+        sortedRaces.forEach(([race, count]) => {
+            const percentage = ((count / jobCharacters.length) * 100).toFixed(1);
+            html += `<tr>
+                <td>${race}</td>
+                <td>${count}</td>
+                <td>${percentage}%</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    }
+    
+    // Character list
+    if (jobCharacters.length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-list"></i> Character List</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Character Name</th>
+                        <th>Village</th>
+                        <th>Race</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        jobCharacters.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(char => {
+            html += `<tr>
+                <td>${char.name || 'Unknown'}</td>
+                <td>${char.homeVillage ? (char.homeVillage.charAt(0).toUpperCase() + char.homeVillage.slice(1)) : '—'}</td>
+                <td>${char.race || '—'}</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    } else {
+        html += `<div class="stats-detail-empty">No characters found with job ${jobName}</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+// Function: Generate HWQ type detail view
+function generateHWQTypeDetailView(questType, data) {
+    const hwqData = data.hwqData || {};
+    const questsByType = hwqData.questsByType || {};
+    const typeQuests = questsByType[questType.toLowerCase()] || [];
+    
+    let html = `<div class="stats-detail-section">
+        <h4><i class="fas fa-clipboard-list"></i> ${questType.charAt(0).toUpperCase() + questType.slice(1)} Help Wanted Quests</h4>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Total: ${typeQuests.length} quests</p>
+    `;
+    
+    // Completion stats
+    const completed = typeQuests.filter(q => q.completed).length;
+    const completionRate = typeQuests.length > 0 ? ((completed / typeQuests.length) * 100).toFixed(1) : 0;
+    
+    html += `<div class="stats-detail-grid">
+        <div class="stats-detail-card">
+            <h5>Completion Rate</h5>
+            <p style="font-size: 1.5rem; font-weight: 700; color: var(--accent-color);">${completionRate}%</p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">${completed} of ${typeQuests.length} completed</p>
+        </div>
+    </div>`;
+    
+    // Quest list
+    if (typeQuests.length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-list"></i> Quest List</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Quest ID</th>
+                        <th>Village</th>
+                        <th>NPC</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        typeQuests.slice(0, 50).forEach(quest => {
+            html += `<tr>
+                <td>${quest.questId || '—'}</td>
+                <td>${quest.village || '—'}</td>
+                <td>${quest.npcName || '—'}</td>
+                <td>${quest.completed ? '<span style="color: #4caf50;">Completed</span>' : '<span style="color: #ff9800;">Active</span>'}</td>
+                <td>${quest.date || '—'}</td>
+            </tr>`;
+        });
+        
+        if (typeQuests.length > 50) {
+            html += `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">... and ${typeQuests.length - 50} more quests</td></tr>`;
+        }
+        
+        html += `</tbody></table></div>`;
+    } else {
+        html += `<div class="stats-detail-empty">No ${questType} quests found</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+// Function: Generate HWQ NPC detail view
+function generateHWQNPCDetailView(npcName, data) {
+    const hwqData = data.hwqData || {};
+    const questsByNPC = hwqData.questsByNPC || {};
+    const npcQuests = questsByNPC[npcName] || [];
+    
+    let html = `<div class="stats-detail-section">
+        <h4><i class="fas fa-user-tie"></i> ${npcName} - Quest Details</h4>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Total: ${npcQuests.length} quests</p>
+    `;
+    
+    // Completion stats
+    const completed = npcQuests.filter(q => q.completed).length;
+    const completionRate = npcQuests.length > 0 ? ((completed / npcQuests.length) * 100).toFixed(1) : 0;
+    
+    // Type breakdown
+    const typeBreakdown = {};
+    npcQuests.forEach(quest => {
+        const type = quest.type || 'unknown';
+        typeBreakdown[type] = (typeBreakdown[type] || 0) + 1;
+    });
+    
+    html += `<div class="stats-detail-grid">
+        <div class="stats-detail-card">
+            <h5>Completion Rate</h5>
+            <p style="font-size: 1.5rem; font-weight: 700; color: var(--accent-color);">${completionRate}%</p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">${completed} of ${npcQuests.length} completed</p>
+        </div>
+    </div>`;
+    
+    // Type breakdown
+    if (Object.keys(typeBreakdown).length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-chart-bar"></i> Breakdown by Quest Type</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Quest Type</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        const sortedTypes = Object.entries(typeBreakdown).sort((a, b) => b[1] - a[1]);
+        sortedTypes.forEach(([type, count]) => {
+            const percentage = ((count / npcQuests.length) * 100).toFixed(1);
+            html += `<tr>
+                <td>${type.charAt(0).toUpperCase() + type.slice(1)}</td>
+                <td>${count}</td>
+                <td>${percentage}%</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+    }
+    
+    // Quest list
+    if (npcQuests.length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-list"></i> Quest List</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Quest ID</th>
+                        <th>Type</th>
+                        <th>Village</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        npcQuests.slice(0, 50).forEach(quest => {
+            html += `<tr>
+                <td>${quest.questId || '—'}</td>
+                <td>${quest.type ? (quest.type.charAt(0).toUpperCase() + quest.type.slice(1)) : '—'}</td>
+                <td>${quest.village || '—'}</td>
+                <td>${quest.completed ? '<span style="color: #4caf50;">Completed</span>' : '<span style="color: #ff9800;">Active</span>'}</td>
+                <td>${quest.date || '—'}</td>
+            </tr>`;
+        });
+        
+        if (npcQuests.length > 50) {
+            html += `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">... and ${npcQuests.length - 50} more quests</td></tr>`;
+        }
+        
+        html += `</tbody></table></div>`;
+    } else {
+        html += `<div class="stats-detail-empty">No quests found for ${npcName}</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+// ============================================================================
 // ------------------- Chart Initialization Functions -------------------
 // ============================================================================
 
@@ -998,7 +1649,10 @@ function initializeVillageChart(data) {
     const villageCtx = canvas.getContext('2d');
     villageChart = createPieChart(villageCtx, villageData, {
         labelTransform: v => v.charAt(0).toUpperCase() + v.slice(1),
-        colors: colors
+        colors: colors,
+        onClick: (originalLabel, label, index) => {
+            showChartDetailModal('village', originalLabel, { allCharacters: data.allCharacters || [] });
+        }
     });
 }
 
@@ -1026,7 +1680,10 @@ function initializeRaceChart(data) {
             '#FF9999', '#FFD27A', '#FFF066', '#A6F29A', '#6EEEDD', '#8FCBFF',
             '#B89CFF', '#F78CD2', '#8CE6C0', '#FFDB66', '#BFBFBF'
         ],
-        yMax: isMobile ? 30 : (isTablet ? 32 : 35)
+        yMax: isMobile ? 30 : (isTablet ? 32 : 35),
+        onClick: (originalLabel, label, index) => {
+            showChartDetailModal('race', originalLabel, { allCharacters: data.allCharacters || [] });
+        }
     });
 }
 
@@ -1055,7 +1712,10 @@ function initializeJobChart(data) {
             '#8FCBFF', '#B89CFF', '#F78CD2', '#8CE6C0', '#FFDB66',
             '#BFBFBF', '#D6AEFA', '#7BEFC3', '#FFC3A0', '#AAB6FF', '#FFB3B3'
         ],
-        yMax: isMobile ? 12 : (isTablet ? 13 : 15)
+        yMax: isMobile ? 12 : (isTablet ? 13 : 15),
+        onClick: (originalLabel, label, index) => {
+            showChartDetailModal('job', originalLabel, { allCharacters: data.allCharacters || [] });
+        }
     });
 }
 
@@ -1177,6 +1837,19 @@ async function initStatsPage() {
         // Initialize HWQ stats if data is available
         if (hwqData) {
             initializeHWQStats(hwqData);
+        }
+        
+        // Fetch quest stats
+        try {
+            const questRes = await fetch(`/api/stats/quests?t=${timestamp}`);
+            if (questRes.ok) {
+                const questData = await questRes.json();
+                if (questData) {
+                    initializeQuestStats(questData);
+                }
+            }
+        } catch (questError) {
+            console.warn('Error loading quest stats:', questError);
         }
 
         // Apply Firefox-specific fixes (with multiple attempts to ensure DOM is ready)
@@ -1311,7 +1984,10 @@ function initializeHWQTypeChart(hwqData) {
             '#e91e63', // Art (pink)
             '#2196f3'  // Writing (blue)
         ],
-        yMax: dynamicMax
+        yMax: dynamicMax,
+        onClick: (originalLabel, label, index) => {
+            showChartDetailModal('hwq-type', originalLabel, { hwqData: hwqData });
+        }
     });
 }
 
@@ -1345,7 +2021,10 @@ function initializeHWQNPCChart(hwqData) {
             '#FF9999', '#FFD27A', '#FFF066', '#A6F29A', '#6EEEDD',
             '#8FCBFF', '#B89CFF', '#F78CD2', '#8CE6C0', '#FFDB66'
         ],
-        yMax: dynamicMax
+        yMax: dynamicMax,
+        onClick: (originalLabel, label, index) => {
+            showChartDetailModal('hwq-npc', originalLabel, { hwqData: hwqData });
+        }
     });
 }
 
@@ -1493,6 +2172,244 @@ if (isFirefoxBrowser()) {
     } else {
         applyFirefoxFixes();
     }
+}
+
+// ============================================================================
+// ------------------- Quest Statistics Functions -------------------
+// ============================================================================
+
+// Function: Initialize quest statistics section
+function initializeQuestStats(questData) {
+    // Render overview stats
+    renderQuestOverview(questData);
+    
+    // Initialize charts
+    initializeQuestTypeChart(questData);
+    
+    // Render top participants with detailed stats
+    renderQuestTopParticipants(questData);
+}
+
+// Function: Render quest overview statistics
+function renderQuestOverview(questData) {
+    const overviewDiv = document.getElementById('quest-stats-overview');
+    if (!overviewDiv) return;
+    
+    overviewDiv.innerHTML = `
+        <div class="stats-table-section">
+            <h4 class="stats-section-header"><i class="fas fa-info-circle"></i> Overview</h4>
+            <div class="stats-table-container">
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th colspan="2">General Statistics</th>
+                        </tr>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Total Quests</strong></td>
+                            <td>${questData.totalQuests || 0}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Active</strong></td>
+                            <td>${questData.activeQuests || 0}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Completed</strong></td>
+                            <td>${questData.completedQuests || 0}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Average Participants</strong></td>
+                            <td>${questData.avgParticipants || 0}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th colspan="2">Completion Rates by Type</th>
+                        </tr>
+                        <tr>
+                            <th>Type</th>
+                            <th>Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Object.entries(questData.completionRateByType || {})
+                            .sort(([,a], [,b]) => b - a)
+                            .map(([type, rate]) => `
+                                <tr>
+                                    <td>${type}</td>
+                                    <td>${rate}%</td>
+                                </tr>
+                            `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// Function: Initialize quest type distribution chart
+function initializeQuestTypeChart(questData) {
+    const canvas = document.getElementById('questTypeChart');
+    if (!canvas) return;
+    
+    // Hide loading indicator
+    const loadingIndicator = canvas.parentElement.querySelector('.chart-loading');
+    if (loadingIndicator) loadingIndicator.style.display = 'none';
+    
+    const ctx = canvas.getContext('2d');
+    const typeData = questData.questsPerType || {};
+    
+    if (questTypeChart) questTypeChart.destroy();
+    
+    // Calculate dynamic y-axis max
+    const maxValue = Math.max(...Object.values(typeData), 0);
+    const dynamicMax = Math.max(50, Math.ceil(maxValue * 1.2 / 10) * 10); // Round up to nearest 10
+    
+    questTypeChart = createBarChart(ctx, typeData, {
+        labelTransform: v => v || 'Unknown',
+        colors: [
+            '#FF6384', // Art (red)
+            '#36A2EB', // Writing (blue)
+            '#FFCE56', // Interactive (yellow)
+            '#4BC0C0', // RP (cyan)
+            '#9966FF'  // Art/Writing (purple)
+        ],
+        yMax: dynamicMax,
+        onClick: (originalLabel, label, index) => {
+            showChartDetailModal('quest-type', originalLabel, { questData: questData });
+        }
+    });
+}
+
+// Function: Render top participants leaderboard
+function renderQuestTopParticipants(questData) {
+    const participantsDiv = document.getElementById('quest-top-participants');
+    if (!participantsDiv) return;
+    
+    const topParticipants = questData.topParticipants || [];
+    
+    if (topParticipants.length === 0) {
+        participantsDiv.innerHTML = '<p style="text-align: center; color: #aaa;">No participation data available</p>';
+        return;
+    }
+    
+    participantsDiv.innerHTML = `
+        <div class="stats-table-section">
+            <h4 class="stats-section-header"><i class="fas fa-trophy"></i> Leaderboard</h4>
+            <div class="stats-table-container">
+                <table class="stats-table" style="max-width: 500px;">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>User</th>
+                            <th>Quests Participated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${topParticipants.map((participant, index) => {
+                            const medals = ['🥇', '🥈', '🥉'];
+                            const medal = index < 3 ? medals[index] : '';
+                            return `
+                                <tr${index < 3 ? ' style="background: rgba(255, 215, 0, 0.08);"' : ''}>
+                                    <td style="text-align: center; font-weight: 600; font-size: 1.1rem;">${medal} ${index + 1}</td>
+                                    <td><i class="fas fa-user"></i> ${participant.username}</td>
+                                    <td style="text-align: center; font-weight: 700; color: var(--accent-color); font-size: 1.1rem;">${participant.count}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// Function: Generate quest type detail view
+function generateQuestTypeDetailView(questType, data) {
+    const questData = data.questData || {};
+    const questsByType = questData.questsByType || {};
+    const typeQuests = questsByType[questType] || [];
+    
+    let html = `<div class="stats-detail-section">
+        <h4><i class="fas fa-scroll"></i> ${questType} Quests</h4>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Total: ${typeQuests.length} quests</p>
+    `;
+    
+    // Completion stats
+    const completed = typeQuests.filter(q => q.status === 'completed').length;
+    const completionRate = typeQuests.length > 0 ? ((completed / typeQuests.length) * 100).toFixed(1) : 0;
+    
+    // Average participants
+    let totalParticipants = 0;
+    typeQuests.forEach(q => {
+        totalParticipants += q.participantCount || 0;
+    });
+    const avgParticipants = typeQuests.length > 0 ? (totalParticipants / typeQuests.length).toFixed(2) : 0;
+    
+    html += `<div class="stats-detail-grid">
+        <div class="stats-detail-card">
+            <h5>Completion Rate</h5>
+            <p style="font-size: 1.5rem; font-weight: 700; color: var(--accent-color);">${completionRate}%</p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">${completed} of ${typeQuests.length} completed</p>
+        </div>
+        <div class="stats-detail-card">
+            <h5>Average Participants</h5>
+            <p style="font-size: 1.5rem; font-weight: 700; color: var(--accent-color);">${avgParticipants}</p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">per quest</p>
+        </div>
+    </div>`;
+    
+    // Quest list
+    if (typeQuests.length > 0) {
+        html += `<div class="stats-detail-section">
+            <h4><i class="fas fa-list"></i> Quest List</h4>
+            <table class="stats-detail-table">
+                <thead>
+                    <tr>
+                        <th>Quest ID</th>
+                        <th>Title</th>
+                        <th>Location</th>
+                        <th>Status</th>
+                        <th>Participants</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        typeQuests.slice(0, 50).sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+            return dateB - dateA;
+        }).forEach(quest => {
+            html += `<tr>
+                <td>${quest.questID || '—'}</td>
+                <td>${quest.title || '—'}</td>
+                <td>${quest.location || '—'}</td>
+                <td>${quest.status === 'completed' ? '<span style="color: #4caf50;">Completed</span>' : '<span style="color: #ff9800;">Active</span>'}</td>
+                <td>${quest.participantCount || 0}</td>
+                <td>${quest.date || (quest.createdAt ? new Date(quest.createdAt).toLocaleDateString() : '—')}</td>
+            </tr>`;
+        });
+        
+        if (typeQuests.length > 50) {
+            html += `<tr><td colspan="6" style="text-align: center; color: var(--text-secondary);">... and ${typeQuests.length - 50} more quests</td></tr>`;
+        }
+        
+        html += `</tbody></table></div>`;
+    } else {
+        html += `<div class="stats-detail-empty">No ${questType} quests found</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
 }
 
 // ============================================================================
