@@ -46,29 +46,34 @@
     --blight-text:          #ffb8dd;
     --blight-glow:          #AD1457;
   
-    /* Global Defaults */
-    --primary-color:        var(--botw-blue);
-    
-    /* Theme System - Default to Dark Mode */
-    --bg-primary:           #1A1A1A;
-    --bg-secondary:         #2D2D2D;
-    --text-primary:         #FFFFFF;
-    --text-secondary:       #B3B3B3;
-    --border-color:         #404040;
-    --accent-color:         #00A3DA;
-    --accent-hover:         var(--botw-dark-blue);
-    --primary-hover:        var(--botw-dark-blue);
-    --background-color:     var(--botw-black);
-    --card-background:      var(--botw-warm-black);
-    --text-color:           var(--botw-white);
-    --border-color:         var(--botw-dark-beige);
-    --error-color:          var(--blight-border);
-    --success-color:        var(--totk-light-green);
+    /* Global Defaults - Theme System (Default to Dark Mode) */
     --bg-primary:           var(--botw-black);
     --bg-secondary:         var(--botw-warm-black);
+    --bg-tertiary:          #404040;
     --text-primary:         var(--botw-white);
     --text-secondary:       var(--botw-beige);
+    --text-muted:           #808080;
+    --text-color:           var(--botw-white);
+    --border-color:         var(--botw-dark-beige);
+    --border-light:         #2D2D2D;
+    --background-color:     var(--botw-black);
+    --card-background:      var(--botw-warm-black);
+    
+    /* Accent Colors */
+    --primary-color:        var(--botw-blue);
+    --accent-color:         var(--botw-blue);
     --accent:               var(--botw-blue);
+    --accent-hover:         var(--botw-dark-blue);
+    --primary-hover:        var(--botw-dark-blue);
+    --accent-light:         #001A26;
+    --accent-glow:          rgba(0, 163, 218, 0.18);
+    
+    /* Status Colors */
+    --error-color:          var(--blight-border);
+    --success-color:        var(--totk-light-green);
+    --warning-color:        #FFC107;
+    --danger-color:         #DC3545;
+    --info-color:           #17A2B8;
   
     /* Modern Dashboard Layout & Visuals */
     --sidebar-width: 260px;
@@ -3163,20 +3168,31 @@ html {
   --bg-primary:           #1A1A1A;
   --bg-secondary:         #2D2D2D;
   --bg-tertiary:          #404040;
+  --background-color:     #1A1A1A;
+  --card-background:      #2D2D2D;
   --text-primary:         #FFFFFF;
   --text-secondary:       #B3B3B3;
   --text-muted:           #808080;
+  --text-color:           #FFFFFF;
   --border-color:         #404040;
   --border-light:         #2D2D2D;
   --accent-color:         #00A3DA;
+  --accent:               #00A3DA;
+  --primary-color:        #00A3DA;
   --accent-hover:         #0088B8;
+  --primary-hover:        #0088B8;
   --accent-light:         #001A26;
+  --accent-glow:          rgba(0, 163, 218, 0.18);
   --success-color:        #28A745;
   --warning-color:        #FFC107;
   --danger-color:         #DC3545;
+  --error-color:          #DC3545;
   --info-color:           #17A2B8;
   --shadow:               rgba(0, 0, 0, 0.3);
   --shadow-hover:         rgba(0, 0, 0, 0.4);
+  --glass-bg:             rgba(32, 36, 44, 0.72);
+  --glass-border:         rgba(255, 255, 255, 0.08);
+  --glass-divider:        rgba(255, 255, 255, 0.06);
 }
 
 /* Rudania Theme (Dark with Warm Red Accents) */
@@ -3184,21 +3200,31 @@ html {
   --bg-primary:           #1A1A1A;
   --bg-secondary:         #2D2D2D;
   --bg-tertiary:          #404040;
+  --background-color:     #1A1A1A;
+  --card-background:      #2D2D2D;
   --text-primary:         #FFFFFF;
   --text-secondary:       #B3B3B3;
   --text-muted:           #808080;
+  --text-color:           #FFFFFF;
   --border-color:         #4A2C2C;
   --border-light:         #2D1F1F;
   --accent-color:         #E74C3C;
+  --accent:               #E74C3C;
+  --primary-color:        #E74C3C;
   --accent-hover:         #C0392B;
+  --primary-hover:        #C0392B;
   --accent-light:         #2D1F1F;
   --accent-glow:          rgba(231, 76, 60, 0.2);
   --success-color:        #16A34A;
   --warning-color:        #F59E0B;
   --danger-color:         #EF4444;
+  --error-color:          #EF4444;
   --info-color:           #0EA5E9;
   --shadow:               rgba(231, 76, 60, 0.15);
   --shadow-hover:         rgba(231, 76, 60, 0.25);
+  --glass-bg:             rgba(32, 36, 44, 0.72);
+  --glass-border:         rgba(255, 255, 255, 0.08);
+  --glass-divider:        rgba(255, 255, 255, 0.06);
 }
 
 /* Inariko Theme (Dark with Modern Blue Accents) */
@@ -3206,21 +3232,31 @@ html {
   --bg-primary:           #1A1A1A;
   --bg-secondary:         #2D2D2D;
   --bg-tertiary:          #404040;
+  --background-color:     #1A1A1A;
+  --card-background:      #2D2D2D;
   --text-primary:         #FFFFFF;
   --text-secondary:       #B3B3B3;
   --text-muted:           #808080;
+  --text-color:           #FFFFFF;
   --border-color:         #2C3E50;
   --border-light:         #1F2D3D;
   --accent-color:         #3498DB;
+  --accent:               #3498DB;
+  --primary-color:        #3498DB;
   --accent-hover:         #2980B9;
+  --primary-hover:        #2980B9;
   --accent-light:         #1F2D3D;
   --accent-glow:          rgba(52, 152, 219, 0.2);
   --success-color:        #059669;
   --warning-color:         #D97706;
   --danger-color:         #DC2626;
+  --error-color:          #DC2626;
   --info-color:           #0891B2;
   --shadow:               rgba(52, 152, 219, 0.15);
   --shadow-hover:         rgba(52, 152, 219, 0.25);
+  --glass-bg:             rgba(32, 36, 44, 0.72);
+  --glass-border:         rgba(255, 255, 255, 0.08);
+  --glass-divider:        rgba(255, 255, 255, 0.06);
 }
 
 /* Vhintl Theme (Dark with Fresh Green Accents) */
@@ -3228,21 +3264,31 @@ html {
   --bg-primary:           #1A1A1A;
   --bg-secondary:         #2D2D2D;
   --bg-tertiary:          #404040;
+  --background-color:     #1A1A1A;
+  --card-background:      #2D2D2D;
   --text-primary:         #FFFFFF;
   --text-secondary:       #B3B3B3;
   --text-muted:           #808080;
+  --text-color:           #FFFFFF;
   --border-color:         #2D4A2D;
   --border-light:         #1F2D1F;
   --accent-color:         #27AE60;
+  --accent:               #27AE60;
+  --primary-color:        #27AE60;
   --accent-hover:         #229954;
+  --primary-hover:        #229954;
   --accent-light:         #1F2D1F;
   --accent-glow:          rgba(39, 174, 96, 0.2);
   --success-color:         #22C55E;
   --warning-color:         #EAB308;
   --danger-color:         #EF4444;
+  --error-color:          #EF4444;
   --info-color:           #06B6D4;
   --shadow:               rgba(39, 174, 96, 0.15);
   --shadow-hover:         rgba(39, 174, 96, 0.25);
+  --glass-bg:             rgba(32, 36, 44, 0.72);
+  --glass-border:         rgba(255, 255, 255, 0.08);
+  --glass-divider:        rgba(255, 255, 255, 0.06);
 }
 
 /* High Contrast Mode */

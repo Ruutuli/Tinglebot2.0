@@ -4,7 +4,7 @@
 
 /* -------------------- Divider -------------------- */
 .dashboard-divider {
-  background: linear-gradient(90deg, #cbb687 0%, #e5dcb7 100%);
+  background: linear-gradient(90deg, var(--totk-ocher) 0%, var(--totk-light-ocher) 100%);
   border-radius: 2px;
   height: 4px;
   margin: 0 auto 1.2rem;
@@ -39,7 +39,7 @@
 }
 
 .dashboard-welcome {
-  color: #cbb687;
+  color: var(--totk-ocher);
   font-size: 1.15rem;
   margin: 0 0 0.5rem;
   max-width: 700px;
@@ -67,7 +67,7 @@
 
 .dashboard-links-icon i {
   font-size: 1.3rem;
-  color: #cbb687;
+  color: var(--totk-ocher);
   vertical-align: middle;
 }
 
@@ -111,8 +111,8 @@
     rgba(203, 182, 135, 0.10) 0%,
     rgba(229, 220, 183, 0.08) 100%
   );
-  border: 1.5px solid #cbb687;
-  box-shadow: 0 2px 16px 0 #cbb68722, var(--card-shadow);
+  border: 1.5px solid var(--totk-ocher);
+  box-shadow: 0 2px 16px 0 rgba(203, 182, 135, 0.13), var(--card-shadow);
 }
 
 /* ==========================================================================
