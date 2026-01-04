@@ -120,11 +120,37 @@ body {
   min-height: 100vh;
 }
 
-/* Ensure light theme body styling is explicit */
+/* Light theme body styling - Force dark text on light background */
+html[data-theme="light"],
 html[data-theme="light"] body,
-[data-theme="light"] body {
-  color: var(--text-primary) !important;
-  background: var(--bg-primary) !important;
+[data-theme="light"] body,
+body[data-theme="light"] {
+  color: #212529 !important;
+  background: #FFFFFF !important;
+}
+
+/* Ensure all text elements are dark in light mode */
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3,
+[data-theme="light"] h4,
+[data-theme="light"] h5,
+[data-theme="light"] h6,
+[data-theme="light"] p,
+[data-theme="light"] span,
+[data-theme="light"] div,
+[data-theme="light"] label {
+  color: #212529 !important;
+}
+
+[data-theme="light"] .text-primary,
+[data-theme="light"] [class*="text-primary"] {
+  color: #212529 !important;
+}
+
+[data-theme="light"] .text-secondary,
+[data-theme="light"] [class*="text-secondary"] {
+  color: #495057 !important;
 }
 
 /* Links */
@@ -3089,29 +3115,33 @@ html {
 /* Theme System */
 /* ============================================================================ */
 
-/* Light Theme (Comprehensive) */
+/* Light Theme (Complete Redesign) */
 [data-theme="light"] {
-  /* Base Background Colors */
+  /* Base Background Colors - All Light */
   --bg-primary:           #FFFFFF;
-  --bg-secondary:         #F5F7FA;
+  --bg-secondary:         #F8F9FA;
   --bg-tertiary:          #E9ECEF;
   --background-color:     #FFFFFF;
-  --card-background:      #FAFBFC;
+  --card-background:      #FFFFFF;
+  --card-bg:              #FFFFFF;
+  --card-bg-secondary:    #F8F9FA;
   
-  /* Text Colors */
-  --text-primary:         #1A1A1A;
-  --text-secondary:       #4A5568;
-  --text-muted:           #718096;
-  --text-color:           #1A1A1A;
-  --text-tertiary:        #A0AEC0;
+  /* Text Colors - All Dark */
+  --text-primary:         #212529;
+  --text-secondary:       #495057;
+  --text-muted:           #6C757D;
+  --text-color:           #212529;
+  --text-tertiary:        #ADB5BD;
+  --stat-label:           #495057;
+  --stat-value:           #0D6EFD;
   
-  /* Border Colors */
-  --border-color:         #CBD5E0;
-  --border-light:         #E2E8F0;
-  --glass-border:         rgba(0, 0, 0, 0.1);
-  --glass-divider:        rgba(0, 0, 0, 0.08);
+  /* Border Colors - Light Gray */
+  --border-color:         #DEE2E6;
+  --border-light:         #E9ECEF;
+  --glass-border:         rgba(0, 0, 0, 0.08);
+  --glass-divider:        rgba(0, 0, 0, 0.06);
   
-  /* Accent & Primary Colors */
+  /* Accent & Primary Colors - Blue */
   --accent-color:         #0D6EFD;
   --accent:               #0D6EFD;
   --accent-hover:         #0B5ED7;
@@ -3121,43 +3151,42 @@ html {
   --accent-glow:          rgba(13, 110, 253, 0.15);
   
   /* Status Colors */
-  --success-color:        #16A34A;
-  --warning-color:        #F59E0B;
+  --success-color:        #198754;
+  --warning-color:        #FFC107;
   --danger-color:         #DC3545;
   --error-color:          #DC3545;
-  --info-color:           #0EA5E9;
+  --info-color:           #0DCAF0;
   
   /* TOTK/BOTW Theme Colors (Adjusted for Light) */
-  --totk-light-green:     #059669;
-  --totk-green:           #047857;
-  --totk-dark-green:      #065F46;
+  --totk-light-green:     #198754;
+  --totk-green:           #146C43;
+  --totk-dark-green:      #0F5132;
+  --totk-ocher:           #8B6914;
+  --totk-light-ocher:     #C9A962;
   --botw-blue:            #0D6EFD;
   --botw-dark-blue:       #0B5ED7;
+  --botw-warm-black:      #F8F9FA;
+  --botw-black:           #FFFFFF;
+  --botw-beige:           #6C757D;
+  --botw-dark-beige:      #495057;
+  --botw-white:           #212529;
   
-  /* Glass Morphism Effects */
-  --glass-bg:             rgba(255, 255, 255, 0.8);
-  --card-bg:              #FAFBFC;
-  --card-bg-secondary:    rgba(255, 255, 255, 0.9);
+  /* Glass Morphism Effects - Light */
+  --glass-bg:             rgba(255, 255, 255, 0.95);
   --input-bg:             #FFFFFF;
+  --hover-bg:             rgba(0, 0, 0, 0.03);
+  --hover-bg-strong:      rgba(0, 0, 0, 0.06);
   
-  /* Shadows */
-  --shadow:               rgba(0, 0, 0, 0.08);
-  --shadow-hover:         rgba(0, 0, 0, 0.12);
-  --card-shadow:          0 2px 8px rgba(0, 0, 0, 0.08);
-  --section-shadow:       0 2px 12px rgba(0, 0, 0, 0.1);
-  --section-glow:         0 4px 16px rgba(13, 110, 253, 0.12);
+  /* Shadows - Subtle */
+  --shadow:               rgba(0, 0, 0, 0.05);
+  --shadow-hover:         rgba(0, 0, 0, 0.1);
+  --card-shadow:          0 1px 3px rgba(0, 0, 0, 0.1);
+  --section-shadow:       0 2px 4px rgba(0, 0, 0, 0.08);
+  --section-glow:         0 4px 12px rgba(13, 110, 253, 0.1);
   
-  /* Gradients */
-  --main-gradient:        linear-gradient(135deg, #F9FAFB 0%, #F5F7FA 100%);
-  --primary-gradient:     linear-gradient(90deg, #0D6EFD 0%, #059669 100%);
-  
-  /* Stat Colors */
-  --stat-label:           #4A5568;
-  --stat-value:           #059669;
-  
-  /* Hover & Interactive States */
-  --hover-bg:             rgba(0, 0, 0, 0.04);
-  --hover-bg-strong:      rgba(0, 0, 0, 0.08);
+  /* Gradients - Light */
+  --main-gradient:        linear-gradient(135deg, #FFFFFF 0%, #F8F9FA 100%);
+  --primary-gradient:     linear-gradient(90deg, #0D6EFD 0%, #198754 100%);
   
   /* Blight Theme (Adjusted for Light) */
   --blight-bg-top:        #F3E5F5;
@@ -4429,70 +4458,53 @@ html {
     border-color: var(--border-color) !important;
   }
   
-  /* Force light mode styling with even higher specificity */
-  [data-theme="light"] select,
-  [data-theme="light"] select *,
-  [data-theme="light"] select option {
-    background-color: #FFFFFF !important;
-    background: #FFFFFF !important;
-    color: #1A1A1A !important;
-    border-color: #CBD5E0 !important;
-  }
-  
   /* Specific theme-select styling */
   [data-theme="light"] #theme-select,
   [data-theme="light"] #theme-select option {
     background-color: #FFFFFF !important;
     background: #FFFFFF !important;
-    color: #1A1A1A !important;
-    border-color: #CBD5E0 !important;
+    color: #212529 !important;
+    border-color: #DEE2E6 !important;
   }
   
-  /* Force all form elements in light mode */
+  /* Force all form elements in light mode - Complete override */
   [data-theme="light"] input,
+  [data-theme="light"] input[type="text"],
+  [data-theme="light"] input[type="email"],
+  [data-theme="light"] input[type="password"],
+  [data-theme="light"] input[type="number"],
+  [data-theme="light"] input[type="search"],
+  [data-theme="light"] input[type="tel"],
+  [data-theme="light"] input[type="url"],
+  [data-theme="light"] input[type="date"],
+  [data-theme="light"] input[type="time"],
+  [data-theme="light"] input[type="datetime-local"],
   [data-theme="light"] textarea,
   [data-theme="light"] select {
     background-color: #FFFFFF !important;
     background: #FFFFFF !important;
-    color: #1A1A1A !important;
-    border-color: #CBD5E0 !important;
+    color: #212529 !important;
+    border-color: #DEE2E6 !important;
   }
   
-  /* Force light mode styling for all form elements */
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="number"],
-  input[type="search"],
-  textarea,
-  select {
-    background: var(--input-bg) !important;
-    color: var(--text-primary) !important;
-    border: 1px solid var(--border-color) !important;
-  }
-  
-  input[type="text"]:focus,
-  input[type="email"]:focus,
-  input[type="password"]:focus,
-  input[type="number"]:focus,
-  input[type="search"]:focus,
-  textarea:focus,
-  select:focus {
-    border-color: var(--accent-color) !important;
-    box-shadow: 0 0 0 3px var(--accent-glow) !important;
-  }
-  
-  /* Nuclear option - Override ANY dark backgrounds in light mode */
-  [data-theme="light"] * {
-    background-color: inherit !important;
-  }
-  
-  [data-theme="light"] select,
-  [data-theme="light"] select *,
-  [data-theme="light"] option {
+  [data-theme="light"] input:focus,
+  [data-theme="light"] textarea:focus,
+  [data-theme="light"] select:focus {
     background-color: #FFFFFF !important;
     background: #FFFFFF !important;
-    color: #1A1A1A !important;
+    color: #212529 !important;
+    border-color: #0D6EFD !important;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15) !important;
+  }
+  
+  [data-theme="light"] input::placeholder,
+  [data-theme="light"] textarea::placeholder {
+    color: #6C757D !important;
+  }
+  
+  [data-theme="light"] select option {
+    background-color: #FFFFFF !important;
+    color: #212529 !important;
   }
   
   /* Override any inline styles or browser defaults */
@@ -4500,7 +4512,7 @@ html {
   [data-theme="light"] option[style*="background"] {
     background-color: #FFFFFF !important;
     background: #FFFFFF !important;
-    color: #1A1A1A !important;
+    color: #212529 !important;
   }
 }
 

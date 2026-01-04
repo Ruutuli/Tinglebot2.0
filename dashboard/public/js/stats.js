@@ -2188,6 +2188,9 @@ function initializeQuestStats(questData) {
     
     // Render top participants with detailed stats
     renderQuestTopParticipants(questData);
+    
+    // Render top legacy participants
+    renderQuestTopLegacyParticipants(questData);
 }
 
 // Function: Render quest overview statistics
@@ -2323,6 +2326,49 @@ function renderQuestTopParticipants(questData) {
                     </thead>
                     <tbody>
                         ${topParticipants.map((participant, index) => {
+                            const medals = ['🥇', '🥈', '🥉'];
+                            const medal = index < 3 ? medals[index] : '';
+                            return `
+                                <tr${index < 3 ? ' style="background: rgba(255, 215, 0, 0.08);"' : ''}>
+                                    <td style="text-align: center; font-weight: 600; font-size: 1.1rem;">${medal} ${index + 1}</td>
+                                    <td><i class="fas fa-user"></i> ${participant.username}</td>
+                                    <td style="text-align: center; font-weight: 700; color: var(--accent-color); font-size: 1.1rem;">${participant.count}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// Function: Render top legacy participants leaderboard
+function renderQuestTopLegacyParticipants(questData) {
+    const participantsDiv = document.getElementById('quest-top-legacy-participants');
+    if (!participantsDiv) return;
+    
+    const topLegacyParticipants = questData.topLegacyParticipants || [];
+    
+    if (topLegacyParticipants.length === 0) {
+        participantsDiv.innerHTML = '<p style="text-align: center; color: #aaa;">No legacy quest data available</p>';
+        return;
+    }
+    
+    participantsDiv.innerHTML = `
+        <div class="stats-table-section">
+            <h4 class="stats-section-header"><i class="fas fa-trophy"></i> Leaderboard</h4>
+            <div class="stats-table-container">
+                <table class="stats-table" style="max-width: 500px;">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>User</th>
+                            <th>Legacy Quests</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${topLegacyParticipants.map((participant, index) => {
                             const medals = ['🥇', '🥈', '🥉'];
                             const medal = index < 3 ? medals[index] : '';
                             return `

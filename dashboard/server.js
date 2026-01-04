@@ -11390,7 +11390,13 @@ async function readTransactionsFromGoogleSheets(userId, tokenTrackerUrl) {
 // Get user's token transaction summary
 app.get('/api/tokens/summary', async (req, res) => {
   try {
-    const user = await User.findOne({ discordId: req.user.discordId });
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const userId = req.session.user.discordId;
+    const user = await User.findOne({ discordId: userId });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -11399,7 +11405,7 @@ app.get('/api/tokens/summary', async (req, res) => {
     // Get summary from TokenTransaction model
     let dbSummary = { totalEarned: 0, totalSpent: 0, netTokens: 0, earnedCount: 0, spentCount: 0, totalTransactions: 0 };
     try {
-      dbSummary = await TokenTransaction.getUserTransactionSummary(req.user.discordId);
+      dbSummary = await TokenTransaction.getUserTransactionSummary(userId);
     } catch (error) {
       console.warn('[server.js]: Error getting token summary from database, using defaults:', error.message);
     }
@@ -11407,7 +11413,7 @@ app.get('/api/tokens/summary', async (req, res) => {
     // Also read from Google Sheets if available
     let sheetTransactions = [];
     if (user.tokenTracker) {
-      sheetTransactions = await readTransactionsFromGoogleSheets(req.user.discordId, user.tokenTracker);
+      sheetTransactions = await readTransactionsFromGoogleSheets(userId, user.tokenTracker);
       
       // Calculate totals from Google Sheets
       const sheetEarned = sheetTransactions
@@ -11448,24 +11454,30 @@ app.get('/api/tokens/summary', async (req, res) => {
 // Get user's token transactions
 app.get('/api/tokens/transactions', async (req, res) => {
   try {
+    // Check authentication
+    if (!req.session?.user?.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const userId = req.session.user.discordId;
     const limit = parseInt(req.query.limit) || 50;
     const skip = parseInt(req.query.skip) || 0;
     const type = req.query.type; // 'earned', 'spent', or undefined (all)
     
-    console.log(`[server.js]: 🔍 Fetching token transactions for user ${req.user.discordId}`, {
+    console.log(`[server.js]: 🔍 Fetching token transactions for user ${userId}`, {
       limit,
       skip,
       type: type || 'all'
     });
     
-    const user = await User.findOne({ discordId: req.user.discordId });
+    const user = await User.findOne({ discordId: userId });
     if (!user) {
-      console.warn(`[server.js]: ⚠️ User not found: ${req.user.discordId}`);
+      console.warn(`[server.js]: ⚠️ User not found: ${userId}`);
       return res.status(404).json({ error: 'User not found' });
     }
     
     // Get transactions from database
-    const query = { userId: req.user.discordId };
+    const query = { userId: userId };
     if (type && (type === 'earned' || type === 'spent')) {
       query.type = type;
     }
@@ -11489,7 +11501,7 @@ app.get('/api/tokens/transactions', async (req, res) => {
     if (user.tokenTracker && (dbTransactions.length < limit || skip === 0)) {
       console.log(`[server.js]: 📊 Reading from Google Sheets tracker: ${user.tokenTracker ? 'yes' : 'no'}`);
       try {
-        sheetTransactions = await readTransactionsFromGoogleSheets(req.user.discordId, user.tokenTracker);
+        sheetTransactions = await readTransactionsFromGoogleSheets(userId, user.tokenTracker);
         console.log(`[server.js]: ✅ Google Sheets transactions found: ${sheetTransactions.length}`);
         
         // Filter by type if needed

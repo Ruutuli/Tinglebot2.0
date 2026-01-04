@@ -438,15 +438,25 @@ router.get('/quests', asyncHandler(async (req, res) => {
     // Get all quests
     const allQuests = await Quest.find({}).lean();
     
-    // Get total legacy quests from all users
+    // Get total legacy quests from all users and build leaderboard
     const usersWithLegacy = await User.find({
       'quests.legacy.totalTransferred': { $gt: 0 }
-    }).select('quests.legacy.totalTransferred').lean();
+    }).select('discordId username nickname quests.legacy.totalTransferred').lean();
     
     const totalLegacyQuests = usersWithLegacy.reduce((sum, user) => {
       const legacyCount = user.quests?.legacy?.totalTransferred || 0;
       return sum + legacyCount;
     }, 0);
+    
+    // Top legacy quest participants leaderboard
+    const legacyParticipants = usersWithLegacy
+      .map(user => ({
+        userId: user.discordId,
+        username: user.nickname || user.username || user.discordId,
+        count: user.quests?.legacy?.totalTransferred || 0
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
     
     const totalQuests = allQuests.length;
     const totalAllTimeQuests = totalQuests + totalLegacyQuests;
@@ -573,6 +583,7 @@ router.get('/quests', asyncHandler(async (req, res) => {
       completionRateByType,
       avgParticipants: parseFloat(avgParticipants),
       topParticipants: topParticipantsWithDetails,
+      topLegacyParticipants: legacyParticipants,
       questsByLocation,
       recentQuests,
       timestamp: Date.now()
