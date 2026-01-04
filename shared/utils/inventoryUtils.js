@@ -367,6 +367,13 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 // Removes a single item from inventory database
 async function removeItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "Trade") {
   try {
+    // Validate quantity parameter to prevent NaN corruption
+    if (typeof quantity !== 'number' || isNaN(quantity) || quantity <= 0) {
+      const errorMsg = `Invalid quantity parameter for removeItemInventoryDatabase: ${quantity} (type: ${typeof quantity})`;
+      console.error(`[inventoryUtils.js]: ❌ ${errorMsg}`);
+      throw new Error(`${errorMsg}. This is a bug that would corrupt inventory.`);
+    }
+
     if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories) {
       throw new Error("Required database functions not initialized");
     }
@@ -1004,17 +1011,50 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
     if (remainingQuantity <= 0) break;
   }
 
-  // Check if there are more materials to process
-  const nextMaterialIndex = currentMaterialIndex + 1;
-  if (nextMaterialIndex < allMaterials.length) {
-    // Continue with next material
-    const nextMaterial = allMaterials[nextMaterialIndex];
-    const materialQty = typeof nextMaterial.quantity === 'number' ? nextMaterial.quantity : parseInt(nextMaterial.quantity, 10);
-    if (isNaN(materialQty) || materialQty <= 0) {
-      console.error(`[inventoryUtils.js]: Invalid material quantity for ${nextMaterial.itemName}: ${nextMaterial.quantity}`);
+  // Process all remaining materials
+  let currentProcessIndex = currentMaterialIndex + 1;
+  while (currentProcessIndex < allMaterials.length) {
+    const nextMaterial = allMaterials[currentProcessIndex];
+    
+    // Validate material exists and has valid quantity
+    if (!nextMaterial || !nextMaterial.itemName) {
+      console.error(`[inventoryUtils.js]: Invalid material at index ${currentProcessIndex}: material is missing or invalid`);
       return "canceled";
     }
-    let nextRequiredQuantity = materialQty * quantity;
+    
+    // Validate and parse material quantity - prevent NaN
+    let materialQty;
+    if (typeof nextMaterial.quantity === 'number') {
+      if (isNaN(nextMaterial.quantity) || nextMaterial.quantity <= 0) {
+        console.error(`[inventoryUtils.js]: Invalid material quantity (NaN or <= 0) for ${nextMaterial.itemName}: ${nextMaterial.quantity} (type: number)`);
+        return "canceled";
+      }
+      materialQty = nextMaterial.quantity;
+    } else if (nextMaterial.quantity !== null && nextMaterial.quantity !== undefined) {
+      const parsed = parseInt(nextMaterial.quantity, 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        console.error(`[inventoryUtils.js]: Invalid material quantity for ${nextMaterial.itemName}: ${nextMaterial.quantity} (parsed: ${parsed})`);
+        return "canceled";
+      }
+      materialQty = parsed;
+    } else {
+      console.error(`[inventoryUtils.js]: Material quantity is null/undefined for ${nextMaterial.itemName}`);
+      return "canceled";
+    }
+    
+    // Validate quantity parameter is a valid number before calculating
+    if (typeof quantity !== 'number' || isNaN(quantity) || quantity <= 0) {
+      console.error(`[inventoryUtils.js]: Invalid craft quantity parameter: ${quantity} (type: ${typeof quantity})`);
+      return "canceled";
+    }
+    
+    const nextRequiredQuantity = materialQty * quantity;
+    
+    // Validate nextRequiredQuantity is a valid number (should never be NaN after validations above)
+    if (isNaN(nextRequiredQuantity) || nextRequiredQuantity <= 0) {
+      console.error(`[inventoryUtils.js]: Invalid calculated required quantity for ${nextMaterial.itemName}: ${nextRequiredQuantity} (materialQty: ${materialQty}, quantity: ${quantity})`);
+      return "canceled";
+    }
     
     // Get available items for next material
     let specificItems = [];
@@ -1118,7 +1158,7 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
             quantity: quantity
           },
           materialsUsedSoFar: materialsUsed,
-          currentMaterialIndex: nextMaterialIndex,
+          currentMaterialIndex: currentProcessIndex,
           allMaterials: allMaterials,
           inventory: inventory.map(item => ({
             _id: item._id.toString(),
@@ -1224,7 +1264,12 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
         if (itemQuantity <= 0) continue; // Should not happen after filtering, but safety check
         
         let removeQuantity = Math.min(nextRequiredQuantity, itemQuantity);
-        if (removeQuantity <= 0) continue;
+        
+        // Validate removeQuantity before calling removeItemInventoryDatabase
+        if (isNaN(removeQuantity) || removeQuantity <= 0) {
+          console.error(`[inventoryUtils.js]: Invalid removeQuantity calculated: ${removeQuantity} (nextRequiredQuantity: ${nextRequiredQuantity}, itemQuantity: ${itemQuantity})`);
+          continue;
+        }
         
         await removeItemInventoryDatabase(
           character._id,
@@ -1239,7 +1284,12 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
         });
         nextRequiredQuantity -= removeQuantity;
       }
+      
+      // Move to next material after processing this one
+      currentProcessIndex++;
     }
+    // Note: If material requires selection, we return early above (line 1199)
+    // so we only reach here for auto-processed materials
   }
 
   // All materials processed - log to Google Sheets if needed
