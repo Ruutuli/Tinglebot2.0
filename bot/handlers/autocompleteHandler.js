@@ -672,6 +672,17 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             await handleLookupAutocomplete(interaction, focusedOption);
             break;
 
+          // ------------------- Village Command -------------------
+          case "village":
+            const villageSubcommand = interaction.options.getSubcommand(false);
+            
+            if (focusedOption.name === "charactername") {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "village");
+            } else if (focusedOption.name === "itemname") {
+              await handleVillageItemAutocomplete(interaction, focusedOption, villageSubcommand);
+            }
+            break;
+
           // Steal command routing
           case 'steal':
             const stealSubcommand = interaction.options.getSubcommand(false);
@@ -3789,6 +3800,70 @@ async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleLookupIngredientAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleVillageItemAutocomplete -------------------
+// Provides autocomplete for village materials based on the selected village
+async function handleVillageItemAutocomplete(interaction, focusedOption, subcommand) {
+  try {
+    const villageName = interaction.options.getString('name');
+    const searchQuery = focusedOption.value?.toLowerCase() || '';
+
+    if (!villageName) {
+      return await safeRespondWithValidation(interaction, []);
+    }
+
+    // Fetch the village to get required materials
+    const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+    if (!village) {
+      return await safeRespondWithValidation(interaction, []);
+    }
+
+    // Get materials for upgrade or repair based on subcommand
+    let requiredMaterials = [];
+    
+    if (subcommand === 'upgrade') {
+      // Get materials needed for next level
+      const nextLevel = village.level + 1;
+      const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
+      requiredMaterials = Object.entries(materials)
+        .filter(([key, value]) => {
+          const required = value.required?.[nextLevel];
+          return required !== undefined && required > 0;
+        })
+        .map(([key]) => key);
+    } else if (subcommand === 'repair') {
+      // Get materials needed for repair
+      const lostResources = village.lostResources instanceof Map ? Object.fromEntries(village.lostResources) : village.lostResources;
+      requiredMaterials = Object.keys(lostResources).filter(key => lostResources[key] > 0);
+    }
+
+    if (requiredMaterials.length === 0) {
+      return await safeRespondWithValidation(interaction, []);
+    }
+
+    // Fetch items that match the required materials
+    const items = await Item.find({
+      itemName: { $in: requiredMaterials }
+    })
+      .sort({ itemName: 1 })
+      .select('itemName emoji')
+      .lean();
+
+    // Filter and format choices
+    const choices = items
+      .filter(item => item.itemName.toLowerCase().includes(searchQuery))
+      .map(item => ({
+        name: `${item.emoji || '❓'} ${item.itemName}`,
+        value: item.itemName
+      }))
+      .slice(0, 25); // Discord limit
+
+    return await safeRespondWithValidation(interaction, choices);
+  } catch (error) {
+    console.error('[handleVillageItemAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
   }
 }
