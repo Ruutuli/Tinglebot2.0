@@ -2348,28 +2348,18 @@ module.exports = {
                     ? `🛡️ Protected (${Math.ceil(protectionStatusResult.timeLeft / (60 * 1000))}m remaining)`
                     : '✅ Not protected';
                 
-                // Check jail status
+                // Check jail status using centralized function
                 let jailStatus = '';
-                if (character.inJail && character.jailReleaseTime) {
-                    const now = new Date();
-                    const releaseTime = new Date(character.jailReleaseTime);
-                    const timeUntilRelease = releaseTime.getTime() - now.getTime();
-                    
-                    if (timeUntilRelease > 0) {
-                        const daysUntilRelease = Math.ceil(timeUntilRelease / (24 * 60 * 60 * 1000));
-                        const jailedDate = releaseTime.toLocaleDateString('en-US', { 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric',
-                            timeZone: 'America/New_York'
-                        });
-                        jailStatus = `⛔ **In Jail** - Released on ${jailedDate} (${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''} remaining)`;
-                    } else {
-                        // Jail time is up, character should be released
-                        character.inJail = false;
-                        character.jailReleaseTime = null;
-                        await character.save();
-                    }
+                const jailStatusResult = await checkJailStatus(character);
+                if (jailStatusResult.isInJail) {
+                    const daysUntilRelease = Math.ceil(jailStatusResult.timeLeft / (24 * 60 * 60 * 1000));
+                    const releaseDate = new Date(character.jailReleaseTime).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        timeZone: 'America/New_York'
+                    });
+                    jailStatus = `⛔ **In Jail** - Released on ${releaseDate} (${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''} remaining)`;
                 }
                 
                 const embed = createBaseEmbed('📊 Steal Statistics')

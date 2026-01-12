@@ -72,6 +72,7 @@ const { checkExpiredRequests } = require("../shared/utils/expirationHandler");
 const { isValidImageUrl } = require("../shared/utils/validation");
 const notificationService = require("../shared/utils/notificationService");
 const logger = require("../shared/utils/logger");
+const { releaseFromJail, DEFAULT_JAIL_DURATION_MS } = require("../shared/utils/jailCheck");
 const {
  cleanupExpiredEntries,
  cleanupExpiredHealingRequests,
@@ -86,7 +87,6 @@ const {
 
 // Constants
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
-const DEFAULT_JAIL_DURATION_MS = 3 * 24 * 60 * 60 * 1000;
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
 
 // Channel mappings
@@ -1293,13 +1293,8 @@ description = addBoostFlavorText(description, boostDetails);
   .setFooter({ text: buildFooterText("Town Hall Records • Reformed & Released", character, boostDetails) })
   .setTimestamp();
 
- character.inJail = false;
- character.failedStealAttempts = 0;
- character.jailReleaseTime = null;
- character.jailStartTime = null;
- character.jailDurationMs = null;
- character.jailBoostSource = null;
- await character.save();
+ // Release character using shared function
+ await releaseFromJail(character);
 
   // Post announcement in character's current village town hall channel
   try {

@@ -110,9 +110,7 @@ module.exports = {
       }
 
       // Check if character is in jail
-      const jailCheck = await enforceJail(character, 'use items');
-      if (jailCheck) {
-        await interaction.editReply({ content: jailCheck, ephemeral: true });
+      if (await enforceJail(interaction, character)) {
         return;
       }
 
