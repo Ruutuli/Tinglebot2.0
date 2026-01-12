@@ -2267,8 +2267,8 @@ module.exports = {
                         ))
                 .addStringOption(option =>
                     option.setName('charactername')
-                        .setDescription('Your character name')
-                        .setRequired(true)
+                        .setDescription('Your character name (optional - required for personal cooldowns)')
+                        .setRequired(false)
                         .setAutocomplete(true))
                 .addStringOption(option =>
                     option.setName('target')
