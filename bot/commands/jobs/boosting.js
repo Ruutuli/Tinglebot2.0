@@ -2372,6 +2372,7 @@ const selectionFieldValue = manualSelection
     }
    ])
    .setColor("#E74C3C")
+   .setThumbnail(entertainer?.icon || null)
    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
    .setFooter({ text: "The storm answers the song—find out where at dawn." });
 
