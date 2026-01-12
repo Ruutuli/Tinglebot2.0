@@ -429,8 +429,13 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
   return safeWeightedChoice(validPrecipitations, weightMapping, modifierMap);
 }
 
-function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStreak, weightMapping, modifierMap = {}) {
+function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStreak, weightMapping, modifierMap = {}, previousWeather = null) {
   const validSpecials = seasonData.Special.filter(label => {
+    // Prevent consecutive blight rain days
+    if (label === "Blight Rain" && previousWeather?.special?.label === "Blight Rain") {
+      return false;
+    }
+    
     const specialObj = specials.find(s => s.label === label);
     if (!specialObj || !specialObj.conditions) return true;
     
@@ -599,7 +604,8 @@ async function simulateWeightedWeather(village, season, options = {}) {
       precipitationLabel,
       rainStreak,
       specialWeights,
-      weightModifiers.special || {}
+      weightModifiers.special || {},
+      previous
     );
     
     if (specialLabel) {

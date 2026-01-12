@@ -159,7 +159,7 @@ const weatherWeightModifiers = {
         "Cinder Storm": 1.8
       },
       special: {
-        "Blight Rain": 0.3
+        "Blight Rain": 0.1
       }
     },
     Summer: {
@@ -221,7 +221,7 @@ const weatherWeightModifiers = {
         "Cloudy": 1.3
       },
       special: {
-        "Blight Rain": 0.3
+        "Blight Rain": 0.1
       }
     },
     Spring: {
@@ -289,7 +289,7 @@ const weatherWeightModifiers = {
         "Thundersnow": 0.1
       },
       special: {
-        "Blight Rain": 0.3
+        "Blight Rain": 0.1
       }
     },
     Spring: {
