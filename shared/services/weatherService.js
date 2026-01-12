@@ -722,7 +722,7 @@ async function getCurrentWeather(village) {
         }
         
         // Add date and season to weather data
-        newWeather.date = new Date();
+        newWeather.date = startOfPeriodUTC;
         newWeather.season = season;
 
         // Validate weather combination

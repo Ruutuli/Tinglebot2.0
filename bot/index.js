@@ -645,6 +645,11 @@ async function initializeClient() {
               inline: false
             },
             {
+              name: '⏳ **Two Week Timer**',
+              value: 'You have **2 weeks** to submit a character application. After that, you\'ll be removed to make space for others. Apps don\'t need to be perfect—just started!',
+              inline: false
+            },
+            {
               name: '📜 **Quick Rules**',
               value: '• 18+ server only\n• NSFW belongs in designated channels\n• No godmodding or metagaming\n• Respect pronouns & fellow members\n• Avoid heavy real-world topics (check trigger list)\n• Use "Windfish says No" to end upsetting convos\n• No AI art in apps or official submissions',
               inline: false

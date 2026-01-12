@@ -3,7 +3,10 @@
 // Roots-themed Secret Santa art gift exchange command
 // ============================================================================
 
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+// Standard Library Imports
+const path = require('path');
+
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } = require('discord.js');
 const { connectToTinglebot } = require('../../../shared/database/db');
 const {
   loadSecretSantaData,
@@ -19,6 +22,17 @@ const {
   sendAssignmentDMs,
   isBlacklisted
 } = require('../../modules/secretSantaModule');
+
+// Utility Imports
+const { uploadSubmissionImage } = require('../../../shared/utils/uploadUtils.js');
+const { createArtSubmissionEmbed } = require('../../embeds/embeds.js');
+const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils.js');
+const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
+const { fetchAllCharacters } = require('../../../shared/database/db');
+
+// Model Imports
+const ApprovedSubmission = require('../../../shared/models/ApprovedSubmissionModel');
+const User = require('../../../shared/models/UserModel');
 
 // Admin role ID from questAnnouncements.js
 const MOD_ROLE_ID = '606128760655183882';
@@ -87,6 +101,31 @@ module.exports = {
       subcommand
         .setName('info')
         .setDescription('View event information and deadlines')
+    )
+    
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('submit')
+        .setDescription('Submit your Secret Santa gift art')
+        .addAttachmentOption(option =>
+          option
+            .setName('file')
+            .setDescription('Your Secret Santa gift art file')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('title')
+            .setDescription('Title for your submission (optional)')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('tagged_characters')
+            .setDescription('Characters to tag (comma-separated)')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
     ),
 
   async execute(interaction) {
@@ -105,6 +144,8 @@ module.exports = {
         await handleWithdraw(interaction);
       } else if (subcommand === 'info') {
         await handleInfo(interaction);
+      } else if (subcommand === 'submit') {
+        await handleSubmit(interaction);
       }
     } catch (error) {
       logger.error('SECRET_SANTA', `Error in secretsanta command: ${error.message}`, error);
@@ -344,6 +385,181 @@ async function handleInfo(interaction) {
     .setTimestamp();
   
   await interaction.reply({ embeds: [embed] });
+}
+
+// ------------------- Function: handleSubmit -------------------
+async function handleSubmit(interaction) {
+  try {
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+    const user = interaction.user;
+    
+    // Check if user is signed up
+    const participant = await getParticipant(user.id);
+    if (!participant) {
+      return await interaction.editReply({
+        content: '❌ You are not signed up for Roots Secret Santa. Use `/secretsanta signup` to sign up first.',
+        ephemeral: true
+      });
+    }
+
+    // Check if user has already submitted
+    if (participant.hasCompleted) {
+      return await interaction.editReply({
+        content: '❌ You have already submitted your Secret Santa gift. You can only submit once per year.',
+        ephemeral: true
+      });
+    }
+
+    const attachedFile = interaction.options.getAttachment('file');
+    const title = interaction.options.getString('title')?.trim() || attachedFile.name;
+    const taggedCharactersInput = interaction.options.getString('tagged_characters');
+
+    // Parse and validate tagged characters
+    let taggedCharacters = [];
+    if (taggedCharactersInput) {
+      const characterNames = taggedCharactersInput.split(',').map(name => name.trim()).filter(name => name.length > 0);
+      
+      if (characterNames.length === 0) {
+        return await interaction.editReply({ 
+          content: '❌ **Invalid tagged characters format.** Please provide character names separated by commas.' 
+        });
+      }
+
+      // Validate that all characters exist in the database
+      const allCharacters = await fetchAllCharacters();
+      const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
+      
+      const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
+      if (invalidCharacters.length > 0) {
+        return await interaction.editReply({ 
+          content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct.` 
+        });
+      }
+
+      taggedCharacters = characterNames;
+    }
+
+    // Check if a file is attached
+    if (!attachedFile) {
+      return await interaction.editReply({ content: '❌ **No file attached. Please try again.**' });
+    }
+
+    const fileName = path.basename(attachedFile.name);
+    const discordImageUrl = attachedFile.url;
+
+    // Upload the image to Google Drive or cloud storage
+    const googleImageUrl = await uploadSubmissionImage(discordImageUrl, fileName);
+
+    // Post the embed publicly in the submissions channel
+    const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
+    const submissionId = generateUniqueId('A');
+    const embed = createArtSubmissionEmbed({
+      submissionId,
+      title,
+      fileName,
+      category: 'art',
+      userId: user.id,
+      username: user.username,
+      userAvatar: user.displayAvatarURL({ dynamic: true }),
+      fileUrl: googleImageUrl,
+      finalTokenAmount: 0,
+      tokenCalculation: 'No tokens - Display only',
+      baseSelections: [],
+      baseCounts: new Map(),
+      typeMultiplierSelections: [],
+      typeMultiplierCounts: new Map(),
+      productMultiplierValue: null,
+      addOnsApplied: [],
+      specialWorksApplied: [],
+      collab: [],
+      blightId: null,
+      taggedCharacters: taggedCharacters,
+      questEvent: 'N/A',
+      questBonus: 'N/A'
+    });
+    const sentMessage = await submissionsChannel.send({ embeds: [embed] });
+
+    // Create submission data for auto-approval with message URL
+    const submissionData = {
+      submissionId,
+      title,
+      fileName,
+      category: 'art',
+      userId: user.id,
+      username: user.username,
+      userAvatar: user.displayAvatarURL({ dynamic: true }),
+      fileUrl: googleImageUrl,
+      messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}`,
+      finalTokenAmount: 0, // No tokens
+      tokenCalculation: 'No tokens - Display only',
+      baseSelections: [],
+      baseCounts: new Map(),
+      typeMultiplierSelections: [],
+      typeMultiplierCounts: new Map(),
+      productMultiplierValue: null,
+      addOnsApplied: [],
+      specialWorksApplied: [],
+      collab: [],
+      blightId: null,
+      taggedCharacters: taggedCharacters,
+      questEvent: 'N/A',
+      questBonus: 'N/A',
+      approvedBy: 'System (Secret Santa)',
+      approvedAt: new Date(),
+      approvalMessageId: null,
+      pendingNotificationMessageId: null,
+      submittedAt: new Date()
+    };
+
+    // Save directly to approved submissions database
+    const approvedSubmission = new ApprovedSubmission(submissionData);
+    await approvedSubmission.save();
+
+    // Update participant status
+    await connectToTinglebot();
+    await SecretSantaParticipant.updateOne(
+      { userId: user.id },
+      { 
+        $set: { 
+          hasCompleted: true,
+          safeForNextYear: true
+        }
+      }
+    );
+
+    // Record quest completion
+    const userData = await User.findOne({ discordId: user.id });
+    if (userData) {
+      const currentYear = new Date().getFullYear();
+      const questId = `SECRET_SANTA_${currentYear}`;
+      
+      await userData.recordQuestCompletion({
+        questId: questId,
+        questType: 'Art',
+        questTitle: 'Secret Santa Submission',
+        completedAt: new Date(),
+        rewardedAt: new Date(),
+        tokensEarned: 0,
+        itemsEarned: [],
+        rewardSource: 'immediate'
+      });
+    }
+
+    await interaction.editReply({
+      content: '🎨 **Your Secret Santa gift submission has been posted!**\n\n✅ You have been marked as completed and are safe for next year.\n✅ This completion counts as 1 quest.\n\n**Note:** If you want tokens for this submission, please submit normally using `/submit art`.',
+      ephemeral: true,
+    });
+
+  } catch (error) {
+    handleInteractionError(error, 'secretsanta.js');
+    logger.error('SECRET_SANTA', `Error in handleSubmit: ${error.message}`, error);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ content: '❌ **Error processing your submission. Please try again later.**' });
+    } else {
+      await interaction.reply({ content: '❌ **Error processing your submission. Please try again later.**', ephemeral: true });
+    }
+  }
 }
 
 // ============================================================================

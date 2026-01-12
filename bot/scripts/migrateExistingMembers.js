@@ -45,11 +45,26 @@ async function migrateExistingMembers() {
     // ========================================================================
     // Verify Roles Exist
     // ========================================================================
+    // Fetch roles to ensure cache is up to date
+    await guild.roles.fetch();
+    
     const verifiedRole = guild.roles.cache.get(VERIFIED_ROLE_ID);
     
     if (!verifiedRole) {
       console.error(`❌ Verified role not found (ID: ${VERIFIED_ROLE_ID})`);
-      console.error('   Please create the Verified role first!');
+      console.error('\n💡 Troubleshooting:');
+      console.error('   1. Make sure the role exists in Discord');
+      console.error('   2. Check that the role ID is correct: 1460099245347700962');
+      console.error('   3. Verify the bot has permission to see/manage roles');
+      console.error('   4. Try refreshing the roles cache');
+      console.error('\n📋 Available roles in server:');
+      const allRoles = Array.from(guild.roles.cache.values()).slice(0, 20);
+      allRoles.forEach(role => {
+        console.error(`   - ${role.name} (ID: ${role.id})`);
+      });
+      if (guild.roles.cache.size > 20) {
+        console.error(`   ... and ${guild.roles.cache.size - 20} more roles`);
+      }
       process.exit(1);
     }
     
@@ -138,8 +153,7 @@ async function migrateExistingMembers() {
     const totalProcessed = alreadyVerified + newlyVerified + skipped;
     console.log(`\n📊 Total processed: ${totalProcessed} / ${members.size}`);
     
-    // Refresh role member count
-    await verifiedRole.members.fetch();
+    // Refresh role member count (members collection is already populated)
     console.log(`\n✅ Verified role now has ${verifiedRole.members.size} members`);
     
     console.log('\n✅ Migration complete!');

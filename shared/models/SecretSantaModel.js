@@ -29,6 +29,8 @@ const secretSantaParticipantSchema = new Schema({
   signedUpAt: { type: Date, default: Date.now },
   matchedWith: { type: String, default: null }, // userId of their giftee
   receivedAssignment: { type: Boolean, default: false },
+  hasCompleted: { type: Boolean, default: false }, // Tracks if the user has submitted their gift
+  safeForNextYear: { type: Boolean, default: false }, // Tracks if they're safe to participate next year
 }, {
   timestamps: true
 });

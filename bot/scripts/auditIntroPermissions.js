@@ -31,10 +31,29 @@ const client = new Client({
 
 function formatPermissions(permissions) {
   const perms = [];
-  if (permissions.has(PermissionFlagsBits.ViewChannels)) perms.push('View Channels');
-  if (permissions.has(PermissionFlagsBits.SendMessages)) perms.push('Send Messages');
-  if (permissions.has(PermissionFlagsBits.ReadMessageHistory)) perms.push('Read Message History');
-  if (permissions.has(PermissionFlagsBits.ViewServerMembers)) perms.push('View Server Members');
+  try {
+    if (permissions.has(PermissionFlagsBits.ViewChannels)) perms.push('View Channels');
+    if (permissions.has(PermissionFlagsBits.SendMessages)) perms.push('Send Messages');
+    if (permissions.has(PermissionFlagsBits.ReadMessageHistory)) perms.push('Read Message History');
+    // Check for View Server Members permission - try different constant names
+    const viewMembersFlags = [
+      PermissionFlagsBits.ViewGuildMembers,
+      PermissionFlagsBits.ViewServerMembers
+    ].filter(Boolean); // Remove undefined values
+    
+    for (const flag of viewMembersFlags) {
+      try {
+        if (permissions.has(flag)) {
+          perms.push('View Server Members');
+          break;
+        }
+      } catch (e) {
+        // Flag doesn't exist, continue
+      }
+    }
+  } catch (error) {
+    return 'Error reading permissions';
+  }
   return perms.length > 0 ? perms.join(', ') : 'None';
 }
 
@@ -68,11 +87,18 @@ async function auditPermissions() {
     await client.login(process.env.DISCORD_TOKEN);
     console.log(`✅ Bot logged in as ${client.user.tag}\n`);
     
+    // Wait for guilds to be ready
+    await client.guilds.fetch();
     const guild = client.guilds.cache.first();
     if (!guild) {
       console.error('❌ No guild found!');
       process.exit(1);
     }
+    
+    // Fetch full guild data including channels and roles
+    await guild.fetch();
+    await guild.channels.fetch();
+    await guild.roles.fetch();
     
     console.log(`📊 Auditing permissions for: ${guild.name} (${guild.id})\n`);
     console.log('='.repeat(80));
@@ -123,13 +149,27 @@ async function auditPermissions() {
     console.log('-'.repeat(80));
     
     if (travelerRole) {
-      const canViewMembers = travelerRole.permissions.has(PermissionFlagsBits.ViewServerMembers);
+      let canViewMembers = false;
+      try {
+        canViewMembers = travelerRole.permissions.has(PermissionFlagsBits.ViewGuildMembers) || 
+                         travelerRole.permissions.has(PermissionFlagsBits.ViewServerMembers);
+      } catch (e) {
+        // Check permission bit directly if flags don't work
+        canViewMembers = (travelerRole.permissions.bitfield & BigInt(0x1000000)) !== 0n;
+      }
       console.log(`\nTraveler Role:`);
       console.log(`   View Server Members: ${canViewMembers ? '✅ ALLOW' : '❌ DENY'}`);
     }
     
     if (verifiedRole) {
-      const canViewMembers = verifiedRole.permissions.has(PermissionFlagsBits.ViewServerMembers);
+      let canViewMembers = false;
+      try {
+        canViewMembers = verifiedRole.permissions.has(PermissionFlagsBits.ViewGuildMembers) || 
+                         verifiedRole.permissions.has(PermissionFlagsBits.ViewServerMembers);
+      } catch (e) {
+        // Check permission bit directly if flags don't work
+        canViewMembers = (verifiedRole.permissions.bitfield & BigInt(0x1000000)) !== 0n;
+      }
       console.log(`\nVerified Role:`);
       console.log(`   View Server Members: ${canViewMembers ? '✅ ALLOW' : '❌ DENY'}`);
     }
