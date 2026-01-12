@@ -838,20 +838,26 @@ async function handleParticipants(interaction) {
   
   // Separate participants by completion status
   const completed = participants.filter(p => p.hasCompleted === true);
-  const notCompleted = participants.filter(p => !p.hasCompleted);
+  const notCompleted = participants.filter(p => p.hasCompleted !== true);
   
-  let completedList = completed.map(p => `✅ ${p.discordName}${p.isSubstitute === 'yes' ? ' (Sub)' : ''}`).join('\n') || '*None completed*';
-  let notCompletedList = notCompleted.map(p => `❌ ${p.discordName}${p.isSubstitute === 'yes' ? ' (Sub)' : ''}`).join('\n') || '*All completed!*';
-  let substituteList = substitutes.map(p => `${p.discordName}${p.isSubstitute === 'only_sub' ? ' (Only Sub)' : ''}`).join('\n') || '*None*';
+  let completedList = completed.length > 0 
+    ? completed.map(p => `✅ ${p.discordName}${p.isSubstitute === 'yes' ? ' (Sub)' : ''}`).join('\n')
+    : '*None completed*';
+  let notCompletedList = notCompleted.length > 0
+    ? notCompleted.map(p => `❌ ${p.discordName}${p.isSubstitute === 'yes' ? ' (Sub)' : ''}`).join('\n')
+    : '*All completed!*';
+  let substituteList = substitutes.length > 0
+    ? substitutes.map(p => `${p.discordName}${p.isSubstitute === 'only_sub' ? ' (Only Sub)' : ''}`).join('\n')
+    : '*None*';
   
   const embed = new EmbedBuilder()
     .setTitle('📊 Roots Secret Santa Participants')
     .setImage(BORDER_IMAGE)
     .setColor(0x00AE86)
     .addFields(
-      { name: `✅ Completed (${completed.length}/${participants.length})`, value: completedList.substring(0, 1024) || '*None*', inline: false },
-      { name: `❌ Not Completed (${notCompleted.length}/${participants.length})`, value: notCompletedList.substring(0, 1024) || '*All completed!*', inline: false },
-      { name: `🔄 Substitute Artists (${substitutes.length})`, value: substituteList.substring(0, 1024) || '*None*', inline: false }
+      { name: `✅ Completed (${completed.length}/${participants.length})`, value: completedList.substring(0, 1024), inline: false },
+      { name: `❌ Not Completed (${notCompleted.length}/${participants.length})`, value: notCompletedList.substring(0, 1024), inline: false },
+      { name: `🔄 Substitute Artists (${substitutes.length})`, value: substituteList.substring(0, 1024), inline: false }
     )
     .setTimestamp();
   
