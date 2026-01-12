@@ -360,6 +360,22 @@ app.use(session({
   }
 }));
 
+// ------------------- Authentication Middleware -------------------
+// Populates req.user from req.session.user and adds req.isAuthenticated()
+app.use((req, res, next) => {
+  // Populate req.user from session
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+  }
+  
+  // Add isAuthenticated function (similar to passport.js)
+  req.isAuthenticated = function() {
+    return !!(this.session && this.session.user);
+  };
+  
+  next();
+});
+
 // Serve static files (excluding /map route which needs authentication)
 app.use((req, res, next) => {
   if (req.path === '/map' || req.path === '/map.html') {
@@ -3650,6 +3666,9 @@ app.post('/api/character-of-week/trigger-first', async (req, res) => {
 app.get('/api/relationships/character/:characterId', async (req, res) => {
   try {
     const { characterId } = req.params;
+    if (!req.user || !req.user.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     const userId = req.user.discordId;
     
     // Verify the character belongs to the authenticated user (check both regular and mod characters)
@@ -6917,6 +6936,9 @@ app.get('/api/inventory/characters', async (req, res) => {
 app.get('/api/characters/:characterId/vending', async (req, res) => {
   try {
     const { characterId } = req.params;
+    if (!req.user || !req.user.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     const userId = req.user.discordId;
 
     // Find character (check both regular and mod characters)
@@ -11194,6 +11216,9 @@ app.get('/api/user/export-all', async (req, res) => {
 // Get user's level and rank information
 app.get('/api/user/levels/rank', async (req, res) => {
   try {
+    if (!req.user || !req.user.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     const user = await User.findOne({ discordId: req.user.discordId });
     
     if (!user) {

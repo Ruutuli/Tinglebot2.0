@@ -61,7 +61,7 @@ const getTimestamp = () => {
 // ------------------- getContextColor ------------------
 // Returns color code for context tag based on context type
 const getContextColor = (context) => {
-  const ctx = context.toUpperCase();
+  const ctx = String(context || '').toUpperCase();
   if (ctx.includes('DB') || ctx.includes('DATABASE')) return colors.cyan;
   if (ctx.includes('SYS') || ctx.includes('SYSTEM')) return colors.blue;
   if (ctx.includes('CLEN') || ctx.includes('CLEANUP')) return colors.dim;
@@ -79,7 +79,7 @@ const getContextColor = (context) => {
 // ------------------- getMessageColor ------------------
 // Returns color code for message text based on context type
 const getMessageColor = (context) => {
-  const ctx = context.toUpperCase();
+  const ctx = String(context || '').toUpperCase();
   if (ctx.includes('DB') || ctx.includes('DATABASE')) return colors.cyan;
   if (ctx.includes('CLEN') || ctx.includes('CLEANUP')) return colors.dim;
   if (ctx.includes('SYS') || ctx.includes('SYSTEM')) return colors.blue;
@@ -96,7 +96,7 @@ const getMessageColor = (context) => {
 // ------------------- getContextEmoji ------------------
 // Returns default emoji for context type
 const getContextEmoji = (context) => {
-  const ctx = context.toUpperCase();
+  const ctx = String(context || '').toUpperCase();
   if (ctx.includes('DB') || ctx.includes('DATABASE')) return '💾 ';
   if (ctx.includes('CLEN') || ctx.includes('CLEANUP')) return '🧹 ';
   if (ctx.includes('SYS') || ctx.includes('SYSTEM')) return '⚙️ ';

@@ -333,7 +333,7 @@ function createQuestSubmission(type, submissionData) {
 async function sendCompletionNotification(quest, participant) {
     try {
         // Use dynamic import to avoid circular dependency
-        const questRewardModule = await import('../modules/questRewardModule.js');
+        const questRewardModule = await import('../../bot/modules/questRewardModule.js');
         await questRewardModule.sendQuestCompletionNotification(quest, participant);
     } catch (error) {
         console.error(`[QuestModel] ❌ Error sending quest completion notification:`, error);
@@ -344,7 +344,7 @@ async function sendCompletionNotification(quest, participant) {
 async function sendQuestSummary(quest, reason) {
     try {
         // Use dynamic import to avoid circular dependency
-        const questRewardModule = await import('../modules/questRewardModule.js');
+        const questRewardModule = await import('../../bot/modules/questRewardModule.js');
         await questRewardModule.sendQuestCompletionSummary(quest, reason);
     } catch (error) {
         console.error(`[QuestModel] ❌ Error sending quest completion summary:`, error);

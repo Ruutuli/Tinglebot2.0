@@ -576,7 +576,7 @@ async function joinRaid(character, raidId) {
 
     // ------------------- Blight Rain Check -------------------
     // Check for blight rain in the village and apply infection chance
-    const { getCurrentWeather } = require('../shared/services/weatherService');
+    const { getCurrentWeather } = require('../../shared/services/weatherService');
     const weatherData = await getCurrentWeather(raid.village);
     let blightRainMessage = null;
     
