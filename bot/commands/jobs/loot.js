@@ -462,7 +462,7 @@ module.exports = {
            user.blightedcharacter = true;
            await user.save();
          }
-         return; // Return early only on blight infection
+         // Continue with loot roll - blight rain message will be displayed in embed
        } else {
          let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
          

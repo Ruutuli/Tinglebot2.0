@@ -2314,13 +2314,6 @@ async function checkAndPostMissedBlightPing(client) {
     }
     
     // Calculate the last 8pm EST boundary
-    const now = new Date();
-    const estHour = parseInt(new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      hour: 'numeric',
-      hour12: false
-    }).formatToParts(now).find(p => p.type === 'hour').value);
-    
     // Calculate today's 8 PM EST/EDT in UTC
     const today8PMUTC = get8PMESTInUTC(now);
     
