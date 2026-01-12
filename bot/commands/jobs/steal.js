@@ -2255,11 +2255,6 @@ module.exports = {
                 .setName('cooldown')
                 .setDescription('Check cooldown times for stealing from NPCs and characters.')
                 .addStringOption(option =>
-                    option.setName('charactername')
-                        .setDescription('Your character name')
-                        .setRequired(true)
-                        .setAutocomplete(true))
-                .addStringOption(option =>
                     option.setName('targettype')
                         .setDescription('Choose NPC or Player as target (required when checking a specific target)')
                         .setRequired(false)
@@ -2267,6 +2262,11 @@ module.exports = {
                             { name: 'NPC', value: 'npc' },
                             { name: 'Player', value: 'player' }
                         ))
+                .addStringOption(option =>
+                    option.setName('charactername')
+                        .setDescription('Your character name')
+                        .setRequired(true)
+                        .setAutocomplete(true))
                 .addStringOption(option =>
                     option.setName('target')
                         .setDescription('Specific NPC or character to check (optional)')
