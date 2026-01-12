@@ -2050,6 +2050,202 @@ async function handleChangeJob(interaction) {
 }
 
 // ============================================================================
+// ------------------- Character Village Change Handler -------------------
+// Processes the change of a character's home village with validation and token deduction.
+// ============================================================================
+
+async function handleChangeVillage(interaction) {
+ console.log('[handleChangeVillage] Starting village change process');
+ await interaction.deferReply();
+
+ try {
+  const userId = interaction.user.id;
+  const characterName = interaction.options.getString("charactername");
+  const newVillage = interaction.options.getString("newvillage");
+  
+  console.log(`[handleChangeVillage] Processing village change: ${characterName} -> ${newVillage} (User: ${userId})`);
+
+  // ------------------- Village Validation -------------------
+  if (!isValidVillage(newVillage)) {
+    console.warn(`[handleChangeVillage] Invalid village: '${newVillage}' by user ${userId}`);
+    await interaction.followUp({
+      content: `❌ **${newVillage}** is not a valid village. Please select a valid village from the list.`,
+      ephemeral: true
+    });
+    return;
+  }
+
+  await connectToTinglebot();
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  
+  if (!character) {
+   console.log(`[handleChangeVillage] Character not found: ${characterName} (User: ${userId})`);
+   await interaction.followUp({
+    content: `❌ **Character \"${characterName}\"** not found or does not belong to you.`,
+    ephemeral: true
+   });
+   return;
+  }
+  
+  const previousVillage = character.homeVillage || "Unknown";
+
+  // Add validation to prevent changing to current village
+  if (previousVillage.toLowerCase() === newVillage.toLowerCase()) {
+    console.log(`[handleChangeVillage] Same village attempt: ${previousVillage}`);
+    await interaction.followUp({
+      content: `❌ You cannot change your village to the same village you currently have (${previousVillage}).`,
+      ephemeral: true
+    });
+    return;
+  }
+
+  const villageValidation = await canChangeVillage(character, newVillage);
+  
+  if (!villageValidation.valid) {
+    console.log(`[handleChangeVillage] Validation failed: ${villageValidation.message}`);
+    if (typeof villageValidation.message === 'string') {
+      await interaction.followUp({
+        content: villageValidation.message,
+        ephemeral: true
+      });
+    } else {
+      await interaction.followUp({
+        embeds: [villageValidation.message],
+        ephemeral: true
+      });
+    }
+    return;
+  }
+
+  const lastVillageChange = character.lastVillageChange ? new Date(character.lastVillageChange) : null;
+  const now = new Date();
+  const oneMonthAgo = new Date(now);
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+  if (lastVillageChange && lastVillageChange > oneMonthAgo) {
+    const remainingDays = Math.ceil((lastVillageChange - oneMonthAgo) / (1000 * 60 * 60 * 24));
+    console.log(`[handleChangeVillage] Cooldown active: ${remainingDays} days remaining`);
+    await interaction.followUp({
+      content: `⚠️ You can only change villages once per month. Please wait **${remainingDays}** more day(s).`,
+      ephemeral: true
+    });
+    return;
+  }
+
+  const userTokens = await getOrCreateToken(interaction.user.id);
+  
+  if (!userTokens) {
+    console.log('[handleChangeVillage] No token tracker found');
+    await interaction.followUp({
+      content: "❌ You do not have a Token Tracker set up. Please use `/tokens setup` first.",
+      ephemeral: true
+    });
+    return;
+  }
+
+  // Add check for token synchronization
+  if (!userTokens.tokensSynced) {
+    console.log('[handleChangeVillage] Tokens not synced');
+    await interaction.followUp({
+      content: "❌ Your Token Tracker is not synced. Please use `/tokens sync` to sync your tokens before changing villages.",
+      ephemeral: true
+    });
+    return;
+  }
+
+  if (userTokens.tokens < 500) {
+    console.log(`[handleChangeVillage] Insufficient tokens: ${userTokens.tokens}`);
+    await interaction.followUp({
+      content: `❌ You need **500 tokens** to change your character's village. Current balance: **${userTokens.tokens} tokens**.`,
+      ephemeral: true
+    });
+    return;
+  }
+
+  console.log('[handleChangeVillage] Processing village change and deducting 500 tokens');
+  await updateTokenBalance(interaction.user.id, -500);
+
+  // Log to token tracker
+  try {
+    const user = await User.findOne({ discordId: interaction.user.id });
+    if (user?.tokenTracker && isValidGoogleSheetsUrl(user.tokenTracker)) {
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      const tokenRow = [
+        `${character.name} - Village Change from ${previousVillage} to ${newVillage}`,
+        interactionUrl,
+        'Village Change',
+        'spent',
+        '-500'
+      ];
+      await safeAppendDataToSheet(user.tokenTracker, user, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
+      console.log(`[handleChangeVillage] ✅ Logged to token tracker: ${character.name}`);
+    }
+  } catch (sheetError) {
+    console.error(`[handleChangeVillage] ❌ Token tracker error:`, sheetError);
+  }
+
+  character.homeVillage = newVillage;
+  character.lastVillageChange = now;
+
+  await character.save();
+
+  const villageColor = getVillageColorByName(newVillage) || "#4CAF50";
+  const villageEmoji = getVillageEmojiByName(newVillage) || "🏠";
+  const nextVillageChangeDate = new Date();
+  nextVillageChangeDate.setMonth(nextVillageChangeDate.getMonth() + 1);
+  const formattedNextChangeDate = nextVillageChangeDate.toLocaleDateString(
+   "en-US",
+   {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+   }
+  );
+  
+  const formattedPreviousVillage = capitalizeFirstLetter(previousVillage);
+  const formattedNewVillage = capitalizeFirstLetter(newVillage);
+  
+  const embed = new EmbedBuilder()
+   .setTitle(`${villageEmoji} Village Change Notification`)
+   .setDescription(
+    `Resident **${character.name}** has formally submitted their notice of village change from **${formattedPreviousVillage}** to **${formattedNewVillage}**.\n\n` +
+     `The **${formattedNewVillage} Town Hall** welcomes you to your new home!\n\n` +
+     `💰 **500 tokens deducted.**`
+   )
+   .addFields(
+    { name: "👤 __Name__", value: character.name, inline: true },
+    { name: "🏠 __New Home Village__", value: formattedNewVillage, inline: true },
+    { name: "​", value: "​", inline: true },
+    {
+     name: "📅 __Last Village Change__",
+     value: lastVillageChange ? lastVillageChange.toLocaleDateString() : "N/A",
+     inline: true,
+    },
+    {
+     name: "🔄 __Next Change Available__",
+     value: formattedNextChangeDate,
+     inline: true,
+    }
+   )
+   .setColor(villageColor)
+   .setThumbnail(character.icon && character.icon.startsWith('http') ? character.icon : DEFAULT_IMAGE_URL)
+   .setImage(DEFAULT_IMAGE_URL)
+   .setTimestamp();
+
+  await interaction.followUp({ embeds: [embed] });
+  
+  console.log(`[handleChangeVillage] ✅ Village change completed: ${characterName} (${previousVillage} -> ${newVillage})`);
+ } catch (error) {
+  console.error('[handleChangeVillage] Error occurred:', error);
+  handleInteractionError(error, interaction, { source: "character.js" });
+  await interaction.followUp({
+   content: "❌ An error occurred while processing your request. Please try again later.",
+   ephemeral: true
+  });
+ }
+}
+
+// ============================================================================
 // ------------------- Character Birthday Setting Handler -------------------
 // Handles setting or updating the birthday field for a character.
 // ============================================================================
