@@ -29,6 +29,7 @@ const {
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../../shared/utils/googleSheetsUtils.js');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../../shared/utils/googleSheetsUtils.js');
+const { google } = require('googleapis');
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
 const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
 
@@ -458,10 +459,34 @@ module.exports = {
       const auth = await authorizeSheets();
       console.log('✅ Authorized Google Sheets API.');
 
+      // Check for duplicate tabs before proceeding
+      const sheets = google.sheets({ version: 'v4', auth });
+      const spreadsheetInfo = await sheets.spreadsheets.get({
+        spreadsheetId,
+        includeGridData: false,
+      });
+      
+      const allSheets = spreadsheetInfo.data.sheets || [];
+      const loggedInventoryTabs = allSheets.filter(sheet => 
+        sheet.properties.title.trim() === 'loggedInventory'
+      );
+      
+      if (loggedInventoryTabs.length > 1) {
+        console.error(`❌ Multiple loggedInventory tabs detected (${loggedInventoryTabs.length})`);
+        await interaction.editReply({
+          content: `❌ **Error:** You have **${loggedInventoryTabs.length} tabs** named \`loggedInventory\` in your spreadsheet.\n\n**Fix:** Please delete all duplicate tabs and keep ONLY ONE tab named \`loggedInventory\`. The tab you keep should be the one that contains your character's starter gear. The bot will get confused if there are multiple tabs with the same name.\n\nAfter deleting duplicates, run \`/inventory test\` again.`,
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+
       const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
       if (!sheetId) {
         console.error('❌ "loggedInventory" sheet not found in the spreadsheet.');
-        await this.sendSetupInstructions(interaction, 'missing_sheet', character._id, characterName, inventoryUrl);
+        await interaction.editReply({
+          content: `❌ **Error:** No tab named \`loggedInventory\` found in your spreadsheet.\n\n**Fix:** Please create a tab named exactly \`loggedInventory\` (case-sensitive, no extra spaces) in your spreadsheet.`,
+          flags: [MessageFlags.Ephemeral]
+        });
         return;
       }
       console.log('✅ "loggedInventory" sheet ID retrieved successfully.');
@@ -482,13 +507,30 @@ module.exports = {
       const validationResult = await validateInventorySheet(inventoryUrl, characterName);
       if (!validationResult.success) {
         console.error('❌ Validation failed after header check.');
-        await this.sendSetupInstructions(interaction, 'invalid_inventory', character._id, characterName, inventoryUrl, validationResult.message);
+        
+        // Parse the error message for better formatting
+        const errorMessage = validationResult.message || 'Unknown validation error';
+        const [problem, fix] = errorMessage.split('||');
+        
+        // Provide a helpful checklist if validation fails
+        let checklistMessage = '\n\n**Quick Checklist:**\n';
+        checklistMessage += '✅ Is your tab named exactly `loggedInventory` (case-sensitive)?\n';
+        checklistMessage += '✅ Do you have only ONE tab with this name?\n';
+        checklistMessage += '✅ Are the headers correct in A1:M1?\n';
+        checklistMessage += '✅ Have you added your starter gear to the sheet?\n';
+        checklistMessage += '✅ Does your Character Name column match your character name exactly?\n';
+        checklistMessage += '✅ Is the spreadsheet shared with the service account?';
+        
+        await interaction.editReply({
+          content: `❌ **Validation Failed**\n\n${errorMessage}${checklistMessage}\n\n**Need help?** Run \`/inventory setup\` to see the full setup instructions.`,
+          flags: [MessageFlags.Ephemeral]
+        });
         return;
       }
       console.log('✅ Inventory sheet contains at least one valid item.');
 
       await interaction.editReply({
-        content: `✅ **Success!**\n\n🛠️ **Inventory setup for** **${character.name}** **has been successfully tested.**\n\n📄 **See your inventory [here](<${inventoryUrl}>)**.\n\n🔄 **Once ready, use the** \`/inventory sync\` **command to sync your character's inventory.**`,
+        content: `✅ **Success! Communication test passed!**\n\n🛠️ **Inventory setup for** **${character.name}** **has been successfully tested.**\n\n📄 **See your inventory [here](<${inventoryUrl}>)**.\n\n⚠️ **Important:** This test only checked if the bot can communicate with your sheet. It does NOT sync your items to the database.\n\n✅ **Your sheet is set up correctly and contains your starter gear.**\n\n🔄 **Once you're ready, use the** \`/inventory sync\` **command to actually sync your character's inventory to the database.**\n\n⚠️ **Remember:** You can only sync once without Moderator help, so make sure everything is correct before syncing!`,
         flags: [MessageFlags.Ephemeral]
       });
 
@@ -505,10 +547,16 @@ module.exports = {
           errorMessage = '❌ **Error:** The provided URL is not valid. Please check and try again.';
           break;
         case error.message.includes('missing_sheet'):
-          errorMessage = '❌ **Error:** The Google Sheets document is missing the required "loggedInventory" tab.';
+          errorMessage = '❌ **Error:** The Google Sheets document is missing the required "loggedInventory" tab.\n\n**Fix:** Create a tab named exactly `loggedInventory` (case-sensitive, no extra spaces) in your spreadsheet.';
           break;
         case error.message.includes('missing_headers'):
-          errorMessage = '❌ **Error:** The "loggedInventory" sheet is missing the required headers.';
+          errorMessage = '❌ **Error:** The "loggedInventory" sheet is missing the required headers.\n\n**Fix:** Make sure headers in A1:M1 match exactly: Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync';
+          break;
+        case error.message.includes('multiple') || error.message.includes('duplicate'):
+          errorMessage = '❌ **Error:** You have multiple tabs named `loggedInventory` in your spreadsheet.\n\n**Fix:** Delete all duplicate tabs and keep ONLY ONE tab named `loggedInventory`. Keep the tab that contains your character\'s starter gear.';
+          break;
+        case error.message.includes('No items found') || error.message.includes('no items'):
+          errorMessage = '❌ **Error:** No items found for your character in the sheet.\n\n**Fix:** Add your character\'s starter gear to the sheet before testing. Make sure the Character Name column matches your character name exactly.';
           break;
         case error.message.includes('403'):
           errorMessage = '❌ **Error:** Access to the Google Sheets document is forbidden. Please ensure it is shared with the bot\'s service account email.';

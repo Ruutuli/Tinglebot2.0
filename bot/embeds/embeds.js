@@ -566,12 +566,16 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
 
   const fields = [
     {
-      name: "1️⃣ Open Your Inventory Link",
-      value: `[📄 Inventory Link](${googleSheetsUrl})\n\n> ---`,
+      name: "⚠️ CRITICAL: Read This First",
+      value: `> **Make sure you're linking the correct spreadsheet!**\n> If you have multiple spreadsheets, the bot will use whichever one is linked in your character profile.\n> \n> **⚠️ IMPORTANT:** You can ONLY have ONE tab named \`loggedInventory\` in your spreadsheet!\n> If you have multiple tabs with this name, delete all but one. Keep only the tab that has your character's starter gear.\n\n> ---`,
     },
     {
-      name: "2️⃣ Create a New Tab",
-      value: `> 🔖 Create a new tab named exactly:\n> \`\`\`text\n> loggedInventory\n> \`\`\`\n> *(case-sensitive, no extra spaces)*\n\n> ---`,
+      name: "1️⃣ Open Your Inventory Link",
+      value: `[📄 Inventory Link](${googleSheetsUrl})\n\n**Verify this is the correct spreadsheet you're editing!**\n\n> ---`,
+    },
+    {
+      name: "2️⃣ Create a New Tab (ONLY ONE!)",
+      value: `> 🔖 Create a new tab named **exactly**:\n> \`\`\`text\n> loggedInventory\n> \`\`\`\n> \n> **⚠️ WARNING:** \n> - Must be spelled exactly as shown (case-sensitive)\n> - No extra spaces before or after\n> - If you already have a tab with this name, **delete all duplicates** and keep only one\n> - The bot will get confused if there are multiple tabs with the same name\n\n> ---`,
     },
     {
       name: "3️⃣ Set Up Headers",
@@ -582,8 +586,16 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
       value: `> 📧 Share with **Editor Access** to:\n> \`\`\`text\n> tinglebot@rotw-tinglebot.iam.gserviceaccount.com\n> \`\`\`\n\n> ---`,
     },
     {
-      name: "5️⃣ Test Your Inventory",
-      value: `> ✅ Use the command:\n> \u0060\u0060\u0060text\n> /inventory test charactername:${characterName}\n> \u0060\u0060\u0060\n\n> ---`,
+      name: "5️⃣ Add Your Starter Gear",
+      value: `> 📦 **BEFORE testing or syncing**, add all your character's starter gear items to the \`loggedInventory\` tab.\n> \n> For each item, fill in at minimum:\n> - **Character Name** (column A): Your character's exact name\n> - **Item Name** (column B): The item name\n> - **Qty of Item** (column C): The quantity (must be greater than 0)\n> \n> **Don't sync until all your starter gear is added!**\n\n> ---`,
+    },
+    {
+      name: "6️⃣ Test Your Inventory (Communication Check Only)",
+      value: `> ✅ Use the command:\n> \`\`\`text\n> /inventory test charactername:${characterName}\n> \`\`\`\n> \n> **What this does:**\n> - ✅ Tests if the bot can communicate with your sheet\n> - ✅ Checks if headers are correct\n> - ✅ Verifies permissions are set up\n> - ❌ **Does NOT sync your items to the database**\n> - ❌ **Does NOT transfer any data**\n> \n> This is just a connection test!\n\n> ---`,
+    },
+    {
+      name: "7️⃣ Sync Your Inventory (One Time Only!)",
+      value: `> 🔄 **Only after** your test passes AND you've added all starter gear:\n> \`\`\`text\n> /inventory sync charactername:${characterName}\n> \`\`\`\n> \n> **What this does:**\n> - 🔄 Actually syncs your items to the database\n> - 🔄 Transfers all items from your sheet\n> - ⚠️ **Can only be done ONCE** without Moderator help\n> - ⚠️ **Make sure everything is correct before syncing!**\n\n> ---`,
     },
   ];
 
@@ -635,17 +647,21 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
 
   const fields = [
     {
+      name: "⚠️ CRITICAL: Verify Before Syncing",
+      value: `> **1. Check the Spreadsheet URL:**\n> Make sure [this link](${googleSheetsUrl}) is the correct spreadsheet you're editing!\n> \n> **2. Check for Duplicate Tabs:**\n> ⚠️ **You can ONLY have ONE tab named \`loggedInventory\`!**\n> If you have multiple tabs with this name, delete all but one.\n> Keep only the tab that contains your character's starter gear.\n> \n> **3. Verify the Correct Tab:**\n> Make sure you're using the tab that has your starter gear in it.\n> The bot will read from whichever tab is named \`loggedInventory\`.\n\n> ---`,
+    },
+    {
       name: "📄 Step 1: Open Your Inventory Sheet",
-      value: `Open your personal Google Sheet:\n[📄 Inventory Link](${googleSheetsUrl})\n\nMake sure your tab is named exactly \`loggedInventory\`.`,
+      value: `Open your personal Google Sheet:\n[📄 Inventory Link](${googleSheetsUrl})\n\n**Double-check:** Is this the correct spreadsheet?\nMake sure your tab is named exactly \`loggedInventory\` (case-sensitive).`,
     },
     {
       name: "🧹 Step 2: Final Inventory Check",
       value:
         "Double-check that each item is listed properly:\n" +
-        "- Character Name\n" +
+        "- Character Name (must match your character's name exactly)\n" +
         "- Item Name\n" +
-        "- Quantity\n\n" +
-        "✅ Only include real items your character owns.\n✅ No fake items, placeholders, or notes.",
+        "- Quantity (must be greater than 0)\n\n" +
+        "✅ Only include real items your character owns.\n✅ No fake items, placeholders, or notes.\n✅ Make sure ALL your starter gear is in the sheet.",
     },
     {
       name: "📝 Step 3: Example Format",
@@ -661,7 +677,8 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
       value:
         "- 🛠️ Syncing can **only be performed ONCE** without Moderator help.\n" +
         "- 🚫 After syncing, you **cannot edit your sheet** freely.\n" +
-        "- 📋 Double-check everything **before confirming**!",
+        "- 📋 Double-check everything **before confirming**!\n" +
+        "- 🔍 Make sure you've tested with `/inventory test` first!",
     },
     {
       name: "🔍 Step 5: Exact Formatting Matters",

@@ -789,9 +789,36 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
   
     const auth = await authorizeSheets();
     try {
+        // Check for duplicate tabs first
+        const sheets = google.sheets({ version: 'v4', auth });
+        const spreadsheetInfo = await sheets.spreadsheets.get({
+            spreadsheetId,
+            includeGridData: false,
+        });
+        
+        const allSheets = spreadsheetInfo.data.sheets || [];
+        const loggedInventoryTabs = allSheets.filter(sheet => 
+            sheet.properties.title.trim() === 'loggedInventory'
+        );
+        
+        if (loggedInventoryTabs.length > 1) {
+            console.error(`[googleSheetsUtils.js]: ❌ Multiple loggedInventory tabs detected (${loggedInventoryTabs.length})`);
+            return {
+                success: false,
+                message: "**Error:** You have multiple tabs named `loggedInventory` in your spreadsheet.\n\n**Fix:** Please delete all duplicate tabs and keep ONLY ONE tab named `loggedInventory`. The tab you keep should be the one that contains your character's starter gear. The bot will get confused if there are multiple tabs with the same name."
+            };
+        }
+        
+        if (loggedInventoryTabs.length === 0) {
+            console.error(`[googleSheetsUtils.js]: ❌ No loggedInventory tab found`);
+            return {
+                success: false,
+                message: "**Error:** No tab named `loggedInventory` found in your spreadsheet.\n\n**Fix:** Please create a tab named exactly `loggedInventory` (case-sensitive, no extra spaces)."
+            };
+        }
+        
         // Check service account access
         try {
-            const sheets = google.sheets({ version: 'v4', auth });
             await sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range: 'loggedInventory!A1:M1'
@@ -850,11 +877,12 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
             };
         }
 
-        // Validate content
+        // Validate content - check that items exist for this character
         const inventoryData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M100');
         
+        let hasAtLeastOneItem = false;
         if (inventoryData && inventoryData.length > 0) {
-            const hasAtLeastOneItem = inventoryData.some(row => {
+            hasAtLeastOneItem = inventoryData.some(row => {
                 const sheetCharacterName = (row[0] || '').trim().toLowerCase();
                 const itemName = (row[1] || '').trim();
                 const quantity = Number(row[2] || 0);
@@ -865,7 +893,14 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
                     quantity > 0
                 );
             });
-            
+        }
+        
+        if (!hasAtLeastOneItem) {
+            console.error(`[googleSheetsUtils.js]: ❌ No items found for character ${characterName}`);
+            return {
+                success: false,
+                message: `**Error:** No items found for ${characterName} in the loggedInventory tab.\n\n**Fix:** Before syncing, you must add your character's starter gear to the sheet. For each item, fill in at minimum:\n- **Character Name** (column A): ${characterName} (must match exactly)\n- **Item Name** (column B): The item name\n- **Qty of Item** (column C): The quantity (must be greater than 0)\n\nOnce you've added your starter gear, run \`/inventory test\` again to verify.`
+            };
         }
   
         return { success: true, message: "✅ Inventory sheet is set up correctly!" };
