@@ -2271,6 +2271,20 @@ async function postBlightRollCall(client) {
 
 async function checkAndPostMissedBlightPing(client) {
   try {
+    // Skip this check at exactly 8pm EST - the main scheduled job handles it
+    // This prevents race condition where both jobs run simultaneously
+    const now = new Date();
+    const estHour = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      hour12: false
+    }).formatToParts(now).find(p => p.type === 'hour').value);
+    
+    if (estHour === 20) {
+      logger.info('BLIGHT', 'Skipping missed blight ping check at 8pm EST - main scheduled job handles it');
+      return;
+    }
+    
     const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
     
     if (!client || !client.channels) {

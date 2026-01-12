@@ -1252,6 +1252,118 @@ formatQuestCount(count = 0) {
  // ============================================================================
  // ------------------- Validation Helper Methods -------------------
  // ============================================================================
+ // ------------------- Function: parseDeadlineEST -------------------
+ // Parses a deadline string and converts it to end-of-day EST (23:59:59 EST)
+ // Handles formats like "MM-DD-YY", "YYYY-MM-DD", etc.
+ function parseDeadlineEST(signupDeadlineString) {
+  if (!signupDeadlineString) return null;
+  
+  try {
+   let year, month, day;
+   
+   // Try parsing different date formats
+   // Format: MM-DD-YY or MM-DD-YYYY
+   if (signupDeadlineString.includes('-')) {
+    const parts = signupDeadlineString.split('-');
+    if (parts.length >= 3) {
+     month = parseInt(parts[0], 10);
+     day = parseInt(parts[1], 10);
+     const yearPart = parseInt(parts[2], 10);
+     
+     // Handle 2-digit years (YY format)
+     if (yearPart < 100) {
+      // Assume years 00-50 are 2000-2050, 51-99 are 1951-1999
+      year = yearPart <= 50 ? 2000 + yearPart : 1900 + yearPart;
+     } else {
+      year = yearPart;
+     }
+    }
+   } else {
+    // Try standard Date parsing as fallback
+    const parsedDate = new Date(signupDeadlineString);
+    if (!isNaN(parsedDate.getTime())) {
+     year = parsedDate.getFullYear();
+     month = parsedDate.getMonth() + 1;
+     day = parsedDate.getDate();
+    } else {
+     return null;
+    }
+   }
+   
+   if (!year || !month || !day) return null;
+   
+   // Create a date string in ISO format
+   const isoDateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+   
+   // Create a test date at noon UTC to determine DST status
+   const testDateUTC = new Date(`${isoDateString}T12:00:00Z`);
+   
+   // Get the offset by comparing what time it is in EST vs UTC
+   const estFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    hour12: false
+   });
+   
+   const utcFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    hour: 'numeric',
+    hour12: false
+   });
+   
+   const estHour = parseInt(estFormatter.formatToParts(testDateUTC).find(p => p.type === 'hour').value);
+   const utcHour = parseInt(utcFormatter.formatToParts(testDateUTC).find(p => p.type === 'hour').value);
+   const offsetHours = utcHour - estHour; // EST is UTC-5 or UTC-4 (EDT)
+   
+   // Create date at 23:59:59 EST
+   // 23:59:59 EST = 23:59:59 + offsetHours in UTC
+   // EST: 23:59:59 EST = 04:59:59 UTC next day (23 + 5 = 28, wraps to 04 next day)
+   // EDT: 23:59:59 EDT = 03:59:59 UTC next day (23 + 4 = 27, wraps to 03 next day)
+   const utcHourForEndOfDay = 23 + offsetHours;
+   
+   // Handle day rollover manually (like blightHandler.js does)
+   let utcDay = day;
+   let utcMonth = month - 1;
+   let utcYear = year;
+   let finalHour = utcHourForEndOfDay;
+   
+   if (utcHourForEndOfDay >= 24) {
+    finalHour = utcHourForEndOfDay % 24;
+    utcDay += 1;
+    // Handle month/year rollover
+    const daysInMonth = new Date(year, month, 0).getDate();
+    if (utcDay > daysInMonth) {
+     utcDay = 1;
+     utcMonth += 1;
+     if (utcMonth >= 12) {
+      utcMonth = 0;
+      utcYear += 1;
+     }
+    }
+   }
+   
+   const deadlineUTC = new Date(Date.UTC(utcYear, utcMonth, utcDay, finalHour, 59, 59));
+   
+   return deadlineUTC;
+  } catch (error) {
+   // If parsing fails, try to use the string directly as a fallback
+   try {
+    const parsedDate = new Date(signupDeadlineString);
+    if (!isNaN(parsedDate.getTime())) {
+     // Set to end of day in EST (defaulting to EST offset -05:00)
+     const year = parsedDate.getFullYear();
+     const month = parsedDate.getMonth();
+     const day = parsedDate.getDate();
+     const estDateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59-05:00`;
+     return new Date(estDateString);
+    }
+   } catch (fallbackError) {
+    return null;
+   }
+   return null;
+  }
+ }
+
  async validateQuest(interaction, questID) {
   const quest = await Quest.findOne({ questID });
   if (!quest) {
@@ -1272,8 +1384,8 @@ formatQuestCount(count = 0) {
 
   const now = new Date();
   if (quest.signupDeadline) {
-   const deadline = new Date(quest.signupDeadline);
-   if (now > deadline) {
+   const deadline = parseDeadlineEST(quest.signupDeadline);
+   if (!deadline || now > deadline) {
     await interaction.reply({
      content: `[quest.js]❌ The signup deadline for quest \`${quest.title}\` has passed.`,
      flags: MessageFlags.Ephemeral,
