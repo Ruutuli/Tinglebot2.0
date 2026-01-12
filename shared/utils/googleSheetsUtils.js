@@ -711,18 +711,18 @@ async function getActualSheetName(auth, spreadsheetId, sheetTitle) {
             return null;
         }
         
-        const actualSheetName = sheet.properties.title.trim();
-        
-        // Check for spaces in the sheet name that could cause range parsing issues
-        if (actualSheetName !== actualSheetName.trim() || actualSheetName.includes('  ')) {
-            throw new Error(`Sheet name "${actualSheetName}" contains spaces that will cause range parsing errors. Please rename your sheet to remove any leading, trailing, or multiple spaces.`);
-        }
-        
-        return actualSheetName;
+        // Return the actual sheet name with spaces preserved for use in range queries
+        return sheet.properties.title;
     } catch (error) {
         logger.error('TOKEN', `Error occurred:`, error.message);
         throw error;
     }
+}
+
+// ------------------- Function: getActualInventorySheetName -------------------
+// Gets the actual 'loggedInventory' sheet name (preserving spaces) for use in range queries
+async function getActualInventorySheetName(auth, spreadsheetId) {
+    return await getActualSheetName(auth, spreadsheetId, 'loggedInventory');
 }
 
 // ------------------- Function: convertWixImageLinkForSheets -------------------
@@ -817,15 +817,25 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
             };
         }
         
+        // Get the actual sheet name (preserving spaces) for use in range queries
+        const actualSheetName = await getActualInventorySheetName(auth, spreadsheetId);
+        if (!actualSheetName) {
+            console.error(`[googleSheetsUtils.js]: ❌ Could not get actual sheet name`);
+            return {
+                success: false,
+                message: "**Error:** Could not retrieve the inventory sheet name.\n\n**Fix:** Please ensure your spreadsheet is accessible and has a tab named `loggedInventory`."
+            };
+        }
+        
         // Check service account access
         try {
             await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: 'loggedInventory!A1:M1'
+                range: `${actualSheetName}!A1:M1`
             });
             await sheets.spreadsheets.values.update({
                 spreadsheetId,
-                range: 'loggedInventory!A1',
+                range: `${actualSheetName}!A1`,
                 valueInputOption: 'USER_ENTERED',
                 resource: {
                     values: [['Character Name']]
@@ -852,7 +862,7 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
         }
 
         // Validate headers
-        const headerRow = await readSheetData(auth, spreadsheetId, 'loggedInventory!A1:M1');
+        const headerRow = await readSheetData(auth, spreadsheetId, `${actualSheetName}!A1:M1`);
         const expectedHeaders = [
             'Character Name', 'Item Name', 'Qty of Item', 'Category', 'Type', 'Subtype',
             'Obtain', 'Job', 'Perk', 'Location', 'Link', 'Date/Time', 'Confirmed Sync'
@@ -878,7 +888,7 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
         }
 
         // Validate content - check that items exist for this character
-        const inventoryData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M100');
+        const inventoryData = await readSheetData(auth, spreadsheetId, `${actualSheetName}!A2:M100`);
         
         let hasAtLeastOneItem = false;
         if (inventoryData && inventoryData.length > 0) {
@@ -1732,6 +1742,7 @@ module.exports = {
     getSheetIdByName,
     getSheetIdByTitle,
     getActualSheetName,
+    getActualInventorySheetName,
     isValidGoogleSheetsUrl,
     extractSpreadsheetId,
     convertWixImageLinkForSheets,

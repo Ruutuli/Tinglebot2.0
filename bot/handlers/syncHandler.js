@@ -36,7 +36,7 @@ function escapeRegExp(string) {
 const { handleError } = require('../../shared/utils/globalErrorHandler');
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds.js');
 const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../../shared/utils/inventoryUtils');
-const { authorizeSheets, getSheetIdByTitle, readSheetData, writeBatchData, validateInventorySheet } = require('../../shared/utils/googleSheetsUtils');
+const { authorizeSheets, getSheetIdByTitle, getActualInventorySheetName, readSheetData, writeBatchData, validateInventorySheet } = require('../../shared/utils/googleSheetsUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../shared/utils/googleSheetsUtils');
 
 // ============================================================================
@@ -245,6 +245,14 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             return;
         }
 
+        // Get the actual sheet name (preserving spaces) for use in range queries
+        const actualSheetName = await getActualInventorySheetName(auth, spreadsheetId);
+        if (!actualSheetName) {
+            console.log(`[syncHandler.js]: ⚠️ Sheet 'loggedInventory' not found`);
+            await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
+            return;
+        }
+
         // Get sheet ID and read data
         const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
         if (!sheetId) {
@@ -253,7 +261,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             return;
         }
 
-        const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
+        const sheetData = await readSheetData(auth, spreadsheetId, `${actualSheetName}!A2:M`);
         if (!sheetData?.length) {
             console.log(`[syncHandler.js]: ⚠️ No data found in sheet`);
             await editSyncErrorMessage(interaction, `❌ **No data found in the Google Sheet. Please ensure the sheet is correctly set up.**`);
@@ -352,7 +360,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
 
                             // For crafted items, find and update existing row instead of appending
                             if (isCraftedItem) {
-                                const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
+                                const sheetData = await readSheetData(auth, spreadsheetId, `${actualSheetName}!A2:M`);
                                 const existingRowIndex = sheetData.findIndex(row => {
                                     const sheetChar = (row[0] || '').trim().toLowerCase();
                                     const sheetItem = (row[1] || '').trim().toLowerCase();
@@ -367,14 +375,14 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                                 if (existingRowIndex !== -1) {
                                     // Update existing row
                                     currentBatchRequests.push({
-                                        range: `loggedInventory!A${existingRowIndex + 2}:M${existingRowIndex + 2}`,
+                                        range: `${actualSheetName}!A${existingRowIndex + 2}:M${existingRowIndex + 2}`,
                                         values: [updatedRowData]
                                     });
                                     console.log(`[syncHandler.js]: ✅ Updated existing crafted item row for ${inventoryItem.itemName}`);
                                 } else {
                                     // If no existing row found, append new row
                                     currentBatchRequests.push({
-                                        range: `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`,
+                                        range: `${actualSheetName}!A${originalRowIndex}:M${originalRowIndex}`,
                                         values: [updatedRowData]
                                     });
                                     console.log(`[syncHandler.js]: ✅ Appended new crafted item row for ${inventoryItem.itemName}`);
@@ -382,7 +390,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                             } else {
                                 // For non-crafted items, use normal update logic
                                 currentBatchRequests.push({
-                                    range: `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`,
+                                    range: `${actualSheetName}!A${originalRowIndex}:M${originalRowIndex}`,
                                     values: [updatedRowData]
                                 });
                             }

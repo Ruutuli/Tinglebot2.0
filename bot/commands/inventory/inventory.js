@@ -28,7 +28,7 @@ const {
 // ------------------- Project Utilities -------------------
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../../shared/utils/googleSheetsUtils.js');
-const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../../shared/utils/googleSheetsUtils.js');
+const { authorizeSheets, appendSheetData, getSheetIdByTitle, getActualInventorySheetName, readSheetData, validateInventorySheet } = require('../../../shared/utils/googleSheetsUtils.js');
 const { google } = require('googleapis');
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
 const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
@@ -480,6 +480,17 @@ module.exports = {
         return;
       }
 
+      // Get the actual sheet name (preserving spaces) for use in range queries
+      const actualSheetName = await getActualInventorySheetName(auth, spreadsheetId);
+      if (!actualSheetName) {
+        console.error('❌ "loggedInventory" sheet not found in the spreadsheet.');
+        await interaction.editReply({
+          content: `❌ **Error:** No tab named \`loggedInventory\` found in your spreadsheet.\n\n**Fix:** Please create a tab named exactly \`loggedInventory\` (case-sensitive, no extra spaces) in your spreadsheet.`,
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
+
       const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
       if (!sheetId) {
         console.error('❌ "loggedInventory" sheet not found in the spreadsheet.');
@@ -496,7 +507,7 @@ module.exports = {
         'Subtype', 'Obtain', 'Job', 'Perk', 'Location', 'Link', 'Date/Time', 'Confirmed Sync'
       ];
 
-      const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A1:M1');
+      const sheetData = await readSheetData(auth, spreadsheetId, `${actualSheetName}!A1:M1`);
       if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
         console.error('❌ Missing or incorrect headers in "loggedInventory" sheet.');
         await this.sendSetupInstructions(interaction, 'missing_headers', character._id, characterName, inventoryUrl);
