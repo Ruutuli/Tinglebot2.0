@@ -1117,6 +1117,24 @@ async function generateDailyQuests() {
     }
     
     const selectedTimes = selectTimesWithVariableBuffer(availableTimes, VILLAGES.length);
+    
+    // Validate that we have enough times for all villages
+    if (selectedTimes.length !== VILLAGES.length) {
+      const errorMsg = `Time selection failed: expected ${VILLAGES.length} times but got ${selectedTimes.length}. Cannot generate quests for all villages.`;
+      logger.error('QUEST', errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Validate that all selected times are defined
+    const undefinedTimes = selectedTimes.filter((time, index) => !time);
+    if (undefinedTimes.length > 0) {
+      const errorMsg = `Time selection returned ${undefinedTimes.length} undefined time(s). Cannot generate quests for all villages.`;
+      logger.error('QUEST', errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    logger.info('QUEST', `Successfully selected ${selectedTimes.length} posting times for ${VILLAGES.length} villages`);
+    
     const quests = [];
     
     // Generate quests sequentially to ensure unique NPCs
@@ -1131,10 +1149,26 @@ async function generateDailyQuests() {
       }
       
       // Assign a posting time with variable buffer from the selected times
-      quest.scheduledPostTime = selectedTimes[i];
+      const assignedTime = selectedTimes[i];
+      if (!assignedTime) {
+        const errorMsg = `No posting time available for village ${village} at index ${i}. This should not happen after validation.`;
+        logger.error('QUEST', errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      quest.scheduledPostTime = assignedTime;
       const hour = cronToHour(quest.scheduledPostTime);
       logger.info('QUEST', `Generated ${quest.type} quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
       quests.push(quest);
+    }
+    
+    // Final validation: ensure all quests have valid scheduledPostTime before saving
+    const questsWithoutTime = quests.filter(q => !q.scheduledPostTime);
+    if (questsWithoutTime.length > 0) {
+      const villagesWithoutTime = questsWithoutTime.map(q => q.village).join(', ');
+      const errorMsg = `Validation failed: ${questsWithoutTime.length} quest(s) missing scheduledPostTime for village(s): ${villagesWithoutTime}`;
+      logger.error('QUEST', errorMsg);
+      throw new Error(errorMsg);
     }
 
     // Upsert quests
@@ -1148,12 +1182,25 @@ async function generateDailyQuests() {
       results.push(updated);
     }
     
-    // Log the final schedule for the day
+    // Log the final schedule for the day with detailed information
     const scheduleDetails = results.map(quest => {
       const hour = cronToHour(quest.scheduledPostTime);
-      return `${quest.village}: ${quest.npcName} at ${formatHour(hour)}`;
+      if (!quest.scheduledPostTime) {
+        logger.error('QUEST', `CRITICAL: Quest for ${quest.village} has no scheduledPostTime after generation!`);
+        return `${quest.village}: ${quest.npcName} - MISSING POST TIME`;
+      }
+      return `${quest.village}: ${quest.npcName} (${quest.type}) at ${formatHour(hour)} (${quest.scheduledPostTime})`;
     }).join(', ');
     logger.info('QUEST', `Daily quest schedule for ${date}: ${scheduleDetails}`);
+    
+    // Final validation log
+    const allHaveTimes = results.every(quest => quest.scheduledPostTime);
+    if (!allHaveTimes) {
+      const missingTimes = results.filter(quest => !quest.scheduledPostTime).map(q => q.village);
+      logger.error('QUEST', `CRITICAL: ${missingTimes.length} quest(s) missing scheduledPostTime after save: ${missingTimes.join(', ')}`);
+    } else {
+      logger.success('QUEST', `All ${results.length} quest(s) have valid scheduledPostTime for ${date}`);
+    }
     
     return results;
   } catch (error) {
@@ -1169,6 +1216,18 @@ async function generateDailyQuests() {
 // ------------------- Function: selectTimesWithVariableBuffer -------------------
 // Selects times from FIXED_CRON_TIMES ensuring variable buffer (3-6 hours) between each
 function selectTimesWithVariableBuffer(availableTimes, count) {
+  if (!availableTimes || availableTimes.length === 0) {
+    throw new Error(`No available times provided for time selection`);
+  }
+  
+  if (count <= 0) {
+    throw new Error(`Invalid count (${count}) for time selection`);
+  }
+  
+  if (availableTimes.length < count) {
+    logger.warn('QUEST', `Warning: Only ${availableTimes.length} available times for ${count} requested times. Some villages may not get optimal spacing.`);
+  }
+
   // Convert cron times to time slots with hour information
   const timeSlots = availableTimes.map(cronTime => ({
     cron: cronTime,
@@ -1177,16 +1236,16 @@ function selectTimesWithVariableBuffer(availableTimes, count) {
 
   const selected = [];
   const shuffled = shuffleArray([...timeSlots]); // Start with random order
+  const minBuffer = 3; // Minimum 3 hours between quests
+  const maxBuffer = 6; // Maximum 6 hours between quests
 
+  // Try variable buffer approach: assign a consistent buffer to each selected time
   for (const timeSlot of shuffled) {
     // Check if this time slot is compatible with all already selected times
-    // Use a variable buffer between 3-6 hours for more randomness
-    const isCompatible = selected.every(selectedTime => {
-      const minBuffer = 3; // Minimum 3 hours between quests
-      const maxBuffer = 6; // Maximum 6 hours between quests
-      const buffer = Math.floor(Math.random() * (maxBuffer - minBuffer + 1)) + minBuffer;
-      return isHoursApart(timeSlot.hour, selectedTime.hour, buffer);
-    });
+    // Use a consistent buffer check: each selected time maintains at least minBuffer hours from others
+    const isCompatible = selected.every(selectedTime => 
+      isHoursApart(timeSlot.hour, selectedTime.hour, minBuffer)
+    );
 
     if (isCompatible) {
       selected.push(timeSlot);
@@ -1198,7 +1257,7 @@ function selectTimesWithVariableBuffer(availableTimes, count) {
 
   // If we couldn't find enough compatible times, fall back to fixed 3-hour buffer
   if (selected.length < count) {
-    console.log(`[HelpWanted] Warning: Could only find ${selected.length} times with variable buffer, falling back to 3-hour minimum`);
+    logger.warn('QUEST', `Could only find ${selected.length} times with variable buffer, falling back to 3-hour minimum`);
     selected.length = 0; // Reset and try again with fixed buffer
     
     for (const timeSlot of shuffled) {
@@ -1215,12 +1274,43 @@ function selectTimesWithVariableBuffer(availableTimes, count) {
     }
   }
 
+  // Final fallback: if still not enough, just take the first N times (ensures we always return count times)
+  if (selected.length < count) {
+    logger.warn('QUEST', `Could only find ${selected.length} times with 3-hour buffer, using final fallback to ensure all villages get posting times`);
+    selected.length = 0;
+    
+    // Sort by hour and take evenly spaced times
+    const sortedByHour = [...timeSlots].sort((a, b) => a.hour - b.hour);
+    const step = Math.floor(sortedByHour.length / count);
+    
+    for (let i = 0; i < count && i < sortedByHour.length; i++) {
+      const index = Math.min(i * step, sortedByHour.length - 1);
+      selected.push(sortedByHour[index]);
+    }
+    
+    // If still not enough, just take the first N available times
+    if (selected.length < count) {
+      for (let i = selected.length; i < count && i < sortedByHour.length; i++) {
+        if (!selected.find(s => s.hour === sortedByHour[i].hour)) {
+          selected.push(sortedByHour[i]);
+        }
+      }
+    }
+  }
+
+  // Final validation: ensure we have exactly count times
+  if (selected.length < count) {
+    const errorMsg = `Failed to select ${count} times: only found ${selected.length} compatible times out of ${availableTimes.length} available. This should not happen.`;
+    logger.error('QUEST', errorMsg);
+    throw new Error(errorMsg);
+  }
+
   // Sort selected times by hour for better scheduling
   selected.sort((a, b) => a.hour - b.hour);
   
   // Log the selected times in a readable format
   const timeDisplay = selected.map(t => formatHour(t.hour)).join(', ');
-  logger.info('QUEST', `Selected times with variable buffer (3-6 hours): ${timeDisplay}`);
+  logger.info('QUEST', `Selected ${selected.length} times with variable buffer (3-6 hours): ${timeDisplay}`);
   
   return selected.map(timeSlot => timeSlot.cron);
 }

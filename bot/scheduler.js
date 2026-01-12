@@ -1935,13 +1935,23 @@ async function checkAndPostMissedQuests(client) {
     
     const shuffledQuests = processedQuests.sort(() => Math.random() - 0.5);
     let posted = 0;
+    let skippedNoTime = 0;
+    let skippedInvalidFormat = 0;
     
     for (const quest of shuffledQuests) {
       const scheduledTime = quest.scheduledPostTime;
-      if (!scheduledTime) continue;
+      if (!scheduledTime) {
+        skippedNoTime++;
+        logger.warn('QUEST', `Skipping quest ${quest.questId} for ${quest.village}: missing scheduledPostTime. This indicates a quest generation error.`);
+        continue;
+      }
       
       const parts = scheduledTime.split(' ');
-      if (parts.length !== 5) continue;
+      if (parts.length !== 5) {
+        skippedInvalidFormat++;
+        logger.warn('QUEST', `Skipping quest ${quest.questId} for ${quest.village}: invalid scheduledPostTime format "${scheduledTime}". Expected cron format.`);
+        continue;
+      }
       
       const scheduledMinute = parseInt(parts[0]);
       const scheduledHour = parseInt(parts[1]);
@@ -1960,6 +1970,10 @@ async function checkAndPostMissedQuests(client) {
     
     if (posted > 0) {
       logger.success('QUEST', `Posted ${posted} missed quests during startup`);
+    }
+    
+    if (skippedNoTime > 0 || skippedInvalidFormat > 0) {
+      logger.warn('QUEST', `Skipped ${skippedNoTime + skippedInvalidFormat} quest(s) during startup: ${skippedNoTime} missing scheduledPostTime, ${skippedInvalidFormat} invalid format`);
     }
     
     return posted;

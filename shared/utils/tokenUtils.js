@@ -77,6 +77,7 @@ function resetSubmissionState() {
 
 // ------------------- Calculate Tokens -------------------
 // Calculates the total tokens based on user selections and configurations
+// Only base tokens are split; quest bonus and collab bonus are given to each person
 function calculateTokens({
   baseSelections = [],
   baseCounts = new Map(),
@@ -87,6 +88,7 @@ function calculateTokens({
   specialWorksApplied = [],
   collab = null, // Add collab as a parameter
   questBonus = 0, // Add quest bonus parameter
+  collabBonus = 0, // Add collab bonus parameter
 }) {
   // Base Token Calculation with individual counts
   const baseTotal = baseSelections.reduce((total, base) => {
@@ -136,33 +138,42 @@ function calculateTokens({
     return total + workValue * (count || 1);
   }, 0);
 
-  // Regular Total Calculation
+  // Regular Total Calculation (base tokens only - no bonuses)
   const regularTotal = Math.ceil(baseTotal * typeMultiplierTotal * productMultiplier + addOnTotal);
-  // Final Token Calculation (including quest bonus)
-  const totalTokens = regularTotal + specialWorksTotal + questBonus;
-
-  // Calculate split tokens based on number of collaborators
-  let splitTokens = totalTokens;
-  if (collab && Array.isArray(collab) && collab.length > 0) {
-    const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
-    splitTokens = Math.floor(totalTokens / totalParticipants);
-  } else if (collab && typeof collab === 'string') {
-    // Legacy support for single collaborator string
-    splitTokens = Math.floor(totalTokens / 2);
+  
+  // Calculate base tokens per person (split only base tokens, not bonuses)
+  let baseTokensPerPerson = regularTotal + specialWorksTotal;
+  let tokensPerPerson = baseTokensPerPerson;
+  const hasCollab = collab && ((Array.isArray(collab) && collab.length > 0) || typeof collab === 'string');
+  const totalParticipants = hasCollab ? (Array.isArray(collab) ? 1 + collab.length : 2) : 1;
+  
+  if (hasCollab) {
+    baseTokensPerPerson = Math.floor((regularTotal + specialWorksTotal) / totalParticipants);
+    tokensPerPerson = baseTokensPerPerson + questBonus + collabBonus;
+  } else {
+    // No collab - single person gets everything
+    tokensPerPerson = baseTokensPerPerson + questBonus;
   }
+  
+  // Calculate total tokens (for display/reference)
+  const totalTokens = tokensPerPerson * totalParticipants;
 
   return {
     totalTokens,
-    splitTokens,
+    tokensPerPerson,
+    splitTokens: tokensPerPerson, // For backward compatibility
     breakdown: {
       baseTotal,
       typeMultiplierTotal,
       productMultiplier,
       addOnTotal,
       specialWorksTotal,
-      questBonus,
       regularTotal,
-      finalTotal: totalTokens,
+      baseTokensPerPerson,
+      questBonus,
+      collabBonus: hasCollab ? collabBonus : 0,
+      tokensPerPerson,
+      finalTotal: tokensPerPerson,
     },
   };
 }
@@ -337,31 +348,61 @@ function calculateWritingTokens(wordCount) {
 
 // ------------------- Calculate Writing Tokens with Collaboration -------------------
 // Calculates tokens for writing submissions with collaboration splitting
-function calculateWritingTokensWithCollab(wordCount, collab = null, questBonus = 0) {
+// Only base tokens are split; quest bonus and collab bonus are given to each person
+function calculateWritingTokensWithCollab(wordCount, collab = null, questBonus = 0, collabBonus = 0) {
   const baseTokens = Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
-  const totalTokens = baseTokens + questBonus; // Add quest bonus
   
-  // Calculate split tokens based on number of collaborators
-  let splitTokens = totalTokens;
+  // Calculate tokens per person
+  let tokensPerPerson = baseTokens;
+  let baseTokensPerPerson = baseTokens;
+  
   if (collab && Array.isArray(collab) && collab.length > 0) {
     const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
-    splitTokens = Math.floor(totalTokens / totalParticipants);
+    baseTokensPerPerson = Math.floor(baseTokens / totalParticipants);
+    tokensPerPerson = baseTokensPerPerson + questBonus + collabBonus;
   } else if (collab && typeof collab === 'string') {
     // Legacy support for single collaborator string
-    splitTokens = Math.floor(totalTokens / 2);
+    baseTokensPerPerson = Math.floor(baseTokens / 2);
+    tokensPerPerson = baseTokensPerPerson + questBonus + collabBonus;
+  } else {
+    // No collab - single person gets everything
+    tokensPerPerson = baseTokens + questBonus;
   }
+  
+  // Calculate total tokens (for display/reference, but distribution uses tokensPerPerson)
+  const totalParticipants = collab && ((Array.isArray(collab) && collab.length > 0) || typeof collab === 'string')
+    ? (Array.isArray(collab) ? 1 + collab.length : 2)
+    : 1;
+  const totalTokens = tokensPerPerson * totalParticipants;
   
   return {
     totalTokens,
-    splitTokens,
+    tokensPerPerson,
+    splitTokens: tokensPerPerson, // For backward compatibility
     breakdown: {
       wordCount,
       tokensPerHundredWords: 10,
+      baseTokens,
+      baseTokensPerPerson,
       questBonus,
-      calculation: questBonus > 0 
-        ? `${wordCount} words ÷ 100 × 10 + ${questBonus} quest bonus = ${totalTokens} tokens`
-        : `${wordCount} words ÷ 100 × 10 = ${totalTokens} tokens`,
-      finalTotal: totalTokens,
+      collabBonus: collab && ((Array.isArray(collab) && collab.length > 0) || typeof collab === 'string') ? collabBonus : 0,
+      tokensPerPerson,
+      calculation: (() => {
+        const parts = [];
+        if (baseTokensPerPerson !== baseTokens) {
+          parts.push(`${baseTokens} base ÷ ${totalParticipants} = ${baseTokensPerPerson} each`);
+        } else {
+          parts.push(`${baseTokens} base`);
+        }
+        if (questBonus > 0) {
+          parts.push(`+ ${questBonus} quest bonus (each)`);
+        }
+        if (collab && ((Array.isArray(collab) && collab.length > 0) || typeof collab === 'string') && collabBonus > 0) {
+          parts.push(`+ ${collabBonus} collab bonus (each)`);
+        }
+        return parts.join(' ') + ` = ${tokensPerPerson} tokens per person`;
+      })(),
+      finalTotal: tokensPerPerson,
     }
   };
 }
@@ -520,9 +561,9 @@ async function getQuestBonus(questId, userId = null) {
 
         // Look for different quest bonus formats in the token reward string
         // Format 1: "per_unit:222 unit:submission max:3 quest_bonus:50"
-        // Format 2: "per_unit:222 unit:submission max:3 collab_bonus:50" (collab bonus used as quest bonus)
+        // Format 2: "per_unit:222 unit:submission max:3 collab_bonus:50" (collab bonus is separate, not quest bonus)
         // Format 3: "flat:300 quest_bonus:50"
-        // Format 4: "flat:300 collab_bonus:50" (collab bonus used as quest bonus)
+        // Format 4: "flat:300 collab_bonus:200" (flat amount is quest bonus, collab_bonus is separate)
         
         let questBonus = 0;
         
@@ -534,11 +575,11 @@ async function getQuestBonus(questId, userId = null) {
             return questBonus;
         }
         
-        // Check for collab_bonus (often used as quest bonus in practice)
-        const collabBonusMatch = tokenReward.match(/collab_bonus:(\d+)/);
-        if (collabBonusMatch) {
-            questBonus = parseInt(collabBonusMatch[1], 10);
-            console.log(`[tokenUtils.js]: 🎯 Found collab bonus (using as quest bonus): ${questBonus} for quest ${questId}`);
+        // Check for flat format - use flat amount as quest bonus
+        const flatMatch = tokenReward.match(/flat:(\d+)/);
+        if (flatMatch) {
+            questBonus = parseInt(flatMatch[1], 10);
+            console.log(`[tokenUtils.js]: 🎯 Found flat format, using flat amount as quest bonus: ${questBonus} for quest ${questId}`);
             return questBonus;
         }
 
@@ -559,6 +600,46 @@ async function getQuestBonus(questId, userId = null) {
     }
 }
 
+// ------------------- Get Collab Bonus -------------------
+// Retrieves collab bonus from quest data based on quest ID
+async function getCollabBonus(questId) {
+    try {
+        if (!questId || questId === 'N/A') {
+            console.log(`[tokenUtils.js]: ⚠️ No quest ID provided or quest ID is N/A for collab bonus`);
+            return 0;
+        }
+
+        console.log(`[tokenUtils.js]: 🔍 Looking up collab bonus for quest ID: ${questId}`);
+        const quest = await Quest.findOne({ questID: questId });
+        if (!quest) {
+            console.log(`[tokenUtils.js]: ⚠️ Quest ${questId} not found in database for collab bonus`);
+            return 0;
+        }
+
+        const tokenReward = quest.tokenReward;
+        if (!tokenReward || typeof tokenReward !== 'string') {
+            console.log(`[tokenUtils.js]: ⚠️ No valid token reward string found for quest ${questId}`);
+            return 0;
+        }
+
+        // Look for collab_bonus in the token reward string
+        // Format: "flat:300 collab_bonus:200" or "per_unit:222 unit:submission max:3 collab_bonus:50"
+        const collabBonusMatch = tokenReward.match(/collab_bonus:(\d+)/);
+        if (collabBonusMatch) {
+            const collabBonus = parseInt(collabBonusMatch[1], 10);
+            console.log(`[tokenUtils.js]: 🎯 Found collab bonus: ${collabBonus} for quest ${questId}`);
+            return collabBonus;
+        }
+
+        // If no collab bonus found, return 0
+        console.log(`[tokenUtils.js]: ⚠️ No collab bonus found in token reward for quest ${questId}`);
+        return 0;
+    } catch (error) {
+        console.error(`[tokenUtils.js]: ❌ Error retrieving collab bonus for quest ${questId}:`, error);
+        return 0;
+    }
+}
+
 // ------------------- Exported Functions -------------------
 // Exporting the unified `calculateTokens` and other utility functions.
 module.exports = {
@@ -570,4 +651,5 @@ module.exports = {
   handleTokenError,
   logTokenBalanceChange,
   getQuestBonus,
+  getCollabBonus,
 };

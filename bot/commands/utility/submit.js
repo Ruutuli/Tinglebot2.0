@@ -585,17 +585,20 @@ module.exports = {
           return;
         }
     
-        // Get quest bonus if quest is linked
+        // Get quest bonus and collab bonus if quest is linked
         let questBonus = 0;
+        let collabBonus = 0;
         if (questId && questId !== 'N/A') {
-          const { getQuestBonus } = require('../../../shared/utils/tokenUtils');
+          const { getQuestBonus, getCollabBonus } = require('../../../shared/utils/tokenUtils');
           questBonus = await getQuestBonus(questId, user.id);
+          collabBonus = await getCollabBonus(questId);
           console.log(`[submit.js]: 🎯 Quest bonus for ${questId}: ${questBonus}`);
+          console.log(`[submit.js]: 🤝 Collab bonus for ${questId}: ${collabBonus}`);
         }
 
         // Calculate tokens for the writing submission with collaboration splitting
-        const tokenCalculation = calculateWritingTokensWithCollab(wordCount, collab, questBonus);
-        let finalTokenAmount = tokenCalculation.totalTokens;
+        const tokenCalculation = calculateWritingTokensWithCollab(wordCount, collab, questBonus, collabBonus);
+        let finalTokenAmount = tokenCalculation.tokensPerPerson;
         const boostEffects = [];
         const boostedCharacters = new Map();
         const processedBoostTypes = new Set();
@@ -739,22 +742,29 @@ module.exports = {
             // Calculate token display based on collaboration and quest bonus
             let tokenDisplay = `${finalTokenAmount} tokens`;
             
-            // Add quest bonus breakdown if present
+            // Build breakdown showing per-person amounts
+            const breakdownParts = [];
+            if (tokenCalculation.breakdown.baseTokensPerPerson !== undefined) {
+              breakdownParts.push(`${tokenCalculation.breakdown.baseTokensPerPerson} base`);
+            } else {
+              breakdownParts.push(`${tokenCalculation.breakdown.baseTokens} base`);
+            }
             if (questBonus && questBonus > 0) {
-              const baseTokens = tokenCalculation.totalTokens - questBonus;
-              if (boostTokenIncrease > 0) {
-                tokenDisplay = `${baseTokens} + ${questBonus} quest bonus + ${boostTokenIncrease} boost = ${finalTokenAmount} tokens`;
-              } else {
-                tokenDisplay = `${baseTokens} + ${questBonus} quest bonus = ${finalTokenAmount} tokens`;
-              }
-            } else if (boostTokenIncrease > 0) {
-              tokenDisplay = `${tokenCalculation.totalTokens} + ${boostTokenIncrease} boost = ${finalTokenAmount} tokens`;
+              breakdownParts.push(`+ ${questBonus} quest bonus (each)`);
+            }
+            if (collab && collab.length > 0 && collabBonus > 0) {
+              breakdownParts.push(`+ ${collabBonus} collab bonus (each)`);
+            }
+            if (boostTokenIncrease > 0) {
+              breakdownParts.push(`+ ${boostTokenIncrease} boost`);
+            }
+            
+            if (breakdownParts.length > 1 || boostTokenIncrease > 0) {
+              tokenDisplay = `${breakdownParts.join(' ')} = ${finalTokenAmount} tokens`;
             }
             
             if (collab && collab.length > 0) {
-              const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
-              const splitTokens = Math.floor(finalTokenAmount / totalParticipants);
-              tokenDisplay += ` (${splitTokens} each)`;
+              tokenDisplay += ` per person (${1 + collab.length} people)`;
             }
 
             // Build notification fields dynamically

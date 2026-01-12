@@ -422,20 +422,23 @@ async function confirmSubmission(interaction) {
       });
       return;
     }
-    // Get quest bonus if quest is linked
+    // Get quest bonus and collab bonus if quest is linked
     let questBonus = 0;
+    let collabBonus = 0;
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
-      const { getQuestBonus } = require('../../shared/utils/tokenUtils');
+      const { getQuestBonus, getCollabBonus } = require('../../shared/utils/tokenUtils');
       const userId = submissionData.userId || interaction.user.id;
       questBonus = await getQuestBonus(submissionData.questEvent, userId);
+      collabBonus = await getCollabBonus(submissionData.questEvent);
       console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
+      console.log(`[selectMenuHandler.js]: 🤝 Collab bonus for ${submissionData.questEvent}: ${collabBonus}`);
       
       // Update submission data with the actual quest bonus (convert to string for storage)
       submissionData.questBonus = String(questBonus);
     }
 
     // Calculate tokens and generate breakdown
-    const { totalTokens, breakdown } = calculateTokens({
+    const { tokensPerPerson, breakdown } = calculateTokens({
       baseSelections: submissionData.baseSelections,
       baseCounts: submissionData.baseCounts || new Map(),
       typeMultiplierSelections: submissionData.typeMultiplierSelections,
@@ -444,10 +447,11 @@ async function confirmSubmission(interaction) {
       specialWorksApplied: submissionData.specialWorksApplied,
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
       collab: submissionData.collab,
-      questBonus
+      questBonus,
+      collabBonus
     });
     // Update submission data with final calculations
-    submissionData.finalTokenAmount = totalTokens;
+    submissionData.finalTokenAmount = tokensPerPerson;
     submissionData.tokenCalculation = breakdown;
     submissionData.updatedAt = new Date();
     // Save final submission data using submissionId as the key
@@ -461,13 +465,13 @@ async function confirmSubmission(interaction) {
       addOnsApplied: submissionData.addOnsApplied,
       specialWorksApplied: submissionData.specialWorksApplied,
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
-      finalTokenAmount: totalTokens,
+      finalTokenAmount: tokensPerPerson,
       collab: submissionData.collab,
       questBonus
     });
     // ------------------- Display Confirmation -------------------
     await interaction.update({
-      content: `${breakdownMessage}\n\n☑️ **Final Total Token Calculation:** ${totalTokens} Tokens`,
+      content: `${breakdownMessage}\n\n☑️ **Final Total Token Calculation:** ${tokensPerPerson} Tokens per person`,
       components: [
         new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('confirm').setLabel('✅ Confirm').setStyle(ButtonStyle.Success),

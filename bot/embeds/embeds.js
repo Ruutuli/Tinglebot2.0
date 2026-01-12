@@ -966,48 +966,57 @@ const createWritingSubmissionEmbed = (submissionData) => {
       ? submissionData.boostTokenIncrease
       : 0;
 
+  // Extract token breakdown from tokenCalculation if available
   let baseTokenPortion = null;
+  let collabBonusValue = 0;
+  let tokensPerPerson = submissionData.finalTokenAmount;
+  
   if (submissionData.tokenCalculation && typeof submissionData.tokenCalculation === 'object') {
-    baseTokenPortion =
-      submissionData.tokenCalculation.finalTotal ??
-      submissionData.tokenCalculation.totalTokens ??
-      null;
+    baseTokenPortion = submissionData.tokenCalculation.baseTokensPerPerson ?? 
+                       submissionData.tokenCalculation.baseTokens ?? null;
+    collabBonusValue = submissionData.tokenCalculation.collabBonus ?? 0;
+    tokensPerPerson = submissionData.tokenCalculation.tokensPerPerson ?? 
+                      submissionData.tokenCalculation.finalTotal ?? 
+                      submissionData.finalTokenAmount;
   }
 
   if (baseTokenPortion === null) {
     baseTokenPortion = submissionData.finalTokenAmount - boostIncreaseValue;
-  }
-
-  if (questBonusValue > 0) {
-    baseTokenPortion -= questBonusValue;
-  }
-
-  let tokenDisplay = `${submissionData.finalTokenAmount} tokens`;
-  if (questBonusValue > 0 || boostIncreaseValue > 0) {
-    const breakdownParts = [];
-    if (
-      typeof baseTokenPortion === 'number' &&
-      !Number.isNaN(baseTokenPortion) &&
-      baseTokenPortion >= 0
-    ) {
-      breakdownParts.push(`${baseTokenPortion} base`);
-    }
     if (questBonusValue > 0) {
-      breakdownParts.push(`${questBonusValue} quest bonus`);
+      baseTokenPortion -= questBonusValue;
     }
-    if (boostIncreaseValue > 0) {
-      breakdownParts.push(`${boostIncreaseValue} boost`);
+    if (hasCollaborators && collabBonusValue > 0) {
+      baseTokenPortion -= collabBonusValue;
     }
-    tokenDisplay = `${breakdownParts.join(' + ')} = ${submissionData.finalTokenAmount} tokens`;
   }
 
+  let tokenDisplay = `${tokensPerPerson} tokens`;
+  const breakdownParts = [];
+  
+  // Only show breakdown if there are bonuses or it's a collab
+  if (baseTokenPortion !== null && baseTokenPortion >= 0) {
+    breakdownParts.push(`${baseTokenPortion} base`);
+  }
+  if (questBonusValue > 0) {
+    breakdownParts.push(`+ ${questBonusValue} quest bonus${hasCollaborators ? ' (each)' : ''}`);
+  }
+  if (hasCollaborators && collabBonusValue > 0) {
+    breakdownParts.push(`+ ${collabBonusValue} collab bonus (each)`);
+  }
+  if (boostIncreaseValue > 0) {
+    breakdownParts.push(`+ ${boostIncreaseValue} boost`);
+  }
+  
+  if (breakdownParts.length > 0) {
+    tokenDisplay = `${breakdownParts.join(' ')} = ${tokensPerPerson} tokens`;
+  }
+  
   if (hasCollaborators) {
     const collaborators = Array.isArray(submissionData.collab)
       ? submissionData.collab
       : [submissionData.collab];
     const totalParticipants = 1 + collaborators.length;
-    const splitTokens = Math.floor(submissionData.finalTokenAmount / totalParticipants);
-    tokenDisplay += ` (${splitTokens} each)`;
+    tokenDisplay += ` per person (${totalParticipants} people)`;
   }
 
   if (submissionData.submissionId && submissionData.submissionId !== 'N/A') {

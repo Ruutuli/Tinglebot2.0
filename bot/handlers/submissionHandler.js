@@ -168,19 +168,22 @@ async function handleSubmissionCompletion(interaction) {
       addOnsApplied
     });
     
-    // Get quest bonus if quest is linked
+    // Get quest bonus and collab bonus if quest is linked
     let questBonus = 0;
+    let collabBonus = 0;
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
-      const { getQuestBonus } = require('../../shared/utils/tokenUtils');
+      const { getQuestBonus, getCollabBonus } = require('../../shared/utils/tokenUtils');
       const userId = submissionData.userId || interaction.user.id;
       questBonus = await getQuestBonus(submissionData.questEvent, userId);
+      collabBonus = await getCollabBonus(submissionData.questEvent);
       console.log(`[submissionHandler.js]: 🎯 Quest bonus for ${submissionData.questEvent}: ${questBonus}`);
+      console.log(`[submissionHandler.js]: 🤝 Collab bonus for ${submissionData.questEvent}: ${collabBonus}`);
       
       // Update submission data with the actual quest bonus (convert to string for storage)
       submissionData.questBonus = String(questBonus);
     }
 
-    const { totalTokens, breakdown } = calculateTokens({
+    const { tokensPerPerson, breakdown } = calculateTokens({
       baseSelections,
       baseCounts: submissionData.baseCounts || new Map(),
       typeMultiplierSelections,
@@ -189,12 +192,13 @@ async function handleSubmissionCompletion(interaction) {
       typeMultiplierCounts: submissionData.typeMultiplierCounts || {},
       specialWorksApplied: submissionData.specialWorksApplied || [],
       collab: submissionData.collab,
-      questBonus
+      questBonus,
+      collabBonus
     });
-    console.log(`[submissionHandler.js]: 💰 Calculated tokens: ${totalTokens}`);
+    console.log(`[submissionHandler.js]: 💰 Calculated tokens per person: ${tokensPerPerson}`);
     console.log(`[submissionHandler.js]: 📊 Token breakdown:`, breakdown);
 
-    let finalTokenAmount = totalTokens;
+    let finalTokenAmount = tokensPerPerson;
     const boostEffects = Array.isArray(submissionData.boostEffects) ? [...submissionData.boostEffects] : [];
     const boostFulfillmentMap = new Map();
     const boostMetadataMap = new Map();
@@ -611,27 +615,35 @@ async function handleSubmitAction(interaction) {
       const submissionTitle = submission.title || submission.fileName;
       const submissionUrl = submission.fileUrl;
       
-      // If a collaboration exists, split tokens; otherwise, assign all tokens to the main user.
+      // Get tokensPerPerson from tokenCalculation breakdown if available
+      // Otherwise, use finalTokenAmount (for backward compatibility with old submissions)
+      let tokensPerPerson = submission.finalTokenAmount;
+      if (submission.tokenCalculation && typeof submission.tokenCalculation === 'object') {
+        tokensPerPerson = submission.tokenCalculation.tokensPerPerson || 
+                          submission.tokenCalculation.finalTotal || 
+                          submission.finalTokenAmount;
+      }
+      
+      // If a collaboration exists, give each person their tokensPerPerson amount
       if (submission.collab && ((Array.isArray(submission.collab) && submission.collab.length > 0) || typeof submission.collab === 'string')) {
         // Handle both array and legacy string format
         const collaborators = Array.isArray(submission.collab) ? submission.collab : [submission.collab];
-        const totalParticipants = 1 + collaborators.length; // 1 submitter + collaborators
-        const splitTokens = Math.floor(submission.finalTokenAmount / totalParticipants);
         
+        // Each person gets tokensPerPerson (not split - bonuses are already included)
         // Update tokens for the main user
-        await appendEarnedTokens(user.id, submissionTitle, submissionCategory, splitTokens, submissionUrl);
-        await updateTokenBalance(user.id, splitTokens);
+        await appendEarnedTokens(user.id, submissionTitle, submissionCategory, tokensPerPerson, submissionUrl);
+        await updateTokenBalance(user.id, tokensPerPerson);
         
         // Update tokens for each collaborator
         for (const collaboratorMention of collaborators) {
           const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
-          await appendEarnedTokens(collaboratorId, submissionTitle, submissionCategory, splitTokens, submissionUrl);
-          await updateTokenBalance(collaboratorId, splitTokens);
+          await appendEarnedTokens(collaboratorId, submissionTitle, submissionCategory, tokensPerPerson, submissionUrl);
+          await updateTokenBalance(collaboratorId, tokensPerPerson);
         }
       } else {
         // No collaboration; assign all tokens to the main user.
-        await appendEarnedTokens(user.id, submissionTitle, submissionCategory, submission.finalTokenAmount, submissionUrl);
-        await updateTokenBalance(user.id, submission.finalTokenAmount);
+        await appendEarnedTokens(user.id, submissionTitle, submissionCategory, tokensPerPerson, submissionUrl);
+        await updateTokenBalance(user.id, tokensPerPerson);
       }
     } catch (error) {
       handleError(error, 'submissionHandler.js');
