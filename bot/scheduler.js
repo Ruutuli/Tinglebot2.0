@@ -2442,26 +2442,177 @@ function setupBloodMoonScheduling(client) {
  createCronJob("0 8 * * *", "blood moon end announcement", () => handleBloodMoonEnd(client), "America/New_York");
 }
 
-function setupGoogleSheetsRetry() {
- createCronJob("*/15 * * * *", "retry pending Google Sheets operations", async () => {
-  try {
-   const pendingCount = await getPendingSheetOperationsCount();
-   if (pendingCount > 0) {
-    logger.info('SYNC', `Retrying ${pendingCount} pending Google Sheets operations`);
-    const result = await retryPendingSheetOperations();
-    if (result.success) {
-     logger.success('SYNC', `Retry completed: ${result.retried} successful, ${result.failed} failed`);
+ function setupGoogleSheetsRetry() {
+  createCronJob("*/15 * * * *", "retry pending Google Sheets operations", async () => {
+   try {
+    const pendingCount = await getPendingSheetOperationsCount();
+    if (pendingCount > 0) {
+     logger.info('SYNC', `Retrying ${pendingCount} pending Google Sheets operations`);
+     const result = await retryPendingSheetOperations();
+     if (result.success) {
+      logger.success('SYNC', `Retry completed: ${result.retried} successful, ${result.failed} failed`);
+     } else {
+      logger.error('SYNC', 'Retry failed', result.error);
+     }
     } else {
-     logger.error('SYNC', 'Retry failed', result.error);
+     logger.info('SCHEDULER', 'No pending Google Sheets operations to retry');
     }
-   } else {
-    logger.info('SCHEDULER', 'No pending Google Sheets operations to retry');
+   } catch (error) {
+    handleError(error, "scheduler.js");
+    logger.error('SYNC', 'Google Sheets retry task failed', error.message);
    }
+  }, "America/New_York");
+ }
+
+// ============================================================================
+// ------------------- Intro Verification Kick System -------------------
+// ============================================================================
+
+/**
+ * Check and kick members who haven't posted intro within 24 hours
+ * Also sends warning at 23 hours
+ */
+async function checkAndKickNoIntroMembers(client) {
+  try {
+    const VERIFIED_ROLE_ID = '1460099245347700962';
+    const TRAVELER_ROLE_ID = '788137818135330837';
+    const INTRO_DEADLINE_HOURS = 24;
+    const WARNING_HOURS = 23;
+    
+    const guild = client.guilds.cache.first();
+    if (!guild) {
+      logger.warn('INTRO_KICK', 'No guild found for intro check');
+      return;
+    }
+    
+    const now = Date.now();
+    const deadlineMs = INTRO_DEADLINE_HOURS * 60 * 60 * 1000;
+    const warningMs = WARNING_HOURS * 60 * 60 * 1000;
+    
+    // Get all members
+    const members = await guild.members.fetch();
+    
+    let warned = 0;
+    let kicked = 0;
+    let errors = 0;
+    
+    for (const [id, member] of members) {
+      try {
+        // Skip bots
+        if (member.user.bot) continue;
+        
+        // Only check members with Traveler role but not Verified role
+        const hasTraveler = member.roles.cache.has(TRAVELER_ROLE_ID);
+        const hasVerified = member.roles.cache.has(VERIFIED_ROLE_ID);
+        
+        if (!hasTraveler || hasVerified) continue;
+        
+        // Check join time
+        if (!member.joinedAt) continue;
+        
+        const joinTime = member.joinedAt.getTime();
+        const timeSinceJoin = now - joinTime;
+        
+        // Check if they posted intro in database
+        const User = require("../shared/models/UserModel");
+        const userDoc = await User.findOne({ discordId: id });
+        const hasPostedIntro = userDoc?.introPostedAt !== null && userDoc?.introPostedAt !== undefined;
+        
+        // If they posted intro but don't have role, give it (safety check)
+        if (hasPostedIntro && !hasVerified) {
+          const verifiedRole = guild.roles.cache.get(VERIFIED_ROLE_ID);
+          if (verifiedRole) {
+            try {
+              await member.roles.add(verifiedRole, 'Intro verification: Had intro in DB but missing role');
+              logger.info('INTRO_KICK', `Added Verified role to ${member.user.tag} (had intro in DB but not role)`);
+              continue;
+            } catch (error) {
+              logger.error('INTRO_KICK', `Could not add Verified role to ${member.user.tag}: ${error.message}`);
+            }
+          }
+        }
+        
+        // Warn at 23 hours
+        if (timeSinceJoin >= warningMs && timeSinceJoin < deadlineMs && !hasPostedIntro) {
+          try {
+            const warningEmbed = new EmbedBuilder()
+              .setColor(0xff9900)
+              .setTitle('⚠️ Intro Reminder')
+              .setDescription(`You have **1 hour** left to post your intro in the intro channel!\n\nIf you don't post an intro within 24 hours of joining, you will be automatically removed from the server.`)
+              .addFields({
+                name: '📝 What to do',
+                value: '• Go to the intro channel\n• Post your intro using the pinned template\n• Once posted, you\'ll get full access to the server!',
+                inline: false
+              })
+              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+              .setTimestamp();
+            
+            await member.send({ embeds: [warningEmbed] });
+            warned++;
+            logger.info('INTRO_KICK', `Warned ${member.user.tag} about intro deadline`);
+          } catch (error) {
+            // DM might be disabled
+            logger.warn('INTRO_KICK', `Could not send warning DM to ${member.user.tag}`);
+          }
+        }
+        
+        // Kick at 24 hours
+        if (timeSinceJoin >= deadlineMs && !hasPostedIntro) {
+          try {
+            const kickEmbed = new EmbedBuilder()
+              .setColor(0xff0000)
+              .setTitle('❌ Removed from Server')
+              .setDescription(`You were removed from the server because you didn't post an intro within 24 hours of joining.`)
+              .addFields({
+                name: '🔄 Want to rejoin?',
+                value: 'You can rejoin the server and try again! Make sure to:\n1. React to the rules to get the Traveler role\n2. Post your intro in the intro channel within 24 hours',
+                inline: false
+              })
+              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+              .setTimestamp();
+            
+            // Try to send DM before kicking
+            try {
+              await member.send({ embeds: [kickEmbed] });
+            } catch (error) {
+              // DM might be disabled, continue with kick anyway
+            }
+            
+            await member.kick("Did not post intro within 24 hours of joining.");
+            kicked++;
+            logger.info('INTRO_KICK', `Kicked ${member.user.tag} for not posting intro`);
+          } catch (error) {
+            errors++;
+            logger.error('INTRO_KICK', `Could not kick ${member.user.tag}: ${error.message}`);
+          }
+        }
+      } catch (error) {
+        errors++;
+        logger.error('INTRO_KICK', `Error processing member ${id}: ${error.message}`);
+      }
+    }
+    
+    if (warned > 0 || kicked > 0) {
+      logger.info('INTRO_KICK', `Intro check complete - Warned: ${warned}, Kicked: ${kicked}${errors > 0 ? `, Errors: ${errors}` : ''}`);
+    }
   } catch (error) {
-   handleError(error, "scheduler.js");
-   logger.error('SYNC', 'Google Sheets retry task failed', error.message);
+    logger.error('INTRO_KICK', 'Error in checkAndKickNoIntroMembers', error);
+    handleError(error, 'scheduler.js');
   }
- }, "America/New_York");
+}
+
+function setupIntroKickScheduler(client) {
+  // Run every hour to check for members to warn/kick
+  createCronJob("0 * * * *", "intro verification kick check", async () => {
+    try {
+      await checkAndKickNoIntroMembers(client);
+    } catch (error) {
+      handleError(error, "scheduler.js");
+      logger.error('INTRO_KICK', 'Intro kick check failed', error.message);
+    }
+  }, "America/New_York");
+  
+  logger.info('SCHEDULER', 'Intro verification kick system initialized (runs hourly)');
 }
 
 // ------------------- Main Initialization Function ------------------
@@ -2487,6 +2638,7 @@ function initializeScheduler(client) {
  setupWeatherScheduler(client);
  setupHelpWantedFixedScheduler(client);
  setupSecretSantaScheduler(client);
+ setupIntroKickScheduler(client);
  
  logger.success('SCHEDULER', 'All scheduled tasks initialized');
  
@@ -2528,4 +2680,5 @@ module.exports = {
  cleanupExpiredRaids,
  distributeMonthlyBoostRewards,
  checkAndDistributeMonthlyBoostRewards,
+ checkAndKickNoIntroMembers,
 };

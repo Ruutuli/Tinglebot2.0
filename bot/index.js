@@ -636,12 +636,12 @@ async function initializeClient() {
           .addFields(
             {
               name: '🗺️ **Start Here**',
-              value: '• Please check the **rules** channel to unlock the server\n• Post your intro in the **intro** channel\n• Come hang out in **gossip-stone** chat\n• Questions? DM Roots.Admin#9069 or post in **faq-and-suggestions**',
+              value: '• React to the **rules** channel to get the Traveler role\n• Post your intro in the **intro** channel to get full access\n• Come hang out in **gossip-stone** chat\n• Questions? DM Roots.Admin#9069 or post in **faq-and-suggestions**',
               inline: false
             },
             {
-              name: '⏳ **Two Week Timer**',
-              value: 'You have **2 weeks** to submit a character application. After that, you\'ll be removed to make space for others. Apps don\'t need to be perfect—just started!',
+              name: '⏳ **24 Hour Timer**',
+              value: 'You have **24 hours** to post your intro in the intro channel. After that, you\'ll be automatically removed to make space for others. Make sure to react to the rules first!',
               inline: false
             },
             {
@@ -670,6 +670,74 @@ async function initializeClient() {
         console.error(`[index.js]: ❌ Error sending welcome message to ${member.user.tag}:`, error);
         // If DM fails, we could send to a welcome channel instead
         // For now, just log the error
+      }
+    });
+
+    // --------------------------------------------------------------------------
+    // Intro Detection and Verified Role Assignment
+    // --------------------------------------------------------------------------
+    const INTRO_CHANNEL_ID = '795200689918836736';
+    const VERIFIED_ROLE_ID = '1460099245347700962';
+    const TRAVELER_ROLE_ID = '788137818135330837';
+    
+    client.on("messageCreate", async (message) => {
+      try {
+        // Only process messages in intro channel
+        if (message.channelId !== INTRO_CHANNEL_ID) return;
+        
+        // Skip bot messages
+        if (message.author.bot) return;
+        
+        // Skip if user already has Verified role
+        const member = message.member;
+        if (!member) return;
+        
+        if (member.roles.cache.has(VERIFIED_ROLE_ID)) {
+          return; // Already verified
+        }
+        
+        // Check if user has Traveler role (they should have this to post)
+        if (!member.roles.cache.has(TRAVELER_ROLE_ID)) {
+          // They shouldn't be able to post here, but just in case
+          console.log(`[index.js]: User ${message.author.tag} posted in intro without Traveler role`);
+          return;
+        }
+        
+        // Get Verified role and assign it
+        const verifiedRole = message.guild.roles.cache.get(VERIFIED_ROLE_ID);
+        if (!verifiedRole) {
+          console.error(`[index.js]: Verified role not found (ID: ${VERIFIED_ROLE_ID})`);
+          return;
+        }
+        
+        // Add Verified role
+        await member.roles.add(verifiedRole);
+        console.log(`[index.js]: ✅ Added Verified role to ${message.author.tag} after intro post`);
+        
+        // Track intro post in database
+        const User = require('../shared/models/UserModel');
+        const userDoc = await User.getOrCreateUser(message.author.id);
+        userDoc.introPostedAt = new Date();
+        await userDoc.save();
+        
+        // Send confirmation DM
+        try {
+          const { EmbedBuilder } = require('discord.js');
+          const confirmEmbed = new EmbedBuilder()
+            .setColor(0x00ff00)
+            .setTitle('✅ Intro Posted!')
+            .setDescription(`Thanks for posting your intro! You now have full access to the server.`)
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setTimestamp();
+          
+          await message.author.send({ embeds: [confirmEmbed] });
+        } catch (error) {
+          // DM might be disabled, that's okay
+          console.log(`[index.js]: Could not send intro confirmation DM to ${message.author.tag}`);
+        }
+        
+      } catch (error) {
+        console.error(`[index.js]: ❌ Error handling intro post:`, error);
       }
     });
 

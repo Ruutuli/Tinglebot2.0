@@ -19,6 +19,9 @@ const userSchema = new mongoose.Schema({
   lastMessageContent: { type: String, default: '' }, // Content of the last message sent
   lastMessageTimestamp: { type: Date }, // Timestamp of the last message
 
+  // ------------------- Intro tracking fields -------------------
+  introPostedAt: { type: Date, default: null }, // When the user posted their intro
+
   // ------------------- Help Wanted Quest Tracking -------------------
   // Tracks Help Wanted quest completions, cooldowns, and history for this user
   helpWanted: {
