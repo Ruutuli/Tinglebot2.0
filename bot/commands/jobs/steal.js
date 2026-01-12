@@ -2260,6 +2260,14 @@ module.exports = {
                         .setRequired(true)
                         .setAutocomplete(true))
                 .addStringOption(option =>
+                    option.setName('targettype')
+                        .setDescription('Choose NPC or Player as target (required when checking a specific target)')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'NPC', value: 'npc' },
+                            { name: 'Player', value: 'player' }
+                        ))
+                .addStringOption(option =>
                     option.setName('target')
                         .setDescription('Specific NPC or character to check (optional)')
                         .setRequired(false)
@@ -2488,37 +2496,57 @@ module.exports = {
                 await interaction.deferReply();
 
                 const targetName = interaction.options.getString('target');
+                const targetType = interaction.options.getString('targettype');
                 
                 if (targetName) {
-                    // Check specific target
-                    // Try NPC first
-                    const npcCooldown = await getTargetCooldownInfo(character._id, targetName, true);
-                    if (npcCooldown) {
-                        const embed = createBaseEmbed('⏰ Steal Cooldown Check', '#FF6B35')
-                            .setDescription(`Cooldown information for **${targetName}** (NPC)`)
-                            .setThumbnail(npcCooldown.icon)
-                            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+                    // Validate that targettype is provided when target is provided
+                    if (!targetType) {
+                        await interaction.editReply({
+                            content: '❌ **Target type is required when checking a specific target.**\n\nPlease specify whether you are checking an NPC or Player character.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
 
-                        const fields = [];
-                        
-                        if (npcCooldown.global) {
-                            fields.push({
-                                name: '🌍 Global Cooldown',
-                                value: `> **${npcCooldown.global.formatted}** remaining\n> *Applies to all thieves*`,
-                                inline: false
-                            });
-                        } else {
-                            fields.push({
-                                name: '🌍 Global Cooldown',
-                                value: '> ✅ **No global cooldown**\n> *This NPC is available for all thieves*',
-                                inline: false
-                            });
-                        }
+                    // Check specific target based on targettype
+                    const isNPC = targetType === 'npc';
+                    const targetCooldown = await getTargetCooldownInfo(character._id, targetName, isNPC);
+                    
+                    if (!targetCooldown) {
+                        await interaction.editReply({
+                            content: `❌ **${isNPC ? 'NPC' : 'Player character'} "${targetName}" not found.**\n\n**Tip:** Make sure to select ${isNPC ? 'an NPC' : 'a character'} from the dropdown menu.`,
+                            ephemeral: true
+                        });
+                        return;
+                    }
 
-                        if (npcCooldown.personal) {
+                    const embed = createBaseEmbed('⏰ Steal Cooldown Check', '#FF6B35')
+                        .setDescription(`Cooldown information for **${targetName}** (${isNPC ? 'NPC' : 'Player'})`)
+                        .setThumbnail(targetCooldown.icon)
+                        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+
+                    const fields = [];
+                    
+                    if (targetCooldown.global) {
+                        fields.push({
+                            name: '🌍 Global Cooldown',
+                            value: `> **${targetCooldown.global.formatted}** remaining\n> *Applies to all thieves*`,
+                            inline: false
+                        });
+                    } else {
+                        fields.push({
+                            name: '🌍 Global Cooldown',
+                            value: `> ✅ **No global cooldown**\n> *This ${isNPC ? 'NPC' : 'character'} is available for all thieves*`,
+                            inline: false
+                        });
+                    }
+
+                    // Personal cooldown only applies to NPCs
+                    if (isNPC) {
+                        if (targetCooldown.personal) {
                             fields.push({
                                 name: '👤 Personal Cooldown',
-                                value: `> **${npcCooldown.personal.formatted}** remaining\n> *Your 30-day cooldown for this NPC*`,
+                                value: `> **${targetCooldown.personal.formatted}** remaining\n> *Your 30-day cooldown for this NPC*`,
                                 inline: false
                             });
                         } else {
@@ -2528,66 +2556,22 @@ module.exports = {
                                 inline: false
                             });
                         }
-
-                        // Summary
-                        const canSteal = !npcCooldown.global && !npcCooldown.personal;
-                        fields.push({
-                            name: '📊 Status',
-                            value: canSteal 
-                                ? '> ✅ **Available to steal from**' 
-                                : '> ❌ **On cooldown - cannot steal yet**',
-                            inline: false
-                        });
-
-                        embed.addFields(fields);
-                        await interaction.editReply({ embeds: [embed] });
-                        return;
                     }
 
-                    // Try player character
-                    const playerCooldown = await getTargetCooldownInfo(character._id, targetName, false);
-                    if (playerCooldown) {
-                        const embed = createBaseEmbed('⏰ Steal Cooldown Check', '#FF6B35')
-                            .setDescription(`Cooldown information for **${targetName}** (Player)`)
-                            .setThumbnail(playerCooldown.icon)
-                            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
-
-                        const fields = [];
-                        
-                        if (playerCooldown.global) {
-                            fields.push({
-                                name: '🌍 Global Cooldown',
-                                value: `> **${playerCooldown.global.formatted}** remaining\n> *Applies to all thieves*`,
-                                inline: false
-                            });
-                        } else {
-                            fields.push({
-                                name: '🌍 Global Cooldown',
-                                value: '> ✅ **No global cooldown**\n> *This character is available for all thieves*',
-                                inline: false
-                            });
-                        }
-
-                        // Summary
-                        const canSteal = !playerCooldown.global;
-                        fields.push({
-                            name: '📊 Status',
-                            value: canSteal 
-                                ? '> ✅ **Available to steal from**' 
-                                : '> ❌ **On cooldown - cannot steal yet**',
-                            inline: false
-                        });
-
-                        embed.addFields(fields);
-                        await interaction.editReply({ embeds: [embed] });
-                        return;
-                    }
-
-                    // Target not found
-                    await interaction.editReply({
-                        content: `❌ **Target "${targetName}" not found.**\n\n**Tip:** Make sure to select an NPC or character from the dropdown menu.`,
-                        ephemeral: true
+                    // Summary
+                    const canSteal = isNPC 
+                        ? !targetCooldown.global && !targetCooldown.personal
+                        : !targetCooldown.global;
+                    fields.push({
+                        name: '📊 Status',
+                        value: canSteal 
+                            ? '> ✅ **Available to steal from**' 
+                            : '> ❌ **On cooldown - cannot steal yet**',
+                        inline: false
                     });
+
+                    embed.addFields(fields);
+                    await interaction.editReply({ embeds: [embed] });
                     return;
                 } else {
                     // Show all cooldowns
