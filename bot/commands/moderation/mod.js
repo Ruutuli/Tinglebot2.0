@@ -478,17 +478,18 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
   // Check if collaboration exists (handle both array and legacy string format)
   const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab.trim() && collab !== 'N/A'));
   
+  // tokenAmount is already tokensPerPerson (per-person amount) for collab submissions
+  // Use it directly without splitting
+  
   // Add token tracker links for collaboration
   if (hasCollaborators) {
     const collaborators = Array.isArray(collab) ? collab : [collab];
-    const totalParticipants = 1 + collaborators.length;
-    const splitTokens = Math.floor(tokenAmount / totalParticipants);
     
     // Add main user field
     embed.addFields(
       { 
         name: '💰 Main User Tokens', 
-        value: `<@${userId}> received **${splitTokens} tokens**\n${userTrackerLink}`, 
+        value: `<@${userId}> received **${tokenAmount} tokens**\n${userTrackerLink}`, 
         inline: true 
       }
     );
@@ -505,7 +506,7 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
       embed.addFields(
         { 
           name: '💰 Collaborator Tokens', 
-          value: `<@${collaboratorId}> received **${splitTokens} tokens**\n${collabTrackerLink}`, 
+          value: `<@${collaboratorId}> received **${tokenAmount} tokens**\n${collabTrackerLink}`, 
           inline: true 
         }
       );
@@ -887,13 +888,6 @@ const modCommand = new SlashCommandBuilder()
           { name: 'Clear All Pending', value: 'clear' }
         )
     )
-)
-
-// ------------------- Subcommand: kick -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('kick_travelers')
-    .setDescription('👢 Kick users who have been Travelers for 14+ days without a character')
 )
 
 // ------------------- Subcommand: slots -------------------
@@ -1306,9 +1300,6 @@ async function execute(interaction) {
         return await handleApproveEdit(interaction);
     } else if (subcommand === 'inactivityreport') {
         return await handleInactivityReport(interaction);      
-      
-    } else if (subcommand === 'kick_travelers') {
-        return await handleKickTravelers(interaction);      
     } else if (subcommand === 'tokens') {
         const user = interaction.options.getUser('user');
         const amount = interaction.options.getInteger('amount');
@@ -1840,7 +1831,16 @@ async function handleApprove(interaction) {
         return interaction.editReply({ content: `⚠️ Submission with ID \`${submissionId}\` not found.`, ephemeral: true });
       }
   
-    const { userId, collab, category = 'art', finalTokenAmount: tokenAmount, title, messageUrl } = submission;
+    const { userId, collab, category = 'art', finalTokenAmount, title, messageUrl } = submission;
+    
+    // Get tokensPerPerson from tokenCalculation breakdown if available
+    // Otherwise, use finalTokenAmount (for backward compatibility with old submissions)
+    let tokensPerPerson = finalTokenAmount;
+    if (submission.tokenCalculation && typeof submission.tokenCalculation === 'object') {
+      tokensPerPerson = submission.tokenCalculation.tokensPerPerson || 
+                        submission.tokenCalculation.finalTotal || 
+                        finalTokenAmount;
+    }
   
     if (!messageUrl) {
       return interaction.editReply({ 
@@ -1945,13 +1945,12 @@ async function handleApprove(interaction) {
         if (hasCollaborators) {
           // Handle both array and legacy string format
           const collaborators = Array.isArray(collab) ? collab : [collab];
-          const totalParticipants = 1 + collaborators.length; // 1 submitter + collaborators
-          const splitTokens = Math.floor(tokenAmount / totalParticipants);
-
+          
+          // Each person gets tokensPerPerson (not split - bonuses are already included)
           // Update tokens for the main user
           try {
-            await updateTokenBalance(userId, splitTokens);
-            await appendEarnedTokens(userId, title, category, splitTokens, messageUrl);
+            await updateTokenBalance(userId, tokensPerPerson);
+            await appendEarnedTokens(userId, title, category, tokensPerPerson, messageUrl);
           } catch (tokenError) {
             console.error(`[mod.js]: ❌ Error updating tokens for main user ${userId}:`, tokenError);
             tokenErrors.push(`Main user (${userId})`);
@@ -1962,8 +1961,8 @@ async function handleApprove(interaction) {
             const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
             
             try {
-              await updateTokenBalance(collaboratorId, splitTokens);
-              await appendEarnedTokens(collaboratorId, title, category, splitTokens, messageUrl);
+              await updateTokenBalance(collaboratorId, tokensPerPerson);
+              await appendEarnedTokens(collaboratorId, title, category, tokensPerPerson, messageUrl);
             } catch (tokenError) {
               console.error(`[mod.js]: ❌ Error updating tokens for collaborator ${collaboratorId}:`, tokenError);
               tokenErrors.push(`Collaborator (${collaboratorId})`);
@@ -1972,7 +1971,7 @@ async function handleApprove(interaction) {
 
           // Send embed DM to main user
           try {
-            const mainUserEmbed = createApprovalDMEmbed(submissionId, title, splitTokens, true);
+            const mainUserEmbed = createApprovalDMEmbed(submissionId, title, tokensPerPerson, true);
             await interaction.client.users.send(userId, { embeds: [mainUserEmbed] });
           } catch (dmError) {
             console.error(`[mod.js]: ❌ Error sending DM to main user ${userId}:`, dmError);
@@ -1983,7 +1982,7 @@ async function handleApprove(interaction) {
             const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
             
             try {
-              const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, splitTokens);
+              const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, tokensPerPerson);
               await interaction.client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
             } catch (dmError) {
               console.error(`[mod.js]: ❌ Error sending DM to collaborator ${collaboratorId}:`, dmError);
@@ -1992,8 +1991,8 @@ async function handleApprove(interaction) {
         } else {
           // No collaboration - assign all tokens to the main user
           try {
-            await updateTokenBalance(userId, tokenAmount);
-            await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
+            await updateTokenBalance(userId, tokensPerPerson);
+            await appendEarnedTokens(userId, title, category, tokensPerPerson, messageUrl);
           } catch (tokenError) {
             console.error(`[mod.js]: ❌ Error updating tokens for user ${userId}:`, tokenError);
             tokenErrors.push(`User (${userId})`);
@@ -2093,7 +2092,7 @@ async function handleApprove(interaction) {
         await deleteSubmissionFromStorage(submissionId);
         
         // Create improved mod confirmation message
-        const modConfirmationEmbed = await createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab);
+        const modConfirmationEmbed = await createModApprovalConfirmationEmbed(submissionId, title, tokensPerPerson, userId, collab);
         
         // Add warning if token updates failed
         let warningMessage = '';
@@ -2707,53 +2706,6 @@ async function handleBlightStatus(interaction) {
     console.error('[mod.js]: Error in handleBlightStatus', error);
     return interaction.editReply('❌ An error occurred while processing your request.');
   }
-}
-
-// ------------------- Function: handleKickTravelers -------------------
-// Kicks members who joined 14+ days ago and only have Traveler role
-async function handleKickTravelers(interaction) {
-  const guild = interaction.guild;
-  const travelerRoleId = process.env.TRAVELER_ROLE_ID;
-
-  if (!travelerRoleId) {
-    return interaction.editReply('❌ Environment variable `TRAVELER_ROLE_ID` not set.');
-  }
-
-  await safeInteractionResponse(interaction, {
-    content: '🔍 Checking members...',
-    ephemeral: true
-  });
-
-  const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
-  const kicked = [];
-
-  const members = await guild.members.fetch();
-
-  for (const [id, member] of members) {
-    const hasTraveler = member.roles.cache.has(travelerRoleId);
-    const joinedLongAgo = member.joinedAt && member.joinedAt.getTime() < fourteenDaysAgo;
-
-    const userDoc = await User.findOne({ discordId: id });
-    const hasCharacter = userDoc?.characters?.length > 0;
-
-    if (hasTraveler && joinedLongAgo && !hasCharacter) {
-      try {
-        await member.kick("No character submitted within 2 weeks of joining.");
-        kicked.push(`<@${id}>`);
-      } catch (err) {
-        console.warn(`❌ Could not kick ${id}: ${err.message}`);
-      }
-    }
-  }
-
-  const resultContent = `✅ Kicked ${kicked.length} members:\n${kicked.join('\n') || 'None'}`;
-  
-  // Use safe follow-up to avoid webhook token issues
-  await safeFollowUp(interaction, {
-    content: resultContent,
-    ephemeral: true,
-    fallbackToChannel: true
-  });
 }
 
 // ------------------- Function: handleSlots -------------------

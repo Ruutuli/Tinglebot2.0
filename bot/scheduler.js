@@ -937,45 +937,77 @@ async function handleBirthdayRoleRemoval(client) {
   logger.info('CLEANUP', 'Starting birthday role cleanup...');
   
   try {
+    // Calculate yesterday's date in EST timezone
+    const now = new Date();
+    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const yesterday = new Date(estNow);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayMonth = yesterday.getMonth() + 1;
+    const yesterdayDay = yesterday.getDate();
+    const yesterdayDateStr = yesterday.toISOString().slice(5, 10); // MM-DD format
+    
+    logger.info('CLEANUP', `Removing birthday roles from users whose birthday was yesterday (${yesterdayDateStr})`);
+    
+    // Get all users whose birthday was yesterday
+    const User = require('../shared/models/UserModel');
+    const usersWithBirthdaysYesterday = await User.find({
+      'birthday.month': yesterdayMonth,
+      'birthday.day': yesterdayDay
+    });
+    
+    if (usersWithBirthdaysYesterday.length === 0) {
+      logger.info('CLEANUP', 'No users had birthdays yesterday, nothing to clean up');
+      return;
+    }
+    
+    logger.info('CLEANUP', `Found ${usersWithBirthdaysYesterday.length} users whose birthday was yesterday`);
+    
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) {
       logger.error('CLEANUP', 'Guild not found');
       return;
     }
     
-    // Get all members with birthday roles
+    // Get the birthday roles
     const birthdayRole = guild.roles.cache.get(BIRTHDAY_ROLE_ID);
     const modBirthdayRole = guild.roles.cache.get(MOD_BIRTHDAY_ROLE_ID);
     
+    if (!birthdayRole && !modBirthdayRole) {
+      logger.error('CLEANUP', 'Birthday roles not found');
+      return;
+    }
+    
     let removedCount = 0;
     
-    if (birthdayRole) {
-      const membersWithBirthdayRole = birthdayRole.members;
-      for (const [memberId, member] of membersWithBirthdayRole) {
-        try {
-          await member.roles.remove(birthdayRole);
-          removedCount++;
-          logger.info('CLEANUP', `Removed birthday role from ${member.user.tag}`);
-        } catch (error) {
-          logger.error('CLEANUP', `Error removing birthday role from ${member.user.tag}`, error);
+    // Remove roles only from users whose birthday was yesterday
+    for (const user of usersWithBirthdaysYesterday) {
+      try {
+        const member = await guild.members.fetch(user.discordId).catch(() => null);
+        if (!member) {
+          logger.warn('CLEANUP', `Member ${user.discordId} not found in guild`);
+          continue;
         }
+        
+        // Remove regular birthday role if present
+        if (birthdayRole && member.roles.cache.has(BIRTHDAY_ROLE_ID)) {
+          await member.roles.remove(BIRTHDAY_ROLE_ID);
+          removedCount++;
+          logger.info('CLEANUP', `Removed birthday role from ${member.user.tag} (birthday was yesterday)`);
+        }
+        
+        // Remove mod birthday role if present
+        if (modBirthdayRole && member.roles.cache.has(MOD_BIRTHDAY_ROLE_ID)) {
+          await member.roles.remove(MOD_BIRTHDAY_ROLE_ID);
+          removedCount++;
+          logger.info('CLEANUP', `Removed mod birthday role from ${member.user.tag} (birthday was yesterday)`);
+        }
+        
+      } catch (error) {
+        logger.error('CLEANUP', `Error removing birthday role from user ${user.discordId}`, error);
       }
     }
     
-    if (modBirthdayRole) {
-      const membersWithModBirthdayRole = modBirthdayRole.members;
-      for (const [memberId, member] of membersWithModBirthdayRole) {
-        try {
-          await member.roles.remove(modBirthdayRole);
-          removedCount++;
-          logger.info('CLEANUP', `Removed mod birthday role from ${member.user.tag}`);
-        } catch (error) {
-          logger.error('CLEANUP', `Error removing mod birthday role from ${member.user.tag}`, error);
-        }
-      }
-    }
-    
-    logger.success('CLEANUP', `Birthday role cleanup completed - ${removedCount} roles removed`);
+    logger.success('CLEANUP', `Birthday role cleanup completed - ${removedCount} roles removed from ${usersWithBirthdaysYesterday.length} users whose birthday was yesterday`);
     
   } catch (error) {
     logger.error('CLEANUP', 'Error in birthday role cleanup', error);
@@ -2473,156 +2505,6 @@ function setupBloodMoonScheduling(client) {
   }, "America/New_York");
  }
 
-// ============================================================================
-// ------------------- Intro Verification Kick System -------------------
-// ============================================================================
-
-/**
- * Check and kick members who haven't posted intro within 24 hours
- * Also sends warning at 23 hours
- */
-async function checkAndKickNoIntroMembers(client) {
-  try {
-    const VERIFIED_ROLE_ID = '1460099245347700962';
-    const TRAVELER_ROLE_ID = '788137818135330837';
-    const INTRO_DEADLINE_HOURS = 24;
-    const WARNING_HOURS = 23;
-    
-    const guild = client.guilds.cache.first();
-    if (!guild) {
-      logger.warn('INTRO_KICK', 'No guild found for intro check');
-      return;
-    }
-    
-    const now = Date.now();
-    const deadlineMs = INTRO_DEADLINE_HOURS * 60 * 60 * 1000;
-    const warningMs = WARNING_HOURS * 60 * 60 * 1000;
-    
-    // Get all members
-    const members = await guild.members.fetch();
-    
-    let warned = 0;
-    let kicked = 0;
-    let errors = 0;
-    
-    for (const [id, member] of members) {
-      try {
-        // Skip bots
-        if (member.user.bot) continue;
-        
-        // Only check members with Traveler role but not Verified role
-        const hasTraveler = member.roles.cache.has(TRAVELER_ROLE_ID);
-        const hasVerified = member.roles.cache.has(VERIFIED_ROLE_ID);
-        
-        if (!hasTraveler || hasVerified) continue;
-        
-        // Check join time
-        if (!member.joinedAt) continue;
-        
-        const joinTime = member.joinedAt.getTime();
-        const timeSinceJoin = now - joinTime;
-        
-        // Check if they posted intro in database
-        const User = require("../shared/models/UserModel");
-        const userDoc = await User.findOne({ discordId: id });
-        const hasPostedIntro = userDoc?.introPostedAt !== null && userDoc?.introPostedAt !== undefined;
-        
-        // If they posted intro but don't have role, give it (safety check)
-        if (hasPostedIntro && !hasVerified) {
-          const verifiedRole = guild.roles.cache.get(VERIFIED_ROLE_ID);
-          if (verifiedRole) {
-            try {
-              await member.roles.add(verifiedRole, 'Intro verification: Had intro in DB but missing role');
-              logger.info('INTRO_KICK', `Added Verified role to ${member.user.tag} (had intro in DB but not role)`);
-              continue;
-            } catch (error) {
-              logger.error('INTRO_KICK', `Could not add Verified role to ${member.user.tag}: ${error.message}`);
-            }
-          }
-        }
-        
-        // Warn at 23 hours
-        if (timeSinceJoin >= warningMs && timeSinceJoin < deadlineMs && !hasPostedIntro) {
-          try {
-            const warningEmbed = new EmbedBuilder()
-              .setColor(0xff9900)
-              .setTitle('⚠️ Intro Reminder')
-              .setDescription(`You have **1 hour** left to post your intro in the intro channel!\n\nIf you don't post an intro within 24 hours of joining, you will be automatically removed from the server.`)
-              .addFields({
-                name: '📝 What to do',
-                value: '• Go to the intro channel\n• Post your intro using the pinned template\n• Once posted, you\'ll get full access to the server!',
-                inline: false
-              })
-              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-              .setTimestamp();
-            
-            await member.send({ embeds: [warningEmbed] });
-            warned++;
-            logger.info('INTRO_KICK', `Warned ${member.user.tag} about intro deadline`);
-          } catch (error) {
-            // DM might be disabled
-            logger.warn('INTRO_KICK', `Could not send warning DM to ${member.user.tag}`);
-          }
-        }
-        
-        // Kick at 24 hours
-        if (timeSinceJoin >= deadlineMs && !hasPostedIntro) {
-          try {
-            const kickEmbed = new EmbedBuilder()
-              .setColor(0xff0000)
-              .setTitle('❌ Removed from Server')
-              .setDescription(`You were removed from the server because you didn't post an intro within 24 hours of joining.`)
-              .addFields({
-                name: '🔄 Want to rejoin?',
-                value: 'You can rejoin the server and try again! Make sure to:\n1. React to the rules to get the Traveler role\n2. Post your intro in the intro channel within 24 hours',
-                inline: false
-              })
-              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-              .setTimestamp();
-            
-            // Try to send DM before kicking
-            try {
-              await member.send({ embeds: [kickEmbed] });
-            } catch (error) {
-              // DM might be disabled, continue with kick anyway
-            }
-            
-            await member.kick("Did not post intro within 24 hours of joining.");
-            kicked++;
-            logger.info('INTRO_KICK', `Kicked ${member.user.tag} for not posting intro`);
-          } catch (error) {
-            errors++;
-            logger.error('INTRO_KICK', `Could not kick ${member.user.tag}: ${error.message}`);
-          }
-        }
-      } catch (error) {
-        errors++;
-        logger.error('INTRO_KICK', `Error processing member ${id}: ${error.message}`);
-      }
-    }
-    
-    if (warned > 0 || kicked > 0) {
-      logger.info('INTRO_KICK', `Intro check complete - Warned: ${warned}, Kicked: ${kicked}${errors > 0 ? `, Errors: ${errors}` : ''}`);
-    }
-  } catch (error) {
-    logger.error('INTRO_KICK', 'Error in checkAndKickNoIntroMembers', error);
-    handleError(error, 'scheduler.js');
-  }
-}
-
-function setupIntroKickScheduler(client) {
-  // Run every hour to check for members to warn/kick
-  createCronJob("0 * * * *", "intro verification kick check", async () => {
-    try {
-      await checkAndKickNoIntroMembers(client);
-    } catch (error) {
-      handleError(error, "scheduler.js");
-      logger.error('INTRO_KICK', 'Intro kick check failed', error.message);
-    }
-  }, "America/New_York");
-  
-  logger.info('SCHEDULER', 'Intro verification kick system initialized (runs hourly)');
-}
 
 // ------------------- Main Initialization Function ------------------
 
@@ -2647,7 +2529,6 @@ function initializeScheduler(client) {
  setupWeatherScheduler(client);
  setupHelpWantedFixedScheduler(client);
  setupSecretSantaScheduler(client);
- setupIntroKickScheduler(client);
  
  logger.success('SCHEDULER', 'All scheduled tasks initialized');
  
@@ -2689,5 +2570,4 @@ module.exports = {
  cleanupExpiredRaids,
  distributeMonthlyBoostRewards,
  checkAndDistributeMonthlyBoostRewards,
- checkAndKickNoIntroMembers,
 };
