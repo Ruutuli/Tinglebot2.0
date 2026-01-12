@@ -130,6 +130,10 @@ const tempDataSchema = new mongoose.Schema({
       'delivery',      // Delivery requests
       'quest',         // Quest tracking
       
+      // Crafting
+      'craftingContinue',        // Crafting continuation state
+      'craftingMaterialSelection', // Crafting material selection state
+      
       // Combat & Encounters
       'battle',        // Battle progress
       'encounter',     // Mount encounters
@@ -200,6 +204,12 @@ tempDataSchema.pre('save', function(next) {
       break;
     case 'submission':
       this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      break;
+    case 'craftingContinue':
+      this.expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      break;
+    case 'craftingMaterialSelection':
+      this.expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
       break;
     default:
       this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
