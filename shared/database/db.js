@@ -46,6 +46,7 @@ let vendingDbConnection = null;
 // Add these at the top with other connection variables
 let inventoriesClient = null;
 let inventoriesDb = null;
+let connectingInventoriesDb = null; // Promise to track in-progress connection
 
 // ============================================================================
 // ------------------- Configuration Constants -------------------
@@ -2362,77 +2363,104 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
 };
 
 const connectToInventoriesForItems = async (context = {}) => {
-    const maxRetries = 3;
-    let retryCount = 0;
-    
-    while (retryCount < maxRetries) {
+    // Always check if we have a valid connection first (fast path)
+    if (inventoriesClient && inventoriesDb) {
+        // Test the connection to make sure it's still alive
         try {
-            // Always check if we have a valid connection first
-            if (inventoriesClient && inventoriesDb) {
-                // Test the connection to make sure it's still alive
-                try {
-                    await inventoriesClient.db('tinglebot').admin().ping();
-                    return inventoriesDb;
-                } catch (pingError) {
-                    console.log("[db.js]: Connection lost, reconnecting...");
-                    // Connection is dead, reset and reconnect
-                    inventoriesClient = null;
-                    inventoriesDb = null;
-                }
-            }
-        
-            // If no client or connection failed, create a new one
-            if (!inventoriesClient) {
-                const uri = dbConfig.inventories || dbConfig.tinglebot;
-                
-                if (!uri) {
-                    throw new Error('Missing MongoDB URI for items database');
-                }
-                
-                logger.info('DATABASE', `Connecting to items database... (attempt ${retryCount + 1}/${maxRetries})`);
-                inventoriesClient = new MongoClient(uri, {
-                    serverSelectionTimeoutMS: 10000,  // 10 seconds
-                    connectTimeoutMS: 10000,          // 10 seconds
-                    socketTimeoutMS: 30000,           // 30 seconds
-                    maxPoolSize: 5,
-                    minPoolSize: 1
-                });
-                
-                await inventoriesClient.connect();
-                inventoriesDb = inventoriesClient.db('tinglebot');
-                logger.success('DATABASE', 'Items database connected');
-                
-                // Reset error counter on successful connection
-                resetErrorCounter();
-            }
-            
-            // Double-check that we have a valid database connection
-            if (!inventoriesDb) {
-                throw new Error('Database connection failed - inventoriesDb is null');
-            }
-            
+            await inventoriesClient.db('tinglebot').admin().ping();
             return inventoriesDb;
-            
-        } catch (error) {
-            retryCount++;
-            console.error(`[db.js]: ❌ Error connecting to Items database (attempt ${retryCount}/${maxRetries}):`, error.message);
-            
-            // Reset the connection variables on error
+        } catch (pingError) {
+            console.log("[db.js]: Connection lost, reconnecting...");
+            // Connection is dead, reset and reconnect
             inventoriesClient = null;
             inventoriesDb = null;
-            
-            if (retryCount >= maxRetries) {
-                handleError(error, "db.js", context);
-                console.error("[db.js]: Error details:", {
-                    name: error.name,
-                    code: error.code,
-                    stack: error.stack
-                });
-                throw error;
+        }
+    }
+
+    // If a connection is already in progress, wait for it
+    if (connectingInventoriesDb) {
+        try {
+            return await connectingInventoriesDb;
+        } catch (error) {
+            // If the in-progress connection failed, we'll try to create a new one below
+            connectingInventoriesDb = null;
+        }
+    }
+
+    // Create a connection promise to prevent concurrent connection attempts
+    const connectionPromise = (async () => {
+        const maxRetries = 3;
+        let retryCount = 0;
+        
+        while (retryCount < maxRetries) {
+            try {
+                // If no client, create a new one
+                if (!inventoriesClient) {
+                    const uri = dbConfig.inventories || dbConfig.tinglebot;
+                    
+                    if (!uri) {
+                        throw new Error('Missing MongoDB URI for items database');
+                    }
+                    
+                    logger.info('DATABASE', `Connecting to items database... (attempt ${retryCount + 1}/${maxRetries})`);
+                    inventoriesClient = new MongoClient(uri, {
+                        serverSelectionTimeoutMS: 10000,  // 10 seconds
+                        connectTimeoutMS: 10000,          // 10 seconds
+                        socketTimeoutMS: 30000,           // 30 seconds
+                        maxPoolSize: 5,
+                        minPoolSize: 1
+                    });
+                    
+                    await inventoriesClient.connect();
+                    inventoriesDb = inventoriesClient.db('tinglebot');
+                    logger.success('DATABASE', 'Items database connected');
+                    
+                    // Reset error counter on successful connection
+                    resetErrorCounter();
+                }
+                
+                // Double-check that we have a valid database connection
+                if (!inventoriesDb) {
+                    throw new Error('Database connection failed - inventoriesDb is null');
+                }
+                
+                return inventoriesDb;
+                
+            } catch (error) {
+                retryCount++;
+                console.error(`[db.js]: ❌ Error connecting to Items database (attempt ${retryCount}/${maxRetries}):`, error.message);
+                
+                // Reset the connection variables on error
+                inventoriesClient = null;
+                inventoriesDb = null;
+                
+                if (retryCount >= maxRetries) {
+                    handleError(error, "db.js", context);
+                    console.error("[db.js]: Error details:", {
+                        name: error.name,
+                        code: error.code,
+                        stack: error.stack
+                    });
+                    throw error;
+                }
+                
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
             }
-            
-            // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        }
+    })();
+
+    // Store the connection promise so concurrent calls can wait for it
+    connectingInventoriesDb = connectionPromise;
+
+    try {
+        const db = await connectionPromise;
+        return db;
+    } finally {
+        // Clear the connection promise once the connection attempt completes
+        // (whether successful or not)
+        if (connectingInventoriesDb === connectionPromise) {
+            connectingInventoriesDb = null;
         }
     }
 };
