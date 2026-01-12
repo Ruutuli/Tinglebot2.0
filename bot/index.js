@@ -690,28 +690,50 @@ async function initializeClient() {
         // Only process messages in intro channel
         if (message.channelId !== INTRO_CHANNEL_ID) return;
         
+        console.log(`[index.js]: 📝 Message detected in intro channel from ${message.author.tag}`);
+        
         // Skip bot messages
-        if (message.author.bot) return;
+        if (message.author.bot) {
+          console.log(`[index.js]: ⏭️  Skipping bot message`);
+          return;
+        }
         
-        // Skip if user already has Verified role
-        const member = message.member;
-        if (!member) return;
+        // Ensure we have the member object
+        if (!message.guild) {
+          console.log(`[index.js]: ⚠️  No guild found for message`);
+          return;
+        }
         
+        let member = message.member;
+        if (!member) {
+          // Try to fetch the member
+          try {
+            member = await message.guild.members.fetch(message.author.id);
+            console.log(`[index.js]: ✅ Fetched member ${message.author.tag}`);
+          } catch (fetchError) {
+            console.error(`[index.js]: ❌ Could not fetch member ${message.author.tag}:`, fetchError);
+            return;
+          }
+        }
+        
+        // Check if user already has Verified role
         if (member.roles.cache.has(VERIFIED_ROLE_ID)) {
+          console.log(`[index.js]: ⏭️  User ${message.author.tag} already has Verified role`);
           return; // Already verified
         }
         
         // Check if user has Traveler role (they should have this to post)
         if (!member.roles.cache.has(TRAVELER_ROLE_ID)) {
-          // They shouldn't be able to post here, but just in case
-          console.log(`[index.js]: User ${message.author.tag} posted in intro without Traveler role`);
+          console.log(`[index.js]: ⚠️  User ${message.author.tag} posted in intro without Traveler role`);
           return;
         }
+        
+        console.log(`[index.js]: 🔍 Processing intro post for ${message.author.tag}...`);
         
         // Get Verified role and assign it
         const verifiedRole = message.guild.roles.cache.get(VERIFIED_ROLE_ID);
         if (!verifiedRole) {
-          console.error(`[index.js]: Verified role not found (ID: ${VERIFIED_ROLE_ID})`);
+          console.error(`[index.js]: ❌ Verified role not found (ID: ${VERIFIED_ROLE_ID})`);
           return;
         }
         
@@ -724,6 +746,7 @@ async function initializeClient() {
         const userDoc = await User.getOrCreateUser(message.author.id);
         userDoc.introPostedAt = new Date();
         await userDoc.save();
+        console.log(`[index.js]: ✅ Saved intro timestamp to database for ${message.author.tag}`);
         
         // Send confirmation DM
         try {
@@ -736,13 +759,15 @@ async function initializeClient() {
             .setTimestamp();
           
           await message.author.send({ embeds: [confirmEmbed] });
+          console.log(`[index.js]: ✅ Sent confirmation DM to ${message.author.tag}`);
         } catch (error) {
           // DM might be disabled, that's okay
-          console.log(`[index.js]: Could not send intro confirmation DM to ${message.author.tag}`);
+          console.log(`[index.js]: ⚠️  Could not send intro confirmation DM to ${message.author.tag} (DMs may be disabled)`);
         }
         
       } catch (error) {
         console.error(`[index.js]: ❌ Error handling intro post:`, error);
+        console.error(`[index.js]: Error stack:`, error.stack);
       }
     });
 
