@@ -1022,7 +1022,8 @@ function formatCooldownTime(timeLeft) {
 
 // ------------------- Get All Cooldown Information -------------------
 // Get all cooldown information for a character (NPCs and player targets)
-async function getAllCooldownInfo(characterId) {
+// characterId is optional - if not provided, only global cooldowns are shown
+async function getAllCooldownInfo(characterId = null) {
     try {
         const cooldowns = {
             npcs: [],
@@ -1048,9 +1049,9 @@ async function getAllCooldownInfo(characterId) {
                 };
             }
 
-            // Check personal lockout (30-day cooldown for this character)
+            // Check personal lockout (30-day cooldown for this character) - only if characterId is provided
             let personalCooldown = null;
-            if (npc?.personalLockouts) {
+            if (characterId && npc?.personalLockouts) {
                 const personalLockout = npc.personalLockouts.find(lockout => 
                     lockout.characterId.toString() === characterId.toString() && 
                     lockout.lockoutEndTime > new Date()
@@ -1076,27 +1077,29 @@ async function getAllCooldownInfo(characterId) {
             });
         }
 
-        // Get all player characters that have protection
-        const protectedCharacters = await Character.find({
-            'stealProtection.isProtected': true,
-            _id: { $ne: characterId } // Exclude self
-        });
+        // Get all player characters that have protection - only if characterId is provided
+        if (characterId) {
+            const protectedCharacters = await Character.find({
+                'stealProtection.isProtected': true,
+                _id: { $ne: characterId } // Exclude self
+            });
 
-        for (const char of protectedCharacters) {
-            // Check if protection is still active
-            if (char.stealProtection?.isProtected && !char.isProtectionExpired()) {
-                const timeLeft = char.getProtectionTimeLeft();
-                if (timeLeft > 0) {
-                    cooldowns.players.push({
-                        name: char.name,
-                        global: {
-                            active: true,
-                            timeLeft: timeLeft,
-                            formatted: formatCooldownTime(timeLeft),
-                            type: 'global'
-                        },
-                        icon: char.icon || null
-                    });
+            for (const char of protectedCharacters) {
+                // Check if protection is still active
+                if (char.stealProtection?.isProtected && !char.isProtectionExpired()) {
+                    const timeLeft = char.getProtectionTimeLeft();
+                    if (timeLeft > 0) {
+                        cooldowns.players.push({
+                            name: char.name,
+                            global: {
+                                active: true,
+                                timeLeft: timeLeft,
+                                formatted: formatCooldownTime(timeLeft),
+                                type: 'global'
+                            },
+                            icon: char.icon || null
+                        });
+                    }
                 }
             }
         }
@@ -2487,22 +2490,36 @@ module.exports = {
             }
 
             if (subcommand === 'cooldown') {
-                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
-                if (!valid) {
-                    await interaction.reply({ content: error, ephemeral: true });
-                    return;
-                }
-
                 await interaction.deferReply();
 
                 const targetName = interaction.options.getString('target');
                 const targetType = interaction.options.getString('targettype');
                 
+                // Validate character only if needed (when checking specific target or showing personal cooldowns)
+                let character = null;
+                if (targetName || characterName) {
+                    const { valid, error, character: validatedCharacter } = await validateCharacter(characterName, interaction.user.id);
+                    if (!valid) {
+                        await interaction.editReply({ content: error, ephemeral: true });
+                        return;
+                    }
+                    character = validatedCharacter;
+                }
+
                 if (targetName) {
                     // Validate that targettype is provided when target is provided
                     if (!targetType) {
                         await interaction.editReply({
                             content: '❌ **Target type is required when checking a specific target.**\n\nPlease specify whether you are checking an NPC or Player character.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+
+                    // Character name is required for checking specific targets (to show personal cooldowns)
+                    if (!character) {
+                        await interaction.editReply({
+                            content: '❌ **Character name is required when checking a specific target.**\n\nPlease provide your character name to check personal cooldowns.',
                             ephemeral: true
                         });
                         return;
@@ -2575,52 +2592,69 @@ module.exports = {
                     return;
                 } else {
                     // Show all cooldowns
-                    const allCooldowns = await getAllCooldownInfo(character._id);
+                    // If targettype is specified, filter to that type only
+                    // If character is provided, show personal cooldowns; otherwise only global
+                    const characterId = character ? character._id : null;
+                    const allCooldowns = await getAllCooldownInfo(characterId);
+
+                    // Filter based on targettype if provided
+                    let displayNPCs = allCooldowns.npcs;
+                    let displayPlayers = allCooldowns.players;
+                    
+                    if (targetType === 'npc') {
+                        displayPlayers = [];
+                    } else if (targetType === 'player') {
+                        displayNPCs = [];
+                    }
 
                     const embed = createBaseEmbed('⏰ Steal Cooldowns', '#FF6B35')
-                        .setDescription(`Cooldown information for **${character.name}**`)
-                        .setThumbnail(character.icon)
+                        .setDescription(character 
+                            ? `Cooldown information for **${character.name}**`
+                            : 'Cooldown information (Global only - provide character name for personal cooldowns)')
+                        .setThumbnail(character?.icon || null)
                         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
                     // NPC Cooldowns - Show all NPCs
-                    const npcFields = [];
-                    for (const npc of allCooldowns.npcs.slice(0, 25)) { // Increased limit to show more NPCs
-                        let npcText = `**${npc.name}**\n`;
-                        
-                        if (npc.global) {
-                            npcText += `🌍 Global: ${npc.global.formatted}\n`;
-                        } else {
-                            npcText += `🌍 Global: ✅ Available\n`;
+                    if (displayNPCs.length > 0) {
+                        const npcFields = [];
+                        for (const npc of displayNPCs.slice(0, 25)) { // Increased limit to show more NPCs
+                            let npcText = `**${npc.name}**\n`;
+                            
+                            if (npc.global) {
+                                npcText += `🌍 Global: ${npc.global.formatted}\n`;
+                            } else {
+                                npcText += `🌍 Global: ✅ Available\n`;
+                            }
+                            
+                            if (npc.personal) {
+                                npcText += `👤 Personal: ${npc.personal.formatted}`;
+                            } else if (character) {
+                                npcText += `👤 Personal: ✅ Available`;
+                            }
+                            
+                            npcFields.push({
+                                name: '\u200b',
+                                value: npcText,
+                                inline: true
+                            });
                         }
-                        
-                        if (npc.personal) {
-                            npcText += `👤 Personal: ${npc.personal.formatted}`;
-                        } else {
-                            npcText += `👤 Personal: ✅ Available`;
-                        }
-                        
-                        npcFields.push({
-                            name: '\u200b',
-                            value: npcText,
-                            inline: true
-                        });
+
+                        embed.addFields([
+                            { 
+                                name: `__🤖 All NPCs (${displayNPCs.length} total)__`, 
+                                value: displayNPCs.length > 25 
+                                    ? `*Showing first 25 of ${displayNPCs.length} NPCs*` 
+                                    : '\u200b',
+                                inline: false 
+                            },
+                            ...npcFields
+                        ]);
                     }
 
-                    embed.addFields([
-                        { 
-                            name: `__🤖 All NPCs (${allCooldowns.npcs.length} total)__`, 
-                            value: allCooldowns.npcs.length > 25 
-                                ? `*Showing first 25 of ${allCooldowns.npcs.length} NPCs*` 
-                                : '\u200b',
-                            inline: false 
-                        },
-                        ...npcFields
-                    ]);
-
                     // Player Cooldowns
-                    if (allCooldowns.players.length > 0) {
+                    if (displayPlayers.length > 0) {
                         const playerFields = [];
-                        for (const player of allCooldowns.players.slice(0, 10)) { // Limit to 10 players per embed
+                        for (const player of displayPlayers.slice(0, 10)) { // Limit to 10 players per embed
                             let playerText = `**${player.name}**\n`;
                             
                             if (player.global) {
@@ -2638,15 +2672,15 @@ module.exports = {
 
                         embed.addFields([
                             { 
-                                name: `__👥 Player Cooldowns (${allCooldowns.players.length} total)__`, 
-                                value: allCooldowns.players.length > 10 
-                                    ? `*Showing first 10 of ${allCooldowns.players.length} players with cooldowns*` 
+                                name: `__👥 Player Cooldowns (${displayPlayers.length} total)__`, 
+                                value: displayPlayers.length > 10 
+                                    ? `*Showing first 10 of ${displayPlayers.length} players with cooldowns*` 
                                     : '\u200b',
                                 inline: false 
                             },
                             ...playerFields
                         ]);
-                    } else {
+                    } else if (targetType === 'player' || (!targetType && character)) {
                         embed.addFields({
                             name: '__👥 Player Cooldowns__',
                             value: '> ✅ **No players on cooldown**\n> *All players are available*',
@@ -2655,13 +2689,13 @@ module.exports = {
                     }
 
                     // Add summary
-                    const npcsOnCooldown = allCooldowns.npcs.filter(npc => npc.global || npc.personal).length;
-                    const totalOnCooldown = npcsOnCooldown + allCooldowns.players.length;
+                    const npcsOnCooldown = displayNPCs.filter(npc => npc.global || npc.personal).length;
+                    const totalOnCooldown = npcsOnCooldown + displayPlayers.length;
                     embed.addFields({
                         name: '__📊 Summary__',
                         value: totalOnCooldown > 0
-                            ? `> **${totalOnCooldown}** target${totalOnCooldown !== 1 ? 's' : ''} currently on cooldown (${npcsOnCooldown} NPC${npcsOnCooldown !== 1 ? 's' : ''}, ${allCooldowns.players.length} player${allCooldowns.players.length !== 1 ? 's' : ''})\n> Use \`/steal cooldown target:<name>\` to check a specific target`
-                            : `> ✅ **All targets are available!**\n> Showing all ${allCooldowns.npcs.length} NPCs with cooldown status`,
+                            ? `> **${totalOnCooldown}** target${totalOnCooldown !== 1 ? 's' : ''} currently on cooldown (${npcsOnCooldown} NPC${npcsOnCooldown !== 1 ? 's' : ''}, ${displayPlayers.length} player${displayPlayers.length !== 1 ? 's' : ''})\n> Use \`/steal cooldown target:<name>\` to check a specific target`
+                            : `> ✅ **All targets are available!**\n> Showing all ${displayNPCs.length} NPC${displayNPCs.length !== 1 ? 's' : ''} with cooldown status`,
                         inline: false
                     });
 
