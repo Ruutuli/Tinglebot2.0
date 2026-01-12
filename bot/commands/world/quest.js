@@ -1255,7 +1255,7 @@ formatQuestCount(count = 0) {
  // ------------------- Function: parseDeadlineEST -------------------
  // Parses a deadline string and converts it to end-of-day EST (23:59:59 EST)
  // Handles formats like "MM-DD-YY", "YYYY-MM-DD", etc.
- function parseDeadlineEST(signupDeadlineString) {
+ parseDeadlineEST(signupDeadlineString) {
   if (!signupDeadlineString) return null;
   
   try {
@@ -1362,7 +1362,7 @@ formatQuestCount(count = 0) {
    }
    return null;
   }
- }
+ },
 
  async validateQuest(interaction, questID) {
   const quest = await Quest.findOne({ questID });
@@ -1384,7 +1384,7 @@ formatQuestCount(count = 0) {
 
   const now = new Date();
   if (quest.signupDeadline) {
-   const deadline = parseDeadlineEST(quest.signupDeadline);
+   const deadline = this.parseDeadlineEST(quest.signupDeadline);
    if (!deadline || now > deadline) {
     await interaction.reply({
      content: `[quest.js]❌ The signup deadline for quest \`${quest.title}\` has passed.`,
