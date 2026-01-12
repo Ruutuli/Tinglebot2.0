@@ -1552,6 +1552,33 @@ async function deactivateJobVoucherIfNeeded(thiefCharacter, voucherCheck) {
     }
 }
 
+// ------------------- Failed Attempts Calculation Helper -------------------
+// Calculate max attempts, current attempts, and attempts remaining before jail
+async function getFailedAttemptsInfo(character) {
+    const currentAttempts = character.failedStealAttempts || 0;
+    let maxAttempts = 3; // Base: 3 failed attempts before jail
+    let hasTeacherBoost = false;
+    
+    // Check if character is boosted by a Teacher (increases max attempts to 4)
+    if (character.boostedBy) {
+        const { fetchCharacterByName } = require('../../../shared/database/db');
+        const boosterChar = await fetchCharacterByName(character.boostedBy);
+        if (boosterChar && boosterChar.job === 'Teacher') {
+            maxAttempts = 4;
+            hasTeacherBoost = true;
+        }
+    }
+    
+    const attemptsRemaining = Math.max(0, maxAttempts - currentAttempts);
+    
+    return {
+        maxAttempts,
+        currentAttempts,
+        attemptsRemaining,
+        hasTeacherBoost
+    };
+}
+
 // ------------------- Centralized Failed Attempts Handling -------------------
 // Centralized failed attempts logic to eliminate duplication
 async function handleFailedAttempts(thiefCharacter, embed) {
@@ -2295,10 +2322,30 @@ module.exports = {
                 const jailStatus = await checkJailStatus(character);
                 
                 if (!jailStatus.isInJail) {
+                    // Get failed attempts information
+                    const attemptsInfo = await getFailedAttemptsInfo(character);
+                    
                     const notInJailEmbed = createBaseEmbed('✅ Not in Jail', '#00ff00')
                         .setDescription(`**${character.name}** is not currently in jail.`)
                         .setThumbnail(character.icon)
                         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+                    
+                    // Add failed attempts information
+                    let attemptsValue = `> **${attemptsInfo.currentAttempts}** failed attempt${attemptsInfo.currentAttempts !== 1 ? 's' : ''} on record\n`;
+                    attemptsValue += `> **${attemptsInfo.attemptsRemaining}** attempt${attemptsInfo.attemptsRemaining !== 1 ? 's' : ''} remaining before jail time`;
+                    if (attemptsInfo.hasTeacherBoost) {
+                        attemptsValue += `\n> 📖 *Teacher boost active (max ${attemptsInfo.maxAttempts} attempts)*`;
+                    }
+                    
+                    const attemptsFieldName = attemptsInfo.attemptsRemaining === 1 
+                        ? '⚠️ Failed Attempts (Final Warning!)' 
+                        : '⚠️ Failed Attempts';
+                    
+                    notInJailEmbed.addFields({
+                        name: attemptsFieldName,
+                        value: attemptsValue,
+                        inline: false
+                    });
                     
                     await interaction.editReply({ embeds: [notInJailEmbed] });
                     return;
@@ -2362,6 +2409,12 @@ module.exports = {
                     jailStatus = `⛔ **In Jail** - Released on ${releaseDate} (${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''} remaining)`;
                 }
                 
+                // Get failed attempts information (only if not in jail, since attempts reset when jailed)
+                let attemptsInfo = null;
+                if (!jailStatusResult.isInJail) {
+                    attemptsInfo = await getFailedAttemptsInfo(character);
+                }
+                
                 const embed = createBaseEmbed('📊 Steal Statistics')
                     .setDescription(`Statistics for **${character.name}** the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`)
                     .setThumbnail(character.icon)
@@ -2373,6 +2426,21 @@ module.exports = {
                         { name: '__📈 Success Rate__', value: `> ${stats.successRate}%`, inline: true },
                         { name: '__🛡️ Protection Status__', value: `> ${protectionStatus}`, inline: true }
                     );
+                
+                // Add failed attempts information if not in jail
+                if (attemptsInfo) {
+                    let attemptsValue = `> **${attemptsInfo.currentAttempts}** failed attempt${attemptsInfo.currentAttempts !== 1 ? 's' : ''} on record\n`;
+                    attemptsValue += `> **${attemptsInfo.attemptsRemaining}** attempt${attemptsInfo.attemptsRemaining !== 1 ? 's' : ''} remaining before jail time`;
+                    if (attemptsInfo.hasTeacherBoost) {
+                        attemptsValue += `\n> 📖 *Teacher boost active (max ${attemptsInfo.maxAttempts} attempts)*`;
+                    }
+                    
+                    const attemptsFieldName = attemptsInfo.attemptsRemaining === 1 
+                        ? '__⚠️ Failed Attempts (Final Warning!)__' 
+                        : '__⚠️ Failed Attempts__';
+                    
+                    embed.addFields({ name: attemptsFieldName, value: attemptsValue, inline: false });
+                }
                 
                 // Add jail status if applicable
                 if (jailStatus && jailStatus.trim() !== '') {

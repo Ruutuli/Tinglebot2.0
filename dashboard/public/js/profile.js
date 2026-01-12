@@ -4166,8 +4166,11 @@ async function showAddVendorItemModal(character) {
       const inventoryData = await inventoryResponse.json();
       // Get items from this specific character's inventory
       if (inventoryData.data && Array.isArray(inventoryData.data)) {
-        // Find the character object matching the requested character name
-        const characterObj = inventoryData.data.find(char => char.characterName === character.name);
+        // Find the character object matching the requested character name (case-insensitive)
+        const characterObj = inventoryData.data.find(char => 
+          char.characterName && character.name && 
+          char.characterName.trim().toLowerCase() === character.name.trim().toLowerCase()
+        );
         const characterInventoryItems = characterObj?.inventory || [];
         
         // Combine items with the same name (like inventory.js does)
@@ -4875,8 +4878,11 @@ export async function loadVendorDashboard(characterId) {
       });
       if (invResponse.ok) {
         const invData = await invResponse.json();
-        // Find the character object matching the requested character name
-        const characterObj = invData.data?.find(char => char.characterName === character.name);
+        // Find the character object matching the requested character name (case-insensitive)
+        const characterObj = invData.data?.find(char => 
+          char.characterName && character.name && 
+          char.characterName.trim().toLowerCase() === character.name.trim().toLowerCase()
+        );
         characterInventory = characterObj?.inventory || [];
       }
     } catch (error) {

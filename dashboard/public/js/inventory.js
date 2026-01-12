@@ -463,8 +463,11 @@ async function loadCharacterInventory(characterName) {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const { data: characterData } = await response.json();
     
-    // Find the character object matching the requested characterName
-    const characterObj = characterData?.find(char => char.characterName === characterName);
+    // Find the character object matching the requested characterName (case-insensitive)
+    const characterObj = characterData?.find(char => 
+      char.characterName && characterName && 
+      char.characterName.trim().toLowerCase() === characterName.trim().toLowerCase()
+    );
     const items = characterObj?.inventory || [];
     
     // Cache the inventory data
