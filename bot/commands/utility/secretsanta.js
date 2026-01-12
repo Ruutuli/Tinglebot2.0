@@ -28,7 +28,6 @@ const { uploadSubmissionImage } = require('../../../shared/utils/uploadUtils.js'
 const { createArtSubmissionEmbed } = require('../../embeds/embeds.js');
 const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils.js');
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
-const { fetchAllCharacters } = require('../../../shared/database/db');
 
 // Model Imports
 const ApprovedSubmission = require('../../../shared/models/ApprovedSubmissionModel');
@@ -118,13 +117,6 @@ module.exports = {
             .setName('title')
             .setDescription('Title for your submission (optional)')
             .setRequired(false)
-        )
-        .addStringOption(option =>
-          option
-            .setName('tagged_characters')
-            .setDescription('Characters to tag (comma-separated)')
-            .setRequired(false)
-            .setAutocomplete(true)
         )
     ),
 
@@ -413,32 +405,6 @@ async function handleSubmit(interaction) {
 
     const attachedFile = interaction.options.getAttachment('file');
     const title = interaction.options.getString('title')?.trim() || attachedFile.name;
-    const taggedCharactersInput = interaction.options.getString('tagged_characters');
-
-    // Parse and validate tagged characters
-    let taggedCharacters = [];
-    if (taggedCharactersInput) {
-      const characterNames = taggedCharactersInput.split(',').map(name => name.trim()).filter(name => name.length > 0);
-      
-      if (characterNames.length === 0) {
-        return await interaction.editReply({ 
-          content: '❌ **Invalid tagged characters format.** Please provide character names separated by commas.' 
-        });
-      }
-
-      // Validate that all characters exist in the database
-      const allCharacters = await fetchAllCharacters();
-      const characterNamesSet = new Set(allCharacters.map(char => char.name.toLowerCase()));
-      
-      const invalidCharacters = characterNames.filter(name => !characterNamesSet.has(name.toLowerCase()));
-      if (invalidCharacters.length > 0) {
-        return await interaction.editReply({ 
-          content: `❌ **Invalid character names:** ${invalidCharacters.join(', ')}. Please check that all character names are correct.` 
-        });
-      }
-
-      taggedCharacters = characterNames;
-    }
 
     // Check if a file is attached
     if (!attachedFile) {
@@ -474,7 +440,7 @@ async function handleSubmit(interaction) {
       specialWorksApplied: [],
       collab: [],
       blightId: null,
-      taggedCharacters: taggedCharacters,
+      taggedCharacters: [],
       questEvent: 'N/A',
       questBonus: 'N/A'
     });
@@ -502,7 +468,7 @@ async function handleSubmit(interaction) {
       specialWorksApplied: [],
       collab: [],
       blightId: null,
-      taggedCharacters: taggedCharacters,
+      taggedCharacters: [],
       questEvent: 'N/A',
       questBonus: 'N/A',
       approvedBy: 'System (Secret Santa)',

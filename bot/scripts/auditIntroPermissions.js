@@ -31,29 +31,36 @@ const client = new Client({
 
 function formatPermissions(permissions) {
   const perms = [];
+  const VIEW_MEMBERS_BIT = BigInt(0x1000000);
+  
   try {
     if (permissions.has(PermissionFlagsBits.ViewChannels)) perms.push('View Channels');
-    if (permissions.has(PermissionFlagsBits.SendMessages)) perms.push('Send Messages');
-    if (permissions.has(PermissionFlagsBits.ReadMessageHistory)) perms.push('Read Message History');
-    // Check for View Server Members permission - try different constant names
-    const viewMembersFlags = [
-      PermissionFlagsBits.ViewGuildMembers,
-      PermissionFlagsBits.ViewServerMembers
-    ].filter(Boolean); // Remove undefined values
-    
-    for (const flag of viewMembersFlags) {
-      try {
-        if (permissions.has(flag)) {
-          perms.push('View Server Members');
-          break;
-        }
-      } catch (e) {
-        // Flag doesn't exist, continue
-      }
-    }
-  } catch (error) {
-    return 'Error reading permissions';
+  } catch (e) {
+    // Permission flag doesn't exist, skip
   }
+  
+  try {
+    if (permissions.has(PermissionFlagsBits.SendMessages)) perms.push('Send Messages');
+  } catch (e) {
+    // Permission flag doesn't exist, skip
+  }
+  
+  try {
+    if (permissions.has(PermissionFlagsBits.ReadMessageHistory)) perms.push('Read Message History');
+  } catch (e) {
+    // Permission flag doesn't exist, skip
+  }
+  
+  // Check for View Server Members permission using bitfield (0x1000000 = 16777216)
+  // This is more reliable than using constant names which may vary by version
+  try {
+    if ((permissions.bitfield & VIEW_MEMBERS_BIT) !== 0n) {
+      perms.push('View Server Members');
+    }
+  } catch (e) {
+    // Error reading bitfield, skip
+  }
+  
   return perms.length > 0 ? perms.join(', ') : 'None';
 }
 
@@ -64,13 +71,28 @@ function getPermissionState(overwrites, roleId) {
   const allow = [];
   const deny = [];
   
-  if (overwrite.allow.has(PermissionFlagsBits.ViewChannels)) allow.push('View Channels');
-  if (overwrite.allow.has(PermissionFlagsBits.SendMessages)) allow.push('Send Messages');
-  if (overwrite.allow.has(PermissionFlagsBits.ReadMessageHistory)) allow.push('Read Message History');
+  // Permission bit values
+  const VIEW_CHANNELS_BIT = BigInt(0x400);
+  const SEND_MESSAGES_BIT = BigInt(0x800);
+  const READ_MESSAGE_HISTORY_BIT = BigInt(0x10000);
   
-  if (overwrite.deny.has(PermissionFlagsBits.ViewChannels)) deny.push('View Channels');
-  if (overwrite.deny.has(PermissionFlagsBits.SendMessages)) deny.push('Send Messages');
-  if (overwrite.deny.has(PermissionFlagsBits.ReadMessageHistory)) deny.push('Read Message History');
+  // Check allow permissions using bitfield
+  try {
+    if ((overwrite.allow.bitfield & VIEW_CHANNELS_BIT) !== 0n) allow.push('View Channels');
+    if ((overwrite.allow.bitfield & SEND_MESSAGES_BIT) !== 0n) allow.push('Send Messages');
+    if ((overwrite.allow.bitfield & READ_MESSAGE_HISTORY_BIT) !== 0n) allow.push('Read Message History');
+  } catch (e) {
+    // Error reading allow permissions
+  }
+  
+  // Check deny permissions using bitfield
+  try {
+    if ((overwrite.deny.bitfield & VIEW_CHANNELS_BIT) !== 0n) deny.push('View Channels');
+    if ((overwrite.deny.bitfield & SEND_MESSAGES_BIT) !== 0n) deny.push('Send Messages');
+    if ((overwrite.deny.bitfield & READ_MESSAGE_HISTORY_BIT) !== 0n) deny.push('Read Message History');
+  } catch (e) {
+    // Error reading deny permissions
+  }
   
   if (allow.length === 0 && deny.length === 0) return 'No overwrite (inherits)';
   return `Allow: ${allow.join(', ') || 'None'} | Deny: ${deny.join(', ') || 'None'}`;
@@ -82,6 +104,9 @@ function getPermissionState(overwrites, roleId) {
 
 async function auditPermissions() {
   try {
+    // Constants
+    const VIEW_MEMBERS_BIT = BigInt(0x1000000);
+    
     console.log('🔍 Starting permission audit...\n');
     
     await client.login(process.env.DISCORD_TOKEN);
@@ -149,27 +174,13 @@ async function auditPermissions() {
     console.log('-'.repeat(80));
     
     if (travelerRole) {
-      let canViewMembers = false;
-      try {
-        canViewMembers = travelerRole.permissions.has(PermissionFlagsBits.ViewGuildMembers) || 
-                         travelerRole.permissions.has(PermissionFlagsBits.ViewServerMembers);
-      } catch (e) {
-        // Check permission bit directly if flags don't work
-        canViewMembers = (travelerRole.permissions.bitfield & BigInt(0x1000000)) !== 0n;
-      }
+      const canViewMembers = (travelerRole.permissions.bitfield & VIEW_MEMBERS_BIT) !== 0n;
       console.log(`\nTraveler Role:`);
       console.log(`   View Server Members: ${canViewMembers ? '✅ ALLOW' : '❌ DENY'}`);
     }
     
     if (verifiedRole) {
-      let canViewMembers = false;
-      try {
-        canViewMembers = verifiedRole.permissions.has(PermissionFlagsBits.ViewGuildMembers) || 
-                         verifiedRole.permissions.has(PermissionFlagsBits.ViewServerMembers);
-      } catch (e) {
-        // Check permission bit directly if flags don't work
-        canViewMembers = (verifiedRole.permissions.bitfield & BigInt(0x1000000)) !== 0n;
-      }
+      const canViewMembers = (verifiedRole.permissions.bitfield & VIEW_MEMBERS_BIT) !== 0n;
       console.log(`\nVerified Role:`);
       console.log(`   View Server Members: ${canViewMembers ? '✅ ALLOW' : '❌ DENY'}`);
     }
@@ -196,14 +207,14 @@ async function auditPermissions() {
       
       console.log(`\n   Traveler Role Overwrite:`);
       if (travelerOverwrite) {
-        console.log(`     ${getPermissionState(introChannel.permissionOverwrites.cache.array(), TRAVELER_ROLE_ID)}`);
+        console.log(`     ${getPermissionState(Array.from(introChannel.permissionOverwrites.cache.values()), TRAVELER_ROLE_ID)}`);
       } else {
         console.log(`     No overwrite (inherits from role/server)`);
       }
       
       console.log(`\n   Verified Role Overwrite:`);
       if (verifiedOverwrite) {
-        console.log(`     ${getPermissionState(introChannel.permissionOverwrites.cache.array(), VERIFIED_ROLE_ID)}`);
+        console.log(`     ${getPermissionState(Array.from(introChannel.permissionOverwrites.cache.values()), VERIFIED_ROLE_ID)}`);
       } else {
         console.log(`     No overwrite (inherits from role/server)`);
       }
@@ -217,6 +228,8 @@ async function auditPermissions() {
     const channelsTravelerCanSee = [];
     const channelsVerifiedCanSee = [];
     
+    const VIEW_CHANNELS_BIT = BigInt(0x400);
+    
     channels.forEach(channel => {
       const travelerOverwrite = channel.permissionOverwrites.cache.get(TRAVELER_ROLE_ID);
       const verifiedOverwrite = channel.permissionOverwrites.cache.get(VERIFIED_ROLE_ID);
@@ -225,13 +238,20 @@ async function auditPermissions() {
         channelsWithTravelerOverwrite.push({
           name: channel.name,
           id: channel.id,
-          state: getPermissionState(channel.permissionOverwrites.cache.array(), TRAVELER_ROLE_ID)
+          state: getPermissionState(Array.from(channel.permissionOverwrites.cache.values()), TRAVELER_ROLE_ID)
         });
         
-        // Check if Traveler can view this channel
-        if (travelerOverwrite.allow.has(PermissionFlagsBits.ViewChannels) || 
-            (!travelerOverwrite.deny.has(PermissionFlagsBits.ViewChannels) && travelerRole?.permissions.has(PermissionFlagsBits.ViewChannels))) {
-          channelsTravelerCanSee.push(channel.name);
+        // Check if Traveler can view this channel using bitfield
+        try {
+          const canViewAllow = (travelerOverwrite.allow.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+          const canViewDeny = (travelerOverwrite.deny.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+          const roleCanView = travelerRole ? (travelerRole.permissions.bitfield & VIEW_CHANNELS_BIT) !== 0n : false;
+          
+          if (canViewAllow || (!canViewDeny && roleCanView)) {
+            channelsTravelerCanSee.push(channel.name);
+          }
+        } catch (e) {
+          // Error checking permissions, skip
         }
       }
       
@@ -239,19 +259,28 @@ async function auditPermissions() {
         channelsWithVerifiedOverwrite.push({
           name: channel.name,
           id: channel.id,
-          state: getPermissionState(channel.permissionOverwrites.cache.array(), VERIFIED_ROLE_ID)
+          state: getPermissionState(Array.from(channel.permissionOverwrites.cache.values()), VERIFIED_ROLE_ID)
         });
       }
       
-      // Check if Verified can view this channel (inherits or explicit allow)
+      // Check if Verified can view this channel (inherits or explicit allow) using bitfield
       if (verifiedRole) {
-        const canView = verifiedOverwrite 
-          ? verifiedOverwrite.allow.has(PermissionFlagsBits.ViewChannels) || 
-            (!verifiedOverwrite.deny.has(PermissionFlagsBits.ViewChannels) && verifiedRole.permissions.has(PermissionFlagsBits.ViewChannels))
-          : verifiedRole.permissions.has(PermissionFlagsBits.ViewChannels);
-        
-        if (canView) {
-          channelsVerifiedCanSee.push(channel.name);
+        try {
+          let canView = false;
+          if (verifiedOverwrite) {
+            const canViewAllow = (verifiedOverwrite.allow.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+            const canViewDeny = (verifiedOverwrite.deny.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+            const roleCanView = (verifiedRole.permissions.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+            canView = canViewAllow || (!canViewDeny && roleCanView);
+          } else {
+            canView = (verifiedRole.permissions.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+          }
+          
+          if (canView) {
+            channelsVerifiedCanSee.push(channel.name);
+          }
+        } catch (e) {
+          // Error checking permissions, skip
         }
       }
     });
@@ -308,21 +337,33 @@ async function auditPermissions() {
       recommendations.push('Move Verified role above Traveler role in server settings');
     }
     
-    if (travelerRole && travelerRole.permissions.has(PermissionFlagsBits.ViewServerMembers)) {
-      issues.push('Traveler role should NOT have "View Server Members" permission');
-      recommendations.push('Remove "View Server Members" from Traveler role');
+    if (travelerRole) {
+      const canViewMembers = (travelerRole.permissions.bitfield & VIEW_MEMBERS_BIT) !== 0n;
+      if (canViewMembers) {
+        issues.push('Traveler role should NOT have "View Server Members" permission');
+        recommendations.push('Remove "View Server Members" from Traveler role');
+      }
     }
     
-    if (verifiedRole && !verifiedRole.permissions.has(PermissionFlagsBits.ViewServerMembers)) {
-      issues.push('Verified role should have "View Server Members" permission');
-      recommendations.push('Add "View Server Members" to Verified role');
+    if (verifiedRole) {
+      const canViewMembers = (verifiedRole.permissions.bitfield & VIEW_MEMBERS_BIT) !== 0n;
+      if (!canViewMembers) {
+        issues.push('Verified role should have "View Server Members" permission');
+        recommendations.push('Add "View Server Members" to Verified role');
+      }
     }
     
     if (introChannel) {
       const travelerOverwrite = introChannel.permissionOverwrites.cache.get(TRAVELER_ROLE_ID);
-      const canViewIntro = travelerOverwrite 
-        ? travelerOverwrite.allow.has(PermissionFlagsBits.ViewChannels)
-        : false;
+      let canViewIntro = false;
+      if (travelerOverwrite) {
+        try {
+          const VIEW_CHANNELS_BIT = BigInt(0x400);
+          canViewIntro = (travelerOverwrite.allow.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+        } catch (e) {
+          // Error checking permissions
+        }
+      }
       
       if (!canViewIntro) {
         issues.push('Traveler role cannot view intro channel');
