@@ -8542,8 +8542,6 @@ app.post('/api/suggestions', async (req, res) => {
     if (!req.isAuthenticated() || !req.user) {
       console.warn('🚫 SECURITY: Unauthenticated suggestion submission attempt');
       console.warn('🌐 IP:', clientIP);
-      console.warn('📝 Title:', title);
-      console.warn('📄 Description:', description);
       console.warn('🔍 Session info:', {
         isAuthenticated: !!req.session.user,
         hasUser: !!req.user,
