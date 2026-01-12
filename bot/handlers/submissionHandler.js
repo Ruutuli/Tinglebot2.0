@@ -20,7 +20,9 @@ const {
   fetchCharacterByNameAndUserId,
   fetchModCharacterByNameAndUserId,
   fetchCharacterByName,
-  fetchModCharacterByName
+  fetchModCharacterByName,
+  fetchCharactersByUserId,
+  fetchModCharactersByUserId
 } = require('../../shared/database/db');
 
 // ============================================================================
@@ -199,6 +201,7 @@ async function handleSubmissionCompletion(interaction) {
     console.log(`[submissionHandler.js]: 📊 Token breakdown:`, breakdown);
 
     let finalTokenAmount = tokensPerPerson;
+    const totalTokens = tokensPerPerson; // Base tokens before boosts
     const boostEffects = Array.isArray(submissionData.boostEffects) ? [...submissionData.boostEffects] : [];
     const boostFulfillmentMap = new Map();
     const boostMetadataMap = new Map();
@@ -302,6 +305,102 @@ async function handleSubmissionCompletion(interaction) {
           metadataRecord.tokenIncrease += tokenIncrease;
           console.log(`[submissionHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens)`);
         }
+      }
+    }
+
+    // Check user's characters for boosts (in case they didn't tag themselves)
+    if (submissionData.userId) {
+      try {
+        const userCharacters = await fetchCharactersByUserId(submissionData.userId);
+        const userModCharacters = await fetchModCharactersByUserId(submissionData.userId);
+        const allUserCharacters = [...userCharacters, ...userModCharacters];
+
+        for (const character of allUserCharacters) {
+          if (!character || !character.boostedBy) continue;
+
+          // Skip if this character was already checked in tagged characters
+          const normalizedName = character.name.toLowerCase();
+          if (focusCharacterMap.has(normalizedName)) continue;
+
+          const boosterChar = await resolveTaggedCharacter(character.boostedBy);
+          if (!boosterChar) {
+            console.warn(`[submissionHandler.js]: ⚠️ Booster ${character.boostedBy} not found for ${character.name}`);
+            continue;
+          }
+
+          if (
+            submissionData.category === 'art' &&
+            boosterChar.job === 'Teacher' &&
+            !processedBoostTypes.has('teacher_tokens')
+          ) {
+            const teacherEffectAlreadyLogged = boostEffects.some(effect =>
+              effect.includes('Critique & Composition')
+            );
+
+            const boostedTokens = applyTeacherTokensBoost(finalTokenAmount);
+            const tokenIncrease = boostedTokens - finalTokenAmount;
+            if (tokenIncrease > 0) {
+              finalTokenAmount = boostedTokens;
+              if (!teacherEffectAlreadyLogged) {
+                boostEffects.push(`👩‍🏫 **Critique & Composition:** ${boosterChar.name} added 🪙 ${tokenIncrease}.`);
+              }
+              processedBoostTypes.add('teacher_tokens');
+              boostFulfillmentMap.set(character.name.toLowerCase(), character);
+              const metadataKey = `${boosterChar.job.toLowerCase()}_${boosterChar.name.toLowerCase()}`;
+              if (!boostMetadataMap.has(metadataKey)) {
+                boostMetadataMap.set(metadataKey, {
+                  boostType: 'teacher_tokens',
+                  boosterJob: boosterChar.job,
+                  boosterName: boosterChar.name,
+                  targets: new Set(),
+                  tokenIncrease: 0
+                });
+              }
+              const metadataRecord = boostMetadataMap.get(metadataKey);
+              metadataRecord.targets.add(character.name);
+              metadataRecord.tokenIncrease += tokenIncrease;
+              console.log(`[submissionHandler.js]: 📖 Teacher boost - Critique & Composition (+${tokenIncrease} tokens) from user character ${character.name}`);
+            }
+          }
+
+          if (
+            submissionData.category === 'writing' &&
+            boosterChar.job === 'Scholar' &&
+            !processedBoostTypes.has('scholar_tokens')
+          ) {
+            const scholarEffectAlreadyLogged = boostEffects.some(effect =>
+              effect.includes('Research Stipend')
+            );
+
+            const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
+            const tokenIncrease = boostedTokens - finalTokenAmount;
+            if (tokenIncrease > 0) {
+              finalTokenAmount = boostedTokens;
+              if (!scholarEffectAlreadyLogged) {
+                boostEffects.push(`📚 **Research Stipend:** ${boosterChar.name} added 🪙 ${tokenIncrease}.`);
+              }
+              processedBoostTypes.add('scholar_tokens');
+              boostFulfillmentMap.set(character.name.toLowerCase(), character);
+              const metadataKey = `${boosterChar.job.toLowerCase()}_${boosterChar.name.toLowerCase()}`;
+              if (!boostMetadataMap.has(metadataKey)) {
+                boostMetadataMap.set(metadataKey, {
+                  boostType: 'scholar_tokens',
+                  boosterJob: boosterChar.job,
+                  boosterName: boosterChar.name,
+                  targets: new Set(),
+                  tokenIncrease: 0
+                });
+              }
+              const metadataRecord = boostMetadataMap.get(metadataKey);
+              metadataRecord.targets.add(character.name);
+              metadataRecord.tokenIncrease += tokenIncrease;
+              console.log(`[submissionHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens) from user character ${character.name}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[submissionHandler.js]: ❌ Error checking user characters for boosts:`, error);
+        // Don't fail the submission if boost check fails
       }
     }
 
