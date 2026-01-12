@@ -403,6 +403,29 @@ async function handleSubmit(interaction) {
       });
     }
 
+    // Check if deadline has passed
+    const data = await loadSecretSantaData();
+    const now = new Date();
+    const submissionDeadline = new Date(data.settings.submissionDeadline);
+    
+    if (now > submissionDeadline) {
+      // Add user to blacklist for next year
+      const currentBlacklist = data.settings.blacklistedUsers || [];
+      const userIdentifier = user.username || user.id;
+      
+      if (!currentBlacklist.includes(userIdentifier) && !currentBlacklist.includes(user.id)) {
+        await updateSettings({
+          blacklistedUsers: [...currentBlacklist, userIdentifier]
+        });
+        logger.info('SECRET_SANTA', `Added ${userIdentifier} to blacklist for submitting after deadline`);
+      }
+      
+      return await interaction.editReply({
+        content: `❌ **The submission deadline has passed!**\n\nThe deadline was **January 14th, 11:59 PM EST**. You have been added to the naughty list and will not be able to participate in next year's Secret Santa.`,
+        ephemeral: true
+      });
+    }
+
     const attachedFile = interaction.options.getAttachment('file');
     const title = interaction.options.getString('title')?.trim() || attachedFile.name;
 
@@ -813,7 +836,12 @@ async function handleParticipants(interaction) {
   const participants = data.participants.filter(p => p.isSubstitute !== 'only_sub');
   const substitutes = data.participants.filter(p => p.isSubstitute === 'yes' || p.isSubstitute === 'only_sub');
   
-  let participantList = participants.map(p => `${p.discordName}${p.isSubstitute === 'yes' ? ' (Sub)' : ''}`).join('\n') || '*None*';
+  // Separate participants by completion status
+  const completed = participants.filter(p => p.hasCompleted === true);
+  const notCompleted = participants.filter(p => !p.hasCompleted);
+  
+  let completedList = completed.map(p => `✅ ${p.discordName}${p.isSubstitute === 'yes' ? ' (Sub)' : ''}`).join('\n') || '*None completed*';
+  let notCompletedList = notCompleted.map(p => `❌ ${p.discordName}${p.isSubstitute === 'yes' ? ' (Sub)' : ''}`).join('\n') || '*All completed!*';
   let substituteList = substitutes.map(p => `${p.discordName}${p.isSubstitute === 'only_sub' ? ' (Only Sub)' : ''}`).join('\n') || '*None*';
   
   const embed = new EmbedBuilder()
@@ -821,7 +849,8 @@ async function handleParticipants(interaction) {
     .setImage(BORDER_IMAGE)
     .setColor(0x00AE86)
     .addFields(
-      { name: `👥 Participants (${participants.length})`, value: participantList.substring(0, 1024) || '*None*', inline: false },
+      { name: `✅ Completed (${completed.length}/${participants.length})`, value: completedList.substring(0, 1024) || '*None*', inline: false },
+      { name: `❌ Not Completed (${notCompleted.length}/${participants.length})`, value: notCompletedList.substring(0, 1024) || '*All completed!*', inline: false },
       { name: `🔄 Substitute Artists (${substitutes.length})`, value: substituteList.substring(0, 1024) || '*None*', inline: false }
     )
     .setTimestamp();

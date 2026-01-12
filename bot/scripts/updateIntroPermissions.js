@@ -16,6 +16,24 @@ const TRAVELER_ROLE_ID = '788137818135330837';
 const VERIFIED_ROLE_ID = '1460099245347700962';
 const INTRO_CHANNEL_ID = '795200689918836736';
 
+// Verified role can post in these channels
+const VERIFIED_POST_CHANNELS = [
+  '606004405128527873', // 🔔》faqs
+  '606134571456659475', // 💬》gossip-stone
+  '1135739981890068520' // 💬》mossy-stone
+];
+
+// INFO section channels (Verified can view all, but only post in faqs)
+// From server data: parent category is 606004294310690847
+const INFO_SECTION_CHANNELS = [
+  '795200689918836736', // 🔔》intro
+  '1404982928412246076', // 🔔》suggestions
+  '788106986327506994', // 🔔》rules
+  '814567241101475932', // 🔔》roster
+  '606004405128527873', // 🔔》faqs
+  '641858948802150400'  // 🔔》sheikah-slate
+];
+
 // Create Discord client
 const client = new Client({
   intents: [
@@ -95,11 +113,12 @@ async function updatePermissions() {
     console.log('-'.repeat(80));
     
     // Update Traveler role - remove View Server Members
+    // View Server Members bit: 0x1000000 (16777216)
+    const VIEW_MEMBERS_BIT = BigInt(0x1000000);
     try {
-      await travelerRole.setPermissions(
-        travelerRole.permissions.remove(PermissionFlagsBits.ViewServerMembers),
-        'Intro verification system: Traveler role should not see member list'
-      );
+      const currentPerms = travelerRole.permissions.bitfield;
+      const newPerms = currentPerms & ~VIEW_MEMBERS_BIT; // Remove the bit
+      await travelerRole.setPermissions(newPerms.toString(), 'Intro verification system: Traveler role should not see member list');
       console.log('✅ Removed "View Server Members" from Traveler role');
     } catch (error) {
       console.error(`❌ Error updating Traveler role permissions: ${error.message}`);
@@ -107,10 +126,9 @@ async function updatePermissions() {
     
     // Update Verified role - add View Server Members
     try {
-      await verifiedRole.setPermissions(
-        verifiedRole.permissions.add(PermissionFlagsBits.ViewServerMembers),
-        'Intro verification system: Verified role should see member list'
-      );
+      const currentPerms = verifiedRole.permissions.bitfield;
+      const newPerms = currentPerms | VIEW_MEMBERS_BIT; // Add the bit
+      await verifiedRole.setPermissions(newPerms.toString(), 'Intro verification system: Verified role should see member list');
       console.log('✅ Added "View Server Members" to Verified role');
     } catch (error) {
       console.error(`❌ Error updating Verified role permissions: ${error.message}`);
@@ -155,36 +173,56 @@ async function updatePermissions() {
         // Prepare new overwrites
         const newOverwrites = [];
         
+        // Permission bit values
+        const VIEW_CHANNELS_BIT = BigInt(0x400);
+        const SEND_MESSAGES_BIT = BigInt(0x800);
+        const READ_MESSAGE_HISTORY_BIT = BigInt(0x10000);
+        
+        const isVerifiedPostChannel = VERIFIED_POST_CHANNELS.includes(channelId);
+        const isInfoSectionChannel = INFO_SECTION_CHANNELS.includes(channelId);
+        
         // For Traveler role
         if (isIntroChannel) {
           // Intro channel: Allow View Channel and Send Messages
           newOverwrites.push({
             id: TRAVELER_ROLE_ID,
             type: 0, // Role
-            allow: [
-              PermissionFlagsBits.ViewChannels,
-              PermissionFlagsBits.SendMessages,
-              PermissionFlagsBits.ReadMessageHistory
-            ],
-            deny: []
+            allow: Number(VIEW_CHANNELS_BIT | SEND_MESSAGES_BIT | READ_MESSAGE_HISTORY_BIT),
+            deny: 0
           });
         } else {
           // All other channels: Deny View Channel
           newOverwrites.push({
             id: TRAVELER_ROLE_ID,
             type: 0, // Role
-            allow: [],
-            deny: [PermissionFlagsBits.ViewChannels]
+            allow: 0,
+            deny: Number(VIEW_CHANNELS_BIT)
           });
         }
         
-        // For Verified role - allow View Channel on all channels
-        // (inherits other permissions from role/server)
+        // For Verified role
+        // All channels: Allow View Channel
+        let verifiedAllowBits = VIEW_CHANNELS_BIT;
+        let verifiedDenyBits = BigInt(0);
+        
+        // For INFO section and post channels, also allow Read Message History
+        if (isInfoSectionChannel || isVerifiedPostChannel) {
+          verifiedAllowBits = verifiedAllowBits | READ_MESSAGE_HISTORY_BIT;
+        }
+        
+        // Only allow Send Messages in specific post channels
+        if (isVerifiedPostChannel) {
+          verifiedAllowBits = verifiedAllowBits | SEND_MESSAGES_BIT;
+        } else {
+          // Deny Send Messages in all other channels (including INFO section channels that aren't post channels)
+          verifiedDenyBits = SEND_MESSAGES_BIT;
+        }
+        
         newOverwrites.push({
           id: VERIFIED_ROLE_ID,
           type: 0, // Role
-          allow: [PermissionFlagsBits.ViewChannels],
-          deny: []
+          allow: Number(verifiedAllowBits),
+          deny: Number(verifiedDenyBits)
         });
         
         // Check if changes are needed
@@ -192,31 +230,73 @@ async function updatePermissions() {
         
         // Check Traveler overwrite
         if (isIntroChannel) {
-          if (!travelerOverwrite || 
-              !travelerOverwrite.allow.has(PermissionFlagsBits.ViewChannels) ||
-              !travelerOverwrite.allow.has(PermissionFlagsBits.SendMessages)) {
+          if (!travelerOverwrite) {
             needsUpdate = true;
+          } else {
+            const canView = (travelerOverwrite.allow.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+            const canSend = (travelerOverwrite.allow.bitfield & SEND_MESSAGES_BIT) !== 0n;
+            if (!canView || !canSend) {
+              needsUpdate = true;
+            }
           }
         } else {
-          if (!travelerOverwrite || 
-              !travelerOverwrite.deny.has(PermissionFlagsBits.ViewChannels)) {
+          if (!travelerOverwrite) {
             needsUpdate = true;
+          } else {
+            const deniedView = (travelerOverwrite.deny.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+            if (!deniedView) {
+              needsUpdate = true;
+            }
           }
         }
         
         // Check Verified overwrite
-        if (!verifiedOverwrite || 
-            !verifiedOverwrite.allow.has(PermissionFlagsBits.ViewChannels)) {
+        if (!verifiedOverwrite) {
           needsUpdate = true;
+        } else {
+          const canView = (verifiedOverwrite.allow.bitfield & VIEW_CHANNELS_BIT) !== 0n;
+          const canReadHistory = (verifiedOverwrite.allow.bitfield & READ_MESSAGE_HISTORY_BIT) !== 0n;
+          const canSend = (verifiedOverwrite.allow.bitfield & SEND_MESSAGES_BIT) !== 0n;
+          const deniedSend = (verifiedOverwrite.deny.bitfield & SEND_MESSAGES_BIT) !== 0n;
+          
+          // Should be able to view and read history for INFO/post channels
+          if ((isInfoSectionChannel || isVerifiedPostChannel) && (!canView || !canReadHistory)) {
+            needsUpdate = true;
+          }
+          
+          // Check send messages permission
+          if (isVerifiedPostChannel) {
+            // Should be able to send in post channels
+            if (!canSend || deniedSend) {
+              needsUpdate = true;
+            }
+          } else {
+            // Should NOT be able to send in other channels (including other INFO section channels)
+            if (canSend || !deniedSend) {
+              needsUpdate = true;
+            }
+          }
         }
         
         if (needsUpdate) {
           // Apply overwrites
           for (const overwrite of newOverwrites) {
-            await channel.permissionOverwrites.edit(overwrite.id, {
-              allow: overwrite.allow,
-              deny: overwrite.deny
-            }, { reason: 'Intro verification system: Configure role permissions' });
+            try {
+              await channel.permissionOverwrites.edit(overwrite.id, {
+                allow: overwrite.allow,
+                deny: overwrite.deny
+              }, { reason: 'Intro verification system: Configure role permissions' });
+            } catch (error) {
+              // If edit fails, try creating new overwrite
+              try {
+                await channel.permissionOverwrites.create(overwrite.id, {
+                  allow: overwrite.allow,
+                  deny: overwrite.deny
+                }, { reason: 'Intro verification system: Configure role permissions' });
+              } catch (createError) {
+                throw error; // Throw original error if both fail
+              }
+            }
           }
           
           channelsUpdated++;
@@ -250,10 +330,11 @@ async function updatePermissions() {
     const everyoneRole = guild.roles.everyone;
     try {
       // Deny View Channels for @everyone by default
-      await everyoneRole.setPermissions(
-        everyoneRole.permissions.remove(PermissionFlagsBits.ViewChannels),
-        'Intro verification system: Default deny View Channels for @everyone'
-      );
+      // View Channels bit: 0x400 (1024)
+      const VIEW_CHANNELS_BIT = BigInt(0x400);
+      const currentPerms = everyoneRole.permissions.bitfield;
+      const newPerms = currentPerms & ~VIEW_CHANNELS_BIT; // Remove the bit
+      await everyoneRole.setPermissions(newPerms.toString(), 'Intro verification system: Default deny View Channels for @everyone');
       console.log('✅ Denied "View Channels" for @everyone role (default)');
     } catch (error) {
       console.error(`❌ Error updating @everyone role: ${error.message}`);
