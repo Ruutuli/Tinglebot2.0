@@ -2391,6 +2391,7 @@ const connectToInventoriesForItems = async (context = {}) => {
     const connectionPromise = (async () => {
         const maxRetries = 3;
         let retryCount = 0;
+        let lastError = null;
         
         while (retryCount < maxRetries) {
             try {
@@ -2402,7 +2403,11 @@ const connectToInventoriesForItems = async (context = {}) => {
                         throw new Error('Missing MongoDB URI for items database');
                     }
                     
-                    logger.info('DATABASE', `Connecting to items database... (attempt ${retryCount + 1}/${maxRetries})`);
+                    // Only log on first attempt to reduce spam
+                    if (retryCount === 0) {
+                        logger.info('DATABASE', `Connecting to items database... (attempt ${retryCount + 1}/${maxRetries})`);
+                    }
+                    
                     inventoriesClient = new MongoClient(uri, {
                         serverSelectionTimeoutMS: 10000,  // 10 seconds
                         connectTimeoutMS: 10000,          // 10 seconds
@@ -2428,23 +2433,21 @@ const connectToInventoriesForItems = async (context = {}) => {
                 
             } catch (error) {
                 retryCount++;
-                console.error(`[db.js]: ❌ Error connecting to Items database (attempt ${retryCount}/${maxRetries}):`, error.message);
+                lastError = error;
                 
                 // Reset the connection variables on error
                 inventoriesClient = null;
                 inventoriesDb = null;
                 
+                // Only log error after all retries are exhausted to prevent spam
+                // Don't log during retries - handleError will log it once at the end
                 if (retryCount >= maxRetries) {
+                    // Log error once via handleError (which has deduplication)
                     handleError(error, "db.js", context);
-                    console.error("[db.js]: Error details:", {
-                        name: error.name,
-                        code: error.code,
-                        stack: error.stack
-                    });
                     throw error;
                 }
                 
-                // Wait before retrying
+                // Wait before retrying (silently, no logging)
                 await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
             }
         }

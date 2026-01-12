@@ -14,6 +14,7 @@ const logger = require('./logger');
 const MAX_CONSECUTIVE_ERRORS = 5;
 const ERROR_RESET_TIME = 5 * 60 * 1000; // 5 minutes
 const ERROR_LOG_CHANNEL_ID = process.env.CONSOLE_LOG_CHANNEL;
+const ERROR_LOG_COOLDOWN = 5000; // 5 seconds cooldown between identical errors
 
 const ERROR_RESPONSE_TYPES = {
   REPLY: 'reply',
@@ -33,6 +34,9 @@ let lastErrorTime = null;
 let isShuttingDown = false;
 let client = null;
 let trelloLogger = null;
+
+// Error deduplication cache - tracks recently logged errors to prevent spam
+const errorLogCache = new Map();
 
 // ============================================================================
 // ------------------- Error Detection Functions -------------------
@@ -84,6 +88,48 @@ function isDiscordAPIError(error) {
     error.name === pattern ||
     error.code === pattern
   );
+}
+
+// Generate a key for error deduplication
+function getErrorKey(error, source) {
+  // Use a simplified error message for database errors to group similar errors
+  if (isDatabaseError(error)) {
+    // Group all database connection errors together
+    return `db_error:${source}`;
+  }
+  // For other errors, use message + source
+  const message = error?.message || String(error);
+  return `${source}:${message.substring(0, 100)}`;
+}
+
+// Check if error should be logged (deduplication check)
+function shouldLogError(error, source) {
+  // Don't log if shutting down
+  if (isShuttingDown) {
+    return false;
+  }
+  
+  const errorKey = getErrorKey(error, source);
+  const lastLogTime = errorLogCache.get(errorKey);
+  const now = Date.now();
+  
+  // If error was logged recently (within cooldown), skip logging
+  if (lastLogTime && (now - lastLogTime) < ERROR_LOG_COOLDOWN) {
+    return false;
+  }
+  
+  // Update cache with current timestamp
+  errorLogCache.set(errorKey, now);
+  
+  // Clean up old cache entries (older than cooldown * 2)
+  setTimeout(() => {
+    const entryTime = errorLogCache.get(errorKey);
+    if (entryTime && (Date.now() - entryTime) > ERROR_LOG_COOLDOWN * 2) {
+      errorLogCache.delete(errorKey);
+    }
+  }, ERROR_LOG_COOLDOWN * 2);
+  
+  return true;
 }
 
 // ============================================================================
@@ -150,34 +196,17 @@ async function handleCriticalErrorThreshold(error, source) {
   
   console.error(`[globalErrorHandler.js]: 🚨 CRITICAL: ${consecutiveDatabaseErrors} consecutive database errors detected!`);
   console.error(`[globalErrorHandler.js]: 🚨 Shutting down bot to prevent further damage...`);
+  console.error(`[globalErrorHandler.js]: 🚨 FORCING BOT SHUTDOWN NOW... (Railway will restart automatically)`);
   
-  await sendCriticalErrorNotification(error, source);
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  // Send notification but don't wait for it - exit immediately to stop error spam
+  sendCriticalErrorNotification(error, source).catch(() => {
+    // Ignore notification errors during shutdown
+  });
   
-  console.error(`[globalErrorHandler.js]: 🚨 FORCING BOT SHUTDOWN NOW...`);
-  
-  // Multiple shutdown attempts for reliability
-  try {
-    process.exit(1);
-  } catch (exitError) {
-    console.error(`[globalErrorHandler.js]: ❌ process.exit(1) failed:`, exitError);
-  }
-  
-  setTimeout(() => {
-    try {
-      process.exit(1);
-    } catch (e) {
-      console.error(`[globalErrorHandler.js]: ❌ Second exit attempt failed:`, e);
-    }
-  }, 100);
-  
-  setTimeout(() => {
-    try {
-      process.kill(process.pid, 'SIGKILL');
-    } catch (killError) {
-      console.error(`[globalErrorHandler.js]: ❌ SIGKILL failed:`, killError);
-    }
-  }, 1000);
+  // Exit immediately - Railway will detect the exit and restart the service
+  // Setting exit code first ensures Railway sees it as a failure (which triggers restart)
+  process.exitCode = 1;
+  process.exit(1);
 }
 
 async function sendCriticalErrorNotification(error, source) {
@@ -252,23 +281,17 @@ function buildErrorContext(error, context) {
     if (context.characterName && context.characterName !== 'unknown') extraInfo += `• Character: ${context.characterName}\n`;
   }
   
-  // Database/Network errors
+  // Database/Network errors - simplified context to reduce verbosity
   if (isDatabaseError(error)) {
-    const redact = (str) => str ? str.replace(/(mongodb(?:\+srv)?:\/\/)(.*:.*)@(.*)/, '$1[REDACTED]@$3') : '';
-    extraInfo += `\n🌐 **Network Error Details:**\n`;
-    if (error?.name === "SocketError") extraInfo += `• Error Type: SocketError\n`;
-    if (error?.message?.includes('other side closed')) extraInfo += `• Issue: Connection closed by remote server\n`;
-    
-    const hostPortMatch = error.message?.match(/([\d.]+):(\d+)/);
-    if (hostPortMatch) {
-      extraInfo += `• Host: ${hostPortMatch[1]}\n`;
-      extraInfo += `• Port: ${hostPortMatch[2]}\n`;
+    extraInfo += `\n🌐 **Database Connection Error**\n`;
+    if (error?.message?.includes('inventoriesDb is null')) {
+      extraInfo += `• Issue: Database connection not established\n`;
+    } else if (error?.message?.includes('Cannot read properties of null')) {
+      extraInfo += `• Issue: Database connection lost\n`;
+    } else if (error?.message) {
+      // Only show error message, not all the URI details
+      extraInfo += `• Error: ${error.message.substring(0, 200)}\n`;
     }
-    
-    if (process.env.MONGODB_TINGLEBOT_URI) extraInfo += `• Tinglebot URI: ${redact(process.env.MONGODB_TINGLEBOT_URI)}\n`;
-    if (dbConfig.inventories) extraInfo += `• Inventories URI: ${redact(dbConfig.inventories)}\n`;
-    if (process.env.NODE_ENV) extraInfo += `• Node Env: ${process.env.NODE_ENV}\n`;
-    if (context.options) extraInfo += `• Command Options: ${JSON.stringify(context.options)}\n`;
   }
 
   // Google Sheets errors
@@ -405,11 +428,21 @@ async function handleErrorResponse(error, context) {
 }
 
 async function handleError(error, source = "Unknown Source", context = {}) {
+  // Don't log if shutting down
+  if (isShuttingDown) {
+    return;
+  }
+  
+  // Check error deduplication - skip if recently logged
+  const shouldLog = shouldLogError(error, source);
+  
   const message = error?.stack || error?.message || String(error) || 'Unknown error occurred';
   const timestamp = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
   const extraInfo = buildErrorContext(error, context);
 
-  const logBlock = `
+  // Only log full error details if not recently logged (deduplication)
+  if (shouldLog) {
+    const logBlock = `
 [ERROR] ${source} - ${timestamp}
 ${context.commandName ? `Command Used: ${context.commandName}` : ""}
 ${context.userTag ? `User: ${context.userTag}` : ""}
@@ -417,23 +450,32 @@ ${extraInfo ? `Context: ${extraInfo}` : ""}
 Error: ${message}
 `;
 
-  console.error(logBlock);
+    console.error(logBlock);
+  } else {
+    // For repeated errors, just log a brief message
+    console.error(`[ERROR] ${source} - Repeated error (suppressed for ${ERROR_LOG_COOLDOWN / 1000}s): ${error?.message || 'Unknown error'}`);
+  }
 
-  // Track database errors for shutdown threshold
+  // Always track database errors for shutdown threshold (even if not logging)
   if (isDatabaseError(error)) {
     await trackDatabaseError(error, source);
   }
   
   // Log Discord API errors but don't track them for shutdown
-  if (isDiscordAPIError(error)) {
+  if (isDiscordAPIError(error) && shouldLog) {
     console.log(`[globalErrorHandler.js]: 🤖 Discord API error detected: ${error.message}`);
   }
 
-  // Handle Trello logging
-  const trelloLink = await handleTrelloLogging(error, source, context, extraInfo, timestamp, message);
+  // Handle Trello logging (only if should log)
+  let trelloLink = null;
+  if (shouldLog) {
+    trelloLink = await handleTrelloLogging(error, source, context, extraInfo, timestamp, message);
+  }
 
-  // Discord error channel logging
-  await handleDiscordLogging(error, source, context, extraInfo, message, trelloLink);
+  // Discord error channel logging (only if should log)
+  if (shouldLog) {
+    await handleDiscordLogging(error, source, context, extraInfo, message, trelloLink);
+  }
 
   // Handle response based on type
   await handleErrorResponse(error, context);
