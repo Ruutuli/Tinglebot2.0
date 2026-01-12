@@ -1993,25 +1993,56 @@ async function handleCraftingMaterialSelection(interaction) {
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
     const inventory = await inventoryCollection.find().toArray();
 
-    // Update available items - reduce quantity of selected items
     // Count how many times each item was selected
     const selectionCounts = new Map();
     state.selectedItemsSoFar.forEach(sel => {
       const key = sel.itemId || sel.itemName;
       selectionCounts.set(key, (selectionCounts.get(key) || 0) + 1);
     });
+
+    // Rebuild availableItems from fresh inventory instead of decrementing from cached state
+    // This ensures the display accurately reflects what's in the database
+    const generalCategories = require('../../shared/models/GeneralItemCategories');
+    const isGeneralCategory = generalCategories[state.materialName];
     
-    const updatedAvailableItems = state.availableItems.map(availItem => {
-      const key = availItem._id || availItem.itemName;
-      const timesSelected = selectionCounts.get(key) || 0;
-      
-      if (timesSelected > 0) {
-        // Reduce available quantity by how many times it was selected
-        const newQty = Math.max(0, availItem.quantity - timesSelected);
-        return { ...availItem, quantity: newQty };
-      }
-      return availItem;
-    }).filter(item => item.quantity > 0); // Remove items with 0 quantity
+    let filteredInventoryItems = [];
+    if (isGeneralCategory) {
+      // Filter inventory items that match the general category
+      filteredInventoryItems = inventory.filter(item => {
+        const categoryItems = generalCategories[state.materialName];
+        return categoryItems && categoryItems.includes(item.itemName);
+      });
+    } else {
+      // Filter inventory items that match the exact material name
+      filteredInventoryItems = inventory.filter(item => 
+        item.itemName.toLowerCase() === state.materialName.toLowerCase()
+      );
+    }
+
+    // Build updated availableItems from fresh inventory, accounting for selections
+    const updatedAvailableItems = filteredInventoryItems
+      .map(invItem => {
+        const itemId = invItem._id.toString();
+        const itemName = invItem.itemName;
+        const dbQuantity = typeof invItem.quantity === 'number' 
+          ? (isNaN(invItem.quantity) ? 0 : invItem.quantity)
+          : (invItem.quantity !== null && invItem.quantity !== undefined 
+            ? (isNaN(parseInt(invItem.quantity, 10)) ? 0 : parseInt(invItem.quantity, 10))
+            : 0);
+        
+        // Count how many times this specific item was selected
+        const timesSelected = selectionCounts.get(itemId) || 0;
+        
+        // Calculate available quantity: database quantity minus selections
+        const availableQty = Math.max(0, dbQuantity - timesSelected);
+        
+        return {
+          _id: itemId,
+          itemName: itemName,
+          quantity: availableQty
+        };
+      })
+      .filter(item => item.quantity > 0); // Remove items with 0 quantity
 
     // Check if we need more selections
     const stillNeeded = state.requiredQuantity - state.selectedCount;
@@ -2044,8 +2075,6 @@ async function handleCraftingMaterialSelection(interaction) {
       // Create next selection menu
       const { createMaterialSelectionMenu } = require('../../shared/utils/inventoryUtils');
       const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-      const generalCategories = require('../../shared/models/GeneralItemCategories');
-      const isGeneralCategory = generalCategories[state.materialName];
       
       const selectMenu = createMaterialSelectionMenu(
         state.materialName, 
