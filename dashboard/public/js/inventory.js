@@ -461,8 +461,11 @@ async function loadCharacterInventory(characterName) {
     
     const response = await fetch(`/api/inventory/characters?characters=${encodeURIComponent(characterName)}`);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const { data: items } = await response.json();
+    const { data: characterData } = await response.json();
     
+    // Find the character object matching the requested characterName
+    const characterObj = characterData?.find(char => char.characterName === characterName);
+    const items = characterObj?.inventory || [];
     
     // Cache the inventory data
     loadedCharacterInventories.set(characterName, items);

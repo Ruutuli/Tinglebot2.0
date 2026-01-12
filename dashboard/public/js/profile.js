@@ -4166,8 +4166,12 @@ async function showAddVendorItemModal(character) {
       const inventoryData = await inventoryResponse.json();
       // Get items from this specific character's inventory
       if (inventoryData.data && Array.isArray(inventoryData.data)) {
+        // Find the character object matching the requested character name
+        const characterObj = inventoryData.data.find(char => char.characterName === character.name);
+        const characterInventoryItems = characterObj?.inventory || [];
+        
         // Combine items with the same name (like inventory.js does)
-        const combinedItems = inventoryData.data.reduce((acc, item) => {
+        const combinedItems = characterInventoryItems.reduce((acc, item) => {
           const existing = acc.find(i => i.itemName === item.itemName);
           if (existing) {
             existing.quantity += item.quantity || 0;
@@ -4871,7 +4875,9 @@ export async function loadVendorDashboard(characterId) {
       });
       if (invResponse.ok) {
         const invData = await invResponse.json();
-        characterInventory = invData.data || [];
+        // Find the character object matching the requested character name
+        const characterObj = invData.data?.find(char => char.characterName === character.name);
+        characterInventory = characterObj?.inventory || [];
       }
     } catch (error) {
       console.warn('[profile.js]: Could not load character inventory:', error);

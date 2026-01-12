@@ -22,6 +22,7 @@ const { v4: uuidv4 } = require('uuid');
 // ---- Import Inventory Sync Check ----
 // ============================================================================
 const { checkInventorySync } = require('../../../shared/utils/characterUtils');
+const { enforceJail } = require('../../../shared/utils/jailCheck');
 
 // ============================================================================
 // ---- Raid Loot System ----
@@ -99,6 +100,11 @@ module.exports = {
           content: `❌ Character "${characterName}" not found or doesn't belong to you. Please check the spelling and try again.`,
           ephemeral: true
         });
+      }
+
+      // ------------------- Check Jail Status -------------------
+      if (await enforceJail(interaction, character)) {
+        return;
       }
 
       // ------------------- Check Inventory Sync -------------------

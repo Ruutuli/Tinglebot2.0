@@ -31,6 +31,7 @@ const { getBoostInfo, addBoostFlavorText, buildFooterText } = require('../../emb
 const { getActiveBuffEffects } = require('../../modules/elixirModule');
 const logger = require('../../../shared/utils/logger');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, clearBoostAfterUse } = require('../jobs/boosting');
+const { checkJailStatus, sendToJail, formatJailTimeLeftDaysHours, DEFAULT_JAIL_DURATION_MS } = require('../../../shared/utils/jailCheck');
 
 // Add StealStats model
 const StealStats = require('../../../shared/models/StealStatsModel');
@@ -1458,144 +1459,8 @@ async function isCustomWeapon(itemName) {
 }
 
 // ------------------- Jail Management Functions -------------------
-// Centralized jail system to prevent race conditions and ensure consistency
-const JAIL_DURATION = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
-
-async function checkAndUpdateJailStatus(character) {
-    // If not in jail, no action needed
-    if (!character.inJail) {
-        return { isInJail: false, timeLeft: 0 };
-    }
-    
-    // Handle missing or invalid jailReleaseTime
-    if (!character.jailReleaseTime || isNaN(new Date(character.jailReleaseTime).getTime())) {
-        character.inJail = false;
-        character.jailReleaseTime = null;
-        await character.save();
-        return { isInJail: false, timeLeft: 0 };
-    }
-    
-    const now = Date.now();
-    const releaseTime = new Date(character.jailReleaseTime).getTime();
-    const timeLeft = releaseTime - now;
-    
-    // If jail time has expired, release the character
-    if (timeLeft <= 0) {
-        character.inJail = false;
-        character.jailReleaseTime = null;
-        character.jailStartTime = null;
-        character.jailDurationMs = null;
-        character.jailBoostSource = null;
-        await character.save();
-        return { isInJail: false, timeLeft: 0 };
-    }
-    
-    let jailedDate = null;
-    if (character.jailStartTime) {
-        jailedDate = new Date(character.jailStartTime);
-    } else if (character.jailDurationMs) {
-        jailedDate = new Date(releaseTime - character.jailDurationMs);
-    } else {
-        jailedDate = new Date(releaseTime - (3 * 24 * 60 * 60 * 1000));
-    }
-    
-    return { 
-        isInJail: true, 
-        timeLeft,
-        jailedDate: jailedDate
-    };
-}
-
-async function sendToJail(character) {
-    // Mod characters are immune to jail
-    if (character.isModCharacter) {
-        logger.info('MODERATION', `👑 Mod character ${character.name} is immune to jail.`);
-        return {
-            success: false,
-            message: `👑 ${character.name} is a mod character and cannot be sent to jail.`
-        };
-    }
-    
-    // Calculate release time: 3 days from now at midnight EST
-    let jailDays = 3;
-    
-    // ============================================================================
-    // ------------------- Apply Priest Boost (Merciful Sentence) -------------------
-    // ============================================================================
-    if (character.boostedBy) {
-        const { fetchCharacterByName } = require('../../../shared/database/db');
-        const boosterChar = await fetchCharacterByName(character.boostedBy);
-        
-        if (boosterChar && boosterChar.job === 'Priest') {
-            jailDays = Math.ceil(jailDays / 2); // Halve jail time (3 → 2 days, rounded up)
-            logger.info('BOOST', `✨ Priest boost - Merciful Sentence (jail time reduced to ${jailDays} days)`);
-        character.jailBoostSource = boosterChar.name || boosterChar.characterName || boosterChar._id?.toString() || 'Priest';
-    } else {
-        character.jailBoostSource = null;
-        }
-    }
-    
-    const now = new Date();
-    const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const releaseDateEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + jailDays, 0, 0, 0, 0);
-    const jailDurationMs = jailDays * 24 * 60 * 60 * 1000;
-    const jailStartEST = new Date(releaseDateEST.getTime() - jailDurationMs);
-    
-    // Store the EST midnight time directly
-    character.inJail = true;
-    character.jailReleaseTime = releaseDateEST;
-    character.jailStartTime = jailStartEST;
-    character.jailDurationMs = jailDurationMs;
-    character.failedStealAttempts = 0; // Reset counter
-    await character.save();
-    
-    return {
-        success: true,
-        releaseTime: character.jailReleaseTime,
-        timeLeft: character.jailReleaseTime.getTime() - Date.now()
-    };
-}
-
-function getJailTimeLeft(character) {
-    if (!character.inJail || !character.jailReleaseTime) {
-        return 0;
-    }
-    
-    const now = Date.now();
-    const releaseTime = new Date(character.jailReleaseTime).getTime();
-    const timeLeft = releaseTime - now;
-    
-    return timeLeft > 0 ? timeLeft : 0;
-}
-
-function formatJailTimeLeft(timeLeft) {
-    if (timeLeft <= 0) return '0 minutes';
-    
-    const hours = Math.floor(timeLeft / (60 * 60 * 1000));
-    const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
-    
-    if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-    } else {
-        return `${minutes}m`;
-    }
-}
-
-function formatJailTimeLeftDaysHours(timeLeft) {
-    if (timeLeft <= 0) return '0 minutes';
-    
-    const days = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
-    const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-    const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
-    
-    if (days > 0) {
-        return `${days}d ${hours}h`;
-    } else if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-    } else {
-        return `${minutes}m`;
-    }
-}
+// Jail functions are now imported from shared/utils/jailCheck.js
+// Only roleplay-specific jail embed function remains here
 
 // ------------------- Centralized Error Handling -------------------
 // Centralized error handling for steal operations to eliminate duplication
@@ -1729,7 +1594,7 @@ async function handleFailedAttempts(thiefCharacter, embed) {
         // Send to jail using centralized function
         const jailResult = await sendToJail(thiefCharacter);
         const dayMs = 24 * 60 * 60 * 1000;
-        const jailDurationMs = thiefCharacter.jailDurationMs || (jailResult.success ? Math.ceil(jailResult.timeLeft / dayMs) * dayMs : JAIL_DURATION);
+        const jailDurationMs = thiefCharacter.jailDurationMs || (jailResult.success ? Math.ceil(jailResult.timeLeft / dayMs) * dayMs : DEFAULT_JAIL_DURATION_MS);
         const jailDays = Math.max(1, Math.round(jailDurationMs / dayMs));
         warningMessage = `⛔ **You have been sent to jail for ${jailDays} day${jailDays !== 1 ? 's' : ''}!**`;
         attemptsText = 'Too many failed attempts!';
@@ -2427,7 +2292,7 @@ module.exports = {
                 await interaction.deferReply();
 
                 // Use centralized jail status check
-                const jailStatus = await checkAndUpdateJailStatus(character);
+                const jailStatus = await checkJailStatus(character);
                 
                 if (!jailStatus.isInJail) {
                     const notInJailEmbed = createBaseEmbed('✅ Not in Jail', '#00ff00')
@@ -3101,7 +2966,7 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
             }
             
             // Check target's jail status
-            const targetJailStatus = await checkAndUpdateJailStatus(targetCharacter);
+            const targetJailStatus = await checkJailStatus(targetCharacter);
             if (targetJailStatus.isInJail) {
                 const timeLeft = formatJailTimeLeftDaysHours(targetJailStatus.timeLeft);
                 const jailEmbed = createJailBlockEmbed(targetCharacter.name, timeLeft, targetCharacter.icon, thiefCharacter.icon);
@@ -4002,7 +3867,7 @@ async function validateThiefCharacter(characterName, userId, interaction) {
         }
 
         // Check if character is in jail
-        const jailStatus = await checkAndUpdateJailStatus(thiefCharacter);
+        const jailStatus = await checkJailStatus(thiefCharacter);
         if (jailStatus.isInJail) {
             const timeLeft = formatJailTimeLeftDaysHours(jailStatus.timeLeft);
             const embed = new EmbedBuilder()
