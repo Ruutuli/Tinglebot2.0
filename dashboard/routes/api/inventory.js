@@ -42,10 +42,17 @@ router.get('/summary', asyncHandler(async (req, res) => {
   for (const char of characters) {
     try {
       const col = await getCharacterInventoryCollection(char.name);
-      const count = await col.countDocuments();
+      const inv = await col.find().toArray();
+      
+      // Calculate totalItems (sum of all quantities) and uniqueItems (count of unique item names)
+      const totalItems = inv.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      const uniqueItemNames = new Set(inv.filter(item => (item.quantity || 0) > 0).map(item => item.itemName));
+      const uniqueItems = uniqueItemNames.size;
+      
       summary.push({
         characterName: char.name,
-        itemCount: count
+        totalItems: totalItems,
+        uniqueItems: uniqueItems
       });
     } catch (error) {
       logger.warn(`Error counting inventory for character ${char.name}: ${error.message}`, 'inventory.js');

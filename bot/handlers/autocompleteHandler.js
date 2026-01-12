@@ -1661,6 +1661,54 @@ async function handleChangeJobCharacterAutocomplete(
  }
 }
 
+// ------------------- Village Autocomplete for ChangeVillage -------------------
+async function handleChangeVillageNewVillageAutocomplete(interaction, focusedOption) {
+ try {
+  const userId = interaction.user.id;
+
+  // Fix: fallback if characterName is empty
+  const characterName = interaction.options.getString("charactername") || "";
+
+  if (!characterName) {
+   console.warn(`[handleChangeVillageNewVillageAutocomplete]: No character selected.`);
+   await interaction.respond([]);
+   return;
+  }
+
+  // Fetch the character by user and character name
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  if (!character) {
+   console.warn(
+    `[handleChangeVillageNewVillageAutocomplete]: Character not found for userId: ${userId}, characterName: ${characterName}`
+   );
+   await interaction.respond([]);
+   return;
+  }
+
+  // Get all valid villages
+  const allVillages = getAllVillages();
+
+  // Filter villages based on user typing
+  const filteredVillages = allVillages.filter((village) =>
+   village.toLowerCase().includes(focusedOption.value.toLowerCase())
+  );
+
+  // Format the filtered choices
+  const formattedChoices = filteredVillages.map((village) => ({
+   name: village,
+   value: village,
+  }));
+
+  // Respond with filtered choices (limit to 25)
+  await interaction.respond(formattedChoices.slice(0, 25));
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error(`[handleChangeVillageNewVillageAutocomplete] Error:`, error);
+  await interaction.respond([]);
+ }
+}
+
 // ============================================================================
 // COMBAT COMMANDS
 // ============================================================================
@@ -5796,6 +5844,9 @@ module.exports = {
  // ------------------- Change Job Functions -------------------
  handleChangeJobNewJobAutocomplete,
  handleChangeJobCharacterAutocomplete,
+
+ // ------------------- Change Village Functions -------------------
+ handleChangeVillageNewVillageAutocomplete,
 
  // ------------------- Combat Functions -------------------
 

@@ -36,11 +36,14 @@ const dbConfig = require('../../../shared/config/database');
 const {
  getVillageColorByName,
  getVillageEmojiByName,
+ getAllVillages,
+ isValidVillage,
 } = require("../../modules/locationsModule");
 const {
  handleCharacterBasedCommandsAutocomplete,
  handleAutocomplete,
  handleChangeJobNewJobAutocomplete,
+ handleChangeVillageNewVillageAutocomplete,
  handleCreateCharacterRaceAutocomplete,
  handleEditCharacterAutocomplete,
 } = require("../../handlers/autocompleteHandler");
@@ -583,6 +586,28 @@ module.exports = {
       .setAutocomplete(true)
     )
   )
+ // ------------------- Change Character Village Subcommand -------------------
+  .addSubcommand((subcommand) =>
+   subcommand
+    .setName("changevillage")
+    .setDescription(
+     "Change the home village of your character (Costs 500 tokens, once per month)"
+    )
+    .addStringOption((option) =>
+     option
+      .setName("charactername")
+      .setDescription("The name of your character")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+     option
+      .setName("newvillage")
+      .setDescription("The new home village for your character")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+  )
  // ------------------- Set Character Birthday Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
@@ -632,6 +657,9 @@ module.exports = {
       break;
      case "changejob":
       await handleChangeJob(interaction);
+      break;
+     case "changevillage":
+      await handleChangeVillage(interaction);
       break;
      case "setbirthday":
       await handleSetBirthday(interaction);
@@ -718,6 +746,17 @@ module.exports = {
        );
       } else if (focusedOption.name === "newjob") {
        await handleChangeJobNewJobAutocomplete(interaction, focusedOption);
+      }
+      break;
+     case "changevillage":
+      if (focusedOption.name === "charactername") {
+       await handleCharacterBasedCommandsAutocomplete(
+        interaction,
+        focusedOption,
+        "changevillage"
+       );
+      } else if (focusedOption.name === "newvillage") {
+       await handleChangeVillageNewVillageAutocomplete(interaction, focusedOption);
       }
       break;
      default:

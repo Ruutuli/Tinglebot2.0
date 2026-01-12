@@ -362,7 +362,10 @@ async function loadCharacterSummaries() {
 
       // Update with real inventory data
       const updatedSummaries = characters.map(char => {
-        const summary = summaries.find(s => s.characterName === char.characterName);
+        const summary = summaries.find(s => 
+          s.characterName && char.characterName && 
+          s.characterName.trim().toLowerCase() === char.characterName.trim().toLowerCase()
+        );
         return {
           ...char,
           totalItems: summary?.totalItems || 0,
