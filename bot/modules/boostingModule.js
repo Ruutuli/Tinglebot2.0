@@ -263,16 +263,17 @@ const BOOST_MULTIPLIERS = {
 };
 
 const SPECIAL_WEATHER_TYPES = [
- "Avalanche",
- "Blight Rain", 
- "Drought",
- "Fairy Circle",
- "Flood",
- "Flower Bloom",
- "Jubilee",
- "Meteor Shower",
- "Muggy",
- "Rock Slide",
+  "Avalanche",
+  "Blight Rain", 
+  "Drought",
+  "Fairy Circle",
+  "Flood",
+  "Flower Bloom",
+  "Jubilee",
+  "Lightning Storm",
+  "Meteor Shower",
+  "Muggy",
+  "Rock Slide",
 ];
 
 // Note: Keep this list in sync with boosting command usage expectations.

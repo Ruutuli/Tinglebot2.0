@@ -487,13 +487,30 @@ module.exports = {
            safeMsg += "You feel lucky... but be careful out there.";
          }
          
-         blightRainMessage = safeMsg;
+        blightRainMessage = safeMsg;
         logger.info('BLIGHT', `🧿 Character ${character.name} avoided blight infection`);
-       }
-     }
-   }
+      }
+    }
+  }
 
-   // Check inventory sync before proceeding
+  // ---- Lightning Storm Strike Check ----
+  let lightningStrikeMessage = null;
+  if (weather?.special?.label === 'Lightning Storm') {
+    const lightningStrikeChance = 0.015; // 1.5% chance
+    if (Math.random() < lightningStrikeChance) {
+      // Character struck by lightning - 1 heart damage
+      const { useHearts } = require('../../modules/characterStatsModule');
+      await useHearts(character._id, 1, { source: 'lightning_strike' });
+      lightningStrikeMessage = `⚡ **LIGHTNING STRIKE!** ⚡\n\nA bolt of lightning strikes ${character.name} directly! The force is overwhelming... (-1 ❤️)`;
+    }
+  }
+
+  // Combine blight rain and lightning strike messages
+  const weatherMessage = blightRainMessage || lightningStrikeMessage ? 
+    (blightRainMessage ? blightRainMessage + (lightningStrikeMessage ? '\n\n' + lightningStrikeMessage : '') : lightningStrikeMessage) : 
+    null;
+
+  // Check inventory sync before proceeding
    try {
      await checkInventorySync(character);
    } catch (error) {
@@ -722,7 +739,7 @@ module.exports = {
        currentVillage,
        true, // Blood Moon status
        originalRoll, // Pass originalRoll for blight boost display
-       blightRainMessage // Pass blight rain message
+       weatherMessage // Pass combined weather messages
       );
       return; // Stop if reroll is needed and executed
      }
@@ -765,7 +782,7 @@ module.exports = {
     bloodMoonActive,
     character.jobVoucher && !voucherCheck?.skipVoucher, // Deactivate job voucher if needed
     originalRoll, // Pass originalRoll for blight boost display
-    blightRainMessage // Pass blight rain message
+    weatherMessage // Pass combined weather messages
    );
 
    
@@ -904,8 +921,8 @@ async function handleBloodMoonRerolls(
      encounteredMonster,
      bloodMoonActive,
      true, // Deactivate job voucher for reroll encounters
-     originalRoll, // Pass originalRoll for blight boost display
-     blightRainMessage // Pass blight rain message
+    originalRoll, // Pass originalRoll for blight boost display
+    weatherMessage // Pass combined weather messages
     );
     return; // End reroll processing after looting
    }
@@ -1476,7 +1493,7 @@ async function processLootingLogic(
      null, // boostCategoryOverride
      elixirBuffInfo, // Pass elixirBuffInfo to the embed
      originalRoll, // Pass originalRoll to the embed
-     blightRainMessage, // Pass blight rain message to the embed
+     weatherMessage, // Pass combined blight rain and lightning strike messages to the embed
      entertainerBoostUnused, // Pass flag indicating boost was active but unused
     entertainerDamageReduction, // Pass amount of damage reduced by Entertainer boost
     blightAdjustedRoll, // Keep param order in sync

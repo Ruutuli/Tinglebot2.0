@@ -488,6 +488,18 @@ module.exports = {
         }
       }
 
+      // ------------------- Lightning Storm Strike Check ------------------
+      let lightningStrikeMessage = null;
+      if (weatherData?.special?.label === 'Lightning Storm') {
+        const lightningStrikeChance = 0.015; // 1.5% chance
+        if (Math.random() < lightningStrikeChance) {
+          // Character struck by lightning - 1 heart damage
+          const { useHearts } = require('../../modules/characterStatsModule');
+          await useHearts(character._id, 1, { source: 'lightning_strike' });
+          lightningStrikeMessage = `⚡ **LIGHTNING STRIKE!** ⚡\n\nA bolt of lightning strikes ${character.name} directly! The force is overwhelming... (-1 ❤️)`;
+        }
+      }
+
       // ------------------- Daily Roll Check ------------------
       // Check for job voucher and daily roll AFTER job validation
       if (character.jobVoucher || character.isModCharacter) {
@@ -1103,8 +1115,11 @@ module.exports = {
         
         const embed = await createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage);
         
-        // Include blight rain message if present
-        const content = blightRainMessage ? blightRainMessage : undefined;
+        // Include blight rain and lightning strike messages if present
+        const messages = [];
+        if (blightRainMessage) messages.push(blightRainMessage);
+        if (lightningStrikeMessage) messages.push(lightningStrikeMessage);
+        const content = messages.length > 0 ? messages.join('\n\n') : undefined;
         await safeReply({ content, embeds: [embed] });
         
         // ------------------- Clear Boost After Use ------------------

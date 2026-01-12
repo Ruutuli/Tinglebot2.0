@@ -47,6 +47,7 @@ const OVERLAY_MAPPING = {
   'Flood': 'flood',
   'Avalanche': 'avalanche',
   'Blight Rain': 'blightrain',
+  'Lightning Storm': 'thunderstorm',
   'Muggy': 'muggy',
   'Rock Slide': 'rockslide'
 };
@@ -60,6 +61,7 @@ const SPECIAL_TO_REGULAR_OVERLAY = {
   'Flood': 'heavyrain',
   'Flower Bloom': 'rainbow',
   'Jubilee': 'sunny',
+  'Lightning Storm': 'thunderstorm',
   'Meteor Shower': 'sunny',
   'Muggy': 'fog',
   'Rock Slide': 'sunny'
@@ -102,6 +104,7 @@ function generateGatherFlavorText(weatherLabel) {
     'Flood': 'Waters swell past their banks, rushing across the land in waves.',
     'Flower Bloom': 'Every field is bursting with vibrant petals under the warm breeze.',
     'Jubilee': 'The weather is calm and festive, carrying a sense of celebration.',
+    'Lightning Storm': 'Lightning crackles across the sky in a dangerous storm!',
     'Meteor Shower': 'Streaks of light race across the night sky, burning trails into the dark.',
     'Muggy': 'Thick, humid air clings to everything, dense with moisture.',
     'Rock Slide': 'Loose rock and debris tumble down the slopes with thunderous force.',
@@ -571,6 +574,10 @@ module.exports = {
           "Blight Rain": {
             title: `🌧️🧿 **${weather.special.label} Warning**`,
             description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of blight exposure\n\n<:blight_eye:805576955725611058> The blighted rain creates dangerous conditions. Consider waiting for clearer weather.`
+          },
+          "Lightning Storm": {
+            title: `⚡⛈️ **${weather.special.label} Warning**`,
+            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\nLightning crackles across the sky in a dangerous storm! The storm is unpredictable and dangerous - any character who gathers, loots, or travels in this village today risks being struck by lightning!`
           },
           "Avalanche": {
             title: `🏔️ **${weather.special.label} Warning**`,

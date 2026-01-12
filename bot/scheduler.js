@@ -188,7 +188,7 @@ function getVillageChannelId(villageName) {
 
 // ------------------- Weather Helper Functions ------------------
 
-async function postWeatherForVillage(client, village, checkExisting = false) {
+async function postWeatherForVillage(client, village, checkExisting = false, isReminder = false) {
  try {
   if (checkExisting) {
    const existingWeather = await getWeatherWithoutGeneration(village);
@@ -233,13 +233,14 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
   }
 
   logger.info('WEATHER', `Generating embed for ${village}...`);
-  const { embed, files } = await generateWeatherEmbed(village, weather);
+  const title = isReminder ? `${village}'s Daily Weather Forecast Reminder` : undefined;
+  const { embed, files } = await generateWeatherEmbed(village, weather, { title });
   
   logger.info('WEATHER', `Sending weather message to ${village} channel...`);
   await channel.send({ embeds: [embed], files });
   
-  // Mark weather as posted to Discord
-  if (weather._id) {
+  // Mark weather as posted to Discord (only for non-reminder posts to avoid overwriting)
+  if (!isReminder && weather._id) {
    await Weather.updateOne(
     { _id: weather._id },
     { $set: { postedToDiscord: true, postedAt: new Date() } }
@@ -247,7 +248,7 @@ async function postWeatherForVillage(client, village, checkExisting = false) {
    logger.info('WEATHER', `Marked weather as posted for ${village}`);
   }
   
-  logger.success('WEATHER', `Successfully posted weather for ${village}`);
+  logger.success('WEATHER', `Successfully posted weather for ${village}${isReminder ? ' (reminder)' : ''}`);
   return true;
  } catch (error) {
   logger.error('WEATHER', `Error posting weather for ${village}: ${error.message}`, error.stack);
@@ -265,16 +266,17 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
   let postedCount = 0;
   const results = [];
   const weatherDataForNotifications = [];
+  const isReminder = context === 'reminder';
 
   for (const village of villages) {
    try {
-    const posted = await postWeatherForVillage(client, village, checkExisting);
+    const posted = await postWeatherForVillage(client, village, checkExisting, isReminder);
     if (posted) {
      postedCount++;
      results.push({ village, success: true });
      
-     // Collect weather data for notifications (only for daily update, not backup checks)
-     if (context === 'update' || context === '') {
+     // Collect weather data for notifications (only for daily update, not backup checks or reminders)
+     if ((context === 'update' || context === '') && !isReminder) {
       try {
        const weather = await getWeatherWithoutGeneration(village);
        if (weather) {
@@ -339,6 +341,10 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
 
 async function postWeatherUpdate(client) {
  return await processWeatherForAllVillages(client, false, 'update');
+}
+
+async function postWeatherReminder(client) {
+ return await processWeatherForAllVillages(client, false, 'reminder');
 }
 
 async function checkAndPostWeatherIfNeeded(client) {
@@ -1640,6 +1646,12 @@ function setupWeatherScheduler(client) {
  // Backup weather check at 8:15am EST to ensure weather was posted
  createCronJob("15 8 * * *", "Backup Weather Check", () =>
   checkAndPostWeatherIfNeeded(client),
+  "America/New_York"
+ );
+ 
+ // Weather reminder at 8:00pm EST (1:00am UTC during EST, 12:00am UTC during EDT)
+ createCronJob("0 20 * * *", "Daily Weather Forecast Reminder", () =>
+  postWeatherReminder(client),
   "America/New_York"
  );
 }

@@ -222,7 +222,8 @@ module.exports = {
           Special: [
             "Fairy Circle",
             "Meteor Shower",
-            "Blight Rain"
+            "Blight Rain",
+            "Lightning Storm"
           ]
         },
         Spring: {
@@ -267,7 +268,8 @@ module.exports = {
             "Flower Bloom",
             "Jubilee",
             "Meteor Shower",
-            "Blight Rain"
+            "Blight Rain",
+            "Lightning Storm"
           ]
         },
         Summer: {
@@ -309,7 +311,8 @@ module.exports = {
             "Jubilee",
             "Meteor Shower",
             "Muggy",
-            "Blight Rain"
+            "Blight Rain",
+            "Lightning Storm"
           ]
         },
         Autumn: {
@@ -353,7 +356,8 @@ module.exports = {
             "Jubilee",
             "Meteor Shower",
             "Muggy",
-            "Blight Rain"
+            "Blight Rain",
+            "Lightning Storm"
           ]
         }
       }
@@ -485,7 +489,8 @@ module.exports = {
             "Jubilee",
             "Meteor Shower",
             "Muggy",
-            "Blight Rain"
+            "Blight Rain",
+            "Lightning Storm"
           ]
         },
         Autumn: {

@@ -62,6 +62,7 @@ const specials = [
   { label: "Flood", emoji: "🌊", conditions: { temperature: [">= 24°F"], wind: ["any"], precipitation: ["Heavy Rain"] } },
   { label: "Flower Bloom", emoji: "🌼", conditions: { temperature: [">= 72°F"], wind: ["any"], precipitation: ["any"] } },
   { label: "Jubilee", emoji: "🐟", conditions: { temperature: ["any"], wind: ["any"], precipitation: ["any"] } },
+  { label: "Lightning Storm", emoji: "⚡⛈️", conditions: { temperature: [">= 44°F"], wind: ["any"], precipitation: ["Thunderstorm"] } },
   { label: "Meteor Shower", emoji: "☄️", conditions: { temperature: ["any"], wind: ["any"], precipitation: ["sunny"] } },
   { label: "Muggy", emoji: "🐛", conditions: { temperature: [">= 72°F"], wind: ["any"], precipitation: ["rain", "fog", "cloudy"] } },
   { label: "Rock Slide", emoji: "⛏️", conditions: { temperature: ["any"], wind: ["any"], precipitation: ["any"] } }
@@ -128,6 +129,7 @@ const specialWeights = {
   "Flood": 0.2,
   "Flower Bloom": 0.2,
   "Jubilee": 0.02,
+  "Lightning Storm": 0.12,
   "Meteor Shower": 0.12,
   "Muggy": 0.3,
   "Rock Slide": 0.02
@@ -289,7 +291,8 @@ const weatherWeightModifiers = {
         "Thundersnow": 0.1
       },
       special: {
-        "Blight Rain": 0.1
+        "Blight Rain": 0.1,
+        "Lightning Storm": 1.2
       }
     },
     Spring: {
@@ -306,7 +309,8 @@ const weatherWeightModifiers = {
         "Light Rain": 1.3
       },
       special: {
-        "Muggy": 1.6
+        "Muggy": 1.6,
+        "Lightning Storm": 1.4
       }
     },
     Summer: {
@@ -323,7 +327,8 @@ const weatherWeightModifiers = {
         "Light Rain": 1.4
       },
       special: {
-        "Muggy": 2.2
+        "Muggy": 2.2,
+        "Lightning Storm": 1.8
       }
     },
     Autumn: {
@@ -336,6 +341,9 @@ const weatherWeightModifiers = {
         "Rain": 1.6,
         "Thunderstorm": 1.7,
         "Heavy Rain": 1.4
+      },
+      special: {
+        "Lightning Storm": 1.5
       }
     }
   }

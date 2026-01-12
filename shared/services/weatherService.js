@@ -91,6 +91,7 @@ const OVERLAY_MAPPING = {
   'Jubilee': 'jubilee',
   'Drought': 'drought',
   'Flood': 'flood',
+  'Lightning Storm': 'thunderstorm',
 };
 
 // Banner cache for performance
@@ -890,7 +891,7 @@ function specialWeatherFlavorText(weatherType, character = null) {
   }
   
   const weatherTextMap = {
-    "Avalanche": "There has been an avalanche and some roads are blocked! Travel to and from this village today is impossible.",
+    "Avalanche": "There has been an avalanche and some roads are blocked! Travel to and from this village today is impossible. All residents and visitors may use </specialweather:1379838613356806315> to help clear the road! You might just find something interesting while you work...",
     "Drought": "A drought has dried up the smaller vegetation surrounding the village... any plants or mushrooms rolled today are found dead and will not be gathered.",
     "Fairy Circle": "Fairy circles have popped up all over Hyrule! All residents and visitors may use </specialweather:1379838613356806315> to gather mushrooms today!",
     "Flood": "There has been a flood! Traveling to and from this village is impossible today due to the danger.",
@@ -899,7 +900,8 @@ function specialWeatherFlavorText(weatherType, character = null) {
     "Meteor Shower": "Shooting stars have been spotted streaking through the sky! Quick, all residents and visitors make a wish and use </specialweather:1379838613356806315> for a chance to find a star fragment!",
     "Muggy": "Oof! Sure is humid today! Critters are out and about more than usual. All residents and visitors may use </specialweather:1379838613356806315> to catch some critters!",
     "Rock Slide": "Oh no, there's been a rock slide! Traveling to and from this village is impossible today. All residents and visitors may use </specialweather:1379838613356806315> to help clear the road! You might just find something interesting while you work...",
-    "Blight Rain": "Blighted rain falls from the sky, staining the ground and creating sickly maroon-tinged puddles... any character who gathers, loots, or travels in this village today risks exposure to the blight. The corruption spreads through contact with the tainted rain."
+    "Blight Rain": "Blighted rain falls from the sky, staining the ground and creating sickly maroon-tinged puddles... any character who gathers, loots, or travels in this village today risks exposure to the blight. The corruption spreads through contact with the tainted rain.",
+    "Lightning Storm": "Lightning crackles across the sky in a dangerous storm! The storm is unpredictable and dangerous - any character who gathers, loots, or travels in this village today risks being struck by lightning!"
   };
 
   return weatherTextMap[weatherType] || "Unknown weather condition.";
@@ -1070,9 +1072,10 @@ async function generateWeatherEmbed(village, weather, options = {}) {
     const now = new Date();
     const hyruleanDate = convertToHyruleanDate(now);
     const dateLine = `**Hyrulean Date: ${hyruleanDate}**`;
+    const title = options.title || `${village}'s Daily Weather Forecast`;
     const embed = new EmbedBuilder()
       .setColor(VILLAGE_COLORS[village])
-      .setTitle(`${village}'s Daily Weather Forecast`)
+      .setTitle(title)
       .setDescription(`${emojiSummary}\n\n${dateLine}`)
       .setAuthor({ name: `${village} Town Hall`, iconURL: `attachment://${crestIconName}` })
       .addFields(

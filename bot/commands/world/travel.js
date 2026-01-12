@@ -988,6 +988,18 @@ async function processTravelDay(day, context) {
           await finalChannel.send({ content: safeMsg });
         }
       }
+
+      // Check destination for lightning storm after arrival
+      if (destinationWeather?.special?.label === 'Lightning Storm') {
+        const lightningStrikeChance = 0.015; // 1.5% chance
+        if (Math.random() < lightningStrikeChance) {
+          // Character struck by lightning - 1 heart damage
+          const { useHearts } = require('../../modules/characterStatsModule');
+          await useHearts(character._id, 1, { source: 'lightning_strike' });
+          const lightningMsg = `⚡ **LIGHTNING STRIKE!** ⚡\n\nA bolt of lightning strikes ${character.name} directly as they arrive in ${capitalizeFirstLetter(destination)}! The force is overwhelming... (-1 ❤️)`;
+          await finalChannel.send({ content: lightningMsg });
+        }
+      }
       
       // Check starting village for blight rain AFTER successful travel completion
       // This ensures characters are only blighted from starting village if they actually complete the journey
@@ -1120,6 +1132,18 @@ async function processTravelDay(day, context) {
             
             await finalChannel.send({ content: safeMsg });
           }
+        }
+      }
+
+      // Check starting village for lightning storm AFTER successful travel completion
+      if (startingWeather?.special?.label === 'Lightning Storm') {
+        const lightningStrikeChance = 0.015; // 1.5% chance
+        if (Math.random() < lightningStrikeChance) {
+          // Character struck by lightning - 1 heart damage
+          const { useHearts } = require('../../modules/characterStatsModule');
+          await useHearts(character._id, 1, { source: 'lightning_strike' });
+          const lightningMsg = `⚡ **LIGHTNING STRIKE!** ⚡\n\nA bolt of lightning strikes ${character.name} directly as they depart from ${capitalizeFirstLetter(startingVillage)}! The force is overwhelming... (-1 ❤️)`;
+          await finalChannel.send({ content: lightningMsg });
         }
       }
     
