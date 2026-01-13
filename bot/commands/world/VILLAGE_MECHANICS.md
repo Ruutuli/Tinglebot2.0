@@ -17,6 +17,77 @@ Villages have two key attributes:
 - **Level 2** → Max HP: 200
 - **Level 3** → Max HP: 300
 
+### Level-Based Restrictions
+
+#### Level 1 Restrictions
+**⚠️ Status: Planned Feature (Not Yet Implemented)**
+
+At Level 1, villages have the following restrictions:
+- **Cannot change jobs** - Characters in Level 1 villages cannot change their job
+- **Cannot move villages** - Characters in Level 1 villages cannot move to a different village
+
+**Rationale**: Level 1 villages represent newly established or struggling settlements. The lack of infrastructure and stability prevents job mobility and inter-village travel. Characters must help their village reach Level 2 before these options become available.
+
+**When Restrictions Lift**:
+- Restrictions are removed when the village reaches **Level 2**
+- Characters can then change jobs and move villages normally
+- If a village drops back to Level 1, restrictions are re-applied
+
+**Implementation Notes**:
+- Restrictions apply to all characters currently located in a Level 1 village (`character.currentVillage`)
+- Job change commands (e.g., `/character job`) should check village level before allowing changes
+- Village move commands (e.g., `/character move`) should check village level before allowing moves
+- Mod characters may be exempt from these restrictions (subject to design decision)
+
+### Village Statuses
+Villages have three possible statuses that determine what actions can be taken:
+
+#### `'upgradable'` (Default Status)
+- **Meaning**: Village is healthy and can accept upgrade contributions
+- **Conditions**: 
+  - Village HP is at 100% (full health)
+  - Village is not at maximum level (Level 3)
+- **What Can Be Done**:
+  - Players can contribute tokens and materials toward upgrades
+  - Village can level up when requirements are met
+- **Display**: Shows as "📈 **Upgradable**" in `/village view`
+
+#### `'damaged'`
+- **Meaning**: Village has taken damage and needs repair before upgrades can resume
+- **Conditions**:
+  - Village HP is below 100% (any amount of damage, even 1 HP)
+  - Status is set immediately when damage is applied
+- **What Can Be Done**:
+  - Players can contribute tokens to repair the village (see Section 2)
+  - HWQs can still generate and be completed
+  - Gathering bonuses remain active (if implemented)
+- **What Cannot Be Done**:
+  - Cannot contribute materials or tokens toward upgrades
+  - Cannot level up until repaired
+- **How to Clear**: Status automatically clears when HP reaches 100% (full repair)
+- **Display**: Shows as "⚠️ **Damaged - Needs repair**" in `/village view`
+
+#### `'max'`
+- **Meaning**: Village has reached maximum level (Level 3)
+- **Conditions**:
+  - Village level is 3
+  - All upgrade requirements have been met
+- **What Can Be Done**:
+  - Village can still take damage and be repaired if needed
+  - All Level 3 benefits are active (vending discounts, gathering bonuses, etc.)
+- **What Cannot Be Done**:
+  - Cannot level up further (already at maximum)
+- **Display**: Shows as "🌟 **Max level reached**" in `/village view`
+
+**Status Transitions**:
+- `'upgradable'` → `'damaged'`: Occurs immediately when any damage is applied
+- `'damaged'` → `'upgradable'`: Occurs automatically when HP reaches 100%
+- `'upgradable'` → `'max'`: Occurs when village reaches Level 3
+- `'max'` → `'damaged'`: Can occur if a Level 3 village takes damage
+- `'max'` → `'upgradable'`: Cannot occur (max level cannot be lost through damage, only through level drop at 0 HP)
+
+**Note**: If a village drops a level (reaches 0 HP), it resets to the new level's max HP but remains in `'damaged'` status until repaired. See "What Happens at 0 HP" below for details.
+
 ### What Happens When a Village Levels Up
 When an upgrade completes:
 - Village level increases immediately
@@ -39,22 +110,13 @@ When an upgrade completes:
 - Takes 12 damage
 - Becomes 188 / 200 HP
 
-### Village "Damaged" Status
-A village enters a **Damaged state** when its HP is not at full (e.g., 99/100 HP would be considered Damaged).
-- Status is set to `'damaged'` immediately when damage is applied
-- A village is damaged if it doesn't have 100% HP
-- The village must be repaired before upgrade contributions can resume
-- **Status automatically clears when HP reaches 100%** - the system detects full HP and sets status to not damaged
-- If HP is 100/100 (100%), the village is no longer in damaged status
-- HP does not restore naturally - repairs are required to restore HP
-
 ### What Happens at 0 HP
 If Village HP reaches 0:
 - Village **drops 1 level**
 - **Loses ALL upgrade progress** toward the next level
 - **All tokens and materials are cleared** (set to 0)
 - **HP is set to the new level's max HP** (not 0)
-- Village remains in **Damaged state** (already set when HP dropped below max)
+- Village status remains `'damaged'` (status was already set when HP dropped below max)
 - Lost resources are not tracked - they are simply gone
 - Repair requires re-contributing tokens to restore HP (materials would be needed for upgrades if leveling up again)
 
@@ -66,12 +128,54 @@ If Village HP reaches 0:
 
 ---
 
-## 2.5. Repair System
+## 2. Upgrade & Repair System
 
 ### Overview
+Village upgrades and repairs are separate but related systems. Upgrading requires both tokens and materials to level up, while repairs use tokens only to restore HP.
+
+### Upgrade System
+
+#### Overview
+Village upgrades are intentional, manual, and gated. Upgrading requires both tokens and materials, and only one upgrade tier can be worked on at a time.
+
+#### Level 1 → Level 2 Upgrade
+**Requirements**:
+- **10,000 tokens**
+- **250-300 regional materials** (exact mix is flexible, but all required totals must be met)
+
+**When upgrade completes**:
+- Village level becomes 2
+- Max HP increases to 200
+- HP set to 200/200 (fully restored)
+- Upgrade progress toward Level 3 is unlocked
+
+#### Level 2 → Level 3 Upgrade
+**Requirements**:
+- **50,000 tokens**
+- **500+ regional materials**
+- Dragon parts
+- Special rare items (e.g., Goddess Plumes)
+
+**When upgrade completes**:
+- Village level becomes 3
+- Max HP increases to 300
+- HP set to 300/300 (fully restored)
+- Village enters max-level state
+
+#### Upgrade Restrictions
+- Villages **cannot be upgraded while status is `'damaged'`** (see Section 1 for status details)
+- If a village drops a level:
+  - All progress toward the next level is wiped
+  - Repairs must be completed before upgrades resume (status must return to `'upgradable'`)
+- Materials and tokens are **cumulative** - they carry forward when leveling up (see Section 3 for details)
+- Contributions apply toward the current active upgrade tier requirements
+
+### Repair System
+
+#### Overview
 Villages can be repaired using tokens to restore HP. Repairs are separate from upgrades - **tokens repair HP**, while **materials contribute toward leveling up**.
 
-### Repair Mechanics
+#### Repair Mechanics
 - **Repair uses tokens only** - materials are not used for repairs
 - **Token-to-HP conversion scales with village level**:
   - **Level 1**: 50 tokens = 1 HP (5,000 tokens to fully repair 100 HP)
@@ -87,62 +191,38 @@ Villages can be repaired using tokens to restore HP. Repairs are separate from u
 - Level 2 village at 150/200 HP needs 50 HP: 50 × 100 = **5,000 tokens**
 - Level 3 village at 0/300 HP needs 300 HP: 300 × 150 = **45,000 tokens**
 
-### Repair Requirements
+#### Repair Requirements
 - Repair requirements are based on missing HP, not fixed amounts
 - The token cost scales with the village's level and current HP deficit
 - Repair contributions count toward the weekly contribution cooldown (same as upgrade contributions)
 - Repair and upgrade contributions can happen simultaneously in different villages (cooldown is per user, not per village)
 
-### Repair vs. Upgrades
+#### Repair vs. Upgrades
 - **Repairs**: Use tokens to restore HP to 100%
 - **Upgrades**: Use materials and tokens to level up the village
 - These are separate systems - materials only contribute to upgrades, tokens can be used for either repairs or upgrades
 
 ---
 
-## 2. Upgrade System
-
-### Overview
-Village upgrades are intentional, manual, and gated. Upgrading requires both tokens and materials, and only one upgrade tier can be worked on at a time.
-
-### Level 1 → Level 2 Upgrade
-**Requirements**:
-- **10,000 tokens**
-- **250-300 regional materials** (exact mix is flexible, but all required totals must be met)
-
-**When upgrade completes**:
-- Village level becomes 2
-- Max HP increases to 200
-- HP set to 200/200 (fully restored)
-- Upgrade progress toward Level 3 is unlocked
-
-### Level 2 → Level 3 Upgrade
-**Requirements**:
-- **50,000 tokens**
-- **500+ regional materials**
-- Dragon parts
-- Special rare items (e.g., Goddess Plumes)
-
-**When upgrade completes**:
-- Village level becomes 3
-- Max HP increases to 300
-- HP set to 300/300 (fully restored)
-- Village enters max-level state
-
-### Upgrade Restrictions
-- Villages **cannot be upgraded while Damaged**
-- If a village drops a level:
-  - All progress toward the next level is wiped
-  - Repairs must be completed before upgrades resume
-- Excess materials or tokens **do not carry over** between upgrade tiers
-- Contributions only apply to the current active upgrade tier (no pre-paying)
-
----
-
 ## 3. Material Requirements
 
+### How Material Requirements Work (Cumulative System)
+**Materials are cumulative across levels.** When a village levels up, contributed materials are **NOT reset to 0** - they carry forward toward the next level's requirements.
+
+**Example**:
+- **To reach Level 2**: Village needs 250 Wood total
+- **To reach Level 3**: Village needs 500 Wood total (cumulative)
+  - If village is Level 2 with 250 Wood already contributed, it only needs **250 more Wood** to reach the 500 total required for Level 3
+  - The 250 Wood from Level 2 is kept and counts toward Level 3 requirements
+
+**Important Notes**:
+- Material contributions accumulate - they don't reset when leveling up
+- Each level has a **total cumulative requirement**, not a per-level requirement
+- If a village drops a level (reaches 0 HP), all materials and tokens are reset to 0 (see Section 1)
+- Tokens work the same way - cumulative totals, not per-level
+
 ### Material Structure
-Each village uses a themed material pool. Only materials listed for that village may be contributed.
+Each village uses a themed material pool. Only materials listed for that village may be contributed. Material pools are defined in `VillageModel.js` and validated during contribution.
 
 Materials are split into:
 - **Core Materials** (bulk requirements)
@@ -151,151 +231,189 @@ Materials are split into:
 
 ### 🔥 Rudania (Eldin)
 
-#### Level 1 → Level 2
+#### To Reach Level 2 (Cumulative Total Required)
 **Core Materials**:
 - Wood ×250
-- Gold Ore ×60 (at Level 3: ×50)
-- Goron Ore ×100 (at Level 3: ×200)
+- Goron Ore ×100
+- Gold Ore ×50
 
 **Support Materials**:
+- Spicy Pepper ×75
+- Sunshroom ×80
+- Fireproof Lizard ×50
+- Volcanic Ladybug ×60
+- Eldin Roller ×40
+- Gold Dust ×30
 - Flint ×40
 - Rock Salt ×30
-- Spicy Pepper ×75 (at Level 3: ×150)
-- Sunshroom ×80 (at Level 3: ×160)
-- Fireproof Lizard ×50 (at Level 3: ×100)
-- Volcanic Ladybug ×60 (at Level 3: ×120)
-- Eldin Roller ×40 (at Level 3: ×80)
-- Gold Dust ×30 (at Level 3: ×60)
 
-**Total**: 685 materials (300+ for Level 2, additional for Level 3)
+**Total for Level 2**: 805 materials
 
-#### Level 2 → Level 3
-**Core Materials**:
-- Wood ×500 (total across levels, cumulative)
-- Gold Ore ×50
-- Goron Ore ×200
+#### To Reach Level 3 (Cumulative Total Required)
+**Core Materials** (additional needed after Level 2):
+- Wood ×250 more (500 total)
+- Goron Ore ×100 more (200 total)
+- Gold Ore ×0 more (50 total - already met at Level 2)
 
-**Support Materials**:
-- Spicy Pepper ×150 (total across levels, cumulative)
-- Sunshroom ×160 (total across levels, cumulative)
-- Fireproof Lizard ×100 (total across levels, cumulative)
-- Volcanic Ladybug ×120 (total across levels, cumulative)
-- Eldin Roller ×80 (total across levels, cumulative)
-- Gold Dust ×60 (total across levels, cumulative)
+**Support Materials** (additional needed after Level 2):
+- Spicy Pepper ×75 more (150 total)
+- Sunshroom ×80 more (160 total)
+- Fireproof Lizard ×50 more (100 total)
+- Volcanic Ladybug ×60 more (120 total)
+- Eldin Roller ×40 more (80 total)
+- Gold Dust ×30 more (60 total)
+- Flint ×0 more (40 total - already met at Level 2)
+- Rock Salt ×0 more (30 total - already met at Level 2)
 
-**Rare Materials**:
-- Dinraal's Claw ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Dinraal's Scale ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Dinraal's Fang ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Dinraal's Horn ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Goddess Plume ×3 (1 per level)
+**Rare Materials** (Level 3 only):
+- Dinraal's Claw ×1
+- Shard of Dinraal's Scale ×1
+- Shard of Dinraal's Fang ×1
+- Shard of Dinraal's Horn ×1
+- Goddess Plume ×1
 
-**Total**: 1,421 materials + 15 rare items (cumulative across all levels)
+**Total for Level 3**: 1,610 materials + 5 rare items (cumulative)
+**Additional needed after Level 2**: 805 materials + 5 rare items
 
 ---
 
 ### 💧 Inariko (Lanayru)
 
-#### Level 1 → Level 2
+#### To Reach Level 2 (Cumulative Total Required)
 **Core Materials**:
 - Wood ×250
-- Silver Ore ×200 (at Level 3: ×250)
-- Luminous Stone ×50 (at Level 3 only: ×100)
+- Silver Ore ×200
+- Luminous Stone ×50
 
 **Support Materials**:
-- Silent Princess ×40 (at Level 3: ×80)
-- Blue Nightshade ×60 (at Level 3: ×120)
-- Sneaky River Snail ×50 (at Level 3: ×100)
-- Hyrule Bass ×40 (at Level 3: ×80)
-- Lanayru Ant ×45 (at Level 3: ×90)
-- Fleet-Lotus Seeds ×55 (at Level 3: ×110)
-- Staminoka Bass ×30 (at Level 3 only)
+- Silent Princess ×40
+- Blue Nightshade ×60
+- Sneaky River Snail ×50
+- Hyrule Bass ×40
+- Lanayru Ant ×45
+- Fleet-Lotus Seeds ×55
 
-**Total**: 770 materials (300+ for Level 2, additional for Level 3)
+**Total for Level 2**: 790 materials
 
-#### Level 2 → Level 3
-**Core Materials**:
-- Wood ×500 (total across levels, cumulative)
-- Silver Ore ×250 (total across levels, cumulative)
-- Luminous Stone ×100
+#### To Reach Level 3 (Cumulative Total Required)
+**Core Materials** (additional needed after Level 2):
+- Wood ×250 more (500 total)
+- Silver Ore ×50 more (250 total)
+- Luminous Stone ×50 more (100 total)
 
-**Support Materials**:
-- Silent Princess ×80 (total across levels, cumulative)
-- Blue Nightshade ×120 (total across levels, cumulative)
-- Sneaky River Snail ×100 (total across levels, cumulative)
-- Hyrule Bass ×80 (total across levels, cumulative)
-- Lanayru Ant ×90 (total across levels, cumulative)
-- Fleet-Lotus Seeds ×110 (total across levels, cumulative)
-- Staminoka Bass ×30
+**Support Materials** (additional needed after Level 2):
+- Silent Princess ×40 more (80 total)
+- Blue Nightshade ×60 more (120 total)
+- Sneaky River Snail ×50 more (100 total)
+- Hyrule Bass ×40 more (80 total)
+- Lanayru Ant ×45 more (90 total)
+- Fleet-Lotus Seeds ×55 more (110 total)
+- Staminoka Bass ×30 (new material for Level 3)
 
-**Rare Materials**:
-- Naydra's Claw ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Naydra's Scale ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Naydra's Fang ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Naydra's Horn ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Goddess Plume ×3 (1 per level)
+**Rare Materials** (Level 3 only):
+- Naydra's Claw ×1
+- Shard of Naydra's Scale ×1
+- Shard of Naydra's Fang ×1
+- Shard of Naydra's Horn ×1
+- Goddess Plume ×1
 
-**Total**: 1,480 materials + 15 rare items (cumulative across all levels)
+**Total for Level 3**: 1,580 materials + 5 rare items (cumulative)
+**Additional needed after Level 2**: 790 materials + 5 rare items
 
 ---
 
 ### 🍃 Vhintl (Faron)
 
-#### Level 1 → Level 2
+#### To Reach Level 2 (Cumulative Total Required)
 **Core Materials**:
 - Wood ×250
-- Tree Branch ×200 (at Level 3: ×250)
-- Korok Leaf ×50 (at Level 3: ×100)
+- Tree Branch ×200
+- Korok Leaf ×50
 
 **Support Materials**:
-- Mighty Bananas ×70 (at Level 3: ×140)
-- Palm Fruit ×65 (at Level 3: ×130)
-- Hydromelon ×60 (at Level 3: ×120)
-- Voltfruit ×55 (at Level 3: ×110)
-- Faron Grasshopper ×50 (at Level 3: ×100)
-- Deku Hornet ×45 (at Level 3: ×90)
-- Spider Silk ×40 (at Level 3: ×80)
-- Kelp ×50 (at Level 3: ×100)
-- Thornberry ×60 (at Level 3: ×120)
+- Mighty Bananas ×70
+- Palm Fruit ×65
+- Hydromelon ×60
+- Voltfruit ×55
+- Faron Grasshopper ×50
+- Deku Hornet ×45
+- Spider Silk ×40
+- Kelp ×50
+- Thornberry ×60
 
-**Total**: 895 materials (320+ for Level 2, additional for Level 3)
+**Total for Level 2**: 795 materials
 
-#### Level 2 → Level 3
-**Core Materials**:
-- Wood ×500 (total across levels, cumulative)
-- Tree Branch ×250 (total across levels, cumulative)
-- Korok Leaf ×100 (total across levels, cumulative)
+#### To Reach Level 3 (Cumulative Total Required)
+**Core Materials** (additional needed after Level 2):
+- Wood ×250 more (500 total)
+- Tree Branch ×50 more (250 total)
+- Korok Leaf ×50 more (100 total)
 
-**Support Materials**:
-- Mighty Bananas ×140 (total across levels, cumulative)
-- Palm Fruit ×130 (total across levels, cumulative)
-- Hydromelon ×120 (total across levels, cumulative)
-- Voltfruit ×110 (total across levels, cumulative)
-- Faron Grasshopper ×100 (total across levels, cumulative)
-- Deku Hornet ×90 (total across levels, cumulative)
-- Spider Silk ×80 (total across levels, cumulative)
-- Kelp ×100 (total across levels, cumulative)
-- Thornberry ×120 (total across levels, cumulative)
+**Support Materials** (additional needed after Level 2):
+- Mighty Bananas ×70 more (140 total)
+- Palm Fruit ×65 more (130 total)
+- Hydromelon ×60 more (120 total)
+- Voltfruit ×55 more (110 total)
+- Faron Grasshopper ×50 more (100 total)
+- Deku Hornet ×45 more (90 total)
+- Spider Silk ×40 more (80 total)
+- Kelp ×50 more (100 total)
+- Thornberry ×60 more (120 total)
 
-**Rare Materials**:
-- Farosh's Claw ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Farosh's Scale ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Farosh's Fang ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Shard of Farosh's Horn ×3 (1 for Level 1, 2 for Level 2, 3 for Level 3)
-- Goddess Plume ×3 (1 per level)
+**Rare Materials** (Level 3 only):
+- Farosh's Claw ×1
+- Shard of Farosh's Scale ×1
+- Shard of Farosh's Fang ×1
+- Shard of Farosh's Horn ×1
+- Goddess Plume ×1
 
-**Total**: 1,690 materials + 15 rare items (cumulative across all levels)
+**Total for Level 3**: 1,590 materials + 5 rare items (cumulative)
+**Additional needed after Level 2**: 795 materials + 5 rare items
 
 ---
+
+### Material Summary by Village
+| Village | Level 2 Total | Level 3 Total | Additional for Level 3 |
+|---------|---------------|---------------|------------------------|
+| 🔥 Rudania | 805 materials | 1,610 materials + 5 rare | 805 materials + 5 rare |
+| 💧 Inariko | 790 materials | 1,580 materials + 5 rare | 790 materials + 5 rare |
+| 🍃 Vhintl | 795 materials | 1,590 materials + 5 rare | 795 materials + 5 rare |
+
+**Note**: All villages have similar total requirements (~800 for Level 2, ~1,600 for Level 3) for balance.
 
 ### Material Rules
 - Materials must be obtainable via normal gameplay
 - Support materials exist to reduce single-item grind and encourage varied gathering
-- Rare materials are only required for Level 3 upgrades
+- Rare materials are only required for Level 3 upgrades (1 of each dragon part + 1 Goddess Plume)
 - No village requires another village's exclusive material
-- Numbers are intentionally not symmetrical (villages differ in biome access)
-- Wood appears in all villages as a shared baseline
-- Dragon part requirements are kept equal for fairness
+- Requirements are balanced across villages for fairness
+- Wood appears in all villages as a shared baseline (250 for Level 2, 500 total for Level 3)
+- Dragon part requirements are identical across all villages (1 of each type + 1 Goddess Plume for Level 3)
+
+### Dragon Parts Requirements
+**Note**: Dragon parts are only required for Level 3 upgrades. They are **not** required for Level 2.
+
+**For Level 3 (Required Once)**:
+- 1 Dragon Claw (village-specific)
+- 1 Dragon Scale Shard (village-specific)
+- 1 Dragon Fang Shard (village-specific)
+- 1 Dragon Horn Shard (village-specific)
+- 1 Goddess Plume
+
+**Dragon Part Types** (per village):
+- **🔥 Rudania**: Dinraal's Claw, Shard of Dinraal's Scale, Shard of Dinraal's Fang, Shard of Dinraal's Horn
+- **💧 Inariko**: Naydra's Claw, Shard of Naydra's Scale, Shard of Naydra's Fang, Shard of Naydra's Horn
+- **🍃 Vhintl**: Farosh's Claw, Shard of Farosh's Scale, Shard of Farosh's Fang, Shard of Farosh's Horn
+- **Goddess Plume**: Required by all villages (same item for all)
+
+**Total for Level 3**: 5 rare items (1 of each dragon part type + 1 Goddess Plume)
+
+---
+
+## 4. Damage System
+
+### Overview
+Villages can lose HP from multiple sources. All damage is applied directly to current Village HP and can stack across events. When damage occurs, villages also lose resources (tokens and materials) based on the damage percentage.
 
 ### Resource Loss on Damage
 When a village takes damage (but HP does not reach 0), resources are lost based on the damage percentage.
@@ -345,32 +463,6 @@ token_loss = max(1, floor(village.currentTokens × damage_percentage))
 - The 25% cap prevents a single large damage event from wiping out all resources
 - Multiple small damage events can still accumulate to significant losses over time
 
-### Dragon Parts Requirements
-Dragon parts are required for village upgrades, with quantities scaling by level:
-- **Level 1 → Level 2**: 1 of each dragon part type + 1 Goddess Plume
-- **Level 2 → Level 3**: 2 of each dragon part type + 1 Goddess Plume (cumulative: 3 total of each part + 3 total Goddess Plumes)
-
-**Dragon Part Types** (per village):
-- **Dragon Claw**: Dinraal's Claw (Rudania) / Naydra's Claw (Inariko) / Farosh's Claw (Vhintl)
-- **Dragon Scale**: Shard of Dinraal's Scale (Rudania) / Shard of Naydra's Scale (Inariko) / Shard of Farosh's Scale (Vhintl)
-- **Dragon Fang Shard**: Shard of Dinraal's Fang (Rudania) / Shard of Naydra's Fang (Inariko) / Shard of Farosh's Fang (Vhintl)
-- **Dragon Horn Shard**: Shard of Dinraal's Horn (Rudania) / Shard of Naydra's Horn (Inariko) / Shard of Farosh's Horn (Vhintl)
-- **Goddess Plume**: Required by all villages (1 per level)
-
-**Total per Level**:
-- Level 1 → 2: 5 rare items (1 of each part type + 1 Goddess Plume)
-- Level 2 → 3: 5 rare items (2 of each part type + 1 Goddess Plume)
-- **Cumulative to Level 3**: 15 rare items total (3 of each dragon part + 3 Goddess Plumes)
-
----
-
-## 4. Damage System
-
-### Overview
-Villages can lose HP from multiple sources. All damage is applied directly to current Village HP and can stack across events.
-
----
-
 ### 🛡️ Raids & Village Damage
 
 #### Raid Applicability
@@ -403,9 +495,7 @@ Applies equally to all villages.
 - Failing a raid damages the village
 - Damage is applied directly to Village HP
 - Damage stacks across events
-- If Village HP reaches 0:
-  - The village loses one level
-  - All upgrade progress toward the next level is lost
+- If Village HP reaches 0, the village drops one level (see Section 1 for level drop consequences)
 
 #### Current Raid Damage Values (Subject to tuning)
 - Tier 5 → 8 HP
@@ -514,8 +604,8 @@ These may affect gathering, affect travel, or trigger special commands, but do n
 #### Ignored Help Wanted Quests (HWQs)
 **⚠️ Status: Planned Feature (Not Yet Implemented)**
 
-If a village generates an HWQ and no one completes it, the village will take:
-- **5 HP damage per ignored HWQ**
+If an HWQ expires without being completed:
+- The village takes **5 HP damage per ignored HWQ**
 - Damage is applied after the quest expiration check completes (at midnight EST)
 - If multiple villages have expired quests, damage is applied sequentially (one village at a time)
 - If a village has 3 expired quests, it takes 15 HP damage total (5 HP × 3 quests)
@@ -524,7 +614,10 @@ If a village generates an HWQ and no one completes it, the village will take:
 
 This represents:
 - NPC needs going unmet
-- Minor local fallout, not catastrophic failure
+- Minor but cumulative village strain
+- Damage is cumulative with other damage sources (raids, weather)
+
+**Note**: For details on HWQ generation and lifecycle, see Section 5 (Help Wanted Quests).
 
 #### RP & Mod-Run Quests
 - Story events, boss encounters, or plot raids may deal village damage
@@ -562,14 +655,21 @@ Higher village levels generate more opportunities for members to participate and
 - Any eligible member may complete an HWQ
 - HWQs do not require sign-ups — first completion resolves it
 
-### Ignored HWQs
+### Ignored HWQs & Damage
+**⚠️ Status: Planned Feature (Not Yet Implemented)**
+
 If an HWQ expires without being completed:
-- The village takes **5 HP damage per ignored HWQ**
-- Damage is applied immediately when the HWQ expires
+- The village takes **5 HP damage per ignored HWQ** (see Section 4 for damage mechanics)
+- Damage is applied after the quest expiration check completes (at midnight EST)
+- If multiple villages have expired quests, damage is applied sequentially (one village at a time)
+- If a village has 3 expired quests, it takes 15 HP damage total (5 HP × 3 quests)
+- Villages are notified when damage is applied - notification appears in the village channel
+- Quests expire at midnight EST - if a quest is completed before midnight, it is considered completed and does not cause damage
 
 This represents:
 - NPC needs going unmet
 - Minor but cumulative village strain
+- Damage is cumulative with other damage sources (raids, weather)
 
 ### Interaction with Village State
 - HWQs can still generate while a village is Damaged
@@ -587,11 +687,13 @@ Village upgrades and repairs rely on member contributions. Players may donate to
 ### What Can Be Contributed
 Members may contribute:
 - **Tokens**
-- **Approved village materials** (based on the village's material pool)
+- **Approved village materials** (based on the village's material pool - see Section 3 for material lists)
 
 Contributions can be made toward:
 - Active village upgrades
 - Repairs after village damage
+
+**Material Validation**: When contributing via `/village upgrade`, the system validates the item name against the village's approved material list using case-insensitive fuzzy matching. Materials are stored as a `Map` in the Village schema: `{ current: number, required: { 2: number, 3: number } }`.
 
 ### Contribution Tracking
 All contributions are:
@@ -640,282 +742,466 @@ All contributions are:
 
 ---
 
-## 7. Gathering System
-
-**⚠️ Status: Planned Feature (Not Yet Implemented)**
+## 7. Village Benefits by Level
 
 ### Overview
-Village level affects what you can gather, how much you get, and what type of items are favored. These bonuses apply only when gathering in that village. Gathering bonuses are **NOT disabled** when the village is in a Damaged state.
-
-### 1. Item Quantity Bonuses
-Village prosperity improves gathering efficiency.
-
-**Level 1**:
-- Normal gather: 1 item per gather
-
-**Level 2**:
-- Normal gather
-- Small chance to receive +1 extra item
-
-**Level 3**:
-- Normal gather
-- Higher chance to receive +1 extra item
-- Very small chance to receive +2 extra items
-
-Bonus items are pulled from the same gather table as the original roll.
-
-### 2. Rarity Odds by Village Level
-Village level slightly improves the odds of pulling rarer items.
-
-**Level 1**:
-- Standard rarity distribution
-
-**Level 2**:
-- Slightly increased chance for:
-  - Uncommon items
-  - Low-tier rare items
-
-**Level 3**:
-- Noticeably increased chance for:
-  - Rare items
-  - Village-specific specialty items
-
-**This does not guarantee rare drops — it only shifts probabilities.**
-
-### 3. Gathering Table Unlocks by Level
-Villages unlock new items on their gather tables as they grow.
-
-#### Level 1 — Basic Resources
-Common, everyday materials.
-
-**Examples**:
-- Wood
-- Stone
-- Flint
-- Common herbs
-- Basic fish
-- Common mushrooms
-
-#### Level 2 — Regional Specialty Items
-Items that reflect learned techniques, trade routes, or cultivation.
-
-**Examples**:
-- **Rudania**: Rock Salt, Sunshroom, Iron Ore
-- **Inariko**: Luminous Stone, Fleet-Lotus Seeds, Silent Princess
-- **Vhintl**: Korok Leaves, Palm Fruit, Mighty Bananas
-
-#### Level 3 — Thriving Village Items
-Village-exclusive or story-important materials that only appear while the village is thriving.
-
-**Examples**:
-- **Rudania**: Gold Ore, Fireproof Lizard, Rare volcanic minerals
-- **Inariko**: Zora Scales, Sneaky River Snails, Rare crystals
-- **Vhintl**: Vintage Linen, Spider Silk, Rare forest botanicals
-
-**If a village drops below Level 3, these items are removed from the gather table.**
-
-### 4. Village Identity Bonuses (Flavor + Function)
-Each village has a subtle bias toward certain item types.
-
-**🔥 Rudania**:
-- Increased chance to gather: Ores, Stones, Mineral-based items
-
-**💧 Inariko**:
-- Increased chance to gather: Crystals, Fish, Water-related materials
-
-**🍃 Vhintl**:
-- Increased chance to gather: Plants, Forest byproducts, Soft or organic materials
-
-These bonuses affect distribution, not quantity.
-
-### Clarifications
-- Gathering bonuses stack with village level
-- Gathering bonuses do not stack across villages
-- Rare village items are not relics and do not replace exploration rewards
-- Gathering bonuses remain active even when the village is in a Damaged state
+Village level determines various benefits available to players, including gathering bonuses, vending discounts, and special features. This section consolidates all level-based benefits.
 
 ---
 
-## 8. Protection & Vending System
+### Gathering System
 
-### Protection System
-- **All village levels are vulnerable to raids**
-- There is no raid immunity at any level
-- Village level affects random raid frequency, but does not prevent raids
-- Triggered raids (Blood Moons, RP events, bosses) ignore frequency scaling
+#### Current Implementation
+
+**How Gathering Works**:
+When using `/gather` in a village:
+1. **Location Requirement**: Characters must be physically located in the village (`character.currentVillage`) and use the command in the village's designated Discord channel
+2. **Quantity**: Characters receive **1 item** per gather action (regardless of village level)
+3. **Item Selection**: Items are filtered by:
+   - **Job tag** - Item must have the character's job in its `allJobsTags` array
+   - **Region tag** - Item must have the village's region property set to `true` (eldin, lanayru, or faron)
+4. **Weighted Selection**: Items are selected using weighted random selection based on:
+   - Item rarity (1-10 scale)
+   - Item weight (affects probability within rarity tier)
+5. **Item Source**: All items come from the global item database, filtered by job and region
+
+**Special Cases**:
+- **Scholar Boost**: Allows gathering from a different village's item table without being physically there (target village specified in boost request)
+- **Village-Exclusive Jobs**: Some jobs (Miner, Fisherman) tied to specific villages override character location requirements
+- **Testing Channel**: Exception allows bypass for development purposes
+
+**What Items Can Be Gathered**:
+- Available items depend on character's job (determines which items are eligible) and village location (determines which region's items are available)
+- Items must have matching job tag AND region property
+
+**Examples of items by region** (not exhaustive - depends on job):
+- **🔥 Eldin Region (Rudania)**: Eldin Ore, Goron Ore, Rock Salt, Gold Ore, Spicy Pepper, Sunshroom, Fireproof Lizard, etc.
+- **💧 Lanayru Region (Inariko)**: Luminous Stone, Sneaky River Snail, Hyrule Bass, Silent Princess, Blue Nightshade, Fleet-Lotus Seeds, etc.
+- **🍃 Faron Region (Vhintl)**: Korok Leaf, Mighty Bananas, Palm Fruit, Spider Silk, Thornberry, Faron Grasshopper, etc.
+
+**Current Limitations**:
+- **No village level bonuses** - All villages (Level 1, 2, or 3) currently provide the same gathering experience
+- **No quantity bonuses** - Always 1 item per gather, regardless of village level
+- **No rarity bonuses** - Item rarity distribution is the same regardless of village level
+- **No unlockable items** - All region-appropriate items are available from Level 1
+
+#### Planned Enhancements (Not Yet Implemented)
+
+**⚠️ Status: Planned Feature**
+
+The following bonuses will apply only when gathering in that village. Gathering bonuses are **NOT disabled** when the village is in a Damaged state.
+
+**1. Item Quantity Bonuses**:
+Village prosperity improves gathering efficiency.
+
+- **Level 1** (Current): 1 item per gather
+- **Level 2** (Planned): Base: 1 item per gather, Bonus: Small chance (e.g., 10-15%) to receive +1 extra item, **Total possible**: 1-2 items per gather
+- **Level 3** (Planned): Base: 1 item per gather, Bonus: Higher chance (e.g., 20-25%) to receive +1 extra item, Bonus: Very small chance (e.g., 5%) to receive +2 extra items, **Total possible**: 1-3 items per gather
+
+**Bonus Item Rules**:
+- Bonus items are pulled from the same gather table as the original roll
+- Same job and region filtering applies
+- Each bonus item is selected independently (weighted random)
+
+**2. Rarity Odds by Village Level**:
+Village level improves the odds of pulling rarer items by adjusting weight distribution.
+
+- **Level 1** (Current): Standard rarity distribution, Items selected based on base weight and rarity
+- **Level 2** (Planned): **Rarity weight multiplier**: +10-15% weight bonus for items of rarity 3-5, Slightly increased chance for uncommon items (rarity 3-4) and low-tier rare items (rarity 5), Common items (rarity 1-2) remain at base probability
+- **Level 3** (Planned): **Rarity weight multiplier**: +20-30% weight bonus for items of rarity 3-7, Noticeably increased chance for rare items (rarity 5-7) and village-specific specialty items (if tagged as such), Very rare items (rarity 8-10) get smaller bonus to maintain balance
+
+**Implementation Notes**:
+- This does not guarantee rare drops — it only shifts probabilities
+- Weight multipliers are applied after base item filtering
+- Exact percentages subject to balance testing
+
+**3. Gathering Table Unlocks by Level**:
+Villages unlock new items on their gather tables as they grow. Items are tagged with a `villageLevelUnlock` property.
+
+- **Level 1 — Basic Resources** (Currently Available): All items with no `villageLevelUnlock` tag or `villageLevelUnlock: 1` are available. Examples (varies by job and region): Wood, Stone, Flint, Common herbs, Basic fish, Common mushrooms, Basic ores
+- **Level 2 — Regional Specialty Items** (Planned): Items tagged with `villageLevelUnlock: 2` are added to the gather table. Examples (by region):
+  - **🔥 Rudania (Eldin)**: Rock Salt, Sunshroom, Iron Ore, Gold Dust
+  - **💧 Inariko (Lanayru)**: Luminous Stone, Fleet-Lotus Seeds, Silent Princess, Blue Nightshade
+  - **🍃 Vhintl (Faron)**: Korok Leaf, Palm Fruit, Mighty Bananas, Faron Grasshopper
+  - **Unlock Behavior**: Items unlock when village reaches Level 2, Items remain available as long as village is Level 2 or higher, If village drops to Level 1, these items are removed from gather table
+- **Level 3 — Thriving Village Items** (Planned): Items tagged with `villageLevelUnlock: 3` are added to the gather table. Examples (by region):
+  - **🔥 Rudania (Eldin)**: Gold Ore, Fireproof Lizard, Volcanic Ladybug, Eldin Roller
+  - **💧 Inariko (Lanayru)**: Staminoka Bass, Sneaky River Snail, Rare crystals
+  - **🍃 Vhintl (Faron)**: Spider Silk, Thornberry, Rare forest botanicals
+  - **Unlock Behavior**: Items unlock when village reaches Level 3, Items remain available as long as village is Level 3, If village drops below Level 3, these items are immediately removed from gather table
+
+**4. Village Identity Bonuses (Current Implementation)**:
+- **Implementation**: Gathering filters items by character's current village location and associated region (Eldin, Lanayru, or Faron). Items must have both the correct job tag AND correct region tag. The filtering code checks `item.allJobsTags` for job match and `item[regionKey]` (where regionKey is 'eldin', 'lanayru', or 'faron') for region match. Gathering bias is a natural result of this region-based filtering, not a separate probability modifier.
+- Each village's region database naturally contains items matching its theme:
+  - **🔥 Rudania (Eldin)**: Ores, Stones, Mineral-based items (e.g., "Eldin Ore", "Goron Ore", "Rock Salt")
+  - **💧 Inariko (Lanayru)**: Crystals, Fish, Water-related materials (e.g., "Luminous Stone", "Sneaky River Snail", "Hyrule Bass")
+  - **🍃 Vhintl (Faron)**: Plants, Forest byproducts, Organic materials (e.g., "Korok Leaf", "Mighty Bananas", "Spider Silk")
+
+**Summary of Current vs. Planned**:
+
+| Feature | Current (All Levels) | Planned Level 2 | Planned Level 3 |
+|---------|---------------------|-----------------|-----------------|
+| **Items per Gather** | 1 | 1-2 (chance for +1) | 1-3 (chance for +1 or +2) |
+| **Rarity Bonuses** | None | +10-15% weight for rarity 3-5 | +20-30% weight for rarity 3-7 |
+| **Unlockable Items** | All region items available | +Level 2 tagged items | +Level 3 tagged items |
+| **Item Selection** | Weighted by rarity/weight | Same + rarity bonus | Same + larger rarity bonus |
+
+**Clarifications**:
+- **Current Implementation**: All villages (Level 1-3) provide identical gathering experience
+- **Planned Bonuses**: Will stack with village level (Level 2 gets Level 2 bonuses, Level 3 gets Level 2 + Level 3 bonuses)
+- **Village-Specific**: Bonuses only apply when gathering in that specific village
+- **Cross-Village**: Gathering bonuses do not stack across villages (gathering in Rudania doesn't benefit from Inariko's level)
+- **Damaged State**: Gathering bonuses remain active even when the village is in a Damaged state
+- **Item Availability**: Unlockable items are removed from gather table if village drops below required level
+- **Not Relics**: Rare village items are not relics and do not replace exploration rewards
+
+---
+
+### Looting System
+
+#### Current Implementation
+
+**How Looting Works**:
+When using `/loot` in a village:
+1. **Location Requirement**: Characters must be physically located in the village (`character.currentVillage`) and use the command in the village's designated Discord channel
+2. **Monster Encounter**: Characters encounter monsters based on their job and village location
+3. **Item Selection**: Items are filtered by the encountered monster's loot table
+4. **Weighted Selection**: Items are selected using weighted random selection based on:
+   - Final Value (FV) roll (1-100)
+   - Item rarity (1-10 scale)
+   - Item weight (affects probability within rarity tier)
+5. **Item Source**: All items come from the monster's loot table in the global item database
+
+**Special Cases**:
+- **Job Vouchers**: Allow looting with different jobs temporarily
+- **Village-Exclusive Jobs**: Some jobs (Miner, Fisherman) tied to specific villages override character location requirements
+- **Testing Channel**: Exception allows bypass for development purposes
+
+**Current Limitations**:
+- **No village level bonuses** - All villages (Level 1, 2, or 3) currently provide the same looting experience
+- **No rarity bonuses** - Item rarity distribution is the same regardless of village level
+- **No damage reduction** - Monster damage is not reduced by village level
+- **No quantity bonuses** - Always 1 item per successful loot, regardless of village level
+
+#### Planned Enhancements (Not Yet Implemented)
+
+**⚠️ Status: Planned Feature**
+
+The following bonuses will apply only when looting in that village. Looting bonuses are **NOT disabled** when the village is in a Damaged state.
+
+**1. Rarity Odds by Village Level**:
+Village level improves the odds of pulling rarer items from monster loot tables by adjusting weight distribution.
+
+- **Level 1** (Current): Standard rarity distribution, Items selected based on Final Value (FV) roll and base weight/rarity
+- **Level 2** (Planned): **Rarity weight multiplier**: +10-15% weight bonus for items of rarity 3-5, Slightly increased chance for uncommon items (rarity 3-4) and low-tier rare items (rarity 5), Common items (rarity 1-2) remain at base probability
+- **Level 3** (Planned): **Rarity weight multiplier**: +20-30% weight bonus for items of rarity 3-7, Noticeably increased chance for rare items (rarity 5-7), Very rare items (rarity 8-10) get smaller bonus to maintain balance
+
+**Implementation Notes**:
+- This does not guarantee rare drops — it only shifts probabilities
+- Weight multipliers are applied after Final Value calculation and base item filtering
+- Bonuses apply to the `createWeightedItemList` function in `rngModule.js`
+- Exact percentages subject to balance testing
+
+**2. Damage Reduction by Village Level**:
+Higher-level villages provide better protection and support, reducing damage taken from monster encounters.
+
+- **Level 1** (Current): No damage reduction, Full monster damage applies
+- **Level 2** (Planned): **5-10% damage reduction** - Village infrastructure and community support help mitigate combat damage
+- **Level 3** (Planned): **10-15% damage reduction** - Thriving village provides maximum protection and support
+
+**Implementation Notes**:
+- Damage reduction applies after all other damage calculations (elixirs, boosts, etc.)
+- Reduction is calculated as: `finalDamage = damage × (1 - reductionPercentage)`
+- Minimum damage of 1 heart always applies (cannot reduce to 0)
+- Damage reduction does not affect KO mechanics (0 hearts still results in KO)
+
+**3. Loot Quantity Bonuses**:
+Village prosperity improves looting efficiency, providing chances for bonus items.
+
+- **Level 1** (Current): 1 item per successful loot
+- **Level 2** (Planned): Base: 1 item per loot, Bonus: Small chance (e.g., 5-10%) to receive +1 extra item, **Total possible**: 1-2 items per loot
+- **Level 3** (Planned): Base: 1 item per loot, Bonus: Higher chance (e.g., 10-15%) to receive +1 extra item, Bonus: Very small chance (e.g., 2-3%) to receive +2 extra items, **Total possible**: 1-3 items per loot
+
+**Bonus Item Rules**:
+- Bonus items are pulled from the same monster loot table as the original roll
+- Same Final Value and rarity filtering applies
+- Each bonus item is selected independently (weighted random)
+- Bonus items only apply on successful loots (victory outcomes)
+
+**4. Monster Encounter Adjustments**:
+Higher-level villages may have different monster encounter rates or access to higher-tier monsters.
+
+- **Level 1** (Current): Standard encounter rates, All tier monsters available based on job and location
+- **Level 2** (Planned): Slightly increased chance for higher-tier monsters (tiers 5-7), Reduced chance for very low-tier monsters (tiers 1-2)
+- **Level 3** (Planned): Further increased chance for high-tier monsters (tiers 6-8), Further reduced chance for low-tier monsters (tiers 1-2)
+
+**Implementation Notes**:
+- Encounter adjustments are subtle to maintain game balance
+- Changes affect encounter probability, not availability
+- All monsters remain accessible, just with adjusted frequency
+
+**Summary of Current vs. Planned**:
+
+| Feature | Current (All Levels) | Planned Level 2 | Planned Level 3 |
+|---------|---------------------|-----------------|-----------------|
+| **Items per Loot** | 1 | 1-2 (chance for +1) | 1-3 (chance for +1 or +2) |
+| **Rarity Bonuses** | None | +10-15% weight for rarity 3-5 | +20-30% weight for rarity 3-7 |
+| **Damage Reduction** | None | 5-10% reduction | 10-15% reduction |
+| **Encounter Rates** | Standard | Slight shift toward higher tiers | Further shift toward higher tiers |
+| **Item Selection** | Weighted by FV/rarity/weight | Same + rarity bonus | Same + larger rarity bonus |
+
+**Clarifications**:
+- **Current Implementation**: All villages (Level 1-3) provide identical looting experience
+- **Planned Bonuses**: Will stack with village level (Level 2 gets Level 2 bonuses, Level 3 gets Level 2 + Level 3 bonuses)
+- **Village-Specific**: Bonuses only apply when looting in that specific village
+- **Cross-Village**: Looting bonuses do not stack across villages (looting in Rudania doesn't benefit from Inariko's level)
+- **Damaged State**: Looting bonuses remain active even when the village is in a Damaged state
+- **Monster-Specific**: Bonuses apply to all monsters encountered in that village, regardless of monster tier
+- **Implementation Location**: Changes would be made in `loot.js` (village level fetch) and `rngModule.js` (weight adjustments)
+
+**Technical Implementation**:
+- Fetch village level from `Village` model using `character.currentVillage`
+- Pass village level to `createWeightedItemList()` function
+- Apply rarity weight multipliers in `adjustRarityWeights()` or similar function
+- Apply damage reduction in `getEncounterOutcome()` or damage calculation phase
+- Add quantity bonus logic in `generateLootedItem()` function
+
+---
+
+### Crafting System
+
+#### Current Implementation
+
+**How Crafting Works**:
+When using `/crafting` in a village:
+1. **Location Requirement**: Characters must be physically located in the village (`character.currentVillage`) and use the command in the village's designated Discord channel
+2. **Job Validation**: Characters must have a job with the CRAFTING perk (or ALL perks for mod characters)
+3. **Item Validation**: Items must be craftable by the character's job (Cook, Blacksmith, Craftsman, etc.)
+4. **Stamina Cost**: Each item requires stamina to craft (varies by item)
+5. **Material Cost**: Each item requires specific materials from inventory
+6. **Quantity**: Characters can craft multiple items at once (stamina and materials scale with quantity)
+
+**Special Cases**:
+- **Job Vouchers**: Allow crafting with different jobs temporarily (limited to items requiring ≤5 stamina)
+- **Village-Exclusive Jobs**: Some jobs (Miner, Fisherman) tied to specific villages require being in that village
+- **Testing Channel**: Exception allows bypass for development purposes
+
+**Current Limitations**:
+- **No village level bonuses** - All villages (Level 1, 2, or 3) currently provide the same crafting experience
+- **No stamina cost reduction** - Stamina costs are the same regardless of village level
+- **No material cost reduction** - Material costs are the same regardless of village level (except Scholar boost)
+- **No recipe unlocks** - All craftable items are available from Level 1
+
+#### Planned Enhancements (Not Yet Implemented)
+
+**⚠️ Status: Planned Feature**
+
+The following bonuses will apply only when crafting in that village. Crafting bonuses are **NOT disabled** when the village is in a Damaged state.
+
+**1. Stamina Cost Reduction by Village Level**:
+Higher-level villages have better infrastructure and community support, reducing the stamina required for crafting.
+
+- **Level 1** (Current): No stamina reduction, Full stamina cost applies
+- **Level 2** (Planned): **5-10% stamina cost reduction** - Improved workshops and tools reduce crafting effort
+- **Level 3** (Planned): **10-15% stamina cost reduction** - Advanced facilities and expert support provide maximum efficiency
+
+**Implementation Notes**:
+- Stamina reduction applies after all other stamina calculations (Priest boost, Teacher contribution, etc.)
+- Reduction is calculated as: `finalStaminaCost = staminaCost × (1 - reductionPercentage)`
+- Minimum stamina cost of 1 always applies (cannot reduce to 0)
+- Reduction stacks multiplicatively with Priest boost (applied after Priest's 20% reduction)
+
+**2. Material Cost Reduction by Village Level**:
+Thriving villages have better resource networks and supply chains, reducing material requirements.
+
+- **Level 1** (Current): No material reduction, Full material cost applies
+- **Level 2** (Planned): **5-10% material cost reduction** - Better supply chains and resource sharing reduce waste
+- **Level 3** (Planned): **10-15% material cost reduction** - Optimized production and expert knowledge minimize material needs
+
+**Implementation Notes**:
+- Material reduction applies after Scholar boost (if active) - village bonus stacks with Scholar's 30% reduction
+- Reduction is calculated per material: `finalMaterialQty = Math.ceil(materialQty × (1 - reductionPercentage))`
+- Minimum quantity of 1 always applies (cannot reduce to 0)
+- Reduction applies to all materials in the crafting recipe
+
+**3. Recipe Unlocks by Village Level**:
+Villages unlock new craftable recipes as they grow. Items are tagged with a `villageLevelUnlock` property.
+
+- **Level 1 — Basic Recipes** (Currently Available): All items with no `villageLevelUnlock` tag or `villageLevelUnlock: 1` are craftable
+- **Level 2 — Advanced Recipes** (Planned): Items tagged with `villageLevelUnlock: 2` become craftable. Examples:
+  - **🔥 Rudania (Eldin)**: Advanced metalwork, fire-resistant items, specialized tools
+  - **💧 Inariko (Lanayru)**: Water-based items, crystal work, aquatic equipment
+  - **🍃 Vhintl (Faron)**: Forest-based items, organic materials, nature-focused crafts
+  - **Unlock Behavior**: Recipes unlock when village reaches Level 2, Recipes remain available as long as village is Level 2 or higher, If village drops to Level 1, these recipes become unavailable
+- **Level 3 — Master Recipes** (Planned): Items tagged with `villageLevelUnlock: 3` become craftable. Examples:
+  - **🔥 Rudania (Eldin)**: Master-tier weapons, legendary fire items, elite equipment
+  - **💧 Inariko (Lanayru)**: Master-tier accessories, legendary water items, elite tools
+  - **🍃 Vhintl (Faron)**: Master-tier items, legendary nature items, elite crafts
+  - **Unlock Behavior**: Recipes unlock when village reaches Level 3, Recipes remain available as long as village is Level 3, If village drops below Level 3, these recipes immediately become unavailable
+
+**4. Crafting Quality/Success Bonuses**:
+Higher-level villages may provide bonuses to crafting success rates or item quality (if quality system is implemented).
+
+- **Level 1** (Current): Standard crafting success rate
+- **Level 2** (Planned): Small chance (e.g., 5%) for "high-quality" crafted items (if quality system implemented)
+- **Level 3** (Planned): Higher chance (e.g., 10%) for "high-quality" or "masterwork" crafted items
+
+**Implementation Notes**:
+- Quality bonuses would only apply if a quality/tier system is added to crafted items
+- Could affect item durability, effectiveness, or resale value
+- Subject to balance testing and system design
+
+**Summary of Current vs. Planned**:
+
+| Feature | Current (All Levels) | Planned Level 2 | Planned Level 3 |
+|---------|---------------------|-----------------|-----------------|
+| **Stamina Reduction** | None | 5-10% reduction | 10-15% reduction |
+| **Material Reduction** | None | 5-10% reduction | 10-15% reduction |
+| **Recipe Unlocks** | All basic recipes | +Level 2 recipes | +Level 3 recipes |
+| **Quality Bonuses** | None | 5% high-quality chance | 10% masterwork chance |
+| **Crafting Efficiency** | Standard | Improved | Maximum |
+
+**Clarifications**:
+- **Current Implementation**: All villages (Level 1-3) provide identical crafting experience
+- **Planned Bonuses**: Will stack with village level (Level 2 gets Level 2 bonuses, Level 3 gets Level 2 + Level 3 bonuses)
+- **Village-Specific**: Bonuses only apply when crafting in that specific village
+- **Cross-Village**: Crafting bonuses do not stack across villages (crafting in Rudania doesn't benefit from Inariko's level)
+- **Damaged State**: Crafting bonuses remain active even when the village is in a Damaged state
+- **Job-Specific**: Bonuses apply to all crafting jobs, but recipes may be job-locked
+- **Stacking with Boosts**: Village bonuses stack with existing boosts (Priest stamina reduction, Scholar material reduction, etc.)
+- **Implementation Location**: Changes would be made in `crafting.js` (village level fetch, cost calculations)
+
+**Technical Implementation**:
+- Fetch village level from `Village` model using `character.currentVillage`
+- Apply stamina reduction in stamina cost calculation (after Priest boost)
+- Apply material reduction in material cost calculation (after Scholar boost)
+- Filter craftable items by `villageLevelUnlock` property in autocomplete and validation
+- Add quality bonus logic in crafting result generation (if quality system implemented)
+
+---
 
 ### Vending System
+
+#### Overview
+Village level determines what items are available in vending machines and applies cost discounts.
+
+#### Stock Availability by Level
 - **Level 1**: Basic stock only (items tier 1-3)
 - **Level 2**: Mid-tier stock unlocked (items tier 1-6) + **-10% cost discount**
 - **Level 3**: Rare stock unlocked (items tier 1-10) + **-20% cost discount**
 
-**Item Tier System**: Items are ranked 1 (common) to 10 (super rare). Village level determines which tier items are available in vending machines.
+#### Item Tier System
+Items are ranked 1 (common) to 10 (super rare). Village level determines which tier items are available in vending machines.
 - Both stock availability AND discount apply at higher levels
+- Discount applies to all purchases in that village's vending machines
+- Stock is determined by village's current level
 
----
+#### Planned Enhancements
+**⚠️ Status: Planned Feature (Not Yet Implemented)**
 
-## 9. Village-Specific Flavor
-
-### 🔥 Rudania (Eldin)
-- **Theme**: Goron/Mountain village
-- **Rest Spot** (Planned): Hot Springs (Stamina)
-- **Current Materials**: Wood, Gold Ore, Goron Ore, Flint, Rock Salt, Spicy Pepper, Sunshroom, Fireproof Lizard, Volcanic Ladybug, Eldin Roller, Gold Dust, Dinraal's Claw, Shard of Dinraal's Scale, Shard of Dinraal's Fang, Shard of Dinraal's Horn, Goddess Plume
-- **Gathering Bias**: Ores, Stones, Mineral-based items
-
-### 💧 Inariko (Lanayru)
-- **Theme**: Zora/Water village
-- **Rest Spot** (Planned): Cleansing Pool (Hearts)
-- **Current Materials**: Wood, Silver Ore, Luminous Stone, Silent Princess, Blue Nightshade, Sneaky River Snail, Hyrule Bass, Lanayru Ant, Fleet-Lotus Seeds, Staminoka Bass, Naydra's Claw, Shard of Naydra's Scale, Shard of Naydra's Fang, Shard of Naydra's Horn, Goddess Plume
-- **Gathering Bias**: Crystals, Fish, Water-related materials
-
-### 🍃 Vhintl (Faron)
-- **Theme**: Korok/Forest village
-- **Rest Spot** (Planned): Grove (Gathering Blessing)
-- **Current Materials**: Wood, Tree Branch, Korok Leaf, Mighty Bananas, Palm Fruit, Hydromelon, Voltfruit, Faron Grasshopper, Deku Hornet, Spider Silk, Kelp, Thornberry, Farosh's Claw, Shard of Farosh's Scale, Shard of Farosh's Fang, Shard of Farosh's Horn, Goddess Plume
-- **Special Flavor**: Lost Woods mist (flavor only, not mechanical)
-- **Gathering Bias**: Plants, Forest byproducts, Soft or organic materials
-
----
-
-## 10. Planned Mechanics
-
-### 1. Village Maintenance / Top-Up System
-**Status**: Removed  
-**Priority**: N/A
-
-**Note**: This feature has been removed. The repair system handles HP restoration - there is no separate maintenance/top-up system. Repairs use tokens to restore HP to 100%.
-
----
-
-### 2. Random Events System
-**Status**: Planned  
-**Priority**: Medium
-
-**Description**: Random events that can affect villages, similar to Stardew Valley events.
-
-**Potential Events**:
-- **Positive Events**:
-  - Resource windfall (bonus materials found)
-  - Traveling merchant (special items available)
-  - Community celebration (temporary boost to contributions)
-  
-- **Negative Events**:
-  - Natural disaster (damage to village)
-  - Resource shortage (temporary increase in requirements)
-  - Bandit raid (loss of some resources)
-
-- **Neutral/Interesting Events**:
-  - Mysterious visitor (special quest or interaction)
-  - Weather anomaly (affects gathering rates)
-  - "Witch turns chickens into void chickens" style events (fun flavor)
-
-**Implementation Notes**:
-- Events should be weighted (more positive than negative)
-- Should have cooldowns to prevent spam
-- Should be flavor-rich and engaging
-- May tie into existing weather/special weather systems
-
----
-
-### 4. Rest Spots System
-**Status**: Planned  
-**Priority**: High
-
-**Description**: Special locations in each village that provide free healing/blessings, split by type.
-
-**Rest Spot Types**:
-
-1. **Stamina Rest Spot** (Rudania - Hot Springs)
-   - Heals 1-2 stamina for free
-   - Cooldown: Daily or per character
-   - Primary benefit for crafters
-
-2. **Heart Rest Spot** (Inariko - Cleansing Pool)
-   - Heals 1-2 hearts for free
-   - Cooldown: Daily or per character
-   - Primary benefit for looters
-
-3. **Gathering Blessing Spot** (Vhintl - Grove)
-   - Provides gathering blessing (teacher boost equivalent)
-   - Cooldown: Once per week
-   - Primary benefit for gatherers
-
-**Implementation Notes**:
-- Each village should have all three types, but themed differently
-- Should be accessible via `/village rest` or similar
-- Cooldowns should be per-character to prevent abuse
-- Could unlock at village level 2+
-
----
-
-### 5. Enhanced Vending System
-**Status**: Planned  
-**Priority**: Low
-
-**Description**: More vending options based on village levels.
-
-**Mechanics**:
+**Enhanced Vending System**:
 - Higher village levels unlock more items in vending machines
-- Level 2: Additional mid-tier items
-- Level 3: Additional rare items
+- Level 2: Additional mid-tier items (already implemented)
+- Level 3: Additional rare items (already implemented)
 - Stock could rotate or be expanded based on level
+- Could add special "village exclusive" items at higher levels
 
 **Implementation Notes**:
 - Should integrate with existing `VillageShopsModel`
 - May need to add level-based filtering to shop stock
-- Could add special "village exclusive" items at higher levels
 
 ---
 
-### 6. Random Damage Events
-**Status**: Under Consideration  
-**Priority**: Low
+### Rest Spots System
 
-**Description**: Random chance for villages to take damage based on activity (like landmines in Discord).
+**⚠️ Status: Planned Feature (Not Yet Implemented)**
+**Priority**: High
+
+#### Overview
+Special locations in each village that provide free heart healing. Each village has a themed rest spot accessible to all characters physically located in that village.
+
+#### Rest Spot Mechanics
+
+**Benefit**: Restores 1-2 hearts (random: 50% chance for 1, 50% chance for 2)
+
+**Cooldown**: Once per character per day (resets at 8am EST)
 
 **Mechanics**:
-- Each message/action in village has a small chance (e.g., 1/100) to trigger damage
-- More characters in a village = higher chance of damage
-- Damage amount would be small (1-5 HP)
-- Could be themed as "accidents" or "mishaps"
+- Uses `recoverHearts()` function (see `characterStatsModule.js`)
+- Hearts cannot exceed `character.maxHearts`
+- Free - no token or item cost
+- Cannot revive KO'd characters (requires Healer)
+- Cannot be used if character is at full hearts
 
-**Concerns**:
-- Could be frustrating if too frequent
-- May need balancing based on village population
-- Should probably be opt-in or very rare
+#### Village-Specific Theming
 
-**Implementation Notes**:
-- If implemented, should be toggleable per village
-- Should have safeguards to prevent excessive damage
-- Could be tied to specific activities (e.g., only during certain commands)
+Each village has a unique rest spot theme:
+- **🔥 Rudania**: Hot Springs (natural geothermal pools)
+- **💧 Inariko**: Cleansing Pool (purifying water source)
+- **🍃 Vhintl**: Sacred Grove (restorative forest clearing)
+
+#### Command Structure
+**Planned Command**: `/village rest`
+- **Requirements**:
+  - Character must be physically located in the village (`character.currentVillage`)
+  - Command must be used in village's designated Discord channel
+  - Character must meet cooldown requirements
+  - Character must not be at full hearts
+  - Character must not be KO'd
+
+#### Unlock Requirements
+- **Level 1**: Rest spots are **not available**
+- **Level 2**: Rest spots unlock
+- **Level 3**: Rest spots remain available (no additional benefits)
+
+**Note**: If a village drops below Level 2, rest spots become unavailable until village reaches Level 2 again.
+
+#### Cooldown System
+- **Per-character daily cooldown**
+  - Tracked in character database (new field: `restSpotCooldown`)
+  - Format: `Date` (timestamp of last use)
+  - Resets at 8am EST daily
+  - Separate cooldown per village (can use rest spot in different villages on same day)
+
+#### Implementation Details
+**Database Schema** (planned):
+```javascript
+// Character schema addition
+restSpotCooldown: {
+  Rudania: Date,    // Last use of Rudania rest spot
+  Inariko: Date,    // Last use of Inariko rest spot
+  Vhintl: Date      // Last use of Vhintl rest spot
+}
+```
+
+**Validation Logic**:
+- Check `character.currentVillage` matches target village
+- Check `character.restSpotCooldown[villageName]` against current time
+- Check village level >= 2
+- Check `character.currentHearts < character.maxHearts`
+- Check `character.ko === false`
+
+**Healing Logic**:
+```javascript
+// Pseudo-code for rest spot healing
+const heartsToRestore = Math.random() < 0.5 ? 1 : 2; // 50/50 chance
+const maxRestore = character.maxHearts - character.currentHearts;
+const actualRestore = Math.min(heartsToRestore, maxRestore);
+await recoverHearts(character._id, actualRestore);
+```
+
+**Benefits by Village Level**:
+- **Level 2**: Rest spots available (1-2 hearts restored)
+- **Level 3**: Same as Level 2 (no additional benefits)
 
 ---
 
-### 7. Community Stockyard / Item Share
-**Status**: Rejected  
-**Priority**: N/A
-
-**Description**: Community storage where players can deposit/withdraw items (like Neopets giving tree).
-
-**Reason for Rejection**:
-- Ruu prefers purposeful donations for village upgrades
-- Concerns about fairness (people taking more than their share)
-- Existing gift system already handles resource sharing
-
-**Alternative**:
-- Current donation system already serves this purpose
-- Players can use `/gift` command to share resources
-- Focus should be on purposeful contributions, not free-for-all storage
-
----
-
-## 11. Technical Considerations
+## 8. Technical Considerations
 
 ### Database Schema Updates
 May need to add fields for:
 - Rest spot cooldowns (per character)
 - Event history
-- Maintenance contributions
 
 ### Command Structure
 - `/village view` - View village status (existing)
@@ -930,49 +1216,5 @@ May need to add fields for:
 - Character system (for rest spot cooldowns)
 - Inventory system (for contributions)
 - Token system (for contributions)
-
----
-
-## 12. Implementation Priority
-
-### High Priority
-1. Rest Spots System
-
-### Medium Priority
-3. Random Events System
-
-### Low Priority
-5. Enhanced Vending System
-6. Random Damage Events (if implemented at all)
-
----
-
-## 13. Open Questions
-
-1. Should rest spots be village-specific or available in all villages?
-2. What should be the frequency/rarity of random events?
-3. Should random damage events be implemented, or is the risk too high?
-4. How should maintenance contributions differ from repair contributions?
-5. Should there be limits on how often players can use rest spots?
-6. Should losing to Tier 4+ monsters outside of raids cause village damage? (VOTE)
-
----
-
-## 14. Future Considerations
-
-- Village-specific quests or challenges
-- Seasonal events tied to villages
-- Village leaderboards or achievements
-- Village-specific NPCs or interactions
-- Village customization options (cosmetic)
-
----
-
-## 15. Notes from Discussion
-
-- **November 22, 2025**: Initial discussion about random events, top-up system, and community stockyard
-- **November 23, 2025**: Discussion about rest spots split by type (stamina/hearts/blessing)
-- **November 24, 2025**: Discussion about random damage events (landmine concept)
-- **January 12, 2026**: Vhintl flavor discussion (Lost Woods mist - flavor only, not mechanical)
 
 ---

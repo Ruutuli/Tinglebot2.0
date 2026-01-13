@@ -860,7 +860,7 @@ async function handleBloodMoonRerolls(
  currentVillage,
  bloodMoonActive,
  originalRoll = null,
- blightRainMessage = null
+ weatherMessage = null
 ) {
  let rerollCount = 0;
  const maxRerolls = 5; // Limit the number of rerolls to prevent infinite loops

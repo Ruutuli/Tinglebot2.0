@@ -182,6 +182,27 @@ function getVillageChannelId(villageName) {
   return TOWNHALL_CHANNELS[capitalizedVillage] || HELP_WANTED_TEST_CHANNEL;
 }
 
+// Helper function to check if current time is within a valid weather posting window
+// Valid windows: 8:00-8:15 AM EST or 8:00-8:15 PM EST
+function isWithinWeatherPostingWindow() {
+  const now = new Date();
+  const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const currentHour = estTime.getHours();
+  const currentMinute = estTime.getMinutes();
+  
+  // Morning window: 8:00-8:15 AM
+  if (currentHour === 8 && currentMinute <= 15) {
+    return { valid: true, window: 'morning' };
+  }
+  
+  // Evening window: 8:00-8:15 PM (20:00-20:15)
+  if (currentHour === 20 && currentMinute <= 15) {
+    return { valid: true, window: 'evening' };
+  }
+  
+  return { valid: false, window: null };
+}
+
 // ============================================================================
 // ------------------- Weather Functions -------------------
 // ============================================================================
@@ -348,19 +369,43 @@ async function postWeatherReminder(client) {
 }
 
 async function checkAndPostWeatherIfNeeded(client) {
- return await processWeatherForAllVillages(client, true, 'backup check');
+ try {
+  const windowCheck = isWithinWeatherPostingWindow();
+  
+  if (!windowCheck.valid) {
+   const now = new Date();
+   const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+   const currentHour = estTime.getHours();
+   const currentMinute = estTime.getMinutes();
+   logger.info('WEATHER', `Backup check skipped - outside valid posting window (${currentHour}:${String(currentMinute).padStart(2, '0')} EST). Valid windows: 8:00-8:15 AM or 8:00-8:15 PM EST`);
+   return 0;
+  }
+  
+  logger.info('WEATHER', `Backup check within valid ${windowCheck.window} posting window, proceeding...`);
+  return await processWeatherForAllVillages(client, true, 'backup check');
+ } catch (error) {
+  logger.error('WEATHER', 'Backup check failed');
+  handleError(error, "scheduler.js", {
+   commandName: 'checkAndPostWeatherIfNeeded'
+  });
+  return 0;
+ }
 }
 
 async function checkAndPostWeatherOnRestart(client) {
  try {
-  const now = new Date();
-  const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const currentHour = estTime.getHours();
+  const windowCheck = isWithinWeatherPostingWindow();
   
-  if (currentHour < 8) {
-   logger.info('WEATHER', `Too early for generation (${currentHour}:00 AM)`);
+  if (!windowCheck.valid) {
+   const now = new Date();
+   const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+   const currentHour = estTime.getHours();
+   const currentMinute = estTime.getMinutes();
+   logger.info('WEATHER', `Restart check skipped - outside valid posting window (${currentHour}:${String(currentMinute).padStart(2, '0')} EST). Valid windows: 8:00-8:15 AM or 8:00-8:15 PM EST`);
    return 0;
   }
+  
+  logger.info('WEATHER', `Restart check within valid ${windowCheck.window} posting window, proceeding...`);
   
   // Restart check with checkExisting=true will:
   // - Skip if weather exists and is already posted
@@ -1652,6 +1697,12 @@ function setupWeatherScheduler(client) {
  // Weather reminder at 8:00pm EST (1:00am UTC during EST, 12:00am UTC during EDT)
  createCronJob("0 20 * * *", "Daily Weather Forecast Reminder", () =>
   postWeatherReminder(client),
+  "America/New_York"
+ );
+ 
+ // Backup weather reminder check at 8:15pm EST to ensure reminder was posted
+ createCronJob("15 20 * * *", "Backup Weather Reminder Check", () =>
+  checkAndPostWeatherIfNeeded(client),
   "America/New_York"
  );
 }
