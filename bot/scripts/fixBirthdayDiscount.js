@@ -13,41 +13,66 @@ const mongoose = require('mongoose');
 
 // ------------------- Function: calculateExpirationDateEST -------------------
 // Calculates the expiration date for birthday discount using EST timezone
+// Returns a Date object (stored as UTC) that represents 11:59:59.999 PM EST
 function calculateExpirationDateEST(year, month, day) {
   // Create expiration date: 11:59:59.999 PM EST
-  // Method: Create a date representing end of day EST by using UTC calculation
-  // EST is UTC-5, EDT is UTC-4. We'll determine the offset dynamically.
-  // Create a date at the start of the day in EST, then add 23:59:59.999 hours
-  const startOfDayUTC = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-  // Get what this UTC time is in EST to calculate offset
-  const startESTString = startOfDayUTC.toLocaleString("en-US", { 
-    timeZone: "America/New_York", 
-    year: 'numeric',
-    month: '2-digit', 
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+  // Method: Calculate what UTC time equals 11:59:59.999 PM EST
+  // Use a test date at noon to determine DST offset
+  const testUTC = Date.UTC(year, month, day, 12, 0, 0);
+  const testDate = new Date(testUTC);
+  
+  // Get EST and UTC hours for the test date to determine offset
+  const estFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
     hour12: false
   });
-  // Parse the date parts from EST string (format: "MM/DD/YYYY, HH:MM:SS")
-  const estParts = startESTString.match(/(\d+)\/(\d+)\/(\d+),\s+(\d+):(\d+):(\d+)/);
-  if (estParts) {
-    const estMonth = parseInt(estParts[1]) - 1;
-    const estDay = parseInt(estParts[2]);
-    const estYear = parseInt(estParts[3]);
-    const estHour = parseInt(estParts[4]);
-    // Calculate offset: difference between UTC and EST for this date
-    const estDate = new Date(estYear, estMonth, estDay, estHour, 0, 0, 0);
-    const offsetMs = startOfDayUTC.getTime() - estDate.getTime();
-    // Create expiration: start of day UTC + offset + 23:59:59.999 hours
-    const expirationDate = new Date(startOfDayUTC.getTime() + offsetMs + (23 * 60 * 60 * 1000) + (59 * 60 * 1000) + (59 * 1000) + 999);
-    return expirationDate;
-  } else {
-    // Fallback: use EST offset of 5 hours (UTC-5)
-    const expirationDate = new Date(Date.UTC(year, month, day, 23 + 5, 59, 59, 999));
-    return expirationDate;
+  const utcFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    hour: 'numeric',
+    hour12: false
+  });
+  
+  const estParts = estFormatter.formatToParts(testDate);
+  const utcParts = utcFormatter.formatToParts(testDate);
+  
+  const estHour = parseInt(estParts.find(p => p.type === 'hour').value);
+  const utcHour = parseInt(utcParts.find(p => p.type === 'hour').value);
+  
+  // Calculate offset: EST is behind UTC, so offset is negative
+  // EST: UTC-5 (when estHour=12, utcHour=17, offset = -5)
+  // EDT: UTC-4 (when estHour=12, utcHour=16, offset = -4)
+  const offsetHours = estHour - utcHour;
+  
+  // 11:59:59.999 PM EST = 23:59:59.999 EST
+  // In UTC: 23 + |offsetHours| = 23 + 5 = 28 = 4 AM next day (EST)
+  // or 23 + 4 = 27 = 3 AM next day (EDT)
+  const utcHourFor11PM = 23 + Math.abs(offsetHours);
+  
+  // Handle day rollover
+  let utcDay = day;
+  let utcMonth = month;
+  let utcYear = year;
+  let finalHour = utcHourFor11PM;
+  
+  if (utcHourFor11PM >= 24) {
+    finalHour = utcHourFor11PM % 24;
+    utcDay += 1;
+    // Handle month/year rollover
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    if (utcDay > daysInMonth) {
+      utcDay = 1;
+      utcMonth += 1;
+      if (utcMonth >= 12) {
+        utcMonth = 0;
+        utcYear += 1;
+      }
+    }
   }
+  
+  // Create UTC date for 11:59:59.999 PM EST
+  const expirationDate = new Date(Date.UTC(utcYear, utcMonth, utcDay, finalHour, 59, 59, 999));
+  return expirationDate;
 }
 
 // ------------------- Function: fixUserBirthdayDiscount -------------------
