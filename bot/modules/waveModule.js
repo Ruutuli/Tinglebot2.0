@@ -223,27 +223,29 @@ async function createWaveThread(message, wave) {
   try {
     const { capitalizeVillageName } = require('../../shared/utils/stringUtils');
     const villageName = capitalizeVillageName(wave.village);
-    const emoji = '🌊';
-    const threadName = `${emoji} ${villageName} - Wave of ${wave.analytics.totalMonsters}`;
+    const threadName = `${villageName} - ${wave.waveId}`;
 
     console.log(`[waveModule.js]: 🧵 Creating thread for wave ${wave.waveId}`);
     console.log(`[waveModule.js]: 🧵 Message ID: ${message.id}, Message type: ${message.constructor.name}`);
     console.log(`[waveModule.js]: 🧵 Message has startThread method: ${typeof message.startThread === 'function'}`);
     console.log(`[waveModule.js]: 🧵 Channel ID: ${message.channel?.id}, Channel type: ${message.channel?.type}`);
     
-    // Ensure message is a proper Message object with startThread method
-    if (!message.startThread || typeof message.startThread !== 'function') {
-      // Try to fetch the message if it doesn't have startThread
-      console.log(`[waveModule.js]: ⚠️ Message object doesn't have startThread method, attempting to fetch message...`);
+    // Ensure message is a proper Message object with startThread method and channel context
+    if (!message.startThread || typeof message.startThread !== 'function' || !message.channel) {
+      // Try to fetch the message if it doesn't have startThread or channel context
+      console.log(`[waveModule.js]: ⚠️ Message object needs to be fetched for proper thread creation...`);
       try {
-        const channel = message.channel;
+        const channel = message.channel || (message.guild?.channels?.cache?.get(message.channelId));
         if (channel && channel.messages) {
+          // Small delay to ensure Discord has fully processed the message
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
           const fetchedMessage = await channel.messages.fetch(message.id);
-          if (fetchedMessage && fetchedMessage.startThread) {
-            console.log(`[waveModule.js]: ✅ Successfully fetched message with startThread method`);
+          if (fetchedMessage && fetchedMessage.startThread && fetchedMessage.channel) {
+            console.log(`[waveModule.js]: ✅ Successfully fetched message with startThread method and channel context`);
             message = fetchedMessage;
           } else {
-            throw new Error('Fetched message still does not have startThread method');
+            throw new Error('Fetched message still does not have required properties for thread creation');
           }
         } else {
           throw new Error('Cannot fetch message - channel or messages not available');
@@ -254,8 +256,16 @@ async function createWaveThread(message, wave) {
       }
     }
 
+    // Ensure message has channel context before creating thread
+    if (!message.channel) {
+      throw new Error('Message does not have channel context required for thread creation');
+    }
+
     // Create the thread from the message
     // Note: The original message (with embed) automatically becomes the first message in the thread
+    // Adding a small delay to ensure Discord has fully processed the message before thread creation
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
     console.log(`[waveModule.js]: 🧵 Starting thread creation with name: "${threadName}"`);
     const thread = await message.startThread({
       name: threadName,

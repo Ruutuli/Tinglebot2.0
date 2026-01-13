@@ -3239,13 +3239,21 @@ async function handleWaveStart(interaction) {
     });
     console.log(`[mod.js]: ✅ Wave announcement message sent - Message ID: ${waveMessage.id}`);
 
-    // Fetch the message to ensure it's fully resolved (sometimes needed for thread creation)
+    // Fetch the message to ensure it's fully resolved with proper channel context
+    // This is critical for thread attachment to work properly
     let messageForThread = waveMessage;
     try {
+      // Small delay to ensure Discord has fully processed the message
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const fetchedMessage = await targetChannel.messages.fetch(waveMessage.id);
-      if (fetchedMessage) {
+      if (fetchedMessage && fetchedMessage.channel) {
+        // Ensure the message has the channel context for thread creation
         messageForThread = fetchedMessage;
         console.log(`[mod.js]: ✅ Fetched wave message for thread creation`);
+        console.log(`[mod.js]: 📝 Message channel ID: ${messageForThread.channel?.id}, Channel type: ${messageForThread.channel?.type}`);
+      } else {
+        console.warn(`[mod.js]: ⚠️ Fetched message missing channel context, using original`);
       }
     } catch (fetchError) {
       console.warn(`[mod.js]: ⚠️ Could not fetch message (using original): ${fetchError.message}`);

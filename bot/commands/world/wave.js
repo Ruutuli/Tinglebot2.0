@@ -780,11 +780,10 @@ async function handleWaveVictory(interaction, waveData) {
       console.log(`[wave.js]: ⚠️ Failed characters:`, failedCharacters.map(fc => `${fc.name} (${fc.monster}): ${fc.reason}`));
     }
     
-    // Create participant list (all participants who got loot)
-    const participantList = Array.from(participantsWhoGotLoot).map(name => {
-      const participant = waveData.participants.find(p => p.name === name);
-      return `• **${name}** (${participant?.damage || 0} hearts)`;
-    }).join('\n');
+    // Create participant list (all participants, showing damage even if they didn't get loot)
+    const participantList = waveData.participants
+      .map(participant => `• **${participant.name}** (${participant.damage || 0} hearts)`)
+      .join('\n');
     
     // Create kills list showing who defeated which monsters
     const killsList = Array.from(killsByParticipant.entries())
@@ -881,7 +880,7 @@ async function handleWaveVictory(interaction, waveData) {
       .addFields(
         {
           name: '__Wave Summary__',
-          value: `🎯 **Total Damage:** ${waveData.analytics.totalDamage} hearts\n👥 **Participants with Loot:** ${participantsWhoGotLoot.size}\n🎁 **Items Distributed:** ${lootResults.length}\n⏱️ **Duration:** ${Math.floor((waveData.analytics.duration || 0) / 1000 / 60)}m`,
+          value: `🎯 **Total Damage:** ${waveData.analytics.totalDamage} hearts\n👥 **Participants:** ${waveData.participants.length}\n🎁 **Items Distributed:** ${lootResults.length}\n⏱️ **Duration:** ${Math.floor((waveData.analytics.duration || 0) / 1000 / 60)}m`,
           inline: false
         },
         {
