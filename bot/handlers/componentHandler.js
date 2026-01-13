@@ -1061,14 +1061,43 @@ async function handleRuuGameRoll(interaction) {
           return;
         }
         
-        // Double-check that the player still exists in the updated session
-        const currentPlayer = session.players.find(p => p.discordId === userId);
+        // Double-check that the player exists in the updated session
+        // If they were auto-joined before reload, they need to be added again
+        let currentPlayer = session.players.find(p => p.discordId === userId);
         if (!currentPlayer) {
-          await interaction.editReply({
-            content: '❌ You are no longer in this game.',
-            components: []
-          });
-          return;
+          // Player was auto-joined before reload but not saved - add them now
+          if (session.players.length >= GAME_CONFIG.MAX_PLAYERS) {
+            await interaction.editReply({
+              content: '❌ This game is full!',
+              components: []
+            });
+            return;
+          }
+          
+          // Add player to the session
+          currentPlayer = {
+            discordId: userId,
+            username: interaction.user.username,
+            lastRoll: null,
+            lastRollTime: null
+          };
+          session.players.push(currentPlayer);
+          
+          // Save the player addition to the database
+          try {
+            await RuuGame.findOneAndUpdate(
+              { _id: session._id },
+              { $set: { players: session.players } },
+              { new: true, runValidators: true }
+            );
+          } catch (saveError) {
+            console.error('[RuuGame Component] Failed to save player join:', saveError);
+            await interaction.editReply({
+              content: '❌ Failed to join the game. Please try again.',
+              components: []
+            });
+            return;
+          }
         }
         
         // Update player reference to use the latest session's player data
