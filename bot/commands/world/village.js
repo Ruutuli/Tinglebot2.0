@@ -782,7 +782,7 @@ module.exports = {
             // ------------------- Subcommand: Progress -------------------
             if (subcommand === 'progress') {
                 const embed = await generateProgressEmbed(village);
-                return interaction.reply({ embeds: [embed], ephemeral: true });
+                return interaction.reply({ embeds: [embed] });
             }
 
         } catch (error) {
