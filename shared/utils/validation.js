@@ -188,6 +188,16 @@ async function canChangeJob(character, newJob) {
         return { valid: false, message: errorEmbed };
     }
 
+    // Check if character is in their home village
+    if (!character.currentVillage || character.currentVillage.toLowerCase() !== character.homeVillage.toLowerCase()) {
+        const capitalizedHomeVillage = capitalizeFirstLetter(character.homeVillage);
+        const capitalizedCurrentVillage = character.currentVillage ? capitalizeFirstLetter(character.currentVillage) : 'Unknown';
+        return {
+            valid: false,
+            message: `❌ **${character.name}** must be in their home village (**${capitalizedHomeVillage}**) to change jobs. Currently in: **${capitalizedCurrentVillage}**.`
+        };
+    }
+
     const jobVillage = isVillageExclusiveJob(newJob);
 
     if (!jobVillage) {
