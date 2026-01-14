@@ -1838,6 +1838,11 @@ function showLevelsSection() {
     if (window.levelsModule && typeof window.levelsModule.init === 'function') {
       window.levelsModule.init();
     }
+    
+    // Reinitialize blupee system when showing levels section
+    if (window.reinitializeBlupee) {
+      window.reinitializeBlupee();
+    }
   } else {
     console.error('❌ Levels section not found');
   }

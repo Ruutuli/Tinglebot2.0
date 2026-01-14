@@ -378,6 +378,14 @@ async function handleBlupeeClick(event) {
       createSparkBurst(event.clientX, event.clientY);
       
       console.log(`[blupee.js]: ✨ Reward claimed! +${data.tokensAwarded} tokens (Daily: ${data.dailyCount}/${data.dailyLimit}, Total: ${data.newTokenBalance})`);
+      
+      // Refresh blupee leaderboard if user is currently viewing it
+      if (window.levelsModule && window.levelsModule.currentTab === 'blupee-leaderboard') {
+        console.log('[blupee.js]: Refreshing blupee leaderboard after successful claim');
+        window.levelsModule.loadBlupeeLeaderboard().catch(error => {
+          console.error('[blupee.js]: Error refreshing blupee leaderboard:', error);
+        });
+      }
     } else {
       // Show error (cooldown, daily limit, or other issue)
       if (response.status === 429) {
