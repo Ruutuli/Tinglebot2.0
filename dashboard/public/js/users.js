@@ -11,6 +11,7 @@ class UserLookup {
     this.searchQuery = '';
     this.searchTimeout = null;
     this.isLoading = false;
+    this.viewDetailsHandler = null; // Store handler reference
     
     if (autoLoad) {
       this.init();
@@ -93,21 +94,44 @@ class UserLookup {
     }
 
     // Event delegation for user view buttons
-    const handleViewDetails = (e) => {
+    // Remove existing listener if it exists
+    if (this.viewDetailsHandler) {
+      document.removeEventListener('click', this.viewDetailsHandler);
+    }
+    
+    // Create new handler with arrow function to preserve 'this' context
+    this.viewDetailsHandler = (e) => {
+      // Check if click is on the view button or its children
       const viewBtn = e.target.closest('.user-view-btn');
+      // Also allow clicking on the entire user card (but not on action buttons)
+      const userCard = e.target.closest('.user-card');
+      const clickedOnActions = e.target.closest('.user-actions');
+      
       if (viewBtn) {
         e.preventDefault();
         e.stopPropagation();
         const userId = viewBtn.getAttribute('data-user-id');
         if (userId) {
+          console.log('View details button clicked for user:', userId);
           this.viewUserDetails(userId);
         } else {
           console.error('No user ID found on button:', viewBtn);
         }
+      } else if (userCard && !clickedOnActions) {
+        // If clicking on the card (but not on action buttons), get user ID from card
+        e.preventDefault();
+        e.stopPropagation();
+        const userId = userCard.getAttribute('data-user-id');
+        if (userId) {
+          console.log('User card clicked, viewing details for user:', userId);
+          this.viewUserDetails(userId);
+        } else {
+          console.error('No user ID found on card:', userCard);
+        }
       }
     };
     
-    document.addEventListener('click', handleViewDetails);
+    document.addEventListener('click', this.viewDetailsHandler);
   }
 
   handleSearchInput(query) {
@@ -249,6 +273,9 @@ class UserLookup {
     // Ensure discordId exists
     const discordId = user.discordId || user._id;
     
+    // Add data attribute for easier identification
+    card.setAttribute('data-user-id', discordId);
+    
     card.innerHTML = `
       <div class="user-card-header">
         <div class="user-avatar-container">
@@ -324,10 +351,21 @@ class UserLookup {
 
   createUserDetailsModal(data) {
     try {
+      console.log('Creating user details modal for:', data.user);
+      
+      // Remove any existing modals first
+      const existingModals = document.querySelectorAll('.user-details-modal');
+      existingModals.forEach(m => {
+        if (m.parentNode) {
+          m.parentNode.removeChild(m);
+        }
+      });
+      
       // Create modal container
       const modal = document.createElement('div');
       modal.className = 'user-details-modal';
       modal.style.display = 'flex'; // Ensure modal is visible
+      modal.style.zIndex = '10000'; // Ensure it's on top
       
       // Create modal content
       const modalContent = document.createElement('div');
@@ -401,6 +439,18 @@ class UserLookup {
     
     modal.appendChild(modalContent);
     document.body.appendChild(modal);
+    
+    console.log('Modal appended to body, checking visibility...');
+    // Force a reflow to ensure styles are applied
+    modal.offsetHeight;
+    
+    // Double-check modal is visible
+    if (modal.style.display !== 'flex') {
+      modal.style.display = 'flex';
+    }
+    
+    console.log('Modal display style:', modal.style.display);
+    console.log('Modal computed display:', window.getComputedStyle(modal).display);
     
     // Add close functionality
     const closeBtn = modal.querySelector('.close-modal');
