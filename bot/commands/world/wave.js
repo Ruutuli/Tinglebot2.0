@@ -781,20 +781,172 @@ async function handleWaveVictory(interaction, waveData) {
     }
     
     // Create participant list (all participants, showing damage even if they didn't get loot)
-    const participantList = waveData.participants
-      .map(participant => `• **${participant.name}** (${participant.damage || 0} hearts)`)
-      .join('\n');
+    // Split into chunks that fit within Discord's 1024 character limit
+    const MAX_FIELD_VALUE_LENGTH = 1024;
+    const participantLines = waveData.participants
+      .map(participant => `• **${participant.name}** (${participant.damage || 0} hearts)`);
+    
+    const participantFields = [];
+    if (participantLines.length > 0) {
+      let currentChunk = [];
+      
+      for (const participantLine of participantLines) {
+        // Calculate what the length would be if we add this line
+        const testChunk = [...currentChunk, participantLine];
+        const testValue = testChunk.join('\n');
+        
+        // If adding this line would exceed the limit and we have items in current chunk, save it
+        if (testValue.length > MAX_FIELD_VALUE_LENGTH && currentChunk.length > 0) {
+          // Save current chunk as a field
+          const fieldValue = currentChunk.join('\n');
+          participantFields.push({
+            name: participantFields.length === 0 ? '__Participants__' : `__Participants (${participantFields.length + 1})__`,
+            value: fieldValue,
+            inline: false
+          });
+          // Start new chunk with the current item
+          currentChunk = [participantLine];
+        } else {
+          // Add to current chunk (safe to add)
+          currentChunk.push(participantLine);
+        }
+      }
+      
+      // Add remaining chunk if any
+      if (currentChunk.length > 0) {
+        const fieldValue = currentChunk.join('\n');
+        // Safety check: if even the last chunk is too long, split it further
+        if (fieldValue.length > MAX_FIELD_VALUE_LENGTH) {
+          // Split by newlines and create multiple fields
+          const lines = fieldValue.split('\n');
+          let tempChunk = [];
+          
+          for (const line of lines) {
+            const testChunk = [...tempChunk, line];
+            const testValue = testChunk.join('\n');
+            
+            if (testValue.length > MAX_FIELD_VALUE_LENGTH && tempChunk.length > 0) {
+              participantFields.push({
+                name: participantFields.length === 0 ? '__Participants__' : `__Participants (${participantFields.length + 1})__`,
+                value: tempChunk.join('\n'),
+                inline: false
+              });
+              tempChunk = [line];
+            } else {
+              tempChunk.push(line);
+            }
+          }
+          
+          // Add final temp chunk
+          if (tempChunk.length > 0) {
+            participantFields.push({
+              name: participantFields.length === 0 ? '__Participants__' : `__Participants (${participantFields.length + 1})__`,
+              value: tempChunk.join('\n'),
+              inline: false
+            });
+          }
+        } else {
+          participantFields.push({
+            name: participantFields.length === 0 ? '__Participants__' : `__Participants (${participantFields.length + 1})__`,
+            value: fieldValue,
+            inline: false
+          });
+        }
+      }
+    } else {
+      // No participants, add single field
+      participantFields.push({
+        name: '__Participants__',
+        value: 'No participants found.',
+        inline: false
+      });
+    }
     
     // Create kills list showing who defeated which monsters
-    const killsList = Array.from(killsByParticipant.entries())
+    // Split into chunks that fit within Discord's 1024 character limit
+    const killsLines = Array.from(killsByParticipant.entries())
       .map(([participantName, monsters]) => {
         const monsterList = monsters.map(m => `• ${m}`).join('\n');
         return `**${participantName}** defeated:\n${monsterList}`;
-      })
-      .join('\n\n');
+      });
+    
+    const killsFields = [];
+    if (killsLines.length > 0) {
+      let currentChunk = [];
+      
+      for (const killLine of killsLines) {
+        // Calculate what the length would be if we add this line
+        const testChunk = [...currentChunk, killLine];
+        const testValue = testChunk.join('\n\n');
+        
+        // If adding this line would exceed the limit and we have items in current chunk, save it
+        if (testValue.length > MAX_FIELD_VALUE_LENGTH && currentChunk.length > 0) {
+          // Save current chunk as a field
+          const fieldValue = currentChunk.join('\n\n');
+          killsFields.push({
+            name: killsFields.length === 0 ? '__Monster Kills__' : `__Monster Kills (${killsFields.length + 1})__`,
+            value: fieldValue,
+            inline: false
+          });
+          // Start new chunk with the current item
+          currentChunk = [killLine];
+        } else {
+          // Add to current chunk (safe to add)
+          currentChunk.push(killLine);
+        }
+      }
+      
+      // Add remaining chunk if any
+      if (currentChunk.length > 0) {
+        const fieldValue = currentChunk.join('\n\n');
+        // Safety check: if even the last chunk is too long, split it further
+        if (fieldValue.length > MAX_FIELD_VALUE_LENGTH) {
+          // Split by double newlines (participant sections) and create multiple fields
+          const sections = fieldValue.split('\n\n');
+          let tempChunk = [];
+          
+          for (const section of sections) {
+            const testChunk = [...tempChunk, section];
+            const testValue = testChunk.join('\n\n');
+            
+            if (testValue.length > MAX_FIELD_VALUE_LENGTH && tempChunk.length > 0) {
+              killsFields.push({
+                name: killsFields.length === 0 ? '__Monster Kills__' : `__Monster Kills (${killsFields.length + 1})__`,
+                value: tempChunk.join('\n\n'),
+                inline: false
+              });
+              tempChunk = [section];
+            } else {
+              tempChunk.push(section);
+            }
+          }
+          
+          // Add final temp chunk
+          if (tempChunk.length > 0) {
+            killsFields.push({
+              name: killsFields.length === 0 ? '__Monster Kills__' : `__Monster Kills (${killsFields.length + 1})__`,
+              value: tempChunk.join('\n\n'),
+              inline: false
+            });
+          }
+        } else {
+          killsFields.push({
+            name: killsFields.length === 0 ? '__Monster Kills__' : `__Monster Kills (${killsFields.length + 1})__`,
+            value: fieldValue,
+            inline: false
+          });
+        }
+      }
+    } else {
+      // No kills, add single field
+      killsFields.push({
+        name: '__Monster Kills__',
+        value: 'No kills tracked.',
+        inline: false
+      });
+    }
     
     // Split loot results into chunks that fit within Discord's 1024 character limit
-    const MAX_FIELD_VALUE_LENGTH = 1024;
     const lootFields = [];
     
     if (lootResults.length > 0) {
@@ -883,16 +1035,8 @@ async function handleWaveVictory(interaction, waveData) {
           value: `🎯 **Total Damage:** ${waveData.analytics.totalDamage} hearts\n👥 **Participants:** ${waveData.participants.length}\n🎁 **Items Distributed:** ${lootResults.length}\n⏱️ **Duration:** ${Math.floor((waveData.analytics.duration || 0) / 1000 / 60)}m`,
           inline: false
         },
-        {
-          name: '__Participants__',
-          value: participantList || 'No participants found.',
-          inline: false
-        },
-        {
-          name: '__Monster Kills__',
-          value: killsList || 'No kills tracked.',
-          inline: false
-        },
+        ...participantFields,
+        ...killsFields,
         ...lootFields
       )
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
