@@ -213,6 +213,13 @@ function formatBoostCategoryName(category) {
   return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
 }
 
+/**
+ * Gets the effective job for a character, using jobVoucherJob if a voucher is active, otherwise the regular job.
+ */
+function getEffectiveJob(character) {
+  return (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+}
+
 // ------------------- Formatting Helpers -------------------
 function formatDuration(durationMs) {
   if (!durationMs || durationMs <= 0) {
@@ -446,7 +453,8 @@ function validateVillageCompatibility(targetCharacter, boosterCharacter, isTesti
 function createBoostRequestData(targetCharacter, boosterCharacter, category, village, userId) {
  const boostRequestId = generateUniqueId('B');
  const currentTime = Date.now();
- const boost = getBoostEffect(boosterCharacter.job, category);
+ const boosterJob = getEffectiveJob(boosterCharacter);
+ const boost = getBoostEffect(boosterJob, category);
 
  return {
    boostRequestId,
@@ -461,7 +469,7 @@ function createBoostRequestData(targetCharacter, boosterCharacter, category, vil
    createdAt: new Date().toISOString(),
    durationRemaining: null,
    fulfilledAt: null,
-   boosterJob: boosterCharacter.job,
+   boosterJob: boosterJob,
    boostEffect: `${boost.name} — ${boost.description}`,
    requestedByIcon: targetCharacter.icon,
    boosterIcon: boosterCharacter.icon
@@ -472,10 +480,11 @@ function createBoostRequestData(targetCharacter, boosterCharacter, category, vil
  * Creates embed data for boost request
  */
 function createBoostRequestEmbedData(targetCharacter, boosterCharacter, category, village, boost) {
+ const boosterJob = getEffectiveJob(boosterCharacter);
  return {
    requestedBy: targetCharacter.name,
    booster: boosterCharacter.name,
-   boosterJob: boosterCharacter.job,
+   boosterJob: boosterJob,
    category: category,
    boostEffect: `${boost.name} — ${boost.description}`,
    village: targetCharacter.currentVillage,
@@ -489,9 +498,10 @@ function createBoostRequestEmbedData(targetCharacter, boosterCharacter, category
  * Creates embed data for boost applied
  */
 function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boost) {
+ const boosterJob = getEffectiveJob(booster);
  return {
    boostedBy: booster.name,
-   boosterJob: booster.job,
+   boosterJob: boosterJob,
    target: requestData.targetCharacter,
    category: requestData.category,
    effect: boost.description,
@@ -651,7 +661,8 @@ async function getActiveBoostEffect(characterName, category) {
   logger.error('BOOST', `Could not find booster character "${activeBoost.boostingCharacter}"`);
   return null;
  }
- return getBoostEffect(boosterCharacter.job, category);
+ const boosterJob = getEffectiveJob(boosterCharacter);
+ return getBoostEffect(boosterJob, category);
 }
 
 async function getRemainingBoostTime(characterName, category) {
@@ -867,7 +878,7 @@ async function handleBoostRequest(interaction) {
 
   // Get boost effect information
   const boosterChar = await fetchCharacterByNameWithFallback(boosterName);
-  const boosterJob = boosterChar?.job || activeBoost?.boosterJob || "Unknown";
+  const boosterJob = boosterChar ? getEffectiveJob(boosterChar) : (activeBoost?.boosterJob || "Unknown");
   const boostEffect = getBoostEffect(boosterJob, boostCategory);
   const storedEffect = parseStoredBoostEffect(activeBoost?.boostEffect);
   const boostName = boostEffect?.name || storedEffect.name;
@@ -939,7 +950,8 @@ async function handleBoostRequest(interaction) {
  }
 
    // Validate boost effect
-  const boostEffectValidation = validateBoostEffect(boosterCharacter.job, category);
+  const boosterJob = getEffectiveJob(boosterCharacter);
+  const boostEffectValidation = validateBoostEffect(boosterJob, category);
   if (!boostEffectValidation.valid) {
    logger.debug('BOOST', `[Validation] ${boostEffectValidation.error}`);
    await safeReply({
@@ -950,7 +962,7 @@ async function handleBoostRequest(interaction) {
   }
 
    // Scholar validation
-  const scholarValidation = validateScholarVillageParameter(boosterCharacter.job, category, village);
+  const scholarValidation = validateScholarVillageParameter(boosterJob, category, village);
   if (!scholarValidation.valid) {
    await safeReply({
     content: scholarValidation.error,
@@ -1045,7 +1057,8 @@ async function handleBoostAccept(interaction) {
   return;
  }
 
- const boostEffectValidation = validateBoostEffect(booster.job, requestData.category);
+ const boosterJob = getEffectiveJob(booster);
+ const boostEffectValidation = validateBoostEffect(boosterJob, requestData.category);
  if (!boostEffectValidation.valid) {
   logger.error('BOOST', boostEffectValidation.error);
   await interaction.reply({
@@ -1083,7 +1096,7 @@ async function handleBoostAccept(interaction) {
  requestData.durationRemaining = BOOST_DURATION;
  requestData.boostExpiresAt = boostExpiresAt;
   // Ensure embed update has all required fields
-  requestData.boosterJob = booster.job;
+  requestData.boosterJob = boosterJob;
   requestData.requestedByIcon = (await fetchCharacterByName(requestData.targetCharacter))?.icon;
   requestData.boosterIcon = booster.icon;
 
@@ -1093,7 +1106,8 @@ async function handleBoostAccept(interaction) {
    targetCharacter.boostedBy = booster.name;
    
    // For Scholar Gathering boosts, store the target village in the boost data
-   if (booster.job === 'Scholar' && requestData.category === 'Gathering' && requestData.targetVillage) {
+   const boosterJob = getEffectiveJob(booster);
+   if (boosterJob === 'Scholar' && requestData.category === 'Gathering' && requestData.targetVillage) {
      requestData.targetVillage = requestData.targetVillage;
    }
    
@@ -1181,7 +1195,7 @@ if (!character) {
   }
 
   const boosterCharacter = await fetchCharacterByNameWithFallback(activeBoost.boostingCharacter);
-  const boosterJob = boosterCharacter?.job || activeBoost.boosterJob || "Unknown";
+  const boosterJob = boosterCharacter ? getEffectiveJob(boosterCharacter) : (activeBoost.boosterJob || "Unknown");
   const boostEffect = getBoostEffect(boosterJob, activeBoost.category);
   const storedEffect = parseStoredBoostEffect(activeBoost.boostEffect);
   const boostName = boostEffect?.name || storedEffect.name;
@@ -1427,7 +1441,7 @@ async function handleBoostOther(interaction) {
 
  if (activeOtherBoost) {
   boosterCharacter = await fetchCharacterByNameWithFallback(activeBoost.boostingCharacter);
-  const rawBoosterJob = boosterCharacter?.job || activeBoost.boosterJob || null;
+  const rawBoosterJob = boosterCharacter ? getEffectiveJob(boosterCharacter) : (activeBoost.boosterJob || null);
   boostSourceJob = rawBoosterJob ? normalizeJobName(rawBoosterJob) : null;
  }
 
@@ -2624,7 +2638,8 @@ module.exports.updateBoostAppliedMessage = async function updateBoostAppliedMess
     // Rebuild applied embed with latest status
     const booster = await fetchCharacterByNameWithFallback(requestData.boostingCharacter);
     const targetCharacter = await fetchCharacterByNameWithFallback(requestData.targetCharacter);
-    const boostEffectValidation = validateBoostEffect(booster.job, requestData.category);
+    const boosterJob = getEffectiveJob(booster);
+    const boostEffectValidation = validateBoostEffect(boosterJob, requestData.category);
     const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
     // ensure status taken from requestData
     embedData.status = requestData.status || embedData.status;
