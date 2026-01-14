@@ -382,7 +382,33 @@ async function handleInfo(interaction) {
 // ------------------- Function: handleSubmit -------------------
 async function handleSubmit(interaction) {
   try {
-    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+    // Check if interaction is still valid before deferring
+    if (interaction.replied || interaction.deferred) {
+      logger.warn('SECRET_SANTA', 'Interaction already replied/deferred in handleSubmit');
+      return;
+    }
+    
+    try {
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+    } catch (deferError) {
+      // Handle expired interactions gracefully
+      if (deferError.code === 10062) {
+        logger.warn('SECRET_SANTA', 'Interaction expired in handleSubmit (10062)');
+        // Try to send ephemeral reply if possible
+        try {
+          await interaction.reply({
+            content: '❌ **This interaction has expired.** Please run the command again.',
+            ephemeral: true
+          });
+        } catch (replyError) {
+          // If reply also fails, interaction is definitely expired - ignore
+          logger.debug('SECRET_SANTA', 'Could not send expiration message, interaction fully expired');
+        }
+        return;
+      }
+      // Re-throw other errors
+      throw deferError;
+    }
 
     const user = interaction.user;
     

@@ -2424,8 +2424,14 @@ async function handleTradeFromCharacterAutocomplete(interaction, focusedValue) {
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
-    return await interaction.respond(filtered.slice(0, 25));
+    
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'fromcharacter'
+    };
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleTradeFromCharacterAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
@@ -2447,12 +2453,14 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedValue) {
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
-    const searchTerm = (focusedValue || '').toLowerCase();
-    const filtered = choices.filter(choice => 
-      choice.name.toLowerCase().includes(searchTerm) || 
-      choice.value.toLowerCase().includes(searchTerm)
-    );
-    return await interaction.respond(filtered.slice(0, 25));
+    
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'tocharacter'
+    };
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleTradeToCharacterAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
@@ -2542,12 +2550,8 @@ async function handleGiftFromCharacterAutocomplete(interaction, focusedOption) {
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
-    const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
-    const filtered = choices.filter(choice => 
-      choice.name.toLowerCase().includes(focusedValue) || 
-      choice.value.toLowerCase().includes(focusedValue)
-    );
-    return await interaction.respond(filtered.slice(0, 25));
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleGiftFromCharacterAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
@@ -2569,12 +2573,8 @@ async function handleGiftToCharacterAutocomplete(interaction, focusedOption) {
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
-    const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
-    const filtered = choices.filter(choice => 
-      choice.name.toLowerCase().includes(focusedValue) || 
-      choice.value.toLowerCase().includes(focusedValue)
-    );
-    return await interaction.respond(filtered.slice(0, 25));
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleGiftToCharacterAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
@@ -2806,8 +2806,14 @@ async function handleTransferFromCharacterAutocomplete(interaction, focusedValue
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
-    return await interaction.respond(filtered.slice(0, 25));
+    
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'fromcharacter'
+    };
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleTransferFromCharacterAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
@@ -2829,8 +2835,14 @@ async function handleTransferToCharacterAutocomplete(interaction, focusedValue) 
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
-    return await interaction.respond(filtered.slice(0, 25));
+    
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'tocharacter'
+    };
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleTransferToCharacterAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);

@@ -502,10 +502,15 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
     return true;
   });
   
-  // Fallback if filtering results in empty array (shouldn't happen, but safety check)
+  // Fallback if filtering results in empty array
   if (!validSpecials || validSpecials.length === 0) {
-    console.warn('[weatherService.js]: No valid special weather choices after filtering');
-    return null;
+    console.warn('[weatherService.js]: No valid special weather choices after filtering, using all season options');
+    const allSpecials = seasonData.Special || [];
+    if (allSpecials.length === 0) {
+      console.error('[weatherService.js]: No special weather options available for season');
+      return null;
+    }
+    return safeWeightedChoice(allSpecials, weightMapping, modifierMap);
   }
   
   return safeWeightedChoice(validSpecials, weightMapping, modifierMap);
