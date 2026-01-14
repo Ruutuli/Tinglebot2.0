@@ -53,6 +53,7 @@ const { hasPerk } = require("../../modules/jobsModule");
 const TempData = require('../../../shared/models/TempDataModel');
 const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils');
 const { applyPriestTokensBoost, applyFortuneTellerTokensBoost } = require("../../modules/boostingModule");
+const { applyTokenBoost, getCharacterBoostStatus } = require("../../modules/boostIntegration");
 const {
  retrieveBoostingRequestFromTempDataByCharacter,
  saveBoostingRequestToTempData,
@@ -1304,21 +1305,25 @@ async function handleShopBuy(interaction) {
     let boostFooterIcon = null;
     
     // ============================================================================
-    // ------------------- Apply Priest Boost for Buying -------------------
+    // ------------------- Apply Token Boost for Buying -------------------
     // ============================================================================
-    if (character.boostedBy) {
-      const { fetchCharacterByName } = require('../../../shared/database/db');
-      const boosterChar = await fetchCharacterByName(character.boostedBy);
-      
-      if (boosterChar && boosterChar.job === 'Priest') {
-        const beforeBoost = totalPrice;
-        const boostedPrice = applyPriestTokensBoost(totalPrice, true);
-        const discountGained = beforeBoost - boostedPrice;
-        totalPrice = boostedPrice;
-        boostFooterIcon = boosterChar.icon || null;
-        boostFlavorNotes.push(`⛪ **Blessed Economy:** ${boosterChar.name}'s blessing saved 🪙 ${discountGained}.`);
-        boostFooterNotes.push('Blessed Economy active');
-        logger.info('BOOST', `Priest boost - Blessed Economy (10% buying discount: ${beforeBoost} → ${totalPrice})`);
+    const beforeBoost = totalPrice;
+    totalPrice = await applyTokenBoost(characterName, totalPrice, true);
+    
+    if (totalPrice !== beforeBoost) {
+      // Boost was applied - get booster info for flavor text
+      const boostStatus = await getCharacterBoostStatus(characterName);
+      if (boostStatus && boostStatus.category === 'Tokens') {
+        const { fetchCharacterByName } = require('../../../shared/database/db');
+        const boosterChar = await fetchCharacterByName(boostStatus.boosterName);
+        
+        if (boosterChar && boostStatus.boosterJob === 'Priest') {
+          const discountGained = beforeBoost - totalPrice;
+          boostFooterIcon = boosterChar.icon || null;
+          boostFlavorNotes.push(`⛪ **Blessed Economy:** ${boosterChar.name}'s blessing saved 🪙 ${discountGained}.`);
+          boostFooterNotes.push('Blessed Economy active');
+          logger.info('BOOST', `Priest boost - Blessed Economy (10% buying discount: ${beforeBoost} → ${totalPrice})`);
+        }
       }
     }
     
@@ -1844,31 +1849,30 @@ if (quantity <= 0) {
   const boostFooterNotes = [];
   let boostFooterIcon = null;
 
-  if (character.boostedBy) {
-    const { fetchCharacterByName } = require('../../../shared/database/db');
-    const boosterChar = await fetchCharacterByName(character.boostedBy);
-    
-    if (boosterChar) {
-      boostFooterIcon = boosterChar.icon || null;
+  const preBoostPrice = totalPrice;
+  totalPrice = await applyTokenBoost(characterName, totalPrice, false);
+  
+  if (totalPrice !== preBoostPrice) {
+    // Boost was applied - get booster info for flavor text
+    const boostStatus = await getCharacterBoostStatus(characterName);
+    if (boostStatus && boostStatus.category === 'Tokens') {
+      const { fetchCharacterByName } = require('../../../shared/database/db');
+      const boosterChar = await fetchCharacterByName(boostStatus.boosterName);
       
-      // Fortune Teller: Fortunate Exchange (+10% when selling)
-      if (boosterChar.job === 'Fortune Teller') {
-        const preBoostPrice = totalPrice;
-        totalPrice = applyFortuneTellerTokensBoost(totalPrice, false);
-        const fortuneDelta = totalPrice - preBoostPrice;
-        logger.info('BOOST', `Fortune Teller boost - Fortunate Exchange (+10% tokens: ${preBoostPrice} → ${totalPrice})`);
-        boostFlavorNotes.push(`🔮 **Fortunate Exchange:** ${boosterChar.name}'s foresight added 🪙 ${fortuneDelta}.`);
-        boostFooterNotes.push('Fortunate Exchange active');
-      }
-      
-      // Priest: Blessed Economy (+10% when selling)
-      if (boosterChar.job === 'Priest') {
-        const preBoostPrice = totalPrice;
-        totalPrice = applyPriestTokensBoost(totalPrice, false);
-        const priestDelta = totalPrice - preBoostPrice;
-        logger.info('BOOST', `Priest boost - Blessed Economy (+10% tokens: ${preBoostPrice} → ${totalPrice})`);
-        boostFlavorNotes.push(`⛪ **Blessed Economy:** ${boosterChar.name}'s blessing earned an extra 🪙 ${priestDelta}.`);
-        boostFooterNotes.push('Blessed Economy active');
+      if (boosterChar) {
+        boostFooterIcon = boosterChar.icon || null;
+        const boostDelta = totalPrice - preBoostPrice;
+        
+        // Generate flavor text based on booster job
+        if (boostStatus.boosterJob === 'Fortune Teller') {
+          logger.info('BOOST', `Fortune Teller boost - Fortunate Exchange (+10% tokens: ${preBoostPrice} → ${totalPrice})`);
+          boostFlavorNotes.push(`🔮 **Fortunate Exchange:** ${boosterChar.name}'s foresight added 🪙 ${boostDelta}.`);
+          boostFooterNotes.push('Fortunate Exchange active');
+        } else if (boostStatus.boosterJob === 'Priest') {
+          logger.info('BOOST', `Priest boost - Blessed Economy (+10% tokens: ${preBoostPrice} → ${totalPrice})`);
+          boostFlavorNotes.push(`⛪ **Blessed Economy:** ${boosterChar.name}'s blessing earned an extra 🪙 ${boostDelta}.`);
+          boostFooterNotes.push('Blessed Economy active');
+        }
       }
     }
   }
