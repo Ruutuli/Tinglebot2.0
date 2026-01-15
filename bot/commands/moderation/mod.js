@@ -33,6 +33,7 @@ const {
   fetchCharacterById,
   fetchModCharacterById,
   fetchCharacterByName,
+  fetchModCharacterByName,
   fetchItemByName,
   fetchItemRarityByName,
   fetchItemsByCategory,
@@ -1491,7 +1492,11 @@ async function handleGive(interaction) {
     }
   
     // ------------------- Fetch Character & Item -------------------
-    const character = await fetchCharacterByName(charName);
+    // Try regular character first, then mod character
+    let character = await fetchCharacterByName(charName);
+    if (!character) {
+      character = await fetchModCharacterByName(charName);
+    }
     if (!character) {
       return interaction.editReply(`❌ Character **${charName}** not found.`);
     }
