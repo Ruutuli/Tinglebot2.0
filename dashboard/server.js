@@ -2194,7 +2194,7 @@ app.get('/api/models/vendingShops', async (req, res) => {
 
 // ------------------- Function: getModelData -------------------
 // Returns paginated data for any model type with filtering support
-app.get('/api/models/:modelType', async (req, res) => {
+app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
   try {
     const { modelType } = req.params;
 
@@ -2738,7 +2738,7 @@ app.get('/api/models/:modelType', async (req, res) => {
     console.error(`[server.js]: ❌ Error fetching ${req.params.modelType} data:`, error);
     res.status(500).json({ error: `Failed to fetch ${req.params.modelType} data`, details: error.message });
   }
-});
+}));
 
 // ------------------- Section: Character API Routes -------------------
 
@@ -8312,33 +8312,8 @@ app.get('/api/items', async (req, res) => {
 });
 
 
-// ------------------- Function: searchInventoryByItem -------------------
-// Searches inventory for specific item across all characters
-app.post('/api/inventory/item', async (req, res) => {
-  
-  const { itemName } = req.body;
-  try {
-    const characters = await fetchAllCharacters();
-    const inventoryData = [];
-
-    for (const char of characters) {
-      try {
-        const col = await getCharacterInventoryCollection(char.name);
-        const inv = await col.find().toArray();
-        const entry = inv.find(i => i.itemName.toLowerCase() === itemName.toLowerCase());
-        if (entry) {
-          inventoryData.push({ characterName: char.name, quantity: entry.quantity });
-        }
-      } catch {
-        continue;
-      }
-    }
-    res.json(inventoryData);
-  } catch (error) {
-    logger.error('Error searching inventory by item', error, 'server.js');
-    res.status(500).json({ error: 'Failed to fetch inventory data' });
-  }
-});
+// NOTE: /api/inventory/item route is handled by dashboard/routes/api/inventory.js
+// This duplicate route has been removed to avoid conflicts
 
 // ------------------- Section: Weather API Routes -------------------
 

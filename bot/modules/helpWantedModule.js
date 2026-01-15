@@ -148,84 +148,345 @@ async function isTravelBlockedByWeather(village) {
     const isBlocked = TRAVEL_BLOCKING_WEATHER.includes(specialWeather);
     
     if (isBlocked) {
-      console.log(`[helpWantedModule.js]: 🚫 Travel blocked in ${village} due to ${specialWeather} weather`);
+      logger.info('QUEST', `Travel blocked in ${village} due to ${specialWeather} weather`);
     }
     
     return isBlocked;
   } catch (error) {
-    console.error(`[helpWantedModule.js]: ❌ Error checking weather for ${village}:`, error);
+    logger.error('QUEST', `Error checking weather for ${village}`, error);
     return false; // Default to allowing travel if weather check fails
   }
 }
 
+// ------------------- Function: isTravelBlockedByWeatherCached -------------------
+// Checks if travel is blocked by weather with caching and retry logic
+async function isTravelBlockedByWeatherCached(village, cache = new Map()) {
+  // Check cache first
+  if (cache.has(village)) {
+    return cache.get(village);
+  }
+  
+  // Retry logic with exponential backoff
+  const maxRetries = 3;
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const weather = await getWeatherWithoutGeneration(village);
+      if (!weather || !weather.special) {
+        cache.set(village, false);
+        return false;
+      }
+      
+      const specialWeather = weather.special.label;
+      const isBlocked = TRAVEL_BLOCKING_WEATHER.includes(specialWeather);
+      
+      if (isBlocked) {
+        logger.info('QUEST', `Travel blocked in ${village} due to ${specialWeather} weather`);
+      }
+      
+      // Cache the result
+      cache.set(village, isBlocked);
+      return isBlocked;
+    } catch (error) {
+      lastError = error;
+      logger.warn('QUEST', `Weather check attempt ${attempt}/${maxRetries} failed for ${village}`, error);
+      
+      // Exponential backoff: wait 100ms, 200ms, 400ms
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt - 1)));
+      }
+    }
+  }
+  
+  // All retries failed - default to allowing travel but log warning
+  logger.error('QUEST', `All weather check attempts failed for ${village}, defaulting to allowing travel`, lastError);
+  cache.set(village, false); // Cache the fallback result
+  return false;
+}
+
+// ------------------- Function: getAvailableQuestTypes -------------------
+// Returns available quest types based on time, weather, and exclusions
+function getAvailableQuestTypes(isAfterNoon = false, travelBlocked = false, excludeTypes = []) {
+  let availableTypes = [...QUEST_TYPES];
+  const excludedReasons = [];
+  
+  // Exclude art and writing if after 12pm EST
+  if (isAfterNoon) {
+    if (availableTypes.includes('art')) {
+      availableTypes = availableTypes.filter(type => type !== 'art');
+      excludedReasons.push('art (after 12pm EST)');
+    }
+    if (availableTypes.includes('writing')) {
+      availableTypes = availableTypes.filter(type => type !== 'writing');
+      excludedReasons.push('writing (after 12pm EST)');
+    }
+  }
+  
+  // Exclude escort if travel is blocked
+  if (travelBlocked) {
+    if (availableTypes.includes('escort')) {
+      availableTypes = availableTypes.filter(type => type !== 'escort');
+      excludedReasons.push('escort (travel blocked)');
+    }
+  }
+  
+  // Exclude additional types if specified
+  if (excludeTypes.length > 0) {
+    const beforeExclude = availableTypes.length;
+    availableTypes = availableTypes.filter(type => !excludeTypes.includes(type));
+    if (availableTypes.length < beforeExclude) {
+      excludedReasons.push(`${excludeTypes.filter(t => QUEST_TYPES.includes(t)).join(', ')} (explicitly excluded)`);
+    }
+  }
+  
+  // Fallback to basic types if all types are excluded
+  const basicTypes = ['item', 'monster', 'crafting'];
+  if (availableTypes.length === 0) {
+    logger.warn('QUEST', `All quest types excluded, falling back to basic types: ${basicTypes.join(', ')}`);
+    logger.debug('QUEST', `Exclusion reasons: ${excludedReasons.join('; ')}`);
+    return basicTypes;
+  }
+  
+  // Log exclusions for debugging
+  if (excludedReasons.length > 0) {
+    logger.debug('QUEST', `Excluded quest types: ${excludedReasons.join('; ')}. Available types: ${availableTypes.join(', ')}`);
+  }
+  
+  return availableTypes;
+}
+
 // ------------------- Function: regenerateEscortQuest -------------------
 // Regenerates an escort quest as a different quest type when travel is blocked
+// Includes retry logic and fallback quest types
 async function regenerateEscortQuest(quest) {
-  try {
-    console.log(`[helpWantedModule.js]: 🔄 Regenerating escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
-    
-    // Get available quest pools
-    const pools = await getAllQuestPools();
-    
-    // Get available NPCs (excluding the current one to avoid duplicates)
-    const allNPCs = Object.keys(NPCs);
-    const availableNPCs = allNPCs.filter(npc => npc !== quest.npcName);
-    
-    // Generate new quest excluding escort type
-    const availableTypes = QUEST_TYPES.filter(type => type !== 'escort');
-    const newType = getRandomElement(availableTypes);
-    const newRequirements = generateQuestRequirements(newType, pools, quest.village);
-    const newNpcName = getRandomElement(availableNPCs);
-    
-    // Update the quest
-    quest.type = newType;
-    quest.requirements = newRequirements;
-    quest.npcName = newNpcName;
-    
-    await quest.save();
-    
-    console.log(`[helpWantedModule.js]: ✅ Regenerated quest ${quest.questId} as ${newType} quest with NPC ${newNpcName} for ${quest.village}`);
-    
-    return quest;
-  } catch (error) {
-    console.error(`[helpWantedModule.js]: ❌ Error regenerating escort quest ${quest.questId}:`, error);
-    throw error;
+  const maxRetries = 3;
+  const typePreferences = ['item', 'monster', 'crafting', 'art', 'writing']; // Order of preference (excluding escort)
+  
+  logger.info('QUEST', `Regenerating escort quest ${quest.questId} for ${quest.village} due to travel-blocking weather`);
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Get available quest pools
+      const pools = await getAllQuestPools();
+      
+      // Get available NPCs (excluding the current one to avoid duplicates)
+      const allNPCs = Object.keys(NPCs);
+      let availableNPCs = allNPCs.filter(npc => npc !== quest.npcName);
+      
+      // Fallback to all NPCs if pool is empty
+      if (availableNPCs.length === 0) {
+        logger.warn('QUEST', `No NPCs available excluding ${quest.npcName} for ${quest.questId}, using all NPCs`);
+        availableNPCs = [...allNPCs];
+      }
+      
+      if (availableNPCs.length === 0) {
+        throw new Error(`No NPCs available for quest regeneration`);
+      }
+      
+      // Get available types excluding escort
+      const availableTypes = getAvailableQuestTypes(false, true, ['escort']); // travelBlocked=true ensures escort excluded
+      
+      if (availableTypes.length === 0) {
+        throw new Error(`No available quest types after excluding escort`);
+      }
+      
+      // Try types in preference order, but randomize if multiple attempts
+      let typesToTry = attempt === 1 ? typePreferences.filter(t => availableTypes.includes(t)) : shuffleArray([...availableTypes]);
+      
+      // Ensure we have at least one type
+      if (typesToTry.length === 0) {
+        typesToTry = availableTypes;
+      }
+      
+      let newType = null;
+      let newRequirements = null;
+      let lastTypeError = null;
+      
+      // Try each type until one succeeds
+      for (const tryType of typesToTry) {
+        try {
+          newRequirements = generateQuestRequirements(tryType, pools, quest.village);
+          newType = tryType;
+          break; // Success, exit loop
+        } catch (error) {
+          lastTypeError = error;
+          logger.debug('QUEST', `Failed to generate ${tryType} quest for ${quest.questId} regeneration attempt ${attempt}`, error);
+          continue; // Try next type
+        }
+      }
+      
+      if (!newType || !newRequirements) {
+        throw new Error(`Failed to generate requirements for any quest type. Last error: ${lastTypeError?.message || 'Unknown'}`);
+      }
+      
+      // Validate new type is not escort
+      if (newType === 'escort') {
+        throw new Error(`Regenerated quest type cannot be escort`);
+      }
+      
+      const newNpcName = getRandomElement(availableNPCs);
+      
+      // Update the quest
+      quest.type = newType;
+      quest.requirements = newRequirements;
+      quest.npcName = newNpcName;
+      
+      // Save with retry
+      let saved = false;
+      for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt++) {
+        try {
+          await quest.save();
+          saved = true;
+          break;
+        } catch (saveError) {
+          if (saveAttempt === 3) {
+            throw saveError;
+          }
+          logger.warn('QUEST', `Save attempt ${saveAttempt}/3 failed for ${quest.questId}`, saveError);
+          await new Promise(resolve => setTimeout(resolve, 100 * saveAttempt)); // Exponential backoff
+        }
+      }
+      
+      if (!saved) {
+        throw new Error(`Failed to save regenerated quest after 3 attempts`);
+      }
+      
+      logger.success('QUEST', `Regenerated quest ${quest.questId} as ${newType} quest with NPC ${newNpcName} for ${quest.village}`);
+      return quest;
+      
+    } catch (error) {
+      logger.warn('QUEST', `Regeneration attempt ${attempt}/${maxRetries} failed for escort quest ${quest.questId}`, error);
+      
+      if (attempt === maxRetries) {
+        logger.error('QUEST', `All regeneration attempts failed for escort quest ${quest.questId}. Quest marked for manual review.`, error);
+        // Mark quest for manual review - could add a flag to the quest model
+        throw new Error(`Failed to regenerate escort quest ${quest.questId} after ${maxRetries} attempts: ${error.message}`);
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+    }
   }
+  
+  // Should never reach here, but just in case
+  throw new Error(`Failed to regenerate escort quest ${quest.questId}`);
 }
 
 // ------------------- Function: regenerateArtWritingQuest -------------------
 // Regenerates an art or writing quest as a different quest type when it's after 12pm EST
+// Includes retry logic and fallback quest types
 async function regenerateArtWritingQuest(quest) {
-  try {
-    console.log(`[helpWantedModule.js]: 🔄 Regenerating ${quest.type} quest ${quest.questId} for ${quest.village} due to time restriction (after 12pm EST)`);
-    
-    // Get available quest pools
-    const pools = await getAllQuestPools();
-    
-    // Get available NPCs (excluding the current one to avoid duplicates)
-    const allNPCs = Object.keys(NPCs);
-    const availableNPCs = allNPCs.filter(npc => npc !== quest.npcName);
-    
-    // Generate new quest excluding art and writing types
-    const availableTypes = QUEST_TYPES.filter(type => type !== 'art' && type !== 'writing');
-    const newType = getRandomElement(availableTypes);
-    const newRequirements = generateQuestRequirements(newType, pools, quest.village);
-    const newNpcName = getRandomElement(availableNPCs);
-    
-    // Update the quest
-    quest.type = newType;
-    quest.requirements = newRequirements;
-    quest.npcName = newNpcName;
-    
-    await quest.save();
-    
-    console.log(`[helpWantedModule.js]: ✅ Regenerated quest ${quest.questId} as ${newType} quest with NPC ${newNpcName} for ${quest.village}`);
-    
-    return quest;
-  } catch (error) {
-    console.error(`[helpWantedModule.js]: ❌ Error regenerating ${quest.type} quest ${quest.questId}:`, error);
-    throw error;
+  const maxRetries = 3;
+  const typePreferences = ['item', 'monster', 'crafting', 'escort']; // Order of preference (excluding art/writing)
+  
+  logger.info('QUEST', `Regenerating ${quest.type} quest ${quest.questId} for ${quest.village} due to time restriction (after 12pm EST)`);
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Get available quest pools
+      const pools = await getAllQuestPools();
+      
+      // Get available NPCs (excluding the current one to avoid duplicates)
+      const allNPCs = Object.keys(NPCs);
+      let availableNPCs = allNPCs.filter(npc => npc !== quest.npcName);
+      
+      // Fallback to all NPCs if pool is empty
+      if (availableNPCs.length === 0) {
+        logger.warn('QUEST', `No NPCs available excluding ${quest.npcName} for ${quest.questId}, using all NPCs`);
+        availableNPCs = [...allNPCs];
+      }
+      
+      if (availableNPCs.length === 0) {
+        throw new Error(`No NPCs available for quest regeneration`);
+      }
+      
+      // Get available types excluding art and writing
+      const availableTypes = getAvailableQuestTypes(true, false, ['art', 'writing']); // isAfterNoon=true ensures art/writing excluded
+      
+      if (availableTypes.length === 0) {
+        throw new Error(`No available quest types after excluding art and writing`);
+      }
+      
+      // Try types in preference order, but randomize if multiple attempts
+      let typesToTry = attempt === 1 ? typePreferences.filter(t => availableTypes.includes(t)) : shuffleArray([...availableTypes]);
+      
+      // Ensure we have at least one type
+      if (typesToTry.length === 0) {
+        typesToTry = availableTypes;
+      }
+      
+      let newType = null;
+      let newRequirements = null;
+      let lastTypeError = null;
+      
+      // Try each type until one succeeds
+      for (const tryType of typesToTry) {
+        try {
+          newRequirements = generateQuestRequirements(tryType, pools, quest.village);
+          newType = tryType;
+          break; // Success, exit loop
+        } catch (error) {
+          lastTypeError = error;
+          logger.debug('QUEST', `Failed to generate ${tryType} quest for ${quest.questId} regeneration attempt ${attempt}`, error);
+          continue; // Try next type
+        }
+      }
+      
+      if (!newType || !newRequirements) {
+        throw new Error(`Failed to generate requirements for any quest type. Last error: ${lastTypeError?.message || 'Unknown'}`);
+      }
+      
+      // Validate new type is not art or writing
+      if (newType === 'art' || newType === 'writing') {
+        throw new Error(`Regenerated quest type cannot be ${newType}`);
+      }
+      
+      const newNpcName = getRandomElement(availableNPCs);
+      
+      // Update the quest
+      quest.type = newType;
+      quest.requirements = newRequirements;
+      quest.npcName = newNpcName;
+      
+      // Save with retry
+      let saved = false;
+      for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt++) {
+        try {
+          await quest.save();
+          saved = true;
+          break;
+        } catch (saveError) {
+          if (saveAttempt === 3) {
+            throw saveError;
+          }
+          logger.warn('QUEST', `Save attempt ${saveAttempt}/3 failed for ${quest.questId}`, saveError);
+          await new Promise(resolve => setTimeout(resolve, 100 * saveAttempt)); // Exponential backoff
+        }
+      }
+      
+      if (!saved) {
+        throw new Error(`Failed to save regenerated quest after 3 attempts`);
+      }
+      
+      logger.success('QUEST', `Regenerated quest ${quest.questId} as ${newType} quest with NPC ${newNpcName} for ${quest.village}`);
+      return quest;
+      
+    } catch (error) {
+      logger.warn('QUEST', `Regeneration attempt ${attempt}/${maxRetries} failed for ${quest.type} quest ${quest.questId}`, error);
+      
+      if (attempt === maxRetries) {
+        logger.error('QUEST', `All regeneration attempts failed for ${quest.type} quest ${quest.questId}. Quest marked for manual review.`, error);
+        throw new Error(`Failed to regenerate ${quest.type} quest ${quest.questId} after ${maxRetries} attempts: ${error.message}`);
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+    }
   }
+  
+  // Should never reach here, but just in case
+  throw new Error(`Failed to regenerate ${quest.type} quest ${quest.questId}`);
 }
 
 // ------------------- Function: shuffleArray -------------------
@@ -570,17 +831,17 @@ async function getItemQuestPool() {
       'Yellow Lizalfos Tail'
     ];
 
-    // Search for items by name
+    // Search for items by name, including rarity
     logger.debug('QUEST', 'Searching for items by name');
     
     let items = [];
     try {
       items = await Item.find({
         itemName: { $in: allowedItemNames }
-      }, 'itemName');
+      }, 'itemName itemRarity');
       logger.debug('QUEST', `Found ${items.length} items by name out of ${allowedItemNames.length} requested items`);
     } catch (error) {
-      console.error('[HelpWanted] Error searching for items by name:', error);
+      logger.error('QUEST', 'Error searching for items by name', error);
       items = [];
     }
     
@@ -588,11 +849,28 @@ async function getItemQuestPool() {
       throw new Error('No allowed items found for item quests by name');
     }
     
-    logger.debug('QUEST', `Found ${items.length} items by name`);
+    // Filter out extremely rare items (rarity 6+) as they're too hard to obtain
+    const filteredItems = items.filter(item => {
+      const rarity = item.itemRarity || 1; // Default to rarity 1 if not specified
+      return rarity <= 5; // Only allow rarity 1-5
+    });
     
-    return items;
+    if (filteredItems.length === 0) {
+      logger.warn('QUEST', 'All items filtered out due to rarity restrictions, using all items as fallback');
+      // Fallback: use all items if filtering removes everything
+      return items;
+    }
+    
+    const filteredCount = items.length - filteredItems.length;
+    if (filteredCount > 0) {
+      logger.debug('QUEST', `Filtered out ${filteredCount} item(s) with rarity 6+ from quest pool`);
+    }
+    
+    logger.debug('QUEST', `Found ${filteredItems.length} items by name (after rarity filtering)`);
+    
+    return filteredItems;
   } catch (error) {
-    console.error('[HelpWanted] Error fetching item quest pool:', error);
+    logger.error('QUEST', 'Error fetching item quest pool', error);
     throw error;
   }
 }
@@ -612,7 +890,7 @@ async function getMonsterQuestPool() {
     
     return monsters;
   } catch (error) {
-    console.error('[HelpWanted] Error fetching monster quest pool:', error);
+    logger.error('QUEST', 'Error fetching monster quest pool', error);
     throw error;
   }
 }
@@ -726,7 +1004,7 @@ async function getCraftingQuestPool() {
 
     return weightedPool;
   } catch (error) {
-    console.error('[HelpWanted] Error fetching crafting quest pool:', error);
+    logger.error('QUEST', 'Error fetching crafting quest pool', error);
     throw error;
   }
 }
@@ -829,7 +1107,7 @@ async function getVillageShopQuestPool() {
     
     return shopItems;
   } catch (error) {
-    console.error('[HelpWanted] Error fetching village shop quest pool:', error);
+    logger.error('QUEST', 'Error fetching village shop quest pool', error);
     throw error;
   }
 }
@@ -851,7 +1129,7 @@ async function getAllQuestPools() {
     
     return { itemPool, monsterPool, craftingPool, escortPool, villageShopPool, artPool, writingPool };
   } catch (error) {
-    console.error('[HelpWanted] Error fetching quest pools:', error);
+    logger.error('QUEST', 'Error fetching quest pools', error);
     throw error;
   }
 }
@@ -860,217 +1138,472 @@ async function getAllQuestPools() {
 // ------------------- Quest Generation -------------------
 // ============================================================================
 
+// ------------------- Function: calculateItemQuestAmount -------------------
+// Calculates appropriate min/max amounts for item quests based on item rarity
+// Rarity 1-2: Common items - 1-5 items (normal range)
+// Rarity 3-4: Uncommon items - 1-3 items (reduced range)
+// Rarity 5: Rare items - 1 item only (very limited)
+// Rarity 6+: Should be filtered out, but if present, 1 item only
+function calculateItemQuestAmount(itemRarity) {
+  const rarity = itemRarity || 1; // Default to rarity 1 if not specified
+  
+  if (rarity >= 5) {
+    // Rarity 5+: Only request 1 item
+    return { minAmount: 1, maxAmount: 1 };
+  } else if (rarity >= 3) {
+    // Rarity 3-4: Request 1-3 items (reduced from normal 1-5)
+    return { minAmount: 1, maxAmount: 3 };
+  } else {
+    // Rarity 1-2: Request 1-5 items (normal range)
+    return QUEST_PARAMS.item;
+  }
+}
+
 // ------------------- Function: generateQuestRequirements -------------------
-// Generates quest requirements based on quest type
+// Generates quest requirements based on quest type with pool validation and fallbacks
 function generateQuestRequirements(type, pools, village) {
+  // Validate pools are available
+  if (!pools || typeof pools !== 'object') {
+    logger.error('QUEST', `Invalid pools object provided for ${village} ${type} quest`);
+    throw new Error(`Invalid pools object for ${village} ${type} quest`);
+  }
+  
   switch (type) {
     case 'item': {
-      const item = getRandomElement(pools.itemPool);
-      if (!item?.itemName) {
-        throw new Error(`Invalid item selected for ${village} item quest`);
+      // Validate item pool
+      if (!pools.itemPool || !Array.isArray(pools.itemPool) || pools.itemPool.length === 0) {
+        logger.error('QUEST', `Empty or invalid itemPool for ${village} item quest`);
+        throw new Error(`No items available for ${village} item quest`);
       }
-      const { minAmount, maxAmount } = QUEST_PARAMS.item;
-      return {
-        item: item.itemName,
-        amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount
-      };
+      
+      try {
+        const item = getRandomElement(pools.itemPool);
+        if (!item?.itemName) {
+          logger.warn('QUEST', `Invalid item selected from pool for ${village}, attempting fallback`);
+          // Fallback: try to find any valid item in pool
+          const validItem = pools.itemPool.find(i => i?.itemName);
+          if (!validItem) {
+            throw new Error(`No valid items in pool for ${village} item quest`);
+          }
+          // Use rarity-based amount calculation
+          const itemRarity = validItem.itemRarity || 1;
+          const { minAmount, maxAmount } = calculateItemQuestAmount(itemRarity);
+          return {
+            item: validItem.itemName,
+            amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount
+          };
+        }
+        
+        // Calculate amount based on item rarity
+        const itemRarity = item.itemRarity || 1; // Default to rarity 1 if not specified
+        const { minAmount, maxAmount } = calculateItemQuestAmount(itemRarity);
+        
+        // Log if rare item is being requested
+        if (itemRarity >= 5) {
+          logger.debug('QUEST', `Item ${item.itemName} is rarity ${itemRarity}, requesting 1x only`);
+        } else if (itemRarity >= 3) {
+          logger.debug('QUEST', `Item ${item.itemName} is rarity ${itemRarity}, requesting reduced amount (1-3)`);
+        }
+        
+        return {
+          item: item.itemName,
+          amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount
+        };
+      } catch (error) {
+        logger.error('QUEST', `Error generating item quest requirements for ${village}`, error);
+        throw new Error(`Failed to generate item quest requirements for ${village}: ${error.message}`);
+      }
     }
     
     case 'monster': {
-      const monster = getRandomElement(pools.monsterPool);
-      if (!monster?.name) {
-        throw new Error(`Invalid monster selected for ${village} monster quest`);
+      // Validate monster pool
+      if (!pools.monsterPool || !Array.isArray(pools.monsterPool) || pools.monsterPool.length === 0) {
+        logger.error('QUEST', `Empty or invalid monsterPool for ${village} monster quest`);
+        throw new Error(`No monsters available for ${village} monster quest`);
       }
-      const { minAmount, maxAmount } = QUEST_PARAMS.monster;
-      return {
-        monster: monster.name,
-        tier: monster.tier,
-        amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount
-      };
+      
+      try {
+        // Try to get tier 1-3 monsters first
+        let monsterPool = pools.monsterPool.filter(m => m?.tier <= 3);
+        
+        // Fallback to any monsters if tier 1-3 unavailable
+        if (monsterPool.length === 0) {
+          logger.warn('QUEST', `No tier 1-3 monsters available for ${village}, using all available monsters`);
+          monsterPool = pools.monsterPool.filter(m => m?.name);
+        }
+        
+        if (monsterPool.length === 0) {
+          throw new Error(`No valid monsters in pool for ${village} monster quest`);
+        }
+        
+        const monster = getRandomElement(monsterPool);
+        if (!monster?.name) {
+          throw new Error(`Invalid monster selected for ${village} monster quest`);
+        }
+        
+        const { minAmount, maxAmount } = QUEST_PARAMS.monster;
+        return {
+          monster: monster.name,
+          tier: monster.tier,
+          amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount
+        };
+      } catch (error) {
+        logger.error('QUEST', `Error generating monster quest requirements for ${village}`, error);
+        throw new Error(`Failed to generate monster quest requirements for ${village}: ${error.message}`);
+      }
     }
     
     case 'escort': {
-      const availableDestinations = pools.escortPool.filter(loc => loc !== village);
-      if (availableDestinations.length === 0) {
+      // Validate escort pool
+      if (!pools.escortPool || !Array.isArray(pools.escortPool)) {
+        logger.error('QUEST', `Invalid escortPool for ${village} escort quest`);
+        // Fallback to getAllVillages
         const allLocations = getAllVillages();
         const fallbackDestinations = allLocations.filter(loc => loc !== village);
         if (fallbackDestinations.length === 0) {
           throw new Error(`No escort destinations available for ${village}`);
         }
+        logger.warn('QUEST', `Using fallback destinations for ${village} escort quest`);
         return { location: getRandomElement(fallbackDestinations) };
       }
-      return { location: getRandomElement(availableDestinations) };
+      
+      try {
+        const availableDestinations = pools.escortPool.filter(loc => loc !== village);
+        if (availableDestinations.length === 0) {
+          // Fallback to all villages
+          const allLocations = getAllVillages();
+          const fallbackDestinations = allLocations.filter(loc => loc !== village);
+          if (fallbackDestinations.length === 0) {
+            logger.error('QUEST', `No escort destinations available for ${village}`);
+            throw new Error(`No escort destinations available for ${village}`);
+          }
+          logger.warn('QUEST', `Using fallback destinations for ${village} escort quest`);
+          return { location: getRandomElement(fallbackDestinations) };
+        }
+        return { location: getRandomElement(availableDestinations) };
+      } catch (error) {
+        logger.error('QUEST', `Error generating escort quest requirements for ${village}`, error);
+        throw new Error(`Failed to generate escort quest requirements for ${village}: ${error.message}`);
+      }
     }
     
     case 'crafting': {
-      const item = getRandomElement(pools.craftingPool);
-      if (!item?.itemName) {
-        throw new Error(`Invalid crafting item selected for ${village} crafting quest`);
+      // Validate crafting pool
+      if (!pools.craftingPool || !Array.isArray(pools.craftingPool) || pools.craftingPool.length === 0) {
+        logger.error('QUEST', `Empty or invalid craftingPool for ${village} crafting quest`);
+        throw new Error(`No crafting items available for ${village} crafting quest`);
       }
       
-      // Check stamina to craft and adjust amount accordingly
-      let amount;
-      if (item.staminaToCraft && item.staminaToCraft > 4) {
-        // Items with more than 4 stamina to craft only ask for 1
-        amount = 1;
-      } else {
-        // Items with 4 or less stamina use normal amount range
-        const { minAmount, maxAmount } = QUEST_PARAMS.crafting;
-        amount = Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount;
+      try {
+        // Prefer items with stamina <= 4, but fallback to all items if needed
+        let craftingPool = pools.craftingPool.filter(item => item?.itemName);
+        let preferredPool = craftingPool.filter(item => !item.staminaToCraft || item.staminaToCraft <= 4);
+        
+        // Use preferred pool if available, otherwise use all items
+        if (preferredPool.length === 0) {
+          logger.warn('QUEST', `No simple crafting items (stamina <= 4) for ${village}, using all available items`);
+          preferredPool = craftingPool;
+        }
+        
+        const item = getRandomElement(preferredPool);
+        if (!item?.itemName) {
+          throw new Error(`Invalid crafting item selected for ${village} crafting quest`);
+        }
+        
+        // Check stamina to craft and adjust amount accordingly
+        let amount;
+        if (item.staminaToCraft && item.staminaToCraft > 4) {
+          // Items with more than 4 stamina to craft only ask for 1
+          amount = 1;
+        } else {
+          // Items with 4 or less stamina use normal amount range
+          const { minAmount, maxAmount } = QUEST_PARAMS.crafting;
+          amount = Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount;
+        }
+        
+        return { item: item.itemName, amount };
+      } catch (error) {
+        logger.error('QUEST', `Error generating crafting quest requirements for ${village}`, error);
+        throw new Error(`Failed to generate crafting quest requirements for ${village}: ${error.message}`);
       }
-      
-      return { item: item.itemName, amount };
     }
     
     case 'art': {
-      const artPrompt = getRandomElement(pools.artPool);
-      if (!artPrompt) {
+      // Validate art pool
+      if (!pools.artPool || !Array.isArray(pools.artPool) || pools.artPool.length === 0) {
+        logger.error('QUEST', `Empty or invalid artPool for ${village} art quest`);
         throw new Error(`No art prompts available for ${village} art quest`);
       }
       
-      let finalPrompt = artPrompt.prompt;
-      
-      // Replace {village} placeholder with actual village name
-      if (artPrompt.needsVillage) {
-        finalPrompt = finalPrompt.replace('{village}', village);
+      try {
+        const artPrompt = getRandomElement(pools.artPool);
+        if (!artPrompt || !artPrompt.prompt) {
+          // Fallback: try to find any valid prompt
+          const validPrompt = pools.artPool.find(p => p?.prompt);
+          if (!validPrompt) {
+            throw new Error(`No valid art prompts in pool for ${village} art quest`);
+          }
+          let finalPrompt = validPrompt.prompt;
+          if (validPrompt.needsVillage) {
+            finalPrompt = finalPrompt.replace('{village}', village);
+          }
+          return {
+            prompt: finalPrompt,
+            requirement: validPrompt.requirement || 'Sketch',
+            context: validPrompt.context || 'general',
+            amount: 1
+          };
+        }
+        
+        let finalPrompt = artPrompt.prompt;
+        
+        // Replace {village} placeholder with actual village name
+        if (artPrompt.needsVillage) {
+          finalPrompt = finalPrompt.replace('{village}', village);
+        }
+        
+        return {
+          prompt: finalPrompt,
+          requirement: artPrompt.requirement,
+          context: artPrompt.context,
+          amount: 1
+        };
+      } catch (error) {
+        logger.error('QUEST', `Error generating art quest requirements for ${village}`, error);
+        throw new Error(`Failed to generate art quest requirements for ${village}: ${error.message}`);
       }
-      
-      return {
-        prompt: finalPrompt,
-        requirement: artPrompt.requirement,
-        context: artPrompt.context,
-        amount: 1
-      };
     }
     
     case 'writing': {
-      const writingPrompt = getRandomElement(pools.writingPool);
-      if (!writingPrompt) {
+      // Validate writing pool
+      if (!pools.writingPool || !Array.isArray(pools.writingPool) || pools.writingPool.length === 0) {
+        logger.error('QUEST', `Empty or invalid writingPool for ${village} writing quest`);
         throw new Error(`No writing prompts available for ${village} writing quest`);
       }
       
-      let finalPrompt = writingPrompt.prompt;
-      
-      // Replace {village} placeholder with actual village name
-      if (writingPrompt.needsVillage) {
-        finalPrompt = finalPrompt.replace('{village}', village);
+      try {
+        const writingPrompt = getRandomElement(pools.writingPool);
+        if (!writingPrompt || !writingPrompt.prompt) {
+          // Fallback: try to find any valid prompt
+          const validPrompt = pools.writingPool.find(p => p?.prompt);
+          if (!validPrompt) {
+            throw new Error(`No valid writing prompts in pool for ${village} writing quest`);
+          }
+          let finalPrompt = validPrompt.prompt;
+          if (validPrompt.needsVillage) {
+            finalPrompt = finalPrompt.replace('{village}', village);
+          }
+          return {
+            prompt: finalPrompt,
+            requirement: '500+ words',
+            context: validPrompt.context || 'general',
+            amount: 1
+          };
+        }
+        
+        let finalPrompt = writingPrompt.prompt;
+        
+        // Replace {village} placeholder with actual village name
+        if (writingPrompt.needsVillage) {
+          finalPrompt = finalPrompt.replace('{village}', village);
+        }
+        
+        return { 
+          prompt: finalPrompt, 
+          requirement: '500+ words',
+          context: writingPrompt.context,
+          amount: 1 
+        };
+      } catch (error) {
+        logger.error('QUEST', `Error generating writing quest requirements for ${village}`, error);
+        throw new Error(`Failed to generate writing quest requirements for ${village}: ${error.message}`);
       }
-      
-      return { 
-        prompt: finalPrompt, 
-        requirement: '500+ words',
-        context: writingPrompt.context,
-        amount: 1 
-      };
     }
     
     default:
-      throw new Error(`Unknown quest type: ${type}`);
+      logger.error('QUEST', `Unknown quest type: ${type} for ${village}`);
+      throw new Error(`Unknown quest type: ${type} for ${village}`);
   }
 }
 
 // ------------------- Function: generateQuestForVillage -------------------
-// Generates a random quest object for a given village and date
-async function generateQuestForVillage(village, date, pools, availableNPCs = null, isAfterNoon = false) {
-  // Validate pools
+// Generates a random quest object for a given village and date with fallback handling
+async function generateQuestForVillage(village, date, pools, availableNPCs = null, isAfterNoon = false, travelBlocked = false) {
+  // Validate pools with better error messages
   const requiredPools = ['itemPool', 'monsterPool', 'craftingPool', 'escortPool', 'villageShopPool', 'artPool', 'writingPool'];
+  const missingPools = [];
   for (const poolName of requiredPools) {
     if (!pools[poolName] || pools[poolName].length === 0) {
-      throw new Error(`No ${poolName} available for ${village} quest generation`);
+      missingPools.push(poolName);
     }
+  }
+  
+  if (missingPools.length > 0) {
+    logger.error('QUEST', `Missing or empty pools for ${village}: ${missingPools.join(', ')}`);
+    throw new Error(`Missing or empty pools for ${village}: ${missingPools.join(', ')}`);
   }
 
   const questId = generateUniqueId('X');
   
   if (!questId) {
+    logger.error('QUEST', `Failed to generate questId for ${village} quest`);
     throw new Error(`Failed to generate questId for ${village} quest`);
   }
   
   // Use provided NPC pool or fall back to all NPCs
-  const npcPool = availableNPCs || Object.keys(NPCs);
-  const npcName = getRandomNPCNameFromPool(npcPool);
+  let npcPool = availableNPCs;
+  if (!npcPool || npcPool.length === 0) {
+    logger.warn('QUEST', `NPC pool exhausted for ${village}, falling back to all NPCs`);
+    npcPool = Object.keys(NPCs);
+  }
+  
+  if (!npcPool || npcPool.length === 0) {
+    logger.error('QUEST', `No NPCs available for ${village} quest generation`);
+    throw new Error(`No NPCs available for ${village} quest generation`);
+  }
+  
+  let npcName;
+  try {
+    npcName = getRandomNPCNameFromPool(npcPool);
+  } catch (error) {
+    logger.error('QUEST', `Failed to get NPC name for ${village}`, error);
+    // Fallback to first available NPC
+    npcName = npcPool[0] || Object.keys(NPCs)[0];
+    if (!npcName) {
+      throw new Error(`No NPCs available for ${village} quest generation`);
+    }
+  }
   
   // ------------------- Special Walton Quest Logic -------------------
   // Walton has a 30% chance to request 50x acorns specifically
   if (npcName === 'Walton' && Math.random() < 0.30) {
-    return {
-      questId,
-      village,
-      date,
-      type: 'item',
-      npcName: 'Walton',
-      requirements: {
-        item: 'Acorn',
-        amount: 50
-      },
-      completed: false,
-      completedBy: null
-    };
+    // Validate item pool has Acorn before returning
+    try {
+      const acornItem = pools.itemPool.find(item => item?.itemName === 'Acorn');
+      if (!acornItem) {
+        logger.warn('QUEST', `Acorn not found in item pool for ${village} Walton quest, generating normal quest instead`);
+      } else {
+        return {
+          questId,
+          village,
+          date,
+          type: 'item',
+          npcName: 'Walton',
+          requirements: {
+            item: 'Acorn',
+            amount: 50
+          },
+          completed: false,
+          completedBy: null
+        };
+      }
+    } catch (error) {
+      logger.warn('QUEST', `Error checking for Acorn in ${village} Walton quest, generating normal quest instead`, error);
+    }
   }
   
   // ------------------- Special Peddler Quest Logic -------------------
   // Peddler ONLY asks for item quests from village shops with 1 item amount
   if (npcName === 'Peddler') {
-    const shopItem = getRandomElement(pools.villageShopPool);
-    if (!shopItem?.itemName || !shopItem?.stock) {
-      throw new Error(`Invalid village shop item selected for Peddler quest in ${village}`);
+    try {
+      if (!pools.villageShopPool || pools.villageShopPool.length === 0) {
+        logger.warn('QUEST', `No village shop items for ${village} Peddler quest, generating normal quest instead`);
+      } else {
+        const shopItem = getRandomElement(pools.villageShopPool);
+        if (shopItem?.itemName && shopItem?.stock) {
+          return {
+            questId,
+            village,
+            date,
+            type: 'item',
+            npcName: 'Peddler',
+            requirements: {
+              item: shopItem.itemName,
+              amount: 1 // Only ask for 1 item from shop
+            },
+            completed: false,
+            completedBy: null
+          };
+        } else {
+          logger.warn('QUEST', `Invalid village shop item selected for ${village} Peddler quest, generating normal quest instead`);
+        }
+      }
+    } catch (error) {
+      logger.warn('QUEST', `Error generating Peddler quest for ${village}, generating normal quest instead`, error);
     }
-    
-    return {
-      questId,
-      village,
-      date,
-      type: 'item',
-      npcName: 'Peddler',
-      requirements: {
-        item: shopItem.itemName,
-        amount: 1 // Only ask for 1 item from shop
-      },
-      completed: false,
-      completedBy: null
-    };
   }
   
   // ------------------- Normal Quest Generation -------------------
-  // Exclude art and writing quests if it's after 12pm EST
-  let availableTypes = [...QUEST_TYPES];
-  if (isAfterNoon) {
-    availableTypes = availableTypes.filter(type => type !== 'art' && type !== 'writing');
-    console.log(`[helpWantedModule.js]: ⏰ After 12pm EST - Excluding art and writing quests. Available types: ${availableTypes.join(', ')}`);
+  // Get available quest types using helper function
+  const availableTypes = getAvailableQuestTypes(isAfterNoon, travelBlocked);
+  
+  if (availableTypes.length === 0) {
+    logger.error('QUEST', `No available quest types for ${village} (isAfterNoon: ${isAfterNoon}, travelBlocked: ${travelBlocked})`);
+    throw new Error(`No available quest types for ${village} quest generation`);
   }
   
-  // Note: Weather checking is now done at posting time, not generation time
-  // This allows quests to be generated at midnight before weather is determined at 8am
+  // Try to generate quest with fallback to other types if one fails
+  let lastError = null;
+  const triedTypes = [];
   
-  const type = getRandomElement(availableTypes);
-  const requirements = generateQuestRequirements(type, pools, village);
+  // Shuffle available types to try different ones first
+  const shuffledTypes = shuffleArray([...availableTypes]);
   
-  // Note: Weather-based quest regeneration happens at posting time
+  for (const type of shuffledTypes) {
+    triedTypes.push(type);
+    try {
+      const requirements = generateQuestRequirements(type, pools, village);
+      
+      return {
+        questId,
+        village,
+        date,
+        type,
+        npcName,
+        requirements,
+        completed: false,
+        completedBy: null
+      };
+    } catch (error) {
+      lastError = error;
+      logger.warn('QUEST', `Failed to generate ${type} quest for ${village}, trying next type`, error);
+      // Continue to next type
+    }
+  }
   
-  return {
-    questId,
-    village,
-    date,
-    type,
-    npcName,
-    requirements,
-    completed: false,
-    completedBy: null
-  };
+  // All types failed
+  logger.error('QUEST', `Failed to generate quest for ${village} after trying all types: ${triedTypes.join(', ')}`, lastError);
+  throw new Error(`Failed to generate quest for ${village} after trying types: ${triedTypes.join(', ')}. Last error: ${lastError?.message || 'Unknown error'}`);
 }
 
 
 
 // Generates and saves daily quests for all villages
 async function generateDailyQuests() {
+  const startTime = Date.now();
+  const errors = [];
+  const warnings = [];
+  
   try {
     const now = new Date();
     // Fix: Use toLocaleDateString to get the correct EST date
     const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     
+    // Validate EST date format
+    if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      logger.error('QUEST', `Invalid date format: ${date}`);
+      throw new Error(`Invalid date format: ${date}`);
+    }
+    
     // Check if it's after 12pm EST - if so, don't generate art/writing quests
     const estHour = parseInt(now.toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}));
     const isAfterNoon = estHour >= 12;
+    
+    // Validate EST hour is a number
+    if (isNaN(estHour) || estHour < 0 || estHour > 23) {
+      logger.error('QUEST', `Invalid EST hour: ${estHour}`);
+      throw new Error(`Invalid EST hour: ${estHour}`);
+    }
     
     logger.info('QUEST', `Time check - Current EST hour: ${estHour}, isAfterNoon: ${isAfterNoon}`);
     
@@ -1081,29 +1614,72 @@ async function generateDailyQuests() {
     }
 
     // Clean up existing documents with null questId
-    await HelpWantedQuest.deleteMany({ questId: null });
+    try {
+      await HelpWantedQuest.deleteMany({ questId: null });
+    } catch (error) {
+      logger.warn('QUEST', `Error cleaning up quests with null questId`, error);
+      warnings.push('Failed to clean up null questIds');
+    }
     
     // Clean up any art or writing quests that were generated after 12pm EST
     if (isAfterNoon) {
-      const deletedArtWriting = await HelpWantedQuest.deleteMany({ 
-        date: date, 
-        type: { $in: ['art', 'writing'] } 
-      });
-      if (deletedArtWriting.deletedCount > 0) {
-        console.log(`[helpWantedModule.js]: 🧹 Cleaned up ${deletedArtWriting.deletedCount} art/writing quest(s) that were generated after 12pm EST`);
+      try {
+        const deletedArtWriting = await HelpWantedQuest.deleteMany({ 
+          date: date, 
+          type: { $in: ['art', 'writing'] } 
+        });
+        if (deletedArtWriting.deletedCount > 0) {
+          logger.info('QUEST', `Cleaned up ${deletedArtWriting.deletedCount} art/writing quest(s) that were generated after 12pm EST`);
+        }
+      } catch (error) {
+        logger.warn('QUEST', `Error cleaning up art/writing quests`, error);
+        warnings.push('Failed to clean up art/writing quests');
       }
     }
 
-    // Note: Escort quest cleanup due to weather is now handled at posting time
+    // Check weather for all villages upfront (use cached version)
+    const weatherCache = new Map();
+    const travelBlockedMap = new Map();
+    
+    logger.info('QUEST', 'Checking weather for all villages...');
+    for (const village of VILLAGES) {
+      try {
+        const travelBlocked = await isTravelBlockedByWeatherCached(village, weatherCache);
+        travelBlockedMap.set(village, travelBlocked);
+        if (travelBlocked) {
+          logger.info('QUEST', `Travel blocked in ${village} - escort quests will be excluded`);
+        }
+      } catch (error) {
+        logger.warn('QUEST', `Weather check failed for ${village}, defaulting to allowing travel`, error);
+        travelBlockedMap.set(village, false); // Default to allowing travel
+        warnings.push(`Weather check failed for ${village}`);
+      }
+    }
 
-    const pools = await getAllQuestPools();
+    // Get quest pools
+    let pools;
+    try {
+      pools = await getAllQuestPools();
+    } catch (error) {
+      logger.error('QUEST', 'Failed to get quest pools', error);
+      throw new Error(`Failed to get quest pools: ${error.message}`);
+    }
 
     // Create a shared pool of available NPCs to ensure uniqueness across all quests
     const allNPCs = Object.keys(NPCs);
-    if (allNPCs.length < VILLAGES.length) {
-      throw new Error(`Not enough NPCs available (${allNPCs.length}) for ${VILLAGES.length} villages. Need at least ${VILLAGES.length} unique NPCs.`);
+    if (allNPCs.length === 0) {
+      logger.error('QUEST', 'No NPCs available');
+      throw new Error('No NPCs available for quest generation');
     }
+    
+    // NPC pool handling - allow reuse if needed but log it
+    if (allNPCs.length < VILLAGES.length) {
+      logger.warn('QUEST', `Not enough NPCs (${allNPCs.length}) for ${VILLAGES.length} villages. NPCs will be reused.`);
+      warnings.push(`NPCs will be reused (${allNPCs.length} NPCs for ${VILLAGES.length} villages)`);
+    }
+    
     const availableNPCs = shuffleArray([...allNPCs]); // Shuffle for randomness
+    const npcUsageCount = new Map(); // Track NPC usage
     
     // Randomize village order instead of always having Rudania first
     const shuffledVillages = shuffleArray([...VILLAGES]);
@@ -1136,50 +1712,149 @@ async function generateDailyQuests() {
     logger.info('QUEST', `Successfully selected ${selectedTimes.length} posting times for ${VILLAGES.length} villages`);
     
     const quests = [];
+    const failedVillages = [];
     
     // Generate quests sequentially to ensure unique NPCs
     for (let i = 0; i < shuffledVillages.length; i++) {
       const village = shuffledVillages[i];
-      const quest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon);
+      const travelBlocked = travelBlockedMap.get(village) || false;
       
-      // Remove the used NPC from the available pool
-      const npcIndex = availableNPCs.indexOf(quest.npcName);
-      if (npcIndex !== -1) {
-        availableNPCs.splice(npcIndex, 1);
+      try {
+        // Generate quest with travel blocking info
+        const quest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon, travelBlocked);
+        
+        // Track NPC usage
+        const currentCount = npcUsageCount.get(quest.npcName) || 0;
+        npcUsageCount.set(quest.npcName, currentCount + 1);
+        
+        if (currentCount > 0) {
+          logger.debug('QUEST', `NPC ${quest.npcName} reused (${currentCount + 1} times)`);
+        }
+        
+        // Remove the used NPC from the available pool (but allow reuse if pool is exhausted)
+        const npcIndex = availableNPCs.indexOf(quest.npcName);
+        if (npcIndex !== -1 && availableNPCs.length > VILLAGES.length - i) {
+          // Only remove if we still have enough NPCs left
+          availableNPCs.splice(npcIndex, 1);
+        }
+        
+        // Assign a posting time with variable buffer from the selected times
+        const assignedTime = selectedTimes[i];
+        if (!assignedTime) {
+          const errorMsg = `No posting time available for village ${village} at index ${i}. This should not happen after validation.`;
+          logger.error('QUEST', errorMsg);
+          errors.push(errorMsg);
+          failedVillages.push(village);
+          continue; // Continue with other villages
+        }
+        
+        quest.scheduledPostTime = assignedTime;
+        const hour = cronToHour(quest.scheduledPostTime);
+        logger.info('QUEST', `Generated ${quest.type} quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
+        quests.push(quest);
+        
+      } catch (error) {
+        logger.error('QUEST', `Failed to generate quest for ${village}`, error);
+        errors.push(`Failed to generate quest for ${village}: ${error.message}`);
+        failedVillages.push(village);
+        
+        // Retry once for failed villages
+        try {
+          logger.info('QUEST', `Retrying quest generation for ${village}...`);
+          const retryQuest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon, travelBlocked);
+          const assignedTime = selectedTimes[i];
+          if (assignedTime) {
+            retryQuest.scheduledPostTime = assignedTime;
+            const hour = cronToHour(retryQuest.scheduledPostTime);
+            logger.success('QUEST', `Successfully generated ${retryQuest.type} quest for ${village} on retry`);
+            quests.push(retryQuest);
+            // Remove from failed list
+            const failedIndex = failedVillages.indexOf(village);
+            if (failedIndex !== -1) {
+              failedVillages.splice(failedIndex, 1);
+            }
+          }
+        } catch (retryError) {
+          logger.error('QUEST', `Retry failed for ${village}`, retryError);
+          // Leave in failed list
+        }
       }
-      
-      // Assign a posting time with variable buffer from the selected times
-      const assignedTime = selectedTimes[i];
-      if (!assignedTime) {
-        const errorMsg = `No posting time available for village ${village} at index ${i}. This should not happen after validation.`;
-        logger.error('QUEST', errorMsg);
-        throw new Error(errorMsg);
-      }
-      
-      quest.scheduledPostTime = assignedTime;
-      const hour = cronToHour(quest.scheduledPostTime);
-      logger.info('QUEST', `Generated ${quest.type} quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
-      quests.push(quest);
+    }
+    
+    // Report on failed villages
+    if (failedVillages.length > 0) {
+      logger.error('QUEST', `Failed to generate quests for ${failedVillages.length} village(s): ${failedVillages.join(', ')}`);
+    }
+    
+    if (quests.length === 0) {
+      throw new Error(`Failed to generate any quests. Errors: ${errors.join('; ')}`);
     }
     
     // Final validation: ensure all quests have valid scheduledPostTime before saving
     const questsWithoutTime = quests.filter(q => !q.scheduledPostTime);
     if (questsWithoutTime.length > 0) {
       const villagesWithoutTime = questsWithoutTime.map(q => q.village).join(', ');
-      const errorMsg = `Validation failed: ${questsWithoutTime.length} quest(s) missing scheduledPostTime for village(s): ${villagesWithoutTime}`;
-      logger.error('QUEST', errorMsg);
-      throw new Error(errorMsg);
+      logger.error('QUEST', `Validation failed: ${questsWithoutTime.length} quest(s) missing scheduledPostTime for village(s): ${villagesWithoutTime}`);
+      // Remove quests without time instead of throwing
+      quests = quests.filter(q => q.scheduledPostTime);
+      if (quests.length === 0) {
+        throw new Error(`All quests missing scheduledPostTime`);
+      }
     }
 
-    // Upsert quests
-    const results = [];
+    // Validate quest objects before saving
+    const invalidQuests = [];
     for (const quest of quests) {
-      const updated = await HelpWantedQuest.findOneAndUpdate(
-        { village: quest.village, date: quest.date },
-        quest,
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
-      results.push(updated);
+      if (!quest.questId || !quest.village || !quest.date || !quest.type || !quest.npcName || !quest.requirements) {
+        invalidQuests.push(quest.village);
+        logger.error('QUEST', `Invalid quest object for ${quest.village}: missing required fields`);
+      }
+    }
+    
+    if (invalidQuests.length > 0) {
+      logger.error('QUEST', `Invalid quest objects for ${invalidQuests.length} village(s): ${invalidQuests.join(', ')}`);
+      quests = quests.filter(q => !invalidQuests.includes(q.village));
+    }
+
+    // Save quests with retry logic
+    const results = [];
+    const saveErrors = [];
+    
+    for (const quest of quests) {
+      let saved = false;
+      for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt++) {
+        try {
+          const updated = await HelpWantedQuest.findOneAndUpdate(
+            { village: quest.village, date: quest.date },
+            quest,
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+          
+          if (!updated) {
+            throw new Error('Save returned null');
+          }
+          
+          results.push(updated);
+          saved = true;
+          break;
+        } catch (saveError) {
+          if (saveAttempt === 3) {
+            logger.error('QUEST', `Failed to save quest for ${quest.village} after 3 attempts`, saveError);
+            saveErrors.push(`${quest.village}: ${saveError.message}`);
+          } else {
+            logger.warn('QUEST', `Save attempt ${saveAttempt}/3 failed for ${quest.village}`, saveError);
+            await new Promise(resolve => setTimeout(resolve, 100 * saveAttempt)); // Exponential backoff
+          }
+        }
+      }
+      
+      if (!saved) {
+        errors.push(`Failed to save quest for ${quest.village}`);
+      }
+    }
+    
+    if (results.length === 0) {
+      throw new Error(`Failed to save any quests. Save errors: ${saveErrors.join('; ')}`);
     }
     
     // Log the final schedule for the day with detailed information
@@ -1194,17 +1869,32 @@ async function generateDailyQuests() {
     logger.info('QUEST', `Daily quest schedule for ${date}: ${scheduleDetails}`);
     
     // Final validation log
-    const allHaveTimes = results.every(quest => quest.scheduledPostTime);
+    const allHaveTimes = results.every(quest => quest.scheduledPostTime && quest.questId && quest.type);
     if (!allHaveTimes) {
-      const missingTimes = results.filter(quest => !quest.scheduledPostTime).map(q => q.village);
-      logger.error('QUEST', `CRITICAL: ${missingTimes.length} quest(s) missing scheduledPostTime after save: ${missingTimes.join(', ')}`);
+      const missingFields = results.filter(quest => !quest.scheduledPostTime || !quest.questId || !quest.type);
+      logger.error('QUEST', `CRITICAL: ${missingFields.length} quest(s) missing required fields: ${missingFields.map(q => q.village).join(', ')}`);
     } else {
-      logger.success('QUEST', `All ${results.length} quest(s) have valid scheduledPostTime for ${date}`);
+      logger.success('QUEST', `All ${results.length} quest(s) have valid required fields for ${date}`);
     }
+    
+    // Attempt to regenerate missing quests if validation failed
+    if (failedVillages.length > 0 && results.length < VILLAGES.length) {
+      logger.info('QUEST', `Attempting to regenerate quests for failed villages: ${failedVillages.join(', ')}`);
+      // Could add retry logic here, but for now just log
+    }
+    
+    // Log warnings if any
+    if (warnings.length > 0) {
+      logger.warn('QUEST', `Warnings during quest generation: ${warnings.join('; ')}`);
+    }
+    
+    const duration = Date.now() - startTime;
+    logger.info('QUEST', `Quest generation completed in ${duration}ms. Generated ${results.length}/${VILLAGES.length} quests successfully.`);
     
     return results;
   } catch (error) {
-    console.error('[HelpWanted] Error generating daily quests:', error);
+    const duration = Date.now() - startTime;
+    logger.error('QUEST', `Error generating daily quests (took ${duration}ms)`, error);
     throw error;
   }
 }
@@ -1347,7 +2037,7 @@ function selectTimesWithBuffer(availableTimes, count) {
 
   // If we couldn't find enough compatible times, log a warning
   if (selected.length < count) {
-    console.log(`[HelpWanted] Warning: Could only find ${selected.length} times with 6-hour buffer out of ${availableTimes.length} available times`);
+    logger.warn('QUEST', `Could only find ${selected.length} times with 6-hour buffer out of ${availableTimes.length} available times`);
   }
 
   // Sort selected times by hour for better scheduling
@@ -1355,7 +2045,7 @@ function selectTimesWithBuffer(availableTimes, count) {
   
   // Log the selected times in a readable format
   const timeDisplay = selected.map(t => formatHour(t.hour)).join(', ');
-  console.log(`[HelpWanted] Selected times with 6-hour buffer: ${timeDisplay}`);
+  logger.info('QUEST', `Selected times with 6-hour buffer: ${timeDisplay}`);
   
   return selected.map(timeSlot => timeSlot.cron);
 }
@@ -1391,7 +2081,7 @@ async function getTodaysQuests() {
     
     return quests;
   } catch (error) {
-    console.error('[HelpWanted] Error fetching today\'s quests:', error);
+    logger.error('QUEST', 'Error fetching today\'s quests', error);
     throw error;
   }
 }
@@ -1405,7 +2095,7 @@ async function getQuestsForScheduledTime(cronTime) {
     const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
   } catch (error) {
-    console.error('[HelpWanted] Error fetching quests for scheduled time:', error);
+    logger.error('QUEST', 'Error fetching quests for scheduled time', error);
     throw error;
   }
 }
@@ -1432,7 +2122,7 @@ async function getCurrentQuestSchedule() {
     
     return schedule;
   } catch (error) {
-    console.error('[HelpWanted] Error getting current quest schedule:', error);
+    logger.error('QUEST', 'Error getting current quest schedule', error);
     throw error;
   }
 }
@@ -1496,7 +2186,7 @@ async function formatQuestsAsEmbed() {
     embed.setFooter({ text: 'Only one quest per user per day. Natives only!' });
     return embed;
   } catch (error) {
-    console.error('[HelpWanted] Error formatting quests as embed:', error);
+    logger.error('QUEST', 'Error formatting quests as embed', error);
     throw error;
   }
 }
@@ -1556,7 +2246,7 @@ async function formatQuestsAsEmbedsByVillage() {
             });
           }
         } catch (error) {
-          console.error('[HelpWanted] Error fetching character for completed quest:', error);
+          logger.error('QUEST', 'Error fetching character for completed quest', error);
         }
       } else {
         // Add NPC icon as thumbnail for available quests
@@ -1566,7 +2256,7 @@ async function formatQuestsAsEmbedsByVillage() {
             embed.setThumbnail(npcData.icon);
           }
         } catch (error) {
-          console.error('[HelpWanted] Error setting NPC thumbnail:', error);
+          logger.error('QUEST', 'Error setting NPC thumbnail', error);
         }
         
         // Only add rules and how to complete for available quests
@@ -1591,7 +2281,7 @@ async function formatQuestsAsEmbedsByVillage() {
     
     return result;
   } catch (error) {
-    console.error('[HelpWanted] Error formatting quests by village:', error);
+    logger.error('QUEST', 'Error formatting quests by village', error);
     throw error;
   }
 }
@@ -1648,7 +2338,7 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
             });
           }
         } catch (error) {
-          console.error('[HelpWanted] Error fetching character for completed quest:', error);
+          logger.error('QUEST', 'Error fetching character for completed quest', error);
         }
       } else {
         // Add NPC icon as thumbnail for available quests
@@ -1658,7 +2348,7 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
             embed.setThumbnail(npcData.icon);
           }
         } catch (error) {
-          console.error('[HelpWanted] Error setting NPC thumbnail:', error);
+          logger.error('QUEST', 'Error setting NPC thumbnail', error);
         }
         
         // Only add rules and how to complete for available quests
@@ -1683,7 +2373,7 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
     
     return result;
   } catch (error) {
-    console.error('[HelpWanted] Error formatting specific quests by village:', error);
+    logger.error('QUEST', 'Error formatting specific quests by village', error);
     throw error;
   }
 }
@@ -1708,7 +2398,7 @@ async function hasUserCompletedQuestToday(userId) {
     
     return lastCompletion === today;
   } catch (error) {
-    console.error('[HelpWanted] Error checking user quest completion:', error);
+    logger.error('QUEST', 'Error checking user quest completion', error);
     return false;
   }
 }
@@ -1734,7 +2424,7 @@ async function hasUserReachedWeeklyQuestLimit(userId) {
     
     return weeklyCompletions.length >= 3;
   } catch (error) {
-    console.error('[HelpWanted] Error checking weekly quest limit:', error);
+    logger.error('QUEST', 'Error checking weekly quest limit', error);
     return false;
   }
 }
@@ -1753,7 +2443,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     }
 
     if (!quest.channelId) {
-      console.error(`[helpWantedModule]: No channel ID found for quest ${quest.questId}`);
+      logger.error('QUEST', `No channel ID found for quest ${quest.questId}`);
       return;
     }
     
@@ -1761,19 +2451,19 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     
     const channel = await client.channels.fetch(quest.channelId);
     if (!channel) {
-      console.error(`[helpWantedModule]: Could not find channel ${quest.channelId} for quest ${quest.questId}`);
+      logger.error('QUEST', `Could not find channel ${quest.channelId} for quest ${quest.questId}`);
       return;
     }
 
     const message = await channel.messages.fetch(quest.messageId);
     if (!message) {
-      console.error(`[helpWantedModule]: Could not find message ${quest.messageId}`);
+      logger.error('QUEST', `Could not find message ${quest.messageId}`);
       return;
     }
 
     const originalEmbed = message.embeds[0];
     if (!originalEmbed) {
-      console.error(`[helpWantedModule]: No embed found in message ${quest.messageId}`);
+      logger.error('QUEST', `No embed found in message ${quest.messageId}`);
       return;
     }
 
@@ -1815,7 +2505,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
           });
         }
       } catch (error) {
-        console.error('[HelpWanted] Error fetching character for completed quest:', error);
+        logger.error('QUEST', 'Error fetching character for completed quest', error);
       }
     } else if (!isExpired) {
       // Add NPC icon as thumbnail for available quests
@@ -1825,7 +2515,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
           updatedEmbed.setThumbnail(npcData.icon);
         }
       } catch (error) {
-        console.error('[HelpWanted] Error setting NPC thumbnail:', error);
+        logger.error('QUEST', 'Error setting NPC thumbnail', error);
       }
       
       // Only add rules and how to complete for available quests
@@ -1854,7 +2544,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
 
     await message.edit({ embeds: [updatedEmbed] });
   } catch (error) {
-    console.error(`[helpWantedModule]: ❌ Failed to update quest embed for ${quest.questId}:`, error);
+    logger.error('QUEST', `Failed to update quest embed for ${quest.questId}`, error);
   }
 }
 
@@ -1872,18 +2562,18 @@ async function checkAndCompleteQuestFromSubmission(submissionData, client) {
     }
 
     const questId = submissionData.questEvent;
-    console.log(`[helpWantedModule]: Checking quest completion for submission with quest ID: ${questId}`);
+    logger.debug('QUEST', `Checking quest completion for submission with quest ID: ${questId}`);
 
     // Find the quest
     const quest = await HelpWantedQuest.findOne({ questId });
     if (!quest) {
-      console.log(`[helpWantedModule]: Quest ${questId} not found`);
+      logger.debug('QUEST', `Quest ${questId} not found`);
       return;
     }
 
     // Check if quest is already completed
     if (quest.completed) {
-      console.log(`[helpWantedModule]: Quest ${questId} is already completed`);
+      logger.debug('QUEST', `Quest ${questId} is already completed`);
       return;
     }
 
@@ -1893,7 +2583,7 @@ async function checkAndCompleteQuestFromSubmission(submissionData, client) {
     // Check if submission type matches quest type
     const submissionType = submissionData.category; // 'art' or 'writing'
     if (submissionType !== quest.type) {
-      console.log(`[helpWantedModule]: Submission type ${submissionType} doesn't match quest type ${quest.type}`);
+      logger.debug('QUEST', `Submission type ${submissionType} doesn't match quest type ${quest.type}`);
       return;
     }
 
@@ -1902,7 +2592,7 @@ async function checkAndCompleteQuestFromSubmission(submissionData, client) {
     if (submissionData.messageUrl && !submissionData.approvedSubmissionData) {
       const isApproved = await checkSubmissionApproval(submissionData.messageUrl, client);
       if (!isApproved) {
-        console.log(`[helpWantedModule]: Submission for quest ${questId} is not approved yet`);
+        logger.debug('QUEST', `Submission for quest ${questId} is not approved yet`);
         return;
       }
     }
@@ -1911,7 +2601,7 @@ async function checkAndCompleteQuestFromSubmission(submissionData, client) {
     await completeQuestFromSubmission(quest, submissionData, client);
     
   } catch (error) {
-    console.error(`[helpWantedModule]: Error checking quest completion from submission:`, error);
+    logger.error('QUEST', 'Error checking quest completion from submission', error);
   }
 }
 
@@ -1950,7 +2640,7 @@ async function checkSubmissionApproval(messageUrl, client) {
 
     return checkmarkReactions.size > 0;
   } catch (error) {
-    console.error(`[helpWantedModule]: Error checking submission approval:`, error);
+    logger.error('QUEST', 'Error checking submission approval', error);
     return false;
   }
 }
@@ -1962,7 +2652,7 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
     // Check if quest period has ended before completing
     // Help Wanted quests expire at midnight on the day they are posted
     if (!isQuestExpired(quest)) {
-      console.log(`[helpWantedModule]: Quest ${quest.questId} submission approved, but quest period has not ended yet. Completion will be processed when period expires.`);
+      logger.info('QUEST', `Quest ${quest.questId} submission approved, but quest period has not ended yet. Completion will be processed when period expires.`);
       // Update user tracking to mark they completed the quest (even though quest isn't completed yet)
       const User = require('../../shared/models/UserModel');
       const user = await User.findOne({ discordId: submissionData.userId });
@@ -2001,10 +2691,10 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
     // Send completion message to the original town hall channel
     await sendQuestCompletionMessage(quest, submissionData, client);
 
-    console.log(`[helpWantedModule]: ✅ Quest ${quest.questId} completed via submission approval (period has ended)`);
+    logger.success('QUEST', `Quest ${quest.questId} completed via submission approval (period has ended)`);
     
   } catch (error) {
-    console.error(`[helpWantedModule]: Error completing quest from submission:`, error);
+    logger.error('QUEST', 'Error completing quest from submission', error);
   }
 }
 
@@ -2041,13 +2731,13 @@ async function sendQuestCompletionMessage(quest, submissionData, client) {
 
     const channelId = townHallChannels[quest.village];
     if (!channelId) {
-      console.log(`[helpWantedModule]: No town hall channel found for village ${quest.village}`);
+      logger.warn('QUEST', `No town hall channel found for village ${quest.village}`);
       return;
     }
 
     const channel = await client.channels.fetch(channelId);
     if (!channel) {
-      console.log(`[helpWantedModule]: Could not fetch town hall channel ${channelId}`);
+      logger.error('QUEST', `Could not fetch town hall channel ${channelId}`);
       return;
     }
 
@@ -2097,10 +2787,10 @@ async function sendQuestCompletionMessage(quest, submissionData, client) {
     completionEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
     await channel.send({ embeds: [completionEmbed] });
-    console.log(`[helpWantedModule]: ✅ Quest completion message sent to ${quest.village} town hall`);
+    logger.success('QUEST', `Quest completion message sent to ${quest.village} town hall`);
     
   } catch (error) {
-    console.error(`[helpWantedModule]: Error sending quest completion message:`, error);
+    logger.error('QUEST', 'Error sending quest completion message', error);
   }
 }
 
@@ -2133,8 +2823,10 @@ module.exports = {
   isQuestExpired,
   checkAndCompleteQuestFromSubmission,
   isTravelBlockedByWeather,
+  isTravelBlockedByWeatherCached,
   regenerateEscortQuest,
   regenerateArtWritingQuest,
   getRandomNPCName,
-  getRandomNPCNameFromPool
+  getRandomNPCNameFromPool,
+  getAvailableQuestTypes
 }; 

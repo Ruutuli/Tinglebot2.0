@@ -138,19 +138,32 @@ async function connectToInventories() {
 }
 
 // ------------------- connectToInventoriesNative -------------------
+// Connection promise to prevent multiple simultaneous connection attempts
+let connectingInventoriesNativePromise = null;
+
 const connectToInventoriesNative = async () => {
  try {
   // Always check if we have a valid connection first
   if (inventoriesDbNativeConnection) {
-    // Test the connection to make sure it's still alive
+    // Test the connection to make sure it's still alive with a timeout
     try {
-      await inventoriesDbNativeConnection.admin().ping();
+      // Use a shorter timeout for ping to fail fast if connection is dead
+      await Promise.race([
+        inventoriesDbNativeConnection.admin().ping(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 2000))
+      ]);
       return inventoriesDbNativeConnection;
     } catch (pingError) {
-      console.log("[db.js]: Native inventories connection lost, reconnecting...");
+      logger.warn('Native inventories connection lost, reconnecting...', 'db.js');
       // Connection is dead, reset and reconnect
       inventoriesDbNativeConnection = null;
+      connectingInventoriesNativePromise = null;
     }
+  }
+  
+  // If already connecting, wait for that connection instead of creating a new one
+  if (connectingInventoriesNativePromise) {
+    return await connectingInventoriesNativePromise;
   }
   
   // If no connection, create a new one
@@ -161,23 +174,40 @@ const connectToInventoriesNative = async () => {
       throw new Error('Missing MongoDB URI for inventories database');
     }
     
-    const client = new MongoClient(uri, {
-      maxPoolSize: 5,
-      minPoolSize: 1,
-      serverSelectionTimeoutMS: 10000, // 10 seconds
-      connectTimeoutMS: 10000,         // 10 seconds
-      socketTimeoutMS: 30000           // 30 seconds
-    });
+    // Create connection promise to prevent duplicate connections
+    connectingInventoriesNativePromise = (async () => {
+      try {
+        const client = new MongoClient(uri, {
+          maxPoolSize: 20, // Increased from 5 to handle more parallel requests
+          minPoolSize: 2,  // Increased from 1 to maintain minimum connections
+          serverSelectionTimeoutMS: 15000, // Increased from 10 seconds
+          connectTimeoutMS: 15000,         // Increased from 10 seconds
+          socketTimeoutMS: 45000,          // Increased from 30 seconds
+          maxIdleTimeMS: 30000,            // Close idle connections after 30s
+          retryWrites: true,
+          retryReads: true
+        });
+        
+        await client.connect();
+        const db = client.db('inventories');
+        inventoriesDbNativeConnection = db;
+        logger.success('DATABASE', 'Native inventories database connected');
+        connectingInventoriesNativePromise = null;
+        return db;
+      } catch (error) {
+        connectingInventoriesNativePromise = null;
+        throw error;
+      }
+    })();
     
-    await client.connect();
-    inventoriesDbNativeConnection = client.db('inventories');
-    logger.success('DATABASE', 'Native inventories database connected');
+    return await connectingInventoriesNativePromise;
   }
   
   return inventoriesDbNativeConnection;
  } catch (error) {
   console.error("[db.js]: ❌ Error connecting to Native inventories database:", error.message);
   inventoriesDbNativeConnection = null;
+  connectingInventoriesNativePromise = null;
   throw error;
  }
 };

@@ -119,144 +119,146 @@ function renderItemCards(items, page = 1, totalItems = null) {
 
       return `
         <div class="model-details-item item-card modern-item-card" data-item-name="${item.itemName}" onclick="this.classList.toggle('flipped')">
-          <div class="item-header-row modern-item-header">
-            <div class="item-image-card">
-              <img 
-                src="${formatItemImageUrl(item.image)}" 
-                alt="${item.itemName}" 
-                class="item-image modern-item-image"
-                onerror="console.error('❌ Failed to load:', this.src); this.src='/images/ankleicon.png';"
-                crossorigin="anonymous"
-              >
-              ${emoji}
-            </div>
-            <div class="item-header-info modern-item-header-info">
-              <div class="item-name-row">
-                <span class="item-name-big">${item.itemName}</span>
-                <div class="total-in-world-badge loading" data-item-name="${item.itemName}" title="Total quantity across all character inventories">
-                  <i class="fas fa-spinner"></i>
-                  <span class="total-count">...</span>
+          <div class="item-card-front">
+            <div class="item-header-row modern-item-header">
+              <div class="item-image-card">
+                <img 
+                  src="${formatItemImageUrl(item.image)}" 
+                  alt="${item.itemName}" 
+                  class="item-image modern-item-image"
+                  onerror="console.error('❌ Failed to load:', this.src); this.src='/images/ankleicon.png';"
+                  crossorigin="anonymous"
+                >
+                ${emoji}
+              </div>
+              <div class="item-header-info modern-item-header-info">
+                <div class="item-name-row">
+                  <span class="item-name-big">${item.itemName}</span>
+                  <div class="total-in-world-badge loading" data-item-name="${item.itemName}" title="Total quantity across all character inventories">
+                    <i class="fas fa-spinner"></i>
+                    <span class="total-count">...</span>
+                  </div>
+                </div>
+                <div class="item-type-bar" style="background:${typeBarColor};">
+                  ${renderItemTypeIcon(item.imageType)}
+                  <span class="item-type-bar-label">${mainType}</span>
+                </div>
+                <div class="item-slot-row">
+                  ${slot ? `<span class="item-slot-label">${slot}</span>` : ''}
+                  ${subtype ? `<span class="item-subtype-label">${subtype}</span>` : ''}
                 </div>
               </div>
-              <div class="item-type-bar" style="background:${typeBarColor};">
-                ${renderItemTypeIcon(item.imageType)}
-                <span class="item-type-bar-label">${mainType}</span>
-              </div>
-              <div class="item-slot-row">
-                ${slot ? `<span class="item-slot-label">${slot}</span>` : ''}
-                ${subtype ? `<span class="item-subtype-label">${subtype}</span>` : ''}
-              </div>
             </div>
-          </div>
-          
-          <div class="item-section modern-item-details">
-            <div class="item-section-label modern-item-section-label"><i class="fas fa-info-circle"></i> Details</div>
-            <div class="item-detail-list modern-item-detail-list">
-              <div class="item-detail-row modern-item-detail-row">
-                <strong>Buy:</strong> <span>${item.buyPrice ?? 0}</span> 
-                <strong style="margin-left:1.2em;">Sell:</strong> <span>${item.sellPrice ?? 0}</span>
-              </div>
-              <div class="item-detail-row modern-item-detail-row">
-                <strong>Stackable:</strong> <span>${item.stackable ? `Yes (Max: ${item.maxStackSize || 10})` : 'No'}</span>
-              </div>
-                              <div class="item-detail-row modern-item-detail-row">
-                  <strong>Rarity:</strong> <span>${item.itemRarity || 1}</span>
+            
+            <div class="item-section modern-item-details">
+              <div class="item-section-label modern-item-section-label"><i class="fas fa-info-circle"></i> Details</div>
+              <div class="item-detail-list modern-item-detail-list">
+                <div class="item-detail-row modern-item-detail-row">
+                  <strong>Buy:</strong> <span>${item.buyPrice ?? 0}</span> 
+                  <strong style="margin-left:1.2em;">Sell:</strong> <span>${item.sellPrice ?? 0}</span>
                 </div>
+                <div class="item-detail-row modern-item-detail-row">
+                  <strong>Stackable:</strong> <span>${item.stackable ? `Yes (Max: ${item.maxStackSize || 10})` : 'No'}</span>
+                </div>
+                                <div class="item-detail-row modern-item-detail-row">
+                    <strong>Rarity:</strong> <span>${item.itemRarity || 1}</span>
+                  </div>
+              </div>
             </div>
-          </div>
-          
-          <div class="item-section modern-item-section">
-            <div class="item-section-label modern-item-section-label"><i class="fas fa-route"></i> Sources</div>
-            <div class="item-tag-list modern-item-tag-list">
-              ${obtainTags && obtainTags.filter(Boolean).length ? renderTags(obtainTags) : '<span class="item-tag">None</span>'}
+            
+            <div class="item-section modern-item-section">
+              <div class="item-section-label modern-item-section-label"><i class="fas fa-route"></i> Sources</div>
+              <div class="item-tag-list modern-item-tag-list">
+                ${obtainTags && obtainTags.filter(Boolean).length ? renderTags(obtainTags) : '<span class="item-tag">None</span>'}
+              </div>
             </div>
-          </div>
-          
-          <div class="item-section modern-item-section">
-            <div class="item-section-label modern-item-section-label"><i class="fas fa-map-marker-alt"></i> Locations</div>
-            <div class="item-tag-list modern-item-tag-list">
-              ${locationsTags && locationsTags.filter(Boolean).length ? renderLocationTags(locationsTags) : '<span class="item-tag">None</span>'}
+            
+            <div class="item-section modern-item-section">
+              <div class="item-section-label modern-item-section-label"><i class="fas fa-map-marker-alt"></i> Locations</div>
+              <div class="item-tag-list modern-item-tag-list">
+                ${locationsTags && locationsTags.filter(Boolean).length ? renderLocationTags(locationsTags) : '<span class="item-tag">None</span>'}
+              </div>
             </div>
-          </div>
-          
-          <div class="item-section modern-item-section">
-            <div class="item-section-label modern-item-section-label"><i class="fas fa-user"></i> Jobs</div>
-            <div class="item-tag-list modern-item-tag-list">
-              ${jobsTags && jobsTags.filter(Boolean).length ? renderTags(jobsTags) : '<span class="item-tag">None</span>'}
+            
+            <div class="item-section modern-item-section">
+              <div class="item-section-label modern-item-section-label"><i class="fas fa-user"></i> Jobs</div>
+              <div class="item-tag-list modern-item-tag-list">
+                ${jobsTags && jobsTags.filter(Boolean).length ? renderTags(jobsTags) : '<span class="item-tag">None</span>'}
+              </div>
             </div>
-          </div>
-          
-          <div class="item-section modern-item-section">
-            <div class="item-section-label modern-item-section-label"><i class="fas fa-tools"></i> Crafting Materials</div>
-            <div class="item-crafting-list modern-item-crafting-list">
-              ${craftingMaterials ? craftingMaterials : '<div class="item-crafting-row"><span class="item-tag">Not Craftable</span></div>'}
+            
+            <div class="item-section modern-item-section">
+              <div class="item-section-label modern-item-section-label"><i class="fas fa-tools"></i> Crafting Materials</div>
+              <div class="item-crafting-list modern-item-crafting-list">
+                ${craftingMaterials ? craftingMaterials : '<div class="item-crafting-row"><span class="item-tag">Not Craftable</span></div>'}
+              </div>
             </div>
-          </div>
-          
-          <div class="item-section modern-item-section">
-            <div class="item-section-label modern-item-section-label"><i class="fas fa-cloud-sun"></i> Special Weather</div>
-            <div class="item-tag-list modern-item-tag-list">
-              ${weatherTags ? weatherTags : '<span class="item-tag">None</span>'}
+            
+            <div class="item-section modern-item-section">
+              <div class="item-section-label modern-item-section-label"><i class="fas fa-cloud-sun"></i> Special Weather</div>
+              <div class="item-tag-list modern-item-tag-list">
+                ${weatherTags ? weatherTags : '<span class="item-tag">None</span>'}
+              </div>
             </div>
-          </div>
-          
-          ${(isArmor || isWeapon || isRecipe) ? `
-          <div class="item-section modern-item-section">
-            <div class="item-section-label modern-item-section-label"><i class="fas fa-chart-bar"></i> Stats</div>
-            <div class="item-stats-row modern-item-stats-row">
-              ${isRecipe ? `
-                <span class="item-stat-pill modern-item-stat-pill">
-                  <i class="fas fa-heart"></i>
-                  <span class="stat-label">Hearts Recovered:</span>
-                  <span class="stat-value">${item.modifierHearts ?? 0}</span>
-                </span>
-                <span class="item-stat-pill modern-item-stat-pill">
-                  <i class="fas fa-bolt"></i>
-                  <span class="stat-label">Stamina Recovered:</span>
-                  <span class="stat-value">${item.staminaRecovered ?? 0}</span>
-                </span>
-                ${item.staminaToCraft !== null && item.staminaToCraft !== undefined ? `
+            
+            ${(isArmor || isWeapon || isRecipe) ? `
+            <div class="item-section modern-item-section">
+              <div class="item-section-label modern-item-section-label"><i class="fas fa-chart-bar"></i> Stats</div>
+              <div class="item-stats-row modern-item-stats-row">
+                ${isRecipe ? `
                   <span class="item-stat-pill modern-item-stat-pill">
-                    <i class="fas fa-fire"></i>
-                    <span class="stat-label">Stamina to Craft:</span>
-                    <span class="stat-value">${item.staminaToCraft}</span>
+                    <i class="fas fa-heart"></i>
+                    <span class="stat-label">Hearts Recovered:</span>
+                    <span class="stat-value">${item.modifierHearts ?? 0}</span>
                   </span>
-                ` : ''}
-              ` : (isArmor || isWeapon) ? `
-                <span class="item-stat-pill modern-item-stat-pill">
-                  <i class="fas fa-heart"></i>
-                  <span class="stat-label">Modifier:</span>
-                  <span class="stat-value">${item.modifierHearts ?? 0}</span>
-                </span>
-                ${item.staminaToCraft !== null && item.staminaToCraft !== undefined ? `
                   <span class="item-stat-pill modern-item-stat-pill">
-                    <i class="fas fa-fire"></i>
-                    <span class="stat-label">Stamina to Craft:</span>
-                    <span class="stat-value">${item.staminaToCraft}</span>
+                    <i class="fas fa-bolt"></i>
+                    <span class="stat-label">Stamina Recovered:</span>
+                    <span class="stat-value">${item.staminaRecovered ?? 0}</span>
                   </span>
-                ` : ''}
-              ` : `
-                <span class="item-stat-pill modern-item-stat-pill">
-                  <i class="fas fa-heart"></i>
-                  <span class="stat-label">Hearts Recovered:</span>
-                  <span class="stat-value">${item.modifierHearts ?? 0}</span>
-                </span>
-                <span class="item-stat-pill modern-item-stat-pill">
-                  <i class="fas fa-bolt"></i>
-                  <span class="stat-label">Stamina Recovered:</span>
-                  <span class="stat-value">${item.staminaRecovered ?? 0}</span>
-                </span>
-                ${item.staminaToCraft !== null && item.staminaToCraft !== undefined ? `
+                  ${item.staminaToCraft !== null && item.staminaToCraft !== undefined ? `
+                    <span class="item-stat-pill modern-item-stat-pill">
+                      <i class="fas fa-fire"></i>
+                      <span class="stat-label">Stamina to Craft:</span>
+                      <span class="stat-value">${item.staminaToCraft}</span>
+                    </span>
+                  ` : ''}
+                ` : (isArmor || isWeapon) ? `
                   <span class="item-stat-pill modern-item-stat-pill">
-                    <i class="fas fa-fire"></i>
-                    <span class="stat-label">Stamina to Craft:</span>
-                    <span class="stat-value">${item.staminaToCraft}</span>
+                    <i class="fas fa-heart"></i>
+                    <span class="stat-label">Modifier:</span>
+                    <span class="stat-value">${item.modifierHearts ?? 0}</span>
                   </span>
-                ` : ''}
-              `}
+                  ${item.staminaToCraft !== null && item.staminaToCraft !== undefined ? `
+                    <span class="item-stat-pill modern-item-stat-pill">
+                      <i class="fas fa-fire"></i>
+                      <span class="stat-label">Stamina to Craft:</span>
+                      <span class="stat-value">${item.staminaToCraft}</span>
+                    </span>
+                  ` : ''}
+                ` : `
+                  <span class="item-stat-pill modern-item-stat-pill">
+                    <i class="fas fa-heart"></i>
+                    <span class="stat-label">Hearts Recovered:</span>
+                    <span class="stat-value">${item.modifierHearts ?? 0}</span>
+                  </span>
+                  <span class="item-stat-pill modern-item-stat-pill">
+                    <i class="fas fa-bolt"></i>
+                    <span class="stat-label">Stamina Recovered:</span>
+                    <span class="stat-value">${item.staminaRecovered ?? 0}</span>
+                  </span>
+                  ${item.staminaToCraft !== null && item.staminaToCraft !== undefined ? `
+                    <span class="item-stat-pill modern-item-stat-pill">
+                      <i class="fas fa-fire"></i>
+                      <span class="stat-label">Stamina to Craft:</span>
+                      <span class="stat-value">${item.staminaToCraft}</span>
+                    </span>
+                  ` : ''}
+                `}
+              </div>
             </div>
+            ` : ''}
           </div>
-          ` : ''}
           
           <div id="item-${item.itemName.replace(/[^a-zA-Z0-9]/g, '-')}-back" class="item-card-back">
             <div class="character-inventory-section">
