@@ -10680,6 +10680,7 @@ app.post('/api/blupee/claim', async (req, res) => {
         dailyCount: 0,
         dailyResetDate: null
       };
+      user.markModified('blupeeHunt');
     }
     
     const now = new Date();
@@ -10755,6 +10756,9 @@ app.post('/api/blupee/claim', async (req, res) => {
       tokensReceived: tokensAwarded,
       timestamp: now
     });
+    
+    // Mark blupeeHunt as modified since it's not explicitly defined in schema
+    user.markModified('blupeeHunt');
     
     await user.save();
     
@@ -10836,22 +10840,22 @@ app.get('/api/blupee/status', async (req, res) => {
     
     // Initialize blupeeHunt if it doesn't exist
     if (!user.blupeeHunt) {
-      return res.json({
-        canClaim: true,
-        totalClaimed: 0,
+      user.blupeeHunt = {
         lastClaimed: null,
-        cooldownRemaining: 0,
+        totalClaimed: 0,
+        claimHistory: [],
         dailyCount: 0,
-        dailyLimit: DAILY_LIMIT,
-        dailyRemaining: DAILY_LIMIT,
-        dailyLimitReached: false
-      });
+        dailyResetDate: null
+      };
+      user.markModified('blupeeHunt');
+      // Don't save here - just initialize for the response
     }
     
     // Initialize daily tracking if not exists
     if (user.blupeeHunt.dailyCount === undefined) {
       user.blupeeHunt.dailyCount = 0;
       user.blupeeHunt.dailyResetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      user.markModified('blupeeHunt');
       await user.save();
     }
     
@@ -10864,6 +10868,7 @@ app.get('/api/blupee/status', async (req, res) => {
       console.log(`[server.js]: STATUS - Resetting daily count for user ${user.username || user.discordId} - was ${user.blupeeHunt.dailyCount}, reset date was ${dailyResetDate}, new date is ${today}`);
       user.blupeeHunt.dailyCount = 0;
       user.blupeeHunt.dailyResetDate = today;
+      user.markModified('blupeeHunt');
       await user.save();
     }
     

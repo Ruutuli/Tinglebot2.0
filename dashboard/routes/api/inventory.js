@@ -65,26 +65,47 @@ router.get('/summary', asyncHandler(async (req, res) => {
 
 // ------------------- Function: searchInventoryByItem -------------------
 // Searches inventory for specific item across all characters
+// Optimized to use parallel queries for better performance
 router.post('/item', validateRequiredFields(['itemName']), asyncHandler(async (req, res) => {
+  const startTime = Date.now();
   const { itemName } = req.body;
-  const characters = await fetchAllCharacters();
-  const inventoryData = [];
-
-  for (const char of characters) {
-    try {
-      const col = await getCharacterInventoryCollection(char.name);
-      const inv = await col.find().toArray();
-      const entry = inv.find(i => i.itemName.toLowerCase() === itemName.toLowerCase());
-      if (entry) {
-        inventoryData.push({ characterName: char.name, quantity: entry.quantity });
-      }
-    } catch (error) {
-      logger.warn(`Error searching inventory for character ${char.name}: ${error.message}`, 'inventory.js');
-      continue;
-    }
+  
+  if (!itemName || typeof itemName !== 'string' || itemName.trim().length === 0) {
+    logger.warn('Invalid itemName provided to searchInventoryByItem', 'inventory.js');
+    return res.status(400).json({ error: 'Invalid itemName provided' });
   }
 
-  res.json(inventoryData);
+  try {
+    const characters = await fetchAllCharacters();
+    logger.info(`Searching for item "${itemName}" across ${characters.length} characters`, 'inventory.js');
+    
+    // Use parallel queries instead of sequential for better performance
+    const inventoryPromises = characters.map(async (char) => {
+      try {
+        const col = await getCharacterInventoryCollection(char.name);
+        const inv = await col.find().toArray();
+        const entry = inv.find(i => i.itemName.toLowerCase() === itemName.toLowerCase());
+        if (entry) {
+          return { characterName: char.name, quantity: entry.quantity };
+        }
+        return null;
+      } catch (error) {
+        logger.warn(`Error searching inventory for character ${char.name}: ${error.message}`, 'inventory.js');
+        return null;
+      }
+    });
+    
+    const results = await Promise.all(inventoryPromises);
+    const inventoryData = results.filter(Boolean);
+    
+    const duration = Date.now() - startTime;
+    logger.info(`Item search completed in ${duration}ms. Found ${inventoryData.length} characters with item "${itemName}"`, 'inventory.js');
+    
+    res.json(inventoryData);
+  } catch (error) {
+    logger.error(`Error in searchInventoryByItem for item "${itemName}": ${error.message}`, 'inventory.js');
+    res.status(500).json({ error: 'Internal server error while searching inventory' });
+  }
 }));
 
 // ------------------- Function: getCharacterInventories -------------------

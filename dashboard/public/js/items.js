@@ -527,7 +527,7 @@ function initializeInventoryCache() {
 
 // ------------------- Function: fetchItemInventoryWithTimeout -------------------
 // Enhanced fetch function with timeout and better error handling
-async function fetchItemInventoryWithTimeout(itemName, timeout = 15000) {
+async function fetchItemInventoryWithTimeout(itemName, timeout = 30000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   
@@ -631,7 +631,7 @@ async function fetchItemInventory(itemName) {
     cache.missCount++;
     
     // Fetch data with timeout
-    const data = await fetchItemInventoryWithTimeout(itemName, 12000);
+    const data = await fetchItemInventoryWithTimeout(itemName, 30000);
     
     // Calculate total in world
     const totalInWorld = data ? data.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0;
@@ -686,14 +686,14 @@ async function preloadVisibleItemInventories() {
   const maxTimeouts = 3;
   
   // More conservative batch loading with longer delays
-  const batchSize = 3; // Reduced from 5 to 3
+  const batchSize = 2; // Reduced from 3 to 2
   for (let i = 0; i < itemsToPreload.length; i += batchSize) {
     const batch = itemsToPreload.slice(i, i + batchSize);
     
     // Process batch sequentially instead of concurrently to reduce server load
     for (const item of batch) {
       try {
-        const data = await fetchItemInventoryWithTimeout(item.itemName, 12000);
+        const data = await fetchItemInventoryWithTimeout(item.itemName, 30000);
         const totalInWorld = data ? data.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0;
         
         // Update the badge immediately
@@ -712,12 +712,12 @@ async function preloadVisibleItemInventories() {
       }
       
       // Small delay between individual items
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     // Longer delay between batches
     if (i + batchSize < itemsToPreload.length) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   
@@ -1853,7 +1853,7 @@ window.TinglebotCache = {
     
     for (const itemName of itemNames) {
       try {
-        const data = await fetchItemInventoryWithTimeout(itemName, 12000);
+        const data = await fetchItemInventoryWithTimeout(itemName, 30000);
         const totalInWorld = data ? data.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0;
         
         // Update the badge immediately
