@@ -2150,8 +2150,18 @@ async function handleCraftingMaterialSelection(interaction) {
     // Fetch the message reference so we can edit it later
     const processingMessage = await interaction.fetchReply();
 
+    // CHECK CRAFTING STATE VALIDITY BEFORE PROCESSING MATERIALS
+    // This prevents materials from being consumed if the crafting state has expired
+    const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
+    if (!craftingContinueState || !craftingContinueState.data) {
+      return interaction.followUp({
+        content: '❌ **Crafting state expired. Please start crafting again.**',
+        flags: 64
+      });
+    }
+
     // Process all selected items
-    const { continueProcessMaterials } = require('../../shared/utils/inventoryUtils');
+    const { continueProcessMaterials, addItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
     
     // Update state with fresh inventory - ensure quantities are numbers
     state.inventory = inventory.map(item => ({
@@ -2176,20 +2186,28 @@ async function handleCraftingMaterialSelection(interaction) {
       return;
     }
 
-    // All materials processed - continue with crafting
-    // Delete the material selection state
-    await TempData.findOneAndDelete({ type: 'craftingMaterialSelection', key: selectionId });
-
-    // Get the crafting continuation state
-    const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
-    if (!craftingContinueState || !craftingContinueState.data) {
+    // DEFENSIVE CHECK: Verify state is still valid after material processing
+    // This handles edge cases where state expires during material processing
+    const verifyState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
+    if (!verifyState || !verifyState.data) {
+      // State expired during processing - refund all consumed materials
+      if (Array.isArray(result) && result.length > 0) {
+        for (const mat of result) {
+          await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - State Expired');
+        }
+      }
       return interaction.followUp({
-        content: '❌ **Crafting state expired. Please start crafting again.**',
+        content: '❌ **Crafting state expired during processing. Materials have been refunded. Please start crafting again.**',
         flags: 64
       });
     }
 
-    const continueData = craftingContinueState.data;
+    // All materials processed - continue with crafting
+    // Delete the material selection state
+    await TempData.findOneAndDelete({ type: 'craftingMaterialSelection', key: selectionId });
+
+    // Use the verified state data
+    const continueData = verifyState.data;
     
     // Continue the crafting process, passing the message to edit
     await continueCraftingProcess(interaction, character, result, continueData, processingMessage);
