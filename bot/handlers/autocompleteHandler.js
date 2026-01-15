@@ -3924,19 +3924,33 @@ async function handleLookupCraftingAutocomplete(interaction, focusedValue) {
 // ------------------- /mod give: Character Autocomplete -------------------
 async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
   try {
-    // Fetch all characters from the database
+    // Fetch all characters from the database (both regular and mod characters)
     const characters = await fetchAllCharacters();
+    const modCharacters = await fetchAllModCharacters();
+    
+    // Combine regular characters and mod characters
+    const allCharacters = [...characters, ...modCharacters];
     
     // Ensure focusedValue is a string and has a default value
     const focusedValue = focusedOption?.value?.toString() || '';
     
     // Map characters to autocomplete choices
-    const choices = characters
+    const choices = allCharacters
       .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
-      .map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
+      .map(char => {
+        // Format mod characters differently to show their modTitle/modType
+        if (char.isModCharacter) {
+          return {
+            name: `${char.name} | ${capitalize(char.currentVillage)} | ${char.modTitle} of ${capitalize(char.modType)}`,
+            value: char.name
+          };
+        } else {
+          return {
+            name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+            value: char.name
+          };
+        }
+      });
                 
     // Respond with filtered choices (limit to 25)
     await interaction.respond(choices.slice(0, 25));

@@ -933,11 +933,30 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
       throw new Error(`Unknown special weather label "${specialLabel}".`);
     }
 
+    // Explicitly pass current date to ensure consistent calculation
+    // All weather periods are based on EST/EDT (America/New_York timezone)
+    // Weather periods run from 8:00 AM EST/EDT to 7:59:59 AM EST/EDT the next day
+    const now = new Date();
     const {
       startUTC: startOfNextPeriodUTC,
       endUTC: endOfNextPeriodUTC,
       startEastern: startOfNextPeriod
-    } = getNextPeriodBounds();
+    } = getNextPeriodBounds(now);
+
+    // Validate that the next period is actually in the future (comparing UTC times)
+    // This ensures special weather is scheduled for tomorrow, not today
+    if (startOfNextPeriodUTC <= now) {
+      throw new Error('Calculated next period is not in the future. This indicates a date calculation error.');
+    }
+
+    // Debug logging for troubleshooting (all times in EST/EDT context)
+    console.log('[weatherService.js]: 🎵 Calculating next period bounds for special weather', {
+      currentTimeUTC: now.toISOString(),
+      nextPeriodStartUTC: startOfNextPeriodUTC.toISOString(),
+      nextPeriodEndUTC: endOfNextPeriodUTC.toISOString(),
+      nextPeriodStartEST: startOfNextPeriod.toISOString(), // 8:00 AM EST/EDT tomorrow
+      village: normalizedVillage
+    });
 
     let weatherDoc = await findWeatherForPeriod(
       normalizedVillage,
