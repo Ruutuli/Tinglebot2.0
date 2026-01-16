@@ -18,8 +18,10 @@ const {
 const RuuGame = require('../../../shared/models/RuuGameModel');
 const Character = require('../../../shared/models/CharacterModel');
 const User = require('../../../shared/models/UserModel');
+const TempData = require('../../../shared/models/TempDataModel');
 const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils');
 const { syncInventory } = require('../../handlers/syncHandler');
+const { fetchAllItems } = require('../../../shared/database/db');
 
 // ============================================================================
 // ------------------- Import RuuGame configuration -------------------
@@ -62,6 +64,11 @@ module.exports = {
       subcommand
         .setName('roll')
         .setDescription('Roll a d20 in the current game (auto-joins if not in game)')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('chest')
+        .setDescription('Spawn a chest with 4 random items (Admin only)')
     ),
 
   // ============================================================================
@@ -78,6 +85,9 @@ module.exports = {
           break;
         case 'roll':
           await this.handleRoll(interaction);
+          break;
+        case 'chest':
+          await this.handleChest(interaction);
           break;
         default:
           await interaction.reply({ content: '❌ Unknown subcommand.', flags: 64 });
@@ -490,6 +500,133 @@ module.exports = {
     // Send prize notification if awarded
     if (prizeAwarded) {
       // Prize notification removed - consolidated into main winner embed
+    }
+  },
+
+  // ============================================================================
+  // ------------------- Handle chest subcommand -------------------
+  // Creates a chest with 4 random items that users can claim
+  // ============================================================================
+  async handleChest(interaction) {
+    // Check if user is admin
+    if (!interaction.member.permissions.has('Administrator')) {
+      return await interaction.reply({
+        content: '❌ Only administrators can spawn chests.',
+        flags: 64
+      });
+    }
+
+    try {
+      // Fetch all items from database
+      const allItems = await fetchAllItems();
+      
+      if (!allItems || allItems.length === 0) {
+        return await interaction.reply({
+          content: '❌ No items found in database.',
+          flags: 64
+        });
+      }
+
+      // Randomly select 4 items
+      const selectedItems = [];
+      const usedIndices = new Set();
+      
+      while (selectedItems.length < 4 && usedIndices.size < allItems.length) {
+        const randomIndex = Math.floor(Math.random() * allItems.length);
+        if (!usedIndices.has(randomIndex)) {
+          usedIndices.add(randomIndex);
+          const item = allItems[randomIndex];
+          selectedItems.push({
+            itemName: item.itemName || 'Unknown Item',
+            emoji: item.emoji || '📦',
+            index: selectedItems.length + 1,
+            claimed: false,
+            claimedBy: null
+          });
+        }
+      }
+
+      if (selectedItems.length < 4) {
+        return await interaction.reply({
+          content: '❌ Not enough items in database to create a chest.',
+          flags: 64
+        });
+      }
+
+      // Generate unique chest ID
+      const chestId = generateUniqueId('C');
+      const channelId = interaction.channelId;
+      const guildId = interaction.guildId;
+      const createdAt = new Date();
+      const expiresAt = new Date(createdAt.getTime() + 30 * 60 * 1000); // 30 minutes
+
+      // Create embed with nice formatting (like ruugame)
+      const embed = new EmbedBuilder()
+        .setTitle('🎁 Chest - Roll a 5 to claim!')
+        .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+        .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
+        .setColor(0xFFD700) // Gold color
+        .addFields(
+          { 
+            name: '📋 Chest Info', 
+            value: `**Chest ID:** ${chestId}\n**Items Remaining:** 4/4\n**Expires:** <t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, 
+            inline: false 
+          },
+          { 
+            name: '🎁 Available Items', 
+            value: selectedItems.map(item => `**${item.index}.** ${item.emoji} ${item.itemName}`).join('\n'),
+            inline: false
+          }
+        )
+        .setTimestamp(createdAt);
+
+      // Create button
+      const claimButton = new ButtonBuilder()
+        .setCustomId(`chest_claim_${chestId}`)
+        .setLabel('Roll d5')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🎲');
+
+      const buttons = new ActionRowBuilder()
+        .addComponents(claimButton);
+
+      // Send message
+      const message = await interaction.reply({
+        embeds: [embed],
+        components: [buttons],
+        fetchReply: true
+      });
+
+      // Store chest data in TempData
+      const chestData = {
+        chestId: chestId,
+        channelId: channelId,
+        guildId: guildId,
+        messageId: message.id,
+        items: selectedItems,
+        claims: [],
+        createdAt: createdAt,
+        expiresAt: expiresAt,
+        lastGlobalRollTime: null,
+        playerRollTimes: {} // Map userId to lastRollTime
+      };
+
+      await TempData.create({
+        type: 'temp',
+        key: `chest_${chestId}`,
+        data: chestData,
+        expiresAt: expiresAt
+      });
+
+      console.log(`[RuuGame] Chest ${chestId} created in channel ${channelId}`);
+    } catch (error) {
+      console.error('[RuuGame] Error creating chest:', error);
+      if (!interaction.replied) {
+        await interaction.reply({
+          content: '❌ An error occurred while creating the chest.',
+          flags: 64
+        });
+      }
     }
   }
 }

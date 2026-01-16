@@ -528,7 +528,7 @@ raidSchema.methods.timeoutRaid = function(villageDamage = 0) {
 
 // ---- Method: failRaid ----
 // Mark the raid as failed and KO all participants
-raidSchema.methods.failRaid = async function() {
+raidSchema.methods.failRaid = async function(client = null) {
   this.status = 'timed_out';
   this.result = 'timeout';
   this.isActive = false;
@@ -554,6 +554,32 @@ raidSchema.methods.failRaid = async function() {
       }
     } catch (error) {
       console.error(`[RaidModel.js]: ❌ Error KO'ing participant ${participant.name}:`, error);
+    }
+  }
+  
+  // Apply village damage (only for Tier 5-10 raids)
+  if (this.monster && this.monster.tier >= 5 && this.monster.tier <= 10 && this.village) {
+    try {
+      const { applyVillageDamage } = require('../../bot/modules/villageModule');
+      
+      // Try to get the thread if available
+      let thread = null;
+      if (client && this.threadId) {
+        try {
+          const threadChannel = await client.channels.fetch(this.threadId);
+          if (threadChannel) {
+            thread = threadChannel;
+          }
+        } catch (threadError) {
+          console.warn(`[RaidModel.js]: ⚠️ Could not fetch thread ${this.threadId} for village damage notification:`, threadError.message);
+        }
+      }
+      
+      await applyVillageDamage(this.village, this.monster, thread);
+      console.log(`[RaidModel.js]: 💥 Applied village damage to ${this.village} from failed raid ${this.raidId}`);
+    } catch (damageError) {
+      console.error(`[RaidModel.js]: ❌ Error applying village damage for failed raid ${this.raidId}:`, damageError);
+      // Don't fail the raid cleanup if village damage fails
     }
   }
   
@@ -586,11 +612,11 @@ raidSchema.statics.findExpiredRaids = function() {
 
 // ---- Method: cleanupExpiredRaids ----
 // Clean up expired raids by marking them as failed and KO'ing participants
-raidSchema.statics.cleanupExpiredRaids = async function() {
+raidSchema.statics.cleanupExpiredRaids = async function(client = null) {
   const expiredRaids = await this.findExpiredRaids();
   
   for (const raid of expiredRaids) {
-    await raid.failRaid();
+    await raid.failRaid(client);
   }
   
   return expiredRaids.length;

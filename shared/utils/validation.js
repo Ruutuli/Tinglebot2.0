@@ -24,6 +24,7 @@ const { isValidRace, getRaceValueByName } = require('../../bot/modules/raceModul
 const { capitalizeFirstLetter } = require('../../bot/modules/formattingModule');
 const { capitalizeVillageName } = require('./stringUtils');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('./googleSheetsUtils');
+const { checkVillageStatus } = require('../../bot/modules/villageModule');
 
 
 // ============================================================================
@@ -146,6 +147,20 @@ async function canChangeVillage(character, newVillage) {
         return { valid: false, message: errorEmbed };
     }
 
+    // Check if current village is damaged (mod characters are exempt)
+    // Check if character is a mod character - try both isModCharacter property and constructor name
+    const isModCharacter = character.isModCharacter || (character.constructor && character.constructor.modelName === 'ModCharacter');
+    if (!isModCharacter && character.currentVillage) {
+        const villageStatus = await checkVillageStatus(character.currentVillage);
+        if (villageStatus === 'damaged') {
+            const capitalizedCurrentVillage = capitalizeFirstLetter(character.currentVillage);
+            return {
+                valid: false,
+                message: `❌ **${character.name}** cannot move villages because **${capitalizedCurrentVillage}** is damaged and needs repair. Please help repair the village first by contributing tokens.`
+            };
+        }
+    }
+
     const villageJob = isVillageExclusiveJob(character.job);
     const capitalizedVillageJob = capitalizeVillageName(villageJob);
     const capitalizedNewVillage = capitalizeVillageName(newVillage);
@@ -196,6 +211,20 @@ async function canChangeJob(character, newJob) {
             valid: false,
             message: `❌ **${character.name}** must be in their home village (**${capitalizedHomeVillage}**) to change jobs. Currently in: **${capitalizedCurrentVillage}**.`
         };
+    }
+
+    // Check if village is damaged (mod characters are exempt)
+    // Check if character is a mod character - try both isModCharacter property and constructor name
+    const isModCharacter = character.isModCharacter || (character.constructor && character.constructor.modelName === 'ModCharacter');
+    if (!isModCharacter && character.currentVillage) {
+        const villageStatus = await checkVillageStatus(character.currentVillage);
+        if (villageStatus === 'damaged') {
+            const capitalizedCurrentVillage = capitalizeFirstLetter(character.currentVillage);
+            return {
+                valid: false,
+                message: `❌ **${character.name}** cannot change jobs because **${capitalizedCurrentVillage}** is damaged and needs repair. Please help repair the village first by contributing tokens.`
+            };
+        }
     }
 
     const jobVillage = isVillageExclusiveJob(newJob);

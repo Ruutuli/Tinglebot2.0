@@ -93,6 +93,7 @@ const {
 // Models
 const Character = require('../../../shared/models/CharacterModel.js');
 const User = require('../../../shared/models/UserModel.js');
+const { Village } = require('../../../shared/models/VillageModel.js');
 
 // Character Stats
 const { handleKO } = require("../../modules/characterStatsModule.js");
@@ -996,10 +997,27 @@ async function processLootingLogic(
  blightRainMessage = null
 ) {
   try {
+  // ------------------- Fetch Village Level -------------------
+  const village = await Village.findOne({ name: { $regex: `^${character.currentVillage}$`, $options: 'i' } });
+  const villageLevel = village?.level || 1;
+
   const items = await fetchItemsByMonster(encounteredMonster.name);
 
   // Step 1: Calculate Encounter Outcome
-  const diceRoll = Math.floor(Math.random() * 100) + 1;
+  let diceRoll = Math.floor(Math.random() * 100) + 1;
+  
+  // ------------------- Apply Village Combat Effectiveness Bonuses -------------------
+  // Level 2: +1-3 to dice roll, Level 3: +3-5 to dice roll
+  if (villageLevel >= 2) {
+    const combatBonus = villageLevel === 2 
+      ? Math.floor(Math.random() * 3) + 1  // +1 to +3
+      : Math.floor(Math.random() * 3) + 3;  // +3 to +5
+    const originalDiceRoll = diceRoll;
+    diceRoll = Math.min(100, diceRoll + combatBonus);
+    if (diceRoll > originalDiceRoll) {
+      logger.info('LOOT', `🏘️ Village Level ${villageLevel} combat bonus: ${originalDiceRoll} → ${diceRoll} (+${combatBonus})`);
+    }
+  }
   // Store the original roll for blight boost display
   originalRoll = diceRoll;
   let { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
@@ -1028,7 +1046,9 @@ async function processLootingLogic(
     logger.info('LOOT', `📚 Boost applied to ${character.name} - Roll enhanced from ${rollBeforeBoost} to ${adjustedRandomValue} (+${improvement} points)`);
   }
 
-  let weightedItems = createWeightedItemList(items, adjustedRandomValue);
+  // Determine job for createWeightedItemList (use jobVoucherJob if active, otherwise default job)
+  const jobForWeighting = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
+  let weightedItems = createWeightedItemList(items, adjustedRandomValue, jobForWeighting, villageLevel);
   
   // Build roll display showing progression: original → blight → boost
   let rollDisplay = `${originalRoll}`;
@@ -1073,7 +1093,16 @@ async function processLootingLogic(
       } catch {}
 
       // Perform a single reroll end-to-end
-      const diceRollReroll = Math.floor(Math.random() * 100) + 1;
+      let diceRollReroll = Math.floor(Math.random() * 100) + 1;
+      
+      // Apply village combat effectiveness bonus to reroll as well
+      if (villageLevel >= 2) {
+        const combatBonus = villageLevel === 2 
+          ? Math.floor(Math.random() * 3) + 1  // +1 to +3
+          : Math.floor(Math.random() * 3) + 3;  // +3 to +5
+        diceRollReroll = Math.min(100, diceRollReroll + combatBonus);
+      }
+      
       let { damageValue: damageValueReroll, adjustedRandomValue: adjustedRandomValueReroll, attackSuccess: attackSuccessReroll, defenseSuccess: defenseSuccessReroll } =
         calculateFinalValue(character, diceRollReroll);
 
@@ -1154,8 +1183,9 @@ async function processLootingLogic(
         }
         Object.assign(outcome, rerollOutcome);
 
-        // Recompute weighted items with the new adjusted roll
-        const newWeightedItems = createWeightedItemList(items, adjustedRandomValue);
+        // Recompute weighted items with the new adjusted roll (include village level for rarity bonuses)
+        const jobForWeightingReroll = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
+        const newWeightedItems = createWeightedItemList(items, adjustedRandomValue, jobForWeightingReroll, villageLevel);
         // Replace reference used later
         weightedItems = newWeightedItems; // ensure later references use updated weights
 
@@ -1436,6 +1466,91 @@ async function processLootingLogic(
     }
   }
 
+  // ------------------- Apply Village Level Damage Reduction -------------------
+  // Village level provides protection: Level 2: 5-10% reduction, Level 3: 10-15% reduction
+  let villageDamageReduction = 0;
+  if (villageLevel >= 2 && outcome.hearts && outcome.hearts > 0) {
+    const reductionPercentage = villageLevel === 2
+      ? Math.random() * 0.05 + 0.05  // Random between 0.05 and 0.10 (5-10%)
+      : Math.random() * 0.05 + 0.10;  // Random between 0.10 and 0.15 (10-15%)
+    
+    const originalHeartDamage = outcome.hearts;
+    const reducedDamage = Math.max(1, Math.floor(originalHeartDamage * (1 - reductionPercentage)));
+    villageDamageReduction = originalHeartDamage - reducedDamage;
+    
+    if (villageDamageReduction > 0) {
+      logger.info('LOOT', `🏘️ Village Level ${villageLevel} damage reduction APPLIED: ${originalHeartDamage} → ${reducedDamage} hearts (-${villageDamageReduction}, ${(reductionPercentage * 100).toFixed(1)}% reduction)`);
+      
+      // Hearts were already removed by getEncounterOutcome - restore them and reapply correct amount
+      const { recoverHearts, useHearts } = require('../../modules/characterStatsModule');
+      await recoverHearts(character._id, originalHeartDamage);
+      logger.info('LOOT', `🔄 Restored ${originalHeartDamage} hearts to reapply with village damage reduction`);
+      
+      // Apply the reduced damage
+      if (reducedDamage > 0) {
+        await useHearts(character._id, reducedDamage);
+        logger.info('LOOT', `💔 Applied village-reduced damage: ${reducedDamage} hearts`);
+      }
+      
+      // Update outcome to reflect the reduced damage
+      outcome.hearts = reducedDamage;
+      // Ensure the textual result reflects the post-reduction damage
+      if (outcome.result && typeof outcome.result === 'string' && outcome.result.includes('HEART(S)')) {
+        outcome.result = outcome.result.replace(/(\d+)\s*HEART\(S\)/i, `${reducedDamage} HEART(S)`);
+      }
+    }
+  } else if (villageLevel >= 2 && (!outcome.hearts || outcome.hearts === 0)) {
+    logger.info('LOOT', `🏘️ Village Level ${villageLevel} damage reduction available but not needed (no damage taken)`);
+  } else if (villageLevel === 1 && outcome.hearts && outcome.hearts > 0) {
+    logger.info('LOOT', `🏘️ Village Level 1: No damage reduction (took ${outcome.hearts} hearts)`);
+  }
+
+  // ------------------- Monster Encounter Village Damage (Tier 1-4 only) -------------------
+  // Check if character lost to a Tier 1-4 monster (not KO'd, not a win, took damage)
+  // Apply percentage chance for monster to follow character back to village
+  logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] Evaluating village damage chance for ${character.name} vs ${encounteredMonster.name} (Tier ${encounteredMonster.tier})`);
+  logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] Conditions - Tier check: ${encounteredMonster.tier >= 1 && encounteredMonster.tier <= 4}, Result: "${outcome.result}", Hearts: ${outcome.hearts}, Village: ${character.currentVillage}`);
+  
+  if (encounteredMonster.tier >= 1 && encounteredMonster.tier <= 4 && 
+      outcome.result !== 'Win!/Loot' && outcome.result !== 'Win!/Loot (1HKO)' &&
+      outcome.result !== 'KO' && outcome.hearts && outcome.hearts > 0 &&
+      character.currentVillage) {
+    logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] ✅ All conditions met! Checking 12.5% chance for village damage...`);
+    try {
+      // 12.5% chance for monster to cause village damage (balance TBD, starting conservative)
+      const DAMAGE_CHANCE = 0.125;
+      const roll = Math.random();
+      logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] Damage chance roll: ${(roll * 100).toFixed(2)}% (need < ${(DAMAGE_CHANCE * 100).toFixed(1)}%)`);
+      
+      if (roll < DAMAGE_CHANCE) {
+        // Damage amount: 1-3 HP (random between 1 and 3)
+        const damageAmount = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3 HP
+        
+        const { damageVillage } = require('../../modules/villageModule');
+        const { capitalizeFirstLetter } = require('../../modules/formattingModule');
+        
+        logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] 🎲 Damage chance triggered! Applying ${damageAmount} HP to ${character.currentVillage}`);
+        
+        // Apply village damage
+        await damageVillage(character.currentVillage, damageAmount);
+        
+        logger.info('LOOT', `✅ Monster encounter damage: ${character.currentVillage} took ${damageAmount} HP damage from ${encounteredMonster.name} (Tier ${encounteredMonster.tier}) following ${character.name}`);
+        
+        // Add flavor text note to outcome message
+        if (outcome.result && typeof outcome.result === 'string') {
+          outcome.result += `\n⚠️ **${encounteredMonster.name}** followed **${character.name}** back to **${capitalizeFirstLetter(character.currentVillage)}** and caused ${damageAmount} HP damage to the village!`;
+        }
+      } else {
+        logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] ❌ Damage chance not triggered (roll was too high)`);
+      }
+    } catch (damageError) {
+      logger.error('LOOT', `❌ Error applying monster encounter village damage: ${damageError.message}`, damageError.stack);
+      // Don't fail the loot encounter if village damage fails
+    }
+  } else {
+    logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] ❌ Conditions not met - skipping village damage check`);
+  }
+
   // Step 2: Handle KO Logic
   let updatedCharacter;
   if (character.isModCharacter) {
@@ -1471,20 +1586,22 @@ async function processLootingLogic(
   }
 
   // Step 4: Loot Item Logic
-  let lootedItem = null;
+  let lootedItems = null;
   if (outcome.canLoot && weightedItems.length > 0) {
-   lootedItem = await generateLootedItem(encounteredMonster, weightedItems, character);
-   logger.success('LOOT', `${character.name} looted: ${lootedItem?.itemName} (x${lootedItem?.quantity})`);
+   lootedItems = await generateLootedItem(encounteredMonster, weightedItems, character, villageLevel, adjustedRandomValue, items);
+   const totalQuantity = lootedItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+   logger.success('LOOT', `${character.name} looted: ${lootedItems.map(item => `${item.itemName} (x${item.quantity})`).join(', ')} (${lootedItems.length} item${lootedItems.length > 1 ? 's' : ''}, total qty: ${totalQuantity})`);
 
    const inventoryLink = character.inventory || character.inventoryLink;
    if (!isValidGoogleSheetsUrl(inventoryLink)) {
    logger.warn('LOOT', `Invalid inventory link for ${character.name}`);
+    // Use first item for embed display (will be updated to show all items)
     const embed = await createMonsterEncounterEmbed(
      character,
      encounteredMonster,
      outcomeMessage,
      updatedCharacter.currentHearts,
-     lootedItem,
+     lootedItems[0], // Pass first item for now
      bloodMoonActive,
      blightAdjustedRoll, // Pass blightAdjustedRoll for blight boost detection
      null, // currentMonster
@@ -1510,7 +1627,7 @@ async function processLootingLogic(
     return;
    }
 
-   await handleInventoryUpdate(interaction, character, lootedItem, encounteredMonster, bloodMoonActive);
+   await handleInventoryUpdate(interaction, character, lootedItems, encounteredMonster, bloodMoonActive);
   }
 
   // Create embed BEFORE clearing boost so boost info can be retrieved
@@ -1519,7 +1636,7 @@ async function processLootingLogic(
    encounteredMonster,
    outcomeMessage,
    updatedCharacter.currentHearts,
-   outcome.canLoot && weightedItems.length > 0 ? lootedItem : null,
+   outcome.canLoot && weightedItems.length > 0 && lootedItems ? lootedItems[0] : null,
    bloodMoonActive,
    adjustedRandomValue, // Pass the final roll value (after boost) as actualRoll
    null, // currentMonster
@@ -1570,46 +1687,20 @@ async function processLootingLogic(
 }
 
 // New helper function for inventory updates
-async function handleInventoryUpdate(interaction, character, lootedItem, encounteredMonster, bloodMoonActive) {
-  // Use the same fallback pattern as other commands
-  const inventoryLink = character.inventory || character.inventoryLink;
-
-  const spreadsheetId = extractSpreadsheetId(inventoryLink);
-  const auth = await authorizeSheets();
-  const range = "loggedInventory!A2:M";
-  const uniqueSyncId = uuidv4();
-  const formattedDateTime = new Date().toLocaleString("en-US", {
-    timeZone: "America/New_York",
-  });
-  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-  const values = [
-    [
-      character.name,
+async function handleInventoryUpdate(interaction, character, lootedItems, encounteredMonster, bloodMoonActive) {
+  // Handle both single item (backward compatibility) and array of items
+  const itemsArray = Array.isArray(lootedItems) ? lootedItems : [lootedItems];
+  
+  // Process each item
+  for (const lootedItem of itemsArray) {
+    await addItemInventoryDatabase(
+      character._id,
       lootedItem.itemName,
-      lootedItem.quantity.toString(),
-      lootedItem.category.join(", "),
-      lootedItem.type.join(", "),
-      lootedItem.subtype.join(", "),
-      "Looted",
-      character.job,
-      "",
-      character.currentVillage,
-      interactionUrl,
-      formattedDateTime,
-      uniqueSyncId,
-    ],
-  ];
-
-
-
-  await addItemInventoryDatabase(
-    character._id,
-    lootedItem.itemName,
-    lootedItem.quantity,
-    interaction,
-    "Looted"
-  );
+      lootedItem.quantity,
+      interaction,
+      "Looted"
+    );
+  }
 
   // Note: Google Sheets sync is handled by addItemInventoryDatabase
 }
@@ -1684,7 +1775,7 @@ function generateOutcomeMessage(outcome, character = null) {
 }
 
 // ------------------- Helper Function: Generate Looted Item -------------------
-async function generateLootedItem(encounteredMonster, weightedItems, character) {
+async function generateLootedItem(encounteredMonster, weightedItems, character, villageLevel = 1, adjustedRandomValue = 0, items = []) {
  let lootedItem;
  let isPriestDivineBlessingActive = false;
  
@@ -1758,11 +1849,65 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
  if (character) {
    const boostedLoot = await applyLootingQuantityBoost(character.name, lootedItem);
    if (boostedLoot && boostedLoot.quantity !== lootedItem.quantity) {
-     return boostedLoot;
+     lootedItem = boostedLoot;
    }
  }
 
- return lootedItem;
+ // Create a copy of the item for the result array
+ const resultItems = [{ ...lootedItem }];
+
+ // ------------------- Apply Village Level Quantity Bonuses -------------------
+ // Level 2: 5-10% chance for +1 extra item
+ // Level 3: 10-15% chance for +1 extra item, 2-3% chance for +2 extra items
+ if (villageLevel >= 2 && weightedItems.length > 0) {
+   const jobForWeighting = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
+   
+   // Level 2: Check for +1 bonus
+   if (villageLevel === 2) {
+     const bonusChance = Math.random() * 0.05 + 0.05; // Random between 0.05 and 0.10 (5-10%)
+     if (Math.random() < bonusChance) {
+       const bonusWeightedItems = createWeightedItemList(items, adjustedRandomValue, jobForWeighting, villageLevel);
+       if (bonusWeightedItems.length > 0) {
+         const bonusIndex = Math.floor(Math.random() * bonusWeightedItems.length);
+         const bonusItem = { ...bonusWeightedItems[bonusIndex] };
+         bonusItem.quantity = 1;
+         resultItems.push(bonusItem);
+         logger.info('LOOT', `🏘️ Village Level 2 quantity bonus: +1 extra item (${bonusItem.itemName})`);
+       }
+     }
+   }
+   
+   // Level 3: Check for +1 or +2 bonus
+   if (villageLevel === 3) {
+     const roll = Math.random();
+     const bonus1Chance = 0.10 + Math.random() * 0.05; // Random between 0.10 and 0.15 (10-15%)
+     const bonus2Chance = 0.02 + Math.random() * 0.01; // Random between 0.02 and 0.03 (2-3%)
+     
+     if (roll < bonus2Chance) {
+       // +2 bonus items
+       const bonusWeightedItems = createWeightedItemList(items, adjustedRandomValue, jobForWeighting, villageLevel);
+       for (let i = 0; i < 2 && bonusWeightedItems.length > 0; i++) {
+         const bonusIndex = Math.floor(Math.random() * bonusWeightedItems.length);
+         const bonusItem = { ...bonusWeightedItems[bonusIndex] };
+         bonusItem.quantity = 1;
+         resultItems.push(bonusItem);
+       }
+       logger.info('LOOT', `🏘️ Village Level 3 quantity bonus: +2 extra items`);
+     } else if (roll < bonus1Chance) {
+       // +1 bonus item
+       const bonusWeightedItems = createWeightedItemList(items, adjustedRandomValue, jobForWeighting, villageLevel);
+       if (bonusWeightedItems.length > 0) {
+         const bonusIndex = Math.floor(Math.random() * bonusWeightedItems.length);
+         const bonusItem = { ...bonusWeightedItems[bonusIndex] };
+         bonusItem.quantity = 1;
+         resultItems.push(bonusItem);
+         logger.info('LOOT', `🏘️ Village Level 3 quantity bonus: +1 extra item (${bonusItem.itemName})`);
+       }
+     }
+   }
+ }
+
+ return resultItems;
 }
 
 

@@ -100,6 +100,11 @@ const {
 } = require('../../modules/locationsModule');
 
 const {
+  damageVillage,
+  updateVillageStatus
+} = require('../../modules/villageModule');
+
+const {
   GAME_CONFIGS,
   createAlienDefenseGame,
   addPlayerToTurnOrder,
@@ -1267,6 +1272,78 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: villagedamage -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('villagedamage')
+    .setDescription('⚔️ Apply damage to a village (for testing and events)')
+    .addStringOption(option =>
+      option
+        .setName('village')
+        .setDescription('Name of the village to damage')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Rudania', value: 'Rudania' },
+          { name: 'Inariko', value: 'Inariko' },
+          { name: 'Vhintl', value: 'Vhintl' }
+        )
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('damage')
+        .setDescription('Amount of damage to apply')
+        .setRequired(true)
+        .setMinValue(1)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason for the damage (optional)')
+        .setRequired(false)
+    )
+)
+// ------------------- Subcommand: villageresources -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('villageresources')
+    .setDescription('📦 Add materials or tokens to a village (for testing)')
+    .addStringOption(option =>
+      option
+        .setName('village')
+        .setDescription('Name of the village')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Rudania', value: 'Rudania' },
+          { name: 'Inariko', value: 'Inariko' },
+          { name: 'Vhintl', value: 'Vhintl' }
+        )
+    )
+    .addStringOption(option =>
+      option
+        .setName('type')
+        .setDescription('Type of resource to add')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Tokens', value: 'tokens' },
+          { name: 'Material', value: 'material' }
+        )
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('amount')
+        .setDescription('Amount to add')
+        .setRequired(true)
+        .setMinValue(1)
+    )
+    .addStringOption(option =>
+      option
+        .setName('material')
+        .setDescription('Material name (required if type is material)')
+        .setRequired(false)
+        .setAutocomplete(true)
+    )
+)
+
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -1382,6 +1459,10 @@ async function execute(interaction) {
         return await handleLevel(interaction);
     } else if (subcommand === 'villagecheck') {
         return await handleVillageCheck(interaction);
+    } else if (subcommand === 'villagedamage') {
+        return await handleVillageDamage(interaction);
+    } else if (subcommand === 'villageresources') {
+        return await handleVillageResources(interaction);
     } else {
         return await safeReply(interaction, '❌ Unknown subcommand.');
     }
@@ -5569,6 +5650,347 @@ async function handleVillageCheck(interaction) {
   } catch (error) {
     console.error('[mod.js]: Error in handleVillageCheck:', error);
     return await safeReply(interaction, '❌ An error occurred while checking village locations. Please try again later.');
+  }
+}
+
+// ------------------- Function: handleVillageResources -------------------
+// Adds materials or tokens to a village for testing
+async function handleVillageResources(interaction) {
+  try {
+    const villageName = interaction.options.getString('village');
+    const type = interaction.options.getString('type');
+    const materialName = interaction.options.getString('material');
+    const amount = interaction.options.getInteger('amount');
+
+    // Import Village model
+    const { Village } = require('../../../shared/models/VillageModel');
+
+    // Find the village
+    const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+    if (!village) {
+      return await interaction.editReply({ content: `❌ Village "${villageName}" not found.`, ephemeral: true });
+    }
+
+    if (type === 'tokens') {
+      // Import updateVillageStatus function
+      const { updateVillageStatus } = require('../../modules/villageModule');
+      
+      // Get max health for current level
+      const maxHealth = village.levelHealth instanceof Map 
+        ? village.levelHealth.get(village.level.toString()) 
+        : village.levelHealth[village.level.toString()] || 100;
+      
+      const healthBefore = village.health;
+      const tokensBefore = village.currentTokens || 0;
+      
+      // Calculate HP needed and token cost per HP
+      const hpNeeded = maxHealth - village.health;
+      const tokensPerHP = village.level * 50; // Level 1: 50, Level 2: 100, Level 3: 150
+      
+      let tokensForRepair = 0;
+      let hpRestored = 0;
+      let tokensForUpgrade = amount;
+      
+      // If village is damaged, apply tokens to repair first
+      if (hpNeeded > 0) {
+        // Calculate how much HP can be restored
+        const maxHpRestored = Math.floor(amount / tokensPerHP);
+        hpRestored = Math.min(maxHpRestored, hpNeeded);
+        tokensForRepair = hpRestored * tokensPerHP;
+        tokensForUpgrade = amount - tokensForRepair;
+        
+        // Apply repair
+        if (hpRestored > 0) {
+          village.health = Math.min(maxHealth, village.health + hpRestored);
+          // Update status (will be 'upgradable' if HP is full, 'damaged' if not)
+          updateVillageStatus(village);
+        }
+      }
+      
+      // Apply remaining tokens to upgrades
+      village.currentTokens = tokensBefore + tokensForUpgrade;
+      
+      // Check for auto-level up after adding tokens
+      const { checkAndHandleVillageLevelUp } = require('../world/village');
+      const leveledUp = await checkAndHandleVillageLevelUp(village, interaction?.client);
+      if (leveledUp) {
+        // Update vending tier and discount
+        village.vendingTier = village.level;
+        village.vendingDiscount = village.level === 2 ? 10 : village.level === 3 ? 20 : 0;
+      }
+      
+      await village.save();
+      
+      // Build embed description
+      let description = `**Amount Added:** ${amount}\n**Before:** ${tokensBefore}\n**After:** ${village.currentTokens}`;
+      
+      if (leveledUp) {
+        description += `\n\n🌟 **The village has reached level ${village.level}!**`;
+      }
+      
+      if (hpRestored > 0) {
+        description += `\n\n❤️ **HP Restored:** +${hpRestored} HP (${healthBefore}/${maxHealth} → ${village.health}/${maxHealth})`;
+        description += `\n🪙 **Tokens for Repair:** ${tokensForRepair}`;
+        if (tokensForUpgrade > 0) {
+          description += `\n🪙 **Tokens for Upgrade:** ${tokensForUpgrade}`;
+        }
+      }
+      
+      const embed = new EmbedBuilder()
+        .setTitle(`🪙 Village Tokens Added - ${villageName}${leveledUp ? ' ⭐ LEVELED UP!' : ''}`)
+        .setDescription(description)
+        .setColor(village.color)
+        .setTimestamp()
+        .setFooter({ text: `Added by ${interaction.user.username}` });
+      
+      return await interaction.editReply({ embeds: [embed], ephemeral: true });
+    } else if (type === 'material') {
+      if (!materialName) {
+        return await interaction.editReply({ content: '❌ Material name is required when adding materials.', ephemeral: true });
+      }
+
+      // Convert Map to object
+      let materials = {};
+      if (village.materials instanceof Map) {
+        for (const [key, value] of village.materials.entries()) {
+          materials[key] = value;
+        }
+      } else {
+        materials = village.materials || {};
+      }
+
+      // Find matching material (case-insensitive)
+      const materialKey = Object.keys(materials).find(
+        key => key.toLowerCase() === materialName.toLowerCase()
+      );
+
+      if (!materialKey) {
+        return await interaction.editReply({ 
+          content: `❌ Material "${materialName}" not found in village materials. Available materials: ${Object.keys(materials).slice(0, 10).join(', ')}${Object.keys(materials).length > 10 ? '...' : ''}`, 
+          ephemeral: true 
+        });
+      }
+
+      // Initialize material data if needed
+      if (!materials[materialKey] || typeof materials[materialKey] !== 'object') {
+        materials[materialKey] = { current: 0, required: {} };
+      }
+      if (!('current' in materials[materialKey])) {
+        materials[materialKey].current = 0;
+      }
+
+      const before = materials[materialKey].current || 0;
+      materials[materialKey].current = (materials[materialKey].current || 0) + amount;
+      
+      // Update the Map
+      village.materials.set(materialKey, materials[materialKey]);
+      // Mark the Map as modified so Mongoose detects the change
+      village.markModified('materials');
+      
+      // Check for auto-level up after adding materials
+      const { checkAndHandleVillageLevelUp } = require('../world/village');
+      const leveledUp = await checkAndHandleVillageLevelUp(village, interaction?.client);
+      if (leveledUp) {
+        // Update vending tier and discount
+        village.vendingTier = village.level;
+        village.vendingDiscount = village.level === 2 ? 10 : village.level === 3 ? 20 : 0;
+      }
+      
+      await village.save();
+
+      let description = `**Material:** ${materialKey}\n**Amount Added:** ${amount}\n**Before:** ${before}\n**After:** ${materials[materialKey].current}`;
+      if (leveledUp) {
+        description += `\n\n🌟 **The village has reached level ${village.level}!**`;
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle(`📦 Village Material Added - ${villageName}${leveledUp ? ' ⭐ LEVELED UP!' : ''}`)
+        .setDescription(description)
+        .setColor(village.color)
+        .setTimestamp()
+        .setFooter({ text: `Added by ${interaction.user.username}` });
+      
+      return await interaction.editReply({ embeds: [embed], ephemeral: true });
+    }
+  } catch (error) {
+    console.error('[mod.js]: Error in handleVillageResources:', error);
+    return await safeReply(interaction, '❌ An error occurred while adding village resources.');
+  }
+}
+
+// ------------------- Function: handleVillageDamage -------------------
+// Applies damage to a village for testing and events
+async function handleVillageDamage(interaction) {
+  try {
+    const villageName = interaction.options.getString('village');
+    const damageAmount = interaction.options.getInteger('damage');
+    const reason = interaction.options.getString('reason') || 'Moderator action';
+
+    // Import Village model
+    const { Village } = require('../../../shared/models/VillageModel');
+
+    // Find the village
+    const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+    if (!village) {
+      return await interaction.editReply({ content: `❌ Village "${villageName}" not found.`, ephemeral: true });
+    }
+
+    // Get current state before damage
+    const maxHealth = village.levelHealth instanceof Map 
+      ? village.levelHealth.get(village.level.toString()) 
+      : village.levelHealth[village.level.toString()] || 100;
+    const healthBefore = village.health;
+    const levelBefore = village.level;
+
+    // Apply damage
+    const { village: updatedVillage, removedResources } = await damageVillage(villageName, damageAmount);
+
+    // Get state after damage
+    const healthAfter = updatedVillage.health;
+    const levelAfter = updatedVillage.level;
+    const maxHealthAfter = updatedVillage.levelHealth instanceof Map 
+      ? updatedVillage.levelHealth.get(updatedVillage.level.toString()) 
+      : updatedVillage.levelHealth[updatedVillage.level.toString()] || 100;
+
+    // Determine if level was lost
+    const levelDropped = levelAfter < levelBefore;
+    let levelMessage = '';
+    if (levelDropped) {
+      levelMessage = `\n⚠️ **The village has lost a level!** It's now at **level ${levelAfter}**.`;
+    }
+
+    // Format resource loss information (resources are lost on every damage event)
+    const materialsLost = removedResources
+      .filter(resource => resource.type === 'Material')
+      .map(resource => `${resource.name}: ${resource.amount}`)
+      .join('\n') || 'No materials lost.';
+    
+    const tokensLostAmount = removedResources
+      .filter(resource => resource.type === 'Tokens')
+      .reduce((sum, resource) => sum + resource.amount, 0);
+
+    // Set thumbnail using village images (URL, not emoji)
+    const VILLAGE_IMAGES = {
+      Rudania: {
+        thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_rudania_.png',
+      },
+      Inariko: {
+        thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_inariko_.png',
+      },
+      Vhintl: {
+        thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_vhintl_.png',
+      },
+    };
+
+    // Create embed for moderator response (ephemeral)
+    const moderatorEmbed = new EmbedBuilder()
+      .setTitle(`⚔️ Village Damage Applied - ${villageName}`)
+      .setDescription(
+        `**Damage Amount:** ${damageAmount} HP\n` +
+        `**Reason:** ${reason}\n\n` +
+        `**Health:** ${healthBefore}/${maxHealth} → ${healthAfter}/${maxHealthAfter}${levelMessage}`
+      )
+      .addFields(
+        { name: '📦 Materials Lost', value: materialsLost, inline: false },
+        { name: '🪙 Tokens Lost', value: `Tokens: ${tokensLostAmount}`, inline: false },
+        { name: '📊 Status', value: `**${updatedVillage.status.charAt(0).toUpperCase() + updatedVillage.status.slice(1)}**`, inline: true },
+        { name: '🌟 Level', value: `**${levelAfter}/3**`, inline: true }
+      )
+      .setColor(village.color);
+    
+    if (VILLAGE_IMAGES[villageName]) {
+      moderatorEmbed.setThumbnail(VILLAGE_IMAGES[villageName].thumbnail);
+    }
+    
+    moderatorEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setTimestamp()
+      .setFooter({ text: `Applied by ${interaction.user.username}` });
+
+    // Create embed for town hall announcement (public)
+    const townHallEmbed = new EmbedBuilder()
+      .setTitle(`⚔️ Village Damage Applied - ${villageName}`)
+      .setDescription(
+        `**Damage Amount:** ${damageAmount} HP\n` +
+        `**Reason:** ${reason}\n\n` +
+        `**Health:** ${healthBefore}/${maxHealth} → ${healthAfter}/${maxHealthAfter}${levelDropped ? levelMessage : ''}`
+      )
+      .addFields(
+        { name: '📦 Materials Lost', value: materialsLost || 'No materials lost.', inline: false },
+        { name: '🪙 Tokens Lost', value: `Tokens: ${tokensLostAmount}`, inline: false },
+        { name: '📊 Status', value: `**${updatedVillage.status.charAt(0).toUpperCase() + updatedVillage.status.slice(1)}**`, inline: true },
+        { name: '🌟 Level', value: `**${levelAfter}/3**`, inline: true }
+      )
+      .setColor(village.color);
+    
+    if (VILLAGE_IMAGES[villageName]) {
+      townHallEmbed.setThumbnail(VILLAGE_IMAGES[villageName].thumbnail);
+    }
+    
+    townHallEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setTimestamp();
+
+    // Create "OH NO!" level loss announcement if level was dropped
+    let levelLossEmbed = null;
+    if (levelDropped) {
+      levelLossEmbed = new EmbedBuilder()
+        .setTitle(`😱 OH NO! ${villageName} Lost a Level!`)
+        .setDescription(
+          `**The village has been severely damaged and lost a level!**\n\n` +
+          `**Level:** ${levelBefore}/3 → ${levelAfter}/3\n` +
+          `**Health:** ${healthBefore}/${maxHealth} → ${healthAfter}/${maxHealthAfter}\n\n` +
+          `⚠️ All resources have been reset to 0. The village needs to rebuild from scratch!`
+        )
+        .setColor(0xFF0000) // Red color for urgency
+        .setTimestamp();
+      
+      if (VILLAGE_IMAGES[villageName]) {
+        levelLossEmbed.setThumbnail(VILLAGE_IMAGES[villageName].thumbnail);
+      }
+      
+      levelLossEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+    }
+
+    // Send to moderator (ephemeral)
+    await interaction.editReply({ embeds: [moderatorEmbed], ephemeral: true });
+
+    // Send to town hall channel (public announcement)
+    // For testing, use the test channel ID provided by user
+    const TEST_CHANNEL_ID = '1391812848099004578';
+    
+    // Map village names to their respective town hall channel IDs
+    const villageChannelMap = {
+      'rudania': process.env.RUDANIA_TOWNHALL,
+      'inariko': process.env.INARIKO_TOWNHALL,
+      'vhintl': process.env.VHINTL_TOWNHALL
+    };
+    
+    // Use test channel for now, later switch to actual town hall channel
+    const targetChannelId = TEST_CHANNEL_ID; // TODO: Change to villageChannelMap[villageName.toLowerCase()] when ready
+    
+    try {
+      const announcementChannel = await interaction.client.channels.fetch(targetChannelId).catch(() => null);
+      if (announcementChannel) {
+        // Post damage announcement
+        await announcementChannel.send({ embeds: [townHallEmbed] });
+        console.log(`[handleVillageDamage] Posted damage announcement to channel ${targetChannelId} for village ${villageName}`);
+        
+        // Post level loss announcement if level was dropped
+        if (levelLossEmbed) {
+          await announcementChannel.send({ embeds: [levelLossEmbed] });
+          console.log(`[handleVillageDamage] Posted level loss announcement to channel ${targetChannelId} for village ${villageName}`);
+        }
+      } else {
+        console.error(`[handleVillageDamage] Could not find channel ${targetChannelId} for village damage announcement`);
+      }
+    } catch (error) {
+      console.error('[handleVillageDamage] Error posting to town hall channel:', error);
+      // Don't fail the command if announcement fails
+    }
+
+    return;
+  } catch (error) {
+    console.error('[mod.js]: Error in handleVillageDamage:', error);
+    return await safeReply(interaction, '❌ An error occurred while applying village damage.');
   }
 }
 

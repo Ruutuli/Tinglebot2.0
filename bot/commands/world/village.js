@@ -1,25 +1,26 @@
 // ============================================================================
 // ---- Standard Libraries ----
 // ============================================================================
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 // ============================================================================
 // ---- Database Services ----
 // ============================================================================
-const { fetchCharacterByName, getOrCreateToken, updateTokenBalance } = require('../../../shared/database/db');
+const { fetchCharacterByName, fetchCharacterById, getOrCreateToken, updateTokenBalance } = require('../../../shared/database/db');
 
 // ============================================================================
 // ---- Utility Functions ----
 // ============================================================================
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils');
+const { recoverHearts, recoverStamina } = require('../../modules/characterStatsModule');
 
 // ============================================================================
 // ---- Database Models ----
 // ============================================================================
 const ItemModel = require('../../../shared/models/ItemModel');
 const { Village } = require('../../../shared/models/VillageModel');
-const { initializeVillages } = require('../../modules/villageModule');
+const { initializeVillages, updateVillageStatus } = require('../../modules/villageModule');
 
 // ============================================================================
 // ---- Constants ----
@@ -40,7 +41,8 @@ const VILLAGE_IMAGES = {
 };
 
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
-const COOLDOWN_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+const COOLDOWN_DURATION = 7 * 24 * 60 * 60 * 1000; // 1 week in milliseconds
+const COOLDOWN_ENABLED = false; // Temporarily disabled for testing
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -77,6 +79,15 @@ function formatProgress(current, max) {
     return `${progressBar} ${current}/${max}`;
 }
 
+// ------------------- Function: getTokensPerHP -------------------
+// Calculates the token cost per HP for village repair based on village level
+// Level 1: 100 tokens = 1 HP (10,000 tokens for 100 HP)
+// Level 2: 100 tokens = 1 HP (20,000 tokens for 200 HP)
+// Level 3: 100 tokens = 1 HP (30,000 tokens for 300 HP)
+function getTokensPerHP(villageLevel) {
+    return 100; // Flat rate: 100 tokens per HP for all levels
+}
+
 // ------------------- Function: processContribution -------------------
 // Handles the contribution of items or tokens for village upgrades
 async function processContribution(village, interaction, type, itemName, qty, characterName) {
@@ -84,7 +95,7 @@ async function processContribution(village, interaction, type, itemName, qty, ch
         if (type === 'Items') {
             return await processItemContribution(village, interaction, itemName, qty, characterName);
         } else if (type === 'Tokens') {
-            return await processTokenContribution(village, interaction, qty);
+            return await processTokenContribution(village, interaction, qty, characterName);
         }
         return { success: false, message: '❌ **Invalid contribution type.**' };
     } catch (error) {
@@ -131,15 +142,18 @@ async function processItemContribution(village, interaction, itemName, qty, char
     // Update village materials
     material.current = current + qty;
     village.materials.set(matchedKey, material);
+    // Mark the Map as modified so Mongoose detects the change
+    village.markModified('materials');
 
     // Update contributor tracking
     const contributorKey = donatingCharacter._id.toString();
     const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
     contributorData.items[matchedKey] = (contributorData.items[matchedKey] || 0) + qty;
     village.contributors.set(contributorKey, contributorData);
+    village.markModified('contributors');
 
     // Check for level up
-    const leveledUp = await checkAndHandleVillageLevelUp(village);
+    const leveledUp = await checkAndHandleVillageLevelUp(village, interaction?.client);
     if (leveledUp) {
         // Update vending tier and discount
         village.vendingTier = village.level;
@@ -176,7 +190,17 @@ async function processItemContribution(village, interaction, itemName, qty, char
 
 // ------------------- Function: processTokenContribution -------------------
 // Handles the contribution of tokens for village upgrades
-async function processTokenContribution(village, interaction, qty) {
+async function processTokenContribution(village, interaction, qty, characterName) {
+    if (!characterName) {
+        return { success: false, message: '❌ **Character name is required for token donations.**' };
+    }
+
+    // Fetch character to get character ID for tracking
+    const donatingCharacter = await fetchCharacterByName(characterName);
+    if (!donatingCharacter) {
+        return { success: false, message: `❌ **Character "${characterName}" not found.**` };
+    }
+
     const userId = interaction.user.id;
     const tokenRecord = await getOrCreateToken(userId);
 
@@ -185,27 +209,32 @@ async function processTokenContribution(village, interaction, qty) {
     }
 
     const nextLevel = village.level + 1;
-    const requiredTokens = village.tokenRequirements.get(nextLevel.toString()) || 0;
+    const requiredTokens = village.tokenRequirements instanceof Map 
+        ? village.tokenRequirements.get(nextLevel.toString()) 
+        : village.tokenRequirements[nextLevel.toString()] || 0;
     const currentTokens = village.currentTokens || 0;
 
     if (currentTokens + qty > requiredTokens) {
         return { success: false, message: `❌ **Cannot contribute more than required. Need ${requiredTokens - currentTokens} more tokens.**` };
     }
 
-    // Deduct tokens
-    await updateTokenBalance(userId, -qty);
+    // Deduct tokens from user balance
+    const balanceBefore = tokenRecord.tokens;
+    const newBalance = await updateTokenBalance(userId, -qty);
+    console.log(`[processTokenContribution] Deducted ${qty} tokens from user ${userId}. Balance: ${balanceBefore} → ${newBalance}`);
 
     // Update village tokens
     village.currentTokens = currentTokens + qty;
 
-    // Update contributor tracking
-    const contributorKey = userId;
+    // Update contributor tracking by CHARACTER ID (not user ID)
+    const contributorKey = donatingCharacter._id.toString();
     const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
     contributorData.tokens += qty;
     village.contributors.set(contributorKey, contributorData);
+    village.markModified('contributors');
 
     // Check for level up
-    const leveledUp = await checkAndHandleVillageLevelUp(village);
+    const leveledUp = await checkAndHandleVillageLevelUp(village, interaction?.client);
     if (leveledUp) {
         // Update vending tier and discount
         village.vendingTier = village.level;
@@ -221,10 +250,10 @@ async function processTokenContribution(village, interaction, qty) {
         .setTitle(`${village.name} (Level ${village.level})`)
         .setDescription(
             leveledUp
-                ? `🎉 **${interaction.user.username}** has contributed **Tokens x ${qty}** towards upgrading the village!\n\n` +
+                ? `🎉 **${characterName}** has contributed **Tokens x ${qty}** towards upgrading the village!\n\n` +
                   `🌟 **The village has reached level ${village.level}!**\n` +
                   `Use </village view:1324300899585363968> to check the new requirements.`
-                : `🎉 **${interaction.user.username}** has contributed **Tokens x ${qty}** towards upgrading the village!\n` +
+                : `🎉 **${characterName}** has contributed **Tokens x ${qty}** towards upgrading the village!\n` +
                   `Use </village view:1324300899585363968> to check the status.`
         )
         .addFields(
@@ -237,19 +266,312 @@ async function processTokenContribution(village, interaction, qty) {
     return { success: true, embed };
 }
 
-// ------------------- Function: processRepair -------------------
-// Handles the repair of a damaged village
-async function processRepair(village, interaction, type, itemName, qty, characterName) {
+// ------------------- Function: processImprove -------------------
+// Handles combined repair and upgrade contributions
+async function processImprove(village, interaction, type, itemName, qty, characterName) {
     try {
-        const lostResources = village.lostResources instanceof Map ? Object.fromEntries(village.lostResources) : village.lostResources;
-        const repairProgress = village.repairProgress instanceof Map ? Object.fromEntries(village.repairProgress) : village.repairProgress;
+        const maxHealth = village.levelHealth instanceof Map 
+            ? village.levelHealth.get(village.level.toString()) 
+            : village.levelHealth[village.level.toString()] || 100;
+        
+        const isDamaged = village.health < maxHealth;
+        const canUpgrade = village.status !== 'damaged' && village.level < 3;
+        
+        // If village is damaged and tokens are being donated, apply to repair first
+        if (isDamaged && type === 'Tokens') {
+            const hpNeeded = maxHealth - village.health;
+            // Calculate token cost per HP: scales with village level
+            const tokensPerHP = getTokensPerHP(village.level);
+            const maxTokensNeeded = hpNeeded * tokensPerHP;
+            
+            // Calculate how much HP can be restored
+            // HP_restored = tokens_contributed / (village_level × 50)
+            const hpRestored = Math.floor(qty / tokensPerHP);
+            const actualHpRestored = Math.min(hpRestored, hpNeeded);
+            const tokensForRepair = actualHpRestored * tokensPerHP;
+            const tokensRemaining = qty - tokensForRepair;
+            
+            // Apply repair
+            if (tokensForRepair > 0) {
+                if (!characterName) {
+                    return { success: false, message: '❌ **Character name is required for token donations.**' };
+                }
 
-        if (type === 'Items') {
-            return await processItemRepair(village, interaction, itemName, qty, characterName, lostResources, repairProgress);
-        } else if (type === 'Tokens') {
-            return await processTokenRepair(village, interaction, qty, lostResources, repairProgress);
+                // Fetch character to get character ID for tracking
+                const donatingCharacter = await fetchCharacterByName(characterName);
+                if (!donatingCharacter) {
+                    return { success: false, message: `❌ **Character "${characterName}" not found.**` };
+                }
+
+                const userId = interaction.user.id;
+                const tokenRecord = await getOrCreateToken(userId);
+                
+                // Check if user has enough tokens for the full contribution
+                if (tokenRecord.tokens < qty) {
+                    return { success: false, message: `❌ **You do not have enough tokens.** Current Balance: ${tokenRecord.tokens}, Required: ${qty}` };
+                }
+                
+                // Deduct full amount upfront from user balance
+                const balanceBefore = tokenRecord.tokens;
+                const newBalance = await updateTokenBalance(userId, -qty);
+                console.log(`[processImprove] Deducted ${qty} tokens from user ${userId} for repair. Balance: ${balanceBefore} → ${newBalance}`);
+                village.health = Math.min(maxHealth, village.health + actualHpRestored);
+                
+                // Update contributor tracking by CHARACTER ID (not user ID)
+                const contributorKey = donatingCharacter._id.toString();
+                const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
+                contributorData.tokens = (contributorData.tokens || 0) + tokensForRepair;
+                village.contributors.set(contributorKey, contributorData);
+                village.markModified('contributors');
+                
+                // Update status
+                updateVillageStatus(village);
+                
+                // If repair is complete and there are remaining tokens, apply to upgrade
+                const repairComplete = village.health >= maxHealth;
+                const canUpgradeNow = repairComplete && village.level < 3;
+                if (repairComplete && tokensRemaining > 0 && canUpgradeNow) {
+                    // Apply remaining tokens to upgrade (tokens already deducted, just update village)
+                    const nextLevel = village.level + 1;
+                    const requiredTokens = village.tokenRequirements instanceof Map 
+                        ? village.tokenRequirements.get(nextLevel.toString()) 
+                        : village.tokenRequirements[nextLevel.toString()] || 0;
+                    const currentTokens = village.currentTokens || 0;
+                    
+                    if (currentTokens + tokensRemaining > requiredTokens) {
+                        // Can't contribute more than needed
+                        const actualTokensToAdd = requiredTokens - currentTokens;
+                        village.currentTokens = requiredTokens;
+                        
+                        // Update contributor tracking by CHARACTER ID (not user ID)
+                        const contributorKey = donatingCharacter._id.toString();
+                        const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
+                        contributorData.tokens = (contributorData.tokens || 0) + actualTokensToAdd;
+                        village.contributors.set(contributorKey, contributorData);
+                        village.markModified('contributors');
+                        
+                        // Refund excess tokens
+                        if (tokensRemaining > actualTokensToAdd) {
+                            await updateTokenBalance(interaction.user.id, tokensRemaining - actualTokensToAdd);
+                        }
+                    } else {
+                        village.currentTokens = currentTokens + tokensRemaining;
+                        
+                        // Update contributor tracking by CHARACTER ID (not user ID)
+                        const contributorKey = donatingCharacter._id.toString();
+                        const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
+                        contributorData.tokens = (contributorData.tokens || 0) + tokensRemaining;
+                        village.contributors.set(contributorKey, contributorData);
+                        village.markModified('contributors');
+                    }
+                    
+                    // Check for level up
+                    const leveledUp = await checkAndHandleVillageLevelUp(village, interaction?.client);
+                    if (leveledUp) {
+                        village.vendingTier = village.level;
+                        village.vendingDiscount = village.level === 2 ? 10 : village.level === 3 ? 20 : 0;
+                    }
+                    
+                    await village.save();
+                    
+                    // Generate embed
+                    const tokenProgress = formatProgress(village.currentTokens, requiredTokens);
+                    const embed = new EmbedBuilder()
+                        .setTitle(`${village.name} (Level ${village.level})`)
+                        .setDescription(
+                            `🎉 **${characterName}** has contributed **${tokensForRepair} tokens** to repair and **${tokensRemaining} tokens** to upgrade the village!` +
+                            (leveledUp ? `\n\n🌟 **The village has reached level ${village.level}!**` : '')
+                        )
+                        .addFields(
+                            { name: '❤️ **Repair**', value: `> +${actualHpRestored} HP (${village.health}/${maxHealth})`, inline: true },
+                            { name: '🪙 **Upgrade Progress**', value: `> ${tokenProgress}`, inline: true }
+                        )
+                        .setColor(village.color)
+                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                        .setImage(BORDER_IMAGE);
+                    
+                    return { success: true, embed };
+                }
+                
+                // If repair is complete but can't upgrade, refund remaining tokens
+                if (repairComplete && tokensRemaining > 0 && !canUpgradeNow) {
+                    await updateTokenBalance(interaction.user.id, tokensRemaining);
+                }
+                
+                await village.save();
+                
+                // Generate embed for repair only
+                const hpProgress = formatProgress(village.health, maxHealth);
+                const embed = new EmbedBuilder()
+                    .setTitle(`${village.name} (Level ${village.level})`)
+                    .setDescription(
+                        repairComplete
+                            ? `🎉 **${characterName}** has completed the village repair!` +
+                              (tokensRemaining > 0 && canUpgradeNow 
+                                  ? `\n\n💰 **${tokensRemaining} tokens** were also contributed toward upgrades!`
+                                  : tokensRemaining > 0
+                                  ? `\n\n💰 **${tokensRemaining} tokens** were refunded (village is at max level).`
+                                  : '')
+                            : `🎉 **${characterName}** has contributed **${tokensForRepair} tokens** to repair the village!`
+                    )
+                    .addFields(
+                        { name: '❤️ **Health Recovery**', value: `> +${actualHpRestored} HP\n> ${hpProgress}`, inline: true },
+                        { name: '🪙 **Tokens Used**', value: `> ${tokensForRepair} tokens`, inline: true }
+                    )
+                    .setColor(village.color)
+                    .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                    .setImage(BORDER_IMAGE);
+                
+                if (!repairComplete && maxTokensNeeded - tokensForRepair > 0) {
+                    embed.addFields(
+                        { name: '💰 **Remaining Cost**', value: `> ${maxTokensNeeded - tokensForRepair} tokens needed to fully repair`, inline: false }
+                    );
+                }
+                
+                return { success: true, embed };
+            }
         }
-        return { success: false, message: '❌ **Invalid contribution type.**' };
+        
+        // If village is not damaged (or after repair), apply to upgrade
+        if (!isDamaged || (isDamaged && type === 'Items')) {
+            if (village.status === 'damaged' && type === 'Items') {
+                return { success: false, message: '❌ **This village needs to be repaired before materials can be contributed.** Please use tokens to repair first.' };
+            }
+            
+            // Process upgrade contribution
+            const result = await processContribution(village, interaction, type, itemName, qty, characterName);
+            if (!result.success) {
+                return result;
+            }
+            
+            // Check for level up
+            const leveledUp = await checkAndHandleVillageLevelUp(village, interaction?.client);
+            if (leveledUp) {
+                village.vendingTier = village.level;
+                village.vendingDiscount = village.level === 2 ? 10 : village.level === 3 ? 20 : 0;
+                await village.save();
+                
+                // Update the embed to show level up
+                result.embed.setDescription(
+                    result.embed.data.description?.replace(
+                        /Use.*to check.*status\./,
+                        `🌟 **The village has reached level ${village.level}!**\nUse </village view:1324300899585363968> to check the new requirements.`
+                    ) || `🌟 **The village has reached level ${village.level}!**`
+                );
+            }
+            
+            return result;
+        }
+        
+        return { success: false, message: '❌ **Invalid contribution type for current village state.**' };
+    } catch (error) {
+        handleInteractionError(error, 'village.js');
+        console.error('[processImprove] Error:', error);
+        return { success: false, message: '❌ **An error occurred while processing your contribution.**' };
+    }
+}
+
+// ------------------- Function: processRepair -------------------
+// Handles the repair of a damaged village using tokens only
+async function processRepair(village, interaction, qty, characterName) {
+    try {
+        if (!characterName) {
+            return { success: false, message: '❌ **Character name is required for token donations.**' };
+        }
+
+        // Fetch character to get character ID for tracking
+        const donatingCharacter = await fetchCharacterByName(characterName);
+        if (!donatingCharacter) {
+            return { success: false, message: `❌ **Character "${characterName}" not found.**` };
+        }
+
+        const userId = interaction.user.id;
+        const tokenRecord = await getOrCreateToken(userId);
+
+        if (tokenRecord.tokens < qty) {
+            return { success: false, message: `❌ **You do not have enough tokens to contribute.** Current Balance: ${tokenRecord.tokens}, Required: ${qty}` };
+        }
+
+        // Get max health for current level
+        const maxHealth = village.levelHealth instanceof Map 
+            ? village.levelHealth.get(village.level.toString()) 
+            : village.levelHealth[village.level.toString()] || 100;
+        
+        // Calculate HP needed
+        const hpNeeded = maxHealth - village.health;
+        
+        if (hpNeeded <= 0) {
+            return { success: false, message: '❌ **This village is already at full health.**' };
+        }
+
+        // Calculate token cost per HP: scales with village level
+        const tokensPerHP = getTokensPerHP(village.level);
+        const maxTokensNeeded = hpNeeded * tokensPerHP;
+
+        // Calculate HP that can be restored with the tokens provided
+        // HP_restored = tokens_contributed / (village_level × 50)
+        const hpRestored = Math.floor(qty / tokensPerHP);
+        
+        if (hpRestored <= 0) {
+            return { success: false, message: `❌ **Insufficient tokens. You need at least ${tokensPerHP} tokens to restore 1 HP at level ${village.level}.**` };
+        }
+
+        // Cap HP restoration to what's needed
+        const actualHpRestored = Math.min(hpRestored, hpNeeded);
+        const actualTokensUsed = actualHpRestored * tokensPerHP;
+
+        // Deduct tokens
+        await updateTokenBalance(userId, -actualTokensUsed);
+
+        // Update village HP
+        village.health = Math.min(maxHealth, village.health + actualHpRestored);
+
+        // Update contributor tracking by CHARACTER ID (not user ID)
+        const contributorKey = donatingCharacter._id.toString();
+        const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
+        contributorData.tokens = (contributorData.tokens || 0) + actualTokensUsed;
+        village.contributors.set(contributorKey, contributorData);
+        village.markModified('contributors');
+
+        // Check if repair is complete (HP at 100%)
+        const isComplete = village.health >= maxHealth;
+        // Update status (will be 'upgradable' if HP is full, 'damaged' if not)
+        updateVillageStatus(village);
+
+        await village.save();
+
+        // Generate embed
+        const hpProgress = formatProgress(village.health, maxHealth);
+        const tokensRemaining = maxTokensNeeded - actualTokensUsed;
+
+        // Use character name for display
+        const displayName = characterName;
+
+        const embed = new EmbedBuilder()
+            .setTitle(`${village.name} (Level ${village.level})`)
+            .setDescription(
+                isComplete
+                    ? `🎉 **${displayName}** has completed the village repair!\n\n` +
+                      `🌟 **The village is now fully restored!**\n` +
+                      `Use </village view:1324300899585363968> to check the current status.`
+                    : `🎉 **${displayName}** has contributed **${actualTokensUsed} tokens** to repair the village!\n` +
+                      `Use </village view:1324300899585363968> to check the repair status.`
+            )
+            .addFields(
+                { name: '❤️ **Health Recovery**', value: `> +${actualHpRestored} HP\n> ${hpProgress}`, inline: true },
+                { name: '🪙 **Tokens Used**', value: `> ${actualTokensUsed} tokens`, inline: true }
+            )
+            .setColor(village.color)
+            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+            .setImage(BORDER_IMAGE);
+
+        if (!isComplete && tokensRemaining > 0) {
+            embed.addFields(
+                { name: '💰 **Remaining Cost**', value: `> ${tokensRemaining} tokens needed to fully repair`, inline: false }
+            );
+        }
+
+        return { success: true, embed };
     } catch (error) {
         handleInteractionError(error, 'village.js');
         console.error('[processRepair] Error:', error);
@@ -257,240 +579,529 @@ async function processRepair(village, interaction, type, itemName, qty, characte
     }
 }
 
-// ------------------- Function: processItemRepair -------------------
-// Handles the repair of a village using items
-async function processItemRepair(village, interaction, itemName, qty, characterName, lostResources, repairProgress) {
-    if (!itemName || !characterName) {
-        return { success: false, message: '❌ **Item name and character name are required for item donations.**' };
-    }
-
-    const matchedKey = Object.keys(lostResources).find(key => key.toLowerCase() === itemName.trim().toLowerCase());
-    if (!matchedKey) {
-        return { success: false, message: '❌ **This item is not needed for repair.**' };
-    }
-
-    const lostAmount = lostResources[matchedKey] || 0;
-    const currentProgress = repairProgress[matchedKey] || 0;
-
-    if (currentProgress + qty > lostAmount) {
-        return { success: false, message: `❌ **Cannot contribute more than lost. Need ${lostAmount - currentProgress} more.**` };
-    }
-
-    // Deduct items from character
-    const donatingCharacter = await fetchCharacterByName(characterName);
-    if (!donatingCharacter) {
-        return { success: false, message: `❌ **Character "${characterName}" not found.**` };
-    }
-
-    const removed = await removeItemInventoryDatabase(donatingCharacter._id, matchedKey, qty, interaction);
-    if (!removed) {
-        return { success: false, message: `❌ **Failed to remove items from ${characterName}'s inventory.**` };
-    }
-
-    // Update repair progress
-    repairProgress[matchedKey] = currentProgress + qty;
-    village.repairProgress.set(matchedKey, repairProgress[matchedKey]);
-
-    // Calculate health recovery
-    const maxHealth = village.levelHealth.get(village.level.toString()) || 100;
-    const healthRecovery = Math.floor((qty / lostAmount) * maxHealth);
-    village.health = Math.min(maxHealth, village.health + healthRecovery);
-
-    // Check if repair is complete
-    const isComplete = Object.entries(lostResources).every(([key, amount]) => (repairProgress[key] || 0) >= amount);
-    if (isComplete) {
-        village.status = 'upgradable';
-        village.health = maxHealth;
-        village.lostResources = new Map();
-        village.repairProgress = new Map();
-    }
-
-    await village.save();
-
-    // Generate embed
-    const item = await ItemModel.findOne({ itemName: { $regex: `^${matchedKey}$`, $options: 'i' } });
-    const emoji = item?.emoji || ':grey_question:';
-    const displayName = item?.itemName || matchedKey;
-    const progressBar = `\`${'▰'.repeat(Math.round(((currentProgress + qty) / lostAmount) * 10))}${'▱'.repeat(10 - Math.round(((currentProgress + qty) / lostAmount) * 10))}\``;
-
-    const embed = new EmbedBuilder()
-        .setTitle(`${village.name} (Level ${village.level})`)
-        .setDescription(
-            isComplete
-                ? `🎉 **${characterName}** has completed the village repair!\n\n` +
-                  `🌟 **The village is now fully restored!**\n` +
-                  `Use </village view:1324300899585363968> to check the current status.`
-                : `🎉 **${characterName}** has contributed **${displayName} x ${qty}** to repair the village!\n` +
-                  `Use </village view:1324300899585363968> to check the repair status.`
-        )
-        .addFields(
-            { name: '📦 Repair Progress', value: `${emoji} ${displayName}\n> ${progressBar} ${currentProgress + qty}/${lostAmount}`, inline: true },
-            { name: '❤️ Health Recovery', value: `> +${healthRecovery} HP (${village.health}/${maxHealth})`, inline: true }
-        )
-        .setColor(village.color)
-        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-        .setImage(BORDER_IMAGE);
-
-    return { success: true, embed };
-}
-
-// ------------------- Function: processTokenRepair -------------------
-// Handles the repair of a village using tokens
-async function processTokenRepair(village, interaction, qty, lostResources, repairProgress) {
-    const userId = interaction.user.id;
-    const tokenRecord = await getOrCreateToken(userId);
-
-    if (tokenRecord.tokens < qty) {
-        return { success: false, message: `❌ **You do not have enough tokens to contribute.** Current Balance: ${tokenRecord.tokens}, Required: ${qty}` };
-    }
-
-    const lostTokens = lostResources.tokens || 0;
-    const currentProgress = repairProgress.tokens || 0;
-
-    if (currentProgress + qty > lostTokens) {
-        return { success: false, message: `❌ **Cannot contribute more than lost. Need ${lostTokens - currentProgress} more tokens.**` };
-    }
-
-    // Deduct tokens
-    await updateTokenBalance(userId, -qty);
-
-    // Update repair progress
-    repairProgress.tokens = currentProgress + qty;
-    village.repairProgress.set('tokens', repairProgress.tokens);
-
-    // Calculate health recovery
-    const maxHealth = village.levelHealth.get(village.level.toString()) || 100;
-    const healthRecovery = Math.floor((qty / lostTokens) * maxHealth);
-    village.health = Math.min(maxHealth, village.health + healthRecovery);
-
-    // Check if repair is complete
-    const isComplete = Object.entries(lostResources).every(([key, amount]) => (repairProgress[key] || 0) >= amount);
-    if (isComplete) {
-        village.status = 'upgradable';
-        village.health = maxHealth;
-        village.lostResources = new Map();
-        village.repairProgress = new Map();
-    }
-
-    await village.save();
-
-    // Generate embed
-    const progressBar = `\`${'▰'.repeat(Math.round(((currentProgress + qty) / lostTokens) * 10))}${'▱'.repeat(10 - Math.round(((currentProgress + qty) / lostTokens) * 10))}\``;
-
-    const embed = new EmbedBuilder()
-        .setTitle(`${village.name} (Level ${village.level})`)
-        .setDescription(
-            isComplete
-                ? `🎉 **${interaction.user.username}** has completed the village repair!\n\n` +
-                  `🌟 **The village is now fully restored!**\n` +
-                  `Use </village view:1324300899585363968> to check the current status.`
-                : `🎉 **${interaction.user.username}** has contributed **Tokens x ${qty}** to repair the village!\n` +
-                  `Use </village view:1324300899585363968> to check the repair status.`
-        )
-        .addFields(
-            { name: '🪙 Token Progress', value: `> ${progressBar} ${currentProgress + qty}/${lostTokens}`, inline: true },
-            { name: '❤️ Health Recovery', value: `> +${healthRecovery} HP (${village.health}/${maxHealth})`, inline: true }
-        )
-        .setColor(village.color)
-        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-        .setImage(BORDER_IMAGE);
-
-    return { success: true, embed };
-}
-
 // ------------------- Function: generateProgressEmbed -------------------
 // Generates an embed showing village upgrade or repair progress
 async function generateProgressEmbed(village) {
     const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
     const nextLevel = village.level + 1;
-    const requiredTokens = village.tokenRequirements.get(nextLevel.toString()) || 0;
+    
+    // Get token requirements (cumulative)
+    const requiredTokens = village.tokenRequirements instanceof Map 
+        ? village.tokenRequirements.get(nextLevel.toString()) 
+        : village.tokenRequirements[nextLevel.toString()] || 0;
 
-    // Format materials progress
-    const formattedMaterials = await formatMaterials(
-        Object.fromEntries(
-            Object.entries(materials).filter(([key, value]) => {
-                const required = value.required?.[nextLevel];
-                return required !== undefined && required > 0;
-            }).map(([key, value]) => [key, value.required[nextLevel]])
-        ),
-        materials
-    );
+    // Format materials progress (cumulative system)
+    // Show all materials that have requirements for the next level
+    const materialsForNextLevel = Object.entries(materials)
+        .filter(([key, value]) => {
+            if (key.startsWith('$')) return false; // Skip special keys
+            const required = value.required?.[nextLevel];
+            return required !== undefined && required > 0;
+        })
+        .map(([key, value]) => {
+            const required = value.required[nextLevel]; // Cumulative requirement for next level
+            const current = value.current || 0; // Current cumulative amount
+            return { key, required, current };
+        })
+        .sort((a, b) => b.required - a.required); // Sort by requirement amount (descending)
+
+    // Format materials for display
+    const formattedMaterials = [];
+    for (const { key, required, current } of materialsForNextLevel) {
+        const item = await ItemModel.findOne({ itemName: { $regex: `^${key}$`, $options: 'i' } });
+        const emoji = item?.emoji || ':grey_question:';
+        const displayName = item?.itemName || key;
+        const progressBar = `\`${'▰'.repeat(Math.round((current / required) * 10))}${'▱'.repeat(10 - Math.round((current / required) * 10))}\``;
+        formattedMaterials.push(`${emoji} **${displayName}**\n> ${progressBar} ${current}/${required}`);
+    }
 
     // Format token progress
     const tokenBar = formatProgress(village.currentTokens || 0, requiredTokens);
 
-    // Get top contributors
+    // Get top contributors (by CHARACTER ID now, not user ID)
     const contributors = village.contributors instanceof Map ? Object.fromEntries(village.contributors) : village.contributors;
-    const topContributors = Object.entries(contributors)
-        .map(([userId, data]) => ({
-            userId,
-            total: (data.tokens || 0) + Object.values(data.items || {}).reduce((sum, qty) => sum + qty, 0)
-        }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 3);
+    const topContributors = await Promise.all(
+        Object.entries(contributors)
+            .map(async ([characterId, data]) => {
+                const total = (data.tokens || 0) + Object.values(data.items || {}).reduce((sum, qty) => sum + qty, 0);
+                // Fetch character to get name
+                const character = await fetchCharacterById(characterId);
+                const characterName = character ? character.name : `Character ${characterId.substring(0, 8)}...`;
+                return {
+                    characterId,
+                    characterName,
+                    total
+                };
+            })
+    );
+    
+    // Sort by total and take top 3
+    topContributors.sort((a, b) => b.total - a.total);
+    const top3 = topContributors.slice(0, 3);
 
     // Format contributors list
-    const contributorsList = topContributors.length > 0
-        ? topContributors.map((contrib, index) => `${['🥇', '🥈', '🥉'][index]} <@${contrib.userId}>: ${contrib.total} total contributions`)
+    const contributorsList = top3.length > 0
+        ? top3.map((contrib, index) => `${['🥇', '🥈', '🥉'][index]} **${contrib.characterName}**: ${contrib.total} total contributions`)
         : ['No contributions yet'];
 
     // Build the embed
     const embed = new EmbedBuilder()
         .setTitle(`${village.name} Progress (Level ${village.level})`)
+        .setDescription(village.level < 3 
+            ? `📈 **Progress toward Level ${nextLevel}**\n*Materials are cumulative - contributions carry forward to the next level.*`
+            : `🌟 **Village is at maximum level!**`)
         .addFields(
-            { name: '🪙 **__Tokens Progress__**', value: `> ${tokenBar}`, inline: false },
-            { name: '📦 **__Materials Progress__**', value: formattedMaterials.join('\n'), inline: false },
-            { name: '👥 **__Top Contributors__**', value: contributorsList.join('\n'), inline: false }
+            { name: '🪙 **__Tokens Progress__**', value: `> ${tokenBar}`, inline: false }
         )
         .setColor(village.color)
         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
         .setImage(BORDER_IMAGE);
 
+    // Add materials field only if not at max level
+    if (village.level < 3 && formattedMaterials.length > 0) {
+        embed.addFields(
+            { name: '📦 **__Materials Progress__**', value: formattedMaterials.join('\n'), inline: false }
+        );
+    }
+
+    // Add contributors field
+    embed.addFields(
+        { name: '👥 **__Top Contributors__**', value: contributorsList.join('\n'), inline: false }
+    );
+
     return embed;
+}
+
+// ------------------- Function: generateContributorsEmbed -------------------
+// Generates an embed showing all contributors to a village with their detailed contributions
+async function generateContributorsEmbed(village) {
+    // Get all contributors (by CHARACTER ID)
+    const contributors = village.contributors instanceof Map ? Object.fromEntries(village.contributors) : village.contributors;
+    
+    if (!contributors || Object.keys(contributors).length === 0) {
+        const embed = new EmbedBuilder()
+            .setTitle(`${village.name} Contributors`)
+            .setDescription('📭 **No contributions yet.**\nBe the first to contribute to this village!')
+            .setColor(village.color)
+            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+            .setImage(BORDER_IMAGE);
+        return embed;
+    }
+
+    // Process all contributors
+    const contributorList = await Promise.all(
+        Object.entries(contributors)
+            .map(async ([characterId, data]) => {
+                const character = await fetchCharacterById(characterId);
+                const characterName = character ? character.name : `Character ${characterId.substring(0, 8)}...`;
+                
+                const tokens = data.tokens || 0;
+                const items = data.items || {};
+                const itemContributions = Object.entries(items)
+                    .filter(([_, qty]) => qty > 0)
+                    .map(([itemName, qty]) => ({ itemName, qty }));
+                
+                const totalItems = Object.values(items).reduce((sum, qty) => sum + qty, 0);
+                const totalContributions = tokens + totalItems;
+                
+                return {
+                    characterName,
+                    tokens,
+                    itemContributions,
+                    totalItems,
+                    totalContributions
+                };
+            })
+    );
+    
+    // Sort by total contributions (descending)
+    contributorList.sort((a, b) => b.totalContributions - a.totalContributions);
+    
+    // Build contributor details
+    const contributorDetails = [];
+    for (let i = 0; i < contributorList.length; i++) {
+        const contrib = contributorList[i];
+        const rankEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '•';
+        
+        let details = `${rankEmoji} **${contrib.characterName}**\n`;
+        details += `   Total: ${contrib.totalContributions} contributions\n`;
+        
+        if (contrib.tokens > 0) {
+            details += `   🪙 Tokens: ${contrib.tokens.toLocaleString()}\n`;
+        }
+        
+        if (contrib.itemContributions.length > 0) {
+            // Get item emojis and format item contributions
+            const itemDetails = await Promise.all(
+                contrib.itemContributions.map(async ({ itemName, qty }) => {
+                    const item = await ItemModel.findOne({ itemName: { $regex: `^${itemName}$`, $options: 'i' } });
+                    const emoji = item?.emoji || '📦';
+                    return `${emoji} ${itemName}: ${qty}`;
+                })
+            );
+            
+            // Limit item display to avoid embed field length issues
+            const maxItems = 5;
+            if (contrib.itemContributions.length > maxItems) {
+                const shown = itemDetails.slice(0, maxItems).join(', ');
+                const remaining = contrib.itemContributions.length - maxItems;
+                details += `   📦 Items: ${shown} (+${remaining} more)\n`;
+            } else {
+                details += `   📦 Items: ${itemDetails.join(', ')}\n`;
+            }
+        }
+        
+        contributorDetails.push(details);
+    }
+    
+    // Split into multiple fields if needed (Discord field value limit is 1024 characters)
+    const fields = [];
+    let currentField = '';
+    
+    for (const detail of contributorDetails) {
+        if (currentField.length + detail.length > 1000) {
+            fields.push({ name: '👥 **Contributors**', value: currentField.trim(), inline: false });
+            currentField = detail;
+        } else {
+            currentField += (currentField ? '\n\n' : '') + detail;
+        }
+    }
+    
+    if (currentField) {
+        fields.push({ name: '👥 **Contributors**', value: currentField.trim(), inline: false });
+    }
+    
+    // Build the embed
+    const embed = new EmbedBuilder()
+        .setTitle(`${village.name} Contributors`)
+        .setDescription(`📊 **Total Contributors:** ${contributorList.length}\n\nView all contributions to ${village.name}!`)
+        .setColor(village.color)
+        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+        .setImage(BORDER_IMAGE);
+    
+    // Add all fields
+    for (const field of fields) {
+        embed.addFields(field);
+    }
+    
+    return embed;
+}
+
+// ------------------- Function: sendLevelUpAnnouncement -------------------
+// Sends an announcement embed to the town hall channel when a village levels up
+async function sendLevelUpAnnouncement(village, client) {
+    if (!client) {
+        console.log('[sendLevelUpAnnouncement] No client provided, skipping announcement');
+        return;
+    }
+
+    try {
+        // Test channel ID for now
+        const TEST_CHANNEL_ID = '1391812848099004578';
+        
+        // Map village names to their respective town hall channel IDs
+        const villageChannelMap = {
+            'Rudania': process.env.RUDANIA_TOWNHALL,
+            'Inariko': process.env.INARIKO_TOWNHALL,
+            'Vhintl': process.env.VHINTL_TOWNHALL
+        };
+        
+        // Use test channel for now, later switch to actual town hall channel
+        const targetChannelId = TEST_CHANNEL_ID; // TODO: Change to villageChannelMap[village.name] when ready
+        
+        const announcementChannel = await client.channels.fetch(targetChannelId).catch(() => null);
+        if (!announcementChannel) {
+            console.error(`[sendLevelUpAnnouncement] Could not find channel ${targetChannelId} for level-up announcement`);
+            return;
+        }
+
+        // Get max health for the new level
+        const maxHealth = village.levelHealth instanceof Map 
+            ? village.levelHealth.get(village.level.toString()) 
+            : village.levelHealth[village.level.toString()] || 100;
+
+        // Format vending status based on new level
+        let vendingStatus = '';
+        if (village.level === 3) {
+            vendingStatus = '🛍️ **Rare stock unlocked (-20% cost)**';
+        } else if (village.level === 2) {
+            vendingStatus = '🛍️ **Mid-tier stock unlocked (-10% cost)**';
+        } else {
+            vendingStatus = '🛍️ **Basic stock only**';
+        }
+
+        // Create announcement embed
+        const announcementEmbed = new EmbedBuilder()
+            .setTitle(`🌟 ${village.name} is now Level ${village.level}!`)
+            .setDescription(
+                `🎉 **Congratulations!** The village has successfully upgraded!\n\n` +
+                `**New Level:** ${village.level}/3\n` +
+                `**Health:** ${village.health}/${maxHealth} HP\n` +
+                `${vendingStatus}\n\n` +
+                `Use </village view:1324300899585363968> to check the new requirements.`
+            )
+            .setColor(village.color)
+            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+            .setImage(BORDER_IMAGE)
+            .setTimestamp();
+
+        await announcementChannel.send({ embeds: [announcementEmbed] });
+        console.log(`[sendLevelUpAnnouncement] ✅ Posted level-up announcement to channel ${targetChannelId} for ${village.name}`);
+    } catch (error) {
+        console.error('[sendLevelUpAnnouncement] Error posting level-up announcement:', error);
+        // Don't fail the level-up process if announcement fails
+    }
 }
 
 // ------------------- Function: checkAndHandleVillageLevelUp -------------------
 // Checks if a village can level up and handles the level up process
-async function checkAndHandleVillageLevelUp(village) {
+// Exported for use in mod.js and other modules
+// client: Optional Discord client for sending announcements
+async function checkAndHandleVillageLevelUp(village, client = null) {
+    // Don't check if already at max level
+    if (village.level >= 3) {
+        console.log(`[checkAndHandleVillageLevelUp] Village ${village.name} is already at max level ${village.level}, skipping check`);
+        return false;
+    }
+    
     const nextLevel = village.level + 1;
     const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
-    const requiredTokens = village.tokenRequirements.get(nextLevel.toString()) || 0;
+    const requiredTokens = village.tokenRequirements instanceof Map 
+        ? village.tokenRequirements.get(nextLevel.toString()) 
+        : village.tokenRequirements[nextLevel.toString()] || 0;
     
-    // Check if all materials are met for next level
-    const allMaterialsMet = Object.entries(materials).every(([key, value]) => {
-        if (key.startsWith('$')) return true; // Skip special keys
+    console.log(`[checkAndHandleVillageLevelUp] Checking ${village.name} (Level ${village.level}) for level up to ${nextLevel}`);
+    console.log(`[checkAndHandleVillageLevelUp] Required tokens: ${requiredTokens}, Current tokens: ${village.currentTokens || 0}`);
+    
+    // Check if all materials are met for next level (cumulative system)
+    // Only check materials that have requirements for the next level
+    const materialChecks = [];
+    const materialsWithRequirements = Object.entries(materials).filter(([key, value]) => {
+        if (key.startsWith('$')) return false; // Skip special keys
         const required = value.required?.[nextLevel] || 0;
-        return value.current >= required;
+        return required > 0; // Only check materials with requirements
     });
+    
+    const allMaterialsMet = materialsWithRequirements.length === 0 || materialsWithRequirements.every(([key, value]) => {
+        const required = value.required?.[nextLevel] || 0;
+        const current = value.current || 0;
+        const met = current >= required;
+        materialChecks.push({ key, required, current, met });
+        return met;
+    });
+    
+    console.log(`[checkAndHandleVillageLevelUp] Materials with requirements for level ${nextLevel}: ${materialsWithRequirements.length}`);
+    if (materialChecks.length > 0) {
+        console.log(`[checkAndHandleVillageLevelUp] Materials check:`, materialChecks.map(m => `${m.key}: ${m.current}/${m.required} (${m.met ? '✓' : '✗'})`).join(', '));
+    }
+    console.log(`[checkAndHandleVillageLevelUp] All materials met: ${allMaterialsMet}`);
 
     // Check if tokens are met for next level
-    const tokensMet = village.currentTokens >= requiredTokens;
+    const tokensMet = (village.currentTokens || 0) >= requiredTokens;
+    console.log(`[checkAndHandleVillageLevelUp] Tokens met: ${tokensMet} (${village.currentTokens || 0}/${requiredTokens})`);
 
     // If both materials and tokens are met, level up the village
     if (allMaterialsMet && tokensMet) {
-        village.level = nextLevel;
-        village.health = village.levelHealth.get(nextLevel.toString()) || 100;
+        console.log(`[checkAndHandleVillageLevelUp] ✅ All requirements met! Leveling up ${village.name} from ${village.level} to ${nextLevel}`);
         
-        // Reset current tokens and materials for the new level
+        village.level = nextLevel;
+        
+        // Set HP to full max for the new level
+        const newMaxHealth = village.levelHealth instanceof Map 
+            ? village.levelHealth.get(nextLevel.toString()) 
+            : village.levelHealth[nextLevel.toString()] || 100;
+        village.health = newMaxHealth;
+        
+        console.log(`[checkAndHandleVillageLevelUp] Set HP to ${newMaxHealth} for level ${nextLevel}`);
+        
+        // Reset current tokens only (materials carry forward in cumulative system)
         village.currentTokens = 0;
-        Object.entries(materials).forEach(([key, value]) => {
+        console.log(`[checkAndHandleVillageLevelUp] Reset tokens to 0 (materials persist)`);
+        
+        // Update materials Map (materials persist, don't reset)
+        for (const [key, value] of Object.entries(materials)) {
             if (!key.startsWith('$')) {
-                value.current = 0;
+                village.materials.set(key, value);
             }
-        });
+        }
         
         // Update vending tier and discount
         village.vendingTier = nextLevel;
         village.vendingDiscount = nextLevel === 2 ? 10 : nextLevel === 3 ? 20 : 0;
+        console.log(`[checkAndHandleVillageLevelUp] Updated vending tier to ${nextLevel}, discount to ${village.vendingDiscount}%`);
 
-        // Update status
-        village.status = nextLevel >= 3 ? 'max' : 'upgradable';
+        // Update status using helper function
+        updateVillageStatus(village);
         
         await village.save();
+        console.log(`[checkAndHandleVillageLevelUp] ✅ Successfully leveled up ${village.name} to level ${nextLevel}!`);
+        
+        // Send announcement to town hall channel
+        await sendLevelUpAnnouncement(village, client);
+        
         return true;
     }
     
+    console.log(`[checkAndHandleVillageLevelUp] ❌ Requirements not met - materials: ${allMaterialsMet}, tokens: ${tokensMet}`);
     return false;
+}
+
+// ============================================================================
+// ---- Rest Spot Helper Functions ----
+// ============================================================================
+
+// ------------------- Function: getRestSpotCooldownKey -------------------
+// Returns the dailyRoll Map key for a village's rest spot cooldown
+function getRestSpotCooldownKey(villageName) {
+    return `restSpot_${villageName}`;
+}
+
+// ------------------- Function: canUseRestSpot -------------------
+// Checks if a character can use the rest spot (cooldown check)
+// Returns { canUse: boolean, reason?: string }
+function canUseRestSpot(character, villageName) {
+    const now = new Date();
+    // Compute the most recent 12:00 UTC (8am EST) rollover
+    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+    if (now < rollover) {
+        // If before today's 12:00 UTC, use yesterday's 12:00 UTC
+        rollover.setUTCDate(rollover.getUTCDate() - 1);
+    }
+
+    const cooldownKey = getRestSpotCooldownKey(villageName);
+    const lastUse = character.dailyRoll?.get(cooldownKey);
+
+    if (!lastUse) {
+        return { canUse: true };
+    }
+
+    const lastUseDate = new Date(lastUse);
+    if (lastUseDate >= rollover) {
+        // Calculate time until next reset
+        const nextReset = new Date(rollover);
+        nextReset.setUTCDate(nextReset.getUTCDate() + 1);
+        const hoursUntilReset = Math.ceil((nextReset - now) / (1000 * 60 * 60));
+        return { 
+            canUse: false, 
+            reason: `You've already used the rest spot today. Cooldown resets in ${hoursUntilReset} hour(s) at 8am EST.` 
+        };
+    }
+
+    return { canUse: true };
+}
+
+// ------------------- Function: updateRestSpotCooldown -------------------
+// Updates the rest spot cooldown for a character
+async function updateRestSpotCooldown(character, villageName) {
+    try {
+        if (!character.dailyRoll) {
+            character.dailyRoll = new Map();
+        }
+        const cooldownKey = getRestSpotCooldownKey(villageName);
+        character.dailyRoll.set(cooldownKey, new Date().toISOString());
+        await character.save();
+    } catch (error) {
+        console.error(`[updateRestSpotCooldown] Error updating cooldown for ${character.name} in ${villageName}:`, error);
+        throw error;
+    }
+}
+
+// ------------------- Function: validateRestSpotRequirements -------------------
+// Validates all requirements for using a rest spot
+// Returns { valid: boolean, error?: string }
+async function validateRestSpotRequirements(character, village, interaction) {
+    // Check if character is KO'd
+    if (character.ko) {
+        return { valid: false, error: '❌ **You cannot use the rest spot while KO\'d. You need a Healer to revive you first.**' };
+    }
+
+    // Check if character is in the correct village
+    const characterVillage = character.currentVillage?.toLowerCase()?.trim();
+    const targetVillage = village.name.toLowerCase().trim();
+    if (characterVillage !== targetVillage) {
+        return { 
+            valid: false, 
+            error: `❌ **You must be physically located in ${village.name} to use its rest spot. Current location: ${character.currentVillage || 'Unknown'}.**` 
+        };
+    }
+
+    // Check if command is used in the correct channel
+    const testingChannelId = '1391812848099004578';
+    const isTestingChannel = interaction.channelId === testingChannelId;
+    
+    const villageChannelMap = {
+        'Rudania': process.env.RUDANIA_TOWNHALL,
+        'Inariko': process.env.INARIKO_TOWNHALL,
+        'Vhintl': process.env.VHINTL_TOWNHALL
+    };
+    
+    const allowedChannel = villageChannelMap[village.name];
+    if (!allowedChannel || (interaction.channelId !== allowedChannel && !isTestingChannel)) {
+        const channelMention = allowedChannel ? `<#${allowedChannel}>` : 'the village town hall';
+        return { 
+            valid: false, 
+            error: `❌ **This command can only be used in ${channelMention}.**` 
+        };
+    }
+
+    // Check village level
+    if (village.level < 2) {
+        return { 
+            valid: false, 
+            error: `❌ **Rest spots are only available in Level 2+ villages. ${village.name} is currently Level ${village.level}.**` 
+        };
+    }
+
+    // Check if character is at full health/stamina
+    if (village.level === 2) {
+        if (character.currentHearts >= character.maxHearts) {
+            return { 
+                valid: false, 
+                error: `❌ **You are already at full hearts (${character.currentHearts}/${character.maxHearts}). The rest spot cannot restore more.**` 
+            };
+        }
+    } else if (village.level === 3) {
+        if (character.currentHearts >= character.maxHearts && character.currentStamina >= character.maxStamina) {
+            return { 
+                valid: false, 
+                error: `❌ **You are already at full hearts and stamina. The rest spot cannot restore more.**` 
+            };
+        }
+    }
+
+    // Check cooldown
+    const cooldownCheck = canUseRestSpot(character, village.name);
+    if (!cooldownCheck.canUse) {
+        return { valid: false, error: `❌ **${cooldownCheck.reason}**` };
+    }
+
+    return { valid: true };
+}
+
+// ------------------- Function: getRestSpotTheme -------------------
+// Returns themed information for each village's rest spot
+function getRestSpotTheme(villageName) {
+    const themes = {
+        'Rudania': {
+            emoji: '🔥',
+            name: 'Hot Springs',
+            description: 'natural geothermal pools',
+            color: '#FF6B6B'
+        },
+        'Inariko': {
+            emoji: '💧',
+            name: 'Cleansing Pool',
+            description: 'purifying water source',
+            color: '#4ECDC4'
+        },
+        'Vhintl': {
+            emoji: '🍃',
+            name: 'Sacred Grove',
+            description: 'restorative forest clearing',
+            color: '#95E1D3'
+        }
+    };
+    return themes[villageName] || themes['Rudania'];
 }
 
 // ============================================================================
@@ -515,14 +1126,19 @@ module.exports = {
                             { name: 'Vhintl', value: 'Vhintl' }
                         ))
         )
-        // ------------------- Subcommand: Upgrade Village -------------------
+        // ------------------- Subcommand: Improve Village -------------------
         .addSubcommand(subcommand =>
             subcommand
-                .setName('upgrade')
-                .setDescription('Upgrade a village')
+                .setName('improve')
+                .setDescription('Repair with tokens or contribute materials/tokens for upgrades (auto-upgrades when ready)')
+                .addStringOption(option =>
+                    option.setName('charactername')
+                        .setDescription('Name of the character donating (required for both Items and Tokens)')
+                        .setRequired(true)
+                        .setAutocomplete(true))
                 .addStringOption(option =>
                     option.setName('name')
-                        .setDescription('Name of the village to upgrade')
+                        .setDescription('Name of the village to improve')
                         .setRequired(true)
                         .addChoices(
                             { name: 'Rudania', value: 'Rudania' },
@@ -530,13 +1146,8 @@ module.exports = {
                             { name: 'Vhintl', value: 'Vhintl' }
                         ))
                 .addStringOption(option =>
-                    option.setName('charactername')
-                        .setDescription('Name of the character donating items')
-                        .setRequired(true)
-                        .setAutocomplete(true))
-                .addStringOption(option =>
                     option.setName('type')
-                        .setDescription('Upgrade using Items or Tokens')
+                        .setDescription('Contribute using Items or Tokens')
                         .setRequired(true)
                         .addChoices(
                             { name: 'Items', value: 'Items' },
@@ -552,48 +1163,31 @@ module.exports = {
                         .setRequired(false)
                         .setAutocomplete(true))
         )
-        // ------------------- Subcommand: Repair Village -------------------
+        // ------------------- Subcommand: Contributors -------------------
         .addSubcommand(subcommand =>
             subcommand
-                .setName('repair')
-                .setDescription('Repair a damaged village')
+                .setName('contributors')
+                .setDescription('View all contributors to a village')
                 .addStringOption(option =>
                     option.setName('name')
-                        .setDescription('Name of the village to repair')
+                        .setDescription('Name of the village')
                         .setRequired(true)
                         .addChoices(
                             { name: 'Rudania', value: 'Rudania' },
                             { name: 'Inariko', value: 'Inariko' },
                             { name: 'Vhintl', value: 'Vhintl' }
                         ))
-                .addStringOption(option =>
-                    option.setName('charactername')
-                        .setDescription('Name of the character donating items')
-                        .setRequired(true)
-                        .setAutocomplete(true))
-                .addStringOption(option =>
-                    option.setName('type')
-                        .setDescription('Repair using Items or Tokens')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'Items', value: 'Items' },
-                            { name: 'Tokens', value: 'Tokens' }
-                        ))
-                .addIntegerOption(option =>
-                    option.setName('qty')
-                        .setDescription('Quantity of items or tokens to contribute')
-                        .setRequired(true))
-                .addStringOption(option =>
-                    option.setName('itemname')
-                        .setDescription('Name of the item to use (if using Items)')
-                        .setRequired(false)
-                        .setAutocomplete(true))
         )
-        // ------------------- Subcommand: Progress -------------------
+        // ------------------- Subcommand: Rest -------------------
         .addSubcommand(subcommand =>
             subcommand
-                .setName('progress')
-                .setDescription('View village upgrade or repair progress')
+                .setName('rest')
+                .setDescription('Use the village rest spot to restore hearts or stamina')
+                .addStringOption(option =>
+                    option.setName('charactername')
+                        .setDescription('Name of the character using the rest spot')
+                        .setRequired(true)
+                        .setAutocomplete(true))
                 .addStringOption(option =>
                     option.setName('name')
                         .setDescription('Name of the village')
@@ -635,26 +1229,26 @@ module.exports = {
 
             // ------------------- Subcommand: View -------------------
             if (subcommand === 'view') {
-                const nextLevel = village.level + 1;
-                const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
-
-                // Get raid protection status
-                const raidProtection = village.raidProtection.get(village.level.toString()) || false;
-                const bloodMoonProtection = village.bloodMoonProtection.get(village.level.toString()) || false;
+                // Check for auto-level up when viewing (requirements might already be met)
+                // This ensures villages auto-level even if requirements were met before viewing
+                let villageToDisplay = village;
+                if (village.level < 3) {
+                    const leveledUp = await checkAndHandleVillageLevelUp(village, interaction?.client);
+                    if (leveledUp) {
+                        // Reload village to get updated state after level up
+                        const updatedVillage = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+                        if (updatedVillage) {
+                            villageToDisplay = updatedVillage;
+                        }
+                    }
+                }
+                
+                const nextLevel = villageToDisplay.level + 1;
+                const materials = villageToDisplay.materials instanceof Map ? Object.fromEntries(villageToDisplay.materials) : villageToDisplay.materials;
 
                 // Get vending tier and discount
-                const vendingTier = village.vendingTier;
-                const vendingDiscount = village.vendingDiscount;
-
-                // Format protection status
-                let protectionStatus = '';
-                if (bloodMoonProtection) {
-                    protectionStatus = '🛡️ **Immune to all raids**';
-                } else if (raidProtection) {
-                    protectionStatus = '🛡️ **Protected from random raids**';
-                } else {
-                    protectionStatus = '⚠️ **Vulnerable to all raids**';
-                }
+                const vendingTier = villageToDisplay.vendingTier;
+                const vendingDiscount = villageToDisplay.vendingDiscount;
 
                 // Format vending status
                 let vendingStatus = '';
@@ -668,122 +1262,337 @@ module.exports = {
 
                 // Format village status
                 let statusMessage = '';
-                if (village.status === 'max') {
+                if (villageToDisplay.status === 'max') {
                     statusMessage = '🌟 **Max level reached**';
-                } else if (village.status === 'damaged') {
+                } else if (villageToDisplay.status === 'damaged') {
                     statusMessage = '⚠️ **Damaged - Needs repair**';
                 } else {
                     statusMessage = '📈 **Upgradable**';
                 }
 
-                // Get next level requirements
-                const requiredTokens = village.tokenRequirements.get(nextLevel.toString()) || 0;
-                const currentTokens = village.currentTokens || 0;
+                // Get next level requirements (cumulative system)
+                const requiredTokens = villageToDisplay.tokenRequirements instanceof Map 
+                    ? villageToDisplay.tokenRequirements.get(nextLevel.toString()) 
+                    : villageToDisplay.tokenRequirements[nextLevel.toString()] || 0;
+                const currentTokens = villageToDisplay.currentTokens || 0;
                 const tokenProgress = formatProgress(currentTokens, requiredTokens);
+                const tokensRemaining = Math.max(0, requiredTokens - currentTokens);
 
-                // Format materials requirements for next level
-                const materialsForNextLevel = await formatMaterials(
-                    Object.fromEntries(
-                        Object.entries(materials).filter(([key, value]) => {
-                            const required = value.required?.[nextLevel];
-                            return required !== undefined && required > 0;
-                        }).map(([key, value]) => [key, value.required[nextLevel]])
-                    ),
-                    materials
+                // Format materials requirements for next level (cumulative system)
+                // Show all materials that have requirements for the next level
+                const materialsForNextLevel = [];
+                const materialsList = Object.entries(materials)
+                    .filter(([key, value]) => {
+                        if (key.startsWith('$')) return false; // Skip special keys
+                        const required = value.required?.[nextLevel];
+                        return required !== undefined && required > 0;
+                    })
+                    .map(([key, value]) => {
+                        const required = value.required[nextLevel]; // Cumulative requirement for next level
+                        const current = value.current || 0; // Current cumulative amount
+                        return { key, required, current };
+                    })
+                    .sort((a, b) => b.required - a.required); // Sort by requirement amount (descending)
+
+                // Format each material for display
+                // Show ALL materials required for next level, even if already complete
+                // This is important because level-up requires ALL materials AND tokens to be met
+                for (const { key, required, current } of materialsList) {
+                    const remaining = Math.max(0, required - current);
+                    
+                    const item = await ItemModel.findOne({ itemName: { $regex: `^${key}$`, $options: 'i' } });
+                    const emoji = item?.emoji || ':grey_question:';
+                    const displayName = item?.itemName || key;
+                    // Calculate progress bar (clamp to 0-10 to handle over-contributed materials)
+                    const filledBars = Math.min(10, Math.max(0, Math.round((current / required) * 10)));
+                    const emptyBars = Math.max(0, 10 - filledBars);
+                    const progressBar = `\`${'▰'.repeat(filledBars)}${'▱'.repeat(emptyBars)}\``;
+                    materialsForNextLevel.push(`${emoji} **${displayName}**\n> ${progressBar} ${current}/${required} (${remaining} needed for level ${nextLevel})`);
+                }
+
+                // Get top contributors (by CHARACTER ID now, not user ID)
+                const contributors = villageToDisplay.contributors instanceof Map ? Object.fromEntries(villageToDisplay.contributors) : villageToDisplay.contributors;
+                const topContributors = await Promise.all(
+                    Object.entries(contributors)
+                        .map(async ([characterId, data]) => {
+                            const total = (data.tokens || 0) + Object.values(data.items || {}).reduce((sum, qty) => sum + qty, 0);
+                            // Fetch character to get name
+                            const character = await fetchCharacterById(characterId);
+                            const characterName = character ? character.name : `Character ${characterId.substring(0, 8)}...`;
+                            return {
+                                characterId,
+                                characterName,
+                                total
+                            };
+                        })
                 );
+                
+                // Sort by total and take top 3
+                topContributors.sort((a, b) => b.total - a.total);
+                const top3 = topContributors.slice(0, 3);
+
+                // Format contributors list
+                const contributorsList = top3.length > 0
+                    ? top3.map((contrib, index) => `${['🥇', '🥈', '🥉'][index]} **${contrib.characterName}**: ${contrib.total} total contributions`)
+                    : ['No contributions yet'];
 
                 // Build the embed
                 const embed = new EmbedBuilder()
-                    .setTitle(`${village.name} (Level ${village.level})`)
+                    .setTitle(`${villageToDisplay.name} (Level ${villageToDisplay.level})${villageToDisplay.level > village.level ? ' ⭐ LEVELED UP!' : ''}`)
+                    .setDescription(villageToDisplay.level < 3 
+                        ? `📈 **Progress toward Level ${nextLevel}**\n*Materials are cumulative - contributions carry forward to the next level.*`
+                        : `🌟 **Village is at maximum level!**`)
                     .addFields(
-                        { name: '🌟 **__Level__**', value: `> ${village.level}/3`, inline: true },
-                        { name: '❤️ **__Health__**', value: `> ${formatProgress(village.health, village.levelHealth.get(village.level.toString()) || 100)}`, inline: false },
-                        { name: '🛡️ **__Protection__**', value: `> ${protectionStatus}`, inline: false },
+                        { name: '🌟 **__Level__**', value: `> ${villageToDisplay.level}/3`, inline: true },
+                        { name: '❤️ **__Health__**', value: `> ${formatProgress(villageToDisplay.health, villageToDisplay.levelHealth.get(villageToDisplay.level.toString()) || 100)}`, inline: false },
                         { name: '🛍️ **__Vending__**', value: `> ${vendingStatus}`, inline: false },
                         { name: '📊 **__Status__**', value: `> ${statusMessage}`, inline: false }
                     )
-                    .setColor(village.color)
+                    .setColor(villageToDisplay.color)
                     .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
                     .setImage(BORDER_IMAGE);
 
                 // Add next level requirements if not at max level
-                if (village.level < 3) {
+                if (villageToDisplay.level < 3) {
                     embed.addFields(
-                        { name: `📈 **__Requirements for Level ${nextLevel}__**`, value: '> The following items are needed to upgrade:', inline: false },
-                        { name: '🪙 **__Tokens__**', value: `> ${tokenProgress}`, inline: false },
-                        { name: '📦 **__Materials__**', value: materialsForNextLevel.join('\n'), inline: false }
+                        { name: '🪙 **__Tokens Progress__**', value: `> ${tokenProgress} (${tokensRemaining.toLocaleString()} needed for level ${nextLevel})`, inline: false }
                     );
+                    
+                    // Add materials field only if there are materials to show
+                    // Split into multiple fields if content exceeds Discord's 1024 character limit
+                    if (materialsForNextLevel.length > 0) {
+                        const MAX_FIELD_VALUE_LENGTH = 1024;
+                        const materialFields = [];
+                        let currentChunk = [];
+                        let currentLength = 0;
+
+                        for (const material of materialsForNextLevel) {
+                            const materialLength = material.length + 1; // +1 for newline
+                            
+                            // If adding this material would exceed the limit, start a new chunk
+                            if (currentLength + materialLength > MAX_FIELD_VALUE_LENGTH && currentChunk.length > 0) {
+                                materialFields.push(currentChunk.join('\n'));
+                                currentChunk = [];
+                                currentLength = 0;
+                            }
+                            
+                            currentChunk.push(material);
+                            currentLength += materialLength;
+                        }
+                        
+                        // Add the last chunk if it has content
+                        if (currentChunk.length > 0) {
+                            materialFields.push(currentChunk.join('\n'));
+                        }
+
+                        // Add fields to embed (with numbered names if multiple fields)
+                        materialFields.forEach((fieldValue, index) => {
+                            const fieldName = materialFields.length > 1
+                                ? `📦 **__Materials Progress (${index + 1}/${materialFields.length})__**`
+                                : '📦 **__Materials Progress__**';
+                            embed.addFields({ name: fieldName, value: fieldValue, inline: false });
+                        });
+                    }
                 }
+
+                // Add contributors field
+                embed.addFields(
+                    { name: '👥 **__Top Contributors__**', value: contributorsList.join('\n'), inline: false }
+                );
 
                 return interaction.reply({ embeds: [embed] });
             }
 
-            // ------------------- Subcommand: Upgrade -------------------
-            if (subcommand === 'upgrade') {
+            // ------------------- Subcommand: Improve -------------------
+            if (subcommand === 'improve') {
                 // Check if village is at max level
-                if (village.level >= 3) {
-                    return interaction.reply({ content: '❌ **This village has reached maximum level.**', ephemeral: true });
+                if (village.level >= 3 && village.status === 'max') {
+                    const maxHealth = village.levelHealth instanceof Map 
+                        ? village.levelHealth.get(village.level.toString()) 
+                        : village.levelHealth[village.level.toString()] || 100;
+                    
+                    // Still allow repair if damaged
+                    if (village.health < maxHealth && type === 'Tokens') {
+                        // Allow repair even at max level
+                    } else {
+                        return interaction.reply({ content: '❌ **This village has reached maximum level and is fully repaired.**', ephemeral: true });
+                    }
                 }
 
-                // Check if village is damaged
-                if (village.status === 'damaged') {
-                    return interaction.reply({ content: '❌ **This village needs to be repaired before upgrading.**', ephemeral: true });
+                // Validate required fields based on type
+                if (type === 'Items') {
+                    if (!characterName || !itemName) {
+                        return interaction.reply({ content: '❌ **Character name and item name are required when contributing items.**', ephemeral: true });
+                    }
+                } else if (type === 'Tokens') {
+                    if (!characterName) {
+                        return interaction.reply({ content: '❌ **Character name is required when contributing tokens.**', ephemeral: true });
+                    }
                 }
 
-                // Check cooldown
-                const cooldownKey = `${interaction.user.id}_${type}_${itemName || 'tokens'}`;
-                const cooldownTime = village.cooldowns.get(cooldownKey);
-                if (cooldownTime && cooldownTime > new Date()) {
-                    const remainingTime = Math.ceil((cooldownTime - new Date()) / 1000 / 60); // Convert to minutes
-                    return interaction.reply({ content: `⏳ **Please wait ${remainingTime} minutes before contributing again.**`, ephemeral: true });
+                // Validate that character belongs to the village
+                if (characterName) {
+                    const donatingCharacter = await fetchCharacterByName(characterName);
+                    if (!donatingCharacter) {
+                        return interaction.reply({ content: `❌ **Character "${characterName}" not found.**`, ephemeral: true });
+                    }
+                    
+                    const characterVillage = donatingCharacter.currentVillage?.toLowerCase()?.trim();
+                    const targetVillage = villageName.toLowerCase().trim();
+                    
+                    if (characterVillage !== targetVillage) {
+                        return interaction.reply({ content: `❌ **Character "${characterName}" must be from ${villageName} to donate to this village. Current village: ${donatingCharacter.currentVillage || 'Unknown'}.**`, ephemeral: true });
+                    }
                 }
 
-                // Process upgrade contribution
-                const result = await processContribution(village, interaction, type, itemName, qty, characterName);
+                // Strip emoji from itemName if present (format: <:name:id> or :name:)
+                let cleanItemName = itemName || null;
+                if (itemName) {
+                    // Remove Discord emoji format: <:name:id>
+                    cleanItemName = itemName.replace(/<:[^:]+:\d+>/g, '').trim();
+                    // Remove standard emoji format: :name:
+                    cleanItemName = cleanItemName.replace(/:[^:]+:/g, '').trim();
+                    // Remove any remaining whitespace
+                    cleanItemName = cleanItemName.trim();
+                    // If after cleaning the name is empty, set to null
+                    if (!cleanItemName) {
+                        cleanItemName = null;
+                    }
+                }
+
+                // Check cooldown (temporarily disabled for testing)
+                const cooldownKey = `${interaction.user.id}_${type}_${cleanItemName || 'tokens'}_improve`;
+                if (COOLDOWN_ENABLED) {
+                    const cooldownTime = village.cooldowns.get(cooldownKey);
+                    if (cooldownTime && cooldownTime > new Date()) {
+                        const remainingTime = Math.ceil((cooldownTime - new Date()) / 1000 / 60); // Convert to minutes
+                        return interaction.reply({ content: `⏳ **Please wait ${remainingTime} minutes before contributing again.**`, ephemeral: true });
+                    }
+                }
+
+                // Process improve contribution (combines repair and upgrade)
+                const result = await processImprove(village, interaction, type, cleanItemName, qty, characterName);
                 if (!result.success) {
                     return interaction.reply({ content: result.message, ephemeral: true });
                 }
 
-                // Set cooldown (1 hour)
-                village.cooldowns.set(cooldownKey, new Date(Date.now() + COOLDOWN_DURATION));
-                await village.save();
-
-                return interaction.reply({ embeds: [result.embed], ephemeral: true });
-            }
-
-            // ------------------- Subcommand: Repair -------------------
-            if (subcommand === 'repair') {
-                // Check if village needs repair
-                if (village.status !== 'damaged') {
-                    return interaction.reply({ content: '❌ **This village does not need repair.**', ephemeral: true });
+                // Set cooldown (1 week, currently disabled for testing)
+                if (COOLDOWN_ENABLED) {
+                    village.cooldowns.set(cooldownKey, new Date(Date.now() + COOLDOWN_DURATION));
+                    await village.save();
                 }
 
-                // Check cooldown
-                const cooldownKey = `${interaction.user.id}_${type}_${itemName || 'tokens'}_repair`;
-                const cooldownTime = village.cooldowns.get(cooldownKey);
-                if (cooldownTime && cooldownTime > new Date()) {
-                    const remainingTime = Math.ceil((cooldownTime - new Date()) / 1000 / 60); // Convert to minutes
-                    return interaction.reply({ content: `⏳ **Please wait ${remainingTime} minutes before contributing to repair again.**`, ephemeral: true });
-                }
-
-                // Process repair contribution
-                const result = await processRepair(village, interaction, type, itemName, qty, characterName);
-                if (!result.success) {
-                    return interaction.reply({ content: result.message, ephemeral: true });
-                }
-
-                // Set cooldown (1 hour)
-                village.cooldowns.set(cooldownKey, new Date(Date.now() + COOLDOWN_DURATION));
-                await village.save();
-
-                return interaction.reply({ embeds: [result.embed], ephemeral: true });
+                return interaction.reply({ embeds: [result.embed] });
             }
 
-            // ------------------- Subcommand: Progress -------------------
-            if (subcommand === 'progress') {
-                const embed = await generateProgressEmbed(village);
-                return interaction.reply({ embeds: [embed] });
+            // ------------------- Subcommand: Contributors -------------------
+            if (subcommand === 'contributors') {
+                const contributorsEmbed = await generateContributorsEmbed(village);
+                return interaction.reply({ embeds: [contributorsEmbed] });
             }
+
+            // ------------------- Subcommand: Rest -------------------
+            if (subcommand === 'rest') {
+                const characterName = interaction.options.getString('charactername');
+                
+                if (!characterName) {
+                    return interaction.reply({ content: '❌ **Character name is required.**', ephemeral: true });
+                }
+
+                // Fetch character
+                const character = await fetchCharacterByName(characterName);
+                if (!character) {
+                    return interaction.reply({ content: `❌ **Character "${characterName}" not found.**`, ephemeral: true });
+                }
+
+                // Validate requirements
+                const validation = await validateRestSpotRequirements(character, village, interaction);
+                if (!validation.valid) {
+                    return interaction.reply({ content: validation.error, ephemeral: true });
+                }
+
+                // Process rest spot based on village level
+                if (village.level === 2) {
+                    // Level 2: Random 1-2 hearts (50/50 chance)
+                    const heartsToRestore = Math.random() < 0.5 ? 1 : 2;
+                    const maxRestore = character.maxHearts - character.currentHearts;
+                    const actualRestore = Math.min(heartsToRestore, maxRestore);
+
+                    await recoverHearts(character._id, actualRestore);
+                    await updateRestSpotCooldown(character, village.name);
+
+                    // Refresh character to get updated hearts value
+                    const updatedCharacter = await fetchCharacterByName(characterName);
+
+                    const theme = getRestSpotTheme(village.name);
+                    const embed = new EmbedBuilder()
+                        .setTitle(`${theme.emoji} ${village.name} ${theme.name}`)
+                        .setDescription(
+                            `**${updatedCharacter.name}** rests in the ${theme.description}...\n\n` +
+                            `❤️ **+${actualRestore} heart${actualRestore !== 1 ? 's' : ''} restored!**\n` +
+                            `**Current Hearts:** ${updatedCharacter.currentHearts}/${updatedCharacter.maxHearts}\n\n` +
+                            `*You can use the rest spot again tomorrow at 8am EST.*`
+                        )
+                        .setColor(village.color)
+                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                        .setImage(BORDER_IMAGE);
+
+                    return interaction.reply({ embeds: [embed] });
+                } else if (village.level === 3) {
+                    // Level 3: Player chooses between 1 stamina or 2 hearts
+                    const theme = getRestSpotTheme(village.name);
+                    
+                    // Check what can be restored
+                    const canRestoreHearts = character.currentHearts < character.maxHearts;
+                    const canRestoreStamina = character.currentStamina < character.maxStamina;
+
+                    if (!canRestoreHearts && !canRestoreStamina) {
+                        return interaction.reply({ 
+                            content: '❌ **You are already at full hearts and stamina.**', 
+                            ephemeral: true 
+                        });
+                    }
+
+                    // Create buttons for choice
+                    const buttons = new ActionRowBuilder();
+                    
+                    if (canRestoreStamina) {
+                        buttons.addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`restSpot_${village.name}_${character._id}_stamina`)
+                                .setLabel('Restore 1 Stamina')
+                                .setStyle(ButtonStyle.Primary)
+                                .setEmoji('🟩')
+                        );
+                    }
+                    
+                    if (canRestoreHearts) {
+                        buttons.addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`restSpot_${village.name}_${character._id}_hearts`)
+                                .setLabel('Restore 2 Hearts')
+                                .setStyle(ButtonStyle.Success)
+                                .setEmoji('❤️')
+                        );
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setTitle(`${theme.emoji} ${village.name} ${theme.name}`)
+                        .setDescription(
+                            `**${character.name}** arrives at the ${theme.description}...\n\n` +
+                            `Choose your benefit:\n` +
+                            `${canRestoreStamina ? '🟩 **Restore 1 Stamina** (50% chance)\n' : ''}` +
+                            `${canRestoreHearts ? '❤️ **Restore 2 Hearts** (50% chance)\n' : ''}\n` +
+                            `*Select your choice below. You can use the rest spot again tomorrow at 8am EST.*`
+                        )
+                        .setColor(village.color)
+                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                        .setImage(BORDER_IMAGE);
+
+                    return interaction.reply({ embeds: [embed], components: [buttons] });
+                }
+            }
+
 
         } catch (error) {
             handleInteractionError(error, 'village.js');
@@ -791,4 +1600,6 @@ module.exports = {
             return interaction.reply({ content: '❌ **An error occurred while processing your request.**', ephemeral: true });
         }
     },
+    // Export function for use in mod.js and other modules
+    checkAndHandleVillageLevelUp
 };

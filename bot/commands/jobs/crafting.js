@@ -17,6 +17,7 @@ const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventory
 
 // ------------------- Database Services -------------------
 const ItemModel = require('../../../shared/models/ItemModel');
+const { Village } = require('../../../shared/models/VillageModel');
 
 // ------------------- Custom Modules -------------------
 const { checkAndUseStamina } = require('../../modules/characterStatsModule');
@@ -177,6 +178,22 @@ module.exports = {
           }],
           flags: [MessageFlags.Ephemeral]
         });
+      }
+
+      // ------------------- Fetch Village Level -------------------
+      // Fetch village level for crafting bonuses (Level 2: 5-10% reduction, Level 3: 10-15% reduction)
+      const villageName = capitalizeWords(character.currentVillage);
+      const village = await Village.findOne({ name: villageName });
+      const villageLevel = village?.level || 1;
+      
+      if (villageLevel === 1) {
+        info('CRFT', `🏘️ Crafting in ${villageName} (Level ${villageLevel}) - No village-level crafting bonuses (Level 1 villages provide standard crafting)`);
+      } else if (villageLevel === 2) {
+        info('CRFT', `🏘️ Crafting in ${villageName} (Level ${villageLevel}) - Village bonuses active: 5-10% stamina & material cost reduction`);
+      } else if (villageLevel === 3) {
+        info('CRFT', `🏘️ Crafting in ${villageName} (Level ${villageLevel}) - Village bonuses active: 10-15% stamina & material cost reduction`);
+      } else {
+        info('CRFT', `🏘️ Crafting in ${villageName} (Level ${villageLevel}) - Unknown level, defaulting to Level 1 (no bonuses)`);
       }
 
       // ------------------- Fetch and Validate Item -------------------
@@ -355,6 +372,26 @@ module.exports = {
         }
       }
       
+      // ------------------- Apply Village-Level Stamina Reduction -------------------
+      // Apply village-level stamina reduction after Priest and Teacher boosts
+      // Level 2: 5-10% reduction, Level 3: 10-15% reduction
+      let villageStaminaReduction = 0;
+      let villageStaminaSavings = 0;
+      if (villageLevel === 2) {
+        villageStaminaReduction = Math.random() * 0.05 + 0.05; // Random 5-10%
+      } else if (villageLevel === 3) {
+        villageStaminaReduction = Math.random() * 0.05 + 0.10; // Random 10-15%
+      }
+      
+      if (villageStaminaReduction > 0) {
+        const staminaBeforeVillageReduction = crafterStaminaCost;
+        crafterStaminaCost = Math.max(1, Math.floor(crafterStaminaCost * (1 - villageStaminaReduction)));
+        villageStaminaSavings = staminaBeforeVillageReduction - crafterStaminaCost;
+        info('CRFT', `🏘️ Village Level ${villageLevel} Stamina Bonus: ${(villageStaminaReduction * 100).toFixed(1)}% reduction applied | ${staminaBeforeVillageReduction} stamina → ${crafterStaminaCost} stamina (Saved: ${villageStaminaSavings} stamina)`);
+      } else {
+        info('CRFT', `🏘️ Village Level ${villageLevel}: No stamina reduction bonus (Level 1 or below)`);
+      }
+      
       if (freshCharacter.currentStamina < crafterStaminaCost) {
         error('CRFT', `Insufficient stamina for ${freshCharacter.name} - needed ${crafterStaminaCost}, has ${freshCharacter.currentStamina}`);
         const staminaErrorEmbed = new EmbedBuilder()
@@ -403,6 +440,72 @@ module.exports = {
             });
             info('CRFT', `Scholar material savings: ${original.itemName} - saved ${savings} (${originalTotal} → ${adjustedTotal})`);
           }
+        }
+      }
+
+      // ------------------- Apply Village-Level Material Reduction -------------------
+      // Apply village-level material reduction after Scholar boost
+      // Level 2: 5-10% reduction, Level 3: 10-15% reduction
+      let villageMaterialReduction = 0;
+      let totalVillageMaterialSavings = 0; // Declared outside if block for summary log access
+      if (villageLevel >= 2 && adjustedCraftingMaterials.length > 0) {
+        villageMaterialReduction = villageLevel === 2 
+          ? Math.random() * 0.05 + 0.05  // Random 5-10%
+          : Math.random() * 0.05 + 0.10; // Random 10-15%
+        
+        const materialsBeforeVillageReduction = adjustedCraftingMaterials.map(m => ({ ...m }));
+        adjustedCraftingMaterials = adjustedCraftingMaterials.map(material => ({
+          ...material,
+          quantity: Math.max(1, Math.ceil(material.quantity * (1 - villageMaterialReduction)))
+        }));
+        
+        // Calculate and log village material savings
+        for (let i = 0; i < materialsBeforeVillageReduction.length; i++) {
+          const before = materialsBeforeVillageReduction[i];
+          const after = adjustedCraftingMaterials[i];
+          const beforeTotal = (before.quantity || 0) * quantity;
+          const afterTotal = (after.quantity || 0) * quantity;
+          const villageSavings = beforeTotal - afterTotal;
+          
+          if (villageSavings > 0) {
+            totalVillageMaterialSavings += villageSavings;
+            // Update materialSavings array to include village savings
+            const existingSaving = materialSavings.find(m => m.itemName === before.itemName);
+            if (existingSaving) {
+              // Add village savings to existing Scholar savings
+              existingSaving.saved += villageSavings;
+              existingSaving.adjustedTotal = afterTotal;
+            } else {
+              // Add new entry for village-only savings
+              materialSavings.push({
+                itemName: before.itemName,
+                saved: villageSavings,
+                originalTotal: beforeTotal,
+                adjustedTotal: afterTotal
+              });
+            }
+            info('CRFT', `🏘️ Village Level ${villageLevel} Material Bonus: ${(villageMaterialReduction * 100).toFixed(1)}% reduction on ${before.itemName} | ${beforeTotal} → ${afterTotal} (Saved: ${villageSavings})`);
+          }
+        }
+        
+        if (totalVillageMaterialSavings > 0) {
+          info('CRFT', `🏘️ Village Level ${villageLevel} Material Bonus Summary: ${(villageMaterialReduction * 100).toFixed(1)}% reduction applied | Total materials saved: ${totalVillageMaterialSavings}`);
+        }
+      } else if (villageLevel === 1) {
+        info('CRFT', `🏘️ Village Level ${villageLevel}: No material reduction bonus (Level 1 villages provide standard material costs)`);
+      }
+
+      // ------------------- Village Level Crafting Bonus Summary -------------------
+      if (villageLevel >= 2) {
+        const bonusSummary = [];
+        if (villageStaminaSavings > 0) {
+          bonusSummary.push(`Stamina: ${villageStaminaSavings} saved`);
+        }
+        if (totalVillageMaterialSavings > 0) {
+          bonusSummary.push(`Materials: ${totalVillageMaterialSavings} saved`);
+        }
+        if (bonusSummary.length > 0) {
+          info('CRFT', `🏘️ Village Level ${villageLevel} Crafting Bonuses Applied: ${bonusSummary.join(' | ')}`);
         }
       }
 

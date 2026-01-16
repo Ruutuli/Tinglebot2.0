@@ -1465,12 +1465,8 @@ const MODEL_STRUCTURES = {
         fields: ['currentTokens', 'tokenRequirements', 'materials']
       },
       {
-        title: '🛡️ Protections',
-        fields: ['raidProtection', 'bloodMoonProtection']
-      },
-      {
         title: '🔧 Repair & Damage',
-        fields: ['lostResources', 'repairProgress', 'lastDamageTime']
+        fields: ['lastDamageTime']
       },
       {
         title: '👥 Contributors',

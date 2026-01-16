@@ -415,6 +415,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "questid") {
                   await handleQuestIdAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "villageresources") {
+                if (focusedOption.name === "material") {
+                  await handleVillageResourcesMaterialAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
@@ -677,7 +681,7 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             const villageSubcommand = interaction.options.getSubcommand(false);
             
             if (focusedOption.name === "charactername") {
-              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "village");
+              await handleVillageCharacterAutocomplete(interaction, focusedOption, villageSubcommand);
             } else if (focusedOption.name === "itemname") {
               await handleVillageItemAutocomplete(interaction, focusedOption, villageSubcommand);
             }
@@ -3814,14 +3818,56 @@ async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
   }
 }
 
-// ------------------- Function: handleVillageItemAutocomplete -------------------
-// Provides autocomplete for village materials based on the selected village
-async function handleVillageItemAutocomplete(interaction, focusedOption, subcommand) {
+// ------------------- Function: handleVillageCharacterAutocomplete -------------------
+// Provides autocomplete for characters that belong to the selected village
+async function handleVillageCharacterAutocomplete(interaction, focusedOption, subcommand) {
   try {
+    const userId = interaction.user.id;
     const villageName = interaction.options.getString('name');
     const searchQuery = focusedOption.value?.toLowerCase() || '';
 
+    // If village name is not selected yet, show all characters
     if (!villageName) {
+      return await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "village");
+    }
+
+    // Fetch all characters owned by the user
+    const characters = await fetchCharactersByUserId(userId);
+    const modCharacters = await fetchModCharactersByUserId(userId);
+    const allCharacters = [...characters, ...modCharacters];
+
+    // Filter characters that belong to the selected village
+    const villageCharacters = allCharacters.filter(char => {
+      const charVillage = char.currentVillage?.toLowerCase()?.trim();
+      const targetVillage = villageName.toLowerCase().trim();
+      return charVillage === targetVillage;
+    });
+
+    // Map filtered characters to choices
+    const choices = villageCharacters
+      .filter(char => char.name.toLowerCase().includes(searchQuery))
+      .map(character => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }))
+      .slice(0, 25); // Discord limit
+
+    return await safeRespondWithValidation(interaction, choices);
+  } catch (error) {
+    console.error('[handleVillageCharacterAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleVillageItemAutocomplete -------------------
+// Provides autocomplete for village materials based on the selected village and character inventory
+async function handleVillageItemAutocomplete(interaction, focusedOption, subcommand) {
+  try {
+    const villageName = interaction.options.getString('name');
+    const characterName = interaction.options.getString('charactername');
+    const searchQuery = focusedOption.value?.toLowerCase() || '';
+
+    if (!villageName || !characterName) {
       return await safeRespondWithValidation(interaction, []);
     }
 
@@ -3831,10 +3877,10 @@ async function handleVillageItemAutocomplete(interaction, focusedOption, subcomm
       return await safeRespondWithValidation(interaction, []);
     }
 
-    // Get materials for upgrade or repair based on subcommand
+    // Get materials for improve subcommand
     let requiredMaterials = [];
     
-    if (subcommand === 'upgrade') {
+    if (subcommand === 'improve') {
       // Get materials needed for next level
       const nextLevel = village.level + 1;
       const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
@@ -3844,31 +3890,61 @@ async function handleVillageItemAutocomplete(interaction, focusedOption, subcomm
           return required !== undefined && required > 0;
         })
         .map(([key]) => key);
-    } else if (subcommand === 'repair') {
-      // Get materials needed for repair
-      const lostResources = village.lostResources instanceof Map ? Object.fromEntries(village.lostResources) : village.lostResources;
-      requiredMaterials = Object.keys(lostResources).filter(key => lostResources[key] > 0);
     }
 
     if (requiredMaterials.length === 0) {
       return await safeRespondWithValidation(interaction, []);
     }
 
-    // Fetch items that match the required materials
+    // Get character inventory
+    const userId = interaction.user.id;
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      return await safeRespondWithValidation(interaction, []);
+    }
+
+    // Get character inventory items
+    const inventoryCollection = await getCharacterInventoryCollection(characterName);
+    const inventoryItems = await inventoryCollection.find({ characterId: character._id }).toArray();
+
+    // Create a map of items in inventory (by itemName, case-insensitive)
+    const inventoryMap = new Map();
+    for (const item of inventoryItems) {
+      if (!item.itemName || item.itemName.toLowerCase() === 'initial item') continue;
+      if (item.quantity <= 0) continue;
+      const key = item.itemName.trim().toLowerCase();
+      const existing = inventoryMap.get(key) || 0;
+      inventoryMap.set(key, existing + (item.quantity || 0));
+    }
+
+    // Filter required materials to only those in character inventory
+    const availableMaterials = requiredMaterials.filter(material => {
+      const materialKey = material.toLowerCase().trim();
+      return inventoryMap.has(materialKey) && inventoryMap.get(materialKey) > 0;
+    });
+
+    if (availableMaterials.length === 0) {
+      return await safeRespondWithValidation(interaction, []);
+    }
+
+    // Fetch items that match the available materials
     const items = await Item.find({
-      itemName: { $in: requiredMaterials }
+      itemName: { $in: availableMaterials }
     })
       .sort({ itemName: 1 })
-      .select('itemName emoji')
+      .select('itemName')
       .lean();
 
-    // Filter and format choices
+    // Filter and format choices (without emoji)
     const choices = items
       .filter(item => item.itemName.toLowerCase().includes(searchQuery))
-      .map(item => ({
-        name: `${item.emoji || '❓'} ${item.itemName}`,
-        value: item.itemName
-      }))
+      .map(item => {
+        const quantity = inventoryMap.get(item.itemName.toLowerCase()) || 0;
+        return {
+          name: `${item.itemName} - Qty: ${quantity}`,
+          value: item.itemName
+        };
+      })
       .slice(0, 25); // Discord limit
 
     return await safeRespondWithValidation(interaction, choices);
@@ -6065,7 +6141,7 @@ handleBlightOverrideTargetAutocomplete,
  handleVendingViewAutocomplete,
 
  // ------------------- Village Functions -------------------
-
+ handleVillageResourcesMaterialAutocomplete,
 
  // ------------------- View Inventory Functions -------------------
  handleViewInventoryAutocomplete,
@@ -6074,6 +6150,46 @@ handleBlightOverrideTargetAutocomplete,
  // ------------------- Shop Buy Functions -------------------
  handleShopBuyItemAutocomplete,
 };
+
+// ------------------- Village Resources Material Autocomplete -------------------
+// Provides autocomplete suggestions for village materials based on selected village.
+async function handleVillageResourcesMaterialAutocomplete(interaction, focusedOption) {
+  try {
+    // Import VILLAGE_CONFIG from VillageModel
+    const { VILLAGE_CONFIG } = require('../../shared/models/VillageModel');
+    
+    // Get the selected village name from interaction options
+    const villageName = interaction.options.getString('village');
+    
+    if (!villageName) {
+      // If no village is selected yet, return empty
+      return await interaction.respond([]);
+    }
+    
+    // Get the materials for the selected village from VILLAGE_CONFIG
+    const villageConfig = VILLAGE_CONFIG[villageName];
+    
+    if (!villageConfig || !villageConfig.materials) {
+      return await interaction.respond([]);
+    }
+    
+    // Get all material names from the village's materials config
+    const materialNames = Object.keys(villageConfig.materials);
+    
+    // Map materials to autocomplete choices
+    const choices = materialNames.map((materialName) => ({
+      name: materialName,
+      value: materialName,
+    }));
+    
+    // Use the helper function to filter and respond
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleVillageResourcesMaterialAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
 
 // ------------------- Table Roll Name Autocomplete -------------------
 // Provides autocomplete suggestions for table roll names.

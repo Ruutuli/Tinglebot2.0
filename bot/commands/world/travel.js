@@ -71,6 +71,7 @@ const { applyTravelWeatherBoost } = require('../../modules/boostIntegration');
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../jobs/boosting');
 const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
+const { checkVillageStatus } = require('../../modules/villageModule');
 
 // ------------------- External API Integrations -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
@@ -285,6 +286,19 @@ module.exports = {
       // This prevents characters from being blighted if they don't actually arrive at their destination
       
       const startingVillage = character.currentVillage.toLowerCase();
+      
+      // ------------------- Check if Starting Village is Damaged -------------------
+      // Mod characters are exempt from this restriction
+      const isModCharacter = character.isModCharacter || (character.constructor && character.constructor.modelName === 'ModCharacter');
+      if (!isModCharacter && startingVillage) {
+        const villageStatus = await checkVillageStatus(startingVillage);
+        if (villageStatus === 'damaged') {
+          const capitalizedStartingVillage = capitalizeFirstLetter(startingVillage);
+          return interaction.editReply({
+            content: `❌ **${character.name}** cannot travel because **${capitalizedStartingVillage}** is damaged and needs repair. Please help repair the village first by contributing tokens using </village improve:1324300899585363968>.`
+          });
+        }
+      }
       
       // Check starting village for blight rain (moved to after travel completion)
       const startingWeather = await getWeatherWithoutGeneration(startingVillage);

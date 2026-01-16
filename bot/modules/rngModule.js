@@ -63,7 +63,8 @@ const rarityWeights = {
 
 // ------------------- Adjust Rarity Weights -------------------
 // Adjusts rarity weights based on the provided Final Value (FV) using predefined multipliers.
-const adjustRarityWeights = (fv) => {
+// Also applies village level bonuses for gathering and looting (Level 2: +10-15% for rarity 3-5, Level 3: +20-30% for rarity 3-7).
+const adjustRarityWeights = (fv, villageLevel = 1) => {
   const adjustedWeights = {};
   const validFv = isNaN(fv) ? 0 : fv;
   const multipliers = {
@@ -104,6 +105,26 @@ const adjustRarityWeights = (fv) => {
     } else if (validFv >= 1 && validFv <= 100 && rarity === '1') {
       multiplier = multipliers['1-100'];
     }
+    
+    // Apply village level rarity weight multipliers
+    if (villageLevel >= 2) {
+      const rarityNum = parseInt(rarity);
+      
+      // Level 2: +10-15% for rarity 3-5
+      if (villageLevel === 2 && rarityNum >= 3 && rarityNum <= 5) {
+        const villageMultiplier = 1.0 + (Math.random() * 0.05 + 0.10); // Random between 1.10 and 1.15
+        multiplier *= villageMultiplier;
+        logger.info('GATHER', `🏘️ Village Level 2 rarity bonus: Rarity ${rarity} weight multiplier ${villageMultiplier.toFixed(3)}x (${((villageMultiplier - 1) * 100).toFixed(1)}% increase)`);
+      }
+      
+      // Level 3: +20-30% for rarity 3-7
+      if (villageLevel === 3 && rarityNum >= 3 && rarityNum <= 7) {
+        const villageMultiplier = 1.0 + (Math.random() * 0.10 + 0.20); // Random between 1.20 and 1.30
+        multiplier *= villageMultiplier;
+        logger.info('GATHER', `🏘️ Village Level 3 rarity bonus: Rarity ${rarity} weight multiplier ${villageMultiplier.toFixed(3)}x (${((villageMultiplier - 1) * 100).toFixed(1)}% increase)`);
+      }
+    }
+    
     adjustedWeights[rarity] = weight * multiplier;
   });
 
@@ -112,14 +133,15 @@ const adjustRarityWeights = (fv) => {
 
 // ------------------- Create Weighted Item List -------------------
 // Creates a weighted list of items based on their rarity and a provided Final Value (FV).
-function createWeightedItemList(items, fv, job) {
+// Also accepts villageLevel for gathering bonuses.
+function createWeightedItemList(items, fv, job, villageLevel = 1) {
   // Safety check: ensure items is an array
   if (!items || !Array.isArray(items) || items.length === 0) {
     console.log(`[rngModule.js] createWeightedItemList: Invalid items parameter - expected array, got ${typeof items}`);
     return [];
   }
 
-  const adjustedWeights = adjustRarityWeights(fv);
+  const adjustedWeights = adjustRarityWeights(fv, villageLevel);
   const validItems = items.filter(item => item.itemRarity && adjustedWeights[item.itemRarity] > 0);
   if (validItems.length === 0) {
     return [];

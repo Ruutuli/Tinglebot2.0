@@ -17,6 +17,7 @@ const { v4: uuidv4 } = require('uuid');
 // ------------------- Database Services -------------------
 // ============================================================================
 const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchItemByName } = require('../../../shared/database/db.js');
+const { Village } = require('../../../shared/models/VillageModel');
 
 // ============================================================================
 // ------------------- Modules -------------------
@@ -554,6 +555,22 @@ module.exports = {
         return;
       }
 
+      // ------------------- Fetch Village Level ------------------
+      // Fetch village level for gathering bonuses (default to 1 if village not found)
+      let villageLevel = 1;
+      try {
+        const village = await Village.findOne({ name: { $regex: `^${currentVillage}$`, $options: 'i' } });
+        if (village && village.level) {
+          villageLevel = village.level;
+          logger.info('GATHER', `🏘️ Village level for ${currentVillage}: ${villageLevel} (affects rarity weights and quantity bonuses)`);
+        } else {
+          logger.warn('GATHER', `Village ${currentVillage} not found, defaulting to level 1 (no bonuses)`);
+        }
+      } catch (error) {
+        logger.error('GATHER', `Error fetching village level for ${currentVillage}:`, error);
+        // Default to level 1 on error
+      }
+
       // ------------------- Helper Functions ------------------
       // Helper function to generate outcome messages
       function generateOutcomeMessage(outcome) {
@@ -901,6 +918,17 @@ module.exports = {
                scholarTargetVillage = boostData.targetVillage;
                gatheringRegion = scholarTargetVillage;
                logger.info('BOOST', `Target village: ${scholarTargetVillage}`);
+               
+               // Fetch target village level for bonuses (use target village level instead of current village)
+               try {
+                 const targetVillage = await Village.findOne({ name: { $regex: `^${scholarTargetVillage}$`, $options: 'i' } });
+                 if (targetVillage && targetVillage.level) {
+                   villageLevel = targetVillage.level;
+                   logger.info('GATHER', `🏘️ Scholar boost: Using target village level ${villageLevel} for ${scholarTargetVillage} (affects rarity weights and quantity bonuses)`);
+                 }
+               } catch (error) {
+                 logger.error('GATHER', `Error fetching target village level for Scholar boost:`, error);
+               }
              } else {
                logger.warn('BOOST', 'No targetVillage in boostData');
              }
@@ -978,8 +1006,17 @@ module.exports = {
           weightedItems = boostedAvailableItems;
         } else {
           // Normal weighting for other boosts or no boost
-          logger.info('GATHER', `Creating weighted list: ${boostedAvailableItems.length} items`);
-          weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
+          // Pass villageLevel for rarity weight multipliers
+          logger.info('GATHER', `Creating weighted list: ${boostedAvailableItems.length} items (village level: ${villageLevel})`);
+          if (villageLevel >= 2) {
+            const rarityBonus = villageLevel === 2 
+              ? 'Level 2: +10-15% weight for rarity 3-5'
+              : 'Level 3: +20-30% weight for rarity 3-7';
+            logger.info('GATHER', `🏘️ Village level ${villageLevel} rarity bonus: ${rarityBonus}`);
+          } else {
+            logger.info('GATHER', `🏘️ Village level 1: No rarity bonuses (standard weights)`);
+          }
+          weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job, villageLevel);
         }
         
         // Calculate total weight for selection
@@ -1051,9 +1088,41 @@ module.exports = {
           logger.info('GATHER', `Item "${randomItem.itemName}" from ${scholarTargetVillage} - Available in: [${itemVillages.join(', ')}]`);
         }
         
-        const quantity = 1;
+        // ------------------- Apply Village Level Quantity Bonuses ------------------
+        let quantity = 1;
+        let villageBonusInfo = null; // Track bonus info for embed display
         
-
+        if (villageLevel >= 2) {
+          if (villageLevel === 2) {
+            // Level 2: 30-50% chance for +1 item
+            const bonusChance = Math.random();
+            const threshold = 0.30 + (Math.random() * 0.20); // Random between 0.30 and 0.50
+            logger.info('GATHER', `🏘️ Village Level 2 quantity bonus check: ${(bonusChance * 100).toFixed(1)}% rolled vs ${(threshold * 100).toFixed(1)}% threshold`);
+            if (bonusChance < threshold) {
+              quantity = 2;
+              villageBonusInfo = { level: 2, bonus: 1 };
+              logger.info('GATHER', `🏘️ Village Level 2 quantity bonus APPLIED: +1 item (total: ${quantity})`);
+            } else {
+              logger.info('GATHER', `🏘️ Village Level 2 quantity bonus NOT applied (roll too high)`);
+            }
+          } else if (villageLevel === 3) {
+            // Level 3: 40-60% chance for bonus, then 50/50 for +1 or +2
+            const bonusChance = Math.random();
+            const threshold = 0.40 + (Math.random() * 0.20); // Random between 0.40 and 0.60
+            logger.info('GATHER', `🏘️ Village Level 3 quantity bonus check: ${(bonusChance * 100).toFixed(1)}% rolled vs ${(threshold * 100).toFixed(1)}% threshold`);
+            if (bonusChance < threshold) {
+              // Determine bonus amount: 50% chance for +1, 50% chance for +2
+              const bonusAmount = Math.random() < 0.5 ? 1 : 2;
+              quantity = 1 + bonusAmount;
+              villageBonusInfo = { level: 3, bonus: bonusAmount };
+              logger.info('GATHER', `🏘️ Village Level 3 quantity bonus APPLIED: +${bonusAmount} items (total: ${quantity})`);
+            } else {
+              logger.info('GATHER', `🏘️ Village Level 3 quantity bonus NOT applied (roll too high)`);
+            }
+          }
+        } else {
+          logger.info('GATHER', `🏘️ Village Level 1: No quantity bonuses (base quantity: ${quantity})`);
+        }
         
         // Handle Entertainer bonus item
         if (isEntertainerBoost) {
@@ -1113,7 +1182,7 @@ module.exports = {
         // Create embed with cross-region gathering info if applicable
         // Debug info removed to reduce log bloat
         
-        const embed = await createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage);
+        const embed = await createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage, villageBonusInfo, quantity);
         
         // Include blight rain and lightning strike messages if present
         const messages = [];

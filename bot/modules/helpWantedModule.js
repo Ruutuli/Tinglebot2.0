@@ -8,6 +8,7 @@ const HelpWantedQuest = require('../../shared/models/HelpWantedQuestModel');
 const Item = require('../../shared/models/ItemModel');
 const Monster = require('../../shared/models/MonsterModel');
 const VillageShopItem = require('../../shared/models/VillageShopsModel');
+const { Village } = require('../../shared/models/VillageModel');
 const { getAllVillages, locations } = require('./locationsModule');
 const moment = require('moment');
 const { EmbedBuilder } = require('discord.js');
@@ -1615,6 +1616,38 @@ async function generateDailyQuests() {
       logger.info('QUEST', `Before 12pm EST (${normalizedEstHour}:00) - All quest types including art and writing are available`);
     }
 
+    // Fetch village levels from database
+    const villageLevelMap = new Map();
+    let totalQuestsNeeded = 0;
+    try {
+      const villages = await Village.find({ name: { $in: VILLAGES } });
+      for (const village of villages) {
+        const level = village.level || 1; // Default to level 1 if not set
+        villageLevelMap.set(village.name, level);
+        // Calculate quests per village: Level 1 = 1, Level 2 = 2, Level 3 = 3
+        const questsPerVillage = level;
+        totalQuestsNeeded += questsPerVillage;
+        logger.info('QUEST', `🏘️ Village ${village.name} is level ${level} → will generate ${questsPerVillage} quest(s) per day (Level 1=1, Level 2=2, Level 3=3)`);
+      }
+      // Handle villages not found in database (default to level 1)
+      for (const villageName of VILLAGES) {
+        if (!villageLevelMap.has(villageName)) {
+          villageLevelMap.set(villageName, 1);
+          totalQuestsNeeded += 1;
+          logger.warn('QUEST', `Village ${villageName} not found in database, defaulting to level 1 (1 quest)`);
+        }
+      }
+      logger.info('QUEST', `🏘️ Total quests needed: ${totalQuestsNeeded} (based on village levels: Level 1=1/day, Level 2=2/day, Level 3=3/day)`);
+    } catch (error) {
+      logger.error('QUEST', 'Failed to fetch village levels', error);
+      // Default to 1 quest per village if fetch fails
+      for (const villageName of VILLAGES) {
+        villageLevelMap.set(villageName, 1);
+        totalQuestsNeeded += 1;
+      }
+      warnings.push('Failed to fetch village levels, defaulting to 1 quest per village');
+    }
+
     // Clean up existing documents with null questId
     try {
       await HelpWantedQuest.deleteMany({ questId: null });
@@ -1675,13 +1708,14 @@ async function generateDailyQuests() {
     }
     
     // NPC pool handling - allow reuse if needed but log it
-    if (allNPCs.length < VILLAGES.length) {
-      logger.warn('QUEST', `Not enough NPCs (${allNPCs.length}) for ${VILLAGES.length} villages. NPCs will be reused.`);
-      warnings.push(`NPCs will be reused (${allNPCs.length} NPCs for ${VILLAGES.length} villages)`);
+    if (allNPCs.length < totalQuestsNeeded) {
+      logger.warn('QUEST', `Not enough NPCs (${allNPCs.length}) for ${totalQuestsNeeded} quests. NPCs will be reused.`);
+      warnings.push(`NPCs will be reused (${allNPCs.length} NPCs for ${totalQuestsNeeded} quests)`);
     }
     
     const availableNPCs = shuffleArray([...allNPCs]); // Shuffle for randomness
     const npcUsageCount = new Map(); // Track NPC usage
+    const npcUsageByVillage = new Map(); // Track NPC usage per village to allow reuse within village
     
     // Randomize village order instead of always having Rudania first
     const shuffledVillages = shuffleArray([...VILLAGES]);
@@ -1694,11 +1728,11 @@ async function generateDailyQuests() {
       availableTimes = FIXED_CRON_TIMES.filter(cronTime => cronToHour(cronTime) < 12);
     }
     
-    const selectedTimes = selectTimesWithVariableBuffer(availableTimes, VILLAGES.length);
+    const selectedTimes = selectTimesWithVariableBuffer(availableTimes, totalQuestsNeeded);
     
-    // Validate that we have enough times for all villages
-    if (selectedTimes.length !== VILLAGES.length) {
-      const errorMsg = `Time selection failed: expected ${VILLAGES.length} times but got ${selectedTimes.length}. Cannot generate quests for all villages.`;
+    // Validate that we have enough times for all quests
+    if (selectedTimes.length !== totalQuestsNeeded) {
+      const errorMsg = `Time selection failed: expected ${totalQuestsNeeded} times but got ${selectedTimes.length}. Cannot generate all quests.`;
       logger.error('QUEST', errorMsg);
       throw new Error(errorMsg);
     }
@@ -1706,79 +1740,99 @@ async function generateDailyQuests() {
     // Validate that all selected times are defined
     const undefinedTimes = selectedTimes.filter((time, index) => !time);
     if (undefinedTimes.length > 0) {
-      const errorMsg = `Time selection returned ${undefinedTimes.length} undefined time(s). Cannot generate quests for all villages.`;
+      const errorMsg = `Time selection returned ${undefinedTimes.length} undefined time(s). Cannot generate all quests.`;
       logger.error('QUEST', errorMsg);
       throw new Error(errorMsg);
     }
     
-    logger.info('QUEST', `Successfully selected ${selectedTimes.length} posting times for ${VILLAGES.length} villages`);
+    logger.info('QUEST', `Successfully selected ${selectedTimes.length} posting times for ${totalQuestsNeeded} quest(s) across ${VILLAGES.length} villages`);
     
-    const quests = [];
+    let quests = []; // Use let to allow filtering/reassignment during validation
     const failedVillages = [];
+    let questIndex = 0; // Track overall quest index for time assignment
     
-    // Generate quests sequentially to ensure unique NPCs
+    // Generate quests sequentially - multiple quests per village based on level
     for (let i = 0; i < shuffledVillages.length; i++) {
       const village = shuffledVillages[i];
+      const villageLevel = villageLevelMap.get(village) || 1;
+      const questsForThisVillage = villageLevel; // Level 1 = 1, Level 2 = 2, Level 3 = 3
       const travelBlocked = travelBlockedMap.get(village) || false;
+      logger.info('QUEST', `🏘️ Generating ${questsForThisVillage} quest(s) for ${village} (Level ${villageLevel})`);
       
-      try {
-        // Generate quest with travel blocking info
-        const quest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon, travelBlocked);
-        
-        // Track NPC usage
-        const currentCount = npcUsageCount.get(quest.npcName) || 0;
-        npcUsageCount.set(quest.npcName, currentCount + 1);
-        
-        if (currentCount > 0) {
-          logger.debug('QUEST', `NPC ${quest.npcName} reused (${currentCount + 1} times)`);
-        }
-        
-        // Remove the used NPC from the available pool (but allow reuse if pool is exhausted)
-        const npcIndex = availableNPCs.indexOf(quest.npcName);
-        if (npcIndex !== -1 && availableNPCs.length > VILLAGES.length - i) {
-          // Only remove if we still have enough NPCs left
-          availableNPCs.splice(npcIndex, 1);
-        }
-        
-        // Assign a posting time with variable buffer from the selected times
-        const assignedTime = selectedTimes[i];
-        if (!assignedTime) {
-          const errorMsg = `No posting time available for village ${village} at index ${i}. This should not happen after validation.`;
-          logger.error('QUEST', errorMsg);
-          errors.push(errorMsg);
-          failedVillages.push(village);
-          continue; // Continue with other villages
-        }
-        
-        quest.scheduledPostTime = assignedTime;
-        const hour = cronToHour(quest.scheduledPostTime);
-        logger.info('QUEST', `Generated ${quest.type} quest for ${village} with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
-        quests.push(quest);
-        
-      } catch (error) {
-        logger.error('QUEST', `Failed to generate quest for ${village}`, error);
-        errors.push(`Failed to generate quest for ${village}: ${error.message}`);
-        failedVillages.push(village);
-        
-        // Retry once for failed villages
+      // Track NPCs used in this village to allow reuse within village
+      const villageNPCs = new Set();
+      
+      // Generate N quests for this village
+      for (let j = 0; j < questsForThisVillage; j++) {
         try {
-          logger.info('QUEST', `Retrying quest generation for ${village}...`);
-          const retryQuest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon, travelBlocked);
-          const assignedTime = selectedTimes[i];
-          if (assignedTime) {
-            retryQuest.scheduledPostTime = assignedTime;
-            const hour = cronToHour(retryQuest.scheduledPostTime);
-            logger.success('QUEST', `Successfully generated ${retryQuest.type} quest for ${village} on retry`);
-            quests.push(retryQuest);
-            // Remove from failed list
-            const failedIndex = failedVillages.indexOf(village);
-            if (failedIndex !== -1) {
-              failedVillages.splice(failedIndex, 1);
-            }
+          // Generate quest with travel blocking info
+          const quest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon, travelBlocked);
+          
+          // Track NPC usage globally and per village
+          const currentCount = npcUsageCount.get(quest.npcName) || 0;
+          npcUsageCount.set(quest.npcName, currentCount + 1);
+          
+          const villageNPCCount = villageNPCs.has(quest.npcName) ? 1 : 0;
+          if (villageNPCCount > 0) {
+            logger.debug('QUEST', `NPC ${quest.npcName} reused within ${village} (quest ${j + 1}/${questsForThisVillage})`);
+          } else if (currentCount > 0) {
+            logger.debug('QUEST', `NPC ${quest.npcName} reused across villages (${currentCount + 1} times total)`);
           }
-        } catch (retryError) {
-          logger.error('QUEST', `Retry failed for ${village}`, retryError);
-          // Leave in failed list
+          villageNPCs.add(quest.npcName);
+          
+          // Remove the used NPC from the available pool only if we have enough NPCs left
+          // Allow reuse within the same village, but try to keep unique across villages
+          const npcIndex = availableNPCs.indexOf(quest.npcName);
+          const remainingQuests = totalQuestsNeeded - questIndex - 1;
+          if (npcIndex !== -1 && availableNPCs.length > remainingQuests && !villageNPCs.has(quest.npcName)) {
+            // Only remove if we still have enough NPCs left and NPC hasn't been used in this village
+            availableNPCs.splice(npcIndex, 1);
+          }
+          
+          // Assign a posting time with variable buffer from the selected times
+          const assignedTime = selectedTimes[questIndex];
+          if (!assignedTime) {
+            const errorMsg = `No posting time available for village ${village} quest ${j + 1} at index ${questIndex}. This should not happen after validation.`;
+            logger.error('QUEST', errorMsg);
+            errors.push(errorMsg);
+            if (!failedVillages.includes(village)) {
+              failedVillages.push(village);
+            }
+            questIndex++; // Still increment to maintain time slot alignment
+            continue; // Continue with next quest
+          }
+          
+          quest.scheduledPostTime = assignedTime;
+          const hour = cronToHour(quest.scheduledPostTime);
+          logger.info('QUEST', `🏘️ Generated ${quest.type} quest ${j + 1}/${questsForThisVillage} for ${village} (Level ${villageLevel}) with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
+          quests.push(quest);
+          questIndex++;
+          
+        } catch (error) {
+          logger.error('QUEST', `Failed to generate quest ${j + 1}/${questsForThisVillage} for ${village}`, error);
+          errors.push(`Failed to generate quest ${j + 1}/${questsForThisVillage} for ${village}: ${error.message}`);
+          if (!failedVillages.includes(village)) {
+            failedVillages.push(village);
+          }
+          questIndex++; // Still increment to maintain time slot alignment
+          
+          // Retry once for failed quests
+          try {
+            logger.info('QUEST', `Retrying quest generation ${j + 1}/${questsForThisVillage} for ${village}...`);
+            const retryQuest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon, travelBlocked);
+            const assignedTime = selectedTimes[questIndex - 1]; // Use the time slot we reserved
+            if (assignedTime) {
+              retryQuest.scheduledPostTime = assignedTime;
+              const hour = cronToHour(retryQuest.scheduledPostTime);
+              logger.success('QUEST', `Successfully generated ${retryQuest.type} quest ${j + 1}/${questsForThisVillage} for ${village} on retry`);
+              quests.push(retryQuest);
+              // Remove from failed list if all quests for this village are now successful
+              // (We'll check this after the loop)
+            }
+          } catch (retryError) {
+            logger.error('QUEST', `Retry failed for ${village} quest ${j + 1}/${questsForThisVillage}`, retryError);
+            // Leave in failed list
+          }
         }
       }
     }
@@ -1805,20 +1859,21 @@ async function generateDailyQuests() {
     }
 
     // Validate quest objects before saving
-    const invalidQuests = [];
+    const invalidQuestIds = [];
     for (const quest of quests) {
       if (!quest.questId || !quest.village || !quest.date || !quest.type || !quest.npcName || !quest.requirements) {
-        invalidQuests.push(quest.village);
-        logger.error('QUEST', `Invalid quest object for ${quest.village}: missing required fields`);
+        invalidQuestIds.push(quest.questId || 'unknown');
+        logger.error('QUEST', `Invalid quest object for ${quest.village} (${quest.questId || 'no questId'}): missing required fields`);
       }
     }
     
-    if (invalidQuests.length > 0) {
-      logger.error('QUEST', `Invalid quest objects for ${invalidQuests.length} village(s): ${invalidQuests.join(', ')}`);
-      quests = quests.filter(q => !invalidQuests.includes(q.village));
+    if (invalidQuestIds.length > 0) {
+      logger.error('QUEST', `Invalid quest objects for ${invalidQuestIds.length} quest(s): ${invalidQuestIds.join(', ')}`);
+      quests = quests.filter(q => q.questId && !invalidQuestIds.includes(q.questId));
     }
 
     // Save quests with retry logic
+    // Use questId as unique identifier to support multiple quests per village/date
     const results = [];
     const saveErrors = [];
     
@@ -1827,7 +1882,7 @@ async function generateDailyQuests() {
       for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt++) {
         try {
           const updated = await HelpWantedQuest.findOneAndUpdate(
-            { village: quest.village, date: quest.date },
+            { questId: quest.questId },
             quest,
             { upsert: true, new: true, setDefaultsOnInsert: true }
           );
@@ -1841,17 +1896,17 @@ async function generateDailyQuests() {
           break;
         } catch (saveError) {
           if (saveAttempt === 3) {
-            logger.error('QUEST', `Failed to save quest for ${quest.village} after 3 attempts`, saveError);
-            saveErrors.push(`${quest.village}: ${saveError.message}`);
+            logger.error('QUEST', `Failed to save quest ${quest.questId} for ${quest.village} after 3 attempts`, saveError);
+            saveErrors.push(`${quest.village} (${quest.questId}): ${saveError.message}`);
           } else {
-            logger.warn('QUEST', `Save attempt ${saveAttempt}/3 failed for ${quest.village}`, saveError);
+            logger.warn('QUEST', `Save attempt ${saveAttempt}/3 failed for ${quest.village} quest ${quest.questId}`, saveError);
             await new Promise(resolve => setTimeout(resolve, 100 * saveAttempt)); // Exponential backoff
           }
         }
       }
       
       if (!saved) {
-        errors.push(`Failed to save quest for ${quest.village}`);
+        errors.push(`Failed to save quest ${quest.questId} for ${quest.village}`);
       }
     }
     
@@ -1859,12 +1914,26 @@ async function generateDailyQuests() {
       throw new Error(`Failed to save any quests. Save errors: ${saveErrors.join('; ')}`);
     }
     
+    // Log quest counts per village
+    const questCountsByVillage = new Map();
+    for (const quest of results) {
+      const count = questCountsByVillage.get(quest.village) || 0;
+      questCountsByVillage.set(quest.village, count + 1);
+    }
+    const villageQuestSummary = Array.from(questCountsByVillage.entries())
+      .map(([village, count]) => {
+        const level = villageLevelMap.get(village) || 1;
+        return `${village} (level ${level}): ${count} quest(s)`;
+      })
+      .join(', ');
+    logger.info('QUEST', `Quest generation summary for ${date}: ${villageQuestSummary}`);
+    
     // Log the final schedule for the day with detailed information
     const scheduleDetails = results.map(quest => {
       const hour = cronToHour(quest.scheduledPostTime);
       if (!quest.scheduledPostTime) {
-        logger.error('QUEST', `CRITICAL: Quest for ${quest.village} has no scheduledPostTime after generation!`);
-        return `${quest.village}: ${quest.npcName} - MISSING POST TIME`;
+        logger.error('QUEST', `CRITICAL: Quest ${quest.questId} for ${quest.village} has no scheduledPostTime after generation!`);
+        return `${quest.village}: ${quest.npcName} (${quest.questId}) - MISSING POST TIME`;
       }
       return `${quest.village}: ${quest.npcName} (${quest.type}) at ${formatHour(hour)} (${quest.scheduledPostTime})`;
     }).join(', ');
@@ -1874,13 +1943,13 @@ async function generateDailyQuests() {
     const allHaveTimes = results.every(quest => quest.scheduledPostTime && quest.questId && quest.type);
     if (!allHaveTimes) {
       const missingFields = results.filter(quest => !quest.scheduledPostTime || !quest.questId || !quest.type);
-      logger.error('QUEST', `CRITICAL: ${missingFields.length} quest(s) missing required fields: ${missingFields.map(q => q.village).join(', ')}`);
+      logger.error('QUEST', `CRITICAL: ${missingFields.length} quest(s) missing required fields: ${missingFields.map(q => `${q.village} (${q.questId})`).join(', ')}`);
     } else {
       logger.success('QUEST', `All ${results.length} quest(s) have valid required fields for ${date}`);
     }
     
     // Attempt to regenerate missing quests if validation failed
-    if (failedVillages.length > 0 && results.length < VILLAGES.length) {
+    if (failedVillages.length > 0 && results.length < totalQuestsNeeded) {
       logger.info('QUEST', `Attempting to regenerate quests for failed villages: ${failedVillages.join(', ')}`);
       // Could add retry logic here, but for now just log
     }
@@ -1891,7 +1960,7 @@ async function generateDailyQuests() {
     }
     
     const duration = Date.now() - startTime;
-    logger.info('QUEST', `Quest generation completed in ${duration}ms. Generated ${results.length}/${VILLAGES.length} quests successfully.`);
+    logger.info('QUEST', `Quest generation completed in ${duration}ms. Generated ${results.length}/${totalQuestsNeeded} quest(s) successfully across ${VILLAGES.length} villages.`);
     
     return results;
   } catch (error) {

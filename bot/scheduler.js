@@ -65,6 +65,9 @@ const { safeAppendDataToSheet, extractSpreadsheetId } = require('../shared/utils
 // Services
 const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("../shared/services/weatherService");
 
+// Village modules
+const { damageVillage, Village } = require('./modules/villageModule');
+
 // Utils
 const { handleError } = require("../shared/utils/globalErrorHandler");
 const { sendUserDM } = require("../shared/utils/messageUtils");
@@ -182,6 +185,124 @@ function getVillageChannelId(villageName) {
   return TOWNHALL_CHANNELS[capitalizedVillage] || HELP_WANTED_TEST_CHANNEL;
 }
 
+// ------------------- Function: applyWeatherDamage -------------------
+// Calculates and applies village damage based on weather conditions
+async function applyWeatherDamage(villageName, weather) {
+  try {
+    // Fetch village from database
+    const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+    if (!village) {
+      logger.warn('WEATHER', `Village "${villageName}" not found for weather damage`);
+      return;
+    }
+
+    // Check if damage was already applied today
+    // Compare lastDamageTime to today's date (same day = already applied)
+    if (village.lastDamageTime) {
+      const lastDamageDate = new Date(village.lastDamageTime);
+      const today = new Date();
+      const isSameDay = lastDamageDate.getDate() === today.getDate() &&
+                        lastDamageDate.getMonth() === today.getMonth() &&
+                        lastDamageDate.getFullYear() === today.getFullYear();
+      
+      if (isSameDay) {
+        logger.info('WEATHER', `Weather damage already applied to ${villageName} today, skipping`);
+        return;
+      }
+    }
+
+    let totalDamage = 0;
+    const damageSources = [];
+
+    // Wind damage (based on wind speed)
+    if (weather.wind && weather.wind.speed) {
+      const windSpeed = weather.wind.speed;
+      if (windSpeed >= 118) {
+        // Hurricane (≥118 km/h) → 2 HP
+        totalDamage += 2;
+        damageSources.push('Hurricane (2 HP)');
+      } else if (windSpeed >= 88) {
+        // Storm (88-117 km/h) → 1 HP
+        totalDamage += 1;
+        damageSources.push('Storm (1 HP)');
+      } else if (windSpeed >= 63) {
+        // Gale (63-87 km/h) → 1 HP
+        totalDamage += 1;
+        damageSources.push('Gale (1 HP)');
+      } else if (windSpeed >= 41) {
+        // Strong Winds (41-62 km/h) → 1 HP
+        totalDamage += 1;
+        damageSources.push('Strong Winds (1 HP)');
+      }
+    }
+
+    // Precipitation damage
+    if (weather.precipitation) {
+      const precipLabel = weather.precipitation.label || '';
+      if (precipLabel === 'Blizzard') {
+        totalDamage += 5;
+        damageSources.push('Blizzard (5 HP)');
+      } else if (precipLabel === 'Heavy Snow') {
+        totalDamage += 2;
+        damageSources.push('Heavy Snow (2 HP)');
+      } else if (precipLabel === 'Hail') {
+        totalDamage += 3;
+        damageSources.push('Hail (3 HP)');
+      }
+    }
+
+    // Special weather damage
+    if (weather.special) {
+      const specialLabel = weather.special.label || '';
+      if (specialLabel === 'Blight Rain') {
+        totalDamage += 50;
+        damageSources.push('Blight Rain (50 HP)');
+      } else if (specialLabel === 'Avalanche') {
+        totalDamage += 15;
+        damageSources.push('Avalanche (15 HP)');
+      } else if (specialLabel === 'Rock Slide') {
+        totalDamage += 15;
+        damageSources.push('Rock Slide (15 HP)');
+      } else if (specialLabel === 'Flood') {
+        totalDamage += 20;
+        damageSources.push('Flood (20 HP)');
+      } else if (specialLabel === 'Lightning Storm') {
+        totalDamage += 5;
+        damageSources.push('Lightning Storm (5 HP)');
+      } else if (specialLabel === 'Cinder Storm') {
+        // Cinder storms always have strong winds by necessity
+        // Currently causes wind-based damage (already counted above if wind speed >= 41)
+        // If wind damage wasn't already counted, add 1-2 HP depending on wind category
+        if (totalDamage === 0 || !damageSources.some(d => d.includes('Strong') || d.includes('Gale') || d.includes('Storm') || d.includes('Hurricane'))) {
+          const windSpeed = weather.wind?.speed || 63; // Default to gale speed for cinder storms
+          if (windSpeed >= 118) {
+            totalDamage += 2;
+            damageSources.push('Cinder Storm - Hurricane winds (2 HP)');
+          } else {
+            totalDamage += 1;
+            damageSources.push('Cinder Storm - Strong winds (1 HP)');
+          }
+        }
+      }
+    }
+
+    // Apply damage if any was calculated
+    if (totalDamage > 0) {
+      logger.info('WEATHER', `Applying ${totalDamage} HP weather damage to ${villageName} from: ${damageSources.join(', ')}`);
+      
+      // Apply damage to village (damageVillage will update lastDamageTime)
+      await damageVillage(villageName, totalDamage);
+      
+      logger.success('WEATHER', `Applied ${totalDamage} HP weather damage to ${villageName}`);
+    } else {
+      logger.info('WEATHER', `No weather damage for ${villageName} - weather conditions do not cause damage`);
+    }
+  } catch (error) {
+    logger.error('WEATHER', `Error in applyWeatherDamage for ${villageName}: ${error.message}`, error.stack);
+    throw error;
+  }
+}
+
 // Helper function to check if current time is within a valid weather posting window
 // Valid windows: 8:00-8:15 AM EST or 8:00-8:15 PM EST
 function isWithinWeatherPostingWindow() {
@@ -267,6 +388,14 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
     { $set: { postedToDiscord: true, postedAt: new Date() } }
    );
    logger.info('WEATHER', `Marked weather as posted for ${village}`);
+   
+   // Apply weather damage if applicable (only once per weather period)
+   try {
+     await applyWeatherDamage(village, weather);
+   } catch (damageError) {
+     logger.error('WEATHER', `Error applying weather damage to ${village}: ${damageError.message}`);
+     // Don't fail weather posting if damage application fails
+   }
   }
   
   logger.success('WEATHER', `Successfully posted weather for ${village}${isReminder ? ' (reminder)' : ''}`);
@@ -445,7 +574,7 @@ async function cleanupExpiredRaids(client = null) {
     logger.info('RAID', `Processing ${raid.raidId} - ${raid.monster.name}`);
     
     // Mark raid as failed and KO all participants
-    await raid.failRaid();
+    await raid.failRaid(client);
     
     // Send failure message if client is available
     if (client) {

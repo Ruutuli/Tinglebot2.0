@@ -19,24 +19,24 @@ Villages have two key attributes:
 
 ### Level-Based Restrictions
 
-#### Level 1 Restrictions
+#### Village Status Restrictions
 **⚠️ Status: Planned Feature (Not Yet Implemented)**
 
-At Level 1, villages have the following restrictions:
-- **Cannot change jobs** - Characters in Level 1 villages cannot change their job
-- **Cannot move villages** - Characters in Level 1 villages cannot move to a different village
+When a village has the `'damaged'` status, the following restrictions apply:
+- **Cannot change jobs** - Characters in damaged villages cannot change their job
+- **Cannot move villages** - Characters in damaged villages cannot move to a different village
 
-**Rationale**: Level 1 villages represent newly established or struggling settlements. The lack of infrastructure and stability prevents job mobility and inter-village travel. Characters must help their village reach Level 2 before these options become available.
+**Rationale**: When a village is damaged, the infrastructure and stability are compromised, preventing job mobility and inter-village travel. Characters must help repair their village (restore HP to 100%) before these options become available again.
 
 **When Restrictions Lift**:
-- Restrictions are removed when the village reaches **Level 2**
+- Restrictions are removed when the village status returns to `'upgradable'` (HP at 100%)
 - Characters can then change jobs and move villages normally
-- If a village drops back to Level 1, restrictions are re-applied
+- If a village takes damage again and enters `'damaged'` status, restrictions are re-applied
 
 **Implementation Notes**:
-- Restrictions apply to all characters currently located in a Level 1 village (`character.currentVillage`)
-- Job change commands (e.g., `/character job`) should check village level before allowing changes
-- Village move commands (e.g., `/character move`) should check village level before allowing moves
+- Restrictions apply to all characters currently located in a village with `'damaged'` status
+- Job change commands (e.g., `/character job`) should check village status before allowing changes
+- Village move commands (e.g., `/character move`) should check village status before allowing moves
 - Mod characters may be exempt from these restrictions (subject to design decision)
 
 ### Village Statuses
@@ -241,9 +241,9 @@ Materials are split into:
 - Spicy Pepper ×75
 - Sunshroom ×80
 - Fireproof Lizard ×50
-- Volcanic Ladybug ×60
+- Volcanic Ladybug ×60 (Note: Currently only available from Beekeeper table. May be added to Hunter table at Level 2 as a level-up perk)
 - Eldin Roller ×40
-- Gold Dust ×30
+- Gold Dust ×30 (Note: May be increased in future rebalancing)
 - Flint ×40
 - Rock Salt ×30
 
@@ -514,10 +514,27 @@ Applies equally to all villages.
   - Cause villages to lose levels
   - Affect multiple villages
 
-#### Tier 4+ Monsters (VOTE)
-**Open Question**: Should losing to Tier 4+ monsters outside of raids cause village damage?
-- React with ✅ Yes, they should cause village damage
-- React with ❌ No, they should not
+#### Monster Encounter Damage
+**⚠️ Status: Planned Feature (Not Yet Implemented)**
+
+**Mechanic**: When a player loses a fight to any Tier 1-4 monster (outside of raids), there is a **percentage chance** that the monster gets angry and follows the player back to the village, causing damage.
+
+**Rationale**: 
+- Represents monsters getting past scout patrols
+- More flavorful than HWQ damage (monster encounters vs. NPC tantrums)
+- Provides chip damage without being too punishing
+- Only applies on losses, not victories
+
+**Implementation Details** (Planned):
+- **Damage Chance**: X% chance per monster loss (exact percentage subject to balance testing)
+- **Damage Amount**: Small amount (e.g., 1-3 HP, subject to balance)
+- **Applies To**: All Tier 1-4 monsters (Tier 5+ are too rare to be reliable damage sources)
+- **Does Not Apply To**: 
+  - Raid monsters (raids have their own damage system)
+  - Monsters encountered outside village territory (if tracking is implemented)
+- **Flavor**: Could include named rivalry enemies (e.g., "Ze'al's Black Lizalfos") for extra flavor
+
+**Note**: This is intended to provide consistent chip damage to prevent villages from staying at 100% HP constantly, while being more fair and flavorful than HWQ damage.
 
 ---
 
@@ -532,6 +549,11 @@ If wind reaches the following categories, the village takes chip damage due to s
 - **Gale** (63-87 km/h) → 1 HP
 - **Storm** (88-117 km/h) → 1 HP
 - **Hurricane** (≥118 km/h) → 2 HP
+
+**Cinder Storms**:
+- Cinder storms always have strong winds by necessity
+- Currently causes wind-based damage (1-2 HP depending on wind category)
+- **Under Discussion**: May be adjusted to cause additional damage beyond wind effects (subject to balance testing)
 
 Applies equally to all villages.
 
@@ -582,9 +604,8 @@ The following weather types never deal village damage on their own:
 - Flower Bloom
 - Fairy Circle
 - Jubilee
-- Meteor Shower
 
-These may affect gathering, affect travel, or trigger special commands, but do not reduce Village HP.
+These may affect gathering, affect travel, or trigger special commands, but do not reduce Village HP .
 
 #### Additional Weather Damage Rules
 **⚠️ Status: Planned Feature (Not Yet Implemented)**
@@ -602,20 +623,20 @@ These may affect gathering, affect travel, or trigger special commands, but do n
 ### 📝 Quest-Related Damage
 
 #### Ignored Help Wanted Quests (HWQs)
-**⚠️ Status: Planned Feature (Not Yet Implemented)**
+**⚠️ Status: REMOVED (May be re-added if villages level up too quickly)**
 
-If an HWQ expires without being completed:
-- The village takes **5 HP damage per ignored HWQ**
-- Damage is applied after the quest expiration check completes (at midnight EST)
-- If multiple villages have expired quests, damage is applied sequentially (one village at a time)
-- If a village has 3 expired quests, it takes 15 HP damage total (5 HP × 3 quests)
-- Villages are notified when damage is applied - notification appears in the village channel
-- Quests expire at midnight EST - if a quest is completed before midnight, it is considered completed and does not cause damage
+**Current Decision**: HWQ damage has been removed from the system. The village will NOT take damage from expired Help Wanted Quests.
 
-This represents:
-- NPC needs going unmet
-- Minor but cumulative village strain
-- Damage is cumulative with other damage sources (raids, weather)
+**Rationale**: 
+- Some HWQ requests are genuinely impossible or too expensive to complete
+- With multiple HWQs per day at higher levels, this would cause constant daily damage
+- Would make it very difficult to maintain village HP and upgrade villages
+- Damage from raids and special weather already provides sufficient challenge
+
+**Future Consideration**: If villages level up too quickly in practice, HWQ damage may be re-added as a balancing mechanism. If re-added, it would likely:
+- Only apply to monster hunt HWQs (not all HWQ types)
+- Or require multiple consecutive days of ignored HWQs before causing damage
+- Be subject to community feedback and balance testing
 
 **Note**: For details on HWQ generation and lifecycle, see Section 5 (Help Wanted Quests).
 
@@ -656,26 +677,39 @@ Higher village levels generate more opportunities for members to participate and
 - HWQs do not require sign-ups — first completion resolves it
 
 ### Ignored HWQs & Damage
-**⚠️ Status: Planned Feature (Not Yet Implemented)**
+**⚠️ Status: REMOVED (May be re-added if villages level up too quickly)**
 
-If an HWQ expires without being completed:
-- The village takes **5 HP damage per ignored HWQ** (see Section 4 for damage mechanics)
-- Damage is applied after the quest expiration check completes (at midnight EST)
-- If multiple villages have expired quests, damage is applied sequentially (one village at a time)
-- If a village has 3 expired quests, it takes 15 HP damage total (5 HP × 3 quests)
-- Villages are notified when damage is applied - notification appears in the village channel
-- Quests expire at midnight EST - if a quest is completed before midnight, it is considered completed and does not cause damage
+**Current Decision**: HWQ damage has been removed from the system. Expired Help Wanted Quests do NOT cause village damage.
 
-This represents:
-- NPC needs going unmet
-- Minor but cumulative village strain
-- Damage is cumulative with other damage sources (raids, weather)
+**Rationale**: 
+- Some HWQ requests are genuinely impossible or too expensive to complete
+- With multiple HWQs per day at higher levels, this would cause constant daily damage
+- Would make it very difficult to maintain village HP and upgrade villages
+- Damage from raids and special weather already provides sufficient challenge
+
+**Future Consideration**: If villages level up too quickly in practice, HWQ damage may be re-added as a balancing mechanism. If re-added, it would likely:
+- Only apply to monster hunt HWQs (not all HWQ types)
+- Or require multiple consecutive days of ignored HWQs before causing damage
+- Be subject to community feedback and balance testing
 
 ### Interaction with Village State
 - HWQs can still generate while a village is Damaged
 - Completing HWQs during a Damaged state:
   - Helps prevent further HP loss
   - Does not replace required repairs
+
+### HWQ Generation Restrictions (Under Discussion)
+**⚠️ Status: Under Discussion (Not Decided)**
+
+**Idea**: Prevent HWQs from spawning on Blight Rain days, since most people won't risk going out during Blight Rain.
+
+**Rationale**:
+- Blight Rain already causes 50 HP damage to villages
+- Most players avoid going out during Blight Rain
+- HWQs spawning on Blight Rain days would likely go unfulfilled, adding unnecessary chip damage
+- However, it's also "heinously funny" to imagine NPCs demanding urgent tasks during dangerous weather
+
+**Note**: This is currently just a discussion idea and has not been approved for implementation. Current system allows HWQs to spawn on any day regardless of weather.
 
 ---
 
@@ -726,10 +760,11 @@ All contributions are:
 - If a village drops a level or enters a Damaged state:
   - All upgrade contributions are locked until repairs are completed
 - Excess contributions do not carry over between levels
+- **⚠️ Planned Feature**: Contribution limits per week may be implemented to prevent single players from fully funding village upgrades. Exact limits subject to balance testing.
 
 ### Clarifications
 **Q: Can one person fully fund a village upgrade?**
-- ❌ No. Cooldowns and/or caps exist to prevent single-player completion.
+- ⚠️ Currently possible, but **contribution limits per week are planned** to prevent single-player completion. Cooldowns already provide some limitation (1 contribution per week per user).
 
 **Q: Can I contribute to multiple villages in the same week?**
 - 🔧 This depends on cooldown tuning and may be allowed or restricted later.
@@ -883,31 +918,32 @@ When using `/loot` in a village:
 - **No damage reduction** - Monster damage is not reduced by village level
 - **No quantity bonuses** - Always 1 item per successful loot, regardless of village level
 
-#### Planned Enhancements (Not Yet Implemented)
+#### Implemented Enhancements
 
-**⚠️ Status: Planned Feature**
+**✅ Status: Implemented**
 
-The following bonuses will apply only when looting in that village. Looting bonuses are **NOT disabled** when the village is in a Damaged state.
+The following bonuses apply only when looting in that village. Looting bonuses are **NOT disabled** when the village is in a Damaged state.
 
 **1. Rarity Odds by Village Level**:
-Village level improves the odds of pulling rarer items from monster loot tables by adjusting weight distribution.
+Village level improves the odds of pulling rarer items from monster loot tables by adjusting weight distribution. Additionally, higher village levels improve villagers' combat effectiveness (better fed and equipped warriors), which can improve loot rolls.
 
-- **Level 1** (Current): Standard rarity distribution, Items selected based on Final Value (FV) roll and base weight/rarity
-- **Level 2** (Planned): **Rarity weight multiplier**: +10-15% weight bonus for items of rarity 3-5, Slightly increased chance for uncommon items (rarity 3-4) and low-tier rare items (rarity 5), Common items (rarity 1-2) remain at base probability
-- **Level 3** (Planned): **Rarity weight multiplier**: +20-30% weight bonus for items of rarity 3-7, Noticeably increased chance for rare items (rarity 5-7), Very rare items (rarity 8-10) get smaller bonus to maintain balance
+- **Level 1**: Standard rarity distribution, Items selected based on Final Value (FV) roll and base weight/rarity
+- **Level 2**: **Rarity weight multiplier**: +10-15% weight bonus for items of rarity 3-5, Slightly increased chance for uncommon items (rarity 3-4) and low-tier rare items (rarity 5), Common items (rarity 1-2) remain at base probability, **Combat effectiveness bonus**: +1-3 to dice roll (improved FV rolls)
+- **Level 3**: **Rarity weight multiplier**: +20-30% weight bonus for items of rarity 3-7, Noticeably increased chance for rare items (rarity 5-7), Very rare items (rarity 8-10) get smaller bonus to maintain balance, **Combat effectiveness bonus**: +3-5 to dice roll (maximum FV rolls)
 
 **Implementation Notes**:
 - This does not guarantee rare drops — it only shifts probabilities
 - Weight multipliers are applied after Final Value calculation and base item filtering
 - Bonuses apply to the `createWeightedItemList` function in `rngModule.js`
+- Combat effectiveness bonuses may affect FV roll ranges or loot success rates
 - Exact percentages subject to balance testing
 
 **2. Damage Reduction by Village Level**:
 Higher-level villages provide better protection and support, reducing damage taken from monster encounters.
 
-- **Level 1** (Current): No damage reduction, Full monster damage applies
-- **Level 2** (Planned): **5-10% damage reduction** - Village infrastructure and community support help mitigate combat damage
-- **Level 3** (Planned): **10-15% damage reduction** - Thriving village provides maximum protection and support
+- **Level 1**: No damage reduction, Full monster damage applies
+- **Level 2**: **5-10% damage reduction** - Village infrastructure and community support help mitigate combat damage
+- **Level 3**: **10-15% damage reduction** - Thriving village provides maximum protection and support
 
 **Implementation Notes**:
 - Damage reduction applies after all other damage calculations (elixirs, boosts, etc.)
@@ -918,9 +954,9 @@ Higher-level villages provide better protection and support, reducing damage tak
 **3. Loot Quantity Bonuses**:
 Village prosperity improves looting efficiency, providing chances for bonus items.
 
-- **Level 1** (Current): 1 item per successful loot
-- **Level 2** (Planned): Base: 1 item per loot, Bonus: Small chance (e.g., 5-10%) to receive +1 extra item, **Total possible**: 1-2 items per loot
-- **Level 3** (Planned): Base: 1 item per loot, Bonus: Higher chance (e.g., 10-15%) to receive +1 extra item, Bonus: Very small chance (e.g., 2-3%) to receive +2 extra items, **Total possible**: 1-3 items per loot
+- **Level 1**: 1 item per successful loot
+- **Level 2**: Base: 1 item per loot, Bonus: 5-10% chance to receive +1 extra item, **Total possible**: 1-2 items per loot
+- **Level 3**: Base: 1 item per loot, Bonus: 10-15% chance to receive +1 extra item, Bonus: 2-3% chance to receive +2 extra items, **Total possible**: 1-3 items per loot
 
 **Bonus Item Rules**:
 - Bonus items are pulled from the same monster loot table as the original roll
@@ -928,43 +964,33 @@ Village prosperity improves looting efficiency, providing chances for bonus item
 - Each bonus item is selected independently (weighted random)
 - Bonus items only apply on successful loots (victory outcomes)
 
-**4. Monster Encounter Adjustments**:
-Higher-level villages may have different monster encounter rates or access to higher-tier monsters.
+**Summary of Implementation**:
 
-- **Level 1** (Current): Standard encounter rates, All tier monsters available based on job and location
-- **Level 2** (Planned): Slightly increased chance for higher-tier monsters (tiers 5-7), Reduced chance for very low-tier monsters (tiers 1-2)
-- **Level 3** (Planned): Further increased chance for high-tier monsters (tiers 6-8), Further reduced chance for low-tier monsters (tiers 1-2)
-
-**Implementation Notes**:
-- Encounter adjustments are subtle to maintain game balance
-- Changes affect encounter probability, not availability
-- All monsters remain accessible, just with adjusted frequency
-
-**Summary of Current vs. Planned**:
-
-| Feature | Current (All Levels) | Planned Level 2 | Planned Level 3 |
-|---------|---------------------|-----------------|-----------------|
-| **Items per Loot** | 1 | 1-2 (chance for +1) | 1-3 (chance for +1 or +2) |
+| Feature | Level 1 | Level 2 | Level 3 |
+|---------|---------|---------|---------|
+| **Items per Loot** | 1 | 1-2 (5-10% chance for +1) | 1-3 (10-15% chance for +1, 2-3% chance for +2) |
 | **Rarity Bonuses** | None | +10-15% weight for rarity 3-5 | +20-30% weight for rarity 3-7 |
 | **Damage Reduction** | None | 5-10% reduction | 10-15% reduction |
-| **Encounter Rates** | Standard | Slight shift toward higher tiers | Further shift toward higher tiers |
+| **Combat Effectiveness** | None | +1-3 to dice roll | +3-5 to dice roll |
 | **Item Selection** | Weighted by FV/rarity/weight | Same + rarity bonus | Same + larger rarity bonus |
 
 **Clarifications**:
-- **Current Implementation**: All villages (Level 1-3) provide identical looting experience
-- **Planned Bonuses**: Will stack with village level (Level 2 gets Level 2 bonuses, Level 3 gets Level 2 + Level 3 bonuses)
+- **Implementation**: All bonuses are now active and working as described
+- **Bonuses Stack**: Level 2 gets Level 2 bonuses, Level 3 gets Level 2 + Level 3 bonuses
 - **Village-Specific**: Bonuses only apply when looting in that specific village
 - **Cross-Village**: Looting bonuses do not stack across villages (looting in Rudania doesn't benefit from Inariko's level)
 - **Damaged State**: Looting bonuses remain active even when the village is in a Damaged state
 - **Monster-Specific**: Bonuses apply to all monsters encountered in that village, regardless of monster tier
-- **Implementation Location**: Changes would be made in `loot.js` (village level fetch) and `rngModule.js` (weight adjustments)
+- **Implementation Location**: Implemented in `bot/commands/jobs/loot.js` (village level fetch, damage reduction, quantity bonuses, combat bonuses) and `bot/modules/rngModule.js` (rarity weight adjustments)
 
-**Technical Implementation**:
-- Fetch village level from `Village` model using `character.currentVillage`
-- Pass village level to `createWeightedItemList()` function
-- Apply rarity weight multipliers in `adjustRarityWeights()` or similar function
-- Apply damage reduction in `getEncounterOutcome()` or damage calculation phase
-- Add quantity bonus logic in `generateLootedItem()` function
+**Technical Implementation Details**:
+- Village level is fetched from `Village` model using `character.currentVillage` in `processLootingLogic()`
+- Village level is passed to `createWeightedItemList()` function for rarity bonuses
+- Rarity weight multipliers are applied in `adjustRarityWeights()` function in `rngModule.js`
+- Damage reduction is applied after `getEncounterOutcome()` in `processLootingLogic()` (after all other damage calculations)
+- Quantity bonus logic is implemented in `generateLootedItem()` function which now returns an array of items
+- Combat effectiveness bonuses are applied to the initial dice roll before `calculateFinalValue()`
+- All bonus items are added to inventory via updated `handleInventoryUpdate()` function
 
 ---
 
@@ -987,23 +1013,20 @@ When using `/crafting` in a village:
 - **Testing Channel**: Exception allows bypass for development purposes
 
 **Current Limitations**:
-- **No village level bonuses** - All villages (Level 1, 2, or 3) currently provide the same crafting experience
-- **No stamina cost reduction** - Stamina costs are the same regardless of village level
-- **No material cost reduction** - Material costs are the same regardless of village level (except Scholar boost)
 - **No recipe unlocks** - All craftable items are available from Level 1
 
-#### Planned Enhancements (Not Yet Implemented)
+#### Implemented Enhancements
 
-**⚠️ Status: Planned Feature**
+**✅ Status: Implemented**
 
 The following bonuses will apply only when crafting in that village. Crafting bonuses are **NOT disabled** when the village is in a Damaged state.
 
 **1. Stamina Cost Reduction by Village Level**:
 Higher-level villages have better infrastructure and community support, reducing the stamina required for crafting.
 
-- **Level 1** (Current): No stamina reduction, Full stamina cost applies
-- **Level 2** (Planned): **5-10% stamina cost reduction** - Improved workshops and tools reduce crafting effort
-- **Level 3** (Planned): **10-15% stamina cost reduction** - Advanced facilities and expert support provide maximum efficiency
+- **Level 1**: No stamina reduction, Full stamina cost applies
+- **Level 2**: **5-10% stamina cost reduction** - Improved workshops and tools reduce crafting effort
+- **Level 3**: **10-15% stamina cost reduction** - Advanced facilities and expert support provide maximum efficiency
 
 **Implementation Notes**:
 - Stamina reduction applies after all other stamina calculations (Priest boost, Teacher contribution, etc.)
@@ -1014,9 +1037,9 @@ Higher-level villages have better infrastructure and community support, reducing
 **2. Material Cost Reduction by Village Level**:
 Thriving villages have better resource networks and supply chains, reducing material requirements.
 
-- **Level 1** (Current): No material reduction, Full material cost applies
-- **Level 2** (Planned): **5-10% material cost reduction** - Better supply chains and resource sharing reduce waste
-- **Level 3** (Planned): **10-15% material cost reduction** - Optimized production and expert knowledge minimize material needs
+- **Level 1**: No material reduction, Full material cost applies
+- **Level 2**: **5-10% material cost reduction** - Better supply chains and resource sharing reduce waste
+- **Level 3**: **10-15% material cost reduction** - Optimized production and expert knowledge minimize material needs
 
 **Implementation Notes**:
 - Material reduction applies after Scholar boost (if active) - village bonus stacks with Scholar's 30% reduction
@@ -1024,59 +1047,29 @@ Thriving villages have better resource networks and supply chains, reducing mate
 - Minimum quantity of 1 always applies (cannot reduce to 0)
 - Reduction applies to all materials in the crafting recipe
 
-**3. Recipe Unlocks by Village Level**:
-Villages unlock new craftable recipes as they grow. Items are tagged with a `villageLevelUnlock` property.
+**Summary of Implementation**:
 
-- **Level 1 — Basic Recipes** (Currently Available): All items with no `villageLevelUnlock` tag or `villageLevelUnlock: 1` are craftable
-- **Level 2 — Advanced Recipes** (Planned): Items tagged with `villageLevelUnlock: 2` become craftable. Examples:
-  - **🔥 Rudania (Eldin)**: Advanced metalwork, fire-resistant items, specialized tools
-  - **💧 Inariko (Lanayru)**: Water-based items, crystal work, aquatic equipment
-  - **🍃 Vhintl (Faron)**: Forest-based items, organic materials, nature-focused crafts
-  - **Unlock Behavior**: Recipes unlock when village reaches Level 2, Recipes remain available as long as village is Level 2 or higher, If village drops to Level 1, these recipes become unavailable
-- **Level 3 — Master Recipes** (Planned): Items tagged with `villageLevelUnlock: 3` become craftable. Examples:
-  - **🔥 Rudania (Eldin)**: Master-tier weapons, legendary fire items, elite equipment
-  - **💧 Inariko (Lanayru)**: Master-tier accessories, legendary water items, elite tools
-  - **🍃 Vhintl (Faron)**: Master-tier items, legendary nature items, elite crafts
-  - **Unlock Behavior**: Recipes unlock when village reaches Level 3, Recipes remain available as long as village is Level 3, If village drops below Level 3, these recipes immediately become unavailable
-
-**4. Crafting Quality/Success Bonuses**:
-Higher-level villages may provide bonuses to crafting success rates or item quality (if quality system is implemented).
-
-- **Level 1** (Current): Standard crafting success rate
-- **Level 2** (Planned): Small chance (e.g., 5%) for "high-quality" crafted items (if quality system implemented)
-- **Level 3** (Planned): Higher chance (e.g., 10%) for "high-quality" or "masterwork" crafted items
-
-**Implementation Notes**:
-- Quality bonuses would only apply if a quality/tier system is added to crafted items
-- Could affect item durability, effectiveness, or resale value
-- Subject to balance testing and system design
-
-**Summary of Current vs. Planned**:
-
-| Feature | Current (All Levels) | Planned Level 2 | Planned Level 3 |
-|---------|---------------------|-----------------|-----------------|
+| Feature | Level 1 | Level 2 | Level 3 |
+|---------|---------|---------|---------|
 | **Stamina Reduction** | None | 5-10% reduction | 10-15% reduction |
 | **Material Reduction** | None | 5-10% reduction | 10-15% reduction |
-| **Recipe Unlocks** | All basic recipes | +Level 2 recipes | +Level 3 recipes |
-| **Quality Bonuses** | None | 5% high-quality chance | 10% masterwork chance |
 | **Crafting Efficiency** | Standard | Improved | Maximum |
 
 **Clarifications**:
-- **Current Implementation**: All villages (Level 1-3) provide identical crafting experience
-- **Planned Bonuses**: Will stack with village level (Level 2 gets Level 2 bonuses, Level 3 gets Level 2 + Level 3 bonuses)
+- **Implementation**: Village level bonuses are now active and provide different crafting experiences based on village level
+- **Bonuses**: Level 3 replaces Level 2 bonuses (Level 3 gets 10-15% reduction, not cumulative)
 - **Village-Specific**: Bonuses only apply when crafting in that specific village
 - **Cross-Village**: Crafting bonuses do not stack across villages (crafting in Rudania doesn't benefit from Inariko's level)
 - **Damaged State**: Crafting bonuses remain active even when the village is in a Damaged state
 - **Job-Specific**: Bonuses apply to all crafting jobs, but recipes may be job-locked
 - **Stacking with Boosts**: Village bonuses stack with existing boosts (Priest stamina reduction, Scholar material reduction, etc.)
-- **Implementation Location**: Changes would be made in `crafting.js` (village level fetch, cost calculations)
+- **Implementation Location**: Implemented in `crafting.js` (village level fetch, cost calculations)
 
 **Technical Implementation**:
-- Fetch village level from `Village` model using `character.currentVillage`
-- Apply stamina reduction in stamina cost calculation (after Priest boost)
-- Apply material reduction in material cost calculation (after Scholar boost)
-- Filter craftable items by `villageLevelUnlock` property in autocomplete and validation
-- Add quality bonus logic in crafting result generation (if quality system implemented)
+- ✅ Fetch village level from `Village` model using `character.currentVillage`
+- ✅ Apply stamina reduction in stamina cost calculation (after Priest boost and Teacher contribution)
+- ✅ Apply material reduction in material cost calculation (after Scholar boost)
+- ✅ Comprehensive logging shows village level effects on crafting costs
 
 ---
 
@@ -1191,8 +1184,12 @@ await recoverHearts(character._id, actualRestore);
 ```
 
 **Benefits by Village Level**:
-- **Level 2**: Rest spots available (1-2 hearts restored)
-- **Level 3**: Same as Level 2 (no additional benefits)
+- **Level 2**: Rest spots available (1-2 hearts restored, random: 50% chance for 1, 50% chance for 2)
+- **Level 3**: Rest spots available with choice between stamina or hearts:
+  - **Option 1**: Restore 1 stamina (50% chance)
+  - **Option 2**: Restore 2 hearts (50% chance)
+  - Player chooses which benefit they want when using the rest spot
+  - Cannot have both - must choose one or the other
 
 ---
 
@@ -1216,5 +1213,155 @@ May need to add fields for:
 - Character system (for rest spot cooldowns)
 - Inventory system (for contributions)
 - Token system (for contributions)
+
+---
+
+## 9. Implementation Checklist
+
+### Core Systems
+- [x] Village level and HP system (Level 1-3, max HP scaling)
+- [x] Village status system (`'upgradable'`, `'damaged'`, `'max'`)
+- [x] Upgrade system (tokens + materials)
+- [x] Repair system (tokens only)
+- [x] Resource loss on damage (tokens and materials)
+- [x] Level drop mechanics (at 0 HP)
+
+### Restrictions & Status
+- [x] Job change restrictions when village is `'damaged'` (implemented in `validation.js` - `canChangeJob`)
+- [x] Village move restrictions when village is `'damaged'` (implemented in `validation.js` - `canChangeVillage` and `travel.js`)
+
+### Damage Sources
+- [x] Raid damage system (Tier 5-10 damage values)
+- [x] Weather damage system (wind, precipitation, special weather)
+- [x] Monster encounter damage (percentage chance on Tier 1-4 losses)
+- [ ] Named rivalry enemies (flavor feature for monster damage)
+
+### Auto-Level-Up System
+- [x] Auto-level-up check after material contributions
+- [x] Auto-level-up check after token contributions
+- [x] Auto-level-up check in mod villageresources command
+- [x] Level-up announcement system (town hall channel posts)
+
+### Material Requirements
+- [x] Rudania material requirements (all levels)
+- [x] Inariko material requirements (all levels)
+- [x] Vhintl material requirements (all levels)
+- [ ] Volcanic Ladybug added to Hunter table at Level 2 (Rudania)
+- [ ] Gold Dust rebalancing (increase amount for Rudania)
+
+### Gathering System Enhancements
+- [x] Level 2 quantity bonuses (chance for +1 item)
+- [x] Level 3 quantity bonuses (chance for +1 or +2 items)
+- [x] Level 2 rarity weight multipliers (+10-15% for rarity 3-5)
+- [x] Level 3 rarity weight multipliers (+20-30% for rarity 3-7)
+
+### Looting System Enhancements
+- [x] Level 2 rarity weight multipliers (+10-15% for rarity 3-5)
+- [x] Level 3 rarity weight multipliers (+20-30% for rarity 3-7)
+- [x] Level 2 damage reduction (5-10%)
+- [x] Level 3 damage reduction (10-15%)
+- [x] Level 2 loot quantity bonuses (chance for +1 item)
+- [x] Level 3 loot quantity bonuses (chance for +1 or +2 items)
+- [x] Level 2 combat effectiveness bonuses (improved FV rolls)
+- [x] Level 3 combat effectiveness bonuses (maximum FV rolls)
+
+### Crafting System Enhancements
+- [x] Level 2 stamina cost reduction (5-10%) - **Implemented in `crafting.js`**
+- [x] Level 3 stamina cost reduction (10-15%) - **Implemented in `crafting.js`**
+- [x] Level 2 material cost reduction (5-10%) - **Implemented in `crafting.js`**
+- [x] Level 3 material cost reduction (10-15%) - **Implemented in `crafting.js`**
+
+### Vending System
+- [ ] Level 2 stock unlocks (tier 1-6) + 10% discount - **Vending tier and discount are set on level-up but not used in vending handler**
+- [ ] Level 3 stock unlocks (tier 1-10) + 20% discount - **Vending tier and discount are set on level-up but not used in vending handler**
+
+### Rest Spots System
+- [ ] Rest spot command (`/village rest`)
+- [ ] Level 2 rest spots (1-2 hearts, random)
+- [ ] Level 3 rest spots (choice: 1 stamina OR 2 hearts)
+- [ ] Rest spot cooldown system (per character, per village, daily)
+- [ ] Database schema for rest spot cooldowns
+
+### Help Wanted Quests (HWQs)
+- [x] HWQ generation by village level (1/2/3 per day) - **Implemented in `helpWantedModule.js` - `generateDailyQuests` (Level 1: 1 quest/day, Level 2: 2 quests/day, Level 3: 3 quests/day)**
+- [x] HWQ expiration system (implemented in `helpWanted.js` - `validateQuestExpiration`)
+- [ ] HWQ damage system (REMOVED - may be re-added if needed)
+- [ ] HWQ generation restrictions on Blight Rain days (Under Discussion)
+
+### Contribution System
+- [x] Contribution cooldown system (1 per week per user) - **Note: Currently disabled for testing (COOLDOWN_ENABLED = false), configured for 1 week but not active**
+- [ ] Contribution limits per week (planned feature)
+- [x] Material validation and fuzzy matching (implemented in `village.js`)
+- [x] Contribution leaderboards (implemented in `village.js` - `generateContributorsEmbed`)
+
+### Weather System Integration
+- [x] Wind damage (Strong Winds, Gale, Storm, Hurricane) - **Implemented in `scheduler.js` - `applyWeatherDamage`**
+- [x] Precipitation damage (Heavy Snow, Blizzard, Hail) - **Implemented in `scheduler.js` - `applyWeatherDamage`**
+- [x] Special weather damage (Blight Rain, Avalanche, Rock Slide, Flood, Lightning Storm) - **Implemented in `scheduler.js` - `applyWeatherDamage`**
+- [x] Cinder storm damage (wind-based, 1-2 HP) - **Implemented in `scheduler.js` - `applyWeatherDamage`**
+- [ ] Cinder storm additional damage (beyond wind - Under Discussion)
+- [ ] Meteor shower damage chance (Under Discussion)
+
+### Testing & Balance
+- [ ] Raid damage value tuning
+- [ ] Weather damage value tuning
+- [ ] Monster encounter damage chance tuning
+- [ ] Contribution limit tuning
+- [ ] Gathering bonus percentage tuning
+- [ ] Looting bonus percentage tuning
+- [ ] Crafting reduction percentage tuning
+
+---
+
+## 10. Implementation Status Summary
+
+### ✅ Fully Implemented Features
+- **Core Systems**: Village level/HP, status system, upgrade/repair, resource loss, level drop
+- **Restrictions**: Job change and village move restrictions when damaged
+- **Damage Sources**: Raid damage, weather damage (all types), monster encounter damage
+- **Auto-Level-Up**: Automatic level-up checks and announcements
+- **Material Requirements**: All village material requirements configured
+- **Weather Integration**: All weather damage types implemented
+- **HWQ Expiration**: Quest expiration validation system
+- **HWQ Generation by Village Level**: Quest generation based on village level (Level 1: 1 quest/day, Level 2: 2 quests/day, Level 3: 3 quests/day)
+- **Gathering System Bonuses**: Quantity bonuses (Level 2: chance for +1, Level 3: chance for +1 or +2) and rarity weight multipliers (Level 2: +10-15% for rarity 3-5, Level 3: +20-30% for rarity 3-7)
+- **Looting System Bonuses**: Rarity weight multipliers, damage reduction, quantity bonuses, and combat effectiveness bonuses (FV roll improvements)
+- **Crafting System Bonuses**: Stamina cost reduction (Level 2: 5-10%, Level 3: 10-15%) and material cost reduction (Level 2: 5-10%, Level 3: 10-15%)
+
+### ⚠️ Partially Implemented Features
+- **Contribution Cooldown**: System exists but currently disabled for testing (`COOLDOWN_ENABLED = false`)
+- **Vending System**: Tier and discount are set on level-up but not applied in vending handler
+- **Cinder Storm Damage**: Wind-based damage implemented, but additional damage beyond wind is under discussion
+
+### ❌ Not Yet Implemented Features
+
+#### High Priority
+1. **Vending System Integration**: Vending tier and discount are stored but not used:
+   - Level 2: Stock tier 1-6 + 10% discount
+   - Level 3: Stock tier 1-10 + 20% discount
+
+2. **Rest Spots System**: Complete system not implemented:
+   - `/village rest` command
+   - Level 2: 1-2 hearts (random)
+   - Level 3: Choice of 1 stamina OR 2 hearts
+   - Daily cooldown per character per village
+
+#### Medium Priority
+3. **Gathering System Item Unlocks**:
+   - Level-based item unlocks (`villageLevelUnlock` property)
+
+#### Low Priority / Future Enhancements
+6. **Material Rebalancing**:
+   - Volcanic Ladybug added to Hunter table at Level 2 (Rudania)
+   - Gold Dust rebalancing (increase amount for Rudania)
+
+7. **Flavor Features**:
+   - Named rivalry enemies for monster encounter damage
+
+8. **Planned Features**:
+   - Contribution limits per week
+   - HWQ generation restrictions on Blight Rain days (under discussion)
+   - Cinder storm additional damage beyond wind (under discussion)
+   - Meteor shower damage chance (under discussion)
 
 ---

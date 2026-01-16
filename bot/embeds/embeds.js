@@ -1344,7 +1344,7 @@ function capitalizeFirst(str) {
 
 // ------------------- Function: createGatherEmbed -------------------
 // Creates an embed for gathering activities with boost support and flavor text
-const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null, scholarTargetVillage = null) => {
+const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false, boosterCharacter = null, scholarTargetVillage = null, villageBonusInfo = null, quantity = 1) => {
  const settings = getCommonEmbedSettings(character);
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
  const article = getArticleForItem(randomItem.itemName);
@@ -1439,9 +1439,25 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
  const villageImage = getVillageImage(character);
  const thumbnailUrl = isValidImageUrl(randomItem.image) ? randomItem.image : DEFAULT_IMAGE_URL;
 
+ // Build title with quantity if > 1
+ let title = `${locationPrefix}: ${character.name} ${action} ${article} ${randomItem.itemName}!`;
+ if (quantity > 1) {
+   title = `${locationPrefix}: ${character.name} ${action} ${quantity}× ${randomItem.itemName}!`;
+ }
+
+ // Add village bonus information to description
+ let descriptionWithBonus = description;
+ if (villageBonusInfo) {
+   const bonusEmoji = villageBonusInfo.level === 2 ? '🏘️' : '🌟';
+   const bonusText = villageBonusInfo.bonus === 1 
+     ? `\n\n${bonusEmoji} **Village Level ${villageBonusInfo.level} Bonus:** Gathered an extra item!`
+     : `\n\n${bonusEmoji} **Village Level ${villageBonusInfo.level} Bonus:** Gathered ${villageBonusInfo.bonus} extra items!`;
+   descriptionWithBonus = description + bonusText;
+ }
+
  const embed = new EmbedBuilder()
-  .setTitle(`${locationPrefix}: ${character.name} ${action} ${article} ${randomItem.itemName}!`)
-  .setDescription(description)
+  .setTitle(title)
+  .setDescription(descriptionWithBonus)
   .setColor(embedColor)
   .setAuthor({
    name: `${character.name} 🔗`,
@@ -1478,6 +1494,11 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
    footerText += ` | Rarity: ${itemRarity}`;
  } else {
    footerText = `Rarity: ${itemRarity}`;
+ }
+ 
+ // Add quantity to footer if > 1 and no village bonus (to avoid redundancy)
+ if (quantity > 1 && !villageBonusInfo) {
+   footerText += ` | Quantity: ${quantity}`;
  }
  
   if (footerText) {

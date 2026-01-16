@@ -34,6 +34,7 @@ const {
 const ItemModel = require('../../shared/models/ItemModel');
 const RuuGame = require('../../shared/models/RuuGameModel');
 const Character = require('../../shared/models/CharacterModel');
+const { Village } = require('../../shared/models/VillageModel');
 
 // ------------------- Embed and Command Imports -------------------
 const {
@@ -46,6 +47,7 @@ const {
 const { getGeneralJobsPage, getJobPerk } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
 const { roles } = require('../modules/rolesModule');
+const { recoverHearts, recoverStamina } = require('../modules/characterStatsModule');
 
 // ------------------- Handler Imports -------------------
 const {
@@ -1830,6 +1832,11 @@ async function handleComponentInteraction(interaction) {
       }
     }
 
+    // Handle Chest buttons
+    if (interaction.customId.startsWith('chest_claim_')) {
+      return await handleChestClaim(interaction);
+    }
+
     // Handle Minigame buttons
     if (interaction.customId.startsWith('minigame_')) {
       if (interaction.customId.startsWith('minigame_join_')) {
@@ -1885,6 +1892,11 @@ async function handleComponentInteraction(interaction) {
       return await handlePouchUpgradeCancel(interaction);
     }
 
+    // Handle rest spot buttons
+    if (interaction.customId.startsWith('restSpot_')) {
+      return await handleRestSpotChoice(interaction);
+    }
+
     // Handle crafting material selection
     if (interaction.customId.startsWith('crafting-material|')) {
       return await handleCraftingMaterialSelection(interaction);
@@ -1923,6 +1935,194 @@ async function handleComponentInteraction(interaction) {
       if (processedInteractions.has(interactionId)) {
         processedInteractions.delete(interactionId);
       }
+    }
+  }
+}
+
+// =============================================================================
+// ------------------- Rest Spot Handler -------------------
+// =============================================================================
+
+// ------------------- Function: handleRestSpotChoice -------------------
+// Handles rest spot button choice for Level 3 villages
+async function handleRestSpotChoice(interaction) {
+  try {
+    if (!interaction.isButton()) {
+      return;
+    }
+
+    // Parse custom ID: restSpot_${villageName}_${characterId}_${choiceType}
+    const parts = interaction.customId.split('_');
+    if (parts.length < 4) {
+      return interaction.reply({
+        content: '❌ **Invalid rest spot interaction.**',
+        flags: 64
+      });
+    }
+
+    const villageName = parts[1]; // Rudania, Inariko, or Vhintl
+    const characterId = parts[2];
+    const choiceType = parts[3]; // stamina or hearts
+
+    // Verify the character belongs to the user
+    const character = await fetchCharacterById(characterId);
+    if (!character) {
+      return interaction.reply({
+        content: '❌ **Character not found.**',
+        flags: 64
+      });
+    }
+
+    if (character.userId !== interaction.user.id) {
+      return interaction.reply({
+        content: '❌ **This rest spot choice is not for your character.**',
+        flags: 64
+      });
+    }
+
+    // Fetch village to verify level
+    const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+    if (!village) {
+      return interaction.reply({
+        content: `❌ **Village "${villageName}" not found.**`,
+        flags: 64
+      });
+    }
+
+    if (village.level < 3) {
+      return interaction.reply({
+        content: '❌ **This choice is only available in Level 3 villages.**',
+        flags: 64
+      });
+    }
+
+    // Check cooldown (reuse logic from village.js)
+    const now = new Date();
+    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+    if (now < rollover) {
+      rollover.setUTCDate(rollover.getUTCDate() - 1);
+    }
+
+    const cooldownKey = `restSpot_${villageName}`;
+    const lastUse = character.dailyRoll?.get(cooldownKey);
+    if (lastUse) {
+      const lastUseDate = new Date(lastUse);
+      if (lastUseDate >= rollover) {
+        return interaction.reply({
+          content: '❌ **You have already used the rest spot today. Cooldown resets at 8am EST.**',
+          flags: 64
+        });
+      }
+    }
+
+    // Apply healing based on choice (50% chance)
+    const success = Math.random() < 0.5;
+    let restored = 0;
+    let restoreType = '';
+    let restoreEmoji = '';
+
+    if (choiceType === 'stamina') {
+      if (character.currentStamina >= character.maxStamina) {
+        return interaction.reply({
+          content: '❌ **You are already at full stamina.**',
+          flags: 64
+        });
+      }
+      if (success) {
+        restored = 1;
+        restoreType = 'stamina';
+        restoreEmoji = '🟩';
+        await recoverStamina(character._id, restored);
+      }
+    } else if (choiceType === 'hearts') {
+      if (character.currentHearts >= character.maxHearts) {
+        return interaction.reply({
+          content: '❌ **You are already at full hearts.**',
+          flags: 64
+        });
+      }
+      if (success) {
+        restored = 2;
+        restoreType = 'hearts';
+        restoreEmoji = '❤️';
+        const maxRestore = character.maxHearts - character.currentHearts;
+        const actualRestore = Math.min(restored, maxRestore);
+        await recoverHearts(character._id, actualRestore);
+        restored = actualRestore;
+      }
+    } else {
+      return interaction.reply({
+        content: '❌ **Invalid choice type.**',
+        flags: 64
+      });
+    }
+
+    // Update cooldown
+    if (!character.dailyRoll) {
+      character.dailyRoll = new Map();
+    }
+    character.dailyRoll.set(cooldownKey, new Date().toISOString());
+    await character.save();
+
+    // Get theme and images
+    const VILLAGE_IMAGES = {
+      Rudania: {
+        thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_rudania_.png',
+      },
+      Inariko: {
+        thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_inariko_.png',
+      },
+      Vhintl: {
+        thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_vhintl_.png',
+      },
+    };
+
+    const themes = {
+      'Rudania': { emoji: '🔥', name: 'Hot Springs', description: 'natural geothermal pools' },
+      'Inariko': { emoji: '💧', name: 'Cleansing Pool', description: 'purifying water source' },
+      'Vhintl': { emoji: '🍃', name: 'Sacred Grove', description: 'restorative forest clearing' }
+    };
+    const theme = themes[villageName] || themes['Rudania'];
+
+    // Refresh character to get updated values
+    const updatedCharacter = await fetchCharacterById(characterId);
+
+    // Create response embed
+    const embed = new EmbedBuilder()
+      .setTitle(`${theme.emoji} ${villageName} ${theme.name}`)
+      .setDescription(
+        success
+          ? `**${updatedCharacter.name}** rests in the ${theme.description}...\n\n` +
+            `${restoreEmoji} **+${restored} ${restoreType} restored!**\n` +
+            `**Current ${restoreType === 'stamina' ? 'Stamina' : 'Hearts'}:** ${restoreType === 'stamina' ? updatedCharacter.currentStamina : updatedCharacter.currentHearts}/${restoreType === 'stamina' ? updatedCharacter.maxStamina : updatedCharacter.maxHearts}\n\n` +
+            `*You can use the rest spot again tomorrow at 8am EST.*`
+          : `**${updatedCharacter.name}** rests in the ${theme.description}, but the restorative energies don't respond this time...\n\n` +
+            `❌ **No restoration occurred (50% chance failed).**\n\n` +
+            `*You can use the rest spot again tomorrow at 8am EST.*`
+      )
+      .setColor(village.color)
+      .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+
+    return interaction.update({ embeds: [embed], components: [] });
+  } catch (error) {
+    handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: ❌ Error in handleRestSpotChoice: ${error.message}`);
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while processing your rest spot choice.**',
+          flags: 64
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while processing your rest spot choice.**',
+          flags: 64
+        });
+      }
+    } catch (replyError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send rest spot error response: ${replyError.message}`);
     }
   }
 }
@@ -2489,6 +2689,424 @@ async function handleCraftingCancel(interaction) {
       }
     } catch (replyError) {
       console.error(`[componentHandler.js]: ❌ Failed to send cancel response: ${replyError.message}`);
+    }
+  }
+}
+
+// =============================================================================
+// ------------------- Chest Claim Handler -------------------
+// =============================================================================
+
+// ------------------- Function: handleChestClaim -------------------
+// Handles chest item claiming when user clicks the button - rolls d20, awards item on 20
+async function handleChestClaim(interaction) {
+  try {
+    const userId = interaction.user.id;
+    const username = interaction.user.username;
+    const chestId = interaction.customId.replace('chest_claim_', '');
+    
+    const TempData = require('../../shared/models/TempDataModel');
+    const User = require('../../shared/models/UserModel');
+    const { addItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
+
+    // Find chest data FIRST (before deferring)
+    const chestDataDoc = await TempData.findByTypeAndKey('temp', `chest_${chestId}`);
+    
+    if (!chestDataDoc || !chestDataDoc.data) {
+      return await interaction.reply({
+        content: '❌ Chest not found or has expired.',
+        flags: 64,
+        ephemeral: true
+      });
+    }
+
+    let chestData = chestDataDoc.data;
+
+    // Check if chest has expired
+    if (new Date() > new Date(chestData.expiresAt)) {
+      return await interaction.reply({
+        content: '❌ This chest has expired.',
+        flags: 64,
+        ephemeral: true
+      });
+    }
+
+    // Check if user already claimed an item (BEFORE cooldown checks - they can't roll at all)
+    const userClaim = chestData.claims.find(c => c.userId === userId);
+    if (userClaim) {
+      return await interaction.reply({
+        content: `❌ You have already claimed an item from this chest!\n\n**You received:** ${userClaim.itemName}\n**Added to:** ${userClaim.characterName}'s inventory`,
+        flags: 64,
+        ephemeral: true
+      });
+    }
+
+    // Check if all items are claimed
+    const allItemsClaimedBefore = chestData.items.every(item => item.claimed);
+    if (allItemsClaimedBefore) {
+      return await interaction.reply({
+        content: '❌ All items from this chest have been claimed.',
+        flags: 64,
+        ephemeral: true
+      });
+    }
+
+    // Validate user setup (similar to ruugame)
+    const user = await User.findOne({ discordId: userId });
+    if (!user || !user.tokensSynced) {
+      return await interaction.reply({
+        content: '❌ You need to have a synced token tracker to claim items.',
+        flags: 64,
+        ephemeral: true
+      });
+    }
+
+    const characters = await Character.find({ userId: userId, inventorySynced: true });
+    if (characters.length === 0) {
+      return await interaction.reply({
+        content: '❌ You need to have at least one character with a synced inventory to claim items.',
+        flags: 64,
+        ephemeral: true
+      });
+    }
+
+    // Check cooldowns BEFORE deferring (same as ruugame)
+    const now = new Date();
+    
+    // Initialize cooldown tracking if not present (for backwards compatibility)
+    if (!chestData.lastGlobalRollTime) {
+      chestData.lastGlobalRollTime = null;
+    }
+    if (!chestData.playerRollTimes) {
+      chestData.playerRollTimes = {};
+    }
+    
+    // Check global cooldown
+    if (chestData.lastGlobalRollTime && (now - new Date(chestData.lastGlobalRollTime)) < (GAME_CONFIG.GLOBAL_COOLDOWN_SECONDS * 1000)) {
+      const remainingSeconds = Math.ceil((GAME_CONFIG.GLOBAL_COOLDOWN_SECONDS * 1000 - (now - new Date(chestData.lastGlobalRollTime))) / 1000);
+      
+      return await interaction.reply({
+        content: `⏰ Please wait ${remainingSeconds} seconds before anyone can roll again.`,
+        flags: 64,
+        ephemeral: true
+      });
+    }
+    
+    // Check individual player cooldown
+    const playerLastRollTime = chestData.playerRollTimes[userId];
+    if (playerLastRollTime && (now - new Date(playerLastRollTime)) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
+      const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - new Date(playerLastRollTime))) / 1000);
+      
+      return await interaction.reply({
+        content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
+        flags: 64,
+        ephemeral: true
+      });
+    }
+
+    // Only defer the interaction if we're actually going to process the roll
+    await interaction.deferUpdate();
+
+    // Roll d5
+    const roll = Math.floor(Math.random() * 5) + 1; // 1-5
+    
+    // Update cooldown timestamps (same as ruugame)
+    chestData.lastGlobalRollTime = now;
+    chestData.playerRollTimes[userId] = now;
+    
+    // Save cooldown updates to database
+    await TempData.findOneAndUpdate(
+      { type: 'temp', key: `chest_${chestId}` },
+      { $set: { 
+        'data.lastGlobalRollTime': chestData.lastGlobalRollTime,
+        'data.playerRollTimes': chestData.playerRollTimes
+      } }
+    );
+    
+    const itemsRemaining = chestData.items.filter(item => !item.claimed).length;
+    let selectedItem = null;
+    let randomCharacter = null;
+    let itemAwarded = false;
+
+    // Only award item if roll is 5
+    if (roll === 5) {
+      // Reload chest data to get latest state (prevent race conditions)
+      const latestChestDataDoc = await TempData.findByTypeAndKey('temp', `chest_${chestId}`);
+      if (!latestChestDataDoc || !latestChestDataDoc.data) {
+        return await interaction.followUp({
+          content: '❌ Chest data not found. Please try again.',
+          flags: 64
+        });
+      }
+      
+      // Use latest chest data
+      const latestChestData = latestChestDataDoc.data;
+      
+      // Initialize cooldown data in latestChestData if missing (backwards compatibility)
+      if (!latestChestData.lastGlobalRollTime) {
+        latestChestData.lastGlobalRollTime = null;
+      }
+      if (!latestChestData.playerRollTimes) {
+        latestChestData.playerRollTimes = {};
+      }
+      
+      // Get available items from latest data
+      const availableItems = latestChestData.items.filter(item => !item.claimed);
+      
+      if (availableItems.length === 0) {
+        return await interaction.followUp({
+          content: '❌ No available items found in chest.',
+          flags: 64
+        });
+      }
+
+      // Randomly select from available items
+      selectedItem = availableItems[Math.floor(Math.random() * availableItems.length)];
+      
+      // Double-check the selected item is still available (race condition protection)
+      const itemInChest = latestChestData.items.find(item => item.index === selectedItem.index);
+      if (!itemInChest || itemInChest.claimed) {
+        // Item was claimed by someone else, try again with remaining items
+        const stillAvailable = latestChestData.items.filter(item => !item.claimed);
+        if (stillAvailable.length === 0) {
+          return await interaction.followUp({
+            content: '❌ That item was just claimed by someone else. No items remaining.',
+            flags: 64
+          });
+        }
+        selectedItem = stillAvailable[Math.floor(Math.random() * stillAvailable.length)];
+      }
+      
+      // Select random character
+      randomCharacter = characters[Math.floor(Math.random() * characters.length)];
+
+      // Mark item as claimed BEFORE adding to inventory (prevent double claims)
+      const itemToClaim = latestChestData.items.find(item => item.index === selectedItem.index);
+      if (itemToClaim && !itemToClaim.claimed) {
+        itemToClaim.claimed = true;
+        itemToClaim.claimedBy = username;
+        itemToClaim.claimedByCharacter = randomCharacter.name; // Store character name
+        
+        latestChestData.claims.push({
+          userId: userId,
+          username: username,
+          characterId: randomCharacter._id.toString(),
+          characterName: randomCharacter.name,
+          itemIndex: selectedItem.index,
+          itemName: selectedItem.itemName
+        });
+
+        // Update TempData atomically - mark item as claimed
+        await TempData.findOneAndUpdate(
+          { type: 'temp', key: `chest_${chestId}` },
+          { $set: { data: latestChestData } },
+          { new: true }
+        );
+        
+        // Now add item to character's inventory
+        try {
+          await addItemInventoryDatabase(
+            randomCharacter._id,
+            selectedItem.itemName,
+            1,
+            interaction,
+            'Chest Reward'
+          );
+          itemAwarded = true;
+          
+          // Update our local reference
+          chestData = latestChestData;
+        } catch (error) {
+          console.error('[Chest] Error adding item to inventory:', error);
+          // Rollback: unclaim the item if inventory add failed
+          itemToClaim.claimed = false;
+          itemToClaim.claimedBy = null;
+          itemToClaim.claimedByCharacter = null;
+          latestChestData.claims = latestChestData.claims.filter(c => c.userId !== userId);
+          await TempData.findOneAndUpdate(
+            { type: 'temp', key: `chest_${chestId}` },
+            { $set: { data: latestChestData } },
+            { new: true }
+          );
+          return await interaction.followUp({
+            content: '❌ Error adding item to inventory. Please try again.',
+            flags: 64
+          });
+        }
+      } else {
+        // Item was already claimed between our check and now
+        return await interaction.followUp({
+          content: '❌ That item was just claimed by someone else. Keep rolling!',
+          flags: 64
+        });
+      }
+    }
+
+    // Create roll result embed with items list FIRST (like ruugame)
+    const remainingAfter = chestData.items.filter(item => !item.claimed).length;
+    const rollEmojis = getRollEmojis(roll);
+    const rollEmbed = new EmbedBuilder()
+      .setTitle(`🎲 Chest - ${username} rolled a ${rollEmojis}!`)
+      .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // User's avatar for roll results
+      .setColor(roll === 5 ? 0x00FF00 : 0xFFD700) // Green for 5, gold for other rolls
+      .addFields(
+        { 
+          name: '📋 Chest Info', 
+          value: `**Chest ID:** ${chestId}\n**Items Remaining:** ${remainingAfter}/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
+          inline: false 
+        },
+        { 
+          name: '🎲 Roll Result', 
+          value: roll === 5 && itemAwarded 
+            ? `${rollEmojis} 🎉 **Perfect 5!**\n\n🎁 **Item Awarded:** ${selectedItem.emoji} ${selectedItem.itemName}\n👤 **Added to:** ${randomCharacter.name}'s inventory`
+            : `${rollEmojis}\n\n${remainingAfter > 0 ? `Keep rolling! ${remainingAfter} item${remainingAfter !== 1 ? 's' : ''} left!` : 'All items claimed!'}`,
+          inline: false
+        },
+        { 
+          name: '🎁 Available Items', 
+          value: chestData.items.map(item => 
+            item.claimed 
+              ? `~~**${item.index}.** ${item.emoji} ${item.itemName}~~ ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
+              : `**${item.index}.** ${item.emoji} ${item.itemName}`
+          ).join('\n'),
+          inline: false
+        }
+      )
+      .setTimestamp(chestData.createdAt);
+
+    // Create button for roll result (same as main message)
+    const rollResultButton = new ButtonBuilder()
+      .setCustomId(`chest_claim_${chestId}`)
+      .setLabel('Roll d5')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('🎲');
+
+    // Disable button if all items are claimed (recalculate after potential updates)
+    const allItemsClaimedForResult = chestData.items.every(item => item.claimed);
+    if (allItemsClaimedForResult) {
+      rollResultButton.setDisabled(true);
+    }
+
+    const rollResultButtons = new ActionRowBuilder()
+      .addComponents(rollResultButton);
+
+    // Send roll result embed FIRST with button (public, like ruugame)
+    await interaction.followUp({
+      embeds: [rollEmbed],
+      components: [rollResultButtons]
+    });
+
+    // Small delay to ensure roll result embed appears first, then update main embed
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Update main chest embed with nice formatting
+    const itemsRemainingCount = chestData.items.filter(item => !item.claimed).length;
+    const mainEmbed = new EmbedBuilder()
+      .setTitle('🎁 Chest - Roll a 5 to claim!')
+      .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+      .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
+      .setColor(0xFFD700) // Gold color
+      .addFields(
+        { 
+          name: '📋 Chest Info', 
+          value: `**Chest ID:** ${chestId}\n**Items Remaining:** ${itemsRemainingCount}/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
+          inline: false 
+        },
+        { 
+          name: '🎁 Available Items', 
+          value: chestData.items.map(item => 
+            item.claimed 
+              ? `~~**${item.index}.** ${item.emoji} ${item.itemName}~~ ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
+              : `**${item.index}.** ${item.emoji} ${item.itemName}`
+          ).join('\n'),
+          inline: false
+        }
+      )
+      .setTimestamp(chestData.createdAt);
+
+    // Create button (disable only if all items are claimed)
+    const claimButton = new ButtonBuilder()
+      .setCustomId(`chest_claim_${chestId}`)
+      .setLabel('Roll d5')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('🎲');
+
+    // Check if all items are now claimed
+    const allItemsClaimed = chestData.items.every(item => item.claimed);
+    if (allItemsClaimed) {
+      claimButton.setDisabled(true);
+      
+      // Create special "All items claimed!" embed
+      const allClaimedEmbed = new EmbedBuilder()
+        .setTitle('🎁 Chest - All Items Claimed!')
+        .setDescription('**All items from this chest have been claimed!**\n\n*Thanks for playing!*')
+        .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
+        .setColor(0x00FF00) // Green color
+        .addFields(
+          { 
+            name: '📋 Chest Info', 
+            value: `**Chest ID:** ${chestId}\n**Items Remaining:** 0/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
+            inline: false 
+          },
+          { 
+            name: '🎁 All Items', 
+            value: chestData.items.map(item => 
+              `~~**${item.index}.** ${item.emoji} ${item.itemName}~~ ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
+            ).join('\n'),
+            inline: false
+          }
+        )
+        .setTimestamp(chestData.createdAt)
+        .setFooter({ text: 'Thanks for playing!' });
+
+      const finalButtons = new ActionRowBuilder()
+        .addComponents(claimButton);
+
+      // Update main message with "all claimed" embed
+      await interaction.editReply({
+        embeds: [allClaimedEmbed],
+        components: [finalButtons]
+      });
+    } else {
+      const buttons = new ActionRowBuilder()
+        .addComponents(claimButton);
+
+      // Update main message AFTER roll result is sent
+      await interaction.editReply({
+        embeds: [mainEmbed],
+        components: [buttons]
+      });
+    }
+
+    if (itemAwarded) {
+      console.log(`[Chest] User ${username} (${userId}) rolled 5 and claimed item ${selectedItem.itemName} from chest ${chestId}`);
+    } else {
+      console.log(`[Chest] User ${username} (${userId}) rolled ${roll} (not 5) on chest ${chestId}`);
+    }
+  } catch (error) {
+    console.error('[Chest] Error handling chest claim:', error);
+    handleError(error, 'componentHandler.js');
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ An error occurred while rolling.',
+          flags: 64
+        });
+      } else if (interaction.deferred) {
+        await interaction.editReply({
+          content: '❌ An error occurred while rolling.',
+          components: []
+        });
+      } else {
+        await interaction.followUp({
+          content: '❌ An error occurred while rolling.',
+          flags: 64
+        });
+      }
+    } catch (replyError) {
+      console.error('[Chest] Failed to send error response:', replyError);
     }
   }
 }

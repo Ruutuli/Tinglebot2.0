@@ -1103,6 +1103,52 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     logger.info('BOOST', `🎭 Entertainer boost was active but not needed (no damage taken)`);
   }
   
+  // ------------------- Monster Encounter Village Damage (Tier 1-4 only) -------------------
+  // Check if character lost to a Tier 1-4 monster (not KO'd, not a win, took damage)
+  // Apply percentage chance for monster to follow character back to village
+  const logger = require('../../../shared/utils/logger');
+  logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] Evaluating village damage chance for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
+  logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] Conditions - Tier check: ${monster.tier >= 1 && monster.tier <= 4}, Result: "${outcome.result}", Hearts: ${outcome.hearts}, Village: ${character.currentVillage}`);
+  
+  if (monster.tier >= 1 && monster.tier <= 4 && 
+      outcome.result !== 'Win!/Loot' && outcome.result !== 'KO' &&
+      outcome.hearts && outcome.hearts > 0 &&
+      character.currentVillage) {
+    logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] ✅ All conditions met! Checking 12.5% chance for village damage...`);
+    try {
+      // 12.5% chance for monster to cause village damage (balance TBD, starting conservative)
+      const DAMAGE_CHANCE = 0.125;
+      const roll = Math.random();
+      logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] Damage chance roll: ${(roll * 100).toFixed(2)}% (need < ${(DAMAGE_CHANCE * 100).toFixed(1)}%)`);
+      
+      if (roll < DAMAGE_CHANCE) {
+        // Damage amount: 1-3 HP (random between 1 and 3)
+        const damageAmount = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3 HP
+        
+        const { damageVillage } = require('../../modules/villageModule');
+        const { capitalizeFirstLetter } = require('../../modules/formattingModule');
+        
+        logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] 🎲 Damage chance triggered! Applying ${damageAmount} HP to ${character.currentVillage}`);
+        
+        // Apply village damage
+        await damageVillage(character.currentVillage, damageAmount);
+        
+        logger.info('HELPWANTED', `✅ Monster encounter damage: ${character.currentVillage} took ${damageAmount} HP damage from ${monster.name} (Tier ${monster.tier}) following ${character.name}`);
+        
+        // Add flavor text note (will be appended to outcome message below)
+        // Store this for later appending to outcome message
+        outcome.villageDamageMessage = `\n⚠️ **${monster.name}** followed **${character.name}** back to **${capitalizeFirstLetter(character.currentVillage)}** and caused ${damageAmount} HP damage to the village!`;
+      } else {
+        logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] ❌ Damage chance not triggered (roll was too high)`);
+      }
+    } catch (damageError) {
+      logger.error('HELPWANTED', `❌ Error applying monster encounter village damage: ${damageError.message}`, damageError.stack);
+      // Don't fail the HWQ encounter if village damage fails
+    }
+  } else {
+    logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] ❌ Conditions not met - skipping village damage check`);
+  }
+
   // Generate outcome message
   let outcomeMessage;
   if (outcome.hearts) {
@@ -1115,6 +1161,11 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     outcomeMessage = generateVictoryMessage(adjustedRandomValue, outcome.defenseSuccess, outcome.attackSuccess);
   } else {
     outcomeMessage = generateFinalOutcomeMessage(damageValue, outcome.defenseSuccess, outcome.attackSuccess, adjustedRandomValue, damageValue);
+  }
+  
+  // Append village damage message if applicable
+  if (outcome.villageDamageMessage) {
+    outcomeMessage += outcome.villageDamageMessage;
   }
   
   // Add elixir buff information to the outcome message if active

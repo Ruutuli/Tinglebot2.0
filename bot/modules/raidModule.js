@@ -454,7 +454,7 @@ async function startRaid(monster, village, interaction = null) {
           console.log(`[raidModule.js]: ⏰ Raid ${raidId} timed out`);
           
           // Mark raid as failed and KO all participants
-          await currentRaid.failRaid();
+          await currentRaid.failRaid(interaction?.client);
 
           // Compose failure embed (used for thread or channel fallback)
           const buildFailureEmbed = () => new EmbedBuilder()
@@ -919,7 +919,8 @@ async function checkRaidExpiration(raidId) {
       console.log(`[raidModule.js]: ⏰ Raid ${raidId} has expired`);
 
       // Mark raid as failed and KO all participants
-      await raid.failRaid();
+      // Note: client not available here, but village damage will still be applied
+      await raid.failRaid(null);
 
       console.log(`[raidModule.js]: 💥 Raid ${raidId} failed - All participants KO'd`);
     }
