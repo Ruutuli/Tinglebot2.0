@@ -608,7 +608,8 @@ module.exports = {
         createdAt: createdAt,
         expiresAt: expiresAt,
         lastGlobalRollTime: null,
-        playerRollTimes: {} // Map userId to lastRollTime
+        playerRollTimes: {}, // Map userId to lastRollTime
+        rollHistory: [] // Track all rolls with user info and roll numbers
       };
 
       await TempData.create({
