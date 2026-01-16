@@ -489,6 +489,15 @@ module.exports = {
           { upsert: true, new: true }
         );
         console.log(`[crafting.js] [CRFT] ✅ craftingContinue state saved - selectionId: ${selectionId}, Saved expiresAt: ${savedState?.expiresAt}, Has data: ${!!(savedState?.data)}`);
+        
+        // Update the craftingMaterialSelection state to include the craftingContinueSelectionId
+        await TempData.findOneAndUpdate(
+          { type: 'craftingMaterialSelection', key: selectionId },
+          { $set: { 'data.craftingContinueSelectionId': selectionId } },
+          { upsert: false }
+        );
+        console.log(`[crafting.js] [CRFT] Updated craftingMaterialSelection state with craftingContinueSelectionId: ${selectionId}`);
+        
         return; // Handler will continue processing after user selection
       }
 

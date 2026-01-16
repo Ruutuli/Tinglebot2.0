@@ -2605,9 +2605,7 @@ async function handleGiftItemAutocomplete(interaction, focusedOption) {
       name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
       value: item.name
     }));
-    const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
-    return await interaction.respond(filtered.slice(0, 25));
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleGiftItemAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);

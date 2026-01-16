@@ -1597,20 +1597,22 @@ async function generateDailyQuests() {
     
     // Check if it's after 12pm EST - if so, don't generate art/writing quests
     const estHour = parseInt(now.toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}));
-    const isAfterNoon = estHour >= 12;
+    // Normalize 24 to 0 for midnight edge case (some JS implementations return 24 instead of 0)
+    const normalizedEstHour = estHour === 24 ? 0 : estHour;
+    const isAfterNoon = normalizedEstHour >= 12;
     
     // Validate EST hour is a number
-    if (isNaN(estHour) || estHour < 0 || estHour > 23) {
-      logger.error('QUEST', `Invalid EST hour: ${estHour}`);
-      throw new Error(`Invalid EST hour: ${estHour}`);
+    if (isNaN(normalizedEstHour) || normalizedEstHour < 0 || normalizedEstHour > 23) {
+      logger.error('QUEST', `Invalid EST hour: ${normalizedEstHour}`);
+      throw new Error(`Invalid EST hour: ${normalizedEstHour}`);
     }
     
-    logger.info('QUEST', `Time check - Current EST hour: ${estHour}, isAfterNoon: ${isAfterNoon}`);
+    logger.info('QUEST', `Time check - Current EST hour: ${normalizedEstHour}, isAfterNoon: ${isAfterNoon}`);
     
     if (isAfterNoon) {
-      logger.info('QUEST', `After 12pm EST (${estHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
+      logger.info('QUEST', `After 12pm EST (${normalizedEstHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
     } else {
-      logger.info('QUEST', `Before 12pm EST (${estHour}:00) - All quest types including art and writing are available`);
+      logger.info('QUEST', `Before 12pm EST (${normalizedEstHour}:00) - All quest types including art and writing are available`);
     }
 
     // Clean up existing documents with null questId

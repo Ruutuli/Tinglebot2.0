@@ -2156,10 +2156,12 @@ async function handleCraftingMaterialSelection(interaction) {
 
     // CHECK CRAFTING STATE VALIDITY BEFORE PROCESSING MATERIALS
     // This prevents materials from being consumed if the crafting state has expired
-    console.log(`[componentHandler.js] [CRFT] First state check - selectionId: ${selectionId}, Character: ${character.name}, Material: ${state.materialName}`);
-    const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
+    // Use craftingContinueSelectionId if available, otherwise use selectionId
+    const stateCheckId = state.craftingContinueSelectionId || selectionId;
+    console.log(`[componentHandler.js] [CRFT] First state check - selectionId: ${selectionId}, craftingContinueSelectionId: ${state.craftingContinueSelectionId}, stateCheckId: ${stateCheckId}, Character: ${character.name}, Material: ${state.materialName}`);
+    const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', stateCheckId);
     if (!craftingContinueState || !craftingContinueState.data) {
-      console.log(`[componentHandler.js] [CRFT] ❌ FIRST CHECK FAILED - selectionId: ${selectionId}, State exists: ${!!craftingContinueState}, Has data: ${!!(craftingContinueState?.data)}`);
+      console.log(`[componentHandler.js] [CRFT] ❌ FIRST CHECK FAILED - stateCheckId: ${stateCheckId}, State exists: ${!!craftingContinueState}, Has data: ${!!(craftingContinueState?.data)}`);
       if (craftingContinueState) {
         console.log(`[componentHandler.js] [CRFT] State details - expiresAt: ${craftingContinueState.expiresAt}, current time: ${new Date()}, expired: ${new Date(craftingContinueState.expiresAt) < new Date()}`);
       }
@@ -2168,7 +2170,7 @@ async function handleCraftingMaterialSelection(interaction) {
         flags: 64
       });
     }
-    console.log(`[componentHandler.js] [CRFT] ✅ FIRST CHECK PASSED - selectionId: ${selectionId}, ExpiresAt: ${craftingContinueState.expiresAt}, CurrentTime: ${new Date()}`);
+    console.log(`[componentHandler.js] [CRFT] ✅ FIRST CHECK PASSED - stateCheckId: ${stateCheckId}, ExpiresAt: ${craftingContinueState.expiresAt}, CurrentTime: ${new Date()}`);
 
     // Process all selected items
     const { continueProcessMaterials, addItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
@@ -2210,8 +2212,8 @@ async function handleCraftingMaterialSelection(interaction) {
 
     // DEFENSIVE CHECK: Verify state is still valid after material processing
     // This handles edge cases where state expires during material processing
-    console.log(`[componentHandler.js] [CRFT] Second state check (defensive) - selectionId: ${selectionId}`);
-    const verifyState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
+    console.log(`[componentHandler.js] [CRFT] Second state check (defensive) - selectionId: ${selectionId}, stateCheckId: ${stateCheckId}`);
+    const verifyState = await TempData.findByTypeAndKey('craftingContinue', stateCheckId);
     if (!verifyState || !verifyState.data) {
       console.log(`[componentHandler.js] [CRFT] ❌ SECOND CHECK FAILED - selectionId: ${selectionId}, State exists: ${!!verifyState}, Has data: ${!!(verifyState?.data)}`);
       if (verifyState) {
@@ -2235,7 +2237,7 @@ async function handleCraftingMaterialSelection(interaction) {
     // Delete the material selection state
     await TempData.findOneAndDelete({ type: 'craftingMaterialSelection', key: selectionId });
 
-    // Use the verified state data
+    // Use the verified state data (using stateCheckId to get the correct craftingContinue state)
     const continueData = verifyState.data;
     
     // Continue the crafting process, passing the message to edit

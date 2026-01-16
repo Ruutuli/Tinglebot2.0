@@ -817,13 +817,18 @@ const processMaterials = async (interaction, character, inventory, craftableItem
       const selectionId = uuidv4();
       const customId = `crafting-material|${selectionId}|${materialName}`;
       
+      // For the first material selection, the selectionId will be used as craftingContinueSelectionId
+      // For subsequent materials, we'll get it from the craftingState passed in
+      const craftingContinueSelectionId = selectionId; // Will be updated when craftingContinue state is created
+      
       // Save crafting state to storage
       // For sequential selection: track how many items have been selected so far
-      const craftingState = {
+      const craftingStateData = {
         type: 'craftingMaterialSelection',
         key: selectionId,
         data: {
           selectionId,
+          craftingContinueSelectionId, // Store the original craftingContinue selectionId
           userId: interaction.user.id,
           characterId: character._id,
           characterName: character.name,
@@ -863,7 +868,7 @@ const processMaterials = async (interaction, character, inventory, craftableItem
 
       await TempData.findOneAndUpdate(
         { type: 'craftingMaterialSelection', key: selectionId },
-        craftingState,
+        craftingStateData,
         { upsert: true, new: true }
       );
 
@@ -966,24 +971,26 @@ const processMaterials = async (interaction, character, inventory, craftableItem
 // Handles general categories correctly - processes different item types from the same category
 // Example: For "Any Raw Meat" x3, user can select 1 Raw Bird + 1 Raw Prime + 1 Raw Gourmet
 const continueProcessMaterials = async (interaction, character, selectedItems, craftingState) => {
-  const { materialName, requiredQuantity, craftableItem, quantity: quantityParam, materialsUsedSoFar, currentMaterialIndex, allMaterials, inventory, selectionId } = craftingState.data;
+  const { materialName, requiredQuantity, craftableItem, quantity: quantityParam, materialsUsedSoFar, currentMaterialIndex, allMaterials, inventory, selectionId, craftingContinueSelectionId } = craftingState.data;
   
-  console.log(`[inventoryUtils.js] [CRFT] continueProcessMaterials called - Material: ${materialName}, SelectionId: ${selectionId}, Character: ${character.name}`);
+  // Use craftingContinueSelectionId if available, otherwise fall back to selectionId
+  const stateCheckId = craftingContinueSelectionId || selectionId;
+  console.log(`[inventoryUtils.js] [CRFT] continueProcessMaterials called - Material: ${materialName}, SelectionId: ${selectionId}, CraftingContinueSelectionId: ${craftingContinueSelectionId}, StateCheckId: ${stateCheckId}, Character: ${character.name}`);
   
   // VALIDATE CRAFTING STATE BEFORE REMOVING ANY MATERIALS
   // This prevents materials from being consumed if the crafting state has expired
-  if (selectionId) {
+  if (stateCheckId) {
     const TempData = require('../../shared/models/TempDataModel');
-    console.log(`[inventoryUtils.js] [CRFT] Checking craftingContinue state for selectionId: ${selectionId}`);
-    const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
+    console.log(`[inventoryUtils.js] [CRFT] Checking craftingContinue state for stateCheckId: ${stateCheckId}`);
+    const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', stateCheckId);
     if (!craftingContinueState || !craftingContinueState.data) {
-      console.log(`[inventoryUtils.js] [CRFT] ❌ Crafting state NOT FOUND or EXPIRED - selectionId: ${selectionId}, State exists: ${!!craftingContinueState}, Has data: ${!!(craftingContinueState?.data)}`);
+      console.log(`[inventoryUtils.js] [CRFT] ❌ Crafting state NOT FOUND or EXPIRED - stateCheckId: ${stateCheckId}, State exists: ${!!craftingContinueState}, Has data: ${!!(craftingContinueState?.data)}`);
       // State expired - return error code so caller can handle refund if needed
-      return { status: 'expired', selectionId };
+      return { status: 'expired', selectionId: stateCheckId };
     }
-    console.log(`[inventoryUtils.js] [CRFT] ✅ Crafting state VALID - selectionId: ${selectionId}, ExpiresAt: ${craftingContinueState.expiresAt}`);
+    console.log(`[inventoryUtils.js] [CRFT] ✅ Crafting state VALID - stateCheckId: ${stateCheckId}, ExpiresAt: ${craftingContinueState.expiresAt}`);
   } else {
-    console.log(`[inventoryUtils.js] [CRFT] ⚠️ No selectionId provided in craftingState.data`);
+    console.log(`[inventoryUtils.js] [CRFT] ⚠️ No stateCheckId available (selectionId: ${selectionId}, craftingContinueSelectionId: ${craftingContinueSelectionId})`);
   }
   
   // Get quantity from top level or from craftableItem as fallback (for backwards compatibility)
@@ -1156,11 +1163,17 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
       const selectionId = uuidv4();
       const customId = `crafting-material|${selectionId}|${nextMaterial.itemName}`;
       
+      // Get the original craftingContinueSelectionId from the current craftingState
+      // This links all material selections back to the same craftingContinue state
+      const craftingContinueSelectionId = craftingState.data.craftingContinueSelectionId || craftingState.data.selectionId;
+      console.log(`[inventoryUtils.js] [CRFT] Creating new craftingMaterialSelection - new selectionId: ${selectionId}, craftingContinueSelectionId: ${craftingContinueSelectionId}`);
+      
       const nextCraftingState = {
         type: 'craftingMaterialSelection',
         key: selectionId,
         data: {
           selectionId,
+          craftingContinueSelectionId, // Store the original craftingContinue selectionId
           userId: interaction.user.id,
           characterId: character._id,
           characterName: character.name,
