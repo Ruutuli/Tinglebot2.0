@@ -383,7 +383,7 @@ function buildMentionContent(error, context) {
         return `HEY! @everyone! 🤖\n\n**Discord API is currently experiencing issues!**\n\nThis is not a bot problem - Discord's servers are having trouble. Please wait a few minutes before trying commands again.`;
       }
     } else {
-      return `HEY! @everyone! 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!`;
+      return `HEY! @here! 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!`;
     }
   }
 }
