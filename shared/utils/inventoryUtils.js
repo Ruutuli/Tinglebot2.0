@@ -968,15 +968,22 @@ const processMaterials = async (interaction, character, inventory, craftableItem
 const continueProcessMaterials = async (interaction, character, selectedItems, craftingState) => {
   const { materialName, requiredQuantity, craftableItem, quantity: quantityParam, materialsUsedSoFar, currentMaterialIndex, allMaterials, inventory, selectionId } = craftingState.data;
   
+  console.log(`[inventoryUtils.js] [CRFT] continueProcessMaterials called - Material: ${materialName}, SelectionId: ${selectionId}, Character: ${character.name}`);
+  
   // VALIDATE CRAFTING STATE BEFORE REMOVING ANY MATERIALS
   // This prevents materials from being consumed if the crafting state has expired
   if (selectionId) {
     const TempData = require('../../shared/models/TempDataModel');
+    console.log(`[inventoryUtils.js] [CRFT] Checking craftingContinue state for selectionId: ${selectionId}`);
     const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
     if (!craftingContinueState || !craftingContinueState.data) {
+      console.log(`[inventoryUtils.js] [CRFT] ❌ Crafting state NOT FOUND or EXPIRED - selectionId: ${selectionId}, State exists: ${!!craftingContinueState}, Has data: ${!!(craftingContinueState?.data)}`);
       // State expired - return error code so caller can handle refund if needed
       return { status: 'expired', selectionId };
     }
+    console.log(`[inventoryUtils.js] [CRFT] ✅ Crafting state VALID - selectionId: ${selectionId}, ExpiresAt: ${craftingContinueState.expiresAt}`);
+  } else {
+    console.log(`[inventoryUtils.js] [CRFT] ⚠️ No selectionId provided in craftingState.data`);
   }
   
   // Get quantity from top level or from craftableItem as fallback (for backwards compatibility)

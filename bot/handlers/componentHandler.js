@@ -1938,15 +1938,18 @@ async function handleCraftingMaterialSelection(interaction) {
     if (!interaction.isStringSelectMenu()) return;
 
     const [, selectionId] = interaction.customId.split('|');
+    console.log(`[componentHandler.js] [CRFT] handleCraftingMaterialSelection called - selectionId: ${selectionId}, User: ${interaction.user.tag}`);
     const TempData = require('../../shared/models/TempDataModel');
     const craftingState = await TempData.findByTypeAndKey('craftingMaterialSelection', selectionId);
 
     if (!craftingState || !craftingState.data) {
+      console.log(`[componentHandler.js] [CRFT] ❌ Crafting material selection state NOT FOUND - selectionId: ${selectionId}, State exists: ${!!craftingState}`);
       return interaction.reply({
         content: '❌ **Crafting selection expired or not found. Please start crafting again.**',
         flags: 64
       });
     }
+    console.log(`[componentHandler.js] [CRFT] ✅ Crafting material selection state found - selectionId: ${selectionId}, Material: ${craftingState.data.materialName}, Required: ${craftingState.data.requiredQuantity}, Selected so far: ${craftingState.data.selectedCount || 0}`);
 
     const state = craftingState.data;
     
@@ -2141,6 +2144,7 @@ async function handleCraftingMaterialSelection(interaction) {
 
     // All items selected - process and continue
     // Update the message to show processing, removing the embed and components
+    console.log(`[componentHandler.js] [CRFT] All items selected for ${state.materialName} - Ready to process, selectionId: ${selectionId}`);
     await interaction.update({
       content: `✅ **Selected all ${state.requiredQuantity} items for ${state.materialName}. Processing...**`,
       embeds: [],
@@ -2152,13 +2156,19 @@ async function handleCraftingMaterialSelection(interaction) {
 
     // CHECK CRAFTING STATE VALIDITY BEFORE PROCESSING MATERIALS
     // This prevents materials from being consumed if the crafting state has expired
+    console.log(`[componentHandler.js] [CRFT] First state check - selectionId: ${selectionId}, Character: ${character.name}, Material: ${state.materialName}`);
     const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
     if (!craftingContinueState || !craftingContinueState.data) {
+      console.log(`[componentHandler.js] [CRFT] ❌ FIRST CHECK FAILED - selectionId: ${selectionId}, State exists: ${!!craftingContinueState}, Has data: ${!!(craftingContinueState?.data)}`);
+      if (craftingContinueState) {
+        console.log(`[componentHandler.js] [CRFT] State details - expiresAt: ${craftingContinueState.expiresAt}, current time: ${new Date()}, expired: ${new Date(craftingContinueState.expiresAt) < new Date()}`);
+      }
       return interaction.followUp({
         content: '❌ **Crafting state expired. Please start crafting again.**',
         flags: 64
       });
     }
+    console.log(`[componentHandler.js] [CRFT] ✅ FIRST CHECK PASSED - selectionId: ${selectionId}, ExpiresAt: ${craftingContinueState.expiresAt}, CurrentTime: ${new Date()}`);
 
     // Process all selected items
     const { continueProcessMaterials, addItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
@@ -2172,9 +2182,12 @@ async function handleCraftingMaterialSelection(interaction) {
 
     // Convert selectedItemsSoFar to format expected by continueProcessMaterials
     const selectedItems = state.selectedItemsSoFar.map(sel => sel.value);
+    console.log(`[componentHandler.js] [CRFT] Calling continueProcessMaterials - ${selectedItems.length} selected items, selectionId: ${selectionId}`);
     const result = await continueProcessMaterials(interaction, character, selectedItems, craftingState);
+    console.log(`[componentHandler.js] [CRFT] continueProcessMaterials returned - type: ${typeof result}, status: ${result?.status}, isArray: ${Array.isArray(result)}`);
 
     if (result === 'canceled') {
+      console.log(`[componentHandler.js] [CRFT] Crafting canceled by continueProcessMaterials`);
       return interaction.followUp({
         content: '❌ **Crafting canceled due to insufficient materials.**',
         flags: 64
@@ -2183,6 +2196,7 @@ async function handleCraftingMaterialSelection(interaction) {
 
     // Handle expired state - materials should not have been removed due to validation in continueProcessMaterials
     if (result && typeof result === 'object' && result.status === 'expired') {
+      console.log(`[componentHandler.js] [CRFT] ❌ EXPIRED STATUS from continueProcessMaterials - selectionId: ${result.selectionId}`);
       return interaction.followUp({
         content: '❌ **Crafting state expired. Please start crafting again.**',
         flags: 64
@@ -2196,10 +2210,16 @@ async function handleCraftingMaterialSelection(interaction) {
 
     // DEFENSIVE CHECK: Verify state is still valid after material processing
     // This handles edge cases where state expires during material processing
+    console.log(`[componentHandler.js] [CRFT] Second state check (defensive) - selectionId: ${selectionId}`);
     const verifyState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
     if (!verifyState || !verifyState.data) {
+      console.log(`[componentHandler.js] [CRFT] ❌ SECOND CHECK FAILED - selectionId: ${selectionId}, State exists: ${!!verifyState}, Has data: ${!!(verifyState?.data)}`);
+      if (verifyState) {
+        console.log(`[componentHandler.js] [CRFT] State details - expiresAt: ${verifyState.expiresAt}, current time: ${new Date()}, expired: ${new Date(verifyState.expiresAt) < new Date()}`);
+      }
       // State expired during processing - refund all consumed materials
       if (Array.isArray(result) && result.length > 0) {
+        console.log(`[componentHandler.js] [CRFT] Refunding ${result.length} materials`);
         for (const mat of result) {
           await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - State Expired');
         }
@@ -2209,6 +2229,7 @@ async function handleCraftingMaterialSelection(interaction) {
         flags: 64
       });
     }
+    console.log(`[componentHandler.js] [CRFT] ✅ SECOND CHECK PASSED - selectionId: ${selectionId}, ExpiresAt: ${verifyState.expiresAt}`);
 
     // All materials processed - continue with crafting
     // Delete the material selection state

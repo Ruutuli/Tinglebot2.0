@@ -449,9 +449,12 @@ module.exports = {
       if (materialsUsed && typeof materialsUsed === 'object' && materialsUsed.status === 'pending') {
         // Save crafting state to continue after material selection
         const TempData = require('../../../shared/models/TempDataModel');
+        const selectionId = materialsUsed.selectionId;
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+        console.log(`[crafting.js] [CRFT] Creating craftingContinue state - selectionId: ${selectionId}, ExpiresAt: ${expiresAt}, Character: ${character.name}, Item: ${itemName}`);
         const craftingState = {
           type: 'craftingContinue',
-          key: materialsUsed.selectionId,
+          key: selectionId,
           data: {
             userId: interaction.user.id,
             characterId: character._id,
@@ -478,13 +481,14 @@ module.exports = {
             jobVoucherJob: character.jobVoucherJob,
             job: character.job
           },
-          expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+          expiresAt: expiresAt
         };
-        await TempData.findOneAndUpdate(
-          { type: 'craftingContinue', key: materialsUsed.selectionId },
+        const savedState = await TempData.findOneAndUpdate(
+          { type: 'craftingContinue', key: selectionId },
           craftingState,
           { upsert: true, new: true }
         );
+        console.log(`[crafting.js] [CRFT] ✅ craftingContinue state saved - selectionId: ${selectionId}, Saved expiresAt: ${savedState?.expiresAt}, Has data: ${!!(savedState?.data)}`);
         return; // Handler will continue processing after user selection
       }
 
