@@ -2181,6 +2181,14 @@ async function handleCraftingMaterialSelection(interaction) {
       });
     }
 
+    // Handle expired state - materials should not have been removed due to validation in continueProcessMaterials
+    if (result && typeof result === 'object' && result.status === 'expired') {
+      return interaction.followUp({
+        content: '❌ **Crafting state expired. Please start crafting again.**',
+        flags: 64
+      });
+    }
+
     if (result && typeof result === 'object' && result.status === 'pending') {
       // More materials need selection - already handled in continueProcessMaterials
       return;

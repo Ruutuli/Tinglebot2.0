@@ -966,7 +966,18 @@ const processMaterials = async (interaction, character, inventory, craftableItem
 // Handles general categories correctly - processes different item types from the same category
 // Example: For "Any Raw Meat" x3, user can select 1 Raw Bird + 1 Raw Prime + 1 Raw Gourmet
 const continueProcessMaterials = async (interaction, character, selectedItems, craftingState) => {
-  const { materialName, requiredQuantity, craftableItem, quantity: quantityParam, materialsUsedSoFar, currentMaterialIndex, allMaterials, inventory } = craftingState.data;
+  const { materialName, requiredQuantity, craftableItem, quantity: quantityParam, materialsUsedSoFar, currentMaterialIndex, allMaterials, inventory, selectionId } = craftingState.data;
+  
+  // VALIDATE CRAFTING STATE BEFORE REMOVING ANY MATERIALS
+  // This prevents materials from being consumed if the crafting state has expired
+  if (selectionId) {
+    const TempData = require('../../shared/models/TempDataModel');
+    const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', selectionId);
+    if (!craftingContinueState || !craftingContinueState.data) {
+      // State expired - return error code so caller can handle refund if needed
+      return { status: 'expired', selectionId };
+    }
+  }
   
   // Get quantity from top level or from craftableItem as fallback (for backwards compatibility)
   const quantity = quantityParam !== undefined ? quantityParam : (craftableItem?.quantity || 1);
