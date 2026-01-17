@@ -1363,6 +1363,11 @@ async function handleRuuGameRoll(interaction) {
           const embed = await createRuuGameEmbed(session, 'Roll Result!', interaction.user, prizeCharacter, roll, pityPrizeCharacter);
           embed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll}!`);
           
+          // Randomly show GIF when rolling a 1 (30% chance)
+          if (roll === 1 && Math.random() < 0.3) {
+            embed.setImage('https://images-ext-1.discordapp.net/external/bRvP_21VaPFCTUfg1OE85vzIkv42UvzI5kgzgh8n8s4/https/media.tenor.com/Z_9PoTuClMIAAAPo/game-over-guardian.mp4');
+          }
+          
           let buttons = createRuuGameButtons(sessionId);
 
           await interaction.editReply({
@@ -3084,6 +3089,11 @@ async function handleChestClaim(interaction) {
         }
       )
       .setTimestamp(chestData.createdAt);
+
+    // Randomly show GIF when rolling a 1 (30% chance)
+    if (roll === 1 && Math.random() < 0.3) {
+      rollEmbed.setImage('https://images-ext-1.discordapp.net/external/bRvP_21VaPFCTUfg1OE85vzIkv42UvzI5kgzgh8n8s4/https/media.tenor.com/Z_9PoTuClMIAAAPo/game-over-guardian.mp4');
+    }
 
     // Create button for roll result (same as main message)
     const rollResultButton = new ButtonBuilder()

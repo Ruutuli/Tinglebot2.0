@@ -1367,17 +1367,6 @@ module.exports = {
                     .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
                     .setImage(BORDER_IMAGE);
 
-                // Add current tokens section (show progress bar if there's a next level requirement)
-                let tokenDisplay;
-                if (villageToDisplay.level < 3 && requiredTokens > 0) {
-                    tokenDisplay = `> ${formatProgress(currentTokens, requiredTokens)}`;
-                } else {
-                    tokenDisplay = `> ${currentTokens.toLocaleString()} tokens stored`;
-                }
-                embed.addFields(
-                    { name: '🪙 **__Current Tokens__**', value: tokenDisplay, inline: false }
-                );
-
                 // Add next level requirements if not at max level
                 if (villageToDisplay.level < 3) {
                     embed.addFields(

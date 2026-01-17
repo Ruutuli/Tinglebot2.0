@@ -481,6 +481,11 @@ module.exports = {
     console.log(`[RuuGame] Creating final embed - Session status: ${updatedSession.status}, winner: ${updatedSession.winner}, gameEnded: ${gameEnded}`);
     const embed = await createRuuGameEmbed(updatedSession, gameEnded ? '🎉 WINNER!' : 'Roll Result!', interaction.user, prizeCharacter, roll, pityPrizeCharacter);
     
+    // Randomly show GIF when rolling a 1 (30% chance)
+    if (roll === 1 && Math.random() < 0.3) {
+      embed.setImage('https://images-ext-1.discordapp.net/external/bRvP_21VaPFCTUfg1OE85vzIkv42UvzI5kgzgh8n8s4/https/media.tenor.com/Z_9PoTuClMIAAAPo/game-over-guardian.mp4');
+    }
+    
     // Add roll announcement for non-winner rolls
     if (!gameEnded) {
       embed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll}!`);
