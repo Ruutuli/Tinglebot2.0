@@ -381,8 +381,15 @@ export async function initializeVillagePage(data, page, contentDiv) {
   }
 
   try {
-    // Clear content
-    contentDiv.innerHTML = '';
+    // Clear content and show loading screen
+    contentDiv.innerHTML = `
+      <div class="village-loading">
+        <div class="loading-spinner">
+          <i class="fas fa-spinner fa-spin"></i>
+        </div>
+        <p>Loading village data...</p>
+      </div>
+    `;
 
     if (!data || data.length === 0) {
       contentDiv.innerHTML = `
@@ -404,6 +411,8 @@ export async function initializeVillagePage(data, page, contentDiv) {
       villagesContainer.insertAdjacentHTML('beforeend', villageCard);
     }
 
+    // Replace loading screen with actual content
+    contentDiv.innerHTML = '';
     contentDiv.appendChild(villagesContainer);
   } catch (error) {
     console.error('[villages.js]: Error initializing village page:', error);

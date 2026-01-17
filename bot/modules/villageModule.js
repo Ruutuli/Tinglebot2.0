@@ -17,6 +17,7 @@ const {
     Village,
     VILLAGE_CONFIG
 } = require('../../shared/models/VillageModel');
+const ItemModel = require('../../shared/models/ItemModel');
 
 // ============================================================================
 // ---- Constants ----
@@ -324,11 +325,18 @@ async function damageVillage(villageName, damageAmount) {
                     if (!channel) {
                         console.error(`[damageVillage] ❌ Could not find channel ${villageChannelId} for village damage notification`);
                     } else {
-                        // Prepare resource loss details
-                        const materialsLost = removedResources
+                        // Prepare resource loss details with emojis
+                        const materialsLostPromises = removedResources
                             .filter(r => r.type === 'Material')
-                            .map(r => `**${r.name}:** ${r.amount.toLocaleString()}`)
-                            .join('\n') || 'No materials lost';
+                            .map(async (r) => {
+                                const item = await ItemModel.findOne({ itemName: { $regex: `^${r.name}$`, $options: 'i' } });
+                                const emoji = item?.emoji || '📦';
+                                return `${emoji} **${r.name}:** ${r.amount.toLocaleString()}`;
+                            });
+                        const materialsLostLines = await Promise.all(materialsLostPromises);
+                        const materialsLost = materialsLostLines.length > 0 
+                            ? materialsLostLines.join('\n') 
+                            : 'No materials lost';
                         
                         const tokensLost = removedResources
                             .filter(r => r.type === 'Tokens')
@@ -348,6 +356,31 @@ async function damageVillage(villageName, damageAmount) {
                         // Convert hex color to integer for Discord embed
                         const embedColor = parseInt(villageColor.replace('#', ''), 16) || 0xFF4444;
                         
+                        // Village-specific border images
+                        const VILLAGE_BORDER_IMAGES = {
+                            Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
+                            Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
+                            Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
+                        };
+                        const villageBorderImage = VILLAGE_BORDER_IMAGES[village.name] || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+                        
+                        // Helper function to create progress bar
+                        const createProgressBar = (current, max, length = 10) => {
+                            if (max <= 0) return `\`${'▱'.repeat(length)}\` 0/0`;
+                            const progress = Math.max(0, Math.min(length, Math.round((current / max) * length)));
+                            return `\`${'▰'.repeat(progress)}${'▱'.repeat(length - progress)}\``;
+                        };
+                        
+                        // Format health with progress bar (showing "After" state)
+                        const healthBar = createProgressBar(healthAfter, currentMaxHealth);
+                        const healthValue = `**Before:** \`${healthBefore.toLocaleString()}/${maxHealth.toLocaleString()}\`\n> ${healthBar} **After:** \`${healthAfter.toLocaleString()}/${currentMaxHealth.toLocaleString()}\`\n**Lost:** \`${actualHPLost.toLocaleString()} HP\``;
+                        
+                        // Format tokens with progress bar (assuming a reasonable max for display)
+                        // Using a max based on level or a default large value for display purposes
+                        const tokenMax = Math.max(currentTokens, 50000); // Use current tokens as min, or 50k if higher
+                        const tokenBar = createProgressBar(currentTokens, tokenMax);
+                        const tokenValue = `> ${tokenBar} **${currentTokens.toLocaleString()}**\n**Lost:** \`${tokensLost.toLocaleString()}\``;
+                        
                         // Build embed
                         const damageEmbed = new EmbedBuilder()
                             .setTitle(`${villageEmoji} ⚠️ Village Damage Report`)
@@ -356,7 +389,7 @@ async function damageVillage(villageName, damageAmount) {
                             .addFields(
                                 {
                                     name: '❤️ Health',
-                                    value: `**Before:** \`${healthBefore.toLocaleString()}/${maxHealth.toLocaleString()}\`\n**After:** \`${healthAfter.toLocaleString()}/${currentMaxHealth.toLocaleString()}\`\n**Lost:** \`${actualHPLost.toLocaleString()} HP\``,
+                                    value: healthValue,
                                     inline: true
                                 },
                                 {
@@ -366,11 +399,11 @@ async function damageVillage(villageName, damageAmount) {
                                 },
                                 {
                                     name: '🪙 Tokens',
-                                    value: `**Lost:** ${tokensLost.toLocaleString()}\n**Remaining:** ${currentTokens.toLocaleString()}`,
+                                    value: tokenValue,
                                     inline: true
                                 }
                             )
-                            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                            .setImage(villageBorderImage)
                             .setTimestamp();
                         
                         // Add materials lost field if any materials were lost
