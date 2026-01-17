@@ -1116,6 +1116,13 @@ async function handleBoostAccept(interaction) {
    logger.error('BOOST', `Could not find target character "${requestData.targetCharacter}"`);
  }
 
+ // Mark job voucher as used if booster has an active voucher
+ if (booster.jobVoucher) {
+   booster.lastGatheredAt = new Date().toISOString();
+   await booster.save();
+   logger.info('BOOST', `Marked job voucher as used for ${booster.name} after accepting boost`);
+ }
+
  // Save updated request data
  await saveBoostingRequestToTempData(requestId, requestData);
 
