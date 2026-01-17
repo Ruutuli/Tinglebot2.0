@@ -2655,7 +2655,7 @@ const createInitialTravelEmbed = (
 // Creates an embed for ongoing travel status
 const createTravelingEmbed = (character) => {
  const embed = new EmbedBuilder()
-  .setDescription(`**${character.name} is traveling** <a:loading:1260369094151114852>`)
+  .setDescription(`**${character.name} is traveling** <a:loading:1125545957136793712>`)
   .setColor("#AA926A")
   .setTimestamp();
 

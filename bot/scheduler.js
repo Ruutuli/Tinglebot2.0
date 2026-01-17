@@ -431,7 +431,7 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
        const weather = await getWeatherWithoutGeneration(village);
        if (weather) {
         // Determine weather type (special weather or normal)
-        const weatherType = weather.special || weather.precipitation || 'Clear';
+        const weatherType = weather.special?.label || weather.precipitation?.label || 'Clear';
         weatherDataForNotifications.push({
           village: village,
           weather: weatherType,

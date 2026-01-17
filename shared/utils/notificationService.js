@@ -256,7 +256,11 @@ async function sendWeatherNotifications(weatherData = {}) {
       'thunderstorm': '⛈️'
     };
 
-    const weatherType = weatherData.type || 'Special Weather';
+    let weatherType = weatherData.type || 'Special Weather';
+    // Ensure weatherType is a string (extract label if it's an object)
+    if (typeof weatherType !== 'string') {
+      weatherType = weatherType?.label || String(weatherType) || 'Special Weather';
+    }
     const emoji = weatherEmojis[weatherType.toLowerCase()] || '🌦️';
     
     const embed = {
@@ -558,7 +562,11 @@ async function sendDailyWeatherNotifications(weatherData = {}) {
       // Multiple villages with weather data
       weatherData.villages.forEach(villageWeather => {
         const village = villageWeather.village || 'Unknown';
-        const weatherType = villageWeather.weather || villageWeather.type || 'Clear';
+        let weatherType = villageWeather.weather || villageWeather.type || 'Clear';
+        // Ensure weatherType is a string (extract label if it's an object)
+        if (typeof weatherType !== 'string') {
+          weatherType = weatherType?.label || String(weatherType) || 'Clear';
+        }
         const emoji = weatherEmojis[weatherType.toLowerCase()] || '🌤️';
         weatherFields.push({
           name: `${emoji} ${village}`,

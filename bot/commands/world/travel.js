@@ -1434,8 +1434,8 @@ async function processTravelDay(day, context) {
       }
     } else {
       // ------------------- Safe Day of Travel -------------------
-      // Check for chest discovery (100% chance for testing - will revert to 20% after)
-      const chestFound = true; // TODO: Revert to Math.random() < 0.2 after testing
+      // Check for chest discovery (20% chance)
+      const chestFound = Math.random() < 0.2;
       context.chestFound = chestFound;
       
       // Generate Do Nothing flavor ONCE for this day
@@ -1457,7 +1457,12 @@ async function processTravelDay(day, context) {
       // Update embed description if chest was found
       if (chestFound) {
         const currentDescription = safeEmbed.data.description || '';
-        safeEmbed.setDescription(`${currentDescription}\n\n🎁 **A chest was discovered!**`);
+        // Add chest option to the description
+        const updatedDescription = currentDescription.replace(
+          '- 💤 Do nothing (move onto the next day)',
+          '- 💤 Do nothing (move onto the next day)\n- 🎁 Open a chest! (costs 1 🟩 stamina)'
+        );
+        safeEmbed.setDescription(updatedDescription);
       }
       
       const safeMessage = await channel.send({ embeds: [safeEmbed] });

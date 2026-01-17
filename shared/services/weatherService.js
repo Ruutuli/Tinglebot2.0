@@ -215,16 +215,27 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
     });
 
     if (legacyWeather) {
-      legacyWeather.date = startUTC;
+      // Check if the legacy weather's date is already close to the target period
+      // If it's within 1 hour of the start, it was likely already realigned
+      const timeDiff = Math.abs(legacyWeather.date.getTime() - startUTC.getTime());
+      const oneHourMs = 60 * 60 * 1000;
+      
+      if (timeDiff > oneHourMs) {
+        // Only realign if the date is significantly different
+        legacyWeather.date = startUTC;
 
-      if (legacyWeather.prediction) {
-        legacyWeather.prediction.periodStart = startUTC;
-        legacyWeather.prediction.periodEnd = endUTC;
-        legacyWeather.markModified('prediction');
+        if (legacyWeather.prediction) {
+          legacyWeather.prediction.periodStart = startUTC;
+          legacyWeather.prediction.periodEnd = endUTC;
+          legacyWeather.markModified('prediction');
+        }
+
+        weather = await legacyWeather.save();
+        console.log(`[weatherService.js]: ℹ️ Realigned legacy weather record for ${normalizedVillage} to new UTC window.`);
+      } else {
+        // Date is already close to target - use it without realignment
+        weather = legacyWeather;
       }
-
-      weather = await legacyWeather.save();
-      console.log(`[weatherService.js]: ℹ️ Realigned legacy weather record for ${normalizedVillage} to new UTC window.`);
     }
   }
 
