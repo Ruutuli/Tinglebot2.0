@@ -16,7 +16,7 @@ body.character-inventory-page {
   min-height: 100vh;
 }
 
-.character-inventory-main {
+body.character-inventory-page .char-inv-main {
   padding: var(--main-padding, 2.5rem);
   display: flex;
   flex-direction: column;
@@ -24,7 +24,7 @@ body.character-inventory-page {
 }
 
 /* ------------------- Character Header ------------------- */
-.character-inventory-header-section {
+body.character-inventory-page .char-inv-header-section {
   background: var(--character-inventory-panel);
   border: 1px solid var(--character-inventory-border);
   border-radius: 18px;
@@ -33,13 +33,13 @@ body.character-inventory-page {
   box-shadow: var(--section-shadow);
 }
 
-.character-header-content {
+body.character-inventory-page .char-inv-header-content {
   display: flex;
   align-items: center;
   gap: 2rem;
 }
 
-.character-avatar-large {
+body.character-inventory-page .char-inv-avatar-large {
   flex-shrink: 0;
   width: 100px;
   height: 100px;
@@ -50,25 +50,25 @@ body.character-inventory-page {
   box-shadow: 0 8px 24px rgba(93, 214, 255, 0.3);
 }
 
-.character-avatar-large img {
+body.character-inventory-page .char-inv-avatar-large img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.character-header-info h1 {
+body.character-inventory-page .char-inv-header-info h1 {
   margin: 0 0 1rem;
   font-size: 2rem;
   font-weight: 700;
 }
 
-.character-stats {
+body.character-inventory-page .char-inv-stats {
   display: flex;
   gap: 1.5rem;
   flex-wrap: wrap;
 }
 
-.character-stats .stat-item {
+body.character-inventory-page .char-inv-stats .char-inv-stat-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -79,31 +79,33 @@ body.character-inventory-page {
   backdrop-filter: blur(10px);
 }
 
-.character-stats .stat-item i {
+body.character-inventory-page .char-inv-stats .char-inv-stat-item i {
   font-size: 1.25rem;
   color: var(--character-inventory-accent);
 }
 
-.character-stats .stat-item span:first-of-type {
+body.character-inventory-page .char-inv-stats .char-inv-stat-item span:first-of-type {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.character-stats .stat-item .stat-label {
+body.character-inventory-page .char-inv-stats .char-inv-stat-item .char-inv-stat-label {
   font-size: 0.9rem;
   color: var(--character-inventory-text-muted);
 }
 
 /* ------------------- Tabs ------------------- */
-.character-inventory-tabs {
+body.character-inventory-page .char-inv-tabs {
   display: flex;
   gap: 0.5rem;
   border-bottom: 2px solid var(--character-inventory-border);
   padding-bottom: 0.5rem;
+  position: relative;
+  z-index: 10;
 }
 
-.tab-button {
+body.character-inventory-page .char-inv-tab-button {
   padding: 0.85rem 1.75rem;
   background: transparent;
   border: none;
@@ -118,29 +120,29 @@ body.character-inventory-page {
   transition: all 0.3s ease;
 }
 
-.tab-button:hover {
+body.character-inventory-page .char-inv-tab-button:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
 }
 
-.tab-button.active {
+body.character-inventory-page .char-inv-tab-button.active {
   background: var(--character-inventory-accent);
   color: var(--botw-black, #010409);
   font-weight: 600;
 }
 
-.tab-button i {
+body.character-inventory-page .char-inv-tab-button i {
   font-size: 1rem;
 }
 
 /* ------------------- Tab Content ------------------- */
-.tab-content {
+body.character-inventory-page .char-inv-tab-content {
   display: none;
   flex-direction: column;
   gap: 1.5rem;
 }
 
-.tab-content.active {
+body.character-inventory-page .char-inv-tab-content.active {
   display: flex;
 }
 
@@ -153,13 +155,14 @@ body.character-inventory-page {
   padding: 1.5rem;
   backdrop-filter: blur(var(--frost-blur));
   box-shadow: var(--section-shadow);
+  margin-bottom: 1rem;
 }
 
 /* ------------------- Category Navigation ------------------- */
 .category-nav {
   position: sticky;
   top: 80px;
-  z-index: 100;
+  z-index: 98;
   background: var(--character-inventory-panel);
   border: 1px solid var(--character-inventory-border);
   border-radius: 16px;
@@ -167,6 +170,7 @@ body.character-inventory-page {
   backdrop-filter: blur(var(--frost-blur));
   box-shadow: var(--section-shadow);
   margin-bottom: 2rem;
+  will-change: transform;
 }
 
 .category-nav-title {
@@ -681,6 +685,7 @@ body.character-inventory-page {
   .character-inventory-main {
     padding: 1rem;
     gap: 1.5rem;
+    overflow-x: visible;
   }
 
   .character-inventory-header-section {
@@ -721,11 +726,24 @@ body.character-inventory-page {
     font-size: 0.8rem;
   }
 
+  /* ------------------- Sticky Tabs ------------------- */
   .character-inventory-tabs {
+    display: flex;
     gap: 0.25rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    border-bottom: 2px solid var(--character-inventory-border);
+    padding: 0.75rem 0;
+    margin: 0 -1rem 1.5rem -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    position: sticky;
+    top: 60px;
+    z-index: 99;
+    background: var(--character-inventory-bg);
+    backdrop-filter: blur(var(--frost-blur));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
   .character-inventory-tabs::-webkit-scrollbar {
@@ -733,21 +751,70 @@ body.character-inventory-page {
   }
 
   .tab-button {
+    display: flex;
     padding: 0.75rem 1.25rem;
     font-size: 0.9rem;
     white-space: nowrap;
     min-width: fit-content;
     min-height: 44px;
     touch-action: manipulation;
+    flex-shrink: 0;
   }
 
   .tab-button i {
     font-size: 0.9rem;
   }
 
+  /* ------------------- Sticky Filters ------------------- */
   .inventory-filters,
   .history-filters {
+    position: sticky;
+    top: calc(60px + 55px);
+    z-index: 97;
     padding: 1rem;
+    margin: 0 -1rem 1rem -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    background: var(--character-inventory-panel);
+    backdrop-filter: blur(var(--frost-blur));
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* ------------------- Sticky Category Nav ------------------- */
+  .category-nav {
+    position: sticky;
+    top: calc(60px + 55px + 70px);
+    z-index: 98;
+    padding: 0.875rem 1rem;
+    margin: 0 -1rem 1.5rem -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    border-radius: 12px;
+    background: var(--character-inventory-panel);
+    backdrop-filter: blur(var(--frost-blur));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .category-nav-links {
+    gap: 0.4rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 0.25rem;
+  }
+
+  .category-nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .category-nav-link {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.8rem;
+    min-height: 36px;
+    touch-action: manipulation;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .items-grid {
@@ -757,6 +824,7 @@ body.character-inventory-page {
 
   .category-section {
     padding: 1rem;
+    scroll-margin-top: calc(60px + 55px + 70px + 70px);
   }
 
   .category-header {
@@ -803,30 +871,37 @@ body.character-inventory-page {
 
   /* Modal mobile improvements */
   .item-log-modal {
-    padding: 1rem;
+    padding: 0;
     align-items: flex-end;
   }
 
   .item-log-modal-content {
     max-width: 100%;
-    max-height: 85vh;
-    border-radius: 16px 16px 0 0;
-    padding: 1.5rem 1rem;
+    width: 100%;
+    max-height: 90vh;
+    height: auto;
+    border-radius: 20px 20px 0 0;
+    padding: 1.5rem 1rem 1rem;
     animation: slideUpMobile 0.3s ease;
+    margin: 0;
   }
 
   @keyframes slideUpMobile {
     from {
       transform: translateY(100%);
+      opacity: 0;
     }
     to {
       transform: translateY(0);
+      opacity: 1;
     }
   }
 
   .item-log-header {
     flex-wrap: wrap;
     gap: 0.75rem;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
   }
 
   .item-log-header .item-icon {
@@ -834,12 +909,27 @@ body.character-inventory-page {
     height: 48px;
   }
 
+  .item-log-header-info {
+    flex: 1;
+    min-width: 0;
+  }
+
   .item-log-header-info h2 {
     font-size: 1.25rem;
+    word-break: break-word;
   }
 
   .item-log-close {
     margin-left: auto;
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .item-log-body {
+    max-height: calc(90vh - 180px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .item-log-table {
@@ -867,15 +957,6 @@ body.character-inventory-page {
   .history-table th,
   .history-table td {
     padding: 0.6rem 0.5rem;
-  }
-
-  .category-nav {
-    position: sticky;
-    top: 60px;
-    z-index: 100;
-    padding: 0.875rem 1rem;
-    margin-bottom: 1.5rem;
-    border-radius: 12px;
   }
 
   .category-nav-links {
@@ -924,6 +1005,15 @@ body.character-inventory-page {
     justify-content: center;
   }
 
+  .character-inventory-tabs {
+    top: 60px;
+    padding: 0.5rem 0;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
   .tab-button {
     padding: 0.65rem 1rem;
     font-size: 0.85rem;
@@ -931,11 +1021,26 @@ body.character-inventory-page {
 
   .inventory-filters,
   .history-filters {
+    top: calc(60px + 55px);
     padding: 0.875rem;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .category-nav {
+    top: calc(60px + 55px + 65px);
+    padding: 0.75rem 0.875rem;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
   }
 
   .category-section {
     padding: 0.875rem;
+    scroll-margin-top: calc(60px + 55px + 65px + 65px);
   }
 
   .category-title {
@@ -956,8 +1061,22 @@ body.character-inventory-page {
   }
 
   .item-log-modal-content {
-    max-height: 90vh;
-    padding: 1.25rem 0.875rem;
+    max-height: 92vh;
+    padding: 1.25rem 0.875rem 0.875rem;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .item-log-header {
+    padding-bottom: 0.875rem;
+    margin-bottom: 0.875rem;
+  }
+
+  .item-log-header-info h2 {
+    font-size: 1.1rem;
+  }
+
+  .item-log-body {
+    max-height: calc(92vh - 160px);
   }
 
   .item-log-table {

@@ -73,9 +73,9 @@ body.inventories-page {
 }
 
 .characters-list-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
 }
 
 .character-list-item {
@@ -1080,6 +1080,11 @@ body.inventories-page {
 
   .characters-list-section {
     padding: 1rem;
+  }
+
+  .characters-list-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
 
   .character-list-item {

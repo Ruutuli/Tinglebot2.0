@@ -268,13 +268,34 @@ function renderInventoryView() {
   }
 
   // Get unique categories and types for filters
-  const categories = [...new Set(inventoryData.flatMap(item => {
+  const extractedCategories = [...new Set(inventoryData.flatMap(item => {
     if (Array.isArray(item.category)) return item.category;
     if (typeof item.category === 'string' && item.category.includes(',')) {
       return item.category.split(',').map(s => s.trim());
     }
     return [item.category || 'Unknown'];
-  }))].filter(Boolean).sort();
+  }))].filter(Boolean);
+
+  // Required categories that should always be available
+  const requiredCategories = [
+    'Weapon',
+    'Armor',
+    'Ancient Parts',
+    'Creature',
+    'Fish',
+    'Fruit',
+    'Meat',
+    'Monster',
+    'Mushroom',
+    'Natural',
+    'Ore',
+    'Plant',
+    'Special',
+    'Recipe'
+  ];
+
+  // Merge extracted categories with required categories and sort
+  const categories = [...new Set([...requiredCategories, ...extractedCategories])].sort();
 
   const types = [...new Set(inventoryData.flatMap(item => {
     if (Array.isArray(item.type)) return item.type;
@@ -541,6 +562,8 @@ function groupItemsByCategory(items) {
       
       // Try to find a more specific category
       const materialCategoryMap = [
+        { keywords: ['ancient'], category: 'Ancient Parts' },
+        { keywords: ['special'], category: 'Special' },
         { keywords: ['fruit', 'apple'], category: 'Fruit' },
         { keywords: ['meat'], category: 'Meat' },
         { keywords: ['fish'], category: 'Fish' },
@@ -612,14 +635,46 @@ function renderInventoryGrid(itemsByCategory) {
     'Unknown'
   ];
 
-  // Get categories in the specified order, then add any missing categories
+  // Required categories that should always appear in navigation
+  const requiredCategories = [
+    'Weapon',
+    'Armor',
+    'Ancient Parts',
+    'Creature',
+    'Fish',
+    'Fruit',
+    'Meat',
+    'Monster',
+    'Mushroom',
+    'Natural',
+    'Ore',
+    'Plant',
+    'Special',
+    'Recipe'
+  ];
+
+  // Get categories with items in the specified order, then add any missing categories
   const orderedCategories = categoryOrder.filter(cat => itemsByCategory[cat] && itemsByCategory[cat].length > 0);
   const remainingCategories = Object.keys(itemsByCategory)
     .filter(cat => !categoryOrder.includes(cat))
     .sort();
-  const categories = [...orderedCategories, ...remainingCategories];
+  const categoriesWithItems = [...orderedCategories, ...remainingCategories];
   
-  if (categories.length === 0) {
+  // For navigation: always include all required categories
+  const navCategories = [...new Set([...requiredCategories, ...categoriesWithItems])].filter(cat => {
+    // Keep required categories and any other categories that have items
+    return requiredCategories.includes(cat) || categoriesWithItems.includes(cat);
+  }).sort((a, b) => {
+    // Sort by required category order first, then alphabetically
+    const aIndex = requiredCategories.indexOf(a);
+    const bIndex = requiredCategories.indexOf(b);
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return a.localeCompare(b);
+  });
+  
+  if (categoriesWithItems.length === 0 && navCategories.length === 0) {
     return '<div class="empty-state"><p>No items match the current filters.</p></div>';
   }
 
@@ -653,22 +708,23 @@ function renderInventoryGrid(itemsByCategory) {
     return 'fa-box';
   };
 
-  // Render category navigation
+  // Render category navigation - always show all required categories
   const categoryNav = `
     <div class="category-nav">
       <div class="category-nav-title">Jump to Category</div>
       <div class="category-nav-links">
-        ${categories.map(category => {
+        ${navCategories.map(category => {
           const categorySlug = category.toLowerCase().replace(/\s+/g, '-');
-          return `<a href="#category-${categorySlug}" class="category-nav-link" data-category="${categorySlug}">${category}</a>`;
+          const href = `#category-${categorySlug}`;
+          return `<a href="${href}" class="category-nav-link" data-category="${categorySlug}">${category}</a>`;
         }).join('')}
       </div>
     </div>
   `;
 
-  // Render categories
-  const categorySections = categories.map(category => {
-    const items = itemsByCategory[category];
+  // Render categories - show all required categories (even if empty)
+  const categorySections = navCategories.map(category => {
+    const items = itemsByCategory[category] || [];
     const categoryIcon = getCategoryIcon(category);
     const itemCount = items.length;
     const ownedCount = items.filter(item => item.owned).length;
