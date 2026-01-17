@@ -304,15 +304,18 @@ module.exports = {
   const allTimeTotal = typeof stats.allTimeTotal === "number"
    ? stats.allTimeTotal
    : totalCompleted + (legacyInfo.totalTransferred || 0);
-  const pendingTurnIns = typeof stats.pendingTurnIns === "number"
-   ? stats.pendingTurnIns
-   : legacyInfo.pendingTurnIns || 0;
- const turnInSummary = stats.turnInSummary || {
-  totalPending: pendingTurnIns,
-  redeemableSets: Math.floor(pendingTurnIns / 10),
-  remainder: pendingTurnIns % 10
- };
- const redeemableSets = turnInSummary.redeemableSets || 0;
+  
+  // Use turnInSummary if available (from getQuestStats), otherwise calculate from stats
+  const turnInSummary = stats.turnInSummary || (typeof userDocument.getQuestTurnInSummary === "function"
+   ? userDocument.getQuestTurnInSummary()
+   : {
+    totalPending: (typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0) + (legacyInfo.pendingTurnIns || 0),
+    redeemableSets: Math.floor(((typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0) + (legacyInfo.pendingTurnIns || 0)) / 10),
+    remainder: ((typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0) + (legacyInfo.pendingTurnIns || 0)) % 10
+   });
+  
+  const pendingTurnIns = turnInSummary.totalPending || 0;
+  const redeemableSets = turnInSummary.redeemableSets || 0;
 
   if (allTimeTotal === 0) {
     if (targetUser.id === interaction.user.id) {

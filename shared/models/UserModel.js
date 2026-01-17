@@ -494,8 +494,34 @@ userSchema.methods.ensureQuestTracking = function() {
       this.quests.totalCompleted = 0;
     }
 
+    // Ensure pendingTurnIns exists and is initialized
     if (typeof this.quests.pendingTurnIns !== 'number') {
       this.quests.pendingTurnIns = 0;
+    }
+    
+    // Validate that pendingTurnIns matches actual non-legacy quest completions
+    // This fixes cases where pendingTurnIns wasn't properly incremented
+    // Count unique quest completions (same logic as recordQuestCompletion safeguard)
+    const uniqueQuestIds = new Set();
+    let nullIdCount = 0;
+    for (const completion of (this.quests.completions || [])) {
+      if (completion.questId && completion.questId.trim() !== '') {
+        uniqueQuestIds.add(completion.questId);
+      } else {
+        nullIdCount++;
+      }
+    }
+    const actualCompletions = uniqueQuestIds.size + nullIdCount;
+    
+    if (this.quests.pendingTurnIns < actualCompletions) {
+      // pendingTurnIns should at least equal the number of unique completions
+      // (it could be higher if some were turned in, but shouldn't be lower)
+      const oldPending = this.quests.pendingTurnIns;
+      this.quests.pendingTurnIns = actualCompletions;
+      const missing = actualCompletions - oldPending;
+      if (missing > 0) {
+        console.log(`[UserModel.ensureQuestTracking] 🔧 Fixed pendingTurnIns for user ${this.discordId}: was ${oldPending}, set to ${actualCompletions} (added ${missing} missing completions)`);
+      }
     }
 
     if (!this.quests.legacy) {
@@ -773,16 +799,26 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
   }
 
   let remaining = sanitizedAmount;
+  const currentPending = questTracking.pendingTurnIns || 0;
+  const legacyPending = questTracking.legacy?.pendingTurnIns || 0;
 
-  if (questTracking.pendingTurnIns && questTracking.pendingTurnIns > 0) {
-    const deductCurrent = Math.min(questTracking.pendingTurnIns, remaining);
-    questTracking.pendingTurnIns -= deductCurrent;
+  // Deduct from non-legacy pending first, then from legacy
+  if (currentPending > 0) {
+    const deductCurrent = Math.min(currentPending, remaining);
+    questTracking.pendingTurnIns = currentPending - deductCurrent;
     remaining -= deductCurrent;
   }
 
-  if (remaining > 0 && questTracking.legacy?.pendingTurnIns) {
-    questTracking.legacy.pendingTurnIns = Math.max(0, questTracking.legacy.pendingTurnIns - remaining);
-    remaining = 0;
+  // Deduct remaining from legacy pending
+  if (remaining > 0 && legacyPending > 0) {
+    const deductLegacy = Math.min(legacyPending, remaining);
+    questTracking.legacy.pendingTurnIns = legacyPending - deductLegacy;
+    remaining -= deductLegacy;
+  }
+
+  // Validate that we consumed exactly the requested amount
+  if (remaining > 0) {
+    console.error(`[UserModel.consumeQuestTurnIns] ⚠️ Warning: Attempted to consume ${sanitizedAmount} but only consumed ${sanitizedAmount - remaining}. This should not happen.`);
   }
 
   await this.save();
