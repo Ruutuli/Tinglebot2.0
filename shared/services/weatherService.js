@@ -145,11 +145,21 @@ function normalizeSeason(season) {
   return s;
 }
 
+const EST_TZ = 'America/New_York';
+
 function getEasternReference(referenceDate = new Date()) {
   const baseDate = referenceDate instanceof Date ? new Date(referenceDate) : new Date(referenceDate);
-  const easternDate = new Date(baseDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const easternDate = new Date(baseDate.toLocaleString('en-US', { timeZone: EST_TZ }));
   const offsetMs = baseDate.getTime() - easternDate.getTime();
   return { easternDate, offsetMs };
+}
+
+/** Hour (0–23) in EST/EDT. Codebase uses America/New_York for all weather periods. */
+function getHourInEastern(date = new Date()) {
+  return parseInt(
+    new Intl.DateTimeFormat('en-CA', { timeZone: EST_TZ, hour: '2-digit', hour12: false }).format(date),
+    10
+  );
 }
 
 function getCurrentPeriodBounds(referenceDate = new Date()) {
@@ -158,7 +168,7 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
   const startEastern = new Date(easternDate);
   startEastern.setHours(8, 0, 0, 0);
 
-  if (easternDate.getHours() < 8) {
+  if (getHourInEastern(referenceDate) < 8) {
     startEastern.setDate(startEastern.getDate() - 1);
   }
 
@@ -175,34 +185,30 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
 }
 
 function getNextPeriodBounds(referenceDate = new Date()) {
-  const { easternDate, offsetMs } = getEasternReference(referenceDate);
-
-  const startEastern = new Date(easternDate);
-  startEastern.setHours(8, 0, 0, 0);
-  startEastern.setDate(startEastern.getDate() + 1);
-
-  const endEastern = new Date(startEastern);
-  endEastern.setDate(endEastern.getDate() + 1);
-  endEastern.setHours(7, 59, 59, 999);
+  // Derive from current period + 24h so "next" is always the period after the current one.
+  // Matches getCurrentPeriodBounds (including the "before 8 AM" adjustment).
+  const current = getCurrentPeriodBounds(referenceDate);
+  const msPerDay = 24 * 60 * 60 * 1000;
 
   return {
-    startUTC: new Date(startEastern.getTime() + offsetMs),
-    endUTC: new Date(endEastern.getTime() + offsetMs),
-    startEastern,
-    endEastern
+    startUTC: new Date(current.startUTC.getTime() + msPerDay),
+    endUTC: new Date(current.endUTC.getTime() + msPerDay),
+    startEastern: new Date(current.startEastern.getTime() + msPerDay),
+    endEastern: new Date(current.endEastern.getTime() + msPerDay)
   };
 }
 
 async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
-  const { legacyFallback = true, fallbackWindowMs = LEGACY_PERIOD_FALLBACK_MS } = options;
+  const { legacyFallback = true, fallbackWindowMs = LEGACY_PERIOD_FALLBACK_MS, exclusiveEnd = false } = options;
   const normalizedVillage = normalizeVillageName(village);
+
+  const dateRange = exclusiveEnd
+    ? { $gte: startUTC, $lt: endUTC }
+    : { $gte: startUTC, $lte: endUTC };
 
   let weather = await Weather.findOne({
     village: normalizedVillage,
-    date: {
-      $gte: startUTC,
-      $lte: endUTC
-    }
+    date: dateRange
   });
 
   if (!weather && legacyFallback) {
@@ -699,13 +705,17 @@ async function simulateWeightedWeather(village, season, options = {}) {
 async function getWeatherWithoutGeneration(village) {
   try {
     const normalizedVillage = normalizeVillageName(village);
-    
-    // Get current time in EST/EDT
-    const { startUTC: startOfPeriodUTC, endUTC: endOfPeriodUTC } = getCurrentPeriodBounds();
-    
-    // Get weather from the current period with legacy fallback support
-    const weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, endOfPeriodUTC);
-    
+    const now = new Date();
+
+    const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
+    const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
+
+    // Use exclusive upper bound (next period's start) so we never pick up the next period's
+    // weather (e.g. tomorrow's Song of Storms Rock Slide when today is Muggy).
+    const weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
+      exclusiveEnd: true
+    });
+
     return weather;
   } catch (error) {
     console.error('[weatherService.js]: ❌ Error getting weather:', error);
@@ -717,12 +727,15 @@ async function getWeatherWithoutGeneration(village) {
 async function getCurrentWeather(village) {
   try {
     const normalizedVillage = normalizeVillageName(village);
-    
-    // Get current time in EST/EDT
-    const { startUTC: startOfPeriodUTC, endUTC: endOfPeriodUTC } = getCurrentPeriodBounds();
-    
-    // Get weather from the current period
-    let weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, endOfPeriodUTC);
+    const now = new Date();
+
+    const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
+    const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
+
+    // Use exclusive upper bound so we never pick up the next period's weather.
+    let weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
+      exclusiveEnd: true
+    });
     
     // Only generate new weather if none exists for the current period
     if (!weather) {
@@ -924,6 +937,16 @@ function specialWeatherFlavorText(weatherType, character = null) {
 }
 
 // ------------------- Schedule Guaranteed Special Weather -------------------
+/**
+ * Schedules guaranteed special weather for the **next** period (8am–7:59am EST).
+ * Song of Storms and any caller of this function schedule special weather for the next period
+ * only; the current period is never modified.
+ *
+ * @param {string} village - Village name (Rudania, Inariko, Vhintl)
+ * @param {string} specialLabel - Special weather label from weatherData.specials
+ * @param {object} [options] - { triggeredBy, recipient, source }
+ * @returns {Promise<{ weather, startOfPeriod, endOfPeriod }>}
+ */
 async function scheduleSpecialWeather(village, specialLabel, options = {}) {
   try {
     const normalizedVillage = normalizeVillageName(village);
@@ -944,28 +967,22 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
       throw new Error(`Unknown special weather label "${specialLabel}".`);
     }
 
-    // Explicitly pass current date to ensure consistent calculation
-    // All weather periods are based on EST/EDT (America/New_York timezone)
-    // Weather periods run from 8:00 AM EST/EDT to 7:59:59 AM EST/EDT the next day
+    // Song of Storms: special weather is always for the NEXT period, never the current one.
+    // All weather periods are EST/EDT (America/New_York): 8:00 AM to 7:59:59 AM the next day.
     const now = new Date();
-    const {
-      startUTC: startOfNextPeriodUTC,
-      endUTC: endOfNextPeriodUTC,
-      startEastern: startOfNextPeriod
-    } = getNextPeriodBounds(now);
+    const raw = getNextPeriodBounds(now);
+    const startOfNextPeriodUTC = raw.startUTC;
+    const endOfNextPeriodUTC = raw.endUTC;
+    const startOfNextPeriod = raw.startEastern;
 
-    // Validate that the next period is actually in the future (comparing UTC times)
-    // This ensures special weather is scheduled for tomorrow, not today
+    // Validate that the next period is in the future (never schedule for the current period)
     if (startOfNextPeriodUTC <= now) {
       throw new Error('Calculated next period is not in the future. This indicates a date calculation error.');
     }
 
-    // Debug logging for troubleshooting (all times in EST/EDT context)
-    console.log('[weatherService.js]: 🎵 Calculating next period bounds for special weather', {
+    console.log('[weatherService.js]: 🎵 Song of Storms: scheduling special for next period', {
       currentTimeUTC: now.toISOString(),
       nextPeriodStartUTC: startOfNextPeriodUTC.toISOString(),
-      nextPeriodEndUTC: endOfNextPeriodUTC.toISOString(),
-      nextPeriodStartEST: startOfNextPeriod.toISOString(), // 8:00 AM EST/EDT tomorrow
       village: normalizedVillage
     });
 
@@ -1001,6 +1018,8 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
 
     const existingSpecialLabel = weatherDoc?.special?.label;
     const existingSpecialProbability = weatherDoc?.special?.probability;
+    // Song of Storms overwrites a naturally rolled special for the next period;
+    // only blocks when a guaranteed special is already set.
     const hasGuaranteedSpecial =
       existingSpecialLabel &&
       typeof existingSpecialProbability === 'string' &&

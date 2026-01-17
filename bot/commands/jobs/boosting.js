@@ -59,6 +59,7 @@ const BOOST_CATEGORIES = [
 ];
 
 const SONG_OF_STORMS_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
+// Lightning Storm excluded by design (in weatherData.specials but not choosable for Song of Storms).
 const SONG_OF_STORMS_SPECIAL_WEATHER = [
   "Avalanche",
   "Blight Rain",

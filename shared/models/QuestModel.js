@@ -257,7 +257,7 @@ const TIME_MULTIPLIERS = {
 // ============================================================================
 
 // ------------------- Requirements Check ------------------
-// Moved from questRewardModule to avoid circular dependency
+// Logic intentionally mirrored in questRewardModule; keep in sync when changing completion rules.
 function meetsRequirements(participant, quest) {
     const { questType, postRequirement, requiredRolls } = quest;
     const { rpPostCount, submissions, successfulRolls } = participant;

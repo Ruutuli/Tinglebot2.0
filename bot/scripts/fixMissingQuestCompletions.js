@@ -14,6 +14,7 @@ const mongoose = require('mongoose');
 const { connectToTinglebot } = require('../../shared/database/db');
 const User = require('../../shared/models/UserModel');
 const Quest = require('../../shared/models/QuestModel');
+const { countUniqueQuestCompletions } = require('../../shared/utils/questTrackingUtils');
 
 const ARG_DRY_RUN = process.argv.includes('--dry-run');
 const ARG_USER = (() => {
@@ -28,25 +29,6 @@ const ARG_QUEST_NAMES = (() => {
 })();
 
 // ------------------- Helper Functions -------------------
-function countUniqueQuestCompletions(completions) {
-  if (!Array.isArray(completions) || completions.length === 0) {
-    return 0;
-  }
-  
-  const uniqueQuestIds = new Set();
-  let nullIdCount = 0;
-  
-  for (const completion of completions) {
-    if (completion.questId && completion.questId.trim() !== '') {
-      uniqueQuestIds.add(completion.questId);
-    } else {
-      nullIdCount++;
-    }
-  }
-  
-  return uniqueQuestIds.size + nullIdCount;
-}
-
 function isParticipantCompleted(participant) {
   if (!participant) return false;
   
@@ -162,16 +144,18 @@ function fixUserPendingTurnIns(user) {
   const completions = questTracking.completions || [];
   const actualCompletions = countUniqueQuestCompletions(completions);
   const currentPendingTurnIns = questTracking.pendingTurnIns || 0;
-  
-  if (currentPendingTurnIns < actualCompletions) {
-    const oldPending = currentPendingTurnIns;
+
+  // Only set when pendingTurnIns is 0 and we have completions (uninitialized). When
+  // 0 < pendingTurnIns < actualCompletions, the user may have turned in; do not set
+  // to avoid over-crediting.
+  if (currentPendingTurnIns === 0 && actualCompletions > 0) {
     questTracking.pendingTurnIns = actualCompletions;
     return {
       fixed: true,
-      fix: `Updated pendingTurnIns from ${oldPending} to ${actualCompletions} (added ${actualCompletions - oldPending} missing completions)`
+      fix: `Updated pendingTurnIns from 0 to ${actualCompletions} (initialized from completions)`
     };
   }
-  
+
   return { fixed: false, fix: null };
 }
 

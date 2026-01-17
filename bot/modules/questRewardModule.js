@@ -8,6 +8,7 @@ const Character = require('../../shared/models/CharacterModel');
 const User = require('../../shared/models/UserModel');
 const ApprovedSubmission = require('../../shared/models/ApprovedSubmissionModel');
 const { handleError } = require('../../shared/utils/globalErrorHandler');
+const logger = require('../../shared/utils/logger');
 const { EmbedBuilder } = require('discord.js');
 
 // ============================================================================
@@ -354,7 +355,7 @@ async function sendQuestCompletionSummary(quest, completionReason) {
 // ------------------- Standardized Error Handling ------------------
 function handleQuestError(error, context, questId = null) {
     const questInfo = questId ? ` for quest ${questId}` : '';
-    console.error(`[questRewardModule.js] ❌ Error ${context}${questInfo}:`, error);
+    logger.error('QUEST', `Error ${context}${questInfo}: ${error.message}`, error);
     return {
         success: false,
         error: error.message || 'Unknown error occurred'
@@ -378,7 +379,7 @@ async function findQuestSafely(questId) {
         }
         return quest;
     } catch (error) {
-        console.error(`[questRewardModule.js] ❌ Database error finding quest ${questId}:`, error);
+        logger.error('QUEST', `Database error finding quest ${questId}: ${error.message}`, error);
         throw error;
     }
 }
@@ -391,7 +392,7 @@ async function findUserSafely(userId) {
         }
         return user;
     } catch (error) {
-        console.error(`[questRewardModule.js] ❌ Database error finding user ${userId}:`, error);
+        logger.error('QUEST', `Database error finding user ${userId}: ${error.message}`, error);
         throw error;
     }
 }
@@ -407,7 +408,7 @@ async function findCharacterSafely(characterName, userId) {
         }
         return character;
     } catch (error) {
-        console.error(`[questRewardModule.js] ❌ Database error finding character ${characterName}:`, error);
+        logger.error('QUEST', `Database error finding character ${characterName}: ${error.message}`, error);
         throw error;
     }
 }
@@ -596,6 +597,7 @@ async function syncApprovedSubmissionsToParticipant(quest, participant) {
 }
 
 // ------------------- Requirements Check ------------------
+// Logic intentionally mirrored in QuestModel; keep in sync when changing completion rules.
 function meetsRequirements(participant, quest) {
     const { questType, postRequirement, requiredRolls } = quest;
     const { rpPostCount, submissions, successfulRolls } = participant;
@@ -1012,10 +1014,10 @@ async function recordQuestCompletionSafeguard(participant, quest) {
             itemsEarned: [],
             rewardSource: 'pending' // Will be updated to 'immediate' or 'monthly' when rewards are distributed
         });
-        
-        console.log(`[questRewardModule.js] 🛡️ Safeguard: Recorded quest completion for user ${participant.userId} (${quest.questID}) - quest count updated`);
+
+        logger.info('QUEST', `recordQuestCompletionSafeguard: recorded for userId=${participant.userId} questId=${quest.questID} rewardSource=pending`);
     } catch (error) {
-        console.error(`[questRewardModule.js] ❌ Error in quest completion safeguard for user ${participant.userId}:`, error);
+        logger.error('QUEST', `Error in quest completion safeguard for user ${participant.userId}: ${error.message}`, error);
     }
 }
 
@@ -1023,24 +1025,24 @@ async function recordUserQuestCompletion(participant, quest, rewardResult, rewar
     try {
         const user = await findUserSafely(participant.userId);
         if (!user || typeof user.recordQuestCompletion !== 'function') {
-            console.warn(`[questRewardModule.js] ⚠️ User ${participant.userId} missing recordQuestCompletion method`);
+            logger.warn('QUEST', `User ${participant.userId} missing recordQuestCompletion method`);
             return;
         }
-        
+
         // ------------------- Validate quest data -------------------
         if (!quest || !quest.questID) {
-            console.error(`[questRewardModule.js] ❌ Cannot record quest completion: quest or questID is missing`);
+            logger.error('QUEST', `Cannot record quest completion: quest or questID is missing`);
             return;
         }
-        
+
         if (!quest.questType) {
-            console.warn(`[questRewardModule.js] ⚠️ Quest ${quest.questID} missing questType`);
+            logger.warn('QUEST', `Quest ${quest.questID} missing questType`);
         }
-        
+
         if (!quest.title) {
-            console.warn(`[questRewardModule.js] ⚠️ Quest ${quest.questID} missing title`);
+            logger.warn('QUEST', `Quest ${quest.questID} missing title`);
         }
-        
+
         await user.recordQuestCompletion({
             questId: quest.questID,
             questType: quest.questType || 'Other',
@@ -1051,10 +1053,10 @@ async function recordUserQuestCompletion(participant, quest, rewardResult, rewar
             itemsEarned: participant.itemsEarned || [],
             rewardSource
         });
-        
-        console.log(`[questRewardModule.js] 🗒️ Recorded quest completion for user ${participant.userId} (${quest.questID})`);
+
+        logger.info('QUEST', `recordUserQuestCompletion: userId=${participant.userId} questId=${quest.questID} rewardSource=${rewardSource}`);
     } catch (error) {
-        console.error(`[questRewardModule.js] ❌ Failed to record quest completion for user ${participant.userId}:`, error);
+        logger.error('QUEST', `Failed to record quest completion for user ${participant.userId}: ${error.message}`, error);
     }
 }
 

@@ -58,7 +58,9 @@ async function copyQuestData() {
     targetUser.quests.completions = sourceQuests.completions ? JSON.parse(JSON.stringify(sourceQuests.completions)) : [];
     targetUser.quests.totalCompleted = sourceQuests.totalCompleted || 0;
     
-    // Calculate pendingTurnIns based on actual completions (fix for missing/mismatched data)
+    // Admin copy: take max of source pendingTurnIns and actualCompletions to avoid under-counting
+    // when migrating. If the source had already turned in, the target may receive extra; acceptable
+    // trade-off for admin copy.
     const actualCompletions = targetUser.quests.completions?.length || 0;
     targetUser.quests.pendingTurnIns = Math.max(sourceQuests.pendingTurnIns || 0, actualCompletions);
     

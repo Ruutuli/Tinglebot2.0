@@ -5,9 +5,6 @@
 
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const path = require('path');
-const fs = require('fs');
-const Jimp = require('jimp');
 
 // ------------------- Database Services -------------------
 const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../../../shared/database/db.js');
@@ -17,8 +14,9 @@ const ItemModel = require('../../../shared/models/ItemModel');
 const { createWeightedItemList } = require('../../modules/rngModule.js');
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('../../../shared/utils/inventoryUtils.js');
-const { getWeatherWithoutGeneration } = require('../../../shared/services/weatherService');
-const WeatherService = require('../../../shared/services/weatherService');
+const weatherService = require('../../../shared/services/weatherService');
+const { getWeatherWithoutGeneration } = weatherService;
+const { canUseSpecialWeather, normalizeVillageName } = require('../../../shared/utils/specialWeatherUtils');
 const { enforceJail } = require('../../../shared/utils/jailCheck.js');
 const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
 const { createGatherDebuffEmbed } = require('../../embeds/embeds.js');
@@ -36,35 +34,6 @@ const VILLAGE_IMAGES = {
   Inariko: "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
   Rudania: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
   Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png"
-};
-
-const OVERLAY_MAPPING = {
-  'Flower Bloom': 'flowerbloom',
-  'Fairy Circle': 'fairycircle',
-  'Meteor Shower': 'meteorshower',
-  'Jubilee': 'jubilee',
-  'Drought': 'drought',
-  'Flood': 'flood',
-  'Avalanche': 'avalanche',
-  'Blight Rain': 'blightrain',
-  'Lightning Storm': 'thunderstorm',
-  'Muggy': 'muggy',
-  'Rock Slide': 'rockslide'
-};
-
-// Mapping special weather to regular weather overlays
-const SPECIAL_TO_REGULAR_OVERLAY = {
-  'Avalanche': 'blizzard',
-  'Blight Rain': 'blightrain',
-  'Drought': 'sunny',
-  'Fairy Circle': 'sunny',
-  'Flood': 'heavyrain',
-  'Flower Bloom': 'rainbow',
-  'Jubilee': 'sunny',
-  'Lightning Storm': 'thunderstorm',
-  'Meteor Shower': 'sunny',
-  'Muggy': 'fog',
-  'Rock Slide': 'sunny'
 };
 
 // Add banner cache
@@ -114,34 +83,8 @@ function generateGatherFlavorText(weatherLabel) {
   return flavorTexts[weatherLabel] || flavorTexts.Default;
 }
 
-function getOverlayPath(condition) {
-  const overlayName = OVERLAY_MAPPING[condition];
-  let overlayPath = null;
-  
-  if (overlayName) {
-    overlayPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${overlayName}.png`);
-    if (fs.existsSync(overlayPath)) {
-      return overlayPath;
-    }
-  }
-  
-  // If no direct overlay found or file doesn't exist, try fallback
-  const fallbackOverlay = SPECIAL_TO_REGULAR_OVERLAY[condition];
-  
-  if (fallbackOverlay) {
-    const fallbackPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${fallbackOverlay}.png`);
-    if (fs.existsSync(fallbackPath)) {
-      return fallbackPath;
-    }
-  }
-  
-  console.warn(`[specialweather.js]: ⚠️ No overlay found for ${condition}`);
-  return null;
-}
-
-// Remove the duplicate generateBanner function and use the unified service
 async function generateBanner(village, weather) {
-  return await WeatherService.generateBanner(village, weather, { 
+  return await weatherService.generateBanner(village, weather, { 
     enableCaching: true, 
     cacheDuration: 300000 // 5 minutes
   });
@@ -203,136 +146,6 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
 
   return { embed, files: [] };
 };
-
-// ------------------- Special Weather Usage Helper -------------------
-function getESTTime() {
-  const now = new Date();
-  
-  // Use Intl.DateTimeFormat to get the time in EST/EDT
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false
-  });
-  
-  // Parse the formatted date string back into a Date object
-  const parts = formatter.formatToParts(now);
-  const values = {};
-  parts.forEach(part => {
-    if (part.type !== 'literal') {
-      values[part.type] = part.value;
-    }
-  });
-  
-  // Create a new date in EST/EDT
-  const estTime = new Date(
-    values.year,
-    values.month - 1,
-    values.day,
-    values.hour,
-    values.minute,
-    values.second
-  );
-  
-  return estTime;
-}
-
-function canUseSpecialWeather(character, village) {
-  const lastUsage = character.specialWeatherUsage?.get(village);
-  if (!lastUsage) return true;
-
-  // Get current time in EST/EDT
-  const now = getESTTime();
-  
-  // Get the start of the current weather period (8am EST/EDT of the current day)
-  const startOfPeriod = new Date(now);
-  startOfPeriod.setHours(8, 0, 0, 0);
-  
-  // If current time is before 8am EST/EDT, use previous day's 8am as start
-  if (now.getHours() < 8) {
-    startOfPeriod.setDate(startOfPeriod.getDate() - 1);
-  }
-
-  // Get the end of the current weather period (7:59:59 AM EST/EDT of the next day)
-  const endOfPeriod = new Date(startOfPeriod);
-  endOfPeriod.setDate(endOfPeriod.getDate() + 1);
-  endOfPeriod.setHours(7, 59, 59, 999);
-
-  // Convert lastUsage to EST/EDT for comparison
-  const lastUsageEST = new Date(lastUsage);
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false
-  });
-  
-  const parts = formatter.formatToParts(lastUsageEST);
-  const values = {};
-  parts.forEach(part => {
-    if (part.type !== 'literal') {
-      values[part.type] = part.value;
-    }
-  });
-  
-  const lastUsageESTDate = new Date(
-    values.year,
-    values.month - 1,
-    values.day,
-    values.hour,
-    values.minute,
-    values.second
-  );
-
-  // Check if last usage was before the start of the current period
-  return lastUsageESTDate < startOfPeriod;
-}
-
-function getNextAvailableTime(lastUsage) {
-  // Convert lastUsage to EST/EDT using the same method
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false
-  });
-  
-  const parts = formatter.formatToParts(lastUsage);
-  const values = {};
-  parts.forEach(part => {
-    if (part.type !== 'literal') {
-      values[part.type] = part.value;
-    }
-  });
-  
-  const lastUsageEST = new Date(
-    values.year,
-    values.month - 1,
-    values.day,
-    values.hour,
-    values.minute,
-    values.second
-  );
-  
-  // Set to 8am EST/EDT of the next day
-  const nextAvailable = new Date(lastUsageEST);
-  nextAvailable.setHours(8, 0, 0, 0);
-  nextAvailable.setDate(nextAvailable.getDate() + 1);
-  return nextAvailable;
-}
 
 // ------------------- Command Definition -------------------
 module.exports = {
@@ -446,18 +259,18 @@ module.exports = {
         }
       }
 
-      // Check if character has already gathered during special weather in this village today
-      const isModerator = ['inarikomod', 'rudaniamod', 'vhintlmod'].includes(character.name.toLowerCase());
+      // Check if character has already gathered during special weather in this village this period
+      const isModerator = ['inarikomod', 'rudaniamod', 'vhintlmod'].includes(character.name.toLowerCase()); // Bypass for mod accounts and mod characters.
       if ((!isModerator && !character.isModCharacter) && !canUseSpecialWeather(character, channelVillage)) {
         await interaction.editReply({
           embeds: [{
             color: 0x008B8B, // Dark cyan color
-            description: `*${character.name} has found all the special weather had to offer in ${channelVillage} today!*\n\n**Daily special weather gathering limit reached for ${channelVillage}.**\nYou've already gathered during special weather in ${channelVillage} today. Special weather events are rare and unpredictable - keep an eye out for the next one!`,
+            description: `*${character.name} has found all the special weather had to offer in ${channelVillage} this period!*\n\n**Period special weather gathering limit reached for ${channelVillage}.**\nYou've already gathered during special weather in ${channelVillage} this period (8am–7:59am EST). Special weather events are rare and unpredictable - keep an eye out for the next one!`,
             image: {
               url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
-              text: 'Daily Activity Limit'
+              text: 'Period Activity Limit'
             }
           }],
           ephemeral: true,
@@ -548,8 +361,8 @@ module.exports = {
 
       // Get special weather items
       const items = await fetchAllItems();
-      
-      // Convert special weather label to the corresponding field name
+      // Convert weather.special.label to ItemModel.specialWeather field: muggy, flowerbloom, fairycircle,
+      // jubilee, meteorShower, rockslide, avalanche. (Meteor Shower -> meteorShower; rest lowercase, no spaces.)
       const specialWeatherField = weather.special.label
         .toLowerCase()
         .replace(/\s+/g, '') // Remove spaces
@@ -637,15 +450,13 @@ module.exports = {
       // Sync item using itemSyncUtils
       await syncToInventoryDatabase(character, itemToSync, interaction);
 
-      // Update last special weather gather time
-      character.lastSpecialWeatherGather = new Date();
-      await character.save();
-
-      // Update special weather usage for this village
+      // 1x per period per village: record usage for this village
+      const now = new Date();
       if (!character.specialWeatherUsage) {
         character.specialWeatherUsage = new Map();
       }
-      character.specialWeatherUsage.set(channelVillage, new Date());
+      character.specialWeatherUsage.set(normalizeVillageName(channelVillage), now);
+      character.markModified('specialWeatherUsage');
       await character.save();
 
       // Create and send embed

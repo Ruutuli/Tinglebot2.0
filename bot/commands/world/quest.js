@@ -266,9 +266,9 @@ module.exports = {
    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 
   } catch (error) {
-   console.error('[quest.js]❌ Error in handleQuestStatus:', error);
+   logger.error('QUEST', `handleQuestStatus failed; userId=${interaction.user?.id}; ${error.message}`, error);
    return interaction.reply({
-    content: "[quest.js]❌ An error occurred while checking your quest status.",
+    content: "An error occurred while checking your quest status.",
     flags: MessageFlags.Ephemeral,
    });
   }
@@ -413,16 +413,16 @@ const snapshotLines = [
    });
 
   } catch (error) {
-   console.error("[quest.js]❌ Error in handleQuestStats:", error);
+   logger.error('QUEST', `handleQuestStats failed; userId=${interaction.user?.id}; ${error.message}`, error);
    return interaction.reply({
-    content: "[quest.js]❌ An error occurred while retrieving quest stats.",
+    content: "An error occurred while retrieving quest stats.",
     flags: MessageFlags.Ephemeral
    });
   }
  },
 
 // ============================================================================
-// ------------------- Legacy Quest Transfer Handler -------------------
+// ------------------- Quest Turn-In Handler -------------------
 // ============================================================================
 async handleQuestTurnIn(interaction) {
  try {
@@ -484,56 +484,74 @@ async handleQuestTurnIn(interaction) {
   let description = "";
 
   if (rewardType === "character_slot") {
-   const previousSlots = typeof user.characterSlot === "number" ? user.characterSlot : 2;
-   user.characterSlot = previousSlots + 1;
-   await user.save();
+   try {
+    const previousSlots = typeof user.characterSlot === "number" ? user.characterSlot : 2;
+    user.characterSlot = previousSlots + 1;
+    await user.save();
 
-   rewardFields.push({
-    name: "🎫 Character Slots",
-    value: `> ${previousSlots} → ${user.characterSlot}`,
-    inline: true
-   });
+    rewardFields.push({
+     name: "🎫 Character Slots",
+     value: `> ${previousSlots} → ${user.characterSlot}`,
+     inline: true
+    });
 
-   rewardValue = "+1 Character Slot";
-   description = "You exchanged 10 completed quests for a new character slot.";
-  } else {
-   const { getCharacterInventoryCollection } = require('../../../shared/database/db');
-   const inventoryCollection = await getCharacterInventoryCollection(character.name);
-   const existingOrb = await inventoryCollection.findOne({
-    characterId: character._id,
-    itemName: { $regex: /^spirit orb$/i }
-   });
-
-   const previousOrbs = existingOrb?.quantity || 0;
-   const newOrbTotal = previousOrbs + 1;
-
-   if (existingOrb) {
-    await inventoryCollection.updateOne(
-     { _id: existingOrb._id },
-     { $set: { quantity: newOrbTotal } }
-    );
-   } else {
-    await inventoryCollection.insertOne({
-     characterId: character._id,
-     itemName: "Spirit Orb",
-     quantity: 1,
-     category: "Material",
-     type: "Special",
-     subtype: "",
-     addedAt: new Date()
+    rewardValue = "+1 Character Slot";
+    description = "You exchanged 10 completed quests for a new character slot.";
+   } catch (slotError) {
+    logger.error('QUEST', `handleQuestTurnIn: character_slot failed; userId=${interaction.user.id}, rewardType=character_slot, requiredTurnIns=${requiredTurnIns}`, slotError);
+    return interaction.reply({
+     content: "The turn-in was consumed but the character slot could not be granted. Please contact an admin.",
+     flags: MessageFlags.Ephemeral
     });
    }
+  } else {
+   // getCharacterInventoryCollection required here to avoid loading db when reward is character_slot
+   try {
+    const { getCharacterInventoryCollection } = require('../../../shared/database/db');
+    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+    const existingOrb = await inventoryCollection.findOne({
+     characterId: character._id,
+     itemName: { $regex: /^spirit orb$/i }
+    });
 
-   await Character.findByIdAndUpdate(character._id, { spiritOrbs: newOrbTotal });
+    const previousOrbs = existingOrb?.quantity || 0;
+    const newOrbTotal = previousOrbs + 1;
 
-   rewardFields.push({
-    name: "<:spiritorb:1171310851748270121> Spirit Orbs",
-    value: `> ${previousOrbs} → ${newOrbTotal}`,
-    inline: true
-   });
+    if (existingOrb) {
+     await inventoryCollection.updateOne(
+      { _id: existingOrb._id },
+      { $set: { quantity: newOrbTotal } }
+     );
+    } else {
+     await inventoryCollection.insertOne({
+      characterId: character._id,
+      itemName: "Spirit Orb",
+      quantity: 1,
+      category: "Material",
+      type: "Special",
+      subtype: "",
+      addedAt: new Date()
+     });
+    }
 
-   rewardValue = "+1 <:spiritorb:1171310851748270121> Spirit Orb";
-   description = `You exchanged 10 completed quests for a Spirit Orb for **${character.name}**.`;
+    await Character.findByIdAndUpdate(character._id, { spiritOrbs: newOrbTotal });
+
+    rewardFields.push({
+     name: "<:spiritorb:1171310851748270121> Spirit Orbs",
+     value: `> ${previousOrbs} → ${newOrbTotal}`,
+     inline: true
+    });
+
+    rewardValue = "+1 <:spiritorb:1171310851748270121> Spirit Orb";
+    description = `You exchanged 10 completed quests for a Spirit Orb for **${character.name}**.`;
+   } catch (orbError) {
+    logger.error('QUEST', `handleQuestTurnIn: spirit_orb failed; userId=${interaction.user.id}, character=${character?.name}, rewardType=spirit_orb`, orbError);
+    // consumeQuestTurnIns already succeeded; user has lost 10 turn-ins. TODO: consider compensate or manual fix path.
+    return interaction.reply({
+     content: "The turn-in was consumed but the Spirit Orb could not be granted. Please contact an admin.",
+     flags: MessageFlags.Ephemeral
+    });
+   }
   }
 
   const summaryEmbed = createBaseEmbed(
@@ -565,23 +583,26 @@ async handleQuestTurnIn(interaction) {
    flags: MessageFlags.Ephemeral
   });
  } catch (error) {
-  console.error("[quest.js]❌ Error in handleQuestTurnIn:", error);
+  logger.error('QUEST', `handleQuestTurnIn failed; userId=${interaction.user?.id}, rewardType=${interaction.options?.getString?.('reward')}; ${error.message}`, error);
 
   if (!interaction.replied && !interaction.deferred) {
    return interaction.reply({
-    content: "[quest.js]❌ An error occurred while processing your quest turn-in.",
+    content: "An error occurred while processing your quest turn-in.",
     flags: MessageFlags.Ephemeral
    });
   }
 
   return interaction.followUp({
-   content: "[quest.js]❌ An error occurred while processing your quest turn-in.",
+   content: "An error occurred while processing your quest turn-in.",
    flags: MessageFlags.Ephemeral
   });
  }
 },
 
- async handleLegacyQuestTransfer(interaction) {
+// ============================================================================
+// ------------------- Legacy Quest Transfer Handler -------------------
+// ============================================================================
+async handleLegacyQuestTransfer(interaction) {
   try {
    const totalLegacy = interaction.options.getInteger("total");
    const pendingLegacy = interaction.options.getInteger("pending");
@@ -627,6 +648,9 @@ async handleQuestTurnIn(interaction) {
    
    // Get the correct turn-in summary after ensuring pendingTurnIns is fixed
    const turnInSummary = updatedUser ? updatedUser.getQuestTurnInSummary() : (transferResult.turnInSummary || {
+    totalPending: transferResult.pendingTurnIns || 0,
+    currentPending: updatedUser?.quests?.pendingTurnIns ?? 0,
+    legacyPending: transferResult.legacy?.pendingTurnIns ?? 0,
     redeemableSets: Math.floor((transferResult.pendingTurnIns || 0) / 10),
     remainder: (transferResult.pendingTurnIns || 0) % 10
    });
@@ -678,9 +702,9 @@ async handleQuestTurnIn(interaction) {
     flags: MessageFlags.Ephemeral
    });
   } catch (error) {
-   console.error("[quest.js]❌ Error in handleLegacyQuestTransfer:", error);
+   logger.error('QUEST', `handleLegacyQuestTransfer failed; userId=${interaction.user?.id}; ${error.message}`, error);
    return interaction.reply({
-    content: "[quest.js]❌ An error occurred while transferring legacy quests.",
+    content: "An error occurred while transferring legacy quests.",
     flags: MessageFlags.Ephemeral
    });
   }
@@ -692,19 +716,19 @@ async handleQuestTurnIn(interaction) {
  async updateQuestEmbed(guild, quest, client = null, updateSource = 'questJoin') {
   try {
    if (!quest || !quest.messageID) {
-    console.log(`[quest.js]⚠️ No quest or messageID provided, skipping embed update`);
+    logger.warn('QUEST', 'updateQuestEmbed: no quest or messageID provided, skipping');
     return { success: false, reason: 'No quest or messageID' };
    }
 
    const questID = quest.questID || quest.questId;
    if (!questID) {
-    console.log(`[quest.js]⚠️ No questID found, skipping embed update`);
+    logger.warn('QUEST', 'updateQuestEmbed: no questID found, skipping');
     return { success: false, reason: 'No questID' };
    }
 
   // Check if we're already updating this quest
   if (this.isQuestBeingUpdated(questID)) {
-   console.log(`[quest.js]⏳ Quest ${questID} is already being updated, queuing request from ${updateSource}`);
+   logger.info('QUEST', `Quest ${questID} is already being updated, queuing request from ${updateSource}`);
    this.queueEmbedUpdate(questID, quest, client, updateSource);
    return { success: true, reason: 'Queued for update' };
   }
@@ -724,13 +748,13 @@ async handleQuestTurnIn(interaction) {
    return result;
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error updating quest embed:`, error);
-   
+   logger.error('QUEST', `Error updating quest embed: ${error.message}`, error);
+
    // Clear update status on error
    if (quest && quest.questID) {
     this.clearQuestUpdateStatus(quest.questID);
    }
-   
+
    return { success: false, error: error.message };
   }
  },
@@ -793,7 +817,7 @@ async handleQuestTurnIn(interaction) {
   queueEntry.pendingUpdates = [];
   
   if (latestUpdate) {
-   console.log(`[quest.js]🔄 Processing queued update for quest ${questID} from ${latestUpdate.updateSource}`);
+   logger.info('QUEST', `Processing queued update for quest ${questID} from ${latestUpdate.updateSource}`);
    await this.updateQuestEmbed(null, latestUpdate.quest, latestUpdate.client, latestUpdate.updateSource);
   }
  },
@@ -902,29 +926,29 @@ formatQuestCount(count = 0) {
 
    // Validate client is available
    if (!client) {
-    console.log(`[quest.js]⚠️ No client provided for embed update, skipping`);
+    logger.warn('QUEST', 'performEmbedUpdate: no client provided, skipping');
     return { success: false, reason: 'No client provided' };
    }
 
    // Get the quest channel and message
    const questChannelId = quest.targetChannel || QUEST_CHANNEL_ID;
    const questChannel = client.channels.cache.get(questChannelId);
-   
+
    if (!questChannel) {
-    console.log(`[quest.js]⚠️ Quest channel not found (${questChannelId})`);
+    logger.warn('QUEST', `performEmbedUpdate: quest channel not found (${questChannelId})`);
     return { success: false, reason: 'Channel not found' };
    }
 
    const questMessage = await questChannel.messages.fetch(quest.messageID);
    if (!questMessage) {
-    console.log(`[quest.js]⚠️ Quest message not found (${quest.messageID})`);
+    logger.warn('QUEST', `performEmbedUpdate: quest message not found (${quest.messageID})`);
     return { success: false, reason: 'Message not found' };
    }
 
    // Get current embed
    const currentEmbed = questMessage.embeds[0];
    if (!currentEmbed) {
-    console.log(`[quest.js]⚠️ No embed found in quest message`);
+    logger.warn('QUEST', 'performEmbedUpdate: no embed found in quest message');
     return { success: false, reason: 'No embed found' };
    }
 
@@ -938,7 +962,7 @@ formatQuestCount(count = 0) {
    return { success: true, reason: 'Updated successfully' };
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error performing embed update:`, error);
+   logger.error('QUEST', `Error performing embed update: ${error.message}`, error);
    return { success: false, error: error.message };
   }
  },
@@ -966,7 +990,7 @@ formatQuestCount(count = 0) {
    return embed;
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error creating updated embed:`, error);
+   logger.error('QUEST', `Error creating updated embed: ${error.message}`, error);
    return currentEmbed; // Return original embed on error
   }
  },
@@ -1034,7 +1058,7 @@ formatQuestCount(count = 0) {
    }
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error updating participant fields:`, error);
+   logger.error('QUEST', `Error updating participant fields: ${error.message}`, error);
   }
  },
 
@@ -1066,7 +1090,7 @@ formatQuestCount(count = 0) {
    }
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error updating status fields:`, error);
+   logger.error('QUEST', `Error updating status fields: ${error.message}`, error);
   }
  },
 
@@ -1093,7 +1117,7 @@ formatQuestCount(count = 0) {
    }
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error updating RP quest fields:`, error);
+   logger.error('QUEST', `Error updating RP quest fields: ${error.message}`, error);
   }
  },
 
@@ -1123,7 +1147,7 @@ formatQuestCount(count = 0) {
    }
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error updating interactive quest fields:`, error);
+   logger.error('QUEST', `Error updating interactive quest fields: ${error.message}`, error);
   }
  },
 
@@ -1142,7 +1166,7 @@ formatQuestCount(count = 0) {
    }
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error updating quest-specific fields:`, error);
+   logger.error('QUEST', `Error updating quest-specific fields: ${error.message}`, error);
   }
  },
 
@@ -1221,7 +1245,7 @@ formatQuestCount(count = 0) {
    });
 
   } catch (error) {
-   console.error(`[quest.js]❌ Error updating footer:`, error);
+   logger.error('QUEST', `Error updating footer: ${error.message}`, error);
   }
  },
 
@@ -1556,7 +1580,7 @@ formatQuestCount(count = 0) {
    // Check if character has an active quest voucher
    return character.questVoucher === true;
   } catch (error) {
-   console.error(`[quest.js] Error checking quest voucher for user ${userID}:`, error);
+   logger.error('QUEST', `Error checking quest voucher for user ${userID}: ${error.message}`, error);
    return false;
   }
  },
@@ -1575,10 +1599,10 @@ formatQuestCount(count = 0) {
    character.questVoucherUsedFor = quest.questID;
    await character.save();
    
-   console.log(`[quest.js] ✅ Quest voucher used by ${character.name} for quest ${quest.questID}`);
+   logger.info('QUEST', `Quest voucher used by ${character.name} for quest ${quest.questID}`);
    return true;
   } catch (error) {
-   console.error(`[quest.js] Error handling quest voucher usage:`, error);
+   logger.error('QUEST', `Error handling quest voucher usage: ${error.message}`, error);
    return false;
   }
  },
@@ -1613,7 +1637,7 @@ formatQuestCount(count = 0) {
    
    return stats;
   } catch (error) {
-   console.error(`[quest.js] Error getting capped quest statistics:`, error);
+   logger.error('QUEST', `Error getting capped quest statistics: ${error.message}`, error);
    return null;
   }
  },
@@ -1650,12 +1674,12 @@ formatQuestCount(count = 0) {
     const rpThread = interaction.guild.channels.cache.get(quest.rpThreadParentChannel);
     if (rpThread && rpThread.isThread()) {
      await rpThread.members.add(userID);
-     console.log(`[quest.js]✅ Added ${userName} to RP thread for quest ${quest.title}`);
+     logger.info('QUEST', `Added ${userName} to RP thread for quest ${quest.title}`);
     } else {
-     console.log(`[quest.js]⚠️ RP thread not found for quest ${quest.title} (ID: ${quest.rpThreadParentChannel})`);
+     logger.warn('QUEST', `RP thread not found for quest ${quest.title} (ID: ${quest.rpThreadParentChannel})`);
     }
    } catch (error) {
-    console.error(`[quest.js]❌ Failed to add user to RP thread: ${error.message}`);
+    logger.error('QUEST', `Failed to add user to RP thread: ${error.message}`, error);
    }
   }
  },

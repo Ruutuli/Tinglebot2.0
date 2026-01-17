@@ -2415,6 +2415,22 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
       return res.status(500).json({ error: `Model not initialized for type: ${modelType}` });
     }
 
+    // For quest + latestMonthOnly: restrict to the calendar month of the most recently posted quest
+    if (modelType === 'quest' && req.query.latestMonthOnly === 'true' && !allItems) {
+      const latest = await Quest.findOne({ postedAt: { $ne: null, $exists: true } })
+        .sort({ postedAt: -1 })
+        .select('postedAt')
+        .lean();
+      if (latest && latest.postedAt) {
+        const d = new Date(latest.postedAt);
+        const y = d.getFullYear();
+        const m = d.getMonth(); // 0-indexed
+        const startOfMonth = new Date(y, m, 1);
+        const endOfMonth = new Date(y, m + 1, 0, 23, 59, 59, 999);
+        query.postedAt = { $gte: startOfMonth, $lte: endOfMonth };
+      }
+    }
+
     // Ensure database connection is available
     // For vending, check vendingConnection; for inventory, check inventoriesConnection; otherwise check main connection
     if (modelType === 'vending') {

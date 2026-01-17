@@ -1,5 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
+const { countUniqueQuestCompletions } = require('../utils/questTrackingUtils');
+const logger = require('../utils/logger');
 // ------------------- Define the user schema -------------------
 const userSchema = new mongoose.Schema({
   discordId: { type: String, required: true, unique: true }, // Unique Discord ID of the user
@@ -502,17 +504,7 @@ userSchema.methods.ensureQuestTracking = function() {
     // Validate that pendingTurnIns matches actual non-legacy quest completions
     // IMPORTANT: Only fix if pendingTurnIns is missing or 0, not if it's lower than completions
     // (lower values could mean some quests were already turned in, which we don't track)
-    // Count unique quest completions (same logic as recordQuestCompletion safeguard)
-    const uniqueQuestIds = new Set();
-    let nullIdCount = 0;
-    for (const completion of (this.quests.completions || [])) {
-      if (completion.questId && completion.questId.trim() !== '') {
-        uniqueQuestIds.add(completion.questId);
-      } else {
-        nullIdCount++;
-      }
-    }
-    const actualCompletions = uniqueQuestIds.size + nullIdCount;
+    const actualCompletions = countUniqueQuestCompletions(this.quests.completions || []);
     const currentPending = this.quests.pendingTurnIns || 0;
     
     // Only fix if pendingTurnIns is 0 or undefined AND we have completions
@@ -534,21 +526,21 @@ userSchema.methods.ensureQuestTracking = function() {
         // Legacy was never transferred - this is a new user
         // Safe to initialize pendingTurnIns from completions
         this.quests.pendingTurnIns = actualCompletions;
-        console.log(`[UserModel.ensureQuestTracking] 🔧 Fixed pendingTurnIns for user ${this.discordId}: was 0, set to ${actualCompletions} (initialized from completions - no legacy)`);
+        logger.info('QUEST', `ensureQuestTracking: fixed pendingTurnIns for user ${this.discordId}: was 0, set to ${actualCompletions} (initialized from completions - no legacy)`);
       } else if (legacyPending > 0) {
         // Legacy exists and hasn't been fully turned in yet
         // Safe to initialize pendingTurnIns (new quests haven't been turned in)
         this.quests.pendingTurnIns = actualCompletions;
-        console.log(`[UserModel.ensureQuestTracking] 🔧 Fixed pendingTurnIns for user ${this.discordId}: was 0, set to ${actualCompletions} (initialized from completions - legacy pending exists)`);
+        logger.info('QUEST', `ensureQuestTracking: fixed pendingTurnIns for user ${this.discordId}: was 0, set to ${actualCompletions} (initialized from completions - legacy pending exists)`);
       } else {
         // Legacy was transferred but is now 0 - turn-ins likely occurred
         // Don't reset pendingTurnIns - it's correctly 0 after turn-in
-        console.log(`[UserModel.ensureQuestTracking] ℹ️ Skipped fixing pendingTurnIns for user ${this.discordId}: legacy was transferred but pending is 0, suggesting turn-ins occurred (pendingTurnIns correctly 0)`);
+        logger.info('QUEST', `ensureQuestTracking: skipped fixing pendingTurnIns for user ${this.discordId}: legacy was transferred but pending is 0, suggesting turn-ins occurred (pendingTurnIns correctly 0)`);
       }
     } else if (currentPending < 0) {
       // Fix negative values (should never happen, but handle it)
       this.quests.pendingTurnIns = Math.max(0, currentPending);
-      console.log(`[UserModel.ensureQuestTracking] 🔧 Fixed negative pendingTurnIns for user ${this.discordId}: was ${currentPending}, set to 0`);
+      logger.info('QUEST', `ensureQuestTracking: fixed negative pendingTurnIns for user ${this.discordId}: was ${currentPending}, set to 0`);
     }
     // Note: We DON'T increase pendingTurnIns if it's less than actualCompletions when it's > 0,
     // because some quests may have been turned in (which we don't track per-quest)
@@ -591,7 +583,7 @@ userSchema.methods.recordQuestCompletion = async function({
   // ------------------- Validate questId -------------------
   // questId is required for proper tracking - warn if missing but don't fail
   if (!questId || questId.trim() === '') {
-    console.warn(`[UserModel.recordQuestCompletion] ⚠️ Quest completion recorded without questId for user ${this.discordId}. This may cause tracking issues.`);
+    logger.warn('QUEST', `Quest completion recorded without questId for user ${this.discordId}. This may cause tracking issues.`);
   }
   
   let isNewCompletion = true;
@@ -656,43 +648,22 @@ userSchema.methods.recordQuestCompletion = async function({
     questTracking.pendingTurnIns = (questTracking.pendingTurnIns || 0) + 1;
     questTracking.typeTotals[typeKey] = (questTracking.typeTotals[typeKey] || 0) + 1;
   } else {
-    // ------------------- Safeguard: Ensure pendingTurnIns is in sync -------------------
-    // When updating an existing completion, verify that pendingTurnIns is correct
-    // Count unique quest completions to ensure consistency
-    const uniqueQuestIds = new Set();
-    let nullIdCount = 0;
-    for (const completion of questTracking.completions) {
-      if (completion.questId && completion.questId.trim() !== '') {
-        uniqueQuestIds.add(completion.questId);
-      } else {
-        nullIdCount++;
-      }
-    }
-    const actualCompletions = uniqueQuestIds.size + nullIdCount;
-    
-    // If totalCompleted doesn't match actual completions, fix it
+    // ------------------- Safeguard: Ensure totalCompleted matches unique completions -------------------
+    // When updating an existing completion, fix totalCompleted if it was undercounted.
+    // Do NOT set pendingTurnIns = actualCompletions: pendingTurnIns can legitimately be less
+    // when the user has already turned in (consumeQuestTurnIns reduces it; completions are not removed).
+    const actualCompletions = countUniqueQuestCompletions(questTracking.completions);
+
     if (questTracking.totalCompleted !== actualCompletions) {
-      console.warn(`[UserModel.recordQuestCompletion] ⚠️ Quest tracking mismatch for user ${this.discordId}: totalCompleted=${questTracking.totalCompleted}, actual=${actualCompletions}. Auto-fixing...`);
+      logger.warn('QUEST', `Quest tracking mismatch for user ${this.discordId}: totalCompleted=${questTracking.totalCompleted}, actual=${actualCompletions}. Auto-fixing...`);
       const diff = actualCompletions - questTracking.totalCompleted;
       questTracking.totalCompleted = actualCompletions;
-      
+
       // Adjust pendingTurnIns if needed (only increase, never decrease to avoid undercounting)
       if (diff > 0) {
         questTracking.pendingTurnIns = (questTracking.pendingTurnIns || 0) + diff;
-        console.log(`[UserModel.recordQuestCompletion] ✅ Fixed pendingTurnIns: added ${diff} missing completions`);
+        logger.info('QUEST', `Fixed pendingTurnIns: added ${diff} missing completions for user ${this.discordId}`);
       }
-    }
-    
-    // ------------------- Always validate pendingTurnIns matches unique completions -------------------
-    // Even if totalCompleted is correct, pendingTurnIns might be wrong
-    // pendingTurnIns should equal the number of unique quest completions (available for turn-in)
-    const currentPendingTurnIns = questTracking.pendingTurnIns || 0;
-    const expectedPendingTurnIns = actualCompletions;
-    
-    if (currentPendingTurnIns < expectedPendingTurnIns) {
-      const pendingDiff = expectedPendingTurnIns - currentPendingTurnIns;
-      questTracking.pendingTurnIns = expectedPendingTurnIns;
-      console.log(`[UserModel.recordQuestCompletion] 🔧 Fixed pendingTurnIns discrepancy for user ${this.discordId}: was ${currentPendingTurnIns}, expected ${expectedPendingTurnIns} (added ${pendingDiff})`);
     }
   }
   
@@ -768,13 +739,12 @@ userSchema.methods.applyLegacyQuestTransfer = async function({
   questTracking.legacy.transferredAt = new Date();
   questTracking.legacy.transferUsed = true;
 
-  // Ensure pendingTurnIns is correctly set based on actual completions
-  // This fixes cases where pendingTurnIns wasn't properly incremented when quests were completed
-  const actualCompletions = questTracking.completions?.length || 0;
-  if (questTracking.pendingTurnIns < actualCompletions) {
-    const oldPending = questTracking.pendingTurnIns || 0;
+  // Only fix current (non-legacy) pendingTurnIns when it is 0 and we have completions.
+  // When pendingTurnIns > 0, we do not touch it to avoid over-crediting users who have already turned in.
+  const actualCompletions = countUniqueQuestCompletions(questTracking.completions || []);
+  if (questTracking.pendingTurnIns === 0 && actualCompletions > 0) {
     questTracking.pendingTurnIns = actualCompletions;
-    console.log(`[UserModel.applyLegacyQuestTransfer] 🔧 Fixed pendingTurnIns for user ${this.discordId}: was ${oldPending}, set to ${actualCompletions} (added ${actualCompletions - oldPending} missing completions)`);
+    logger.info('QUEST', `applyLegacyQuestTransfer: fixed pendingTurnIns for user ${this.discordId}: was 0, set to ${actualCompletions} (initialized from completions)`);
   }
 
   await this.save();
@@ -829,17 +799,7 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
   }
 
   // Ensure pendingTurnIns is correctly set before deduction
-  // Count unique quest completions to determine if pendingTurnIns needs fixing
-  const uniqueQuestIds = new Set();
-  let nullIdCount = 0;
-  for (const completion of (questTracking.completions || [])) {
-    if (completion.questId && completion.questId.trim() !== '') {
-      uniqueQuestIds.add(completion.questId);
-    } else {
-      nullIdCount++;
-    }
-  }
-  const actualCompletions = uniqueQuestIds.size + nullIdCount;
+  const actualCompletions = countUniqueQuestCompletions(questTracking.completions || []);
   const currentPendingBeforeFix = questTracking.pendingTurnIns || 0;
   const legacyPending = questTracking.legacy?.pendingTurnIns || 0;
   const legacyTransferUsed = questTracking.legacy?.transferUsed || false;
@@ -850,7 +810,7 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
     if (!legacyTransferUsed || legacyPending > 0) {
       // Safe to initialize: no legacy transfer OR legacy pending exists (no turn-ins yet)
       questTracking.pendingTurnIns = actualCompletions;
-      console.log(`[UserModel.consumeQuestTurnIns] 🔧 Fixed pendingTurnIns before consumption for user ${this.discordId}: was 0, set to ${actualCompletions}`);
+      logger.info('QUEST', `consumeQuestTurnIns: fixed pendingTurnIns before consumption for user ${this.discordId}: was 0, set to ${actualCompletions}`);
     }
     // If legacy transfer was used and legacy pending is 0, don't fix (turn-ins likely occurred)
   }
@@ -865,7 +825,8 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
 
   let remaining = sanitizedAmount;
   const currentPending = questTracking.pendingTurnIns || 0;
-  const finalLegacyPending = questTracking.legacy?.pendingTurnIns || 0;
+  // Legacy pending before we deduct; we don't modify legacy in the block above.
+  const legacyPendingBeforeDeduct = questTracking.legacy?.pendingTurnIns || 0;
 
   // Deduct from non-legacy pending first, then from legacy
   if (currentPending > 0) {
@@ -875,15 +836,16 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
   }
 
   // Deduct remaining from legacy pending
-  if (remaining > 0 && finalLegacyPending > 0) {
-    const deductLegacy = Math.min(finalLegacyPending, remaining);
-    questTracking.legacy.pendingTurnIns = finalLegacyPending - deductLegacy;
+  if (remaining > 0 && legacyPendingBeforeDeduct > 0) {
+    const deductLegacy = Math.min(legacyPendingBeforeDeduct, remaining);
+    questTracking.legacy.pendingTurnIns = legacyPendingBeforeDeduct - deductLegacy;
     remaining -= deductLegacy;
   }
 
   // Validate that we consumed exactly the requested amount
   if (remaining > 0) {
-    console.error(`[UserModel.consumeQuestTurnIns] ⚠️ Warning: Attempted to consume ${sanitizedAmount} but only consumed ${sanitizedAmount - remaining}. This should not happen.`);
+    const consumed = sanitizedAmount - remaining;
+    logger.error('QUEST', `consumeQuestTurnIns: attempted to consume ${sanitizedAmount} but only consumed ${consumed}; totalPending before deduction was ${totalPending}; userId=${this.discordId}`);
   }
 
   await this.save();

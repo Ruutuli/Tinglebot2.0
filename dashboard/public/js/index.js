@@ -2196,21 +2196,21 @@ async function loadRecentQuests() {
   const container = document.getElementById('recent-quests-container');
   if (!container) return;
 
-  // Update month title
+  // Update month title (will be set from first quest's postedAt when we have data)
   const monthTitle = document.getElementById('quest-month-title');
-  if (monthTitle) {
-    const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long' });
-    monthTitle.textContent = `${currentMonth} Quests`;
-  }
 
   try {
-    // Fetch the most recent 6 quests
-    const response = await fetch('/api/models/quest?limit=6&sort=postedAt&order=desc');
+    // Fetch the most recent 6 quests from the latest month only
+    const response = await fetch('/api/models/quest?limit=6&sort=postedAt&order=desc&latestMonthOnly=true');
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const { data: quests } = await response.json();
     
     if (!quests || quests.length === 0) {
+      if (monthTitle) {
+        const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long' });
+        monthTitle.textContent = `${currentMonth} Quests`;
+      }
       container.innerHTML = `
         <div class="no-recent-quests">
           <i class="fas fa-inbox"></i>
@@ -2218,6 +2218,14 @@ async function loadRecentQuests() {
         </div>
       `;
       return;
+    }
+
+    // Set month title from the first quest's postedAt (all are from the same month when using latestMonthOnly)
+    if (monthTitle) {
+      const monthName = quests[0].postedAt
+        ? new Date(quests[0].postedAt).toLocaleDateString('en-US', { month: 'long' })
+        : new Date().toLocaleDateString('en-US', { month: 'long' });
+      monthTitle.textContent = `${monthName} Quests`;
     }
 
     // Render quest cards
