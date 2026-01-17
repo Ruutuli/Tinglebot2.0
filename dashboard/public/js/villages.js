@@ -546,6 +546,11 @@ function createVillageModelCard(village) {
   // Process contributors for back of card
   let contributorsHTML = '';
   
+  // Debug: Log contributors data structure
+  console.log(`[villages.js] Processing contributors for ${name}:`, contributors);
+  console.log(`[villages.js] Contributors type:`, typeof contributors);
+  console.log(`[villages.js] Contributors keys:`, contributors ? Object.keys(contributors) : 'null');
+  
   if (contributors && typeof contributors === 'object' && Object.keys(contributors).length > 0) {
     const contributorList = [];
     
@@ -616,7 +621,7 @@ function createVillageModelCard(village) {
   }
 
   return `
-    <div class="village-model-card village-model-card-${name.toLowerCase()}" onclick="this.classList.toggle('flipped')" style="--village-color: ${color};">
+    <div class="model-details-item village-model-card village-model-card-${name.toLowerCase()}" onclick="this.classList.toggle('flipped')" style="--village-color: ${color};">
       <div class="village-card-front">
         ${bannerImg ? `<img src="${bannerImg}" class="village-model-header-banner" alt="${name} banner" />` : ''}
         <div class="village-model-card-header">

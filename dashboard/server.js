@@ -11809,16 +11809,26 @@ app.get('/api/levels/blupee-leaderboard', async (req, res) => {
       .lean();
     
     // Format the response
-    const leaderboard = topBlupeeHunters.map((user, index) => ({
-      rank: index + 1,
-      discordId: user.discordId,
-      username: user.username || 'Unknown',
-      discriminator: user.discriminator || '0000',
-      nickname: user.nickname,
-      avatar: user.avatar,
-      totalBlupeesCaught: user.blupeeHunt?.totalClaimed || 0,
-      lastClaimed: user.blupeeHunt?.lastClaimed || null
-    }));
+    const leaderboard = topBlupeeHunters.map((user, index) => {
+      // Ensure lastClaimed is properly serialized as ISO string
+      let lastClaimed = null;
+      if (user.blupeeHunt?.lastClaimed) {
+        lastClaimed = user.blupeeHunt.lastClaimed instanceof Date 
+          ? user.blupeeHunt.lastClaimed.toISOString()
+          : new Date(user.blupeeHunt.lastClaimed).toISOString();
+      }
+      
+      return {
+        rank: index + 1,
+        discordId: user.discordId,
+        username: user.username || 'Unknown',
+        discriminator: user.discriminator || '0000',
+        nickname: user.nickname,
+        avatar: user.avatar,
+        totalBlupeesCaught: user.blupeeHunt?.totalClaimed || 0,
+        lastClaimed: lastClaimed
+      };
+    });
     
     res.json({
       success: true,

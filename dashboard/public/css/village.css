@@ -678,62 +678,66 @@
   margin-bottom: 2rem;
 }
 
+.model-details-item.village-model-card {
+  position: relative;
+  overflow: visible;
+  min-height: auto;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+}
+
 .village-model-card {
   position: relative;
   overflow: hidden;
-  background: transparent;
+  background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--card-radius);
-  backdrop-filter: blur(var(--frost-blur));
-  transition: transform 0.6s;
-  transform-style: preserve-3d;
-  cursor: pointer;
   box-shadow: var(--card-shadow);
-  min-height: 500px;
-}
-
-.village-model-card.flipped {
-  transform: rotateY(180deg);
-}
-
-.village-card-front,
-.village-card-back {
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
   display: flex;
   flex-direction: column;
+  gap: 1.2rem;
+  min-width: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.model-details-item.village-model-card.flipped {
+  transform: rotateY(180deg);
 }
 
 .village-card-front {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
   transform: rotateY(0deg);
-  background: var(--glass-bg);
-  border-radius: var(--card-radius);
-  z-index: 2;
 }
 
 .village-card-back {
-  transform: rotateY(180deg);
-  background: var(--glass-bg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: rgba(30, 30, 30, 0.95);
   border-radius: var(--card-radius);
+  display: flex;
+  flex-direction: column;
+  left: 0;
+  overflow-y: auto;
+  padding: 1rem;
+  position: absolute;
+  top: 0;
+  transform: rotateY(180deg);
+  width: 100%;
+  min-height: 100%;
+}
+
+.model-details-item.village-model-card.flipped .village-card-back {
   overflow-y: auto;
   max-height: 100%;
-  z-index: 1;
 }
 
-.village-model-card.flipped .village-card-front {
-  z-index: 1;
-}
-
-.village-model-card.flipped .village-card-back {
-  z-index: 2;
-}
-
-.village-model-card::before {
+.village-card-front::before {
   content: '';
   position: absolute;
   top: 0;
@@ -742,15 +746,14 @@
   height: 4px;
   background: linear-gradient(90deg, var(--village-color, #666), var(--village-color, #666));
   opacity: 0.9;
+  z-index: 1;
 }
 
-.village-model-card:not(.flipped):hover {
+.model-details-item.village-model-card:not(.flipped):hover {
   transform: translateY(-4px);
-  border-color: var(--village-color, #666);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--village-color, #666);
 }
 
-.village-model-card.flipped:hover {
+.model-details-item.village-model-card:not(.flipped):hover .village-model-card {
   border-color: var(--village-color, #666);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--village-color, #666);
 }
@@ -772,6 +775,8 @@
   padding: 1.25rem 1.5rem;
   position: relative;
   z-index: 2;
+  border-top-left-radius: var(--card-radius);
+  border-top-right-radius: var(--card-radius);
 }
 
 .village-model-card-header.village-header-has-bg {
@@ -842,6 +847,8 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  flex: 1;
+  overflow: visible;
 }
 
 .village-model-stats {
@@ -1167,6 +1174,7 @@
 
   .village-progress-wrapper {
     min-width: 100%;
+    width: 100%;
   }
 
   .material-item {
@@ -1175,8 +1183,16 @@
     gap: 0.5rem;
   }
 
+  .material-info {
+    width: 100%;
+  }
+
   .material-requirements {
     text-align: left;
+    width: 100%;
+  }
+
+  .material-progress-wrapper {
     width: 100%;
   }
 }
@@ -1306,19 +1322,35 @@
   padding: 2rem 1rem;
 }
 
+/* Touch-friendly interactions for village model cards */
+@media (hover: none) and (pointer: coarse) {
+  .model-details-item.village-model-card {
+    min-height: 60px;
+  }
+  
+  .model-details-item.village-model-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+  
+  .model-details-item.village-model-card.flipped:active {
+    transform: rotateY(180deg) scale(0.98);
+  }
+}
+
 /* Reduced motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
-  .village-model-card,
+  .model-details-item.village-model-card,
   .village-model-stat-item,
   .material-item {
     transition: none;
   }
   
-  .village-model-card.flipped {
+  .model-details-item.village-model-card.flipped {
     transform: rotateY(180deg);
   }
   
-  .village-model-card:hover,
+  .model-details-item.village-model-card:not(.flipped):hover,
   .material-item:hover {
     transform: none;
   }
