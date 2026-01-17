@@ -270,6 +270,77 @@ async function initializeClient() {
       process.exit(1);
     });
 
+    // --------------------------------------------------------------------------
+    // HTTP Server Error Handling (for Railway health checks and HTTP connections)
+    // --------------------------------------------------------------------------
+    // Handle HTTP parse errors from malformed client requests or premature disconnections
+    // These errors are common and shouldn't crash the bot
+    const http = require('http');
+    const originalCreateServer = http.createServer;
+    http.createServer = function(...args) {
+      const server = originalCreateServer.apply(this, args);
+      
+      // Handle client errors (malformed requests, premature disconnections, parse errors)
+      server.on('clientError', (err, socket) => {
+        // Handle parse errors gracefully (malformed HTTP requests)
+        if (err.message && err.message.includes('Parse Error')) {
+          logger.warn('HTTP', `Client parse error (malformed request): ${err.message}`);
+          // End the socket gracefully with proper HTTP response
+          if (socket && !socket.destroyed) {
+            socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+          }
+          return;
+        }
+        
+        // Handle other client errors (premature disconnections, etc.)
+        if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || 
+            err.message && (err.message.includes('socket hang up') || 
+                           err.message.includes('premature close'))) {
+          logger.warn('HTTP', `Client connection error (disconnected): ${err.message || err.code}`);
+          // Don't try to write to a closed socket
+          return;
+        }
+        
+        // Log other client errors
+        logger.warn('HTTP', `Client error: ${err.message || err.code || 'Unknown'}`);
+        if (socket && !socket.destroyed) {
+          socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+        }
+      });
+      
+      // Handle server errors (don't crash on server errors)
+      server.on('error', (err) => {
+        // Only log server errors - Railway will handle restarts if needed
+        logger.error('HTTP', `Server error: ${err.message || err.code || 'Unknown'}`);
+      });
+      
+      return server;
+    };
+
+    // Handle unhandled rejections that might be HTTP-related
+    process.on('unhandledRejection', (reason, promise) => {
+      if (reason && typeof reason === 'object') {
+        // Check if it's an HTTP parse error
+        if (reason.message && reason.message.includes('Parse Error')) {
+          logger.warn('HTTP', `Unhandled HTTP parse error: ${reason.message}`);
+          // Don't crash on parse errors - they're from client requests
+          return;
+        }
+        
+        // Check if it's a connection error
+        if (reason.code === 'ECONNRESET' || reason.code === 'EPIPE' || 
+            reason.message && (reason.message.includes('socket hang up') || 
+                               reason.message.includes('premature close'))) {
+          logger.warn('HTTP', `Connection error (non-fatal): ${reason.message || reason.code}`);
+          // These are common and non-fatal
+          return;
+        }
+      }
+      
+      // Log other unhandled rejections for debugging
+      logger.error('SYSTEM', `Unhandled rejection: ${reason}`);
+    });
+
     module.exports = { client };
 
     // Import command handlers

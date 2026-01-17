@@ -931,7 +931,7 @@ async function handleCreateCharacter(interaction, subcommand) {
       // Check if bot's role is high enough in hierarchy
       const botRole = interaction.guild.members.me.roles.highest;
 
-      // Map role names to their IDs from .env
+      // Map role names to their IDs from .env - expanded to include all jobs from rolesModule
       const roleIdMap = {
         'Race: Hylian': process.env.RACE_HYLIAN,
         'Race: Zora': process.env.RACE_ZORA,
@@ -948,10 +948,40 @@ async function handleCreateCharacter(interaction, subcommand) {
         'Rudania Resident': process.env.RUDANIA_RESIDENT,
         'Vhintl Resident': process.env.VHINTL_RESIDENT,
         ' Resident': process.env.RESIDENT_ROLE_ID, // Generic resident role
+        // All jobs from rolesModule.js
         'Job: Rancher': process.env.JOB_RANCHER,
         'Job: Shopkeeper': process.env.JOB_SHOPKEEPER,
         'Job: Farmer': process.env.JOB_FARMER,
-        'Job: Weaver': process.env.JOB_WEAVER
+        'Job: Weaver': process.env.JOB_WEAVER,
+        'Job: Fisherman': process.env.JOB_FISHERMAN,
+        'Job: Researcher': process.env.JOB_RESEARCHER,
+        'Job: Scholar': process.env.JOB_SCHOLAR,
+        'Job: Teacher': process.env.JOB_TEACHER,
+        'Job: Blacksmith': process.env.JOB_BLACKSMITH,
+        'Job: Miner': process.env.JOB_MINER,
+        'Job: Entertainer': process.env.JOB_ENTERTAINER,
+        'Job: Beekeeper': process.env.JOB_BEEKEEPER,
+        'Job: Fortune Teller': process.env.JOB_FORTUNE_TELLER,
+        'Job: Mask Maker': process.env.JOB_MASK_MAKER,
+        'Job: Adventurer': process.env.JOB_ADVENTURER,
+        'Job: Artist': process.env.JOB_ARTIST,
+        'Job: Bandit': process.env.JOB_BANDIT,
+        'Job: Cook': process.env.JOB_COOK,
+        'Job: Courier': process.env.JOB_COURIER,
+        'Job: Craftsman': process.env.JOB_CRAFTSMAN,
+        'Job: Forager': process.env.JOB_FORAGER,
+        'Job: Graveskeeper': process.env.JOB_GRAVESKEEPER,
+        'Job: Guard': process.env.JOB_GUARD,
+        'Job: Healer': process.env.JOB_HEALER,
+        'Job: Herbalist': process.env.JOB_HERBALIST,
+        'Job: Hunter': process.env.JOB_HUNTER,
+        'Job: Merchant': process.env.JOB_MERCHANT,
+        'Job: Mercenary': process.env.JOB_MERCENARY,
+        'Job: Priest': process.env.JOB_PRIEST,
+        'Job: Scout': process.env.JOB_SCOUT,
+        'Job: Stablehand': process.env.JOB_STABLEHAND,
+        'Job: Villager': process.env.JOB_VILLAGER,
+        'Job: Witch': process.env.JOB_WITCH
       };
 
       // Map job perks to their IDs
@@ -967,18 +997,41 @@ async function handleCreateCharacter(interaction, subcommand) {
         'VENDING': process.env.JOB_PERK_VENDING
       };
 
+      // Helper function to find role by name with fallback
+      const findRoleWithFallback = (roleName) => {
+        // First, try to get role ID from environment variable
+        const roleId = roleIdMap[roleName];
+        
+        if (roleId) {
+          const role = interaction.guild.roles.cache.get(roleId);
+          if (role) {
+            return role;
+          }
+        }
+        
+        // Fallback: search for role by name in the guild (case-insensitive)
+        const roleByName = interaction.guild.roles.cache.find(
+          r => r.name.toLowerCase() === roleName.toLowerCase()
+        );
+        
+        if (roleByName) {
+          if (!roleId) {
+            console.log(`[Roles]: Role "${roleName}" found by name search (env var not set).`);
+          }
+          return roleByName;
+        }
+        
+        // If both methods fail, return null
+        return null;
+      };
+
       // Try to assign roles, but don't fail if they're missing
       for (const roleName of roleNames) {
-        const roleId = roleIdMap[roleName];
-        if (!roleId) {
-          console.warn(`[Roles]: Role ID not found for "${roleName}" in configuration.`);
-          missingRoles.push(roleName);
-          continue;
-        }
-
-        const role = interaction.guild.roles.cache.get(roleId);
+        const role = findRoleWithFallback(roleName);
+        
         if (!role) {
-          console.warn(`[Roles]: Role "${roleName}" not found in the guild.`);
+          // Both env var lookup and guild name search failed
+          console.warn(`[Roles]: Role ID not found for "${roleName}" in configuration, and role not found in guild by name.`);
           missingRoles.push(roleName);
           continue;
         }
@@ -999,35 +1052,61 @@ async function handleCreateCharacter(interaction, subcommand) {
         }
       }
 
+      // Helper function to find perk role by name with fallback
+      const findPerkRoleWithFallback = (perk) => {
+        const perkRoleName = `Job Perk: ${perk}`;
+        
+        // First, try to get role ID from environment variable
+        const perkRoleId = jobPerkIdMap[perk];
+        
+        if (perkRoleId) {
+          const role = interaction.guild.roles.cache.get(perkRoleId);
+          if (role) {
+            return role;
+          }
+        }
+        
+        // Fallback: search for role by name in the guild (case-insensitive)
+        const roleByName = interaction.guild.roles.cache.find(
+          r => r.name.toLowerCase() === perkRoleName.toLowerCase()
+        );
+        
+        if (roleByName) {
+          if (!perkRoleId) {
+            console.log(`[Roles]: Perk role "${perkRoleName}" found by name search (env var not set).`);
+          }
+          return roleByName;
+        }
+        
+        // If both methods fail, return null
+        return null;
+      };
+
       // Try to assign perk roles, but don't fail if they're missing
       for (const perk of jobPerks) {
-        const perkRoleId = jobPerkIdMap[perk];
-        if (!perkRoleId) {
-          console.warn(`[Roles]: Perk role ID not found for "${perk}" in configuration.`);
-          missingRoles.push(`Job Perk: ${perk}`);
-          continue;
-        }
-
-        const perkRole = interaction.guild.roles.cache.get(perkRoleId);
+        const perkRoleName = `Job Perk: ${perk}`;
+        const perkRole = findPerkRoleWithFallback(perk);
+        
         if (!perkRole) {
-          console.warn(`[Roles]: Perk role "Job Perk: ${perk}" not found in the guild.`);
-          missingRoles.push(`Job Perk: ${perk}`);
+          // Both env var lookup and guild name search failed
+          console.warn(`[Roles]: Perk role ID not found for "${perk}" in configuration, and role not found in guild by name.`);
+          missingRoles.push(perkRoleName);
           continue;
         }
 
         if (botRole.position <= perkRole.position) {
-          console.warn(`[Roles]: Bot's role is not high enough to assign the "Job Perk: ${perk}" role.`);
-          missingRoles.push(`Job Perk: ${perk}`);
+          console.warn(`[Roles]: Bot's role is not high enough to assign the "${perkRoleName}" role.`);
+          missingRoles.push(perkRoleName);
           continue;
         }
 
         try {
           await member.roles.add(perkRole);
-          assignedRoles.push(`Job Perk: ${perk}`);
-          console.log(`[Roles]: Assigned perk role "Job Perk: ${perk}" to user "${member.user.tag}".`);
+          assignedRoles.push(perkRoleName);
+          console.log(`[Roles]: Assigned perk role "${perkRoleName}" to user "${member.user.tag}".`);
         } catch (error) {
-          console.error(`[Roles]: Failed to assign perk role "Job Perk: ${perk}":`, error.message);
-          missingRoles.push(`Job Perk: ${perk}`);
+          console.error(`[Roles]: Failed to assign perk role "${perkRoleName}":`, error.message);
+          missingRoles.push(perkRoleName);
         }
       }
     }

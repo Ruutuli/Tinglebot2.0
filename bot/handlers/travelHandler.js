@@ -975,7 +975,110 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
     }
     return decision;
   } catch (error) {
-    handleError(error, 'travelHandler.js (handleGather)');
+    handleError(error, 'travelHandler.js (handleDoNothing)');
+    throw error;
+  }
+}
+
+// ------------------- Open Chest Helper -------------------
+// Opens a travel chest, deducts 1 stamina, and adds a random item to inventory.
+async function handleOpenChest(interaction, character, encounterMessage, travelLog) {
+  try {
+    travelLog = Array.isArray(travelLog) ? travelLog : [];
+    
+    // Check stamina
+    if (character.currentStamina <= 0) {
+      const decision = `❌ **Not enough stamina to open the chest.**\n\n*You need at least 1 🟩 stamina to open a chest.*`;
+      
+      const description = 
+        `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+        `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+        `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+      
+      const embed = createUpdatedTravelEmbed({
+        encounterMessage,
+        character,
+        description,
+        fields: [],
+      });
+      
+      if (typeof encounterMessage?.edit === 'function') {
+        await encounterMessage.edit({ embeds: [embed], components: [] });
+      }
+      
+      return decision;
+    }
+    
+    // Deduct stamina
+    await useStamina(character._id, 1);
+    character.currentStamina = Math.max(0, character.currentStamina - 1);
+    
+    // Fetch all items and select random one (100% random, like ruugame)
+    const allItems = await fetchAllItems();
+    
+    if (!allItems || allItems.length === 0) {
+      const decision = `❌ **No items found in database.**`;
+      
+      const description = 
+        `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+        `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+        `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+      
+      const embed = createUpdatedTravelEmbed({
+        encounterMessage,
+        character,
+        description,
+        fields: [],
+      });
+      
+      if (typeof encounterMessage?.edit === 'function') {
+        await encounterMessage.edit({ embeds: [embed], components: [] });
+      }
+      
+      return decision;
+    }
+    
+    // Select completely random item (no weighting, no filtering)
+    const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+    
+    // Add item to inventory
+    try {
+      await addItemInventoryDatabase(
+        character._id,
+        randomItem.itemName,
+        1,
+        interaction,
+        'Travel Chest'
+      );
+    } catch (inventoryError) {
+      handleError(inventoryError, 'travelHandler.js (handleOpenChest - inventory)');
+      // Continue even if inventory add fails (same pattern as gather)
+    }
+    
+    // Create decision message
+    const itemEmoji = randomItem.emoji || '📦';
+    const decision = `🎁 Opened chest and found ${itemEmoji} ${randomItem.itemName}! (-1 🟩 stamina)`;
+    
+    // Update embed
+    const description = 
+      `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+      `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+      `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+    
+    const embed = createUpdatedTravelEmbed({
+      encounterMessage,
+      character,
+      description,
+      fields: [{ name: '🔹 __Outcome__', value: `Found ${itemEmoji} ${randomItem.itemName}`, inline: false }],
+    });
+    
+    if (typeof encounterMessage?.edit === 'function') {
+      await encounterMessage.edit({ embeds: [embed], components: [] });
+    }
+    
+    return decision;
+  } catch (error) {
+    handleError(error, 'travelHandler.js (handleOpenChest)');
     throw error;
   }
 }
@@ -1026,6 +1129,9 @@ async function handleTravelInteraction(
           break;
         case 'gather':
           result = await handleGather(interaction, character, currentPath, encounterMessage, travelLog, travelContext);
+          break;
+        case 'open_chest':
+          result = await handleOpenChest(interaction, character, encounterMessage, travelLog);
           break;
         case 'fight':
           if (!monster) {

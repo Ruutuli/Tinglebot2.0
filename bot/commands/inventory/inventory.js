@@ -416,9 +416,41 @@ module.exports = {
       });
 
     } catch (error) {
-      handleInteractionError(error, 'inventory.js');
+      handleInteractionError(error, interaction, {
+        source: 'inventory.js',
+        subcommand: 'sync',
+        characterName: characterName || 'unknown'
+      });
       console.error('[inventory.js]: Error in handleSync', error);
-      await interaction.reply({ content: '❌ An error occurred while syncing inventory.', flags: [MessageFlags.Ephemeral] });
+      
+      let errorMessage = '❌ **Error:** An error occurred while syncing inventory.';
+      const errorMsg = error.message || String(error);
+      
+      if (errorMsg.includes('Character with name')) {
+        errorMessage = `❌ **Character Not Found**\n\nThe character "${characterName}" could not be found.\n\n**Fix:** Make sure you're using the correct character name and that the character belongs to your account.`;
+      } else if (errorMsg.includes('invalid') || errorMsg.includes('Invalid')) {
+        errorMessage = '❌ **Invalid Configuration**\n\nThere was a problem with your inventory configuration.\n\n**Fix:** Run `/inventory test` first to verify your setup is correct before syncing.';
+      }
+      
+      try {
+        if (!interaction.replied) {
+          await interaction.reply({
+            embeds: [new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('❌ Sync Failed')
+              .setDescription(errorMessage)
+              .addFields(
+                { name: '💡 Suggestion', value: 'Try running `/inventory test` first to verify your inventory setup is correct.' }
+              )
+              .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+              .setFooter({ text: 'Inventory Sync' })
+              .setTimestamp()],
+            flags: [MessageFlags.Ephemeral]
+          });
+        }
+      } catch (replyError) {
+        console.error('[inventory.js]: Error sending sync error message:', replyError);
+      }
     }
   },
 
@@ -427,12 +459,35 @@ module.exports = {
     try {
       await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
       
-      const characterName = interaction.options.getString('charactername');
+      const fullCharacterName = interaction.options.getString('charactername');
+      
+      // Parse character name consistently with handleView (handle autocomplete format "Name | Username")
+      const characterName = fullCharacterName?.split(' | ')[0]?.trim() || fullCharacterName?.split('|')[0]?.trim() || fullCharacterName?.trim();
       const userId = interaction.user.id;
+
+      // Validate character name before database lookup
+      if (!characterName || characterName.length === 0) {
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ Invalid Character Name')
+            .setDescription('You must provide a valid character name to test the inventory setup.')
+            .addFields(
+              { name: '🔍 Required Format', value: '• Use the character name exactly as it appears in the game\n• Example: `/inventory test character:Link`' },
+              { name: '💡 Suggestion', value: 'Please try the command again with a valid character name.' }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+            .setFooter({ text: 'Command Validation' })
+            .setTimestamp()],
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
+      }
 
       await connectToTinglebot();
       console.log('✅ Connected to Tinglebot database.');
 
+      // Try to fetch character with multiple fallback strategies
       let character = await fetchCharacterByNameAndUserId(characterName, userId);
       
       // If not found as regular character, try as mod character
@@ -441,8 +496,31 @@ module.exports = {
         character = await fetchModCharacterByNameAndUserId(characterName, userId);
       }
       
+      // If still not found, try with the full string (in case parsing removed needed info)
+      if (!character && fullCharacterName !== characterName) {
+        character = await fetchCharacterByNameAndUserId(fullCharacterName, userId);
+        if (!character) {
+          const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
+          character = await fetchModCharacterByNameAndUserId(fullCharacterName, userId);
+        }
+      }
+      
       if (!character) {
-        throw new Error(`Character with name "${characterName}" not found.`);
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ Character Not Found')
+            .setDescription(`The character "${characterName}" does not exist in the database.`)
+            .addFields(
+              { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character belongs to a different user\n• Character was deleted or never created\n• Try using autocomplete to select the character' },
+              { name: '💡 Suggestion', value: 'Please check the spelling and try again. Make sure you\'re testing a character that belongs to your account.' }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+            .setFooter({ text: 'Character Validation' })
+            .setTimestamp()],
+          flags: [MessageFlags.Ephemeral]
+        });
+        return;
       }
       console.log(`✅ Character "${characterName}" found.`);
 
@@ -546,48 +624,73 @@ module.exports = {
       });
 
     } catch (error) {
-      handleInteractionError(error, 'inventory.js');
+      handleInteractionError(error, interaction, {
+        source: 'inventory.js',
+        subcommand: 'test',
+        characterName: characterName || 'unknown'
+      });
       console.error('[inventory.js]: Error in handleTest', error);
 
       let errorMessage;
+      const errorMsg = error.message || String(error);
+      
       switch (true) {
-        case error.message.includes('Character with name'):
-          errorMessage = `❌ **Error:** ${error.message}`;
+        case errorMsg.includes('Character with name'):
+          // This should rarely happen now since we handle it earlier, but keep as fallback
+          errorMessage = `❌ **Character Not Found**\n\nThe character could not be found in the database.\n\n**Possible reasons:**\n• Character name is misspelled\n• Character belongs to a different user\n• Character was deleted or never created\n\n**Suggestion:** Try using autocomplete to select your character, or check the character name spelling.`;
           break;
-        case error.message.includes('invalid_url'):
-          errorMessage = '❌ **Error:** The provided URL is not valid. Please check and try again.';
+        case errorMsg.includes('invalid_url'):
+          errorMessage = '❌ **Invalid URL**\n\nThe provided Google Sheets URL is not valid.\n\n**Fix:** Please check the URL and ensure it\'s a valid Google Sheets link that starts with `https://docs.google.com/spreadsheets/`\n\n**Note:** Make sure the spreadsheet is shared with the bot\'s service account.';
           break;
-        case error.message.includes('missing_sheet'):
-          errorMessage = '❌ **Error:** The Google Sheets document is missing the required "loggedInventory" tab.\n\n**Fix:** Create a tab named exactly `loggedInventory` (case-sensitive, no extra spaces) in your spreadsheet.';
+        case errorMsg.includes('missing_sheet'):
+          errorMessage = '❌ **Missing Sheet Tab**\n\nThe Google Sheets document is missing the required "loggedInventory" tab.\n\n**Fix:** Create a tab named exactly `loggedInventory` (case-sensitive, no extra spaces) in your spreadsheet.\n\n**Tip:** The tab name must match exactly - no leading or trailing spaces!';
           break;
-        case error.message.includes('missing_headers'):
-          errorMessage = '❌ **Error:** The "loggedInventory" sheet is missing the required headers.\n\n**Fix:** Make sure headers in A1:M1 match exactly: Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync';
+        case errorMsg.includes('missing_headers'):
+          errorMessage = '❌ **Missing Headers**\n\nThe "loggedInventory" sheet is missing the required headers.\n\n**Fix:** Make sure headers in A1:M1 match exactly:\n`Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync`\n\n**Note:** Headers are case-sensitive and must be in the correct order.';
           break;
-        case error.message.includes('multiple') || error.message.includes('duplicate'):
-          errorMessage = '❌ **Error:** You have multiple tabs named `loggedInventory` in your spreadsheet.\n\n**Fix:** Delete all duplicate tabs and keep ONLY ONE tab named `loggedInventory`. Keep the tab that contains your character\'s starter gear.';
+        case errorMsg.includes('multiple') || errorMsg.includes('duplicate'):
+          errorMessage = '❌ **Duplicate Tabs**\n\nYou have multiple tabs named `loggedInventory` in your spreadsheet.\n\n**Fix:** Delete all duplicate tabs and keep ONLY ONE tab named `loggedInventory`.\n\n**Important:** Keep the tab that contains your character\'s starter gear. The bot will get confused if there are multiple tabs with the same name.';
           break;
-        case error.message.includes('No items found') || error.message.includes('no items'):
-          errorMessage = '❌ **Error:** No items found for your character in the sheet.\n\n**Fix:** Add your character\'s starter gear to the sheet before testing. Make sure the Character Name column matches your character name exactly.';
+        case errorMsg.includes('No items found') || errorMsg.includes('no items'):
+          errorMessage = '❌ **No Items Found**\n\nNo items found for your character in the sheet.\n\n**Fix:**\n• Add your character\'s starter gear to the sheet\n• Make sure the Character Name column matches your character name exactly (case-sensitive)\n• Check that items are in rows below the header row\n\n**Note:** The Character Name must match your character\'s name exactly as it appears in the database.';
           break;
-        case error.message.includes('403'):
-          errorMessage = '❌ **Error:** Access to the Google Sheets document is forbidden. Please ensure it is shared with the bot\'s service account email.';
+        case errorMsg.includes('403'):
+          errorMessage = '❌ **Access Forbidden**\n\nAccess to the Google Sheets document is forbidden.\n\n**Fix:**\n1. Open your Google Sheet\n2. Click "Share" in the top right\n3. Add the bot\'s service account email (check with moderators if unsure)\n4. Give it "Viewer" or "Editor" permissions\n\n**Important:** The spreadsheet must be shared with the service account for the bot to read it.';
           break;
-        case error.message.includes('404'):
-          errorMessage = '❌ **Error:** The Google Sheets document could not be found. Please check the URL and try again.';
+        case errorMsg.includes('404'):
+          errorMessage = '❌ **Sheet Not Found**\n\nThe Google Sheets document could not be found.\n\n**Possible reasons:**\n• The URL is incorrect\n• The spreadsheet was deleted\n• The spreadsheet is not accessible\n\n**Fix:** Check the URL and ensure the spreadsheet exists and is accessible.';
+          break;
+        case errorMsg.includes('ETIMEDOUT') || errorMsg.includes('timeout'):
+          errorMessage = '❌ **Connection Timeout**\n\nThe connection to Google Sheets timed out.\n\n**Fix:**\n• Check your internet connection\n• Wait a few moments and try again\n• Verify the spreadsheet URL is correct\n\n**Note:** This is usually a temporary issue. Please try again in a moment.';
+          break;
+        case errorMsg.includes('NetworkError') || errorMsg.includes('network'):
+          errorMessage = '❌ **Network Error**\n\nA network error occurred while connecting to Google Sheets.\n\n**Fix:**\n• Check your internet connection\n• Verify the spreadsheet URL is correct\n• Wait a few moments and try again\n\n**Note:** This is usually a temporary issue with Google\'s services.';
           break;
         default:
-          errorMessage = `❌ **Error:** An unexpected error occurred: ${error.message}`;
+          errorMessage = `❌ **Unexpected Error**\n\nAn unexpected error occurred while testing your inventory setup.\n\n**Error Details:**\n\`\`\`${errorMsg.substring(0, 500)}\`\`\`\n\n**What to do:**\n• Try the command again in a few moments\n• Verify your spreadsheet is set up correctly\n• Contact a moderator if the issue persists\n\n**Tip:** Use \`/inventory test\` again - sometimes temporary issues resolve themselves.`;
       }
 
       try {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
-            content: errorMessage,
+            embeds: [new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('❌ Inventory Test Failed')
+              .setDescription(errorMessage)
+              .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+              .setFooter({ text: 'Inventory Setup Test' })
+              .setTimestamp()],
             flags: [MessageFlags.Ephemeral]
           });
         } else {
           await interaction.editReply({
-            content: errorMessage,
+            embeds: [new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('❌ Inventory Test Failed')
+              .setDescription(errorMessage)
+              .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+              .setFooter({ text: 'Inventory Setup Test' })
+              .setTimestamp()],
             flags: [MessageFlags.Ephemeral]
           });
         }

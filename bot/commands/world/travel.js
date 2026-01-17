@@ -1434,6 +1434,10 @@ async function processTravelDay(day, context) {
       }
     } else {
       // ------------------- Safe Day of Travel -------------------
+      // Check for chest discovery (100% chance for testing - will revert to 20% after)
+      const chestFound = true; // TODO: Revert to Math.random() < 0.2 after testing
+      context.chestFound = chestFound;
+      
       // Generate Do Nothing flavor ONCE for this day
       const doNothingFlavorTexts = [
         `${character.name} lay under a blanket of stars. 🌌`,
@@ -1449,6 +1453,13 @@ async function processTravelDay(day, context) {
       ];
       const doNothingFlavor = doNothingFlavorTexts[Math.floor(Math.random() * doNothingFlavorTexts.length)];
       const safeEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
+      
+      // Update embed description if chest was found
+      if (chestFound) {
+        const currentDescription = safeEmbed.data.description || '';
+        safeEmbed.setDescription(`${currentDescription}\n\n🎁 **A chest was discovered!**`);
+      }
+      
       const safeMessage = await channel.send({ embeds: [safeEmbed] });
       
       // Delete traveling message immediately after safe day embed is posted
@@ -1462,11 +1473,21 @@ async function processTravelDay(day, context) {
         console.warn(`[travel.js]: ⚠️ Error deleting traveling message after safe day: ${error.message}`);
       }
       
-      const buttons = new ActionRowBuilder().addComponents(
+      // Build buttons array
+      const buttonComponents = [
         new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(character.currentHearts >= character.maxHearts || character.currentStamina === 0),
         new ButtonBuilder().setCustomId('gather').setLabel('🌿 Gather').setStyle(ButtonStyle.Success).setDisabled(character.currentStamina === 0),
         new ButtonBuilder().setCustomId('do_nothing').setLabel('✨ Do Nothing').setStyle(ButtonStyle.Secondary)
-      );
+      ];
+      
+      // Add "Open Chest!" button if chest was found
+      if (chestFound) {
+        buttonComponents.push(
+          new ButtonBuilder().setCustomId('open_chest').setLabel('🎁 Open Chest!').setStyle(ButtonStyle.Primary).setDisabled(character.currentStamina === 0)
+        );
+      }
+      
+      const buttons = new ActionRowBuilder().addComponents(buttonComponents);
       await safeMessage.edit({ embeds: [safeEmbed], components: [buttons] });
 
       let interactionProcessed = false; // Flag to prevent multiple interactions
