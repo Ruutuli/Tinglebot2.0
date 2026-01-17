@@ -15,7 +15,7 @@ const VILLAGE_VISITING_ROLES = {
 };
 
 // ------------------- Discord.js Components -------------------
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
 
 // ------------------- Database Services -------------------
 const { fetchAllItems, fetchItemsByMonster } = require('../../shared/database/db');
@@ -67,6 +67,8 @@ const { handleError } = require('../../shared/utils/globalErrorHandler');
 const { info, success, warn, error, debug } = require('../../shared/utils/logger');
 
 const Character = require('../../shared/models/CharacterModel');
+const TempData = require('../../shared/models/TempDataModel');
+const { generateUniqueId } = require('../../shared/utils/uniqueIdUtils');
 
 // ============================================================================
 // ------------------- Daily Roll Functions -------------------
@@ -710,6 +712,14 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         outcomeMessage = generateVictoryMessage({ itemName: 'nothing' });
         travelLog.push('fight: win but no loot');
       }
+
+      // Like Like Special Case - Chance to drop chest
+      if (monster.name === 'Like Like') {
+        const chestDropChance = Math.random();
+        if (chestDropChance < 0.25) { // 25% chance to drop chest
+          await dropChest(interaction, monster.name);
+        }
+      }
     } else if (outcome.result === 'KO') {
       // ... existing KO logic ...
     } else {
@@ -1038,6 +1048,117 @@ async function handleOpenChest(interaction, character, encounterMessage, travelL
   } catch (error) {
     handleError(error, 'travelHandler.js (handleOpenChest)');
     throw error;
+  }
+}
+
+// ------------------- Drop Chest Helper -------------------
+// Creates and drops a chest with 4 random items that can be claimed by players
+async function dropChest(interaction, monsterName) {
+  try {
+    // Fetch all items from database
+    const allItems = await fetchAllItems();
+    
+    if (!allItems || allItems.length === 0) {
+      info('TRAVEL', `Cannot drop chest: No items found in database`);
+      return;
+    }
+
+    // Randomly select 4 items
+    const selectedItems = [];
+    const usedIndices = new Set();
+    
+    while (selectedItems.length < 4 && usedIndices.size < allItems.length) {
+      const randomIndex = Math.floor(Math.random() * allItems.length);
+      if (!usedIndices.has(randomIndex)) {
+        usedIndices.add(randomIndex);
+        const item = allItems[randomIndex];
+        selectedItems.push({
+          itemName: item.itemName || 'Unknown Item',
+          emoji: item.emoji || '📦',
+          index: selectedItems.length + 1,
+          claimed: false,
+          claimedBy: null
+        });
+      }
+    }
+
+    if (selectedItems.length < 4) {
+      info('TRAVEL', `Cannot drop chest: Not enough unique items in database`);
+      return;
+    }
+
+    // Generate unique chest ID
+    const chestId = generateUniqueId('C');
+    const channelId = interaction.channelId;
+    const guildId = interaction.guildId;
+    const createdAt = new Date();
+    const expiresAt = new Date(createdAt.getTime() + 30 * 60 * 1000); // 30 minutes
+
+    // Create embed with nice formatting
+    const embed = new EmbedBuilder()
+      .setTitle('🎁 Chest - Roll a 5 to claim!')
+      .setDescription(`**${monsterName} dropped a chest!**\n\n**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+      .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+      .setColor(0xFFD700) // Gold color
+      .addFields(
+        { 
+          name: '📋 Chest Info', 
+          value: `**Chest ID:** ${chestId}\n**Items Remaining:** 4/4\n**Expires:** <t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, 
+          inline: false 
+        },
+        { 
+          name: '🎁 Available Items', 
+          value: selectedItems.map(item => `**${item.index}.** ${item.emoji} ${item.itemName}`).join('\n'),
+          inline: false
+        }
+      )
+      .setTimestamp(createdAt);
+
+    // Create button
+    const claimButton = new ButtonBuilder()
+      .setCustomId(`chest_claim_${chestId}`)
+      .setLabel('Roll d5')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('🎲');
+
+    const buttons = new ActionRowBuilder()
+      .addComponents(claimButton);
+
+    // Send message
+    const message = await interaction.followUp({
+      embeds: [embed],
+      components: [buttons],
+      fetchReply: true
+    });
+
+    // Store chest data in TempData
+    const chestData = {
+      chestId: chestId,
+      channelId: channelId,
+      guildId: guildId,
+      messageId: message.id,
+      items: selectedItems,
+      claims: [],
+      createdAt: createdAt,
+      expiresAt: expiresAt,
+      lastGlobalRollTime: null,
+      playerRollTimes: {}, // Map userId to lastRollTime
+      rollHistory: [] // Track all rolls with user info and roll numbers
+    };
+
+    await TempData.create({
+      type: 'temp',
+      key: `chest_${chestId}`,
+      data: chestData,
+      expiresAt: expiresAt
+    });
+
+    info('TRAVEL', `Chest ${chestId} dropped by ${monsterName} in channel ${channelId}`);
+  } catch (error) {
+    handleError(error, 'travelHandler.js (dropChest)');
+    // Don't throw - chest drop failure shouldn't break the fight
+    warn('TRAVEL', `Failed to drop chest after ${monsterName} defeat: ${error.message}`);
   }
 }
 

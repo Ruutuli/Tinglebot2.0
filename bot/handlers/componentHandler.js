@@ -2840,6 +2840,7 @@ async function handleChestClaim(interaction) {
     let selectedItem = null;
     let randomCharacter = null;
     let itemAwarded = false;
+    let blightMessage = null;
 
     // Only award item if roll is 5
     if (roll === 5) {
@@ -2960,6 +2961,47 @@ async function handleChestClaim(interaction) {
           );
           itemAwarded = true;
           
+          // ------------------- Blight Chance Check -------------------
+          // 1% chance to get blighted from opening a chest
+          if (!randomCharacter.blighted && !randomCharacter.isModCharacter && Math.random() < 0.01) {
+            try {
+              // Apply blight to character
+              randomCharacter.blighted = true;
+              randomCharacter.blightedAt = new Date();
+              randomCharacter.blightStage = 1;
+              randomCharacter.blightPaused = false;
+              await randomCharacter.save();
+              
+              // Assign blight role to character owner
+              const guild = interaction.guild;
+              if (guild) {
+                const member = await guild.members.fetch(randomCharacter.userId);
+                await member.roles.add('798387447967907910');
+                console.log(`[componentHandler.js]: ✅ Added blight role to user ${randomCharacter.userId} for character ${randomCharacter.name} (chest blight effect)`);
+              }
+              
+              // Update user's blightedcharacter status
+              const user = await User.findOne({ discordId: randomCharacter.userId });
+              if (user) {
+                user.blightedcharacter = true;
+                await user.save();
+              }
+              
+              blightMessage = 
+                "\n\n<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
+                `◈ Oh no... **${randomCharacter.name}** has been **blighted** by something inside the chest! ◈\n\n` +
+                "🏥 **Healing Available:** You can be healed by **Oracles, Sages & Dragons**\n" +
+                "📋 **Blight Information:** [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n" +
+                "⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+                "🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today's blight roll if you were just infected.*";
+              
+              console.log(`[componentHandler.js]: 🧿 Character ${randomCharacter.name} was blighted by chest effect`);
+              
+            } catch (blightError) {
+              console.error(`[componentHandler.js]: ❌ Error applying blight to ${randomCharacter.name}:`, blightError);
+            }
+          }
+          
           // Update our local reference, preserving roll history
           chestData = latestChestData;
           // Ensure roll history is preserved
@@ -3023,7 +3065,7 @@ async function handleChestClaim(interaction) {
         { 
           name: '🎲 Roll Result', 
           value: roll === 5 && itemAwarded 
-            ? `${rollEmojis} 🎉 **Perfect 5!**\n\n🎁 **Item Awarded:** ${selectedItem.emoji} ${selectedItem.itemName}\n👤 **Added to:** ${randomCharacter.name}'s inventory`
+            ? `${rollEmojis} 🎉 **Perfect 5!**\n\n🎁 **Item Awarded:** ${selectedItem.emoji} ${selectedItem.itemName}\n👤 **Added to:** ${randomCharacter.name}'s inventory${blightMessage || ''}`
             : `${rollEmojis}\n\n${remainingAfter > 0 ? `Keep rolling! ${remainingAfter} item${remainingAfter !== 1 ? 's' : ''} left!` : 'All items claimed!'}`,
           inline: false
         },
@@ -3088,7 +3130,7 @@ async function handleChestClaim(interaction) {
     if (mostRecentRoll) {
       const rollEmojis = getRollEmojis(mostRecentRoll.roll);
       const rollValue = roll === 5 && itemAwarded 
-        ? `${rollEmojis} 🎉 **Perfect 5!**\n\n🎁 **Item Awarded:** ${selectedItem?.emoji || ''} ${selectedItem?.itemName || 'Unknown'}\n👤 **Added to:** ${randomCharacter?.name || 'Unknown'}'s inventory`
+        ? `${rollEmojis} 🎉 **Perfect 5!**\n\n🎁 **Item Awarded:** ${selectedItem?.emoji || ''} ${selectedItem?.itemName || 'Unknown'}\n👤 **Added to:** ${randomCharacter?.name || 'Unknown'}'s inventory${blightMessage || ''}`
         : `${rollEmojis}\n\n${itemsRemainingCount > 0 ? `Keep rolling! ${itemsRemainingCount} item${itemsRemainingCount !== 1 ? 's' : ''} left!` : 'All items claimed!'}`;
       
       mainEmbed.addFields(

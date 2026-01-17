@@ -86,6 +86,7 @@ const itemRoutes = require('./routes/api/items');
 const inventoryRoutes = require('./routes/api/inventory');
 const weatherRoutes = require('./routes/api/weather');
 const statsRoutes = require('./routes/api/stats');
+const villagesRoutes = require('./routes/api/villages');
 
 // Import middleware
 const { errorHandler, asyncHandler, notFoundHandler } = require('./middleware/errorHandler');
@@ -525,6 +526,7 @@ app.use('/api/items', itemRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/weather', weatherRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/villages', villagesRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
