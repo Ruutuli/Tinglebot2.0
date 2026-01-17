@@ -739,6 +739,15 @@ userSchema.methods.applyLegacyQuestTransfer = async function({
   questTracking.legacy.transferredAt = new Date();
   questTracking.legacy.transferUsed = true;
 
+  // Ensure pendingTurnIns is correctly set based on actual completions
+  // This fixes cases where pendingTurnIns wasn't properly incremented when quests were completed
+  const actualCompletions = questTracking.completions?.length || 0;
+  if (questTracking.pendingTurnIns < actualCompletions) {
+    const oldPending = questTracking.pendingTurnIns || 0;
+    questTracking.pendingTurnIns = actualCompletions;
+    console.log(`[UserModel.applyLegacyQuestTransfer] 🔧 Fixed pendingTurnIns for user ${this.discordId}: was ${oldPending}, set to ${actualCompletions} (added ${actualCompletions - oldPending} missing completions)`);
+  }
+
   await this.save();
 
   return {

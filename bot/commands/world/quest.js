@@ -611,10 +611,15 @@ async handleQuestTurnIn(interaction) {
     });
    }
 
-   const turnInSummary = transferResult.turnInSummary || {
+   // Refresh user to get updated quest tracking with ensureQuestTracking fix
+   await user.save(); // Save after transfer to persist changes
+   const updatedUser = await User.findOne({ discordId: interaction.user.id });
+   
+   // Get the correct turn-in summary after ensuring pendingTurnIns is fixed
+   const turnInSummary = updatedUser ? updatedUser.getQuestTurnInSummary() : (transferResult.turnInSummary || {
     redeemableSets: Math.floor((transferResult.pendingTurnIns || 0) / 10),
     remainder: (transferResult.pendingTurnIns || 0) % 10
-   };
+   });
 
    const summaryEmbed = createBaseEmbed(
     "Legacy Quest Transfer Completed",
@@ -622,32 +627,39 @@ async handleQuestTurnIn(interaction) {
     QUEST_COLORS.SUCCESS
    );
 
- summaryEmbed.addFields(
-  {
-   name: "📦 Legacy Import",
-   value: [
-   `• 📚 **Transferred:** ${this.formatQuestCount(transferResult.legacy.totalTransferred)} quests`,
-   `• 🎁 **Pending Turn-Ins:** ${this.formatQuestCount(transferResult.legacy.pendingTurnIns)}`
-   ].join("\n"),
-   inline: false
-  },
-  {
-   name: "📈 Updated Totals",
-   value: [
-   `• 🧮 **All-Time Total:** ${this.formatQuestCount(transferResult.allTimeTotal)} quests`,
-   `• 🎯 **Tracked Quests:** ${this.formatQuestCount(user.quests.totalCompleted || 0)}`
-   ].join("\n"),
-   inline: false
-  },
-  {
-   name: "🎉 Turn-In Progress",
-   value: [
-   `• ✅ **Sets Ready:** ${this.formatQuestCount(turnInSummary.redeemableSets || 0)}`,
-   `• ➕ **Toward Next:** ${this.formatQuestCount(turnInSummary.remainder || 0)}/10`
-   ].join("\n"),
-   inline: false
-  }
- );
+ // Calculate total pending (legacy + non-legacy) for display
+   const totalPendingTurnIns = turnInSummary.totalPending || 0;
+   const legacyPendingDisplay = transferResult.legacy.pendingTurnIns || 0;
+   const currentPendingDisplay = turnInSummary.currentPending || (updatedUser?.quests?.pendingTurnIns || 0);
+   
+   summaryEmbed.addFields(
+    {
+     name: "📦 Legacy Import",
+     value: [
+     `• 📚 **Transferred:** ${this.formatQuestCount(transferResult.legacy.totalTransferred)} quests`,
+     `• 🎁 **Legacy Pending Turn-Ins:** ${this.formatQuestCount(legacyPendingDisplay)}`,
+     `• 🎯 **New Quest Pending Turn-Ins:** ${this.formatQuestCount(currentPendingDisplay)}`,
+     `• 📊 **Total Pending Turn-Ins:** ${this.formatQuestCount(totalPendingTurnIns)}`
+     ].join("\n"),
+     inline: false
+    },
+    {
+     name: "📈 Updated Totals",
+     value: [
+     `• 🧮 **All-Time Total:** ${this.formatQuestCount(transferResult.allTimeTotal)} quests`,
+     `• 🎯 **Tracked Quests:** ${this.formatQuestCount(updatedUser?.quests?.totalCompleted || user.quests?.totalCompleted || 0)}`
+     ].join("\n"),
+     inline: false
+    },
+    {
+     name: "🎉 Turn-In Progress",
+     value: [
+     `• ✅ **Sets Ready:** ${this.formatQuestCount(turnInSummary.redeemableSets || 0)} (${this.formatQuestCount((turnInSummary.redeemableSets || 0) * 10)} quests)`,
+     `• ➕ **Toward Next:** ${this.formatQuestCount(turnInSummary.remainder || 0)}/10`
+     ].join("\n"),
+     inline: false
+    }
+   );
 
    summaryEmbed.setFooter({ text: "This transfer can only be performed once." });
 
