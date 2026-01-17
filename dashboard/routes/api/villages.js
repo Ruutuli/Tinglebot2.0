@@ -60,7 +60,14 @@ router.get('/status', asyncHandler(async (req, res) => {
     };
     
     // Debug logging for token data
-    logger.debug(`[villages.js] Village ${village.name}: level=${village.level}, currentTokens=${currentTokens}, requiredTokens=${requiredTokens}, tokenProgress=${JSON.stringify(tokenProgress)}`);
+    const rawCurrentTokens = village.currentTokens;
+    console.log(`[villages.js] /api/villages/status: Village "${village.name}"`);
+    console.log(`[villages.js]   - Level: ${village.level}`);
+    console.log(`[villages.js]   - raw currentTokens (from DB):`, rawCurrentTokens);
+    console.log(`[villages.js]   - typeof rawCurrentTokens:`, typeof rawCurrentTokens);
+    console.log(`[villages.js]   - processed currentTokens:`, currentTokens);
+    console.log(`[villages.js]   - requiredTokens for level ${village.level < 3 ? village.level + 1 : 'max'}:`, requiredTokens);
+    console.log(`[villages.js]   - tokenProgress object:`, JSON.stringify(tokenProgress));
     
     // Get vending tier display text
     let vendingTierText = 'Basic stock only';

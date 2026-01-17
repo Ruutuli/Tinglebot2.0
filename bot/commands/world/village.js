@@ -1274,9 +1274,24 @@ module.exports = {
                 const requiredTokens = villageToDisplay.tokenRequirements instanceof Map 
                     ? villageToDisplay.tokenRequirements.get(nextLevel.toString()) 
                     : villageToDisplay.tokenRequirements[nextLevel.toString()] || 0;
-                const currentTokens = villageToDisplay.currentTokens || 0;
+                
+                // Log token data for debugging
+                const rawCurrentTokens = villageToDisplay.currentTokens;
+                console.log(`[village.js] /village view: Village "${villageToDisplay.name}"`);
+                console.log(`[village.js]   - Level: ${villageToDisplay.level}`);
+                console.log(`[village.js]   - raw currentTokens (from DB):`, rawCurrentTokens);
+                console.log(`[village.js]   - typeof rawCurrentTokens:`, typeof rawCurrentTokens);
+                console.log(`[village.js]   - requiredTokens for level ${nextLevel}:`, requiredTokens);
+                
+                const currentTokens = (rawCurrentTokens !== undefined && rawCurrentTokens !== null) 
+                    ? Number(rawCurrentTokens) 
+                    : 0;
+                console.log(`[village.js]   - processed currentTokens:`, currentTokens);
+                
                 const tokenProgress = formatProgress(currentTokens, requiredTokens);
                 const tokensRemaining = Math.max(0, requiredTokens - currentTokens);
+                console.log(`[village.js]   - tokenProgress string: "${tokenProgress}"`);
+                console.log(`[village.js]   - tokensRemaining:`, tokensRemaining);
 
                 // Format materials requirements for next level (cumulative system)
                 // Show all materials that have requirements for the next level
@@ -1336,21 +1351,6 @@ module.exports = {
                     ? top3.map((contrib, index) => `${['🥇', '🥈', '🥉'][index]} **${contrib.characterName}**: ${contrib.total} total contributions`)
                     : ['No contributions yet'];
 
-                // Get ALL materials currently stored (not just those needed for next level)
-                const allMaterialsList = [];
-                for (const [key, value] of Object.entries(materials)) {
-                    if (key.startsWith('$')) continue; // Skip special keys
-                    const current = value.current || 0;
-                    if (current > 0) { // Only show materials that have been contributed
-                        const item = await ItemModel.findOne({ itemName: { $regex: `^${key}$`, $options: 'i' } });
-                        const emoji = item?.emoji || ':grey_question:';
-                        const displayName = item?.itemName || key;
-                        allMaterialsList.push(`${emoji} **${displayName}**: ${current.toLocaleString()}`);
-                    }
-                }
-                // Sort alphabetically by display name for consistency
-                allMaterialsList.sort();
-
                 // Build the embed
                 const embed = new EmbedBuilder()
                     .setTitle(`${villageToDisplay.name} (Level ${villageToDisplay.level})${villageToDisplay.level > village.level ? ' ⭐ LEVELED UP!' : ''}`)
@@ -1367,49 +1367,16 @@ module.exports = {
                     .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
                     .setImage(BORDER_IMAGE);
 
-                // Add current tokens section (show tokens stored, not just progress)
-                embed.addFields(
-                    { name: '🪙 **__Current Tokens__**', value: `> ${currentTokens.toLocaleString()} tokens stored`, inline: false }
-                );
-
-                // Add all current materials section
-                if (allMaterialsList.length > 0) {
-                    const MAX_FIELD_VALUE_LENGTH = 1024;
-                    const materialFields = [];
-                    let currentChunk = [];
-                    let currentLength = 0;
-
-                    for (const material of allMaterialsList) {
-                        const materialLength = material.length + 2; // +2 for newline and spacing
-                        
-                        // If adding this material would exceed the limit, start a new chunk
-                        if (currentLength + materialLength > MAX_FIELD_VALUE_LENGTH && currentChunk.length > 0) {
-                            materialFields.push(currentChunk.join('\n'));
-                            currentChunk = [];
-                            currentLength = 0;
-                        }
-                        
-                        currentChunk.push(material);
-                        currentLength += materialLength;
-                    }
-                    
-                    // Add the last chunk if it has content
-                    if (currentChunk.length > 0) {
-                        materialFields.push(currentChunk.join('\n'));
-                    }
-
-                    // Add fields to embed (with numbered names if multiple fields)
-                    materialFields.forEach((fieldValue, index) => {
-                        const fieldName = materialFields.length > 1
-                            ? `📦 **__Current Materials (${index + 1}/${materialFields.length})__**`
-                            : '📦 **__Current Materials__**';
-                        embed.addFields({ name: fieldName, value: fieldValue, inline: false });
-                    });
+                // Add current tokens section (show progress bar if there's a next level requirement)
+                let tokenDisplay;
+                if (villageToDisplay.level < 3 && requiredTokens > 0) {
+                    tokenDisplay = `> ${formatProgress(currentTokens, requiredTokens)}`;
                 } else {
-                    embed.addFields(
-                        { name: '📦 **__Current Materials__**', value: '> No materials stored yet', inline: false }
-                    );
+                    tokenDisplay = `> ${currentTokens.toLocaleString()} tokens stored`;
                 }
+                embed.addFields(
+                    { name: '🪙 **__Current Tokens__**', value: tokenDisplay, inline: false }
+                );
 
                 // Add next level requirements if not at max level
                 if (villageToDisplay.level < 3) {

@@ -206,17 +206,21 @@ function createVillageCard(villageData) {
     `;
   }
 
-  const { name, level, health, maxHealth, status, tokenProgress, vendingTier, vendingTierText, vendingDiscount, color } = villageData;
+  const { name, level, health, maxHealth, status, tokenProgress, currentTokens, vendingTier, vendingTierText, vendingDiscount, color } = villageData;
   
   const statusInfo = getStatusInfo(status);
   const healthPercentage = Math.round((health / maxHealth) * 100);
   
   // Determine if village is at max level
   const isMaxLevel = level >= 3;
+  const nextLevel = level + 1;
   
   // Calculate token progress - ensure tokenProgress exists and has required properties
   const safeTokenProgress = tokenProgress || { current: 0, required: 0, percentage: 0 };
-  const tokenPercentage = isMaxLevel ? 100 : (safeTokenProgress.percentage || 0);
+  // Use currentTokens if available, otherwise fall back to tokenProgress.current
+  const tokenCurrent = currentTokens !== undefined && currentTokens !== null ? Number(currentTokens) : (safeTokenProgress.current || 0);
+  const tokenRequired = safeTokenProgress.required || 0;
+  const tokenPercentage = isMaxLevel ? 100 : (tokenRequired > 0 ? Math.round((tokenCurrent / tokenRequired) * 100) : 0);
   
   // Format vending discount text
   const discountText = vendingDiscount > 0 ? ` (-${vendingDiscount}% cost)` : '';
@@ -265,22 +269,20 @@ function createVillageCard(villageData) {
             </div>
           </div>
           
-          ${!isMaxLevel ? `
-            <div class="village-detail-item">
-              <div class="village-detail-label">
-                <i class="fas fa-coins"></i>
-                <span>Token Progress</span>
-              </div>
-              <div class="village-detail-value">
-                <div class="village-token-progress">
-                  <div class="village-progress-bar">
-                    <div class="village-progress-fill" style="width: ${tokenPercentage}%; --progress-color: ${color}; background: linear-gradient(90deg, ${color}, rgba(255, 255, 255, 0.3));"></div>
-                  </div>
-                  <span class="village-progress-text">${safeTokenProgress.current.toLocaleString()}/${safeTokenProgress.required.toLocaleString()} (${tokenPercentage}%)</span>
+          <div class="village-detail-item">
+            <div class="village-detail-label">
+              <i class="fas fa-coins"></i>
+              <span>Tokens</span>
+            </div>
+            <div class="village-detail-value">
+              <div class="village-token-progress">
+                <div class="village-progress-bar">
+                  <div class="village-progress-fill" style="width: ${tokenPercentage}%; --progress-color: ${color}; background: linear-gradient(90deg, ${color}, rgba(255, 255, 255, 0.3));"></div>
                 </div>
+                <span class="village-progress-text">${isMaxLevel ? `${tokenCurrent.toLocaleString()} tokens` : `${tokenCurrent.toLocaleString()}/${tokenRequired.toLocaleString()} until level ${nextLevel} (${tokenPercentage}%)`}</span>
               </div>
             </div>
-          ` : ''}
+          </div>
         </div>
       </div>
     </div>
@@ -451,6 +453,13 @@ async function createVillageModelCard(village) {
     contributors
   } = village;
 
+  // Debug logging for token data
+  console.log(`[villages.js] createVillageModelCard: Village "${name}"`);
+  console.log(`[villages.js]   - Level: ${level}`);
+  console.log(`[villages.js]   - raw currentTokens (from API):`, currentTokens);
+  console.log(`[villages.js]   - typeof currentTokens:`, typeof currentTokens);
+  console.log(`[villages.js]   - tokenRequirements:`, tokenRequirements);
+
   const statusInfo = getStatusInfo(status);
   const maxHealth = levelHealth?.[level] || levelHealth?.[level.toString()] || 100;
   const healthPercentage = Math.round((health / maxHealth) * 100);
@@ -461,7 +470,16 @@ async function createVillageModelCard(village) {
   const nextLevel = level + 1;
   const isMaxLevel = level >= 3;
   const requiredTokens = isMaxLevel ? 0 : (tokenRequirements?.[nextLevel] || tokenRequirements?.[nextLevel.toString()] || 0);
-  const tokenProgressPercentage = requiredTokens > 0 ? Math.round((currentTokens || 0) / requiredTokens * 100) : 100;
+  
+  // Ensure currentTokens is always a number
+  const processedCurrentTokens = (currentTokens !== undefined && currentTokens !== null) 
+    ? Number(currentTokens) 
+    : 0;
+  console.log(`[villages.js]   - processed currentTokens:`, processedCurrentTokens);
+  console.log(`[villages.js]   - requiredTokens for level ${nextLevel}:`, requiredTokens);
+  
+  const tokenProgressPercentage = requiredTokens > 0 ? Math.round((processedCurrentTokens / requiredTokens) * 100) : 100;
+  console.log(`[villages.js]   - tokenProgressPercentage:`, tokenProgressPercentage);
 
   // Format vending tier text
   let vendingTierText = 'Basic stock only';
@@ -737,8 +755,20 @@ async function createVillageModelCard(village) {
                   <div class="village-progress-bar">
                     <div class="village-progress-fill" style="width: ${tokenProgressPercentage}%; background-color: ${color};"></div>
                   </div>
-                  <span class="village-progress-text">${(currentTokens || 0).toLocaleString()}/${requiredTokens.toLocaleString()} (${tokenProgressPercentage}%)</span>
+                  <span class="village-progress-text">${processedCurrentTokens.toLocaleString()}/${requiredTokens.toLocaleString()} (${tokenProgressPercentage}%)</span>
                 </div>
+              </div>
+            </div>
+          ` : ''}
+          
+          ${isMaxLevel ? `
+            <div class="village-model-stat-item">
+              <div class="village-model-stat-label">
+                <i class="fas fa-coins"></i>
+                <span>Stored Tokens</span>
+              </div>
+              <div class="village-model-stat-value">
+                <span class="village-token-amount">${processedCurrentTokens.toLocaleString()} tokens</span>
               </div>
             </div>
           ` : ''}
