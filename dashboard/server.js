@@ -10465,14 +10465,36 @@ app.get('/api/user', async (req, res) => {
   if (req.session.user) {
     logger.info(`[API /api/user] Returning authenticated user: ${req.session.user.discordId}`, 'server.js');
     
-    // Check admin status
-    const isAdmin = await checkAdminAccess(req);
-    
-    res.json({
-      isAuthenticated: true,
-      user: req.session.user,
-      isAdmin: isAdmin
-    });
+    try {
+      // Fetch full user data from database
+      const dbUser = await User.findOne({ discordId: req.session.user.discordId })
+        .select('tokens characterSlot status createdAt nickname birthday helpWanted leveling')
+        .lean();
+      
+      // Merge session user data with database user data
+      const userData = {
+        ...req.session.user,
+        ...(dbUser || {})
+      };
+      
+      // Check admin status
+      const isAdmin = await checkAdminAccess(req);
+      
+      res.json({
+        isAuthenticated: true,
+        user: userData,
+        isAdmin: isAdmin
+      });
+    } catch (error) {
+      logger.error('[API /api/user] Error fetching user data from database', error, 'server.js');
+      // Fallback to session user data if database query fails
+      const isAdmin = await checkAdminAccess(req);
+      res.json({
+        isAuthenticated: true,
+        user: req.session.user,
+        isAdmin: isAdmin
+      });
+    }
   } else {
     logger.info('[API /api/user] No user in session, returning unauthenticated', 'server.js');
     res.json({

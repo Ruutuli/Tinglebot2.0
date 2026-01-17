@@ -48,6 +48,7 @@ const {
  revertChannelNames,
  cleanupOldTrackingData,
 } = require("./scripts/bloodmoon");
+const { resetAllVillageRaidQuotas, checkVillageRaidQuotas } = require("./scripts/randomMonsterEncounters");
 
 // Modules
 const { recoverDailyStamina } = require("./modules/characterStatsModule");
@@ -2591,6 +2592,20 @@ function setupDailyTasks(client) {
      logger.error('ROLE_COUNT', 'Error updating role count channels', error.message);
    }
  });
+ createCronJob("0 0 * * *", "reset village raid quotas", async () => {
+   try {
+     logger.info('RAID_QUOTA', 'Starting daily village raid quota reset check...');
+     const resetCount = await resetAllVillageRaidQuotas();
+     if (resetCount > 0) {
+       logger.success('RAID_QUOTA', `Reset ${resetCount} village raid quota(s) at period boundary`);
+     } else {
+       logger.info('RAID_QUOTA', 'All village raid quotas are current - no resets needed');
+     }
+   } catch (error) {
+     logger.error('RAID_QUOTA', 'Error resetting village raid quotas', error.message);
+     handleError(error, 'scheduler.js');
+   }
+ });
  
  // Daily tasks at 1 AM - remove birthday roles from previous day
  createCronJob("0 1 * * *", "birthday role cleanup", () => handleBirthdayRoleRemoval(client));
@@ -2672,6 +2687,15 @@ function setupDailyTasks(client) {
  });
 
  // Hourly tasks
+ createCronJob("0 * * * *", "village raid quota check", async () => {
+  try {
+    logger.info('RAID_QUOTA', 'Starting hourly village raid quota check...');
+    await checkVillageRaidQuotas(client);
+  } catch (error) {
+    logger.error('RAID_QUOTA', 'Error during hourly village raid quota check', error.message);
+    handleError(error, 'scheduler.js');
+  }
+ });
  createCronJob("0 */6 * * *", "quest completion check", () => checkQuestCompletions(client));
  createCronJob("0 */2 * * *", "village tracking check", () => checkVillageTracking(client)); // Every 2 hours
  createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {

@@ -150,6 +150,22 @@ async function initProfilePage() {
 async function loadProfileData() {
   try {
     
+    // Fetch fresh user data from the API to ensure we have all database fields
+    const response = await fetch('/api/user', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.user) {
+        // Update currentUser with fresh data from database
+        currentUser = data.user;
+      }
+    }
     
     // Update profile elements with current user data
     updateProfileDisplay(currentUser);
@@ -252,8 +268,8 @@ function updateProfileDisplay(userData) {
   
   // Update help wanted total
   const profileHelpWanted = document.getElementById('profile-help-wanted');
-  if (profileHelpWanted && userData.helpWanted) {
-    profileHelpWanted.textContent = userData.helpWanted.totalCompletions || 0;
+  if (profileHelpWanted) {
+    profileHelpWanted.textContent = userData.helpWanted?.totalCompletions || 0;
   }
   
   // Update join date - will be updated by loadExtendedProfileData

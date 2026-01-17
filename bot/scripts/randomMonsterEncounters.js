@@ -164,17 +164,16 @@ function getPeriodEnd(periodStart, level) {
 // ------------------- Get Village Period Data -------------------
 async function getVillagePeriodData(villageName) {
   try {
-    const key = `village_raid_period_${villageName}`;
-    const periodData = await TempData.findOne({ key, type: 'temp' });
+    const village = await Village.findOne({ name: villageName }).exec();
     
-    if (!periodData || !periodData.data) {
+    if (!village || !village.raidQuotaPeriodStart) {
       return null;
     }
     
     return {
-      periodStart: new Date(periodData.data.periodStart),
-      raidCount: periodData.data.raidCount || 0,
-      periodType: periodData.data.periodType || 'week'
+      periodStart: new Date(village.raidQuotaPeriodStart),
+      raidCount: village.raidQuotaCount || 0,
+      periodType: village.raidQuotaPeriodType || 'week'
     };
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error getting village period data for ${villageName}:`, error);
@@ -185,20 +184,16 @@ async function getVillagePeriodData(villageName) {
 // ------------------- Set Village Period Data -------------------
 async function setVillagePeriodData(villageName, periodStart, raidCount, periodType) {
   try {
-    const key = `village_raid_period_${villageName}`;
-    await TempData.findOneAndUpdate(
-      { key, type: 'temp' },
+    await Village.findOneAndUpdate(
+      { name: villageName },
       {
-        key,
-        type: 'temp',
-        data: {
-          periodStart: periodStart,
-          raidCount: raidCount,
-          periodType: periodType
-        }
+        raidQuotaPeriodStart: periodStart,
+        raidQuotaCount: raidCount,
+        raidQuotaPeriodType: periodType
       },
-      { upsert: true, new: true }
+      { upsert: false, new: true }
     );
+    console.log(`[randomMonsterEncounters.js]: ✅ Updated raid quota for ${villageName}: ${raidCount} raids (${periodType})`);
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error setting village period data for ${villageName}:`, error);
   }
@@ -213,6 +208,7 @@ async function checkAndResetPeriod(villageName, level) {
     // Period has changed, reset
     const periodType = level === 1 ? 'week' : 'month';
     await setVillagePeriodData(villageName, currentPeriodStart, 0, periodType);
+    console.log(`[randomMonsterEncounters.js]: 🔄 Reset raid quota period for ${villageName} (${periodType})`);
     return {
       periodStart: currentPeriodStart,
       raidCount: 0,
@@ -221,6 +217,62 @@ async function checkAndResetPeriod(villageName, level) {
   }
   
   return periodData;
+}
+
+// ------------------- Reset All Village Raid Quotas -------------------
+// This function checks all villages and resets their raid quota counts if the period has changed
+async function resetAllVillageRaidQuotas() {
+  try {
+    console.log('[randomMonsterEncounters.js]: 🔄 Checking all villages for raid quota period resets...');
+    
+    const villages = await Village.find({}).exec();
+    
+    if (!villages || villages.length === 0) {
+      console.log('[randomMonsterEncounters.js]: ⚠️ No villages found in database');
+      return;
+    }
+    
+    let resetCount = 0;
+    
+    for (const village of villages) {
+      const villageName = village.name;
+      const level = village.level || 1;
+      const currentPeriodStart = getVillagePeriodStart(level);
+      const periodType = level === 1 ? 'week' : 'month';
+      
+      // Check if period has changed
+      const storedPeriodStart = village.raidQuotaPeriodStart;
+      const needsReset = !storedPeriodStart || 
+                        new Date(storedPeriodStart).getTime() !== currentPeriodStart.getTime();
+      
+      if (needsReset) {
+        // Period has changed or doesn't exist, reset the count
+        await Village.findOneAndUpdate(
+          { name: villageName },
+          {
+            raidQuotaPeriodStart: currentPeriodStart,
+            raidQuotaCount: 0,
+            raidQuotaPeriodType: periodType
+          }
+        );
+        
+        console.log(`[randomMonsterEncounters.js]: ✅ Reset raid quota for ${villageName} (L${level}, ${periodType})`);
+        resetCount++;
+      }
+    }
+    
+    if (resetCount > 0) {
+      console.log(`[randomMonsterEncounters.js]: 🔄 Reset ${resetCount} village raid quota(s)`);
+    } else {
+      console.log('[randomMonsterEncounters.js]: ✓ All village raid quotas are current');
+    }
+    
+    return resetCount;
+  } catch (error) {
+    console.error('[randomMonsterEncounters.js]: ❌ Error resetting village raid quotas:', error);
+    handleError(error, 'randomMonsterEncounters.js');
+    return 0;
+  }
 }
 
 // ------------------- Get Period Remaining Ratio -------------------
@@ -237,20 +289,34 @@ function getPeriodRemainingRatio(periodStart, level) {
   return remaining / periodDuration;
 }
 
-// ------------------- Increment Village Raid Count -------------------
-async function incrementVillageRaidCount(villageName) {
+// ------------------- Increment Village Raid Count (Atomic) -------------------
+async function incrementVillageRaidCount(villageName, level) {
   try {
-    const periodData = await getVillagePeriodData(villageName);
-    if (periodData) {
-      await setVillagePeriodData(
-        villageName,
-        periodData.periodStart,
-        periodData.raidCount + 1,
-        periodData.periodType
-      );
+    const periodStart = getVillagePeriodStart(level);
+    const periodType = level === 1 ? 'week' : 'month';
+    
+    // Use atomic increment to prevent race conditions
+    // Note: Period should already be set by checkAndResetPeriod, so we just increment
+    const result = await Village.findOneAndUpdate(
+      { name: villageName },
+      {
+        $inc: { raidQuotaCount: 1 }
+      },
+      { upsert: false, new: true }
+    );
+    
+    if (!result) {
+      console.error(`[randomMonsterEncounters.js]: ❌ Village ${villageName} not found for raid count increment`);
+      return 0;
     }
+    
+    const newCount = result.raidQuotaCount || 1;
+    console.log(`[randomMonsterEncounters.js]: ✅ Atomically incremented raid count for ${villageName} to ${newCount}`);
+    
+    return newCount;
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error incrementing raid count for ${villageName}:`, error);
+    throw error;
   }
 }
 
@@ -607,8 +673,9 @@ async function checkVillageRaidQuotas(client) {
     const raidChannel = client.channels.cache.get(targetChannelId);
     
     if (raidChannel && raidChannel.type === ChannelType.GuildText) {
-      // Trigger the raid
-      await triggerQuotaBasedRaid(raidChannel, selectedVillageName, selectedVillage.name);
+      // Trigger the raid (pass level and quota for atomic quota reservation)
+      const quota = getVillageQuota(selectedVillage.level || 1);
+      await triggerQuotaBasedRaid(raidChannel, selectedVillageName, selectedVillage.name, selectedVillage.level || 1, quota);
     } else {
       console.error(`[randomMonsterEncounters.js]: ❌ Could not find channel for ${selectedVillageName} (ID: ${targetChannelId})`);
     }
@@ -619,10 +686,88 @@ async function checkVillageRaidQuotas(client) {
   }
 }
 
+// ------------------- Try Reserve Quota Slot (Atomic) -------------------
+async function tryReserveQuotaSlot(villageName, level, quota) {
+  try {
+    const periodStart = getVillagePeriodStart(level);
+    const periodType = level === 1 ? 'week' : 'month';
+    
+    // First, ensure the period data exists and is current
+    // This resets the period if needed, so we can trust it
+    const periodData = await checkAndResetPeriod(villageName, level);
+    if (!periodData) {
+      return { success: false, reason: 'Could not get period data' };
+    }
+    
+    // Atomically increment only if current count is less than quota AND period matches
+    // This prevents race conditions where multiple checks happen simultaneously
+    // We need to check both: period matches AND count is less than quota
+    const result = await Village.findOneAndUpdate(
+      { 
+        name: villageName,
+        $and: [
+          {
+            $or: [
+              { raidQuotaPeriodStart: { $exists: false } },
+              { raidQuotaPeriodStart: periodStart } // Ensure period matches
+            ]
+          },
+          {
+            $or: [
+              { raidQuotaCount: { $exists: false } },
+              { raidQuotaCount: { $lt: quota } }
+            ]
+          }
+        ]
+      },
+      {
+        $inc: { raidQuotaCount: 1 },
+        $set: {
+          raidQuotaPeriodStart: periodStart,
+          raidQuotaPeriodType: periodType
+        }
+      },
+      { upsert: false, new: true }
+    );
+    
+    if (!result) {
+      // Another process already reserved the last slot or period mismatch
+      return { success: false, reason: 'Quota already met or period mismatch' };
+    }
+    
+    const newCount = result.raidQuotaCount || 1;
+    
+    // Double-check we didn't exceed quota (shouldn't happen with the condition above, but be safe)
+    if (newCount > quota) {
+      // Rollback the increment
+      await Village.findOneAndUpdate(
+        { name: villageName },
+        { $inc: { raidQuotaCount: -1 } }
+      );
+      return { success: false, reason: 'Quota exceeded' };
+    }
+    
+    console.log(`[randomMonsterEncounters.js]: ✅ Reserved quota slot for ${villageName}: ${newCount}/${quota} (period: ${periodType})`);
+    return { success: true, newCount };
+  } catch (error) {
+    console.error(`[randomMonsterEncounters.js]: ❌ Error reserving quota slot for ${villageName}:`, error);
+    return { success: false, reason: error.message };
+  }
+}
+
 // ------------------- Trigger Quota-Based Raid -------------------
-async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayName) {
+async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayName, villageLevel, quota) {
   try {
     console.log(`[randomMonsterEncounters.js]: 🎯 Processing quota-based raid for village: ${villageDisplayName}`);
+    
+    // Atomically reserve a quota slot BEFORE triggering the raid
+    // This prevents race conditions where multiple checks happen simultaneously
+    const quotaReservation = await tryReserveQuotaSlot(villageDisplayName, villageLevel, quota);
+    
+    if (!quotaReservation.success) {
+      console.log(`[randomMonsterEncounters.js]: ⚠️ Could not reserve quota slot for ${villageDisplayName}: ${quotaReservation.reason}`);
+      return;
+    }
     
     // Get the village region
     const villageRegion = getVillageRegionByName(selectedVillage);
@@ -630,6 +775,11 @@ async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayNam
     
     if (!villageRegion) {
       console.error(`[randomMonsterEncounters.js]: ❌ Invalid village: ${selectedVillage}`);
+      // Rollback the quota reservation
+      await Village.findOneAndUpdate(
+        { name: villageDisplayName },
+        { $inc: { raidQuotaCount: -1 } }
+      );
       await channel.send(`❌ **Invalid village: ${selectedVillage}**`);
       return;
     }
@@ -648,6 +798,11 @@ async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayNam
     
     if (!monsters || monsters.length === 0) {
       console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters (excluding Yiga) found for region: ${villageRegion}`);
+      // Rollback the quota reservation
+      await Village.findOneAndUpdate(
+        { name: villageDisplayName },
+        { $inc: { raidQuotaCount: -1 } }
+      );
       await channel.send(`❌ **No tier 5+ monsters (excluding Yiga) found in ${villageRegion} region for ${villageDisplayName}.**`);
       return;
     }
@@ -655,6 +810,11 @@ async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayNam
     const monster = monsters[Math.floor(Math.random() * monsters.length)];
     if (!monster || !monster.name || !monster.tier) {
       console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters found for region: ${villageRegion}`);
+      // Rollback the quota reservation
+      await Village.findOneAndUpdate(
+        { name: villageDisplayName },
+        { $inc: { raidQuotaCount: -1 } }
+      );
       await channel.send(`❌ **No tier 5+ monsters found in ${villageRegion} region for ${villageDisplayName}.**`);
       return;
     }
@@ -687,18 +847,32 @@ async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayNam
     
     if (!result || !result.success) {
       console.error(`[randomMonsterEncounters.js]: ❌ Failed to trigger quota-based raid: ${result?.error || 'Unknown error'}`);
+      // Rollback the quota reservation if raid failed
+      await Village.findOneAndUpdate(
+        { name: villageDisplayName },
+        { $inc: { raidQuotaCount: -1 } }
+      );
       await channel.send(`❌ **Failed to trigger the raid:** ${result?.error || 'Unknown error'}`);
       return;
     }
     
-    // Increment raid count for this village
-    await incrementVillageRaidCount(villageDisplayName);
-    
-    console.log(`[randomMonsterEncounters.js]: ✅ Quota-based raid triggered successfully in ${villageDisplayName} channel`);
+    // Quota was already incremented before triggering, so we're done
+    console.log(`[randomMonsterEncounters.js]: ✅ Quota-based raid triggered successfully in ${villageDisplayName} channel (quota: ${quotaReservation.newCount}/${quota})`);
     console.log(`[randomMonsterEncounters.js]: 🎉 QUOTA-BASED RAID COMPLETE! ${monster.name} (T${monster.tier}) in ${villageDisplayName}`);
     
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error triggering quota-based raid:', error);
+    
+    // Try to rollback quota on error
+    try {
+      await Village.findOneAndUpdate(
+        { name: villageDisplayName },
+        { $inc: { raidQuotaCount: -1 } }
+      );
+    } catch (rollbackError) {
+      console.error(`[randomMonsterEncounters.js]: ❌ Failed to rollback quota for ${villageDisplayName}:`, rollbackError);
+    }
+    
     await handleError(error, 'randomMonsterEncounters.js');
   }
 }
@@ -735,13 +909,7 @@ async function initializeRandomEncounterBot(client) {
     });
   }, CHECK_INTERVAL);
 
-  // Start hourly quota checks (village-level quota-based raids)
-  setInterval(() => {
-    checkVillageRaidQuotas(client).catch(error => {
-      console.error('[randomMonsterEncounters.js]: ❌ Village quota check failed:', error);
-      handleError(error, 'randomMonsterEncounters.js');
-    });
-  }, HOURS_CHECK_INTERVAL);
+  // Note: Hourly quota checks are handled by scheduler.js
   
   // Also check immediately on startup (after a short delay to let everything initialize)
   setTimeout(() => {
@@ -750,6 +918,15 @@ async function initializeRandomEncounterBot(client) {
       handleError(error, 'randomMonsterEncounters.js');
     });
   }, 60000); // Check after 1 minute
+
+  // Also run immediately on startup to reset any outdated periods
+  // (The scheduler.js handles daily resets at midnight)
+  setTimeout(() => {
+    resetAllVillageRaidQuotas().catch(error => {
+      console.error('[randomMonsterEncounters.js]: ❌ Initial raid quota reset failed:', error);
+      handleError(error, 'randomMonsterEncounters.js');
+    });
+  }, 30000); // Check after 30 seconds
 
 }
 
@@ -767,5 +944,6 @@ module.exports = {
   checkVillageRaidQuotas,
   incrementVillageRaidCount,
   getVillagePeriodData,
-  setVillagePeriodData
+  setVillagePeriodData,
+  resetAllVillageRaidQuotas
 };

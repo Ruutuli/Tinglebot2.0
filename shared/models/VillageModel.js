@@ -180,6 +180,19 @@ const VillageSchema = new mongoose.Schema({
         type: Date,
         default: null,
     },
+    raidQuotaPeriodStart: {
+        type: Date,
+        default: null,
+    },
+    raidQuotaCount: {
+        type: Number,
+        default: 0,
+    },
+    raidQuotaPeriodType: {
+        type: String,
+        enum: ['week', 'month'],
+        default: null,
+    },
 }, { timestamps: true });
 
 // ============================================================================
