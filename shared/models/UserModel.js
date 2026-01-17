@@ -500,7 +500,8 @@ userSchema.methods.ensureQuestTracking = function() {
     }
     
     // Validate that pendingTurnIns matches actual non-legacy quest completions
-    // This fixes cases where pendingTurnIns wasn't properly incremented
+    // IMPORTANT: Only fix if pendingTurnIns is missing or 0, not if it's lower than completions
+    // (lower values could mean some quests were already turned in, which we don't track)
     // Count unique quest completions (same logic as recordQuestCompletion safeguard)
     const uniqueQuestIds = new Set();
     let nullIdCount = 0;
@@ -512,17 +513,37 @@ userSchema.methods.ensureQuestTracking = function() {
       }
     }
     const actualCompletions = uniqueQuestIds.size + nullIdCount;
+    const currentPending = this.quests.pendingTurnIns || 0;
     
-    if (this.quests.pendingTurnIns < actualCompletions) {
-      // pendingTurnIns should at least equal the number of unique completions
-      // (it could be higher if some were turned in, but shouldn't be lower)
-      const oldPending = this.quests.pendingTurnIns;
-      this.quests.pendingTurnIns = actualCompletions;
-      const missing = actualCompletions - oldPending;
-      if (missing > 0) {
-        console.log(`[UserModel.ensureQuestTracking] 🔧 Fixed pendingTurnIns for user ${this.discordId}: was ${oldPending}, set to ${actualCompletions} (added ${missing} missing completions)`);
+    // Only fix if pendingTurnIns is 0 or undefined AND we have completions
+    // But be careful: if legacy pending is also 0, it might mean turn-ins happened recently
+    // So only fix if legacy pending exists or is high (suggesting no recent turn-ins)
+    const legacyPending = this.quests.legacy?.pendingTurnIns || 0;
+    if (currentPending === 0 && actualCompletions > 0) {
+      // Only auto-fix if legacy pending is also 0 AND legacy transfer was never used
+      // OR if legacy pending exists (suggesting the new quest hasn't been turned in yet)
+      // If legacy is 0 but transfer was used, recent turn-ins likely happened, so don't reset
+      const legacyTransferUsed = this.quests.legacy?.transferUsed || false;
+      
+      // If legacy was never transferred, safe to initialize
+      // If legacy exists (even if 0 now), only fix if we're sure it wasn't turned in
+      // For now, be conservative: only fix if legacy pending is > 0 (definitely not turned in)
+      // OR if legacy was never transferred (new user)
+      if (!legacyTransferUsed || legacyPending > 0) {
+        this.quests.pendingTurnIns = actualCompletions;
+        console.log(`[UserModel.ensureQuestTracking] 🔧 Fixed pendingTurnIns for user ${this.discordId}: was 0, set to ${actualCompletions} (initialized from completions)`);
+      } else {
+        // Legacy was transferred but is now 0, suggesting turn-ins happened
+        // Don't reset pendingTurnIns - it's correctly 0 after turn-in
+        console.log(`[UserModel.ensureQuestTracking] ℹ️ Skipped fixing pendingTurnIns for user ${this.discordId}: legacy pending is 0, suggesting turn-ins occurred`);
       }
+    } else if (currentPending < 0) {
+      // Fix negative values (should never happen, but handle it)
+      this.quests.pendingTurnIns = Math.max(0, currentPending);
+      console.log(`[UserModel.ensureQuestTracking] 🔧 Fixed negative pendingTurnIns for user ${this.discordId}: was ${currentPending}, set to 0`);
     }
+    // Note: We DON'T increase pendingTurnIns if it's less than actualCompletions when it's > 0,
+    // because some quests may have been turned in (which we don't track per-quest)
 
     if (!this.quests.legacy) {
       this.quests.legacy = { ...defaultQuestTracking().legacy };
@@ -797,6 +818,25 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
 
   if (sanitizedAmount <= 0) {
     return { success: false, error: 'Amount to consume must be greater than zero.' };
+  }
+
+  // Ensure pendingTurnIns is correctly set before deduction
+  // Only fix if it's missing/0 and we have completions (not if some were already turned in)
+  const actualCompletions = questTracking.completions?.length || 0;
+  const currentPendingBeforeFix = questTracking.pendingTurnIns || 0;
+  
+  // If pendingTurnIns is 0 but we have completions, it might be uninitialized
+  // But we need to be careful - it could also mean all were turned in
+  // Only fix if we're sure it's uninitialized (no legacy pending means no recent turn-ins)
+  if (currentPendingBeforeFix === 0 && actualCompletions > 0) {
+    const legacyPending = questTracking.legacy?.pendingTurnIns || 0;
+    // If legacy pending exists but current is 0, it's likely uninitialized (new quest system)
+    // But if legacy is also 0 or low, recent turn-ins may have happened, so be conservative
+    if (legacyPending === 0 || legacyPending >= 10) {
+      // Likely uninitialized - set to completions
+      questTracking.pendingTurnIns = actualCompletions;
+      console.log(`[UserModel.consumeQuestTurnIns] 🔧 Fixed pendingTurnIns before consumption for user ${this.discordId}: was 0, set to ${actualCompletions}`);
+    }
   }
 
   const totalPending = this.getQuestPendingTurnIns();

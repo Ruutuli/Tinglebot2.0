@@ -38,6 +38,8 @@ const TIME_WINDOW = 30 * 60 * 1000;         // 30 minutes in milliseconds
 const CHECK_INTERVAL = 60 * 1000;           // Check every 60 seconds
 const RAID_COOLDOWN = 4 * 60 * 60 * 1000;  // 4 hour cooldown between raids
 const RAID_COOLDOWN_KEY = 'global_raid_cooldown'; // Key for storing raid cooldown in TempData
+const VILLAGE_RAID_COOLDOWN = 4 * 60 * 60 * 1000;  // 4 hour cooldown per village for quota-based raids
+const VILLAGE_RAID_COOLDOWN_PREFIX = 'village_raid_cooldown_'; // Prefix for per-village cooldown keys
 
 // ------------------- Restricted Role -------------------
 // Role ID that cannot trigger raids
@@ -380,6 +382,68 @@ async function resetGlobalRaidCooldown() {
     console.log(`[randomMonsterEncounters.js]: 🔄 Global raid cooldown reset - raids can now be triggered immediately`);
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error resetting raid cooldown:', error);
+  }
+}
+
+// ------------------- Get Village Raid Cooldown -------------------
+async function getVillageRaidCooldown(villageName) {
+  try {
+    const cooldownKey = `${VILLAGE_RAID_COOLDOWN_PREFIX}${villageName.toLowerCase()}`;
+    const cooldownData = await TempData.findOne({ key: cooldownKey, type: 'temp' });
+    
+    if (!cooldownData) {
+      return 0;
+    }
+    
+    // Validate the timestamp is reasonable (not more than 1 year ago)
+    const lastRaidTime = cooldownData.data?.lastRaidTime;
+    if (!lastRaidTime) {
+      return 0;
+    }
+    
+    const currentTime = Date.now();
+    const oneYearAgo = currentTime - (365 * 24 * 60 * 60 * 1000);
+    
+    if (lastRaidTime < oneYearAgo) {
+      console.log(`[randomMonsterEncounters.js]: 🧹 Found corrupted village cooldown timestamp for ${villageName}, resetting...`);
+      await resetVillageRaidCooldown(villageName);
+      return 0;
+    }
+    
+    return lastRaidTime || 0;
+  } catch (error) {
+    console.error(`[randomMonsterEncounters.js]: ❌ Error getting village raid cooldown for ${villageName}:`, error);
+    return 0; // Default to 0 if there's an error
+  }
+}
+
+// ------------------- Set Village Raid Cooldown -------------------
+async function setVillageRaidCooldown(villageName, timestamp) {
+  try {
+    const cooldownKey = `${VILLAGE_RAID_COOLDOWN_PREFIX}${villageName.toLowerCase()}`;
+    await TempData.findOneAndUpdate(
+      { key: cooldownKey },
+      { 
+        key: cooldownKey,
+        type: 'temp',
+        data: { lastRaidTime: timestamp }
+      },
+      { upsert: true, new: true }
+    );
+    console.log(`[randomMonsterEncounters.js]: ⏰ Village raid cooldown set for ${villageName}: ${new Date(timestamp).toISOString()}`);
+  } catch (error) {
+    console.error(`[randomMonsterEncounters.js]: ❌ Error setting village raid cooldown for ${villageName}:`, error);
+  }
+}
+
+// ------------------- Reset Village Raid Cooldown -------------------
+async function resetVillageRaidCooldown(villageName) {
+  try {
+    const cooldownKey = `${VILLAGE_RAID_COOLDOWN_PREFIX}${villageName.toLowerCase()}`;
+    await TempData.findOneAndDelete({ key: cooldownKey, type: 'temp' });
+    console.log(`[randomMonsterEncounters.js]: 🔄 Village raid cooldown reset for ${villageName} - raids can now be triggered immediately`);
+  } catch (error) {
+    console.error(`[randomMonsterEncounters.js]: ❌ Error resetting village raid cooldown for ${villageName}:`, error);
   }
 }
 
@@ -910,15 +974,8 @@ async function initializeRandomEncounterBot(client) {
   }, CHECK_INTERVAL);
 
   // Note: Hourly quota checks are handled by scheduler.js
+  // Startup checks are disabled - raids will only trigger during scheduled hourly checks to prevent raids on bot restart
   
-  // Also check immediately on startup (after a short delay to let everything initialize)
-  setTimeout(() => {
-    checkVillageRaidQuotas(client).catch(error => {
-      console.error('[randomMonsterEncounters.js]: ❌ Initial village quota check failed:', error);
-      handleError(error, 'randomMonsterEncounters.js');
-    });
-  }, 60000); // Check after 1 minute
-
   // Also run immediately on startup to reset any outdated periods
   // (The scheduler.js handles daily resets at midnight)
   setTimeout(() => {
@@ -941,6 +998,10 @@ module.exports = {
   getGlobalRaidCooldown,
   setGlobalRaidCooldown,
   resetGlobalRaidCooldown,
+  getVillageRaidCooldown,
+  setVillageRaidCooldown,
+  resetVillageRaidCooldown,
+  VILLAGE_RAID_COOLDOWN,
   checkVillageRaidQuotas,
   incrementVillageRaidCount,
   getVillagePeriodData,

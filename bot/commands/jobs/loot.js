@@ -1516,10 +1516,9 @@ async function processLootingLogic(
       outcome.result !== 'Win!/Loot' && outcome.result !== 'Win!/Loot (1HKO)' &&
       outcome.result !== 'KO' && outcome.hearts && outcome.hearts > 0 &&
       character.currentVillage) {
-    logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] ✅ All conditions met! Checking 100% chance for village damage (TESTING)...`);
+    logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] ✅ All conditions met! Checking 12.5% chance for village damage...`);
     try {
-      // 100% chance for monster to cause village damage (FOR TESTING PURPOSES ONLY)
-      const DAMAGE_CHANCE = 1.0;
+      const DAMAGE_CHANCE = 0.125;
       const roll = Math.random();
       logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] Damage chance roll: ${(roll * 100).toFixed(2)}% (need < ${(DAMAGE_CHANCE * 100).toFixed(1)}%)`);
       

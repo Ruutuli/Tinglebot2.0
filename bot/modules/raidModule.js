@@ -1060,7 +1060,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     console.log(`[raidModule.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
     
     // ------------------- Global Raid Cooldown Check -------------------
-    // For Blood Moon raids and quota-based raids, skip cooldown entirely (do not check or set)
+    // For Blood Moon raids and quota-based raids, skip global cooldown
     if (!isBloodMoon && !isQuotaBased) {
       // Check if we're still in global cooldown period (4 hours between raids)
       const { getGlobalRaidCooldown, setGlobalRaidCooldown } = require('../scripts/randomMonsterEncounters');
@@ -1093,6 +1093,31 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         console.log('[raidModule.js]: 🌕 Blood Moon raid detected — bypassing global raid cooldown.');
       } else if (isQuotaBased) {
         console.log('[raidModule.js]: 📅 Quota-based raid detected — bypassing global raid cooldown.');
+      }
+    }
+    
+    // ------------------- Per-Village Raid Cooldown Check (for quota-based raids) -------------------
+    // Quota-based raids have their own per-village cooldown to prevent the same village from triggering too frequently
+    if (isQuotaBased) {
+      const { getVillageRaidCooldown, VILLAGE_RAID_COOLDOWN } = require('../scripts/randomMonsterEncounters');
+      const currentTime = Date.now();
+      const lastRaidTime = await getVillageRaidCooldown(villageId);
+      const timeSinceLastRaid = currentTime - lastRaidTime;
+      
+      if (timeSinceLastRaid < VILLAGE_RAID_COOLDOWN) {
+        const remainingTime = VILLAGE_RAID_COOLDOWN - timeSinceLastRaid;
+        const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
+        const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+        
+        console.log(`[raidModule.js]: ⏰ Village raid cooldown active for ${villageId} - ${remainingHours}h ${remainingMinutes}m remaining`);
+        console.log(`[raidModule.js]: ⏰ Last village raid time: ${new Date(lastRaidTime).toISOString()}`);
+        console.log(`[raidModule.js]: ⏰ Current time: ${new Date(currentTime).toISOString()}`);
+        console.log(`[raidModule.js]: ⏰ Time since last village raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
+        
+        return {
+          success: false,
+          error: `Village raid cooldown active. ${villageId} must wait ${remainingHours}h ${remainingMinutes}m before another quota-based raid can be triggered.`
+        };
       }
     }
     
@@ -1245,7 +1270,17 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       console.log(`[raidModule.js]: 💾 Updated raid data without thread information`);
     }
 
-    console.log(`[raidModule.js]: 🐉 Triggered raid ${raidId} - ${monster.name} (T${monster.tier}) in ${villageId}${isBloodMoon ? ' (Blood Moon)' : ''}`);
+    // ------------------- Set Per-Village Cooldown (for quota-based raids) -------------------
+    // Set the per-village cooldown after successfully triggering a quota-based raid
+    if (isQuotaBased) {
+      const { setVillageRaidCooldown, VILLAGE_RAID_COOLDOWN } = require('../scripts/randomMonsterEncounters');
+      const currentTime = Date.now();
+      await setVillageRaidCooldown(villageId, currentTime);
+      const cooldownHours = Math.floor(VILLAGE_RAID_COOLDOWN / (1000 * 60 * 60));
+      console.log(`[raidModule.js]: ⏰ Village raid cooldown started for ${villageId} - next quota-based raid available in ${cooldownHours} hours`);
+    }
+
+    console.log(`[raidModule.js]: 🐉 Triggered raid ${raidId} - ${monster.name} (T${monster.tier}) in ${villageId}${isBloodMoon ? ' (Blood Moon)' : ''}${isQuotaBased ? ' (Quota-based)' : ''}`);
 
     return {
       success: true,
