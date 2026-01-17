@@ -2658,6 +2658,11 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
           villageObj.cooldowns = Object.fromEntries(villageObj.cooldowns);
         }
         
+        // Ensure currentTokens is always included (default to 0 if undefined)
+        if (villageObj.currentTokens === undefined || villageObj.currentTokens === null) {
+          villageObj.currentTokens = 0;
+        }
+        
         // Add material requirements from VILLAGE_CONFIG
         const config = VILLAGE_CONFIG[village.name];
         if (config) {
