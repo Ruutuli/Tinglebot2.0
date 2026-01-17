@@ -744,6 +744,7 @@ async function loadInventories(showLoader = true) {
     populateFilters();
     renderAggregatedTable();
     renderCharacterGrid();
+    renderCharactersList();
     populateTransferSelects();
     showToast('Inventories refreshed', 'success');
   } catch (error) {
@@ -810,6 +811,48 @@ function renderSummary() {
   if (characterCountElement) {
     characterCountElement.textContent = formatNumber(inventoryState.characters.length);
   }
+}
+
+function renderCharactersList() {
+  const container = document.getElementById('characters-list-container');
+
+  if (!container) {
+    return;
+  }
+
+  if (!inventoryState.characters.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-users"></i>
+        <p>Refresh to load your characters.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = '';
+
+  inventoryState.characters
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((character) => {
+      const characterItem = document.createElement('div');
+      characterItem.className = 'character-list-item';
+      characterItem.innerHTML = `
+        <div class="character-list-info">
+          <img src="${character.icon || '/images/ankleicon.png'}" alt="${character.name} icon" class="character-list-icon" />
+          <div class="character-list-details">
+            <h3>${character.name}</h3>
+            <p>${character.job || 'No job'} • ${character.currentVillage || 'Unknown village'}</p>
+          </div>
+        </div>
+        <a href="/character-inventory.html?character=${encodeURIComponent(character.name)}" class="character-list-link">
+          <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+          View Full Inventory
+        </a>
+      `;
+      container.appendChild(characterItem);
+    });
 }
 
 function populateFilters() {

@@ -27,6 +27,13 @@ function createRateLimiter(options = {}) {
   } = options;
 
   return (req, res, next) => {
+    // Skip rate limiting for static files (images, CSS, JS, etc.)
+    // Static file requests can be very frequent and shouldn't count against API limits
+    if (req.path.startsWith('/api/images/') || 
+        req.path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)$/i)) {
+      return next();
+    }
+    
     // req.user is populated from req.session.user by middleware in server.js
     const key = keyGenerator(req);
     const now = Date.now();
@@ -34,7 +41,9 @@ function createRateLimiter(options = {}) {
     // Get or create rate limit entry
     let entry = rateLimitStore.get(key);
     
-    if (!entry || now - entry.resetTime > windowMs) {
+    // Check if entry doesn't exist or if the reset time has passed
+    // resetTime is set in the future (now + windowMs), so we check if now > resetTime
+    if (!entry || now > entry.resetTime) {
       // Create new entry or reset expired entry
       entry = {
         count: 0,
@@ -105,16 +114,43 @@ function cleanupRateLimitStore() {
   }
 }
 
-// Clean up expired entries every 5 minutes
-setInterval(cleanupRateLimitStore, 5 * 60 * 1000);
+// ------------------- Function: clearRateLimitStore -------------------
+// Clears all entries from the rate limit store (useful for development)
+function clearRateLimitStore() {
+  const size = rateLimitStore.size;
+  rateLimitStore.clear();
+  if (!isProduction) {
+    logger.info(`Cleared all ${size} rate limit entries`, 'rateLimiter.js');
+  }
+  return size;
+}
+
+// Clean up expired entries more frequently in development (every minute) vs production (every 5 minutes)
+const cleanupInterval = isProduction ? 5 * 60 * 1000 : 60 * 1000;
+setInterval(cleanupRateLimitStore, cleanupInterval);
+
+// Run initial cleanup on module load to clear any stuck entries from before the bug fix
+// In development, clear ALL entries on restart to avoid issues with stuck rate limits
+if (!isProduction) {
+  // Small delay to ensure logger is ready
+  setImmediate(() => {
+    const size = rateLimitStore.size;
+    if (size > 0) {
+      // Clear all entries on restart in development to avoid stuck rate limits
+      clearRateLimitStore();
+      logger.info(`Cleared all ${size} rate limit entries on restart (development mode)`, 'rateLimiter.js');
+    }
+  });
+}
 
 // ------------------- Pre-configured Rate Limiters -------------------
 
 // General API rate limiter - uses user-based tracking for authenticated users, IP for guests
 // Authenticated users get higher limits since they're making legitimate dashboard requests
+// In development, use much higher limits to avoid issues with page loads that make many requests
 const generalLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 300, // Increased from 100 to 300 to handle dashboard page loads with many modules
+  max: isProduction ? 300 : 1000, // Much higher limit in development for page loads
   message: 'Too many API requests, please try again later',
   keyGenerator: (req) => {
     // Use user ID for authenticated users (allows higher limits per user)
@@ -161,6 +197,7 @@ module.exports = {
   authLimiter,
   adminLimiter,
   publicLimiter,
-  cleanupRateLimitStore
+  cleanupRateLimitStore,
+  clearRateLimitStore
 };
 

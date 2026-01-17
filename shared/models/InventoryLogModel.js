@@ -7,7 +7,8 @@ const { Schema } = mongoose;
 
 // ============================================================================
 // ------------------- Define the inventory log schema -------------------
-// Tracks all item acquisition events (similar to loggedInventory CSV)
+// Tracks all item inventory changes (additions and removals)
+// Similar to loggedInventory CSV - quantity can be positive (additions) or negative (removals)
 // ============================================================================
 const inventoryLogSchema = new Schema({
   // ------------------- Character Information -------------------
@@ -36,7 +37,15 @@ const inventoryLogSchema = new Schema({
   },
   quantity: {
     type: Number,
-    required: true
+    required: true,
+    // Positive = item added to inventory (Bought, Quest Reward, etc.)
+    // Negative = item removed from inventory (Sold, Traded, Used, etc.)
+    validate: {
+      validator: function(v) {
+        return v !== 0; // Quantity must not be zero
+      },
+      message: 'Quantity must be positive (addition) or negative (removal)'
+    }
   },
 
   // ------------------- Item Classification -------------------
@@ -53,7 +62,10 @@ const inventoryLogSchema = new Schema({
     default: ''
   },
 
-  // ------------------- Acquisition Details -------------------
+  // ------------------- Transaction Details -------------------
+  // How the item was obtained or removed:
+  // Additions: 'Bought', 'Quest Reward', 'Crafting', 'Trade', 'Gift', etc.
+  // Removals: 'Sold', 'Traded', 'Used', 'Barter Trade', 'Sold to shop', etc.
   obtain: {
     type: String,
     required: true,
@@ -106,6 +118,7 @@ inventoryLogSchema.index({ category: 1, type: 1 });
 // ============================================================================
 
 // ------------------- Get logs for a character -------------------
+// Supports filtering by additions, removals, or both
 inventoryLogSchema.statics.getCharacterLogs = async function(characterName, filters = {}) {
   const {
     itemName,
@@ -115,13 +128,24 @@ inventoryLogSchema.statics.getCharacterLogs = async function(characterName, filt
     location,
     startDate,
     endDate,
+    transactionType, // 'addition', 'removal', or undefined (both)
     limit = 1000,
     skip = 0
   } = filters;
 
   const query = { characterName };
   
-  if (itemName) query.itemName = { $regex: new RegExp(itemName, 'i') };
+  // Exact case-insensitive match for itemName (escape special regex characters)
+  if (itemName && typeof itemName === 'string' && itemName.trim().length > 0) {
+    const trimmedItemName = itemName.trim();
+    const escapedItemName = trimmedItemName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regexPattern = `^${escapedItemName}$`;
+    query.itemName = { $regex: new RegExp(regexPattern, 'i') };
+    // Debug: Log the query being built
+    console.log(`[InventoryLog] Filtering by itemName: "${trimmedItemName}", regex: /${regexPattern}/i`);
+  } else if (itemName !== undefined && itemName !== null) {
+    console.log(`[InventoryLog] itemName filter was provided but invalid:`, itemName, typeof itemName);
+  }
   if (obtain) query.obtain = { $regex: new RegExp(obtain, 'i') };
   if (category) query.category = category;
   if (type) query.type = type;
@@ -130,6 +154,13 @@ inventoryLogSchema.statics.getCharacterLogs = async function(characterName, filt
     query.dateTime = {};
     if (startDate) query.dateTime.$gte = new Date(startDate);
     if (endDate) query.dateTime.$lte = new Date(endDate);
+  }
+  
+  // Filter by transaction type: addition (positive) or removal (negative)
+  if (transactionType === 'addition') {
+    query.quantity = { $gt: 0 };
+  } else if (transactionType === 'removal') {
+    query.quantity = { $lt: 0 };
   }
 
   return this.find(query)

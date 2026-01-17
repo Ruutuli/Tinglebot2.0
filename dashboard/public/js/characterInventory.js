@@ -26,8 +26,108 @@ let currentFilters = {
   }
 };
 
+// ------------------- Navigation Setup -------------------
+function setupNavigation() {
+  const sidebar = document.querySelector('.sidebar');
+  const sidebarToggle = document.querySelector('.sidebar-toggle');
+
+  // Setup sidebar toggle
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+      document.body.style.overflow = sidebar.classList.contains('active') ? 'hidden' : '';
+    });
+  }
+
+  // Handle sidebar navigation links
+  const sidebarLinks = document.querySelectorAll('.sidebar-nav a:not(.nav-dropdown-toggle)');
+  
+  sidebarLinks.forEach(link => {
+    const sectionId = link.getAttribute('data-section');
+    const href = link.getAttribute('href');
+    
+    // Handle links with data-section (dashboard sections)
+    if (sectionId) {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        
+        // Close sidebar on mobile
+        if (window.innerWidth <= 768 && sidebar) {
+          sidebar.classList.remove('active');
+          document.body.style.overflow = '';
+        }
+        
+        // Navigate to main page with hash
+        if (sectionId === 'dashboard-section') {
+          window.location.href = '/';
+        } else {
+          window.location.href = `/#${sectionId}`;
+        }
+      });
+    }
+    // Handle external links like /map, /inventories - let them work normally
+    else if (href && (href.startsWith('/') || href.startsWith('http'))) {
+      // Close sidebar on mobile when navigating
+      link.addEventListener('click', () => {
+        if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('active')) {
+          sidebar.classList.remove('active');
+          document.body.style.overflow = '';
+        }
+      });
+    }
+  });
+
+  // Handle dropdown toggles
+  const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
+  dropdownToggles.forEach(toggle => {
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const dropdown = toggle.closest('.nav-dropdown');
+      if (dropdown) {
+        const isActive = dropdown.classList.contains('active');
+        
+        // Close all dropdowns
+        document.querySelectorAll('.nav-dropdown').forEach(item => {
+          item.classList.remove('active');
+          const itemToggle = item.querySelector('.nav-dropdown-toggle');
+          if (itemToggle) {
+            itemToggle.setAttribute('aria-expanded', 'false');
+          }
+        });
+        
+        // Toggle current dropdown
+        if (!isActive) {
+          dropdown.classList.add('active');
+          toggle.setAttribute('aria-expanded', 'true');
+        }
+      }
+    });
+  });
+
+  // Close sidebar when clicking outside (mobile)
+  document.addEventListener('click', (e) => {
+    if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('active')) {
+      if (!sidebar.contains(e.target) && !sidebarToggle?.contains(e.target)) {
+        sidebar.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+    }
+  });
+
+  // Close sidebar on window resize (when switching to desktop)
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768 && sidebar) {
+      sidebar.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  });
+}
+
 // ------------------- Initialization -------------------
 document.addEventListener('DOMContentLoaded', async () => {
+  // Setup navigation first
+  setupNavigation();
+
   // Get character name from URL params
   const urlParams = new URLSearchParams(window.location.search);
   characterName = urlParams.get('character') || decodeURIComponent(window.location.pathname.split('/').pop() || '');
@@ -130,7 +230,7 @@ async function loadHistoryData() {
     if (loading) loading.style.display = 'none';
   } catch (error) {
     console.error('Error loading history data:', error);
-    showError('Failed to load acquisition history');
+    // Don't show error if logs endpoint doesn't exist, just continue
   }
 }
 
@@ -155,6 +255,17 @@ function renderInventoryView() {
 
   const container = document.getElementById('inventory-grid-container');
   if (!container) return;
+
+  // Debug: Log sample items to see category structure
+  if (inventoryData.length > 0) {
+    console.log('Sample inventory items:', inventoryData.slice(0, 5).map(item => ({
+      name: item.itemName,
+      category: item.category,
+      type: item.type,
+      subtype: item.subtype,
+      categoryGear: item.categoryGear
+    })));
+  }
 
   // Get unique categories and types for filters
   const categories = [...new Set(inventoryData.flatMap(item => {
@@ -184,6 +295,15 @@ function renderInventoryView() {
 
   // Render grid
   container.innerHTML = renderInventoryGrid(itemsByCategory);
+  
+  // Setup lazy loading for images after render
+  setupLazyImageLoading();
+  
+  // Setup collapsible sections
+  setupCollapsibleSections();
+  
+  // Setup item click handlers
+  setupItemClickHandlers();
 }
 
 function setupInventoryFilters(categories, types) {
@@ -235,10 +355,16 @@ function setupInventoryFilters(categories, types) {
     ]
   });
 
+  // Store current filter values before replacing the container
+  const currentSearchValue = currentFilters.inventory.search || '';
+  const currentCategoryValue = currentFilters.inventory.category || 'all';
+  const currentTypeValue = currentFilters.inventory.type || 'all';
+  const currentOwnedValue = currentFilters.inventory.owned || 'all';
+
   filtersContainer.innerHTML = '';
   filtersContainer.appendChild(filterBar);
 
-  // Attach event listeners
+  // Attach event listeners and restore values
   const searchInput = document.getElementById('inventory-search');
   const categorySelect = document.getElementById('inventory-category');
   const typeSelect = document.getElementById('inventory-type');
@@ -246,24 +372,44 @@ function setupInventoryFilters(categories, types) {
   const clearBtn = document.getElementById('inventory-clear-filters');
 
   if (searchInput) {
+    // Restore search value
+    searchInput.value = currentSearchValue;
     searchInput.addEventListener('input', (e) => {
+      const cursorPosition = e.target.selectionStart;
       currentFilters.inventory.search = e.target.value;
       renderInventoryView();
+      // Restore focus and cursor position after DOM updates
+      setTimeout(() => {
+        const restoredInput = document.getElementById('inventory-search');
+        if (restoredInput) {
+          restoredInput.focus();
+          // Only restore cursor position if it's within the new value length
+          const newLength = restoredInput.value.length;
+          const safePosition = Math.min(cursorPosition, newLength);
+          restoredInput.setSelectionRange(safePosition, safePosition);
+        }
+      }, 0);
     });
   }
   if (categorySelect) {
+    // Restore category value
+    categorySelect.value = currentCategoryValue;
     categorySelect.addEventListener('change', (e) => {
       currentFilters.inventory.category = e.target.value;
       renderInventoryView();
     });
   }
   if (typeSelect) {
+    // Restore type value
+    typeSelect.value = currentTypeValue;
     typeSelect.addEventListener('change', (e) => {
       currentFilters.inventory.type = e.target.value;
       renderInventoryView();
     });
   }
   if (ownedSelect) {
+    // Restore owned value
+    ownedSelect.value = currentOwnedValue;
     ownedSelect.addEventListener('change', (e) => {
       currentFilters.inventory.owned = e.target.value;
       renderInventoryView();
@@ -330,11 +476,103 @@ function groupItemsByCategory(items) {
   const grouped = {};
 
   items.forEach(item => {
-    const categories = Array.isArray(item.category)
-      ? item.category
-      : (typeof item.category === 'string' && item.category.includes(','))
-        ? item.category.split(',').map(s => s.trim())
-        : [item.category || 'Unknown'];
+    // Get categories from multiple possible sources
+    let categories = [];
+    
+    // First, try item.category (can be array or string)
+    if (Array.isArray(item.category) && item.category.length > 0) {
+      categories = item.category.filter(Boolean);
+    } else if (typeof item.category === 'string' && item.category.trim()) {
+      if (item.category.includes(',')) {
+        categories = item.category.split(',').map(s => s.trim()).filter(Boolean);
+      } else {
+        categories = [item.category.trim()];
+      }
+    }
+    
+    // If still no categories, try categoryGear (for weapons/armor)
+    if (categories.length === 0 && item.categoryGear) {
+      if (typeof item.categoryGear === 'string' && item.categoryGear.trim()) {
+        categories = [item.categoryGear.trim()];
+      }
+    }
+    
+    // If still no categories, try category from type or subtype
+    if (categories.length === 0) {
+      // Check if type or subtype contains category-like information
+      const typeArray = Array.isArray(item.type) ? item.type : (item.type ? [item.type] : []);
+      const subtypeArray = Array.isArray(item.subtype) ? item.subtype : (item.subtype ? [item.subtype] : []);
+      const allTypeValues = [...typeArray, ...subtypeArray].map(v => String(v).toLowerCase()).join(' ');
+      
+      // Map common types/subtypes to categories (check multiple keywords per category)
+      // Note: 'material' keyword removed - items should go to specific categories instead
+      const typeCategoryMap = [
+        { keywords: ['weapon', 'sword', 'bow', 'arrow'], category: 'Weapon' },
+        { keywords: ['armor', 'helmet', 'shield', 'attire'], category: 'Armor' },
+        { keywords: ['food', 'cooking', 'meal'], category: 'Food' },
+        { keywords: ['creature', 'critter', 'animal'], category: 'Creature' },
+        { keywords: ['fish'], category: 'Fish' },
+        { keywords: ['ore', 'mineral'], category: 'Ore' },
+        { keywords: ['plant', 'herb', 'vegetable'], category: 'Plant' },
+        { keywords: ['mushroom', 'fungi'], category: 'Mushroom' },
+        { keywords: ['fruit', 'apple'], category: 'Fruit' },
+        { keywords: ['meat'], category: 'Meat' },
+        { keywords: ['monster', 'part'], category: 'Monster' },
+        { keywords: ['natural', 'nature', 'ingredient'], category: 'Natural' },
+        { keywords: ['recipe', 'cooking'], category: 'Recipe' },
+        { keywords: ['ancient'], category: 'Ancient Parts' },
+        { keywords: ['special'], category: 'Special' }
+      ];
+      
+      for (const { keywords, category } of typeCategoryMap) {
+        if (keywords.some(keyword => allTypeValues.includes(keyword))) {
+          categories = [category];
+          break;
+        }
+      }
+    }
+    
+    // If categories contain 'Material', try to replace it with a more specific category
+    if (categories.includes('Material')) {
+      // Check type/subtype to determine more specific category
+      const typeArray = Array.isArray(item.type) ? item.type : (item.type ? [item.type] : []);
+      const subtypeArray = Array.isArray(item.subtype) ? item.subtype : (item.subtype ? [item.subtype] : []);
+      const allTypeValues = [...typeArray, ...subtypeArray].map(v => String(v).toLowerCase()).join(' ');
+      
+      // Try to find a more specific category
+      const materialCategoryMap = [
+        { keywords: ['fruit', 'apple'], category: 'Fruit' },
+        { keywords: ['meat'], category: 'Meat' },
+        { keywords: ['fish'], category: 'Fish' },
+        { keywords: ['mushroom', 'fungi'], category: 'Mushroom' },
+        { keywords: ['ore', 'mineral'], category: 'Ore' },
+        { keywords: ['monster', 'part'], category: 'Monster' },
+        { keywords: ['plant', 'herb', 'vegetable'], category: 'Plant' },
+        { keywords: ['natural', 'nature', 'ingredient'], category: 'Natural' },
+        { keywords: ['creature', 'critter', 'animal'], category: 'Creature' }
+      ];
+      
+      let replaced = false;
+      for (const { keywords, category } of materialCategoryMap) {
+        if (keywords.some(keyword => allTypeValues.includes(keyword))) {
+          categories = categories.filter(c => c !== 'Material');
+          categories.push(category);
+          replaced = true;
+          break;
+        }
+      }
+      
+      // If still Material and couldn't determine specific category, use Natural as default
+      if (!replaced && categories.includes('Material')) {
+        categories = categories.filter(c => c !== 'Material');
+        categories.push('Natural');
+      }
+    }
+
+    // If still no categories, assign to Unknown
+    if (categories.length === 0) {
+      categories = ['Unknown'];
+    }
 
     categories.forEach(cat => {
       if (!grouped[cat]) {
@@ -353,39 +591,133 @@ function groupItemsByCategory(items) {
 }
 
 function renderInventoryGrid(itemsByCategory) {
-  const categories = Object.keys(itemsByCategory).sort();
+  // Define the specific category order (Material removed - items should be in specific categories)
+  const categoryOrder = [
+    'Weapon',
+    'Armor',
+    'Ancient Parts',
+    'Creature',
+    'Fish',
+    'Fruit',
+    'Meat',
+    'Monster',
+    'Mushroom',
+    'Natural',
+    'Ore',
+    'Plant',
+    'Special',
+    'Recipe',
+    'Food',
+    'Arrow',
+    'Unknown'
+  ];
+
+  // Get categories in the specified order, then add any missing categories
+  const orderedCategories = categoryOrder.filter(cat => itemsByCategory[cat] && itemsByCategory[cat].length > 0);
+  const remainingCategories = Object.keys(itemsByCategory)
+    .filter(cat => !categoryOrder.includes(cat))
+    .sort();
+  const categories = [...orderedCategories, ...remainingCategories];
   
   if (categories.length === 0) {
     return '<div class="empty-state"><p>No items match the current filters.</p></div>';
   }
 
-  return categories.map(category => `
-    <div class="category-section" data-category="${category}">
-      <h3 class="category-title">${category}</h3>
-      <div class="items-grid">
-        ${itemsByCategory[category].map(item => renderInventoryItem(item)).join('')}
+  // Get category icon based on category name
+  const getCategoryIcon = (category) => {
+    const iconMap = {
+      'Ore': 'https://storage.googleapis.com/tinglebot/Graphics/ore_white.png',
+      'Mushroom': 'https://storage.googleapis.com/tinglebot/Graphics/fungi_white.png',
+      'Natural': 'https://storage.googleapis.com/tinglebot/Graphics/ingredients_white.png',
+      'Meat': 'https://storage.googleapis.com/tinglebot/Graphics/meat_white.png',
+      'Monster': 'https://storage.googleapis.com/tinglebot/Graphics/monster_part_white.png',
+      'Fruit': 'https://storage.googleapis.com/tinglebot/Graphics/apple_white.png',
+      'Fish': 'https://storage.googleapis.com/tinglebot/Graphics/fish_white.png',
+      'Creature': 'https://storage.googleapis.com/tinglebot/Graphics/critter_white.png',
+      'Ancient Parts': 'https://storage.googleapis.com/tinglebot/Graphics/ancient_part_white.png',
+      'Armor': 'https://storage.googleapis.com/tinglebot/Graphics/attire_white.png',
+      'Weapon': 'https://storage.googleapis.com/tinglebot/Graphics/weapon_white.png',
+      'Special': 'https://storage.googleapis.com/tinglebot/Graphics/special_white.png',
+      'Plant': 'https://storage.googleapis.com/tinglebot/Graphics/plant_white.png',
+      'Recipe': 'https://storage.googleapis.com/tinglebot/Graphics/cooking_white.png',
+      'Material': 'fa-cube',
+      'Food': 'fa-utensils',
+      'Arrow': 'fa-arrow-right'
+    };
+    
+    for (const [key, icon] of Object.entries(iconMap)) {
+      if (category.toLowerCase().includes(key.toLowerCase())) {
+        return icon;
+      }
+    }
+    return 'fa-box';
+  };
+
+  // Render category navigation
+  const categoryNav = `
+    <div class="category-nav">
+      <div class="category-nav-title">Jump to Category</div>
+      <div class="category-nav-links">
+        ${categories.map(category => {
+          const categorySlug = category.toLowerCase().replace(/\s+/g, '-');
+          return `<a href="#category-${categorySlug}" class="category-nav-link" data-category="${categorySlug}">${category}</a>`;
+        }).join('')}
       </div>
     </div>
-  `).join('');
+  `;
+
+  // Render categories
+  const categorySections = categories.map(category => {
+    const items = itemsByCategory[category];
+    const categoryIcon = getCategoryIcon(category);
+    const itemCount = items.length;
+    const ownedCount = items.filter(item => item.owned).length;
+    const categorySlug = category.toLowerCase().replace(/\s+/g, '-');
+    const isImageIcon = categoryIcon.startsWith('https://');
+    const iconHtml = isImageIcon 
+      ? `<img src="${categoryIcon}" alt="${category}" class="category-icon-image" />`
+      : `<i class="fas ${categoryIcon}"></i>`;
+    
+    return `
+      <div class="category-section collapsed" id="category-${categorySlug}" data-category="${category}">
+        <div class="category-header">
+          <i class="fas fa-chevron-down category-toggle"></i>
+          ${iconHtml}
+          <h3 class="category-title">${category}</h3>
+          <span class="category-count">${ownedCount} / ${itemCount}</span>
+        </div>
+        <div class="category-items-container">
+          <div class="items-grid">
+            ${items.map(item => renderInventoryItemCard(item)).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return categoryNav + categorySections;
 }
 
-function renderInventoryItem(item) {
+function renderInventoryItemCard(item) {
   const imageUrl = formatItemImageUrl(item.image || item.emoji);
-  const quantityDisplay = item.owned ? item.quantity : 'Not Owned';
+  const quantityDisplay = item.owned ? `Qty: ${item.quantity}` : 'Not Owned';
   const itemClass = item.owned ? 'owned' : 'not-owned';
+  const qtyClass = item.owned ? 'has-quantity' : 'no-quantity';
+  const itemNameEscaped = item.itemName.replace(/"/g, '&quot;');
 
   return `
-    <div class="inventory-item-card ${itemClass}" data-item="${item.itemName}">
-      <div class="item-icon">
-        <img src="${imageUrl}" alt="${item.itemName}" onerror="this.src='/images/ankleicon.png'" />
-      </div>
-      <div class="item-details">
-        <h4 class="item-name">${item.itemName}</h4>
-        <div class="item-meta">
-          <span class="item-quantity ${item.owned ? 'has-quantity' : 'no-quantity'}">
-            ${quantityDisplay}
-          </span>
-          ${item.type ? `<span class="item-type">${Array.isArray(item.type) ? item.type.join(', ') : item.type}</span>` : ''}
+    <div class="inventory-item-card ${itemClass}" data-item="${itemNameEscaped}" title="${itemNameEscaped}">
+      <div class="item-info">
+        <div class="item-icon loading">
+          <img 
+            data-src="${imageUrl}" 
+            alt="${itemNameEscaped}" 
+            loading="lazy"
+            onerror="this.onerror=null; this.src='/images/ankleicon.png'; this.classList.add('loaded'); this.parentElement.classList.remove('loading');" />
+        </div>
+        <div class="item-details">
+          <h3 class="item-name">${item.itemName}</h3>
+          <p class="item-quantity ${qtyClass}">${quantityDisplay}</p>
         </div>
       </div>
     </div>
@@ -401,6 +733,267 @@ function formatItemImageUrl(image) {
   }
   
   return image;
+}
+
+// ------------------- Collapsible Sections -------------------
+function setupCollapsibleSections() {
+  const categoryHeaders = document.querySelectorAll('.category-header');
+  
+  categoryHeaders.forEach(header => {
+    header.addEventListener('click', (e) => {
+      // Don't collapse if clicking on count or icon
+      if (e.target.classList.contains('category-count') || e.target.classList.contains('fa-chevron-down')) {
+        return;
+      }
+      
+      const section = header.closest('.category-section');
+      if (section) {
+        section.classList.toggle('collapsed');
+      }
+    });
+  });
+
+  // Setup category navigation links
+  const navLinks = document.querySelectorAll('.category-nav-link');
+  navLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const categorySlug = link.getAttribute('data-category');
+      const targetSection = document.getElementById(`category-${categorySlug}`);
+      
+      if (targetSection) {
+        // Expand section if collapsed
+        targetSection.classList.remove('collapsed');
+        
+        // Smooth scroll to section
+        targetSection.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start' 
+        });
+      }
+    });
+  });
+}
+
+// ------------------- Item Click Handlers -------------------
+function setupItemClickHandlers() {
+  const itemCards = document.querySelectorAll('.inventory-item-card');
+  
+  itemCards.forEach(card => {
+    card.addEventListener('click', async (e) => {
+      // Get item name from data attribute and decode any HTML entities
+      const itemNameAttr = card.getAttribute('data-item');
+      if (itemNameAttr) {
+        // Decode HTML entities (like &quot; -> ")
+        const itemName = itemNameAttr.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        await showItemLog(itemName);
+      }
+    });
+  });
+}
+
+async function showItemLog(itemName) {
+  // Create or get modal
+  let modal = document.getElementById('item-log-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'item-log-modal';
+    modal.className = 'item-log-modal';
+    document.body.appendChild(modal);
+  }
+
+  // Show loading state
+  modal.innerHTML = `
+    <div class="item-log-modal-content">
+      <div style="text-align: center; padding: 3rem;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--character-inventory-accent); margin-bottom: 1rem;"></i>
+        <p>Loading inventory log...</p>
+      </div>
+    </div>
+  `;
+  modal.classList.add('active');
+
+  try {
+    // Fetch item log data
+    const url = `/api/inventory/character/${encodeURIComponent(characterName)}/logs?item=${encodeURIComponent(itemName)}`;
+    console.log('[Item Log] Fetching logs for item:', itemName, 'URL:', url);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const { data } = await response.json();
+    const logs = data.logs || [];
+
+    // Find item details from inventory data
+    const item = inventoryData?.find(i => i.itemName === itemName);
+    const imageUrl = item ? formatItemImageUrl(item.image || item.emoji) : '/images/ankleicon.png';
+
+    // Render modal content
+    modal.innerHTML = `
+      <div class="item-log-modal-content">
+        <div class="item-log-header">
+          <div class="item-icon">
+            <img src="${imageUrl}" alt="${itemName}" onerror="this.src='/images/ankleicon.png'; this.style.opacity='1';" style="opacity: 1;" />
+          </div>
+          <div class="item-log-header-info">
+            <h2>${itemName}</h2>
+          </div>
+          <button class="item-log-close" aria-label="Close">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="item-log-body">
+          ${logs.length === 0 
+            ? '<p style="text-align: center; padding: 2rem; color: var(--character-inventory-text-muted);">No inventory log entries found for this item.</p>'
+            : `
+              <table class="item-log-table">
+                <thead>
+                  <tr>
+                    <th>Date/Time</th>
+                    <th>Quantity</th>
+                    <th>Action</th>
+                    <th>Method</th>
+                    <th>Location</th>
+                    <th>Link</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${logs.map(log => renderLogRow(log)).join('')}
+                </tbody>
+              </table>
+            `
+          }
+        </div>
+      </div>
+    `;
+
+    // Setup close button
+    const closeBtn = modal.querySelector('.item-log-close');
+    closeBtn.addEventListener('click', () => {
+      modal.classList.remove('active');
+    });
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.remove('active');
+      }
+    });
+
+    // Close on Escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('active')) {
+        modal.classList.remove('active');
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+  } catch (error) {
+    console.error('Error loading item log:', error);
+    modal.innerHTML = `
+      <div class="item-log-modal-content">
+        <div class="item-log-header">
+          <h2>Error</h2>
+          <button class="item-log-close" aria-label="Close">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="item-log-body">
+          <p style="text-align: center; padding: 2rem; color: var(--error-color, #ff6b6b);">
+            Failed to load inventory log: ${error.message}
+          </p>
+        </div>
+      </div>
+    `;
+    
+    const closeBtn = modal.querySelector('.item-log-close');
+    closeBtn.addEventListener('click', () => {
+      modal.classList.remove('active');
+    });
+  }
+}
+
+function renderLogRow(log) {
+  const dateTime = new Date(log.dateTime);
+  const formattedDate = dateTime.toLocaleString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  });
+
+  const quantity = parseInt(log.quantity) || 0;
+  const quantityClass = quantity > 0 ? 'log-positive' : 'log-negative';
+  const quantityDisplay = quantity > 0 ? `+${quantity}` : `${quantity}`;
+  const actionDisplay = quantity > 0 ? 'Obtained' : 'Removed';
+
+  const linkHtml = log.link 
+    ? `<a href="${log.link}" target="_blank" rel="noopener noreferrer" class="history-link"><i class="fas fa-external-link-alt"></i></a>`
+    : '-';
+
+  return `
+    <tr>
+      <td>${formattedDate}</td>
+      <td class="${quantityClass}">${quantityDisplay}</td>
+      <td>${actionDisplay}</td>
+      <td>${log.obtain || '-'}</td>
+      <td>${log.location || '-'}</td>
+      <td style="text-align: center;">${linkHtml}</td>
+    </tr>
+  `;
+}
+
+// ------------------- Lazy Image Loading -------------------
+function setupLazyImageLoading() {
+  const images = document.querySelectorAll('.item-icon img[data-src]');
+  
+  if (!('IntersectionObserver' in window)) {
+    // Fallback for browsers without IntersectionObserver
+    images.forEach(img => {
+      if (img.dataset.src) {
+        img.src = img.dataset.src;
+        img.classList.add('loaded');
+        img.parentElement.classList.remove('loading');
+      }
+    });
+    return;
+  }
+
+  const imageObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        const iconContainer = img.parentElement;
+        
+        if (img.dataset.src) {
+          img.src = img.dataset.src;
+          img.removeAttribute('data-src');
+          
+          img.onload = () => {
+            img.classList.add('loaded');
+            iconContainer.classList.remove('loading');
+          };
+          
+          img.onerror = () => {
+            img.src = '/images/ankleicon.png';
+            img.classList.add('loaded');
+            iconContainer.classList.remove('loading');
+          };
+        }
+        
+        observer.unobserve(img);
+      }
+    });
+  }, {
+    rootMargin: '50px' // Start loading images 50px before they come into view
+  });
+
+  images.forEach(img => {
+    imageObserver.observe(img);
+  });
 }
 
 // ------------------- History View -------------------

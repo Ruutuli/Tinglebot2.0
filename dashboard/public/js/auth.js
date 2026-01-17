@@ -123,6 +123,33 @@ export function initUserMenu() {
       }, 100);
     }
   });
+  
+  // Handle profile button
+  const profileButton = userDropdown.querySelector('.profile-button');
+  if (profileButton) {
+    profileButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = '/#profile-section';
+    });
+  }
+  
+  // Handle logout button
+  const logoutButton = userDropdown.querySelector('.logout-button');
+  if (logoutButton) {
+    logoutButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+  }
+  
+  // Handle login button (for guest users)
+  const loginButton = userDropdown.querySelector('.login-button');
+  if (loginButton) {
+    loginButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      login();
+    });
+  }
 }
 
 // Check user authentication status

@@ -306,8 +306,13 @@ router.get('/character/:characterName/logs', asyncHandler(async (req, res) => {
   logger.info(`[inventory.js] Request URL: ${req.url}, Original URL: ${req.originalUrl}`, 'inventory.js');
   
   await checkDatabaseConnections();
+  
+  // Log all query parameters for debugging
+  logger.info(`[inventory.js] Query params: ${JSON.stringify(req.query)}`, 'inventory.js');
+  
   const {
-    itemName,
+    item, // Accept 'item' query parameter (from frontend)
+    itemName, // Also accept 'itemName' for backwards compatibility
     obtain,
     category,
     type,
@@ -317,6 +322,30 @@ router.get('/character/:characterName/logs', asyncHandler(async (req, res) => {
     limit = 1000,
     skip = 0
   } = req.query;
+  
+  // Use 'item' if provided, otherwise fall back to 'itemName'
+  // Decode URL-encoded values
+  let filterItemName = null;
+  const itemParam = item || itemName;
+  if (itemParam && typeof itemParam === 'string' && itemParam.trim().length > 0) {
+    try {
+      filterItemName = decodeURIComponent(itemParam.trim());
+      logger.info(`[inventory.js] Decoded itemName: "${filterItemName}" from "${itemParam}"`, 'inventory.js');
+    } catch (e) {
+      // If decoding fails, use the raw value
+      filterItemName = itemParam.trim();
+      logger.warn(`[inventory.js] Failed to decode itemName, using raw: "${filterItemName}"`, 'inventory.js');
+    }
+  } else {
+    logger.info(`[inventory.js] No item parameter found in query (item="${item}", itemName="${itemName}")`, 'inventory.js');
+  }
+
+  // Log the filter being applied
+  if (filterItemName) {
+    logger.info(`[inventory.js] Filtering logs by itemName: "${filterItemName}"`, 'inventory.js');
+  } else {
+    logger.info(`[inventory.js] No item filter provided - returning all logs`, 'inventory.js');
+  }
 
   if (!characterName) {
     return res.status(400).json({ error: 'Character name is required' });
@@ -336,9 +365,8 @@ router.get('/character/:characterName/logs', asyncHandler(async (req, res) => {
       return res.status(404).json({ error: 'Character not found' });
     }
 
-    // Get logs with filters
-    const logs = await InventoryLog.getCharacterLogs(character.name, {
-      itemName,
+    // Build filters object - only include itemName if it's provided
+    const filters = {
       obtain,
       category,
       type,
@@ -347,7 +375,22 @@ router.get('/character/:characterName/logs', asyncHandler(async (req, res) => {
       endDate,
       limit: parseInt(limit),
       skip: parseInt(skip)
-    });
+    };
+    
+    // Only add itemName filter if it was provided
+    if (filterItemName) {
+      filters.itemName = filterItemName;
+      logger.info(`[inventory.js] Adding itemName filter to query: "${filterItemName}"`, 'inventory.js');
+    } else {
+      logger.warn(`[inventory.js] WARNING: filterItemName is null/undefined - NOT filtering by item!`, 'inventory.js');
+    }
+
+    logger.info(`[inventory.js] Calling getCharacterLogs with filters: ${JSON.stringify(filters)}`, 'inventory.js');
+
+    // Get logs with filters
+    const logs = await InventoryLog.getCharacterLogs(character.name, filters);
+    
+    logger.info(`[inventory.js] Found ${logs.length} logs for character "${character.name}"${filterItemName ? ` with item "${filterItemName}"` : ' (ALL ITEMS)'}`, 'inventory.js');
 
     res.json({
       data: {

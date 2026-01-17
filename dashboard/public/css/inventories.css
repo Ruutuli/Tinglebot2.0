@@ -63,6 +63,86 @@ body.inventories-page {
   box-shadow: 0 10px 30px rgba(93, 214, 255, 0.35);
 }
 
+.characters-list-section {
+  background: var(--inventory-panel);
+  border: 1px solid var(--inventory-border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  backdrop-filter: blur(var(--frost-blur));
+  box-shadow: var(--section-shadow);
+}
+
+.characters-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.character-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.character-list-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.character-list-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.character-list-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.character-list-details h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.character-list-details p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--inventory-text-muted);
+}
+
+.character-list-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  background: var(--inventory-accent);
+  color: var(--botw-black, #010409);
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.character-list-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(93, 214, 255, 0.3);
+}
+
+.character-list-link:active {
+  transform: translateY(0);
+}
+
 .inventory-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
