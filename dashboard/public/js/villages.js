@@ -10,6 +10,14 @@ let villageCache = {
   CACHE_DURATION: 5 * 60 * 1000 // 5 minutes
 };
 
+// Item data cache for material images
+let itemCache = {
+  data: null,
+  itemImageMap: null,
+  timestamp: 0,
+  CACHE_DURATION: 10 * 60 * 1000 // 10 minutes
+};
+
 // Village crest images
 const villageCrests = {
   'Rudania': '/images/banners/Rudania1.png',
@@ -49,6 +57,64 @@ function getVillageEmojiIcon(villageName) {
     'Vhintl': '/images/icons/[RotW] village crest_vhintl_.png'
   };
   return emojiIcons[villageName] || null;
+}
+
+// ------------------- Function: formatItemImageUrl -------------------
+// Formats and returns item image URL
+function formatItemImageUrl(image) {
+  if (!image || image === 'No Image') return '/images/ankleicon.png';
+  
+  // If it's a GCS URL, route it through our proxy to avoid CORS issues
+  if (image.startsWith('https://storage.googleapis.com/tinglebot/')) {
+    const path = image.replace('https://storage.googleapis.com/tinglebot/', '');
+    return `/api/images/${path}`;
+  }
+  
+  return image;
+}
+
+// ------------------- Function: fetchItemsForImages -------------------
+// Fetches all items and creates a lookup map for material images
+async function fetchItemsForImages() {
+  const now = Date.now();
+  
+  // Check if cache is valid
+  if (itemCache.itemImageMap && (now - itemCache.timestamp) < itemCache.CACHE_DURATION) {
+    return itemCache.itemImageMap;
+  }
+  
+  try {
+    const response = await fetch('/api/models/item?all=true');
+    if (!response.ok) {
+      console.warn('[villages.js] Failed to fetch items for material images');
+      return itemCache.itemImageMap || {};
+    }
+    
+    const { data } = await response.json();
+    itemCache.data = data;
+    
+    // Create lookup map: itemName -> image
+    itemCache.itemImageMap = {};
+    data.forEach(item => {
+      if (item.itemName && item.image) {
+        itemCache.itemImageMap[item.itemName] = item.image;
+      }
+    });
+    
+    itemCache.timestamp = now;
+    return itemCache.itemImageMap;
+  } catch (error) {
+    console.error('[villages.js] Error fetching items for material images:', error);
+    return itemCache.itemImageMap || {};
+  }
+}
+
+// ------------------- Function: getMaterialImage -------------------
+// Gets the image URL for a material by name
+async function getMaterialImage(materialName) {
+  const itemImageMap = await fetchItemsForImages();
+  const image = itemImageMap[materialName];
+  return formatItemImageUrl(image);
 }
 
 // ============================================================================
@@ -214,16 +280,6 @@ function createVillageCard(villageData) {
               </div>
             </div>
           ` : ''}
-          
-          <div class="village-detail-item">
-            <div class="village-detail-label">
-              <i class="fas fa-store"></i>
-              <span>Vending</span>
-            </div>
-            <div class="village-detail-value">
-              <span class="vending-tier-text">${vendingTierText}${discountText}</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -340,10 +396,10 @@ export async function initializeVillagePage(data, page, contentDiv) {
     villagesContainer.className = 'villages-model-container';
 
     // Process each village
-    data.forEach(village => {
-      const villageCard = createVillageModelCard(village);
+    for (const village of data) {
+      const villageCard = await createVillageModelCard(village);
       villagesContainer.insertAdjacentHTML('beforeend', villageCard);
-    });
+    }
 
     contentDiv.appendChild(villagesContainer);
   } catch (error) {
@@ -362,7 +418,7 @@ export async function initializeVillagePage(data, page, contentDiv) {
  * @param {Object} village - Village data object
  * @returns {string} HTML string for village card
  */
-function createVillageModelCard(village) {
+async function createVillageModelCard(village) {
   if (!village) {
     return `
       <div class="village-model-card">
@@ -487,7 +543,8 @@ function createVillageModelCard(village) {
             <div class="materials-group">
               <h4 class="materials-group-title">Materials for Level 2 & 3</h4>
               <div class="materials-list">
-                ${level2Materials.map(mat => {
+                ${(await Promise.all(level2Materials.map(async (mat) => {
+                  const materialImage = await getMaterialImage(mat.name);
                   const requiredText = isMaxLevel 
                     ? `Level 3: ${mat.level3.toLocaleString()}`
                     : nextLevel === 2 
@@ -495,21 +552,24 @@ function createVillageModelCard(village) {
                       : `Level 2: ${mat.level2.toLocaleString()} | Level 3: ${mat.level3.toLocaleString()}`;
                   return `
                   <div class="material-item">
-                    <span class="material-name">${mat.name}</span>
-                    <div class="material-info">
-                      <span class="material-requirements">${requiredText}</span>
-                      ${mat.required > 0 ? `
-                        <div class="material-progress-wrapper">
-                          <div class="material-progress-bar">
-                            <div class="material-progress-fill" style="width: ${mat.progress}%; background-color: ${color};"></div>
+                    ${materialImage ? `<img src="${materialImage}" alt="${mat.name} icon" class="material-icon" />` : ''}
+                    <div class="material-content">
+                      <span class="material-name">${mat.name}</span>
+                      <div class="material-info">
+                        <span class="material-requirements">${requiredText}</span>
+                        ${mat.required > 0 ? `
+                          <div class="material-progress-wrapper">
+                            <div class="material-progress-bar">
+                              <div class="material-progress-fill" style="width: ${mat.progress}%; background-color: ${color};"></div>
+                            </div>
+                            <span class="material-progress-text">${mat.donated.toLocaleString()}/${mat.required.toLocaleString()} (${mat.progress}%)</span>
                           </div>
-                          <span class="material-progress-text">${mat.donated.toLocaleString()}/${mat.required.toLocaleString()} (${mat.progress}%)</span>
-                        </div>
-                      ` : mat.donated > 0 ? `<span class="material-donated">Donated: ${mat.donated.toLocaleString()}</span>` : ''}
+                        ` : mat.donated > 0 ? `<span class="material-donated">Donated: ${mat.donated.toLocaleString()}</span>` : ''}
+                      </div>
                     </div>
                   </div>
                 `;
-                }).join('')}
+                }))).join('')}
               </div>
             </div>
           ` : ''}
@@ -517,24 +577,28 @@ function createVillageModelCard(village) {
             <div class="materials-group">
               <h4 class="materials-group-title">Level 3 Only Materials</h4>
               <div class="materials-list">
-                ${level3OnlyMaterials.map(mat => {
+                ${(await Promise.all(level3OnlyMaterials.map(async (mat) => {
+                  const materialImage = await getMaterialImage(mat.name);
                   return `
                   <div class="material-item material-item-rare">
-                    <span class="material-name">${mat.name}</span>
-                    <div class="material-info">
-                      <span class="material-requirements">Level 3: ${mat.level3.toLocaleString()}</span>
-                      ${mat.required > 0 ? `
-                        <div class="material-progress-wrapper">
-                          <div class="material-progress-bar">
-                            <div class="material-progress-fill" style="width: ${mat.progress}%; background-color: ${color};"></div>
+                    ${materialImage ? `<img src="${materialImage}" alt="${mat.name} icon" class="material-icon" />` : ''}
+                    <div class="material-content">
+                      <span class="material-name">${mat.name}</span>
+                      <div class="material-info">
+                        <span class="material-requirements">Level 3: ${mat.level3.toLocaleString()}</span>
+                        ${mat.required > 0 ? `
+                          <div class="material-progress-wrapper">
+                            <div class="material-progress-bar">
+                              <div class="material-progress-fill" style="width: ${mat.progress}%; background-color: ${color};"></div>
+                            </div>
+                            <span class="material-progress-text">${mat.donated.toLocaleString()}/${mat.required.toLocaleString()} (${mat.progress}%)</span>
                           </div>
-                          <span class="material-progress-text">${mat.donated.toLocaleString()}/${mat.required.toLocaleString()} (${mat.progress}%)</span>
-                        </div>
-                      ` : mat.donated > 0 ? `<span class="material-donated">Donated: ${mat.donated.toLocaleString()}</span>` : ''}
+                        ` : mat.donated > 0 ? `<span class="material-donated">Donated: ${mat.donated.toLocaleString()}</span>` : ''}
+                      </div>
                     </div>
                   </div>
                 `;
-                }).join('')}
+                }))).join('')}
               </div>
             </div>
           ` : ''}
@@ -554,42 +618,38 @@ function createVillageModelCard(village) {
   if (contributors && typeof contributors === 'object' && Object.keys(contributors).length > 0) {
     const contributorList = [];
     
-    // Process contributors - could be Map converted to object, or plain object
+    // Process contributors - structure: { "CharacterName": { items: { "MaterialName": quantity }, tokens: 0 } }
     Object.entries(contributors).forEach(([characterName, contribData]) => {
       try {
-        // contribData could be an object with materials property, or a Map-like structure
-        let materialsDonated = {};
-        
-        if (contribData && typeof contribData === 'object') {
-          // Check if materials is a property
-          if (contribData.materials) {
-            materialsDonated = contribData.materials;
-          } 
-          // Or the entire object might be materials data
-          else if (!contribData.current && !contribData.required) {
-            materialsDonated = contribData;
-          }
-          // Or it might have nested structure
-          else {
-            materialsDonated = contribData;
-          }
+        if (!contribData || typeof contribData !== 'object') {
+          return;
         }
         
-        // Extract material entries
-        const materialEntries = Object.entries(materialsDonated)
-          .filter(([matName, qty]) => {
-            // Handle both numbers and objects with current property
-            const quantity = typeof qty === 'number' ? qty : (qty?.current || qty?.quantity || 0);
-            return quantity > 0;
-          })
-          .map(([matName, qty]) => {
-            const quantity = typeof qty === 'number' ? qty : (qty?.current || qty?.quantity || 0);
-            return `${matName}: ${quantity}`;
-          })
-          .join(', ');
+        // Contributors are stored as { items: { materialName: quantity }, tokens: 0 }
+        const itemsDonated = contribData.items || {};
+        const tokensDonated = contribData.tokens || 0;
         
-        if (materialEntries) {
-          contributorList.push({ name: characterName, materials: materialEntries });
+        // Build material entries list
+        const materialEntries = [];
+        
+        // Add material donations
+        Object.entries(itemsDonated).forEach(([matName, qty]) => {
+          const quantity = typeof qty === 'number' ? qty : 0;
+          if (quantity > 0) {
+            materialEntries.push(`${matName}: ${quantity}`);
+          }
+        });
+        
+        // Add token donations if any
+        if (tokensDonated > 0) {
+          materialEntries.push(`Tokens: ${tokensDonated.toLocaleString()}`);
+        }
+        
+        if (materialEntries.length > 0) {
+          contributorList.push({ 
+            name: characterName, 
+            materials: materialEntries.join(', ')
+          });
         }
       } catch (error) {
         console.error(`[villages.js] Error processing contributor ${characterName}:`, error);
