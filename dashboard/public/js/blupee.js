@@ -380,11 +380,19 @@ async function handleBlupeeClick(event) {
       console.log(`[blupee.js]: ✨ Reward claimed! +${data.tokensAwarded} tokens (Daily: ${data.dailyCount}/${data.dailyLimit}, Total: ${data.newTokenBalance})`);
       
       // Refresh blupee leaderboard if user is currently viewing it
-      if (window.levelsModule && window.levelsModule.currentTab === 'blupee-leaderboard') {
+      // Check both the currentTab property and if the tab is visible in the DOM
+      const blupeeTab = document.getElementById('blupee-leaderboard-tab');
+      const isBlupeeTabActive = blupeeTab && blupeeTab.classList.contains('active');
+      const isBlupeeTabSelected = window.levelsModule && window.levelsModule.currentTab === 'blupee-leaderboard';
+      
+      if (window.levelsModule && (isBlupeeTabActive || isBlupeeTabSelected)) {
         console.log('[blupee.js]: Refreshing blupee leaderboard after successful claim');
-        window.levelsModule.loadBlupeeLeaderboard().catch(error => {
-          console.error('[blupee.js]: Error refreshing blupee leaderboard:', error);
-        });
+        // Small delay to ensure database save is complete
+        setTimeout(() => {
+          window.levelsModule.loadBlupeeLeaderboard().catch(error => {
+            console.error('[blupee.js]: Error refreshing blupee leaderboard:', error);
+          });
+        }, 500);
       }
     } else {
       // Show error (cooldown, daily limit, or other issue)

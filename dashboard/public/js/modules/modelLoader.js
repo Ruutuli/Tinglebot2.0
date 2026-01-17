@@ -16,6 +16,7 @@ import * as starterGear from '../starterGear.js';
 import * as quests from '../quests.js';
 import * as inventory from '../inventory.js';
 import * as villageShops from '../villageShops.js';
+import * as villages from '../villages.js';
 import * as vending from '../vending.js';
 import * as vendingShops from '../vendingShops.js';
 import * as error from '../error.js';
@@ -103,6 +104,10 @@ export async function initializeModelPage(modelName, data, page, contentDiv, tit
       break;
     case 'villageShops':
       await villageShops.initializeVillageShopsPage(data, page, contentDiv);
+      break;
+    case 'village':
+      title.textContent = 'Villages';
+      await villages.initializeVillagePage(data, page, contentDiv);
       break;
     case 'quest':
       await quests.initializeQuestPage(data, page, contentDiv);

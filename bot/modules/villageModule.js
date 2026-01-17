@@ -160,11 +160,13 @@ async function damageVillage(villageName, damageAmount) {
 
         // Apply damage directly to village health (damage stacks across events)
         const healthBefore = village.health;
+        const levelBefore = village.level;
         village.health = Math.max(0, village.health - damageAmount);
         const actualHPLost = healthBefore - village.health; // Actual HP lost (capped at current health)
         console.log(`[damageVillage] Updated health for village "${villageName}" to ${village.health}/${maxHealth} (damage: ${damageAmount} HP, actual HP lost: ${actualHPLost})`);
 
         const removedResources = [];
+        let levelDropped = false;
         // Convert Map to object for easier manipulation
         let materials = {};
         if (village.materials instanceof Map) {
@@ -199,6 +201,7 @@ async function damageVillage(villageName, damageAmount) {
             console.log(`[damageVillage] Village "${villageName}" health reached 0. Decreasing level.`);
             if (village.level > 1) {
                 village.level -= 1;
+                levelDropped = true;
 
                 // Reset health for the new level
                 const newMaxHealth = village.levelHealth instanceof Map 
@@ -315,7 +318,66 @@ async function damageVillage(villageName, damageAmount) {
                     if (!channel) {
                         console.error(`[damageVillage] ❌ Could not find channel ${VILLAGE_DAMAGE_CHANNEL_ID} for village damage notification`);
                     } else {
-                        await channel.send({ content: 'Village took damage!' });
+                        // Prepare resource loss details
+                        const materialsLost = removedResources
+                            .filter(r => r.type === 'Material')
+                            .map(r => `**${r.name}:** ${r.amount.toLocaleString()}`)
+                            .join('\n') || 'No materials lost';
+                        
+                        const tokensLost = removedResources
+                            .filter(r => r.type === 'Tokens')
+                            .reduce((sum, r) => sum + r.amount, 0);
+                        
+                        const currentTokens = village.currentTokens || 0;
+                        const healthAfter = village.health;
+                        const currentMaxHealth = village.levelHealth instanceof Map 
+                            ? village.levelHealth.get(village.level.toString()) 
+                            : village.levelHealth[village.level.toString()] || 100;
+                        
+                        // Build embed
+                        const damageEmbed = new EmbedBuilder()
+                            .setTitle(`⚠️ Village Damage Report`)
+                            .setDescription(`**${village.name}** has taken damage!`)
+                            .setColor('#FF4444')
+                            .addFields(
+                                {
+                                    name: '❤️ Health',
+                                    value: `**Before:** \`${healthBefore.toLocaleString()}/${maxHealth.toLocaleString()}\`\n**After:** \`${healthAfter.toLocaleString()}/${currentMaxHealth.toLocaleString()}\`\n**Lost:** \`${actualHPLost.toLocaleString()} HP\``,
+                                    inline: true
+                                },
+                                {
+                                    name: '📊 Village Level',
+                                    value: `**Level:** ${village.level}${levelDropped ? ' ⬇️ (Decreased!)' : ''}`,
+                                    inline: true
+                                },
+                                {
+                                    name: '🪙 Tokens',
+                                    value: `**Lost:** ${tokensLost.toLocaleString()}\n**Remaining:** ${currentTokens.toLocaleString()}`,
+                                    inline: true
+                                }
+                            )
+                            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                            .setTimestamp();
+                        
+                        // Add materials lost field if any materials were lost
+                        if (materialsLost !== 'No materials lost') {
+                            damageEmbed.addFields({
+                                name: '📦 Materials Lost',
+                                value: materialsLost,
+                                inline: false
+                            });
+                        }
+                        
+                        // Add level drop warning if applicable
+                        if (levelDropped) {
+                            damageEmbed.addFields({
+                                name: '⚠️ Critical Damage',
+                                value: `The village has lost a level and dropped to **level ${village.level}**! All remaining resources have been lost.`,
+                                inline: false
+                            });
+                        }
+                        
+                        await channel.send({ embeds: [damageEmbed] });
                         console.log(`[damageVillage] ✅ Successfully sent village damage notification to channel ${VILLAGE_DAMAGE_CHANNEL_ID}`);
                     }
                 }
@@ -387,18 +449,52 @@ async function applyVillageDamage(villageName, monster, thread) {
             levelMessage = `\n⚠️ **OH NO! The village has lost a level!** It's now at **level ${updatedVillage.level}**.`;
         }
 
-        const resourceLossMessage = `\n\n📦 **Materials Lost:**\n${materialsLost}\n\n${tokensLost}`;
-
         // Create an embed to report damage
         const failureEmbed = new EmbedBuilder()
             .setTitle(`❌ The Raid Has Failed!`)
             .setDescription(
-                `The village **${villageName}** was overwhelmed by an attack from **${monster.name}** and has taken **${damageAmount} HP damage**!` +
-                `\n\n${healthBar}${resourceLossMessage}\n🪙 **Tokens Remaining:** ${tokensRemaining}${levelMessage}`
+                `The village **${villageName}** was overwhelmed by an attack from **${monster.name}** and has taken **${damageAmount} HP damage**!`
             )
-            .setImage(monster.image || 'https://pm1.aminoapps.com/6485/abe8c0c1f74bcc7eab0542eb1358f51be08c8beb_00.jpg')
             .setColor('#FF0000')
-            .setFooter({ text: "Better luck next time!" });
+            .addFields(
+                {
+                    name: '❤️ Village Health',
+                    value: `\`${updatedVillage.health}/${maxHealth}\``,
+                    inline: true
+                },
+                {
+                    name: '💔 Damage Taken',
+                    value: `\`${damageAmount} HP\``,
+                    inline: true
+                },
+                {
+                    name: '📦 Materials Lost',
+                    value: materialsLost || 'No materials lost.',
+                    inline: false
+                },
+                {
+                    name: '🪙 Tokens',
+                    value: `${removedResources.filter(r => r.type === 'Tokens').map(r => `Lost: ${r.amount}`).join('\n') || 'Lost: 0'}\n**Remaining:** ${tokensRemaining}`,
+                    inline: false
+                }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setFooter({ text: "Better luck next time!" })
+            .setTimestamp();
+
+        // Add monster image as thumbnail if available
+        if (monster.image && monster.image !== 'No Image') {
+            failureEmbed.setThumbnail(monster.image);
+        }
+
+        // Add level drop message as a field if applicable
+        if (levelDropped) {
+            failureEmbed.addFields({
+                name: '⚠️ Village Level Decreased',
+                value: `The village has lost a level and is now at **level ${updatedVillage.level}**.`,
+                inline: false
+            });
+        }
 
         // Send embed to thread
         if (thread) {

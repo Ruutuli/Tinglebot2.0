@@ -4,7 +4,7 @@
 // (No standard libraries imported here)
 
 // Third-Party Libraries
-const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require("discord.js"); // Used to create slash commands for Discord bots
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); // Used to create slash commands for Discord bots
 const { v4: uuidv4 } = require("uuid"); // Generates unique identifiers
 const dotenv = require('dotenv');
 const path = require('path');
@@ -95,8 +95,6 @@ const {
 const Character = require('../../../shared/models/CharacterModel.js');
 const User = require('../../../shared/models/UserModel.js');
 const { Village } = require('../../../shared/models/VillageModel.js');
-const TempData = require('../../../shared/models/TempDataModel.js');
-const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils.js');
 
 // Character Stats
 const { handleKO } = require("../../modules/characterStatsModule.js");
@@ -1633,6 +1631,40 @@ async function processLootingLogic(
    await handleInventoryUpdate(interaction, character, lootedItems, encounteredMonster, bloodMoonActive);
   }
 
+  // ------------------- Like Like Special Case - Chance to get extra item from chest -------------------
+  let chestItemMessage = '';
+  if (outcome.result === "Win!/Loot" || outcome.result === "Win!/Loot (1HKO)") {
+    if (encounteredMonster.name === 'Like Like') {
+      const chestDropChance = Math.random();
+      if (chestDropChance < 0.25) { // 25% chance to get extra item
+        const allItems = await fetchAllItems();
+        if (allItems && allItems.length > 0) {
+          // Select completely random item (like travel chest)
+          const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+          try {
+            await addItemInventoryDatabase(
+              character._id,
+              randomItem.itemName,
+              1,
+              interaction,
+              "Looted"
+            );
+            const itemEmoji = randomItem.emoji || '📦';
+            chestItemMessage = `\n🎁 **Found a chest!** Received ${itemEmoji} ${randomItem.itemName}!`;
+            logger.success('LOOT', `${character.name} found chest from Like Like: ${randomItem.itemName}`);
+          } catch (chestError) {
+            logger.error('LOOT', `Failed to add chest item for ${character.name}: ${chestError.message}`);
+          }
+        }
+      }
+    }
+  }
+
+  // Append chest message to outcome if present
+  if (chestItemMessage) {
+    outcomeMessage += chestItemMessage;
+  }
+
   // Create embed BEFORE clearing boost so boost info can be retrieved
   const embed = await createMonsterEncounterEmbed(
    character,
@@ -1674,16 +1706,6 @@ async function processLootingLogic(
   
   await interaction.editReply({ embeds: [embed] });
 
-  // ------------------- Like Like Special Case - Chance to drop chest -------------------
-  if (outcome.result === "Win!/Loot" || outcome.result === "Win!/Loot (1HKO)") {
-    if (encounteredMonster.name === 'Like Like') {
-      const chestDropChance = Math.random();
-      if (chestDropChance < 0.25) { // 25% chance to drop chest
-        await dropChest(interaction, encounteredMonster.name);
-      }
-    }
-  }
-
   // ------------------- Deactivate Job Voucher if needed -------------------
   if (shouldDeactivateVoucher && character.jobVoucher) {
     const deactivationResult = await deactivateJobVoucher(character._id);
@@ -1716,116 +1738,6 @@ async function handleInventoryUpdate(interaction, character, lootedItems, encoun
   }
 
   // Note: Google Sheets sync is handled by addItemInventoryDatabase
-}
-
-// ------------------- Drop Chest Helper -------------------
-// Creates and drops a chest with 4 random items that can be claimed by players
-async function dropChest(interaction, monsterName) {
-  try {
-    // Fetch all items from database
-    const allItems = await fetchAllItems();
-    
-    if (!allItems || allItems.length === 0) {
-      logger.info('LOOT', `Cannot drop chest: No items found in database`);
-      return;
-    }
-
-    // Randomly select 4 items
-    const selectedItems = [];
-    const usedIndices = new Set();
-    
-    while (selectedItems.length < 4 && usedIndices.size < allItems.length) {
-      const randomIndex = Math.floor(Math.random() * allItems.length);
-      if (!usedIndices.has(randomIndex)) {
-        usedIndices.add(randomIndex);
-        const item = allItems[randomIndex];
-        selectedItems.push({
-          itemName: item.itemName || 'Unknown Item',
-          emoji: item.emoji || '📦',
-          index: selectedItems.length + 1,
-          claimed: false,
-          claimedBy: null
-        });
-      }
-    }
-
-    if (selectedItems.length < 4) {
-      logger.info('LOOT', `Cannot drop chest: Not enough unique items in database`);
-      return;
-    }
-
-    // Generate unique chest ID
-    const chestId = generateUniqueId('C');
-    const channelId = interaction.channelId;
-    const guildId = interaction.guildId;
-    const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + 30 * 60 * 1000); // 30 minutes
-
-    // Create embed with nice formatting
-    const embed = new EmbedBuilder()
-      .setTitle('🎁 Chest - Roll a 5 to claim!')
-      .setDescription(`**${monsterName} dropped a chest!**\n\n**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
-      .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setColor(0xFFD700) // Gold color
-      .addFields(
-        { 
-          name: '📋 Chest Info', 
-          value: `**Chest ID:** ${chestId}\n**Items Remaining:** 4/4\n**Expires:** <t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, 
-          inline: false 
-        },
-        { 
-          name: '🎁 Available Items', 
-          value: selectedItems.map(item => `**${item.index}.** ${item.emoji} ${item.itemName}`).join('\n'),
-          inline: false
-        }
-      )
-      .setTimestamp(createdAt);
-
-    // Create button
-    const claimButton = new ButtonBuilder()
-      .setCustomId(`chest_claim_${chestId}`)
-      .setLabel('Roll d5')
-      .setStyle(ButtonStyle.Success)
-      .setEmoji('🎲');
-
-    const buttons = new ActionRowBuilder()
-      .addComponents(claimButton);
-
-    // Send message
-    const message = await interaction.followUp({
-      embeds: [embed],
-      components: [buttons],
-      fetchReply: true
-    });
-
-    // Store chest data in TempData
-    const chestData = {
-      chestId: chestId,
-      channelId: channelId,
-      guildId: guildId,
-      messageId: message.id,
-      items: selectedItems,
-      claims: [],
-      createdAt: createdAt,
-      expiresAt: expiresAt,
-      lastGlobalRollTime: null,
-      playerRollTimes: {}, // Map userId to lastRollTime
-      rollHistory: [] // Track all rolls with user info and roll numbers
-    };
-
-    await TempData.create({
-      type: 'temp',
-      key: `chest_${chestId}`,
-      data: chestData,
-      expiresAt: expiresAt
-    });
-
-    logger.info('LOOT', `Chest ${chestId} dropped by ${monsterName} in channel ${channelId}`);
-  } catch (error) {
-    logger.error('LOOT', `Failed to drop chest after ${monsterName} defeat: ${error.message}`);
-    // Don't throw - chest drop failure shouldn't break the loot encounter
-  }
 }
 
 // ------------------- Helper Function: Generate Outcome Message -------------------

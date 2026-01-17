@@ -2634,7 +2634,39 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
       data = data.filter(quest => !checkQuestExpiration(quest));
     }
 
-
+    // Transform village data to include VILLAGE_CONFIG and convert Maps to objects
+    if (modelType === 'village') {
+      const { VILLAGE_CONFIG } = require('../shared/models/VillageModel');
+      
+      data = data.map(village => {
+        const villageObj = { ...village };
+        
+        // Convert Map fields to objects for JSON serialization
+        if (villageObj.materials instanceof Map) {
+          villageObj.materials = Object.fromEntries(villageObj.materials);
+        }
+        if (villageObj.tokenRequirements instanceof Map) {
+          villageObj.tokenRequirements = Object.fromEntries(villageObj.tokenRequirements);
+        }
+        if (villageObj.levelHealth instanceof Map) {
+          villageObj.levelHealth = Object.fromEntries(villageObj.levelHealth);
+        }
+        if (villageObj.contributors instanceof Map) {
+          villageObj.contributors = Object.fromEntries(villageObj.contributors);
+        }
+        if (villageObj.cooldowns instanceof Map) {
+          villageObj.cooldowns = Object.fromEntries(villageObj.cooldowns);
+        }
+        
+        // Add material requirements from VILLAGE_CONFIG
+        const config = VILLAGE_CONFIG[village.name];
+        if (config) {
+          villageObj.materialRequirements = config.materials;
+        }
+        
+        return villageObj;
+      });
+    }
 
     // Transform icon URLs for characters and populate user information
     if (modelType === 'character') {

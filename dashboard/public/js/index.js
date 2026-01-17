@@ -17,6 +17,7 @@ import * as error from './error.js';
 import * as auth from './auth.js';
 import * as guilds from './guilds.js';
 import * as villageShops from './villageShops.js';
+import * as villages from './villages.js';
 import * as vending from './vending.js';
 import * as vendingShops from './vendingShops.js';
 import * as monsters from './monsters.js';
@@ -342,6 +343,10 @@ function setupModelCards() {
           case 'vendingShops':
             title.textContent = 'Vending Shops';
             await vendingShops.initializeVendingShopsPage(data, pagination.page, contentDiv);
+            break;
+          case 'village':
+            title.textContent = 'Villages';
+            await villages.initializeVillagePage(data, pagination.page, contentDiv);
             break;
           default:
             console.error(`Unknown model type: ${modelName}`);
