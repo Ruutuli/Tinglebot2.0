@@ -121,6 +121,18 @@ const userSchema = new mongoose.Schema({
       transferredAt: { type: Date, default: null },
       transferUsed: { type: Boolean, default: false }
     }
+  },
+
+  // ------------------- Blupee Hunt System -------------------
+  blupeeHunt: {
+    lastClaimed: { type: Date, default: null }, // Last time user claimed a blupee
+    totalClaimed: { type: Number, default: 0 }, // Total number of blupees ever caught
+    dailyCount: { type: Number, default: 0 }, // Number of blupees caught today
+    dailyResetDate: { type: Date, default: null }, // Date when daily count should reset
+    claimHistory: [{
+      tokensReceived: { type: Number }, // Tokens received for this catch
+      timestamp: { type: Date, default: Date.now } // When the catch occurred
+    }]
   }
 });
 

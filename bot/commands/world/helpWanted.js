@@ -5,7 +5,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
-const { escapeRegExp } = require('../../../shared/utils/inventoryUtils');
+const { escapeRegExp, logItemAcquisitionToDatabase } = require('../../../shared/utils/inventoryUtils');
 const User = require('../../../shared/models/UserModel');
 const Character = require('../../../shared/models/CharacterModel');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
@@ -2049,6 +2049,25 @@ module.exports = {
               subtype: '',
               addedAt: new Date()
             });
+          }
+
+          // Log to InventoryLog database collection
+          try {
+            const ItemModel = require('../../../shared/models/ItemModel');
+            const spiritOrbItem = await ItemModel.findOne({ itemName: { $regex: /^spirit orb$/i } });
+            const interactionUrl = interaction 
+              ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+              : '';
+            
+            await logItemAcquisitionToDatabase(character, spiritOrbItem || { itemName: 'Spirit Orb', category: 'Material', type: 'Special' }, {
+              quantity: 1,
+              obtain: 'Help Wanted Exchange',
+              location: character.currentVillage || character.homeVillage || 'Unknown',
+              link: interactionUrl
+            });
+          } catch (logError) {
+            // Don't fail the exchange if logging fails
+            console.error(`[helpWanted.js] ⚠️ Failed to log Spirit Orb to InventoryLog:`, logError.message);
           }
 
           // Deduct 50 completions from user and track exchange

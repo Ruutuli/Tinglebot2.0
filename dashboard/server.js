@@ -10775,10 +10775,15 @@ app.post('/api/blupee/claim', async (req, res) => {
       timestamp: now
     });
     
-    // Mark blupeeHunt as modified since it's not explicitly defined in schema
-    user.markModified('blupeeHunt');
-    
-    await user.save();
+    // Save user with blupee hunt data
+    try {
+      await user.save();
+      logger.debug(`[server.js]: Successfully saved blupee hunt data for user ${user.username || user.discordId}: totalClaimed=${user.blupeeHunt.totalClaimed}`);
+    } catch (saveError) {
+      console.error('[server.js]: Error saving blupee hunt data:', saveError);
+      logger.error('server.js', `Failed to save blupee hunt data for user ${user.username || user.discordId}: ${saveError.message}`);
+      throw saveError;
+    }
     
     logger.success(`User ${user.username || user.discordId} claimed a blupee! (+${tokensAwarded} tokens, Daily: ${user.blupeeHunt.dailyCount}/${DAILY_LIMIT}, Total: ${user.blupeeHunt.totalClaimed})`);
     logger.debug('Daily count after claim: ' + user.blupeeHunt.dailyCount + ', reset date: ' + user.blupeeHunt.dailyResetDate);
@@ -11811,12 +11816,13 @@ app.get('/api/levels/blupee-leaderboard', async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const limitCapped = Math.min(Math.max(limit, 5), 50); // Between 5 and 50
     
-    // Use aggregation pipeline for more reliable querying of nested Mixed type fields
+    // Use aggregation pipeline to query blupee hunt leaderboard data
     const topBlupeeHunters = await User.aggregate([
       {
-        // Match users that have the blupeeHunt field
+        // Match users that have the blupeeHunt field with at least some data
         $match: {
-          'blupeeHunt': { $exists: true, $ne: null }
+          'blupeeHunt': { $exists: true, $ne: null },
+          'blupeeHunt.totalClaimed': { $exists: true, $ne: null }
         }
       },
       {
@@ -11860,6 +11866,8 @@ app.get('/api/levels/blupee-leaderboard', async (req, res) => {
         $limit: limitCapped
       }
     ]);
+    
+    logger.debug(`[server.js]: Fetched ${topBlupeeHunters.length} blupee hunters for leaderboard`);
     
     // Format the response
     const leaderboard = topBlupeeHunters.map((user, index) => {

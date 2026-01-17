@@ -62,7 +62,8 @@ const {
 const {
   addItemToVendingInventory,
   escapeRegExp,
-  logItemAcquisitionToDatabase
+  logItemAcquisitionToDatabase,
+  logItemRemovalToDatabase
 } = require('../../shared/utils/inventoryUtils.js');
 
 const {
@@ -2976,6 +2977,22 @@ async function handleFulfill(interaction) {
           console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Item added to buyer inventory', {
             fulfillmentId
           });
+          
+          // Log to InventoryLog database collection
+          try {
+            const interactionUrl = interaction 
+              ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+              : '';
+            await logItemAcquisitionToDatabase(buyer, itemDetails || { itemName: itemName }, {
+              quantity: quantity,
+              obtain: 'Bought',
+              location: vendor.name || buyer.currentVillage || 'Unknown',
+              link: interactionUrl
+            });
+          } catch (logError) {
+            // Don't fail the transaction if logging fails
+            console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to log to InventoryLog:', logError.message);
+          }
         } catch (inventoryError) {
           console.error('[vendingHandler.js] [handleFulfillBarter] ❌ Inventory insert failed', {
             fulfillmentId,
@@ -3044,6 +3061,31 @@ async function handleFulfill(interaction) {
                   quantity: removeQty,
                   itemId: itemDoc._id
                 });
+                
+                // Log removal to InventoryLog database collection
+                try {
+                  // Fetch item details for proper categorization
+                  let offeredItemDetails;
+                  if (offeredItemName.includes('+')) {
+                    offeredItemDetails = await ItemModel.findOne({ itemName: offeredItemName });
+                  } else {
+                    offeredItemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(offeredItemName)}$`, 'i') } });
+                  }
+                  
+                  const interactionUrl = interaction 
+                    ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+                    : '';
+                  
+                  await logItemRemovalToDatabase(buyer, offeredItemDetails || { itemName: offeredItemName }, {
+                    quantity: removeQty,
+                    obtain: 'Barter Trade',
+                    location: vendor.name || buyer.currentVillage || 'Unknown',
+                    link: interactionUrl
+                  });
+                } catch (logError) {
+                  // Don't fail the transaction if logging fails
+                  console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to log barter item removal to InventoryLog:', logError.message);
+                }
                 
                 // Log removal to Google Sheets
                 if (buyer.inventory && typeof buyer.inventory === 'string' && isValidGoogleSheetsUrl(buyer.inventory)) {

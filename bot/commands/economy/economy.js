@@ -29,6 +29,8 @@ const {
  removeItemInventoryDatabase,
  syncToInventoryDatabase,
  escapeRegExp,
+ logItemAcquisitionToDatabase,
+ logItemRemovalToDatabase,
 } = require('../../../shared/utils/inventoryUtils.js');
 const {
  authorizeSheets,
@@ -2608,6 +2610,19 @@ async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
     };
     await syncToInventoryDatabase(fromChar, removeData);
 
+    // Log removal to InventoryLog database collection
+    try {
+      await logItemRemovalToDatabase(fromChar, itemDetails || { itemName: item.name }, {
+        quantity: item.quantity,
+        obtain: 'Traded',
+        location: fromChar.currentVillage || fromChar.homeVillage || 'Unknown',
+        link: '' // No interaction link available in trade execution
+      });
+    } catch (logError) {
+      // Don't fail the trade if logging fails
+      console.error(`[economy.js] ⚠️ Failed to log item removal to InventoryLog:`, logError.message);
+    }
+
     // Add to receiver
     const addData = {
       characterId: toChar._id,
@@ -2622,6 +2637,19 @@ async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
       characterName: toChar.name
     };
     await syncToInventoryDatabase(toChar, addData);
+
+    // Log addition to InventoryLog database collection
+    try {
+      await logItemAcquisitionToDatabase(toChar, itemDetails || { itemName: item.name }, {
+        quantity: item.quantity,
+        obtain: 'Trade',
+        location: toChar.currentVillage || toChar.homeVillage || 'Unknown',
+        link: '' // No interaction link available in trade execution
+      });
+    } catch (logError) {
+      // Don't fail the trade if logging fails
+      console.error(`[economy.js] ⚠️ Failed to log item acquisition to InventoryLog:`, logError.message);
+    }
   }
 }
 

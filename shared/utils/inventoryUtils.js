@@ -476,6 +476,25 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       }
     }
 
+    // Log removal to InventoryLog database collection
+    try {
+      // Fetch item details for proper categorization
+      const item = await dbFunctions.fetchItemByName(inventoryItem.itemName);
+      const interactionUrl = interaction 
+        ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+        : '';
+      
+      await logItemRemovalToDatabase(character, item || inventoryItem, {
+        quantity: quantity,
+        obtain: obtain || 'Manual Removal',
+        location: character.currentVillage || character.homeVillage || 'Unknown',
+        link: interactionUrl
+      });
+    } catch (logError) {
+      // Don't fail the main operation if logging fails
+      console.error(`[inventoryUtils.js]: ⚠️ Failed to log to InventoryLog:`, logError.message);
+    }
+
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
@@ -1596,6 +1615,71 @@ async function logItemAcquisitionToDatabase(character, itemData, acquisitionData
 }
 
 // ============================================================================
+// ---- Function: logItemRemovalToDatabase ----
+// Logs item removal events to InventoryLog collection
+// ============================================================================
+async function logItemRemovalToDatabase(character, itemData, removalData) {
+  try {
+    // Extract removal details
+    const {
+      itemName,
+      quantity,
+      itemId = null,
+      category = '',
+      type = '',
+      subtype = '',
+      obtain = 'Manual Removal',
+      job = '',
+      perk = '',
+      location = '',
+      link = '',
+      dateTime = new Date()
+    } = {
+      itemName: itemData.itemName || itemData.name,
+      quantity: itemData.quantity || removalData.quantity || 1,
+      itemId: itemData.itemId || itemData._id || null,
+      category: Array.isArray(itemData.category) ? itemData.category.join(', ') : (itemData.category || ''),
+      type: Array.isArray(itemData.type) ? itemData.type.join(', ') : (itemData.type || ''),
+      subtype: Array.isArray(itemData.subtype) ? itemData.subtype.join(', ') : (itemData.subtype || ''),
+      ...removalData
+    };
+
+    // Ensure quantity is negative for removals
+    const negativeQuantity = quantity < 0 ? quantity : -Math.abs(quantity);
+
+    // Create log entry
+    const logEntry = {
+      characterName: character.name,
+      characterId: character._id,
+      itemName: itemName,
+      itemId: itemId,
+      quantity: negativeQuantity,
+      category: category || '',
+      type: type || '',
+      subtype: subtype || '',
+      obtain: obtain || 'Manual Removal',
+      job: job || character.job || '',
+      perk: perk || character.perk || '',
+      location: location || character.currentVillage || character.homeVillage || '',
+      link: link || '',
+      dateTime: dateTime instanceof Date ? dateTime : new Date(dateTime),
+      confirmedSync: uuidv4()
+    };
+
+    // Save to InventoryLog collection
+    await InventoryLog.create(logEntry);
+    
+    console.log(`[inventoryUtils.js] 📝 Logged item removal: ${negativeQuantity}x ${itemName} for ${character.name} (${obtain})`);
+    
+    return logEntry;
+  } catch (error) {
+    // Don't fail the main operation if logging fails
+    console.error(`[inventoryUtils.js] ⚠️ Failed to log item removal to database:`, error.message);
+    return null;
+  }
+}
+
+// ============================================================================
 // ---- Exports ----
 // Module exports
 // ============================================================================
@@ -1618,5 +1702,6 @@ module.exports = {
   SOURCE_TYPES,
   syncSheetDataToDatabase,
   escapeRegExp,
-  logItemAcquisitionToDatabase
+  logItemAcquisitionToDatabase,
+  logItemRemovalToDatabase
 };

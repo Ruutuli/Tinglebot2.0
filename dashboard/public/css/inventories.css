@@ -993,14 +993,70 @@ body.inventories-page {
 }
 
 @media (max-width: 960px) {
+  .inventories-main {
+    padding: 1.5rem;
+    gap: 1.5rem;
+  }
+
   .inventories-hero {
     flex-direction: column;
     align-items: flex-start;
+    padding: 1.25rem;
+  }
+
+  .inventories-hero h1 {
+    font-size: 1.5rem;
+  }
+
+  .inventories-hero p {
+    font-size: 0.9rem;
   }
 
   .refresh-button {
     width: 100%;
     justify-content: center;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .inventory-summary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .summary-card {
+    padding: 1rem;
+  }
+
+  .summary-value {
+    font-size: 1.5rem;
+  }
+
+  .inventory-controls {
+    grid-template-columns: 1fr;
+    padding: 1.25rem;
+  }
+
+  .inventory-table-card,
+  .inventory-transfer-card,
+  .character-section,
+  .equipped-gear-card {
+    padding: 1.25rem;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .transfer-form {
+    grid-template-columns: 1fr;
+  }
+
+  .character-grid,
+  .equipped-gear-grid {
+    grid-template-columns: 1fr;
   }
 
   .management-drawer {
@@ -1008,3 +1064,273 @@ body.inventories-page {
   }
 }
 
+@media (max-width: 768px) {
+  .inventories-main {
+    padding: 1rem;
+    gap: 1.25rem;
+  }
+
+  .inventories-hero {
+    padding: 1rem;
+  }
+
+  .inventories-hero h1 {
+    font-size: 1.35rem;
+  }
+
+  .characters-list-section {
+    padding: 1rem;
+  }
+
+  .character-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .character-list-link {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .inventory-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .inventory-controls {
+    padding: 1rem;
+  }
+
+  .inventory-table-card,
+  .inventory-transfer-card,
+  .character-section,
+  .equipped-gear-card {
+    padding: 1rem;
+  }
+
+  .card-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .table-wrapper {
+    margin-top: 1rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #aggregated-items-table {
+    min-width: 700px;
+    font-size: 0.85rem;
+  }
+
+  #aggregated-items-table th,
+  #aggregated-items-table td {
+    padding: 0.65rem 0.5rem;
+  }
+
+  .item-cell {
+    gap: 0.65rem;
+  }
+
+  .item-cell img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .instance-list {
+    font-size: 0.8rem;
+  }
+
+  .character-instance-badge {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .character-card {
+    padding: 1rem;
+  }
+
+  .character-card header img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .character-stats {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .character-items-table {
+    font-size: 0.85rem;
+  }
+
+  .pagination-controls {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+
+  .pagination-button {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.85rem;
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .pagination-info {
+    font-size: 0.85rem;
+  }
+
+  .management-drawer {
+    width: 100%;
+    padding: 1rem;
+  }
+
+  .drawer-header h3 {
+    font-size: 1.1rem;
+  }
+
+  .management-form {
+    gap: 0.875rem;
+  }
+
+  .management-actions {
+    flex-direction: column;
+  }
+
+  .management-actions button {
+    width: 100%;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .manage-item-button {
+    min-height: 36px;
+    padding: 0.5rem 0.85rem;
+    touch-action: manipulation;
+  }
+
+  .prefill-transfer-button {
+    min-height: 40px;
+    padding: 0.6rem 1rem;
+    touch-action: manipulation;
+  }
+
+  .primary-button,
+  .danger-button {
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+    touch-action: manipulation;
+  }
+
+  .inventory-toast {
+    bottom: 1rem;
+    right: 1rem;
+    left: 1rem;
+    min-width: auto;
+    max-width: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .inventories-main {
+    padding: 0.75rem;
+    gap: 1rem;
+  }
+
+  .inventories-hero {
+    padding: 0.875rem;
+  }
+
+  .inventories-hero h1 {
+    font-size: 1.2rem;
+  }
+
+  .inventories-hero p {
+    font-size: 0.85rem;
+  }
+
+  .refresh-button {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9rem;
+  }
+
+  .characters-list-section,
+  .inventory-controls,
+  .inventory-table-card,
+  .inventory-transfer-card,
+  .character-section,
+  .equipped-gear-card {
+    padding: 0.875rem;
+  }
+
+  .card-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .summary-card {
+    padding: 0.875rem;
+  }
+
+  .summary-value {
+    font-size: 1.35rem;
+  }
+
+  .summary-label {
+    font-size: 0.85rem;
+  }
+
+  #aggregated-items-table {
+    font-size: 0.8rem;
+    min-width: 650px;
+  }
+
+  #aggregated-items-table th,
+  #aggregated-items-table td {
+    padding: 0.5rem 0.4rem;
+  }
+
+  .item-cell img {
+    width: 32px;
+    height: 32px;
+  }
+
+  .character-card {
+    padding: 0.875rem;
+  }
+
+  .character-card header {
+    gap: 0.65rem;
+  }
+
+  .character-card header img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .character-card h3 {
+    font-size: 1rem;
+  }
+
+  .gear-equip-control {
+    flex-direction: column;
+  }
+
+  .gear-equip-select {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .legend-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .legend-chip {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.75rem;
+  }
+}
