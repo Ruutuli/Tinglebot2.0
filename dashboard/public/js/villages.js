@@ -214,8 +214,9 @@ function createVillageCard(villageData) {
   // Determine if village is at max level
   const isMaxLevel = level >= 3;
   
-  // Calculate token progress
-  const tokenPercentage = isMaxLevel ? 100 : tokenProgress.percentage;
+  // Calculate token progress - ensure tokenProgress exists and has required properties
+  const safeTokenProgress = tokenProgress || { current: 0, required: 0, percentage: 0 };
+  const tokenPercentage = isMaxLevel ? 100 : (safeTokenProgress.percentage || 0);
   
   // Format vending discount text
   const discountText = vendingDiscount > 0 ? ` (-${vendingDiscount}% cost)` : '';
@@ -275,7 +276,7 @@ function createVillageCard(villageData) {
                   <div class="village-progress-bar">
                     <div class="village-progress-fill" style="width: ${tokenPercentage}%; --progress-color: ${color}; background: linear-gradient(90deg, ${color}, rgba(255, 255, 255, 0.3));"></div>
                   </div>
-                  <span class="village-progress-text">${tokenProgress.current.toLocaleString()}/${tokenProgress.required.toLocaleString()} (${tokenPercentage}%)</span>
+                  <span class="village-progress-text">${safeTokenProgress.current.toLocaleString()}/${safeTokenProgress.required.toLocaleString()} (${tokenPercentage}%)</span>
                 </div>
               </div>
             </div>

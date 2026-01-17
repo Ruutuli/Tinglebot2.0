@@ -11807,20 +11807,64 @@ app.get('/api/levels/blupee-leaderboard', async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const limitCapped = Math.min(Math.max(limit, 5), 50); // Between 5 and 50
     
-    const topBlupeeHunters = await User.find({ 'blupeeHunt.totalClaimed': { $gt: 0 } })
-      .sort({ 'blupeeHunt.totalClaimed': -1 })
-      .limit(limitCapped)
-      .select('discordId username discriminator avatar nickname blupeeHunt')
-      .lean();
+    // Use aggregation pipeline for more reliable querying of nested Mixed type fields
+    const topBlupeeHunters = await User.aggregate([
+      {
+        // Match users that have the blupeeHunt field
+        $match: {
+          'blupeeHunt': { $exists: true, $ne: null }
+        }
+      },
+      {
+        // Project fields we need and ensure totalClaimed is a number
+        $project: {
+          discordId: 1,
+          username: 1,
+          discriminator: 1,
+          avatar: 1,
+          nickname: 1,
+          totalClaimed: {
+            $ifNull: [
+              {
+                $convert: {
+                  input: '$blupeeHunt.totalClaimed',
+                  to: 'double',
+                  onError: 0,
+                  onNull: 0
+                }
+              },
+              0
+            ]
+          },
+          lastClaimed: {
+            $ifNull: ['$blupeeHunt.lastClaimed', null]
+          }
+        }
+      },
+      {
+        // Filter out users with 0 totalClaimed
+        $match: {
+          totalClaimed: { $gt: 0 }
+        }
+      },
+      {
+        // Sort by totalClaimed descending
+        $sort: { totalClaimed: -1 }
+      },
+      {
+        // Limit results
+        $limit: limitCapped
+      }
+    ]);
     
     // Format the response
     const leaderboard = topBlupeeHunters.map((user, index) => {
       // Ensure lastClaimed is properly serialized as ISO string
       let lastClaimed = null;
-      if (user.blupeeHunt?.lastClaimed) {
-        lastClaimed = user.blupeeHunt.lastClaimed instanceof Date 
-          ? user.blupeeHunt.lastClaimed.toISOString()
-          : new Date(user.blupeeHunt.lastClaimed).toISOString();
+      if (user.lastClaimed) {
+        lastClaimed = user.lastClaimed instanceof Date 
+          ? user.lastClaimed.toISOString()
+          : new Date(user.lastClaimed).toISOString();
       }
       
       return {
@@ -11830,7 +11874,7 @@ app.get('/api/levels/blupee-leaderboard', async (req, res) => {
         discriminator: user.discriminator || '0000',
         nickname: user.nickname,
         avatar: user.avatar,
-        totalBlupeesCaught: user.blupeeHunt?.totalClaimed || 0,
+        totalBlupeesCaught: user.totalClaimed || 0,
         lastClaimed: lastClaimed
       };
     });

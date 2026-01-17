@@ -33,6 +33,11 @@ router.get('/status', asyncHandler(async (req, res) => {
       ? Object.fromEntries(village.materials) 
       : village.materials || {};
     
+    // Ensure currentTokens is always a number (default to 0 if undefined/null)
+    const currentTokens = typeof village.currentTokens === 'number' 
+      ? village.currentTokens 
+      : 0;
+    
     // Get max health for current level
     const maxHealth = levelHealth[village.level.toString()] || 100;
     
@@ -44,15 +49,18 @@ router.get('/status', asyncHandler(async (req, res) => {
     
     // Calculate token progress percentage
     const tokenProgressPercentage = requiredTokens > 0 
-      ? Math.round((village.currentTokens || 0) / requiredTokens * 100)
+      ? Math.round((currentTokens / requiredTokens) * 100)
       : 100;
     
     // Format token progress
     const tokenProgress = {
-      current: village.currentTokens || 0,
+      current: currentTokens,
       required: requiredTokens,
       percentage: tokenProgressPercentage
     };
+    
+    // Debug logging for token data
+    logger.debug(`[villages.js] Village ${village.name}: level=${village.level}, currentTokens=${currentTokens}, requiredTokens=${requiredTokens}, tokenProgress=${JSON.stringify(tokenProgress)}`);
     
     // Get vending tier display text
     let vendingTierText = 'Basic stock only';
