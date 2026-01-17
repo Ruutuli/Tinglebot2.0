@@ -3064,6 +3064,7 @@ async function handleChestClaim(interaction) {
       .setTitle(`🎲 Chest - ${username} rolled a ${rollEmojis}!`)
       .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
       .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // User's avatar for roll results
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setColor(roll === 5 ? 0x00FF00 : 0xFFD700) // Green for 5, gold for other rolls
       .addFields(
         { 
@@ -3111,213 +3112,136 @@ async function handleChestClaim(interaction) {
     const rollResultButtons = new ActionRowBuilder()
       .addComponents(rollResultButton);
 
-    // Send roll result embed FIRST with button (public, like ruugame)
+    // Send roll result embed - NEW embed posted every time (public, like ruugame)
     await interaction.followUp({
       embeds: [rollEmbed],
       components: [rollResultButtons]
     });
 
-    // Small delay to ensure roll result embed appears first, then update main embed
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // Update main chest embed with nice formatting
-    // Use most recent roller's avatar if there are rolls, otherwise use chest icon (only for first embed)
-    const itemsRemainingCount = chestData.items.filter(item => !item.claimed).length;
-    const hasRolls = chestData.rollHistory && chestData.rollHistory.length > 0;
-    const mostRecentRoll = hasRolls ? chestData.rollHistory[chestData.rollHistory.length - 1] : null;
-    const thumbnailUrl = hasRolls ? mostRecentRoll.avatarUrl : 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413';
-    
-    const mainEmbed = new EmbedBuilder()
-      .setTitle(hasRolls ? `🎲 Chest - ${mostRecentRoll.username} rolled a ${getRollEmojis(mostRecentRoll.roll)}!` : '🎁 Chest - Roll a 5 to claim!')
-      .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
-      .setThumbnail(thumbnailUrl)
-      .setColor(0xFFD700) // Gold color
-      .addFields(
-        { 
-          name: '📋 Chest Info', 
-          value: `**Chest ID:** ${chestId}\n**Items Remaining:** ${itemsRemainingCount}/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
-          inline: false 
-        }
-      );
-    
-    // Add roll result field if there's a most recent roll
-    if (mostRecentRoll) {
-      const rollEmojis = getRollEmojis(mostRecentRoll.roll);
-      const rollValue = roll === 5 && itemAwarded 
-        ? `${rollEmojis} 🎉 **Perfect 5!**\n\n🎁 **Item Awarded:** ${selectedItem?.emoji || ''} ${selectedItem?.itemName || 'Unknown'}\n👤 **Added to:** ${randomCharacter?.name || 'Unknown'}'s inventory${blightMessage || ''}`
-        : `${rollEmojis}\n\n${itemsRemainingCount > 0 ? `Keep rolling! ${itemsRemainingCount} item${itemsRemainingCount !== 1 ? 's' : ''} left!` : 'All items claimed!'}`;
+    // Only update main embed when items are claimed
+    if (itemAwarded) {
+      const itemsRemainingCount = chestData.items.filter(item => !item.claimed).length;
       
-      mainEmbed.addFields(
-        { 
-          name: '🎲 Roll Result', 
-          value: rollValue,
-          inline: false
-        }
-      );
-    }
-    
-    // Add roll history if available (show last 10 rolls, most recent first)
-    if (chestData.rollHistory && chestData.rollHistory.length > 0) {
-      const recentRolls = chestData.rollHistory.slice(-10).reverse();
-      let historyValue = '';
-      
-      for (const rollEntry of recentRolls) {
-        const rollEmojis = getRollEmojis(rollEntry.roll);
-        historyValue += `<@${rollEntry.discordId}> rolled ${rollEmojis}\n`;
+      // Fetch the original message to update it
+      const channel = interaction.channel;
+      let originalMessage = null;
+      try {
+        originalMessage = await channel.messages.fetch(chestData.messageId);
+      } catch (error) {
+        console.error('[Chest] Could not fetch original message:', error);
       }
       
-      if (historyValue) {
-        mainEmbed.addFields(
-          { name: '📜 Roll History', value: historyValue, inline: false }
-        );
-      }
-    }
-    
-    // Add available items field
-    mainEmbed.addFields(
-      { 
-        name: '🎁 Available Items', 
-        value: chestData.items.map(item => 
-          item.claimed 
-            ? `~~**${item.index}.** ${item.emoji} ${item.itemName}~~ ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
-            : `**${item.index}.** ${item.emoji} ${item.itemName}`
-        ).join('\n'),
-        inline: false
-      }
-    );
-    
-    mainEmbed.setTimestamp(chestData.createdAt);
-
-    // Create button (disable only if all items are claimed)
-    const claimButton = new ButtonBuilder()
-      .setCustomId(`chest_claim_${chestId}`)
-      .setLabel('Roll d5')
-      .setStyle(ButtonStyle.Success)
-      .setEmoji('🎲');
-
-    // Check if all items are now claimed
-    const allItemsClaimed = chestData.items.every(item => item.claimed);
-    if (allItemsClaimed) {
-      claimButton.setDisabled(true);
-      
-      // Create special "All items claimed!" embed
-      // Use most recent roller's avatar if there are rolls, otherwise use chest icon
-      const hasRollsForClaimed = chestData.rollHistory && chestData.rollHistory.length > 0;
-      const mostRecentRollForClaimed = hasRollsForClaimed ? chestData.rollHistory[chestData.rollHistory.length - 1] : null;
-      const thumbnailUrlForClaimed = hasRollsForClaimed ? mostRecentRollForClaimed.avatarUrl : 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413';
-      
-      const allClaimedEmbed = new EmbedBuilder()
-        .setTitle('🎁 Chest - All Items Claimed!')
-        .setDescription('**All items from this chest have been claimed!**\n\n*Thanks for playing!*')
-        .setThumbnail(thumbnailUrlForClaimed)
-        .setColor(0x00FF00) // Green color
-        .addFields(
-          { 
-            name: '📋 Chest Info', 
-            value: `**Chest ID:** ${chestId}\n**Items Remaining:** 0/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
-            inline: false 
-          }
-        );
-      
-      // Add roll history if available
-      if (chestData.rollHistory && chestData.rollHistory.length > 0) {
-        const recentRolls = chestData.rollHistory.slice(-10).reverse();
-        let historyValue = '';
+      if (originalMessage) {
+        const allItemsClaimed = itemsRemainingCount === 0;
         
-        for (const rollEntry of recentRolls) {
-          const rollEmojis = getRollEmojis(rollEntry.roll);
-          historyValue += `<@${rollEntry.discordId}> rolled ${rollEmojis}\n`;
-        }
+        // Create button (disable only if all items are claimed)
+        const claimButton = new ButtonBuilder()
+          .setCustomId(`chest_claim_${chestId}`)
+          .setLabel('Roll d5')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('🎲');
         
-        if (historyValue) {
-          allClaimedEmbed.addFields(
-            { name: '📜 Roll History', value: historyValue, inline: false }
-          );
+        if (allItemsClaimed) {
+          claimButton.setDisabled(true);
+          
+          // Create special "All items claimed!" embed
+          const allClaimedEmbed = new EmbedBuilder()
+            .setTitle('🎁 Chest - All Items Claimed!')
+            .setDescription('**All items from this chest have been claimed!**\n\n*Thanks for playing!*')
+            .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setColor(0x00FF00) // Green color
+            .addFields(
+              { 
+                name: '📋 Chest Info', 
+                value: `**Chest ID:** ${chestId}\n**Items Remaining:** 0/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
+                inline: false 
+              },
+              { 
+                name: '🎁 All Items', 
+                value: chestData.items.map(item => 
+                  `~~**${item.index}.** ${item.emoji} ${item.itemName}~~ ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
+                ).join('\n'),
+                inline: false
+              }
+            )
+            .setTimestamp(chestData.createdAt)
+            .setFooter({ text: 'Thanks for playing!' });
+          
+          const finalButtons = new ActionRowBuilder()
+            .addComponents(claimButton);
+          
+          // Update main message with "all claimed" embed
+          await originalMessage.edit({
+            embeds: [allClaimedEmbed],
+            components: [finalButtons]
+          });
+          
+          // Create a new follow-up embed for "All Items Claimed!"
+          const allClaimedFollowUpEmbed = new EmbedBuilder()
+            .setTitle('🎁 ALL ITEMS CLAIMED!')
+            .setDescription('**All items from this chest have been claimed! Here\'s who got what!**\n\n*Thanks for playing!*')
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setColor(0x00FF00) // Green color
+            .addFields(
+              { 
+                name: '📋 Chest Info', 
+                value: `**Chest ID:** ${chestId}\n**Items Remaining:** 0/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
+                inline: false 
+              },
+              { 
+                name: '🎁 All Items - Who Got What!', 
+                value: chestData.items.map(item => 
+                  `**${item.index}.** ${item.emoji} ${item.itemName} → ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
+                ).join('\n'),
+                inline: false
+              }
+            )
+            .setTimestamp(chestData.createdAt)
+            .setFooter({ text: 'Thanks for playing!' });
+          
+          // Send new follow-up embed for "All Items Claimed!"
+          await interaction.followUp({
+            embeds: [allClaimedFollowUpEmbed],
+            components: [] // No buttons on the follow-up message
+          });
+        } else {
+          // Update main embed with updated items list (only when item is claimed)
+          const mainEmbed = new EmbedBuilder()
+            .setTitle('🎁 Chest - Roll a 5 to claim!')
+            .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+            .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setColor(0xFFD700) // Gold color
+            .addFields(
+              { 
+                name: '📋 Chest Info', 
+                value: `**Chest ID:** ${chestId}\n**Items Remaining:** ${itemsRemainingCount}/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
+                inline: false 
+              },
+              { 
+                name: '🎁 Available Items', 
+                value: chestData.items.map(item => 
+                  item.claimed 
+                    ? `~~**${item.index}.** ${item.emoji} ${item.itemName}~~ ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
+                    : `**${item.index}.** ${item.emoji} ${item.itemName}`
+                ).join('\n'),
+                inline: false
+              }
+            )
+            .setTimestamp(chestData.createdAt);
+          
+          const buttons = new ActionRowBuilder()
+            .addComponents(claimButton);
+          
+          // Update main message with updated items list
+          await originalMessage.edit({
+            embeds: [mainEmbed],
+            components: [buttons]
+          });
         }
       }
-      
-      allClaimedEmbed.addFields(
-        { 
-          name: '🎁 All Items', 
-          value: chestData.items.map(item => 
-            `~~**${item.index}.** ${item.emoji} ${item.itemName}~~ ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
-          ).join('\n'),
-          inline: false
-        }
-      );
-      
-      allClaimedEmbed.setTimestamp(chestData.createdAt)
-        .setFooter({ text: 'Thanks for playing!' });
-
-      const finalButtons = new ActionRowBuilder()
-        .addComponents(claimButton);
-
-      // Create a new follow-up embed for "All Items Claimed!" (like roll result embeds)
-      const allClaimedFollowUpEmbed = new EmbedBuilder()
-        .setTitle('🎁 ALL ITEMS CLAIMED!')
-        .setDescription('**All items from this chest have been claimed!**\n\n*Thanks for playing!*')
-        .setThumbnail(thumbnailUrlForClaimed)
-        .setColor(0x00FF00) // Green color
-        .addFields(
-          { 
-            name: '📋 Chest Info', 
-            value: `**Chest ID:** ${chestId}\n**Items Remaining:** 0/${chestData.items.length}\n**Expires:** <t:${Math.floor(new Date(chestData.expiresAt).getTime() / 1000)}:R>`, 
-            inline: false 
-          }
-        );
-      
-      // Add roll history if available
-      if (chestData.rollHistory && chestData.rollHistory.length > 0) {
-        const recentRolls = chestData.rollHistory.slice(-10).reverse();
-        let historyValue = '';
-        
-        for (const rollEntry of recentRolls) {
-          const rollEmojis = getRollEmojis(rollEntry.roll);
-          historyValue += `<@${rollEntry.discordId}> rolled ${rollEmojis}\n`;
-        }
-        
-        if (historyValue) {
-          allClaimedFollowUpEmbed.addFields(
-            { name: '📜 Roll History', value: historyValue, inline: false }
-          );
-        }
-      }
-      
-      allClaimedFollowUpEmbed.addFields(
-        { 
-          name: '🎁 All Items', 
-          value: chestData.items.map(item => 
-            `~~**${item.index}.** ${item.emoji} ${item.itemName}~~ ✅ *Claimed by ${item.claimedBy}* → ${item.claimedByCharacter || 'Unknown'}`
-          ).join('\n'),
-          inline: false
-        }
-      )
-      .setTimestamp(chestData.createdAt)
-      .setFooter({ text: 'Thanks for playing!' });
-
-      // Send new follow-up embed for "All Items Claimed!"
-      await interaction.followUp({
-        embeds: [allClaimedFollowUpEmbed],
-        components: [] // No buttons on the follow-up message
-      });
-
-      // Small delay before updating main message
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Update main message with "all claimed" embed
-      await interaction.editReply({
-        embeds: [allClaimedEmbed],
-        components: [finalButtons]
-      });
-    } else {
-      const buttons = new ActionRowBuilder()
-        .addComponents(claimButton);
-
-      // Update main message AFTER roll result is sent
-      await interaction.editReply({
-        embeds: [mainEmbed],
-        components: [buttons]
-      });
     }
 
     if (itemAwarded) {

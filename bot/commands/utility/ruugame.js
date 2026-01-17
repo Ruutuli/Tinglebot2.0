@@ -568,8 +568,9 @@ module.exports = {
       // Create embed with nice formatting (like ruugame)
       const embed = new EmbedBuilder()
         .setTitle('🎁 Chest - Roll a 5 to claim!')
-        .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+        .setDescription(`**Roll a 5 to claim one of the items!*\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
         .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setColor(0xFFD700) // Gold color
         .addFields(
           { 
