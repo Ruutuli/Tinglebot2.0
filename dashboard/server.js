@@ -512,6 +512,10 @@ app.get('/inventories.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'inventories.html'));
 });
 
+app.get('/character-inventory.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'character-inventory.html'));
+});
+
 // ------------------- Section: Request Logging -------------------
 // Add request logging middleware
 app.use(requestLogger);

@@ -1067,6 +1067,7 @@ async function distributeItems(quest, participant) {
         const { connectToInventories } = require('../../shared/database/db');
         const Item = require('../../shared/models/ItemModel');
         const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId } = require('../../shared/utils/googleSheetsUtils');
+        const { logItemAcquisitionToDatabase } = require('../../shared/utils/inventoryUtils');
         const { v4: uuidv4 } = require('uuid');
         
         // Determine which items to distribute
@@ -1199,6 +1200,19 @@ async function distributeItems(quest, participant) {
                         // Don't fail the reward if sheet sync fails
                         console.error(`[questRewardModule.js] ⚠️ Failed to sync to Google Sheets: ${sheetError.message}`);
                     }
+                }
+                
+                // Log to InventoryLog database collection
+                try {
+                    await logItemAcquisitionToDatabase(character, item, {
+                        quantity: itemReward.quantity,
+                        obtain: `Quest: ${quest.title}`,
+                        location: character.currentVillage || character.homeVillage || 'Unknown',
+                        link: '' // No interaction link for quest rewards
+                    });
+                } catch (logError) {
+                    // Don't fail the reward if logging fails
+                    console.error(`[questRewardModule.js] ⚠️ Failed to log to InventoryLog: ${logError.message}`);
                 }
                 
                 console.log(`[questRewardModule.js] 📦 Added ${itemReward.quantity}x ${item.itemName} to character ${participant.characterName}`);

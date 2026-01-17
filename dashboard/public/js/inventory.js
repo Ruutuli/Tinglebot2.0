@@ -692,6 +692,13 @@ function renderCharacterCards(summaries) {
               </div>
             </div>
             <div class="character-inventory-controls">
+              <a href="/character-inventory.html?character=${encodeURIComponent(summary.characterName)}" 
+                 class="view-full-inventory-button" 
+                 title="View Full Inventory"
+                 onclick="event.stopPropagation();">
+                <i class="fas fa-external-link-alt"></i>
+                <span>View Full</span>
+              </a>
               <button class="expand-button" aria-label="Toggle inventory">
                 <i class="fas fa-chevron-${isExpanded ? 'up' : 'down'}"></i>
               </button>

@@ -61,6 +61,7 @@ const { generateBoostFlavorText } = require('./modules/flavorTextModule');
 
 // Utilities
 const { safeAppendDataToSheet, extractSpreadsheetId } = require('../shared/utils/googleSheetsUtils');
+const { logItemAcquisitionToDatabase } = require('../shared/utils/inventoryUtils');
 
 // Services
 const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("../shared/services/weatherService");
@@ -1375,9 +1376,34 @@ async function executeBirthdayAnnouncements(client) {
               
               logger.info('BIRTHDAY', `📝 Logged birthday gift to ${character.name}'s inventory sheet`);
             }
+            
+            // Log to InventoryLog database collection
+            try {
+              await logItemAcquisitionToDatabase(character, giftItem, {
+                quantity: 1,
+                obtain: isRareGift ? 'Birthday Gift (RARE - 1%!)' : 'Birthday Gift',
+                location: itemLocation || character.currentVillage || character.homeVillage || 'Unknown',
+                link: '' // No interaction link for birthday gifts
+              });
+            } catch (logError) {
+              // Don't fail if logging fails
+              logger.warn('BIRTHDAY', `Failed to log birthday gift to InventoryLog for ${character.name}`, logError.message);
+            }
           } catch (sheetError) {
             logger.warn('BIRTHDAY', `Failed to log gift to sheet for ${character.name}`, sheetError.message);
             // Don't throw - sheet logging is not critical
+            
+            // Still try to log to InventoryLog even if Google Sheets fails
+            try {
+              await logItemAcquisitionToDatabase(character, giftItem, {
+                quantity: 1,
+                obtain: isRareGift ? 'Birthday Gift (RARE - 1%!)' : 'Birthday Gift',
+                location: itemLocation || character.currentVillage || character.homeVillage || 'Unknown',
+                link: ''
+              });
+            } catch (logError) {
+              logger.warn('BIRTHDAY', `Failed to log birthday gift to InventoryLog for ${character.name}`, logError.message);
+            }
           }
         }
       } else {

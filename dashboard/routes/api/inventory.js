@@ -5,11 +5,19 @@
 
 const express = require('express');
 const router = express.Router();
-const { fetchAllCharacters, getCharacterInventoryCollection } = require('../../../shared/database/db');
+const { fetchAllCharacters, getCharacterInventoryCollection, fetchAllItems } = require('../../../shared/database/db');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const { validateRequiredFields } = require('../../middleware/validation');
 const logger = require('../../../shared/utils/logger');
 const mongoose = require('mongoose');
+const Character = require('../../../shared/models/CharacterModel');
+const Item = require('../../../shared/models/ItemModel');
+const InventoryLog = require('../../../shared/models/InventoryLogModel');
+
+// Helper function to escape regex special characters
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 // ------------------- Function: checkDatabaseConnections -------------------
 // Verifies that required database connections are available before processing
@@ -203,6 +211,222 @@ router.get('/characters', asyncHandler(async (req, res) => {
   }
 
   res.json({ data: inventoryData });
+}));
+
+// ------------------- Function: getCharacterDetailedInventory -------------------
+// Returns complete inventory with all items (owned and not owned) for a specific character
+router.get('/character/:characterName/detailed', asyncHandler(async (req, res) => {
+  const { characterName } = req.params;
+  
+  logger.info(`[inventory.js] GET /api/inventory/character/${characterName}/detailed - Route matched`, 'inventory.js');
+  logger.info(`[inventory.js] Request URL: ${req.url}, Original URL: ${req.originalUrl}`, 'inventory.js');
+  
+  await checkDatabaseConnections();
+  
+  if (!characterName) {
+    return res.status(400).json({ error: 'Character name is required' });
+  }
+
+  try {
+    // Decode URL-encoded character name and escape regex special characters
+    const decodedName = decodeURIComponent(characterName);
+    const escapedName = escapeRegExp(decodedName);
+    
+    // Find character (case-insensitive)
+    const character = await Character.findOne({
+      name: { $regex: new RegExp(`^${escapedName}$`, 'i') }
+    }).lean();
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Get character's inventory
+    const col = await getCharacterInventoryCollection(character.name);
+    const inventoryItems = await col.find().toArray();
+
+    // Create a map of owned items for quick lookup
+    const ownedItemsMap = new Map();
+    inventoryItems.forEach(item => {
+      if (item.quantity > 0) {
+        ownedItemsMap.set(item.itemName.toLowerCase(), {
+          quantity: item.quantity,
+          category: item.category,
+          type: item.type,
+          subtype: item.subtype,
+          obtain: item.obtain,
+          location: item.location,
+          date: item.date
+        });
+      }
+    });
+
+    // Get all items in the game
+    const allItems = await fetchAllItems();
+
+    // Merge all items with owned status
+    const completeInventory = allItems.map(item => {
+      const owned = ownedItemsMap.get(item.itemName.toLowerCase());
+      return {
+        itemName: item.itemName,
+        quantity: owned ? owned.quantity : 0,
+        category: item.category || [],
+        type: item.type || [],
+        subtype: item.subtype || [],
+        image: item.image,
+        emoji: item.emoji,
+        owned: !!owned,
+        obtain: owned ? owned.obtain : null,
+        location: owned ? owned.location : null
+      };
+    });
+
+    res.json({
+      data: {
+        characterName: character.name,
+        characterId: character._id,
+        icon: character.icon,
+        totalItems: inventoryItems.reduce((sum, item) => sum + (item.quantity || 0), 0),
+        uniqueItems: inventoryItems.filter(item => (item.quantity || 0) > 0).length,
+        inventory: completeInventory
+      }
+    });
+  } catch (error) {
+    logger.error(`Error fetching detailed inventory for ${characterName}: ${error.message}`, 'inventory.js');
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+}));
+
+// ------------------- Function: getCharacterInventoryLogs -------------------
+// Returns acquisition history/logs for a specific character
+router.get('/character/:characterName/logs', asyncHandler(async (req, res) => {
+  const { characterName } = req.params;
+  
+  logger.info(`[inventory.js] GET /api/inventory/character/${characterName}/logs - Route matched`, 'inventory.js');
+  logger.info(`[inventory.js] Request URL: ${req.url}, Original URL: ${req.originalUrl}`, 'inventory.js');
+  
+  await checkDatabaseConnections();
+  const {
+    itemName,
+    obtain,
+    category,
+    type,
+    location,
+    startDate,
+    endDate,
+    limit = 1000,
+    skip = 0
+  } = req.query;
+
+  if (!characterName) {
+    return res.status(400).json({ error: 'Character name is required' });
+  }
+
+  try {
+    // Decode URL-encoded character name and escape regex special characters
+    const decodedName = decodeURIComponent(characterName);
+    const escapedName = escapeRegExp(decodedName);
+    
+    // Find character (case-insensitive)
+    const character = await Character.findOne({
+      name: { $regex: new RegExp(`^${escapedName}$`, 'i') }
+    }).lean();
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Get logs with filters
+    const logs = await InventoryLog.getCharacterLogs(character.name, {
+      itemName,
+      obtain,
+      category,
+      type,
+      location,
+      startDate,
+      endDate,
+      limit: parseInt(limit),
+      skip: parseInt(skip)
+    });
+
+    res.json({
+      data: {
+        characterName: character.name,
+        characterId: character._id,
+        logs: logs,
+        total: logs.length
+      }
+    });
+  } catch (error) {
+    logger.error(`Error fetching inventory logs for ${characterName}: ${error.message}`, 'inventory.js');
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+}));
+
+// ------------------- Function: getCharacterAllItems -------------------
+// Returns all game items with owned status for a specific character
+router.get('/character/:characterName/all-items', asyncHandler(async (req, res) => {
+  await checkDatabaseConnections();
+  const { characterName } = req.params;
+
+  if (!characterName) {
+    return res.status(400).json({ error: 'Character name is required' });
+  }
+
+  try {
+    // Decode URL-encoded character name and escape regex special characters
+    const decodedName = decodeURIComponent(characterName);
+    const escapedName = escapeRegExp(decodedName);
+    
+    // Find character (case-insensitive)
+    const character = await Character.findOne({
+      name: { $regex: new RegExp(`^${escapedName}$`, 'i') }
+    }).lean();
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Get character's inventory
+    const col = await getCharacterInventoryCollection(character.name);
+    const inventoryItems = await col.find().toArray();
+
+    // Create a map of owned items for quick lookup
+    const ownedItemsMap = new Map();
+    inventoryItems.forEach(item => {
+      if (item.quantity > 0) {
+        ownedItemsMap.set(item.itemName.toLowerCase(), item.quantity);
+      }
+    });
+
+    // Get all items in the game
+    const allItems = await fetchAllItems();
+
+    // Map items with owned status
+    const itemsWithStatus = allItems.map(item => ({
+      itemName: item.itemName,
+      quantity: ownedItemsMap.get(item.itemName.toLowerCase()) || 0,
+      owned: ownedItemsMap.has(item.itemName.toLowerCase()),
+      category: item.category || [],
+      type: item.type || [],
+      subtype: item.subtype || [],
+      image: item.image,
+      emoji: item.emoji
+    }));
+
+    res.json({
+      data: {
+        characterName: character.name,
+        characterId: character._id,
+        items: itemsWithStatus,
+        totalItems: allItems.length,
+        ownedItems: inventoryItems.filter(item => (item.quantity || 0) > 0).length
+      }
+    });
+  } catch (error) {
+    logger.error(`Error fetching all items for ${characterName}: ${error.message}`, 'inventory.js');
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
 }));
 
 module.exports = router;

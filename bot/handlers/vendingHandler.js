@@ -61,7 +61,8 @@ const {
 
 const {
   addItemToVendingInventory,
-  escapeRegExp
+  escapeRegExp,
+  logItemAcquisitionToDatabase
 } = require('../../shared/utils/inventoryUtils.js');
 
 const {
@@ -3391,8 +3392,34 @@ async function handleFulfill(interaction) {
           console.error('[handleFulfill]: Error updating buyer sheet:', sheetError.message);
           // Don't fail the transaction - this is just logging
         }
+        
+        // Log to InventoryLog database collection
+        try {
+          await logItemAcquisitionToDatabase(buyer, itemDetails || { itemName: itemName }, {
+            quantity: quantity,
+            obtain: 'Bought',
+            location: vendor.name || buyer.currentVillage || 'Unknown',
+            link: interactionUrl
+          });
+        } catch (logError) {
+          // Don't fail the transaction if logging fails
+          console.error('[handleFulfill]: Error logging to InventoryLog:', logError.message);
+        }
       } else {
         console.error('[handleFulfill]: No inventory link for buyer:', buyer.name);
+        
+        // Still log to InventoryLog even if no Google Sheets link
+        try {
+          await logItemAcquisitionToDatabase(buyer, itemDetails || { itemName: itemName }, {
+            quantity: quantity,
+            obtain: 'Bought',
+            location: vendor.name || buyer.currentVillage || 'Unknown',
+            link: interactionUrl
+          });
+        } catch (logError) {
+          // Don't fail the transaction if logging fails
+          console.error('[handleFulfill]: Error logging to InventoryLog:', logError.message);
+        }
       }
 
       // ------------------- Delete from Temporary Storage (Cleanup) -------------------

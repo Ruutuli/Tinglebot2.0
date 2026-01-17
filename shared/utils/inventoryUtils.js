@@ -18,6 +18,7 @@ const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
 const ItemModel = require('../models/ItemModel');
+const InventoryLog = require('../models/InventoryLogModel');
 const { ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, MessageFlags, ButtonBuilder, ButtonStyle } = require('discord.js');
 const TempData = require('../models/TempDataModel');
 
@@ -355,6 +356,24 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       };
       await inventoryCollection.insertOne(newItem);
     }
+    
+    // Log to InventoryLog database collection
+    try {
+      const interactionUrl = interaction 
+        ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+        : '';
+      
+      await logItemAcquisitionToDatabase(character, item, {
+        quantity: quantity,
+        obtain: obtain || 'Manual',
+        location: character.currentVillage || character.homeVillage || 'Unknown',
+        link: interactionUrl
+      });
+    } catch (logError) {
+      // Don't fail the main operation if logging fails
+      console.error(`[inventoryUtils.js]: ⚠️ Failed to log to InventoryLog:`, logError.message);
+    }
+    
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
@@ -1515,6 +1534,68 @@ const syncSheetDataToDatabase = async (character, sheetData) => {
 };
 
 // ============================================================================
+// ---- Function: logItemAcquisitionToDatabase ----
+// Logs item acquisition events to InventoryLog collection
+// ============================================================================
+async function logItemAcquisitionToDatabase(character, itemData, acquisitionData) {
+  try {
+    // Extract acquisition details
+    const {
+      itemName,
+      quantity,
+      itemId = null,
+      category = '',
+      type = '',
+      subtype = '',
+      obtain = 'Unknown',
+      job = '',
+      perk = '',
+      location = '',
+      link = '',
+      dateTime = new Date()
+    } = {
+      itemName: itemData.itemName || itemData.name,
+      quantity: itemData.quantity || acquisitionData.quantity || 1,
+      itemId: itemData.itemId || itemData._id || null,
+      category: Array.isArray(itemData.category) ? itemData.category.join(', ') : (itemData.category || ''),
+      type: Array.isArray(itemData.type) ? itemData.type.join(', ') : (itemData.type || ''),
+      subtype: Array.isArray(itemData.subtype) ? itemData.subtype.join(', ') : (itemData.subtype || ''),
+      ...acquisitionData
+    };
+
+    // Create log entry
+    const logEntry = {
+      characterName: character.name,
+      characterId: character._id,
+      itemName: itemName,
+      itemId: itemId,
+      quantity: quantity,
+      category: category || '',
+      type: type || '',
+      subtype: subtype || '',
+      obtain: obtain || 'Unknown',
+      job: job || character.job || '',
+      perk: perk || character.perk || '',
+      location: location || character.currentVillage || character.homeVillage || '',
+      link: link || '',
+      dateTime: dateTime instanceof Date ? dateTime : new Date(dateTime),
+      confirmedSync: uuidv4()
+    };
+
+    // Save to InventoryLog collection
+    await InventoryLog.create(logEntry);
+    
+    console.log(`[inventoryUtils.js] 📝 Logged item acquisition: ${quantity}x ${itemName} for ${character.name} (${obtain})`);
+    
+    return logEntry;
+  } catch (error) {
+    // Don't fail the main operation if logging fails
+    console.error(`[inventoryUtils.js] ⚠️ Failed to log item acquisition to database:`, error.message);
+    return null;
+  }
+}
+
+// ============================================================================
 // ---- Exports ----
 // Module exports
 // ============================================================================
@@ -1536,5 +1617,6 @@ module.exports = {
   refundJobVoucher,
   SOURCE_TYPES,
   syncSheetDataToDatabase,
-  escapeRegExp
+  escapeRegExp,
+  logItemAcquisitionToDatabase
 };
