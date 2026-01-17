@@ -31,7 +31,7 @@ const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = r
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+const { handleInteractionError, ERROR_RESPONSE_TYPES } = require('../../../shared/utils/globalErrorHandler');
 const { removeItemInventoryDatabase, syncToInventoryDatabase, addItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils');
 const { checkInventorySync } = require('../../../shared/utils/characterUtils');
 const { safeAppendDataToSheet } = require('../../../shared/utils/googleSheetsUtils');
@@ -127,6 +127,20 @@ module.exports = {
         // Remove quantity in dash format: " - Qty: 1" or "- Qty:1"
         .replace(/\s*-\s*Qty:\s*\d+\s*$/i, '')
         .trim();
+      
+      // Normalize common compound item names that may be missing spaces
+      const commonItemSpaces = {
+        'jobvoucher': 'Job Voucher',
+        'characterslotvoucher': 'Character Slot Voucher',
+        'chuchuegg': 'Chuchu Egg',
+        'chuchujelly': 'Chuchu Jelly'
+      };
+      
+      // Try to match item name with common space patterns
+      const lowerItemName = cleanItemName.toLowerCase().replace(/\s+/g, '');
+      if (commonItemSpaces[lowerItemName]) {
+        cleanItemName = commonItemSpaces[lowerItemName];
+      }
       
       const item = await fetchItemByName(cleanItemName, {
         commandName: interaction.commandName,
@@ -1352,8 +1366,28 @@ module.exports = {
       await handleInteractionError(error, interaction, {
         source: 'item.js',
         characterName: interaction.options?.getString('charactername'),
-        itemName: interaction.options?.getString('itemname')
+        itemName: interaction.options?.getString('itemname'),
+        responseType: ERROR_RESPONSE_TYPES.EDIT
       });
+      
+      // Also send a user-friendly error message if error handler doesn't
+      try {
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Error Executing Command',
+            description: 'An unexpected error occurred while processing your item command.\n\n**Common fixes:**\n• Make sure the item name is spelled correctly\n• Use autocomplete to select the correct item name\n• Check that your character exists and belongs to you',
+            image: {
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+            },
+            footer: {
+              text: 'If this persists, contact a moderator'
+            }
+          }]
+        });
+      } catch (replyError) {
+        // Already replied or interaction expired - ignore
+      }
     }
   }
 };

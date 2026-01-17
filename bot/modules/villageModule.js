@@ -299,6 +299,33 @@ async function damageVillage(villageName, damageAmount) {
         
         // Save updated village
         await village.save();
+        
+        // ------------------- Send Village Damage Notification -------------------
+        // Only send notification if actual damage occurred (actualHPLost > 0)
+        if (actualHPLost > 0) {
+            try {
+                const { client } = require('../index.js');
+                if (!client) {
+                    console.error(`[damageVillage] ❌ Discord client not available for village damage notification`);
+                } else {
+                    const VILLAGE_DAMAGE_CHANNEL_ID = '1391812848099004578';
+                    console.log(`[damageVillage] 📢 Attempting to send village damage notification to channel ${VILLAGE_DAMAGE_CHANNEL_ID}`);
+                    
+                    const channel = await client.channels.fetch(VILLAGE_DAMAGE_CHANNEL_ID);
+                    if (!channel) {
+                        console.error(`[damageVillage] ❌ Could not find channel ${VILLAGE_DAMAGE_CHANNEL_ID} for village damage notification`);
+                    } else {
+                        await channel.send({ content: 'Village took damage!' });
+                        console.log(`[damageVillage] ✅ Successfully sent village damage notification to channel ${VILLAGE_DAMAGE_CHANNEL_ID}`);
+                    }
+                }
+            } catch (notificationError) {
+                // Don't fail village damage if notification fails, but log the error
+                console.error(`[damageVillage] ❌ Error sending village damage notification:`, notificationError.message);
+                console.error(`[damageVillage] Stack trace:`, notificationError.stack);
+            }
+        }
+        
         return { village, removedResources };
     } catch (error) {
         handleError(error, 'villageModule.js');

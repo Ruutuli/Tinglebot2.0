@@ -67,7 +67,6 @@ const { handleError } = require('../../shared/utils/globalErrorHandler');
 const { info, success, warn, error, debug } = require('../../shared/utils/logger');
 
 const Character = require('../../shared/models/CharacterModel');
-const { damageVillage } = require('../modules/villageModule');
 
 // ============================================================================
 // ------------------- Daily Roll Functions -------------------
@@ -717,47 +716,6 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       outcomeMessage = generateDamageMessage(outcome.hearts);
       // Remove the direct travel log addition since it will be handled by the caller
       // travelLog.push(outcomeMessage);
-      
-      // ------------------- Monster Encounter Village Damage (Tier 1-4 only) -------------------
-      // Check if character lost to a Tier 1-4 monster (not KO'd, not a win)
-      // Apply percentage chance for monster to follow character back to village
-      info('TRAVEL', `[VILLAGE_DAMAGE_CHECK] Evaluating village damage chance for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
-      info('TRAVEL', `[VILLAGE_DAMAGE_CHECK] Conditions - Tier check: ${monster.tier >= 1 && monster.tier <= 4}, Result: "${outcome.result}", Hearts: ${outcome.hearts}, Village: ${character.currentVillage}`);
-      
-      if (monster.tier >= 1 && monster.tier <= 4 && 
-          outcome.result !== 'Win!/Loot' && outcome.result !== 'KO' &&
-          character.currentVillage) {
-        info('TRAVEL', `[VILLAGE_DAMAGE_CHECK] ✅ All conditions met! Checking 12.5% chance for village damage...`);
-        try {
-          // 12.5% chance for monster to cause village damage (balance TBD, starting conservative)
-          const DAMAGE_CHANCE = 0.125;
-          const roll = Math.random();
-          info('TRAVEL', `[VILLAGE_DAMAGE_CHECK] Damage chance roll: ${(roll * 100).toFixed(2)}% (need < ${(DAMAGE_CHANCE * 100).toFixed(1)}%)`);
-          
-          if (roll < DAMAGE_CHANCE) {
-            // Damage amount: 1-3 HP (random between 1 and 3)
-            const damageAmount = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3 HP
-            
-            info('TRAVEL', `[VILLAGE_DAMAGE_CHECK] 🎲 Damage chance triggered! Applying ${damageAmount} HP to ${character.currentVillage}`);
-            
-            // Optional: Named rivalry enemies flavor (can be enhanced later)
-            // For now, just apply the damage
-            await damageVillage(character.currentVillage, damageAmount);
-            
-            info('TRAVEL', `✅ Monster encounter damage: ${character.currentVillage} took ${damageAmount} HP damage from ${monster.name} (Tier ${monster.tier}) following ${character.name}`);
-            
-            // Add flavor text note to outcome message
-            outcomeMessage += `\n⚠️ **${monster.name}** followed **${character.name}** back to **${capitalizeFirstLetter(character.currentVillage)}** and caused ${damageAmount} HP damage to the village!`;
-          } else {
-            info('TRAVEL', `[VILLAGE_DAMAGE_CHECK] ❌ Damage chance not triggered (roll was too high)`);
-          }
-        } catch (damageError) {
-          error('TRAVEL', `❌ Error applying monster encounter village damage: ${damageError.message}`, damageError.stack);
-          // Don't fail the travel encounter if village damage fails
-        }
-      } else {
-        info('TRAVEL', `[VILLAGE_DAMAGE_CHECK] ❌ Conditions not met - skipping village damage check`);
-      }
     }
 
     // ------------------- Embed Update -------------------
