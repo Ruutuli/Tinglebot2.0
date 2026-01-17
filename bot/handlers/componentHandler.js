@@ -3181,7 +3181,7 @@ async function handleChestClaim(interaction) {
           const allClaimedFollowUpEmbed = new EmbedBuilder()
             .setTitle('🎁 ALL ITEMS CLAIMED!')
             .setDescription('**All items from this chest have been claimed! Here\'s who got what!**\n\n*Thanks for playing!*')
-            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+            .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
             .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
             .setColor(0x00FF00) // Green color
             .addFields(
