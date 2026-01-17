@@ -615,7 +615,11 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       const validationResult = await canChangeJob(character, updatedJob);
       if (!validationResult.valid) {
         console.warn(`[componentHandler.js]: Job validation failed: ${validationResult.message}`);
-        return interaction.reply({ content: validationResult.message, flags: 64 });
+        // Handle both string messages and embed messages
+        const replyOptions = validationResult.message instanceof EmbedBuilder
+          ? { embeds: [validationResult.message], flags: 64 }
+          : { content: validationResult.message, flags: 64 };
+        return interaction.reply(replyOptions);
       }
   
       const previousJob = character.job;

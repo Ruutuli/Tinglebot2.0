@@ -214,15 +214,26 @@ async function canChangeJob(character, newJob) {
     }
 
     // Check if village is damaged (mod characters are exempt)
+    // DISABLED DURING TESTING - Will be re-enabled after testing phase
     // Check if character is a mod character - try both isModCharacter property and constructor name
     const isModCharacter = character.isModCharacter || (character.constructor && character.constructor.modelName === 'ModCharacter');
-    if (!isModCharacter && character.currentVillage) {
+    if (false && !isModCharacter && character.currentVillage) { // Disabled: if (false && ...)
         const villageStatus = await checkVillageStatus(character.currentVillage);
         if (villageStatus === 'damaged') {
             const capitalizedCurrentVillage = capitalizeFirstLetter(character.currentVillage);
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('❌ Village Repair Required')
+                .setDescription(`**${character.name}** cannot change jobs because **${capitalizedCurrentVillage}** is damaged and needs repair.`)
+                .addFields(
+                    { name: 'What to do', value: 'Please help repair the village first by contributing tokens.', inline: false }
+                )
+                .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                .setTimestamp();
+            
             return {
                 valid: false,
-                message: `❌ **${character.name}** cannot change jobs because **${capitalizedCurrentVillage}** is damaged and needs repair. Please help repair the village first by contributing tokens.`
+                message: errorEmbed
             };
         }
     }
