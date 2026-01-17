@@ -26,6 +26,25 @@ let currentFilters = {
   }
 };
 
+// #region agent log
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const tabsContainer = document.querySelector('.char-inv-tabs');
+    const mainContainer = document.querySelector('.char-inv-main');
+    if (tabsContainer) {
+      const computed = window.getComputedStyle(tabsContainer);
+      const rect = tabsContainer.getBoundingClientRect();
+      const parentComputed = tabsContainer.parentElement ? window.getComputedStyle(tabsContainer.parentElement) : null;
+      const logData = {location:'characterInventory.js:127',message:'On window load - tabs state',data:{display:computed.display,visibility:computed.visibility,opacity:computed.opacity,position:computed.position,top:computed.top,zIndex:computed.zIndex,width:computed.width,height:computed.height,rectTop:rect.top,rectBottom:rect.bottom,inViewport:rect.top>=0&&rect.top<=window.innerHeight,parentOverflow:parentComputed?.overflow,parentOverflowX:parentComputed?.overflowX,parentOverflowY:parentComputed?.overflowY,viewportWidth:window.innerWidth,mediaQueryMatch:window.matchMedia('(max-width: 768px)').matches},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D,E'};
+      console.log('[DEBUG]', logData);
+      fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
+    } else {
+      console.log('[DEBUG] Tabs container NOT found on window load');
+    }
+  }, 500);
+});
+// #endregion
+
 // ------------------- Navigation Setup -------------------
 function setupNavigation() {
   const sidebar = document.querySelector('.sidebar');
@@ -156,10 +175,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Render initial views
   renderInventoryView();
   renderHistoryView();
+  
+  // #region agent log
+  setTimeout(() => {
+    const tabsContainer = document.querySelector('.char-inv-tabs');
+    const activeContent = document.querySelector('.char-inv-tab-content.active');
+    if (tabsContainer) {
+      const computed = window.getComputedStyle(tabsContainer);
+      const rect = tabsContainer.getBoundingClientRect();
+      fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'characterInventory.js:160',message:'After DOMContentLoaded - initial render complete',data:{display:computed.display,visibility:computed.visibility,opacity:computed.opacity,position:computed.position,top:computed.top,zIndex:computed.zIndex,width:computed.width,height:computed.height,rectTop:rect.top,rectBottom:rect.bottom,inViewport:rect.top>=0&&rect.top<=window.innerHeight,activeContentDisplay:activeContent?window.getComputedStyle(activeContent).display:'none',viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C,E'})}).catch(()=>{});
+    }
+  }, 500);
+  // #endregion
 });
 
 // ------------------- Tab Management -------------------
 function setupTabs() {
+  // #region agent log
+  const tabsContainer = document.querySelector('.char-inv-tabs');
+  if (tabsContainer) {
+    const computed = window.getComputedStyle(tabsContainer);
+    const logData = {location:'characterInventory.js:162',message:'Tabs container found at setupTabs',data:{display:computed.display,visibility:computed.visibility,opacity:computed.opacity,position:computed.position,top:computed.top,zIndex:computed.zIndex,width:computed.width,height:computed.height,viewportWidth:window.innerWidth,isMobile:window.innerWidth<=768},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,D'};
+    console.log('[DEBUG]', logData);
+    fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
+  } else {
+    const logData = {location:'characterInventory.js:162',message:'Tabs container NOT found at setupTabs',data:{viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+    console.log('[DEBUG]', logData);
+    fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
+  }
+  // #endregion
   const tabs = document.querySelectorAll('.char-inv-tab-button');
   const contents = document.querySelectorAll('.char-inv-tab-content');
 
@@ -175,6 +219,16 @@ function setupTabs() {
       const targetContent = document.getElementById(`content-${targetTab}`);
       if (targetContent) {
         targetContent.classList.add('active');
+        // #region agent log
+        const tabsContainer2 = document.querySelector('.char-inv-tabs');
+        const contentComputed = window.getComputedStyle(targetContent);
+        if (tabsContainer2) {
+          const tabsComputed = window.getComputedStyle(tabsContainer2);
+          const logData = {location:'characterInventory.js:192',message:'Tab clicked - active state changed',data:{contentDisplay:contentComputed.display,contentZIndex:contentComputed.zIndex,tabsDisplay:tabsComputed.display,tabsVisibility:tabsComputed.visibility,tabsOpacity:tabsComputed.opacity,tabsZIndex:tabsComputed.zIndex,tabsTop:tabsComputed.top,tabsPosition:tabsComputed.position,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+          console.log('[DEBUG]', logData);
+          fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
+        }
+        // #endregion
       }
     });
   });
@@ -255,6 +309,18 @@ function renderInventoryView() {
 
   const container = document.getElementById('inventory-grid-container');
   if (!container) return;
+  
+  // #region agent log
+  const tabsContainer = document.querySelector('.char-inv-tabs');
+  const activeContent = document.querySelector('.char-inv-tab-content.active');
+  if (tabsContainer) {
+    const computed = window.getComputedStyle(tabsContainer);
+    const rect = tabsContainer.getBoundingClientRect();
+    const logData = {location:'characterInventory.js:274',message:'Before rendering inventory view',data:{display:computed.display,visibility:computed.visibility,opacity:computed.opacity,position:computed.position,top:computed.top,zIndex:computed.zIndex,width:computed.width,height:computed.height,rectTop:rect.top,rectBottom:rect.bottom,rectLeft:rect.left,rectRight:rect.right,inViewport:rect.top>=0&&rect.top<=window.innerHeight,activeContentDisplay:activeContent?window.getComputedStyle(activeContent).display:'none',viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'};
+    console.log('[DEBUG]', logData);
+    fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
+  }
+  // #endregion
 
   // Debug: Log sample items to see category structure
   if (inventoryData.length > 0) {
@@ -316,6 +382,19 @@ function renderInventoryView() {
 
   // Render grid
   container.innerHTML = renderInventoryGrid(itemsByCategory);
+  // #region agent log
+  setTimeout(() => {
+    const tabsContainer2 = document.querySelector('.char-inv-tabs');
+    const activeContent2 = document.querySelector('.char-inv-tab-content.active');
+    if (tabsContainer2) {
+      const computed2 = window.getComputedStyle(tabsContainer2);
+      const rect2 = tabsContainer2.getBoundingClientRect();
+      const logData = {location:'characterInventory.js:350',message:'After rendering inventory grid',data:{display:computed2.display,visibility:computed2.visibility,opacity:computed2.opacity,position:computed2.position,top:computed2.top,zIndex:computed2.zIndex,width:computed2.width,height:computed2.height,rectTop:rect2.top,rectBottom:rect2.bottom,rectLeft:rect2.left,rectRight:rect2.right,inViewport:rect2.top>=0&&rect2.top<=window.innerHeight,activeContentDisplay:activeContent2?window.getComputedStyle(activeContent2).display:'none',viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'};
+      console.log('[DEBUG]', logData);
+      fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
+    }
+  }, 100);
+  // #endregion
   
   // Setup lazy loading for images after render
   setupLazyImageLoading();
