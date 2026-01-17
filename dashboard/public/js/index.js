@@ -24,8 +24,9 @@ import * as monsters from './monsters.js';
 import * as pets from './pets.js';
 import * as starterGear from './starterGear.js';
 import * as quests from './quests.js';
+import * as blank from './blank.js';
 import { createPagination, setupBackToTopButton, scrollToTop, createSearchFilterBar } from './ui.js';
-import { updateActiveNavState, updateBreadcrumb, clearActiveNavState, navigateToDashboard } from './modules/navigation.js';
+import { updateActiveNavState, updateBreadcrumb, clearActiveNavState, navigateToDashboard, resetFilterState } from './modules/navigation.js';
 
 // Import specific functions from characters module
 const { renderCharacterCards } = characters;
@@ -219,6 +220,28 @@ function setupModelCards() {
         // Ensure back to top button is set up for model pages
         setupBackToTopButton();
 
+        // Skip API fetch for 'blank' and 'inventory' models - they fetch their own data
+        if (modelName === 'blank') {
+          title.textContent = 'Blank Template';
+          await blank.initializeBlankPage([], 1, contentDiv);
+          return; // Exit early, don't continue with API fetch or switch statement
+        }
+        
+        if (modelName === 'inventory') {
+          console.log(`[Inventory Load] 🖱️  setupModelCards: Inventory card clicked in OLD handler at ${new Date().toISOString()}`);
+          title.textContent = 'Inventories';
+          // Show loading state immediately
+          contentDiv.innerHTML = `
+            <div class="model-loading-overlay">
+              <i class="fas fa-spinner fa-spin"></i>
+              <p>Loading inventory data...</p>
+            </div>
+          `;
+          console.log(`[Inventory Load] 📍 Loading state set in setupModelCards at ${new Date().toISOString()}`);
+          await inventory.initializeInventoryPage([], 1, contentDiv);
+          return; // Exit early, don't continue with API fetch or switch statement
+        }
+
         let fetchUrl = `/api/models/${modelName}`;
         if (modelName === 'starterGear') {
           fetchUrl = '/api/models/item?all=true';
@@ -319,27 +342,56 @@ function setupModelCards() {
           case 'quest':
             await quests.initializeQuestPage(data, pagination.page, contentDiv);
             break;
+          case 'mount':
+            title.textContent = 'Mounts';
+            // TODO: Implement mount page initialization
+            contentDiv.innerHTML = `
+              <div class="blank-empty-state">
+                <i class="fas fa-horse"></i>
+                <p>Mounts page is not yet implemented</p>
+              </div>
+            `;
+            break;
+          case 'relic':
+            title.textContent = 'Relics';
+            // TODO: Implement relic page initialization
+            contentDiv.innerHTML = `
+              <div class="blank-empty-state">
+                <i class="fas fa-gem"></i>
+                <p>Relics page is not yet implemented</p>
+              </div>
+            `;
+            break;
           case 'helpwantedquest':
+            console.log('[HWQ] Rendering help wanted quest page with data:', data?.length || 0, 'items');
             title.textContent = 'Help Wanted Quests';
             // Show loading state while fetching user/character data
             contentDiv.innerHTML = `
-              <div class="quest-loading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; min-height: 400px;">
+              <div class="model-loading-overlay" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; min-height: 400px;">
                 <i class="fas fa-spinner fa-spin" style="font-size: 3rem; color: var(--accent-color); margin-bottom: 1.5rem;"></i>
                 <p style="font-size: 1.1rem; color: var(--text-primary); font-weight: 600;">Loading Help Wanted Quests...</p>
                 <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">Fetching quest and user data</p>
               </div>
             `;
             // Render async with proper delay to ensure loading shows
-            await renderHelpWantedQuests(data, contentDiv);
+            try {
+              await renderHelpWantedQuests(data, contentDiv);
+              console.log('[HWQ] Help wanted quest page rendered successfully');
+            } catch (error) {
+              console.error('[HWQ] Error rendering help wanted quest page:', error);
+              contentDiv.innerHTML = `
+                <div class="blank-empty-state">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <p>Error loading Help Wanted Quests</p>
+                  <p style="font-size: 0.9rem; margin-top: 0.5rem;">${error.message}</p>
+                </div>
+              `;
+            }
             break;
-                case 'vending':
-                  title.textContent = 'Vending Stock';
-                  await vending.initializeVendingPage(data, pagination.page, contentDiv);
-                  break;
-                case 'vendingShops':
-                  title.textContent = 'Vending Shops';
-                  await vendingShops.initializeVendingShopsPage(data, pagination.page, contentDiv);
-                  break;
+          case 'vending':
+            title.textContent = 'Vending Stock';
+            await vending.initializeVendingPage(data, pagination.page, contentDiv);
+            break;
           case 'vendingShops':
             title.textContent = 'Vending Shops';
             await vendingShops.initializeVendingShopsPage(data, pagination.page, contentDiv);
@@ -536,13 +588,187 @@ function setupModelCards() {
 }
 
 // ------------------- Function: loadModelByName -------------------
-// Loads a model view by triggering the model card click
+// Loads a model view by triggering the model card click or directly initializing
 async function loadModelByName(modelName) {
+  if (modelName === 'inventory') {
+    console.log(`[Inventory Load] 🔗 loadModelByName called for inventory at ${new Date().toISOString()}`);
+  }
   const modelCard = document.querySelector(`.model-card[data-model="${modelName}"]`);
   if (modelCard) {
+    if (modelName === 'inventory') {
+      console.log(`[Inventory Load] 🎯 Found inventory card, clicking it at ${new Date().toISOString()}`);
+    }
     modelCard.click();
   } else {
-    console.warn(`Model card not found for: ${modelName}`);
+    // If card doesn't exist, directly initialize the model page
+    console.log(`Model card not found for: ${modelName}, initializing directly...`);
+    
+    const dashboardSection = document.getElementById('dashboard-section');
+    const modelDetailsPage = document.getElementById('model-details-page');
+    const title = document.getElementById('model-details-title');
+    const contentDiv = document.getElementById('model-details-data');
+    const backButton = document.querySelector('.back-button');
+    
+    if (!dashboardSection || !modelDetailsPage || !title || !contentDiv) {
+      console.error('Required DOM elements not found for direct model loading');
+      return;
+    }
+    
+    // Hide dashboard, show model page
+    dashboardSection.style.display = 'none';
+    modelDetailsPage.style.display = 'block';
+    title.textContent = modelName.charAt(0).toUpperCase() + modelName.slice(1);
+    contentDiv.innerHTML = '';
+    
+    // Setup back button
+    if (backButton) {
+      backButton.onclick = () => {
+        navigateToDashboard();
+        modelDetailsPage.style.display = 'none';
+        dashboardSection.style.display = 'block';
+        resetFilterState(modelName);
+      };
+    }
+    
+    setupBackToTopButton();
+    
+    // Initialize the model page
+    // Skip API fetch for 'blank' and 'inventory' models - they fetch their own data
+    if (modelName === 'blank' || modelName === 'inventory') {
+      if (modelName === 'blank') {
+        title.textContent = 'Blank Template';
+        await blank.initializeBlankPage([], 1, contentDiv);
+      } else if (modelName === 'inventory') {
+        console.log(`[Inventory Load] 🔗 loadModelByName called directly (hash navigation) at ${new Date().toISOString()}`);
+        title.textContent = 'Inventories';
+        // Show loading state immediately
+        if (contentDiv) {
+          contentDiv.innerHTML = `
+            <div class="model-loading-overlay">
+              <i class="fas fa-spinner fa-spin"></i>
+              <p>Loading inventory data...</p>
+            </div>
+          `;
+          console.log(`[Inventory Load] 📍 Loading state set in loadModelByName at ${new Date().toISOString()}`);
+        }
+        await inventory.initializeInventoryPage([], 1, contentDiv);
+      }
+    } else {
+      // For other models, try to fetch data
+      try {
+        let fetchUrl = `/api/models/${modelName}`;
+        if (modelName === 'starterGear') {
+          fetchUrl = '/api/models/item?all=true';
+        } else if (modelName === 'helpwantedquest') {
+          fetchUrl = '/api/models/helpwantedquest?all=true';
+        }
+        
+        const response = await fetch(fetchUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const { data, pagination } = await response.json();
+        
+        // Use the switch statement from the model card handler
+        switch (modelName) {
+          case 'character':
+            await characters.initializeCharacterPage(data, pagination.page, contentDiv);
+            break;
+          case 'weather':
+            await weatherStats.initializeWeatherStatsPage();
+            break;
+          case 'item':
+            await items.initializeItemPage(data, pagination.page, contentDiv);
+            break;
+          case 'starterGear':
+            title.textContent = 'Starter Gear';
+            await starterGear.initializeStarterGearPage(data, pagination.page, contentDiv);
+            break;
+          case 'monster':
+            await monsters.initializeMonsterPage(data, pagination.page, contentDiv);
+            break;
+          case 'pet':
+            await pets.initializePetPage(data, pagination.page, contentDiv);
+            break;
+          case 'villageShops':
+            await villageShops.initializeVillageShopsPage(data, pagination.page, contentDiv);
+            break;
+          case 'village':
+            title.textContent = 'Villages';
+            await villages.initializeVillagePage(data, pagination.page, contentDiv);
+            break;
+          case 'quest':
+            await quests.initializeQuestPage(data, pagination.page, contentDiv);
+            break;
+          case 'mount':
+            title.textContent = 'Mounts';
+            // TODO: Implement mount page initialization
+            contentDiv.innerHTML = `
+              <div class="blank-empty-state">
+                <i class="fas fa-horse"></i>
+                <p>Mounts page is not yet implemented</p>
+              </div>
+            `;
+            break;
+          case 'relic':
+            title.textContent = 'Relics';
+            // TODO: Implement relic page initialization
+            contentDiv.innerHTML = `
+              <div class="blank-empty-state">
+                <i class="fas fa-gem"></i>
+                <p>Relics page is not yet implemented</p>
+              </div>
+            `;
+            break;
+          case 'helpwantedquest':
+            console.log('[HWQ] Rendering help wanted quest page with data:', data?.length || 0, 'items');
+            title.textContent = 'Help Wanted Quests';
+            // Show loading state while fetching user/character data
+            contentDiv.innerHTML = `
+              <div class="model-loading-overlay" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; min-height: 400px;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 3rem; color: var(--accent-color); margin-bottom: 1.5rem;"></i>
+                <p style="font-size: 1.1rem; color: var(--text-primary); font-weight: 600;">Loading Help Wanted Quests...</p>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">Fetching quest and user data</p>
+              </div>
+            `;
+            // Render async with proper delay to ensure loading shows
+            try {
+              await renderHelpWantedQuests(data, contentDiv);
+              console.log('[HWQ] Help wanted quest page rendered successfully');
+            } catch (error) {
+              console.error('[HWQ] Error rendering help wanted quest page:', error);
+              contentDiv.innerHTML = `
+                <div class="blank-empty-state">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <p>Error loading Help Wanted Quests</p>
+                  <p style="font-size: 0.9rem; margin-top: 0.5rem;">${error.message}</p>
+                </div>
+              `;
+            }
+            break;
+          case 'vending':
+            title.textContent = 'Vending Stock';
+            await vending.initializeVendingPage(data, pagination.page, contentDiv);
+            break;
+          case 'vendingShops':
+            title.textContent = 'Vending Shops';
+            await vendingShops.initializeVendingShopsPage(data, pagination.page, contentDiv);
+            break;
+          default:
+            console.error(`Unknown model type: ${modelName}`);
+            contentDiv.innerHTML = `
+              <div class="error-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Unknown model type: ${modelName}</p>
+              </div>
+            `;
+        }
+      } catch (error) {
+        console.error(`Error loading model ${modelName}:`, error);
+        error.logError(error, 'Model Loading');
+      }
+    }
   }
 }
 
@@ -578,6 +804,17 @@ function handleModelDataError(modelName, contentDiv) {
     retryButton.addEventListener('click', async () => {
       showLoadingState();
       try {
+        // Skip API fetch for 'blank' and 'inventory' models - they fetch their own data
+        if (modelName === 'blank' || modelName === 'inventory') {
+          if (modelName === 'blank') {
+            await blank.initializeBlankPage([], 1, contentDiv);
+          } else if (modelName === 'inventory') {
+            console.log(`[Inventory Load] 🔄 Retry button clicked for inventory, skipping loadModelData at ${new Date().toISOString()}`);
+            await inventory.initializeInventoryPage([], 1, contentDiv);
+          }
+          return;
+        }
+        
         const { data, pagination } = await loadModelData(modelName);
         switch (modelName) {
           case 'character':
@@ -585,9 +822,6 @@ function handleModelDataError(modelName, contentDiv) {
             break;
           case 'item':
             items.initializeItemPage(data, pagination.page, contentDiv);
-            break;
-          case 'inventory':
-            await inventory.initializeInventoryPage(data, pagination.page, contentDiv);
             break;
           case 'monster':
             await monsters.initializeMonsterPage(data, pagination.page, contentDiv);
@@ -967,29 +1201,55 @@ function setupSidebarNavigation() {
     }
   }
   
-  // Handle initial URL on page load
-  const hash = window.location.hash;
-  if (hash) {
-    const hashValue = hash.substring(1);
-    
-    // List of known model names
-    const modelNames = ['character', 'monster', 'pet', 'mount', 'vending', 'vendingShops', 'item', 'starterGear', 'village', 'villageShops', 'relic', 'quest', 'inventory'];
-    
-    // Check for admin area sub-sections
-    if (hashValue === 'admin-area-section/database-editor') {
-      showAdminAreaSection();
-      openDropdownForSection('admin-area-section');
-      // Small delay to ensure admin area is loaded before opening database editor
-      setTimeout(() => {
-        if (window.openDatabaseEditor) {
-          window.openDatabaseEditor();
-        }
-      }, 100);
+  // Handle hash changes (for direct navigation to pages)
+  window.addEventListener('hashchange', () => {
+    const hash = window.location.hash;
+    if (hash) {
+      const hashValue = hash.substring(1);
+      const modelNames = ['character', 'monster', 'pet', 'mount', 'vending', 'vendingShops', 'item', 'starterGear', 'village', 'villageShops', 'relic', 'quest', 'helpwantedquest', 'inventory', 'blank'];
+      
+      if (modelNames.includes(hashValue)) {
+        loadModelByName(hashValue);
+      } else if (hashValue === 'dashboard' || hashValue === 'dashboard-section') {
+        showDashboardSection();
+        window.history.replaceState({ section: 'dashboard-section' }, '', '/');
+      } else {
+        // Handle other sections
+        const sectionId = hashValue.replace('-section', '') + '-section';
+        showSection(sectionId);
+        openDropdownForSection(sectionId);
+      }
+    } else {
+      // No hash, show dashboard
+      showDashboardSection();
     }
-    // Check if it's a model hash
-    else if (modelNames.includes(hashValue)) {
-      loadModelByName(hashValue);
-    } else if (hashValue === 'stats-section') {
+  });
+
+  // Handle initial URL on page load
+  // Use a small delay to ensure all DOM elements are ready
+  setTimeout(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const hashValue = hash.substring(1);
+      
+      // List of known model names
+      const modelNames = ['character', 'monster', 'pet', 'mount', 'vending', 'vendingShops', 'item', 'starterGear', 'village', 'villageShops', 'relic', 'quest', 'helpwantedquest', 'inventory', 'blank'];
+      
+      // Check for admin area sub-sections
+      if (hashValue === 'admin-area-section/database-editor') {
+        showAdminAreaSection();
+        openDropdownForSection('admin-area-section');
+        // Small delay to ensure admin area is loaded before opening database editor
+        setTimeout(() => {
+          if (window.openDatabaseEditor) {
+            window.openDatabaseEditor();
+          }
+        }, 100);
+      }
+      // Check if it's a model hash
+      else if (modelNames.includes(hashValue)) {
+        loadModelByName(hashValue);
+      } else if (hashValue === 'stats-section') {
       showStatsSection();
       openDropdownForSection('stats-section');
     } else if (hashValue === 'dashboard' || hashValue === 'dashboard-section') {
@@ -1035,7 +1295,11 @@ function setupSidebarNavigation() {
       showSection(hashValue);
       openDropdownForSection(hashValue);
     }
-  }
+    } else {
+      // No hash, show dashboard
+      showDashboardSection();
+    }
+  }, 100);
   
   // ============================================================================
   // ------------------- Mobile Sidebar Functionality -------------------
@@ -1375,6 +1639,12 @@ function showDashboardSection() {
       recentQuestsSection.style.display = 'block';
     }
     
+    // Ensure village section is visible
+    const villageSection = document.getElementById('village-section');
+    if (villageSection) {
+      villageSection.style.display = 'block';
+    }
+    
     // Check for any loading states that might be hiding content
     const loader = document.getElementById('loader');
     const loadingStates = document.querySelectorAll('.loading-state');
@@ -1397,6 +1667,11 @@ function showDashboardSection() {
     // Render weather section
     if (window.renderWeatherSection) {
       window.renderWeatherSection();
+    }
+    
+    // Render village section
+    if (window.renderVillageSection) {
+      window.renderVillageSection();
     }
     
     // Load character of the week
@@ -2495,37 +2770,69 @@ function getParticipationRequirements(quest) {
 // ------------------- Function: renderHelpWantedQuests -------------------
 // Renders Help Wanted Quest data with search, filter, and pagination
 async function renderHelpWantedQuests(data, contentDiv) {
-  // Allow loading state to render
-  await new Promise(resolve => setTimeout(resolve, 50));
-  
-  if (!data || data.length === 0) {
-    contentDiv.innerHTML = `
-      <div class="error-state">
-        <i class="fas fa-inbox"></i>
-        <p>No Help Wanted Quests found</p>
-      </div>
-    `;
-    return;
+  try {
+    console.log('[HWQ] renderHelpWantedQuests called with:', {
+      dataLength: data?.length || 0,
+      hasContentDiv: !!contentDiv
+    });
+    
+    // Allow loading state to render
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    if (!data || data.length === 0) {
+      console.warn('[HWQ] No data provided or data is empty');
+      contentDiv.innerHTML = `
+        <div class="blank-empty-state">
+          <i class="fas fa-inbox"></i>
+          <p>No Help Wanted Quests found</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Store all quests in global variable for filtering
+    window.allHWQs = data;
+    window.hwqCurrentPage = 1;
+    window.hwqItemsPerPage = 12;
+
+    console.log('[HWQ] Creating interface with', data.length, 'quests');
+    
+    // Create the initial UI with filters
+    createHWQInterface(contentDiv);
+    
+    // Small delay to ensure DOM elements are ready
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Populate NPC dropdown with unique NPCs
+    populateHWQNPCFilter(data);
+    
+    // Apply initial filter and render
+    console.log('[HWQ] Starting filterAndRenderHWQs');
+    await filterAndRenderHWQs();
+    console.log('[HWQ] filterAndRenderHWQs completed');
+  } catch (error) {
+    console.error('[HWQ] Error rendering Help Wanted Quests:', error);
+    console.error('[HWQ] Error stack:', error.stack);
+    if (contentDiv) {
+      contentDiv.innerHTML = `
+        <div class="blank-empty-state">
+          <i class="fas fa-exclamation-triangle"></i>
+          <p>Error loading Help Wanted Quests</p>
+          <p style="font-size: 0.9rem; margin-top: 0.5rem;">${error.message}</p>
+        </div>
+      `;
+    }
   }
-
-  // Store all quests in global variable for filtering
-  window.allHWQs = data;
-  window.hwqCurrentPage = 1;
-  window.hwqItemsPerPage = 12;
-
-  // Create the initial UI with filters
-  createHWQInterface(contentDiv);
-  
-  // Populate NPC dropdown with unique NPCs
-  populateHWQNPCFilter(data);
-  
-  // Apply initial filter and render
-  await filterAndRenderHWQs();
 }
 
 // ------------------- Function: createHWQInterface -------------------
 // Creates the HWQ interface with filters and containers
 function createHWQInterface(contentDiv) {
+  if (!contentDiv) {
+    console.error('[HWQ] createHWQInterface: contentDiv is null or undefined');
+    return;
+  }
+  
   contentDiv.innerHTML = `
     <!-- HWQ Info Message -->
     <div class="hwq-info-message" style="
@@ -2549,115 +2856,182 @@ function createHWQInterface(contentDiv) {
       </div>
     </div>
 
-    <div class="hwq-filter-container"></div>
+    <div class="hwq-filters-wrapper"></div>
 
     <!-- HWQ Stats Grid -->
     <div class="hwq-stats-grid" id="hwq-stats-grid"></div>
 
     <!-- HWQ Results Info -->
-    <div class="hwq-results-info" id="hwq-results-info"></div>
+    <div class="model-results-info" id="hwq-results-info"></div>
 
     <!-- HWQ Quest Cards Grid -->
     <div class="quest-details-grid" id="hwq-quests-grid"></div>
 
     <!-- HWQ Pagination -->
-    <div class="hwq-pagination" id="hwq-pagination" style="display: none;"></div>
+    <div class="model-pagination blank-pagination" id="hwq-pagination"></div>
   `;
 
-  renderHWQFilterBar(contentDiv);
+  try {
+    createHWQSearchAndFilterBars(contentDiv);
+  } catch (error) {
+    console.error('[HWQ] Error creating search and filter bars:', error);
+  }
 
   // Setup event listeners
-  setupHWQEventListeners();
+  try {
+    setupHWQEventListeners();
+  } catch (error) {
+    console.error('[HWQ] Error setting up event listeners:', error);
+  }
 }
 
-function renderHWQFilterBar(contentDiv) {
-  const container = contentDiv.querySelector('.hwq-filter-container');
-  if (!container) return;
+function createHWQSearchAndFilterBars(contentDiv) {
+  const filtersWrapper = contentDiv.querySelector('.hwq-filters-wrapper');
+  if (!filtersWrapper) {
+    console.error('[HWQ] createHWQSearchAndFilterBars: .hwq-filters-wrapper not found');
+    return;
+  }
 
-  container.innerHTML = '';
+  // Create separate search bar (like blank.js pattern)
+  const searchWrapper = document.createElement('div');
+  searchWrapper.className = 'model-search-wrapper blank-search-wrapper';
+  
+  const searchBar = document.createElement('div');
+  searchBar.className = 'model-search-bar blank-search-bar';
+  
+  const searchIcon = document.createElement('i');
+  searchIcon.className = 'fas fa-search model-search-icon blank-search-icon';
+  searchIcon.setAttribute('aria-hidden', 'true');
+  
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.id = 'hwq-search-input';
+  searchInput.className = 'model-search-input blank-search-input';
+  searchInput.placeholder = 'Search by NPC, requirements, or Quest ID...';
+  searchInput.setAttribute('autocomplete', 'off');
+  searchInput.setAttribute('aria-label', 'Search Help Wanted Quests');
+  
+  searchBar.appendChild(searchIcon);
+  searchBar.appendChild(searchInput);
+  searchWrapper.appendChild(searchBar);
+  filtersWrapper.appendChild(searchWrapper);
 
-  const { bar } = createSearchFilterBar({
-    id: 'hwq-filter-bar',
-    layout: 'wide',
-    filters: [
-      {
-        type: 'input',
-        id: 'hwq-search-input',
-        placeholder: 'Search by NPC, requirements, or Quest ID...',
-        attributes: { 'aria-label': 'Search Help Wanted Quests' },
-        width: 'double',
-        label: 'Search'
-      },
-      {
-        type: 'select',
-        id: 'hwq-village-filter',
-        label: 'Village',
-        attributes: { 'aria-label': 'Filter by village' },
-        options: [
-          { value: '', label: 'All Villages', selected: true },
-          { value: 'Rudania', label: 'Rudania' },
-          { value: 'Inariko', label: 'Inariko' },
-          { value: 'Vhintl', label: 'Vhintl' }
-        ]
-      },
-      {
-        type: 'select',
-        id: 'hwq-type-filter',
-        label: 'Quest Type',
-        attributes: { 'aria-label': 'Filter by quest type' },
-        options: [
-          { value: '', label: 'All Types', selected: true },
-          { value: 'item', label: 'Item' },
-          { value: 'monster', label: 'Monster' },
-          { value: 'escort', label: 'Escort' },
-          { value: 'crafting', label: 'Crafting' },
-          { value: 'art', label: 'Art' },
-          { value: 'writing', label: 'Writing' }
-        ]
-      },
-      {
-        type: 'select',
-        id: 'hwq-npc-filter',
-        label: 'NPC',
-        attributes: { 'aria-label': 'Filter by NPC' },
-        options: [{ value: '', label: 'All NPCs', selected: true }]
-      },
-      {
-        type: 'select',
-        id: 'hwq-status-filter',
-        label: 'Status',
-        attributes: { 'aria-label': 'Filter by status' },
-        options: [
-          { value: '', label: 'All', selected: true },
-          { value: 'completed', label: 'Completed' },
-          { value: 'expired', label: 'Expired' }
-        ]
-      },
-      {
-        type: 'select',
-        id: 'hwq-sort-select',
-        label: 'Sort By',
-        attributes: { 'aria-label': 'Sort quests' },
-        options: [
-          { value: 'date-desc', label: 'Newest First', selected: true },
-          { value: 'date-asc', label: 'Oldest First' },
-          { value: 'village', label: 'Village' },
-          { value: 'type', label: 'Type' },
-          { value: 'npc', label: 'NPC Name' }
-        ]
-      }
-    ],
-    buttons: [
-      {
-        id: 'hwq-clear-filters',
-        className: 'clear-filters-btn hwq-clear-filters-btn',
-        html: '<i class="fas fa-times"></i> Clear Filters',
-        attributes: { 'aria-label': 'Clear all filters' }
-      }
-    ]
-  });
+  // Create separate filter bar (like blank.js pattern)
+  const filterWrapper = document.createElement('div');
+  filterWrapper.className = 'model-filter-wrapper blank-filter-wrapper';
+  
+  const filterBar = document.createElement('div');
+  filterBar.className = 'model-filter-bar blank-filter-bar';
 
-  container.appendChild(bar);
+  // Village Filter
+  const villageControl = document.createElement('div');
+  villageControl.className = 'model-filter-control blank-filter-control';
+  const villageLabel = document.createElement('label');
+  villageLabel.className = 'model-filter-label blank-filter-label';
+  villageLabel.innerHTML = '<i class="fas fa-map-marker-alt"></i> Village';
+  villageLabel.setAttribute('for', 'hwq-village-filter');
+  const villageSelect = document.createElement('select');
+  villageSelect.id = 'hwq-village-filter';
+  villageSelect.className = 'model-filter-select blank-filter-select';
+  villageSelect.innerHTML = `
+    <option value="" selected>All Villages</option>
+    <option value="Rudania">Rudania</option>
+    <option value="Inariko">Inariko</option>
+    <option value="Vhintl">Vhintl</option>
+  `;
+  villageControl.appendChild(villageLabel);
+  villageControl.appendChild(villageSelect);
+  filterBar.appendChild(villageControl);
+
+  // Quest Type Filter
+  const typeControl = document.createElement('div');
+  typeControl.className = 'model-filter-control blank-filter-control';
+  const typeLabel = document.createElement('label');
+  typeLabel.className = 'model-filter-label blank-filter-label';
+  typeLabel.innerHTML = '<i class="fas fa-tag"></i> Quest Type';
+  typeLabel.setAttribute('for', 'hwq-type-filter');
+  const typeSelect = document.createElement('select');
+  typeSelect.id = 'hwq-type-filter';
+  typeSelect.className = 'model-filter-select blank-filter-select';
+  typeSelect.innerHTML = `
+    <option value="" selected>All Types</option>
+    <option value="item">Item</option>
+    <option value="monster">Monster</option>
+    <option value="escort">Escort</option>
+    <option value="crafting">Crafting</option>
+    <option value="art">Art</option>
+    <option value="writing">Writing</option>
+  `;
+  typeControl.appendChild(typeLabel);
+  typeControl.appendChild(typeSelect);
+  filterBar.appendChild(typeControl);
+
+  // NPC Filter
+  const npcControl = document.createElement('div');
+  npcControl.className = 'model-filter-control blank-filter-control';
+  const npcLabel = document.createElement('label');
+  npcLabel.className = 'model-filter-label blank-filter-label';
+  npcLabel.innerHTML = '<i class="fas fa-user"></i> NPC';
+  npcLabel.setAttribute('for', 'hwq-npc-filter');
+  const npcSelect = document.createElement('select');
+  npcSelect.id = 'hwq-npc-filter';
+  npcSelect.className = 'model-filter-select blank-filter-select';
+  npcSelect.innerHTML = '<option value="" selected>All NPCs</option>';
+  npcControl.appendChild(npcLabel);
+  npcControl.appendChild(npcSelect);
+  filterBar.appendChild(npcControl);
+
+  // Status Filter
+  const statusControl = document.createElement('div');
+  statusControl.className = 'model-filter-control blank-filter-control';
+  const statusLabel = document.createElement('label');
+  statusLabel.className = 'model-filter-label blank-filter-label';
+  statusLabel.innerHTML = '<i class="fas fa-flag"></i> Status';
+  statusLabel.setAttribute('for', 'hwq-status-filter');
+  const statusSelect = document.createElement('select');
+  statusSelect.id = 'hwq-status-filter';
+  statusSelect.className = 'model-filter-select blank-filter-select';
+  statusSelect.innerHTML = `
+    <option value="" selected>All</option>
+    <option value="completed">Completed</option>
+    <option value="expired">Expired</option>
+  `;
+  statusControl.appendChild(statusLabel);
+  statusControl.appendChild(statusSelect);
+  filterBar.appendChild(statusControl);
+
+  // Sort Filter
+  const sortControl = document.createElement('div');
+  sortControl.className = 'model-filter-control blank-filter-control';
+  const sortLabel = document.createElement('label');
+  sortLabel.className = 'model-filter-label blank-filter-label';
+  sortLabel.innerHTML = '<i class="fas fa-sort"></i> Sort By';
+  sortLabel.setAttribute('for', 'hwq-sort-select');
+  const sortSelect = document.createElement('select');
+  sortSelect.id = 'hwq-sort-select';
+  sortSelect.className = 'model-filter-select blank-filter-select';
+  sortSelect.innerHTML = `
+    <option value="date-desc" selected>Newest First</option>
+    <option value="date-asc">Oldest First</option>
+    <option value="village">Village</option>
+    <option value="type">Type</option>
+    <option value="npc">NPC Name</option>
+  `;
+  sortControl.appendChild(sortLabel);
+  sortControl.appendChild(sortSelect);
+  filterBar.appendChild(sortControl);
+
+  // Clear Filters Button
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.id = 'hwq-clear-filters';
+  clearButton.className = 'model-clear-filters-btn blank-clear-filters-btn';
+  clearButton.innerHTML = '<i class="fas fa-times"></i> Clear Filters';
+  clearButton.setAttribute('aria-label', 'Clear all filters');
+  filterBar.appendChild(clearButton);
+
+  filterWrapper.appendChild(filterBar);
+  filtersWrapper.appendChild(filterWrapper);
 }
 
 // ------------------- Function: populateHWQNPCFilter -------------------
@@ -2748,7 +3122,10 @@ function setupHWQEventListeners() {
 // ------------------- Function: filterAndRenderHWQs -------------------
 // Filters and renders HWQs based on current filter settings
 async function filterAndRenderHWQs() {
-  if (!window.allHWQs) return;
+  if (!window.allHWQs) {
+    console.warn('[HWQ] filterAndRenderHWQs: window.allHWQs not set');
+    return;
+  }
 
   const searchInput = document.getElementById('hwq-search-input');
   const villageFilter = document.getElementById('hwq-village-filter');
@@ -2756,6 +3133,13 @@ async function filterAndRenderHWQs() {
   const npcFilter = document.getElementById('hwq-npc-filter');
   const statusFilter = document.getElementById('hwq-status-filter');
   const sortSelect = document.getElementById('hwq-sort-select');
+  
+  // Ensure required DOM elements exist
+  const questsGrid = document.getElementById('hwq-quests-grid');
+  if (!questsGrid) {
+    console.error('[HWQ] filterAndRenderHWQs: hwq-quests-grid element not found');
+    return;
+  }
 
   const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
   const villageValue = villageFilter ? villageFilter.value : '';
@@ -2838,10 +3222,27 @@ async function filterAndRenderHWQs() {
   const paginatedQuests = filteredQuests.slice(startIndex, endIndex);
 
   // Render quest cards (async)
-  await renderHWQCards(paginatedQuests);
+  try {
+    await renderHWQCards(paginatedQuests);
+  } catch (error) {
+    console.error('[HWQ] Error rendering quest cards:', error);
+    const questsGrid = document.getElementById('hwq-quests-grid');
+    if (questsGrid) {
+      questsGrid.innerHTML = `
+        <div class="blank-empty-state" style="grid-column: 1 / -1;">
+          <i class="fas fa-exclamation-triangle"></i>
+          <p>Error rendering quest cards</p>
+        </div>
+      `;
+    }
+  }
   
   // Render pagination after cards are rendered
-  renderHWQPagination(window.hwqCurrentPage, totalPages);
+  try {
+    renderHWQPagination(window.hwqCurrentPage, totalPages);
+  } catch (error) {
+    console.error('[HWQ] Error rendering pagination:', error);
+  }
 }
 
 // ------------------- Function: renderHWQStats -------------------
@@ -2933,7 +3334,7 @@ async function renderHWQCards(quests) {
 
   if (quests.length === 0) {
     questsGrid.innerHTML = `
-      <div class="error-state" style="grid-column: 1 / -1;">
+      <div class="blank-empty-state" style="grid-column: 1 / -1;">
         <i class="fas fa-search"></i>
         <p>No quests match your filters</p>
       </div>
@@ -3187,63 +3588,176 @@ async function fetchHWQCharacters() {
   }
 }
 
+// ------------------- Function: showHWQPageJumpModal -------------------
+// Shows the page jump modal when ellipsis is clicked
+function showHWQPageJumpModal(minPage, maxPage, totalPages) {
+  // Remove existing modal if any
+  const existingModal = document.getElementById('hwq-page-jump-modal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  const pageRange = minPage === maxPage ? `Page ${minPage}` : `Pages ${minPage}-${maxPage}`;
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'blank-page-jump-modal-overlay';
+  overlay.id = 'hwq-page-jump-modal';
+  
+  const modal = document.createElement('div');
+  modal.className = 'blank-page-jump-modal';
+  
+  modal.innerHTML = `
+    <div class="blank-page-jump-modal-header">
+      <h3 class="blank-page-jump-modal-title">
+        <i class="fas fa-arrow-right"></i>
+        Jump to Page
+      </h3>
+      <button class="blank-page-jump-modal-close" aria-label="Close modal">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="blank-page-jump-modal-body">
+      <p>Enter a page number between ${minPage} and ${maxPage} (of ${totalPages} total pages):</p>
+      <input 
+        type="number" 
+        id="hwq-page-jump-input" 
+        class="blank-page-jump-input"
+        min="${minPage}" 
+        max="${maxPage}" 
+        placeholder="${minPage}-${maxPage}"
+        autofocus
+      />
+      <div class="blank-page-jump-modal-actions">
+        <button class="blank-page-jump-modal-cancel">Cancel</button>
+        <button class="blank-page-jump-modal-go">Go</button>
+      </div>
+    </div>
+  `;
+  
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  
+  // Close handlers
+  const closeModal = () => overlay.remove();
+  
+  overlay.querySelector('.blank-page-jump-modal-close').onclick = closeModal;
+  overlay.querySelector('.blank-page-jump-modal-cancel').onclick = closeModal;
+  overlay.onclick = (e) => {
+    if (e.target === overlay) closeModal();
+  };
+  
+  // Go handler
+  const pageInput = document.getElementById('hwq-page-jump-input');
+  const goButton = overlay.querySelector('.blank-page-jump-modal-go');
+  
+  const jumpToPage = () => {
+    const page = parseInt(pageInput.value);
+    if (page >= minPage && page <= maxPage) {
+      window.hwqCurrentPage = page;
+      closeModal();
+      filterAndRenderHWQs().then(() => {
+        document.getElementById('hwq-stats-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    } else {
+      pageInput.setCustomValidity(`Please enter a number between ${minPage} and ${maxPage}`);
+      pageInput.reportValidity();
+    }
+  };
+  
+  goButton.onclick = jumpToPage;
+  pageInput.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      jumpToPage();
+    }
+  };
+}
+
 // ------------------- Function: renderHWQPagination -------------------
-// Renders pagination controls
+// Renders pagination controls with ellipsis modal
 function renderHWQPagination(currentPage, totalPages) {
   const paginationDiv = document.getElementById('hwq-pagination');
   if (!paginationDiv) return;
 
-  if (totalPages <= 1) {
-    paginationDiv.style.display = 'none';
-    return;
+  // Ensure it has the right classes
+  if (!paginationDiv.classList.contains('model-pagination')) {
+    paginationDiv.classList.add('model-pagination', 'blank-pagination');
   }
 
-  paginationDiv.style.display = 'flex';
-  paginationDiv.innerHTML = `
-    <button 
-      class="hwq-pagination-button" 
-      id="hwq-prev-btn" 
-      ${currentPage === 1 ? 'disabled' : ''}
-      aria-label="Previous page"
-    >
-      <i class="fas fa-chevron-left"></i> Previous
-    </button>
-    <span class="hwq-page-info">Page ${currentPage} of ${totalPages}</span>
-    <button 
-      class="hwq-pagination-button" 
-      id="hwq-next-btn" 
-      ${currentPage === totalPages ? 'disabled' : ''}
-      aria-label="Next page"
-    >
-      Next <i class="fas fa-chevron-right"></i>
-    </button>
-  `;
+  // Remove any existing pagination
+  paginationDiv.innerHTML = '';
 
-  // Setup pagination event listeners
-  const prevBtn = document.getElementById('hwq-prev-btn');
-  const nextBtn = document.getElementById('hwq-next-btn');
+  if (totalPages <= 1) return;
 
-  if (prevBtn) {
-    prevBtn.addEventListener('click', async () => {
-      if (window.hwqCurrentPage > 1) {
-        window.hwqCurrentPage--;
-        await filterAndRenderHWQs();
-        // Scroll to top of quest grid
+  // Create pagination bar
+  const paginationBar = document.createElement('div');
+  paginationBar.className = 'pagination';
+
+  // Helper to create a button (matching blank.js style)
+  const makeButton = (label, pageNum, isActive = false, icon = null) => {
+    const btn = document.createElement('button');
+    btn.className = `pagination-button ${isActive ? 'active' : ''}`;
+    if (icon) {
+      btn.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+    } else {
+      btn.textContent = label;
+    }
+    btn.title = `Page ${pageNum}`;
+    btn.onclick = () => {
+      window.hwqCurrentPage = pageNum;
+      filterAndRenderHWQs().then(() => {
         document.getElementById('hwq-stats-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+      });
+    };
+    return btn;
+  };
+
+  // Helper to create ellipsis
+  const makeEllipsis = (minPage, maxPage) => {
+    const ell = document.createElement('span');
+    ell.className = 'pagination-ellipsis';
+    ell.textContent = '...';
+    ell.title = `Click to jump to a page (${minPage}-${maxPage})`;
+    ell.style.cursor = 'pointer';
+    ell.onclick = () => {
+      showHWQPageJumpModal(minPage, maxPage, totalPages);
+    };
+    return ell;
+  };
+
+  // Previous button
+  if (currentPage > 1) {
+    paginationBar.appendChild(makeButton('Previous', currentPage - 1, false, 'left'));
   }
 
-  if (nextBtn) {
-    nextBtn.addEventListener('click', async () => {
-      if (window.hwqCurrentPage < totalPages) {
-        window.hwqCurrentPage++;
-        await filterAndRenderHWQs();
-        // Scroll to top of quest grid
-        document.getElementById('hwq-stats-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+  // Page numbers (matching blank.js logic)
+  const startPage = Math.max(1, currentPage - 2);
+  const endPage = Math.min(totalPages, currentPage + 2);
+
+  if (startPage > 1) {
+    paginationBar.appendChild(makeButton('1', 1));
+    if (startPage > 2) {
+      paginationBar.appendChild(makeEllipsis(2, startPage - 1));
+    }
   }
+
+  for (let i = startPage; i <= endPage; i++) {
+    paginationBar.appendChild(makeButton(i.toString(), i, i === currentPage));
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      paginationBar.appendChild(makeEllipsis(endPage + 1, totalPages - 1));
+    }
+    paginationBar.appendChild(makeButton(totalPages.toString(), totalPages));
+  }
+
+  // Next button
+  if (currentPage < totalPages) {
+    paginationBar.appendChild(makeButton('Next', currentPage + 1, false, 'right'));
+  }
+
+  paginationDiv.appendChild(paginationBar);
 }
 
 // Helper function to get quest type icon

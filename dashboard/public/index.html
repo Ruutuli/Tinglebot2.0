@@ -56,6 +56,7 @@
   <link rel="stylesheet" href="css/inventory.css" />
   <link rel="stylesheet" href="css/items.css" />
   <link rel="stylesheet" href="css/model.css" />
+  <link rel="stylesheet" href="css/blank.css" />
   <link rel="stylesheet" href="css/monsters.css" />
   <link rel="stylesheet" href="css/pets.css" />
   <link rel="stylesheet" href="css/pagination.css" />
@@ -209,18 +210,40 @@
             </ul>
           </li>
           
+          <!-- Models Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-database"></i><span>Models</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="#character"><i class="fas fa-user"></i><span>Characters</span></a></li>
+              <li><a href="#helpwantedquest"><i class="fas fa-clipboard-list"></i><span>Help Wanted Quests</span></a></li>
+              <li id="inventories-nav-item-models" style="display: none;"><a href="#inventory"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
+              <li><a href="#item"><i class="fas fa-gem"></i><span>Items</span></a></li>
+              <li><a href="#monster"><i class="fas fa-dragon"></i><span>Monsters</span></a></li>
+              <li><a href="#mount"><i class="fas fa-horse"></i><span>Mounts</span></a></li>
+              <li><a href="#pet"><i class="fas fa-paw"></i><span>Pets</span></a></li>
+              <li><a href="#quest"><i class="fas fa-tasks"></i><span>Quests</span></a></li>
+              <li><a href="#relic"><i class="fas fa-scroll"></i><span>Relics</span></a></li>
+              <li><a href="#starterGear"><i class="fas fa-tshirt"></i><span>Starter Gear</span></a></li>
+              <li><a href="#vendingShops"><i class="fas fa-shopping-cart"></i><span>Vending Shops</span></a></li>
+              <li><a href="#vending"><i class="fas fa-store"></i><span>Vending Stock</span></a></li>
+              <li><a href="#villageShops"><i class="fas fa-shop"></i><span>Village Shops</span></a></li>
+              <li><a href="#village"><i class="fas fa-map-marker-alt"></i><span>Villages</span></a></li>
+            </ul>
+          </li>
+          
           <!-- User Area Dropdown -->
           <li class="nav-dropdown">
             <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
               <i class="fas fa-user-circle"></i><span>User Area</span><i class="fas fa-chevron-down nav-chevron"></i>
             </a>
             <ul class="nav-dropdown-menu">
-              <li id="inventories-nav-item" style="display: none;"><a href="/inventories"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
+              <li id="inventories-nav-item" style="display: none;"><a href="#inventory"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
               <li><a href="#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a></li>
               <li><a href="#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a></li>
               <li><a href="#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a></li>
               <li><a href="#tokens-section" data-section="tokens-section"><i class="fas fa-coins"></i><span>Tokens</span></a></li>
-              <li><a href="#vending-section" data-section="vending-section"><i class="fas fa-store"></i><span>Vending</span></a></li>
             </ul>
           </li>
           
@@ -434,47 +457,50 @@
         <div class="dashboard-links-divider"></div>
 
         <section class="model-grid">
+          <button type="button" class="model-card" data-model="blank">
+            <i class="fas fa-file-alt" aria-hidden="true"></i><span>Blank Template</span>
+          </button>
           <button type="button" class="model-card" data-model="character">
             <i class="fas fa-user" aria-hidden="true"></i><span>Characters</span>
-          </button>
-          <button type="button" class="model-card" data-model="monster">
-            <i class="fas fa-dragon" aria-hidden="true"></i><span>Monsters</span>
-          </button>
-          <button type="button" class="model-card" data-model="pet">
-            <i class="fas fa-paw" aria-hidden="true"></i><span>Pets</span>
-          </button>
-          <button type="button" class="model-card" data-model="mount">
-            <i class="fas fa-horse" aria-hidden="true"></i><span>Mounts</span>
-          </button>
-          <button type="button" class="model-card" data-model="vending">
-            <i class="fas fa-store" aria-hidden="true"></i><span>Vending Stock</span>
-          </button>
-          <button type="button" class="model-card" data-model="vendingShops">
-            <i class="fas fa-shopping-cart" aria-hidden="true"></i><span>Vending Shops</span>
-          </button>
-          <button type="button" class="model-card" data-model="item">
-            <i class="fas fa-box" aria-hidden="true"></i><span>Items</span>
-          </button>
-          <button type="button" class="model-card" data-model="starterGear">
-            <i class="fas fa-hiking" aria-hidden="true"></i><span>Starter Gear</span>
-          </button>
-          <button type="button" class="model-card" data-model="village">
-            <i class="fas fa-home" aria-hidden="true"></i><span>Villages</span>
-          </button>
-          <button type="button" class="model-card" data-model="villageShops">
-            <i class="fas fa-store-alt" aria-hidden="true"></i><span>Village Shops</span>
-          </button>
-          <button type="button" class="model-card" data-model="relic">
-            <i class="fas fa-gem" aria-hidden="true"></i><span>Relics</span>
-          </button>
-          <button type="button" class="model-card" data-model="quest">
-            <i class="fas fa-scroll" aria-hidden="true"></i><span>Quests</span>
           </button>
           <button type="button" class="model-card" data-model="helpwantedquest">
             <i class="fas fa-clipboard-list" aria-hidden="true"></i><span>Help Wanted Quests</span>
           </button>
           <button type="button" class="model-card" data-model="inventory">
             <i class="fas fa-shopping-bag" aria-hidden="true"></i><span>Inventories</span>
+          </button>
+          <button type="button" class="model-card" data-model="item">
+            <i class="fas fa-box" aria-hidden="true"></i><span>Items</span>
+          </button>
+          <button type="button" class="model-card" data-model="monster">
+            <i class="fas fa-dragon" aria-hidden="true"></i><span>Monsters</span>
+          </button>
+          <button type="button" class="model-card" data-model="mount">
+            <i class="fas fa-horse" aria-hidden="true"></i><span>Mounts</span>
+          </button>
+          <button type="button" class="model-card" data-model="pet">
+            <i class="fas fa-paw" aria-hidden="true"></i><span>Pets</span>
+          </button>
+          <button type="button" class="model-card" data-model="quest">
+            <i class="fas fa-scroll" aria-hidden="true"></i><span>Quests</span>
+          </button>
+          <button type="button" class="model-card" data-model="relic">
+            <i class="fas fa-gem" aria-hidden="true"></i><span>Relics</span>
+          </button>
+          <button type="button" class="model-card" data-model="starterGear">
+            <i class="fas fa-hiking" aria-hidden="true"></i><span>Starter Gear</span>
+          </button>
+          <button type="button" class="model-card" data-model="vendingShops">
+            <i class="fas fa-shopping-cart" aria-hidden="true"></i><span>Vending Shops</span>
+          </button>
+          <button type="button" class="model-card" data-model="vending">
+            <i class="fas fa-store" aria-hidden="true"></i><span>Vending Stock</span>
+          </button>
+          <button type="button" class="model-card" data-model="villageShops">
+            <i class="fas fa-store-alt" aria-hidden="true"></i><span>Village Shops</span>
+          </button>
+          <button type="button" class="model-card" data-model="village">
+            <i class="fas fa-home" aria-hidden="true"></i><span>Villages</span>
           </button>
         </section>
       </section>

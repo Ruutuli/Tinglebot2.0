@@ -27,6 +27,23 @@ function createRateLimiter(options = {}) {
   } = options;
 
   return (req, res, next) => {
+    // Skip rate limiting for localhost in development mode
+    // This prevents rate limit errors during development when many modules load simultaneously
+    if (!isProduction) {
+      const ip = req.ip || req.connection.remoteAddress || '';
+      const host = req.get('host') || '';
+      // Check if request is from localhost (various IP formats) or localhost hostname
+      if (ip === '127.0.0.1' || 
+          ip === '::1' || 
+          ip === '::ffff:127.0.0.1' || 
+          ip.startsWith('127.') || 
+          ip === 'localhost' ||
+          host.includes('localhost') ||
+          host.includes('127.0.0.1')) {
+        return next();
+      }
+    }
+    
     // Skip rate limiting for static files (images, CSS, JS, etc.)
     // Static file requests can be very frequent and shouldn't count against API limits
     if (req.path.startsWith('/api/images/') || 
@@ -148,9 +165,10 @@ if (!isProduction) {
 // General API rate limiter - uses user-based tracking for authenticated users, IP for guests
 // Authenticated users get higher limits since they're making legitimate dashboard requests
 // In development, use much higher limits to avoid issues with page loads that make many requests
+// Note: Rate limiting is bypassed entirely for localhost in development (see createRateLimiter above)
 const generalLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: isProduction ? 300 : 1000, // Much higher limit in development for page loads
+  max: isProduction ? 300 : 10000, // Very high limit in development as fallback (normally bypassed for localhost)
   message: 'Too many API requests, please try again later',
   keyGenerator: (req) => {
     // Use user ID for authenticated users (allows higher limits per user)

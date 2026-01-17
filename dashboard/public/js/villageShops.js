@@ -3,7 +3,7 @@
 /* Handles village shop item card rendering, filtering, pagination       */
 /* ====================================================================== */
 
-import { scrollToTop, createSearchFilterBar } from './ui.js';
+import { scrollToTop } from './ui.js';
 import { capitalize } from './utils.js';
 
 // ============================================================================
@@ -198,11 +198,12 @@ function renderVillageShopCards(items, page = 1, totalItems = null) {
     }
 
     // Update results info
-    const resultsInfo = document.querySelector('.village-shop-results-info p');
+    const resultsInfo = document.querySelector('.model-results-info');
     if (resultsInfo) {
       const startItem = startIndex + 1;
       const endItem = Math.min(endIndex, itemsForPagination);
-      resultsInfo.textContent = `Showing ${startItem}-${endItem} of ${itemsForPagination} village shop items`;
+      const totalPages = Math.ceil(itemsForPagination / itemsPerPage);
+      resultsInfo.textContent = `Showing ${startItem}-${endItem} of ${itemsForPagination} village shop items (Page ${page} of ${totalPages})`;
     }
 
   }
@@ -400,12 +401,141 @@ function populateSelect(id, values) {
   console.log(`✅ Populated select '${id}' with ${formatted.length} options`);
 }
 
+// ------------------- Function: showPageJumpModal -------------------
+// Shows the page jump modal when ellipsis is clicked
+function showPageJumpModal(minPage, maxPage, totalPages) {
+  // Remove existing modal if any
+  const existingModal = document.getElementById('village-shop-page-jump-modal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  const pageRange = minPage === maxPage ? `Page ${minPage}` : `Pages ${minPage}-${maxPage}`;
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'blank-page-jump-modal-overlay';
+  overlay.id = 'village-shop-page-jump-modal';
+  
+  const modal = document.createElement('div');
+  modal.className = 'blank-page-jump-modal';
+  
+  modal.innerHTML = `
+    <div class="blank-page-jump-modal-header">
+      <h3 class="blank-page-jump-modal-title">
+        <i class="fas fa-arrow-right"></i>
+        Jump to Page
+      </h3>
+      <button class="blank-page-jump-modal-close" aria-label="Close modal">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="blank-page-jump-modal-body">
+      <label class="blank-page-jump-modal-label" for="village-shop-page-jump-input">
+        Enter a page number (${pageRange}):
+      </label>
+      <input 
+        type="number" 
+        id="village-shop-page-jump-input" 
+        class="blank-page-jump-modal-input" 
+        min="1" 
+        max="${totalPages}" 
+        value="${minPage}"
+        placeholder="Enter page number"
+        autofocus
+      />
+      <div class="blank-page-jump-modal-info">
+        Valid range: 1 - ${totalPages}
+      </div>
+      <div class="blank-page-jump-modal-error" id="village-shop-page-jump-error"></div>
+    </div>
+    <div class="blank-page-jump-modal-actions">
+      <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-cancel">
+        Cancel
+      </button>
+      <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-submit">
+        <i class="fas fa-check"></i>
+        Go to Page
+      </button>
+    </div>
+  `;
+  
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  
+  // Show modal with animation
+  setTimeout(() => {
+    overlay.classList.add('active');
+  }, 10);
+  
+  const input = modal.querySelector('#village-shop-page-jump-input');
+  const errorMsg = modal.querySelector('#village-shop-page-jump-error');
+  const submitBtn = modal.querySelector('.blank-page-jump-modal-btn-submit');
+  const cancelBtn = modal.querySelector('.blank-page-jump-modal-btn-cancel');
+  const closeBtn = modal.querySelector('.blank-page-jump-modal-close');
+  
+  const validateAndSubmit = () => {
+    const pageNum = parseInt(input.value, 10);
+    errorMsg.classList.remove('active');
+    
+    if (!pageNum || isNaN(pageNum)) {
+      errorMsg.textContent = 'Please enter a valid page number.';
+      errorMsg.classList.add('active');
+      input.focus();
+      return;
+    }
+    
+    if (pageNum < 1 || pageNum > totalPages) {
+      errorMsg.textContent = `Please enter a page number between 1 and ${totalPages}.`;
+      errorMsg.classList.add('active');
+      input.focus();
+      return;
+    }
+    
+    hidePageJumpModal();
+    window.filterVillageShopItems(pageNum);
+  };
+  
+  const hidePageJumpModal = () => {
+    overlay.classList.remove('active');
+    setTimeout(() => {
+      overlay.remove();
+    }, 300);
+  };
+  
+  // Event listeners
+  submitBtn.onclick = validateAndSubmit;
+  cancelBtn.onclick = hidePageJumpModal;
+  closeBtn.onclick = hidePageJumpModal;
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      hidePageJumpModal();
+    }
+  };
+  
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      validateAndSubmit();
+    } else if (e.key === 'Escape') {
+      hidePageJumpModal();
+    }
+  };
+  
+  // Focus input
+  input.select();
+}
+
 // ------------------- Function: updateVillageShopPagination -------------------
 // Updates the pagination controls for village shop items
 function updateVillageShopPagination(currentPage, totalPages, totalItems) {
   const paginationContainer = document.getElementById('village-shop-pagination');
   if (!paginationContainer) {
     return;
+  }
+
+  // Ensure pagination container has standard classes
+  if (!paginationContainer.classList.contains('model-pagination')) {
+    paginationContainer.classList.add('model-pagination', 'blank-pagination');
   }
 
   // Clear existing pagination
@@ -418,18 +548,37 @@ function updateVillageShopPagination(currentPage, totalPages, totalItems) {
       window.filterVillageShopItems(pageNum);
     };
 
-    // Create pagination
+    // Create pagination div with proper classes
     const paginationDiv = document.createElement('div');
     paginationDiv.className = 'pagination';
     
+    const createButton = (label, pageNum, isActive = false, icon = null) => {
+      const button = document.createElement('button');
+      button.className = `pagination-button ${isActive ? 'active' : ''}`;
+      button.textContent = icon ? '' : label;
+      if (icon) {
+        button.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+      }
+      button.title = `Page ${pageNum}`;
+      button.onclick = () => handlePageChange(pageNum);
+      return button;
+    };
+
+    const createEllipsis = (minPage, maxPage) => {
+      const ellipsis = document.createElement('span');
+      ellipsis.className = 'pagination-ellipsis';
+      ellipsis.textContent = '...';
+      ellipsis.title = `Click to jump to a page (${minPage}-${maxPage})`;
+      ellipsis.style.cursor = 'pointer';
+      ellipsis.onclick = () => {
+        showPageJumpModal(minPage, maxPage, totalPages);
+      };
+      return ellipsis;
+    };
+
     // Add previous button
     if (currentPage > 1) {
-      const prevButton = document.createElement('button');
-      prevButton.className = 'pagination-button';
-      prevButton.innerHTML = '<i class="fas fa-chevron-left"></i>';
-      prevButton.title = 'Previous Page';
-      prevButton.addEventListener('click', () => handlePageChange(currentPage - 1));
-      paginationDiv.appendChild(prevButton);
+      paginationDiv.appendChild(createButton('Previous', currentPage - 1, false, 'left'));
     }
 
     // Add page numbers
@@ -437,51 +586,26 @@ function updateVillageShopPagination(currentPage, totalPages, totalItems) {
     const endPage = Math.min(totalPages, currentPage + 2);
 
     if (startPage > 1) {
-      const firstButton = document.createElement('button');
-      firstButton.className = 'pagination-button';
-      firstButton.textContent = '1';
-      firstButton.addEventListener('click', () => handlePageChange(1));
-      paginationDiv.appendChild(firstButton);
-
+      paginationDiv.appendChild(createButton('1', 1));
       if (startPage > 2) {
-        const ellipsis = document.createElement('span');
-        ellipsis.className = 'pagination-ellipsis';
-        ellipsis.textContent = '...';
-        paginationDiv.appendChild(ellipsis);
+        paginationDiv.appendChild(createEllipsis(2, startPage - 1));
       }
     }
 
     for (let i = startPage; i <= endPage; i++) {
-      const pageButton = document.createElement('button');
-      pageButton.className = `pagination-button ${i === currentPage ? 'active' : ''}`;
-      pageButton.textContent = i.toString();
-      pageButton.addEventListener('click', () => handlePageChange(i));
-      paginationDiv.appendChild(pageButton);
+      paginationDiv.appendChild(createButton(i.toString(), i, i === currentPage));
     }
 
     if (endPage < totalPages) {
       if (endPage < totalPages - 1) {
-        const ellipsis = document.createElement('span');
-        ellipsis.className = 'pagination-ellipsis';
-        ellipsis.textContent = '...';
-        paginationDiv.appendChild(ellipsis);
+        paginationDiv.appendChild(createEllipsis(endPage + 1, totalPages - 1));
       }
-
-      const lastButton = document.createElement('button');
-      lastButton.className = 'pagination-button';
-      lastButton.textContent = totalPages.toString();
-      lastButton.addEventListener('click', () => handlePageChange(totalPages));
-      paginationDiv.appendChild(lastButton);
+      paginationDiv.appendChild(createButton(totalPages.toString(), totalPages));
     }
 
     // Add next button
     if (currentPage < totalPages) {
-      const nextButton = document.createElement('button');
-      nextButton.className = 'pagination-button';
-      nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
-      nextButton.title = 'Next Page';
-      nextButton.addEventListener('click', () => handlePageChange(currentPage + 1));
-      paginationDiv.appendChild(nextButton);
+      paginationDiv.appendChild(createButton('Next', currentPage + 1, false, 'right'));
     }
 
     paginationContainer.appendChild(paginationDiv);
@@ -521,12 +645,12 @@ async function setupVillageShopFilters(items) {
     return;
   }
 
-  // Show the filters container
-  const filtersContainer = document.querySelector('.village-shop-filters');
-  if (filtersContainer) {
-    filtersContainer.style.display = 'block';
+  // Show the filters wrapper (already shown, no need to set display)
+  const filtersWrapper = document.querySelector('.village-shop-filters-wrapper');
+  if (filtersWrapper) {
+    filtersWrapper.style.display = 'block';
   } else {
-    console.error('❌ Village shop filters container not found');
+    console.error('❌ Village shop filters wrapper not found');
   }
 
   // Wait longer for the DOM to update
@@ -642,7 +766,7 @@ async function setupVillageShopFilters(items) {
     const itemsPerPage = itemsPerPageSelect.value === 'all' ? 999999 : parseInt(itemsPerPageSelect.value);
 
     // Show loading state
-    const resultsInfo = document.querySelector('.village-shop-results-info p');
+    const resultsInfo = document.querySelector('.model-results-info');
     if (resultsInfo) {
       resultsInfo.textContent = 'Loading filtered village shop items...';
     }
@@ -728,7 +852,7 @@ async function setupVillageShopFilters(items) {
     const paginatedItems = sorted.slice(startIndex, endIndex);
 
     // Update results info
-    const resultsInfo = document.querySelector('.village-shop-results-info p');
+    const resultsInfo = document.querySelector('.model-results-info');
     if (resultsInfo) {
       if (itemsPerPageSelect.value === 'all') {
         resultsInfo.textContent = `Showing all ${sorted.length} of ${window.allVillageShopItems.length} village shop items`;
@@ -856,7 +980,7 @@ async function setupVillageShopFilters(items) {
       categorySelect.value = 'all';
       typeSelect.value = 'all';
       sortSelect.value = 'name-asc';
-      itemsPerPageSelect.value = '35';
+      itemsPerPageSelect.value = '36';
       
       // Clear saved state
       window.savedFilterState = {};
@@ -887,7 +1011,7 @@ async function setupVillageShopFilters(items) {
         renderVillageShopCards(paginatedItems, 1, sortedItems.length);
         
         // Update results info
-        const resultsInfo = document.querySelector('.village-shop-results-info p');
+        const resultsInfo = document.querySelector('.model-results-info');
         if (resultsInfo) {
           if (itemsPerPageSelect.value === 'all') {
             resultsInfo.textContent = `Showing all ${sortedItems.length} village shop items`;
@@ -965,59 +1089,131 @@ async function initializeVillageShopsPage(data, page, contentDiv) {
       contentDiv.innerHTML = '';
     }
 
-    // Create the filters container with proper structure
-    const filtersContainer = document.createElement('div');
-    filtersContainer.className = 'village-shop-search-filters';
+    // Create filters wrapper (like blank.js and characters.js)
+    const filtersWrapper = document.createElement('div');
+    filtersWrapper.className = 'village-shop-filters-wrapper blank-filters-wrapper';
+    contentDiv.appendChild(filtersWrapper);
 
-    const { bar: villageShopFilterBar } = createSearchFilterBar({
-      layout: 'wide',
-      filters: [
-        {
-          type: 'input',
-          id: 'village-shop-search-input',
-          placeholder: 'Search village shop items...',
-          attributes: { autocomplete: 'off' },
-          width: 'double'
-        },
-        { type: 'select', id: 'village-shop-filter-category', options: [{ value: 'all', label: 'All Categories' }] },
-        { type: 'select', id: 'village-shop-filter-type', options: [{ value: 'all', label: 'All Types' }] },
-        {
-          type: 'select',
-          id: 'village-shop-sort-by',
-          options: [
-            { value: 'name-asc', label: 'Name (A-Z)', selected: true },
-            { value: 'name-desc', label: 'Name (Z-A)' },
-            { value: 'price-asc', label: 'Price (Low-High)' },
-            { value: 'price-desc', label: 'Price (High-Low)' },
-            { value: 'stock-asc', label: 'Stock (Low-High)' },
-            { value: 'stock-desc', label: 'Stock (High-Low)' }
-          ]
-        },
-        {
-          type: 'select',
-          id: 'village-shop-items-per-page',
-          options: [
-            { value: '35', label: '35 per page', selected: true },
-            { value: '15', label: '15 per page' },
-            { value: '25', label: '25 per page' },
-            { value: '45', label: '45 per page' },
-            { value: '55', label: '55 per page' },
-            { value: 'all', label: 'All items' }
-          ]
-        }
-      ],
-      buttons: [
-        { id: 'village-shop-clear-filters', label: 'Clear Filters', className: 'clear-filters-btn' }
-      ]
-    });
+    // Create separate search bar (like blank.js and characters.js)
+    const searchWrapper = document.createElement('div');
+    searchWrapper.className = 'model-search-wrapper blank-search-wrapper';
+    
+    const searchBar = document.createElement('div');
+    searchBar.className = 'model-search-bar blank-search-bar';
+    
+    const searchIcon = document.createElement('i');
+    searchIcon.className = 'fas fa-search model-search-icon blank-search-icon';
+    searchIcon.setAttribute('aria-hidden', 'true');
+    
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'village-shop-search-input';
+    searchInput.className = 'model-search-input blank-search-input';
+    searchInput.placeholder = 'Search village shop items...';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.setAttribute('aria-label', 'Search village shop items');
+    
+    searchBar.appendChild(searchIcon);
+    searchBar.appendChild(searchInput);
+    searchWrapper.appendChild(searchBar);
+    filtersWrapper.appendChild(searchWrapper);
 
-    filtersContainer.appendChild(villageShopFilterBar);
-    contentDiv.appendChild(filtersContainer);
+    // Create separate filter bar (like blank.js and characters.js)
+    const filterWrapper = document.createElement('div');
+    filterWrapper.className = 'model-filter-wrapper blank-filter-wrapper';
+    
+    const filterBar = document.createElement('div');
+    filterBar.className = 'model-filter-bar blank-filter-bar';
 
-    // Add results info section
+    // Category Filter
+    const categoryControl = document.createElement('div');
+    categoryControl.className = 'model-filter-control blank-filter-control';
+    const categoryLabel = document.createElement('label');
+    categoryLabel.className = 'model-filter-label blank-filter-label';
+    categoryLabel.innerHTML = '<i class="fas fa-tag"></i> Category';
+    categoryLabel.setAttribute('for', 'village-shop-filter-category');
+    const categorySelect = document.createElement('select');
+    categorySelect.id = 'village-shop-filter-category';
+    categorySelect.className = 'model-filter-select blank-filter-select';
+    categorySelect.innerHTML = '<option value="all" selected>All Categories</option>';
+    categoryControl.appendChild(categoryLabel);
+    categoryControl.appendChild(categorySelect);
+    filterBar.appendChild(categoryControl);
+
+    // Type Filter
+    const typeControl = document.createElement('div');
+    typeControl.className = 'model-filter-control blank-filter-control';
+    const typeLabel = document.createElement('label');
+    typeLabel.className = 'model-filter-label blank-filter-label';
+    typeLabel.innerHTML = '<i class="fas fa-layer-group"></i> Type';
+    typeLabel.setAttribute('for', 'village-shop-filter-type');
+    const typeSelect = document.createElement('select');
+    typeSelect.id = 'village-shop-filter-type';
+    typeSelect.className = 'model-filter-select blank-filter-select';
+    typeSelect.innerHTML = '<option value="all" selected>All Types</option>';
+    typeControl.appendChild(typeLabel);
+    typeControl.appendChild(typeSelect);
+    filterBar.appendChild(typeControl);
+
+    // Sort Filter
+    const sortControl = document.createElement('div');
+    sortControl.className = 'model-filter-control blank-filter-control';
+    const sortLabel = document.createElement('label');
+    sortLabel.className = 'model-filter-label blank-filter-label';
+    sortLabel.innerHTML = '<i class="fas fa-sort"></i> Sort By';
+    sortLabel.setAttribute('for', 'village-shop-sort-by');
+    const sortSelect = document.createElement('select');
+    sortSelect.id = 'village-shop-sort-by';
+    sortSelect.className = 'model-filter-select blank-filter-select';
+    sortSelect.innerHTML = `
+      <option value="name-asc" selected>Name (A-Z)</option>
+      <option value="name-desc">Name (Z-A)</option>
+      <option value="price-asc">Price (Low-High)</option>
+      <option value="price-desc">Price (High-Low)</option>
+      <option value="stock-asc">Stock (Low-High)</option>
+      <option value="stock-desc">Stock (High-Low)</option>
+    `;
+    sortControl.appendChild(sortLabel);
+    sortControl.appendChild(sortSelect);
+    filterBar.appendChild(sortControl);
+
+    // Items Per Page
+    const itemsPerPageControl = document.createElement('div');
+    itemsPerPageControl.className = 'model-filter-control blank-filter-control';
+    const itemsPerPageLabel = document.createElement('label');
+    itemsPerPageLabel.className = 'model-filter-label blank-filter-label';
+    itemsPerPageLabel.innerHTML = '<i class="fas fa-list"></i> Per Page';
+    itemsPerPageLabel.setAttribute('for', 'village-shop-items-per-page');
+    const itemsPerPageSelect = document.createElement('select');
+    itemsPerPageSelect.id = 'village-shop-items-per-page';
+    itemsPerPageSelect.className = 'model-filter-select blank-filter-select';
+    itemsPerPageSelect.innerHTML = `
+      <option value="36" selected>36 per page</option>
+      <option value="15">15 per page</option>
+      <option value="25">25 per page</option>
+      <option value="45">45 per page</option>
+      <option value="55">55 per page</option>
+      <option value="all">All items</option>
+    `;
+    itemsPerPageControl.appendChild(itemsPerPageLabel);
+    itemsPerPageControl.appendChild(itemsPerPageSelect);
+    filterBar.appendChild(itemsPerPageControl);
+
+    // Clear Filters Button
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.id = 'village-shop-clear-filters';
+    clearButton.className = 'model-clear-filters-btn blank-clear-filters-btn';
+    clearButton.innerHTML = '<i class="fas fa-times"></i> Clear Filters';
+    filterBar.appendChild(clearButton);
+
+    filterWrapper.appendChild(filterBar);
+    filtersWrapper.appendChild(filterWrapper);
+
+    // Add results info section using standard class
     const resultsInfoSection = document.createElement('div');
-    resultsInfoSection.className = 'village-shop-results-info';
-    resultsInfoSection.innerHTML = '<p>Loading village shop items...</p>';
+    resultsInfoSection.className = 'model-results-info';
+    resultsInfoSection.textContent = 'Loading village shop items...';
     contentDiv.appendChild(resultsInfoSection);
 
     // Create the grid container
@@ -1026,9 +1222,10 @@ async function initializeVillageShopsPage(data, page, contentDiv) {
     gridContainer.className = 'village-shops-grid';
     contentDiv.appendChild(gridContainer);
 
-    // Create pagination container
+    // Create pagination container with standard classes
     const paginationContainer = document.createElement('div');
     paginationContainer.id = 'village-shop-pagination';
+    paginationContainer.className = 'model-pagination blank-pagination';
     contentDiv.appendChild(paginationContainer);
 
     // Set up filters first
@@ -1042,10 +1239,9 @@ async function initializeVillageShopsPage(data, page, contentDiv) {
       renderVillageShopCards(data, page);
     }
     
-    // Update results info
-    const resultsInfo = document.querySelector('.village-shop-results-info p');
-    if (resultsInfo) {
-      resultsInfo.textContent = `Showing ${data.length} village shop items`;
+    // Update results info (already created above)
+    if (resultsInfoSection) {
+      resultsInfoSection.textContent = `Showing ${data.length} village shop item${data.length !== 1 ? 's' : ''}`;
     }
     
   } catch (error) {

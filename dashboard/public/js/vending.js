@@ -78,12 +78,10 @@ async function initializeVendingPage(data, page, contentDiv) {
     // Check if we have data
     if (!data || data.length === 0) {
       contentDiv.innerHTML = `
-        <div class="error-state">
-          <i class="fas fa-exclamation-circle"></i>
-          <p>No vending stock data available</p>
-          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
-            Vending stock is updated monthly
-          </p>
+        <div class="blank-empty-state">
+          <i class="fas fa-inbox"></i>
+          <h3>No vending stock data available</h3>
+          <p>Vending stock is updated monthly</p>
         </div>
       `;
       return;
@@ -169,10 +167,11 @@ async function initializeVendingPage(data, page, contentDiv) {
     console.error('❌ Error initializing vending page:', error);
     if (contentDiv) {
       contentDiv.innerHTML = `
-        <div class="error-state">
+        <div class="blank-empty-state">
           <i class="fas fa-exclamation-circle"></i>
-          <p>Failed to initialize vending stock page</p>
-          <button class="retry-button" onclick="location.reload()">Retry</button>
+          <h3>Failed to initialize vending stock page</h3>
+          <p>${error.message || 'An error occurred while loading the page'}</p>
+          <button class="retry-button" onclick="location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button>
         </div>
       `;
     }

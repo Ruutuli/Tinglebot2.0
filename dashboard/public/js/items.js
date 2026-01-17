@@ -3,7 +3,7 @@
 /* Handles item card rendering, filtering, pagination, and item details */
 /* ====================================================================== */
 
-import { scrollToTop, createSearchFilterBar } from './ui.js';
+import { scrollToTop } from './ui.js';
 import { capitalize } from './utils.js';
 
 // ============================================================================
@@ -32,7 +32,13 @@ function renderItemCards(items, page = 1, totalItems = null) {
   
     // ------------------- No Items Found -------------------
     if (!sortedItems || sortedItems.length === 0) {
-      grid.innerHTML = '<div class="item-loading">No items found</div>';
+      grid.innerHTML = `
+        <div class="blank-empty-state">
+          <i class="fas fa-inbox"></i>
+          <h3>No items found</h3>
+          <p>Try adjusting your search or filters</p>
+        </div>
+      `;
       const pagination = document.getElementById('item-pagination');
       if (pagination) pagination.innerHTML = '';
       return;
@@ -326,7 +332,7 @@ function renderItemCards(items, page = 1, totalItems = null) {
     });
   
     // Update results info
-    const resultsInfo = document.querySelector('.item-results-info p');
+    const resultsInfo = document.querySelector('.model-results-info');
     if (resultsInfo) {
       const totalPages = Math.ceil(itemsForPagination / itemsPerPage);
       resultsInfo.textContent = `Showing ${startIndex + 1}-${endIndex} of ${itemsForPagination} items (Page ${page} of ${totalPages})`;
@@ -862,10 +868,10 @@ async function setupItemFilters(items) {
     return;
   }
 
-  // Show the filters container
-  const filtersContainer = document.querySelector('.item-filters');
-  if (filtersContainer) {
-    filtersContainer.style.display = 'flex';
+  // Show the filters wrapper (already shown, no need to set display)
+  const filtersWrapper = document.querySelector('.item-filters-wrapper');
+  if (filtersWrapper) {
+    filtersWrapper.style.display = 'block';
   }
 
   const searchInput = document.getElementById('item-search-input');
@@ -991,7 +997,7 @@ async function setupItemFilters(items) {
 
 
     // Show loading state
-    const resultsInfo = document.querySelector('.item-results-info p');
+    const resultsInfo = document.querySelector('.model-results-info');
     if (resultsInfo) {
       resultsInfo.textContent = 'Loading filtered items...';
     }
@@ -1151,7 +1157,7 @@ async function setupItemFilters(items) {
 
 
     // Update results info
-    const resultsInfo = document.querySelector('.item-results-info p');
+    const resultsInfo = document.querySelector('.model-results-info');
     if (resultsInfo) {
       if (itemsPerPageSelect.value === 'all') {
         resultsInfo.textContent = `Showing all ${sorted.length} of ${window.allItems.length} items`;
@@ -1298,6 +1304,130 @@ async function setupItemFilters(items) {
     });
   }
 
+  // ------------------- Function: showPageJumpModal -------------------
+  // Shows the page jump modal when ellipsis is clicked
+  function showPageJumpModal(minPage, maxPage, totalPages) {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('item-page-jump-modal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    const pageRange = minPage === maxPage ? `Page ${minPage}` : `Pages ${minPage}-${maxPage}`;
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'blank-page-jump-modal-overlay';
+    overlay.id = 'item-page-jump-modal';
+    
+    const modal = document.createElement('div');
+    modal.className = 'blank-page-jump-modal';
+    
+    modal.innerHTML = `
+      <div class="blank-page-jump-modal-header">
+        <h3 class="blank-page-jump-modal-title">
+          <i class="fas fa-arrow-right"></i>
+          Jump to Page
+        </h3>
+        <button class="blank-page-jump-modal-close" aria-label="Close modal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="blank-page-jump-modal-body">
+        <label class="blank-page-jump-modal-label" for="item-page-jump-input">
+          Enter a page number (${pageRange}):
+        </label>
+        <input 
+          type="number" 
+          id="item-page-jump-input" 
+          class="blank-page-jump-modal-input" 
+          min="1" 
+          max="${totalPages}" 
+          value="${minPage}"
+          placeholder="Enter page number"
+          autofocus
+        />
+        <div class="blank-page-jump-modal-info">
+          Valid range: 1 - ${totalPages}
+        </div>
+        <div class="blank-page-jump-modal-error" id="item-page-jump-error"></div>
+      </div>
+      <div class="blank-page-jump-modal-actions">
+        <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-cancel">
+          Cancel
+        </button>
+        <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-submit">
+          <i class="fas fa-check"></i>
+          Go to Page
+        </button>
+      </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Show modal with animation
+    setTimeout(() => {
+      overlay.classList.add('active');
+    }, 10);
+    
+    const input = modal.querySelector('#item-page-jump-input');
+    const errorMsg = modal.querySelector('#item-page-jump-error');
+    const submitBtn = modal.querySelector('.blank-page-jump-modal-btn-submit');
+    const cancelBtn = modal.querySelector('.blank-page-jump-modal-btn-cancel');
+    const closeBtn = modal.querySelector('.blank-page-jump-modal-close');
+    
+    const validateAndSubmit = () => {
+      const pageNum = parseInt(input.value, 10);
+      errorMsg.classList.remove('active');
+      
+      if (!pageNum || isNaN(pageNum)) {
+        errorMsg.textContent = 'Please enter a valid page number.';
+        errorMsg.classList.add('active');
+        input.focus();
+        return;
+      }
+      
+      if (pageNum < 1 || pageNum > totalPages) {
+        errorMsg.textContent = `Please enter a page number between 1 and ${totalPages}.`;
+        errorMsg.classList.add('active');
+        input.focus();
+        return;
+      }
+      
+      hidePageJumpModal();
+      window.filterItems(pageNum);
+    };
+    
+    const hidePageJumpModal = () => {
+      overlay.classList.remove('active');
+      setTimeout(() => {
+        overlay.remove();
+      }, 300);
+    };
+    
+    // Event listeners
+    submitBtn.onclick = validateAndSubmit;
+    cancelBtn.onclick = hidePageJumpModal;
+    closeBtn.onclick = hidePageJumpModal;
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        hidePageJumpModal();
+      }
+    };
+    
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        validateAndSubmit();
+      } else if (e.key === 'Escape') {
+        hidePageJumpModal();
+      }
+    };
+    
+    // Focus input
+    input.select();
+  }
+
   // ------------------- Function: updateFilteredPagination -------------------
   // Creates pagination for filtered results
   function updateFilteredPagination(currentPage, totalPages, totalItems) {
@@ -1321,18 +1451,47 @@ async function setupItemFilters(items) {
         window.filterItems(pageNum);
       };
 
-      // Create pagination manually since we can't import dynamically
+      // Create pagination container with standard classes
+      let paginationContainer = document.getElementById('item-pagination');
+      if (!paginationContainer) {
+        paginationContainer = document.createElement('div');
+        paginationContainer.id = 'item-pagination';
+        paginationContainer.className = 'model-pagination blank-pagination';
+        contentDiv.appendChild(paginationContainer);
+      }
+      paginationContainer.innerHTML = '';
+
+      // Create pagination div with proper classes
       const paginationDiv = document.createElement('div');
       paginationDiv.className = 'pagination';
       
+      const createButton = (label, pageNum, isActive = false, icon = null) => {
+        const button = document.createElement('button');
+        button.className = `pagination-button ${isActive ? 'active' : ''}`;
+        button.textContent = icon ? '' : label;
+        if (icon) {
+          button.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+        }
+        button.title = `Page ${pageNum}`;
+        button.onclick = () => handlePageChange(pageNum);
+        return button;
+      };
+
+      const createEllipsis = (minPage, maxPage) => {
+        const ellipsis = document.createElement('span');
+        ellipsis.className = 'pagination-ellipsis';
+        ellipsis.textContent = '...';
+        ellipsis.title = `Click to jump to a page (${minPage}-${maxPage})`;
+        ellipsis.style.cursor = 'pointer';
+        ellipsis.onclick = () => {
+          showPageJumpModal(minPage, maxPage, totalPages);
+        };
+        return ellipsis;
+      };
+
       // Add previous button
       if (currentPage > 1) {
-        const prevButton = document.createElement('button');
-        prevButton.className = 'pagination-button';
-        prevButton.innerHTML = '<i class="fas fa-chevron-left"></i>';
-        prevButton.title = 'Previous Page';
-        prevButton.addEventListener('click', () => handlePageChange(currentPage - 1));
-        paginationDiv.appendChild(prevButton);
+        paginationDiv.appendChild(createButton('Previous', currentPage - 1, false, 'left'));
       }
 
       // Add page numbers
@@ -1340,54 +1499,29 @@ async function setupItemFilters(items) {
       const endPage = Math.min(totalPages, currentPage + 2);
 
       if (startPage > 1) {
-        const firstButton = document.createElement('button');
-        firstButton.className = 'pagination-button';
-        firstButton.textContent = '1';
-        firstButton.addEventListener('click', () => handlePageChange(1));
-        paginationDiv.appendChild(firstButton);
-
+        paginationDiv.appendChild(createButton('1', 1));
         if (startPage > 2) {
-          const ellipsis = document.createElement('span');
-          ellipsis.className = 'pagination-ellipsis';
-          ellipsis.textContent = '...';
-          paginationDiv.appendChild(ellipsis);
+          paginationDiv.appendChild(createEllipsis(2, startPage - 1));
         }
       }
 
       for (let i = startPage; i <= endPage; i++) {
-        const pageButton = document.createElement('button');
-        pageButton.className = `pagination-button ${i === currentPage ? 'active' : ''}`;
-        pageButton.textContent = i.toString();
-        pageButton.addEventListener('click', () => handlePageChange(i));
-        paginationDiv.appendChild(pageButton);
+        paginationDiv.appendChild(createButton(i.toString(), i, i === currentPage));
       }
 
       if (endPage < totalPages) {
         if (endPage < totalPages - 1) {
-          const ellipsis = document.createElement('span');
-          ellipsis.className = 'pagination-ellipsis';
-          ellipsis.textContent = '...';
-          paginationDiv.appendChild(ellipsis);
+          paginationDiv.appendChild(createEllipsis(endPage + 1, totalPages - 1));
         }
-
-        const lastButton = document.createElement('button');
-        lastButton.className = 'pagination-button';
-        lastButton.textContent = totalPages.toString();
-        lastButton.addEventListener('click', () => handlePageChange(totalPages));
-        paginationDiv.appendChild(lastButton);
+        paginationDiv.appendChild(createButton(totalPages.toString(), totalPages));
       }
 
       // Add next button
       if (currentPage < totalPages) {
-        const nextButton = document.createElement('button');
-        nextButton.className = 'pagination-button';
-        nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
-        nextButton.title = 'Next Page';
-        nextButton.addEventListener('click', () => handlePageChange(currentPage + 1));
-        paginationDiv.appendChild(nextButton);
+        paginationDiv.appendChild(createButton('Next', currentPage + 1, false, 'right'));
       }
 
-      contentDiv.appendChild(paginationDiv);
+      paginationContainer.appendChild(paginationDiv);
     }
   }
 
@@ -1430,7 +1564,7 @@ async function setupItemFilters(items) {
       window.allItems = data;
       
       // Update results info
-      const resultsInfo = document.querySelector('.item-results-info p');
+      const resultsInfo = document.querySelector('.model-results-info');
       if (resultsInfo) {
         resultsInfo.textContent = `Showing ${data.length} of ${pagination.total} items`;
       }
@@ -1455,7 +1589,7 @@ async function setupItemFilters(items) {
             window.allItems = pageData;
             
             // Update results info
-            const resultsInfo = document.querySelector('.item-results-info p');
+            const resultsInfo = document.querySelector('.model-results-info');
             if (resultsInfo) {
               resultsInfo.textContent = `Showing ${pageData.length} of ${pagePagination.total} items (sorted alphabetically)`;
             }
@@ -1492,17 +1626,47 @@ async function setupItemFilters(items) {
     const contentDiv = document.getElementById('model-details-data');
     if (!contentDiv) return;
 
+    // Create pagination container with standard classes
+    let paginationContainer = document.getElementById('item-pagination');
+    if (!paginationContainer) {
+      paginationContainer = document.createElement('div');
+      paginationContainer.id = 'item-pagination';
+      paginationContainer.className = 'model-pagination blank-pagination';
+      contentDiv.appendChild(paginationContainer);
+    }
+    paginationContainer.innerHTML = '';
+
+    // Create pagination div with proper classes
     const paginationDiv = document.createElement('div');
     paginationDiv.className = 'pagination';
     
+    const createButton = (label, pageNum, isActive = false, icon = null) => {
+      const button = document.createElement('button');
+      button.className = `pagination-button ${isActive ? 'active' : ''}`;
+      button.textContent = icon ? '' : label;
+      if (icon) {
+        button.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+      }
+      button.title = `Page ${pageNum}`;
+      button.onclick = () => handlePageChange(pageNum);
+      return button;
+    };
+
+    const createEllipsis = (minPage, maxPage) => {
+      const ellipsis = document.createElement('span');
+      ellipsis.className = 'pagination-ellipsis';
+      ellipsis.textContent = '...';
+      ellipsis.title = `Click to jump to a page (${minPage}-${maxPage})`;
+      ellipsis.style.cursor = 'pointer';
+      ellipsis.onclick = () => {
+        showPageJumpModal(minPage, maxPage, totalPages);
+      };
+      return ellipsis;
+    };
+
     // Add previous button
     if (currentPage > 1) {
-      const prevButton = document.createElement('button');
-      prevButton.className = 'pagination-button';
-      prevButton.innerHTML = '<i class="fas fa-chevron-left"></i>';
-      prevButton.title = 'Previous Page';
-      prevButton.addEventListener('click', () => handlePageChange(currentPage - 1));
-      paginationDiv.appendChild(prevButton);
+      paginationDiv.appendChild(createButton('Previous', currentPage - 1, false, 'left'));
     }
 
     // Add page numbers
@@ -1510,54 +1674,29 @@ async function setupItemFilters(items) {
     const endPage = Math.min(totalPages, currentPage + 2);
 
     if (startPage > 1) {
-      const firstButton = document.createElement('button');
-      firstButton.className = 'pagination-button';
-      firstButton.textContent = '1';
-      firstButton.addEventListener('click', () => handlePageChange(1));
-      paginationDiv.appendChild(firstButton);
-
+      paginationDiv.appendChild(createButton('1', 1));
       if (startPage > 2) {
-        const ellipsis = document.createElement('span');
-        ellipsis.className = 'pagination-ellipsis';
-        ellipsis.textContent = '...';
-        paginationDiv.appendChild(ellipsis);
+        paginationDiv.appendChild(createEllipsis(2, startPage - 1));
       }
     }
 
     for (let i = startPage; i <= endPage; i++) {
-      const pageButton = document.createElement('button');
-      pageButton.className = `pagination-button ${i === currentPage ? 'active' : ''}`;
-      pageButton.textContent = i.toString();
-      pageButton.addEventListener('click', () => handlePageChange(i));
-      paginationDiv.appendChild(pageButton);
+      paginationDiv.appendChild(createButton(i.toString(), i, i === currentPage));
     }
 
     if (endPage < totalPages) {
       if (endPage < totalPages - 1) {
-        const ellipsis = document.createElement('span');
-        ellipsis.className = 'pagination-ellipsis';
-        ellipsis.textContent = '...';
-        paginationDiv.appendChild(ellipsis);
+        paginationDiv.appendChild(createEllipsis(endPage + 1, totalPages - 1));
       }
-
-      const lastButton = document.createElement('button');
-      lastButton.className = 'pagination-button';
-      lastButton.textContent = totalPages.toString();
-      lastButton.addEventListener('click', () => handlePageChange(totalPages));
-      paginationDiv.appendChild(lastButton);
+      paginationDiv.appendChild(createButton(totalPages.toString(), totalPages));
     }
 
     // Add next button
     if (currentPage < totalPages) {
-      const nextButton = document.createElement('button');
-      nextButton.className = 'pagination-button';
-      nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
-      nextButton.title = 'Next Page';
-      nextButton.addEventListener('click', () => handlePageChange(currentPage + 1));
-      paginationDiv.appendChild(nextButton);
+      paginationDiv.appendChild(createButton('Next', currentPage + 1, false, 'right'));
     }
 
-    contentDiv.appendChild(paginationDiv);
+    paginationContainer.appendChild(paginationDiv);
   }
 
   window.itemFiltersInitialized = true; 
@@ -1578,65 +1717,255 @@ function initializeItemPage(data, page = 1, contentDiv) {
   // Initialize enhanced inventory cache
   initializeInventoryCache();
 
-  // Create or refresh the standardized filter bar
-  let filtersContainer = document.querySelector('.item-filters');
-  if (!filtersContainer) {
-    filtersContainer = document.createElement('div');
-    filtersContainer.className = 'item-filters';
+  // Create filters wrapper (like blank.js and characters.js)
+  let filtersWrapper = document.querySelector('.item-filters-wrapper');
+  if (!filtersWrapper) {
+    filtersWrapper = document.createElement('div');
+    filtersWrapper.className = 'item-filters-wrapper blank-filters-wrapper';
+    contentDiv.insertBefore(filtersWrapper, contentDiv.firstChild);
   }
-  filtersContainer.innerHTML = '';
+  filtersWrapper.innerHTML = '';
 
-  const { bar: itemFilterBar } = createSearchFilterBar({
-    layout: 'wide',
-    filters: [
-      {
-        type: 'input',
-        id: 'item-search-input',
-        placeholder: 'Search items...',
-        attributes: { autocomplete: 'off' },
-        width: 'double'
-      },
-      { type: 'select', id: 'filter-category', options: [{ value: 'all', label: 'All Categories' }] },
-      { type: 'select', id: 'filter-type', options: [{ value: 'all', label: 'All Types' }] },
-      { type: 'select', id: 'filter-subtype', options: [{ value: 'all', label: 'All Subtypes' }] },
-      {
-        type: 'select',
-        id: 'sort-by',
-        options: [
-          { value: 'name-asc', label: 'Name (A-Z)', selected: true },
-          { value: 'name-desc', label: 'Name (Z-A)' },
-          { value: 'price-desc', label: 'Price (High-Low)' },
-          { value: 'price-asc', label: 'Price (Low-High)' }
-        ]
-      },
-      {
-        type: 'select',
-        id: 'items-per-page',
-        options: [
-          { value: '12', label: '12 per page', selected: true },
-          { value: '24', label: '24 per page' },
-          { value: '36', label: '36 per page' },
-          { value: '48', label: '48 per page' },
-          { value: 'all', label: 'All items' }
-        ]
-      }
-    ],
-    advancedFilters: [
-      { type: 'select', id: 'filter-jobs', options: [{ value: 'all', label: 'All Jobs' }] },
-      { type: 'select', id: 'filter-locations', options: [{ value: 'all', label: 'All Locations' }] },
-      { type: 'select', id: 'filter-sources', options: [{ value: 'all', label: 'All Sources' }] },
-      { type: 'select', id: 'filter-modifier-hearts', options: [{ value: 'all', label: 'All Heart Modifiers' }] },
-      { type: 'select', id: 'filter-stamina-recovered', options: [{ value: 'all', label: 'All Stamina Recovery' }] },
-      { type: 'select', id: 'filter-stamina-to-craft', options: [{ value: 'all', label: 'All Craft Stamina' }] },
-      { type: 'select', id: 'filter-rarity', options: [{ value: 'all', label: 'All Rarities' }] }
-    ],
-    buttons: [
-      { id: 'clear-filters', label: 'Clear Filters', className: 'clear-filters-btn' }
-    ]
-  });
+  // Create separate search bar (like blank.js and characters.js)
+  const searchWrapper = document.createElement('div');
+  searchWrapper.className = 'model-search-wrapper blank-search-wrapper';
+  
+  const searchBar = document.createElement('div');
+  searchBar.className = 'model-search-bar blank-search-bar';
+  
+  const searchIcon = document.createElement('i');
+  searchIcon.className = 'fas fa-search model-search-icon blank-search-icon';
+  searchIcon.setAttribute('aria-hidden', 'true');
+  
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.id = 'item-search-input';
+  searchInput.className = 'model-search-input blank-search-input';
+  searchInput.placeholder = 'Search items...';
+  searchInput.setAttribute('autocomplete', 'off');
+  searchInput.setAttribute('aria-label', 'Search items');
+  
+  searchBar.appendChild(searchIcon);
+  searchBar.appendChild(searchInput);
+  searchWrapper.appendChild(searchBar);
+  filtersWrapper.appendChild(searchWrapper);
 
-  filtersContainer.appendChild(itemFilterBar);
-  contentDiv.insertBefore(filtersContainer, contentDiv.firstChild);
+  // Create separate filter bar (like blank.js and characters.js)
+  const filterWrapper = document.createElement('div');
+  filterWrapper.className = 'model-filter-wrapper blank-filter-wrapper';
+  
+  const filterBar = document.createElement('div');
+  filterBar.className = 'model-filter-bar blank-filter-bar';
+
+  // Helper function to escape HTML
+  function escapeHtml(str) {
+    if (typeof str !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Category Filter
+  const categoryControl = document.createElement('div');
+  categoryControl.className = 'model-filter-control blank-filter-control';
+  const categoryLabel = document.createElement('label');
+  categoryLabel.className = 'model-filter-label blank-filter-label';
+  categoryLabel.innerHTML = '<i class="fas fa-tag"></i> Category';
+  categoryLabel.setAttribute('for', 'filter-category');
+  const categorySelect = document.createElement('select');
+  categorySelect.id = 'filter-category';
+  categorySelect.className = 'model-filter-select blank-filter-select';
+  categorySelect.innerHTML = '<option value="all" selected>All Categories</option>';
+  categoryControl.appendChild(categoryLabel);
+  categoryControl.appendChild(categorySelect);
+  filterBar.appendChild(categoryControl);
+
+  // Type Filter
+  const typeControl = document.createElement('div');
+  typeControl.className = 'model-filter-control blank-filter-control';
+  const typeLabel = document.createElement('label');
+  typeLabel.className = 'model-filter-label blank-filter-label';
+  typeLabel.innerHTML = '<i class="fas fa-layer-group"></i> Type';
+  typeLabel.setAttribute('for', 'filter-type');
+  const typeSelect = document.createElement('select');
+  typeSelect.id = 'filter-type';
+  typeSelect.className = 'model-filter-select blank-filter-select';
+  typeSelect.innerHTML = '<option value="all" selected>All Types</option>';
+  typeControl.appendChild(typeLabel);
+  typeControl.appendChild(typeSelect);
+  filterBar.appendChild(typeControl);
+
+  // Subtype Filter
+  const subtypeControl = document.createElement('div');
+  subtypeControl.className = 'model-filter-control blank-filter-control';
+  const subtypeLabel = document.createElement('label');
+  subtypeLabel.className = 'model-filter-label blank-filter-label';
+  subtypeLabel.innerHTML = '<i class="fas fa-th"></i> Subtype';
+  subtypeLabel.setAttribute('for', 'filter-subtype');
+  const subtypeSelect = document.createElement('select');
+  subtypeSelect.id = 'filter-subtype';
+  subtypeSelect.className = 'model-filter-select blank-filter-select';
+  subtypeSelect.innerHTML = '<option value="all" selected>All Subtypes</option>';
+  subtypeControl.appendChild(subtypeLabel);
+  subtypeControl.appendChild(subtypeSelect);
+  filterBar.appendChild(subtypeControl);
+
+  // Jobs Filter (advanced)
+  const jobsControl = document.createElement('div');
+  jobsControl.className = 'model-filter-control blank-filter-control';
+  const jobsLabel = document.createElement('label');
+  jobsLabel.className = 'model-filter-label blank-filter-label';
+  jobsLabel.innerHTML = '<i class="fas fa-user-tie"></i> Jobs';
+  jobsLabel.setAttribute('for', 'filter-jobs');
+  const jobsSelect = document.createElement('select');
+  jobsSelect.id = 'filter-jobs';
+  jobsSelect.className = 'model-filter-select blank-filter-select';
+  jobsSelect.innerHTML = '<option value="all" selected>All Jobs</option>';
+  jobsControl.appendChild(jobsLabel);
+  jobsControl.appendChild(jobsSelect);
+  filterBar.appendChild(jobsControl);
+
+  // Locations Filter (advanced)
+  const locationsControl = document.createElement('div');
+  locationsControl.className = 'model-filter-control blank-filter-control';
+  const locationsLabel = document.createElement('label');
+  locationsLabel.className = 'model-filter-label blank-filter-label';
+  locationsLabel.innerHTML = '<i class="fas fa-map-marker-alt"></i> Locations';
+  locationsLabel.setAttribute('for', 'filter-locations');
+  const locationsSelect = document.createElement('select');
+  locationsSelect.id = 'filter-locations';
+  locationsSelect.className = 'model-filter-select blank-filter-select';
+  locationsSelect.innerHTML = '<option value="all" selected>All Locations</option>';
+  locationsControl.appendChild(locationsLabel);
+  locationsControl.appendChild(locationsSelect);
+  filterBar.appendChild(locationsControl);
+
+  // Sources Filter (advanced)
+  const sourcesControl = document.createElement('div');
+  sourcesControl.className = 'model-filter-control blank-filter-control';
+  const sourcesLabel = document.createElement('label');
+  sourcesLabel.className = 'model-filter-label blank-filter-label';
+  sourcesLabel.innerHTML = '<i class="fas fa-source-fork"></i> Sources';
+  sourcesLabel.setAttribute('for', 'filter-sources');
+  const sourcesSelect = document.createElement('select');
+  sourcesSelect.id = 'filter-sources';
+  sourcesSelect.className = 'model-filter-select blank-filter-select';
+  sourcesSelect.innerHTML = '<option value="all" selected>All Sources</option>';
+  sourcesControl.appendChild(sourcesLabel);
+  sourcesControl.appendChild(sourcesSelect);
+  filterBar.appendChild(sourcesControl);
+
+  // Modifier Hearts Filter (advanced)
+  const modifierHeartsControl = document.createElement('div');
+  modifierHeartsControl.className = 'model-filter-control blank-filter-control';
+  const modifierHeartsLabel = document.createElement('label');
+  modifierHeartsLabel.className = 'model-filter-label blank-filter-label';
+  modifierHeartsLabel.innerHTML = '<i class="fas fa-heart"></i> Hearts';
+  modifierHeartsLabel.setAttribute('for', 'filter-modifier-hearts');
+  const modifierHeartsSelect = document.createElement('select');
+  modifierHeartsSelect.id = 'filter-modifier-hearts';
+  modifierHeartsSelect.className = 'model-filter-select blank-filter-select';
+  modifierHeartsSelect.innerHTML = '<option value="all" selected>All Hearts</option>';
+  modifierHeartsControl.appendChild(modifierHeartsLabel);
+  modifierHeartsControl.appendChild(modifierHeartsSelect);
+  filterBar.appendChild(modifierHeartsControl);
+
+  // Stamina Recovered Filter (advanced)
+  const staminaRecoveredControl = document.createElement('div');
+  staminaRecoveredControl.className = 'model-filter-control blank-filter-control';
+  const staminaRecoveredLabel = document.createElement('label');
+  staminaRecoveredLabel.className = 'model-filter-label blank-filter-label';
+  staminaRecoveredLabel.innerHTML = '<i class="fas fa-battery-full"></i> Stamina';
+  staminaRecoveredLabel.setAttribute('for', 'filter-stamina-recovered');
+  const staminaRecoveredSelect = document.createElement('select');
+  staminaRecoveredSelect.id = 'filter-stamina-recovered';
+  staminaRecoveredSelect.className = 'model-filter-select blank-filter-select';
+  staminaRecoveredSelect.innerHTML = '<option value="all" selected>All Stamina</option>';
+  staminaRecoveredControl.appendChild(staminaRecoveredLabel);
+  staminaRecoveredControl.appendChild(staminaRecoveredSelect);
+  filterBar.appendChild(staminaRecoveredControl);
+
+  // Stamina To Craft Filter (advanced)
+  const staminaToCraftControl = document.createElement('div');
+  staminaToCraftControl.className = 'model-filter-control blank-filter-control';
+  const staminaToCraftLabel = document.createElement('label');
+  staminaToCraftLabel.className = 'model-filter-label blank-filter-label';
+  staminaToCraftLabel.innerHTML = '<i class="fas fa-hammer"></i> Craft Stamina';
+  staminaToCraftLabel.setAttribute('for', 'filter-stamina-to-craft');
+  const staminaToCraftSelect = document.createElement('select');
+  staminaToCraftSelect.id = 'filter-stamina-to-craft';
+  staminaToCraftSelect.className = 'model-filter-select blank-filter-select';
+  staminaToCraftSelect.innerHTML = '<option value="all" selected>All Craft Stamina</option>';
+  staminaToCraftControl.appendChild(staminaToCraftLabel);
+  staminaToCraftControl.appendChild(staminaToCraftSelect);
+  filterBar.appendChild(staminaToCraftControl);
+
+  // Rarity Filter (advanced)
+  const rarityControl = document.createElement('div');
+  rarityControl.className = 'model-filter-control blank-filter-control';
+  const rarityLabel = document.createElement('label');
+  rarityLabel.className = 'model-filter-label blank-filter-label';
+  rarityLabel.innerHTML = '<i class="fas fa-star"></i> Rarity';
+  rarityLabel.setAttribute('for', 'filter-rarity');
+  const raritySelect = document.createElement('select');
+  raritySelect.id = 'filter-rarity';
+  raritySelect.className = 'model-filter-select blank-filter-select';
+  raritySelect.innerHTML = '<option value="all" selected>All Rarities</option>';
+  rarityControl.appendChild(rarityLabel);
+  rarityControl.appendChild(raritySelect);
+  filterBar.appendChild(rarityControl);
+
+  // Sort Filter
+  const sortControl = document.createElement('div');
+  sortControl.className = 'model-filter-control blank-filter-control';
+  const sortLabel = document.createElement('label');
+  sortLabel.className = 'model-filter-label blank-filter-label';
+  sortLabel.innerHTML = '<i class="fas fa-sort"></i> Sort By';
+  sortLabel.setAttribute('for', 'sort-by');
+  const sortSelect = document.createElement('select');
+  sortSelect.id = 'sort-by';
+  sortSelect.className = 'model-filter-select blank-filter-select';
+  sortSelect.innerHTML = `
+    <option value="name-asc" selected>Name (A-Z)</option>
+    <option value="name-desc">Name (Z-A)</option>
+    <option value="price-desc">Price (High-Low)</option>
+    <option value="price-asc">Price (Low-High)</option>
+  `;
+  sortControl.appendChild(sortLabel);
+  sortControl.appendChild(sortSelect);
+  filterBar.appendChild(sortControl);
+
+  // Items Per Page
+  const itemsPerPageControl = document.createElement('div');
+  itemsPerPageControl.className = 'model-filter-control blank-filter-control';
+  const itemsPerPageLabel = document.createElement('label');
+  itemsPerPageLabel.className = 'model-filter-label blank-filter-label';
+  itemsPerPageLabel.innerHTML = '<i class="fas fa-list"></i> Per Page';
+  itemsPerPageLabel.setAttribute('for', 'items-per-page');
+  const itemsPerPageSelect = document.createElement('select');
+  itemsPerPageSelect.id = 'items-per-page';
+  itemsPerPageSelect.className = 'model-filter-select blank-filter-select';
+  itemsPerPageSelect.innerHTML = `
+    <option value="12" selected>12 per page</option>
+    <option value="24">24 per page</option>
+    <option value="36">36 per page</option>
+    <option value="48">48 per page</option>
+    <option value="all">All items</option>
+  `;
+  itemsPerPageControl.appendChild(itemsPerPageLabel);
+  itemsPerPageControl.appendChild(itemsPerPageSelect);
+  filterBar.appendChild(itemsPerPageControl);
+
+  // Clear Filters Button
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.id = 'clear-filters';
+  clearButton.className = 'model-clear-filters-btn blank-clear-filters-btn';
+  clearButton.innerHTML = '<i class="fas fa-times"></i> Clear Filters';
+  filterBar.appendChild(clearButton);
+
+  filterWrapper.appendChild(filterBar);
+  filtersWrapper.appendChild(filterWrapper);
 
   // Create item container if it doesn't exist
   let container = document.getElementById('items-container');
@@ -1647,12 +1976,12 @@ function initializeItemPage(data, page = 1, contentDiv) {
     contentDiv.appendChild(container);
   }
 
-  // Add results info section
-  let resultsInfo = document.querySelector('.item-results-info');
+  // Add results info section using standard class
+  let resultsInfo = document.querySelector('.model-results-info');
   if (!resultsInfo) {
     resultsInfo = document.createElement('div');
-    resultsInfo.className = 'item-results-info';
-    resultsInfo.innerHTML = '<p>Loading items...</p>';
+    resultsInfo.className = 'model-results-info';
+    resultsInfo.textContent = 'Loading items...';
     contentDiv.insertBefore(resultsInfo, container);
   }
 
@@ -1786,9 +2115,9 @@ function initializeItemPage(data, page = 1, contentDiv) {
     }, 2000);
   });
 
-  // Update results info
+  // Update results info (already created above)
   if (resultsInfo) {
-    resultsInfo.innerHTML = `<p>Showing ${data.length} items (sorted alphabetically)</p>`;
+    resultsInfo.textContent = `Showing ${data.length} item${data.length !== 1 ? 's' : ''} (sorted alphabetically)`;
   }
 }
 

@@ -116,6 +116,29 @@
             </ul>
           </li>
           
+          <!-- Models Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-database"></i><span>Models</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#character"><i class="fas fa-user"></i><span>Characters</span></a></li>
+              <li><a href="/#helpwantedquest"><i class="fas fa-clipboard-list"></i><span>Help Wanted Quests</span></a></li>
+              <li class="active" id="inventories-nav-item-models"><a href="/#inventory"><i class="fas fa-boxes"></i><span>All Inventories</span></a></li>
+              <li><a href="/#item"><i class="fas fa-gem"></i><span>Items</span></a></li>
+              <li><a href="/#monster"><i class="fas fa-dragon"></i><span>Monsters</span></a></li>
+              <li><a href="/#mount"><i class="fas fa-horse"></i><span>Mounts</span></a></li>
+              <li><a href="/#pet"><i class="fas fa-paw"></i><span>Pets</span></a></li>
+              <li><a href="/#quest"><i class="fas fa-tasks"></i><span>Quests</span></a></li>
+              <li><a href="/#relic"><i class="fas fa-scroll"></i><span>Relics</span></a></li>
+              <li><a href="/#starterGear"><i class="fas fa-tshirt"></i><span>Starter Gear</span></a></li>
+              <li><a href="/#vendingShops"><i class="fas fa-shopping-cart"></i><span>Vending Shops</span></a></li>
+              <li><a href="/#vending"><i class="fas fa-store"></i><span>Vending Stock</span></a></li>
+              <li><a href="/#villageShops"><i class="fas fa-shop"></i><span>Village Shops</span></a></li>
+              <li><a href="/#village"><i class="fas fa-map-marker-alt"></i><span>Villages</span></a></li>
+            </ul>
+          </li>
+          
           <!-- User Area Dropdown -->
           <li class="nav-dropdown">
             <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
@@ -179,25 +202,6 @@
         </article>
       </section>
 
-      <section class="inventory-controls" aria-label="Inventory filters">
-        <div class="control-group">
-          <label for="inventory-search-input">Search items</label>
-          <input type="search" id="inventory-search-input" placeholder="Search by item name..." autocomplete="off" />
-        </div>
-        <div class="control-group">
-          <label for="inventory-category-filter">Category</label>
-          <select id="inventory-category-filter">
-            <option value="all">All categories</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label for="inventory-character-filter">Character</label>
-          <select id="inventory-character-filter">
-            <option value="all">All characters</option>
-          </select>
-        </div>
-      </section>
-
       <section class="inventory-transfer-card" aria-label="Transfer items between characters">
         <div class="card-header">
           <h2>Transfer Items</h2>
@@ -230,9 +234,31 @@
             <i class="fas fa-exchange-alt"></i> Transfer Items
           </button>
         </form>
-        <p class="transfer-disclaimer" role="note">
-          Transfers made here will not log to your Google Sheet. If you track inventory there, remember to add these changes manually.
-        </p>
+      </section>
+
+      <section class="inventory-controls" aria-label="Inventory filters">
+        <div class="control-group">
+          <label for="inventory-search-input">Search items</label>
+          <input type="search" id="inventory-search-input" placeholder="Search by item name..." autocomplete="off" />
+        </div>
+        <div class="control-group">
+          <label for="inventory-category-filter">Category</label>
+          <select id="inventory-category-filter">
+            <option value="all">All categories</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="inventory-character-filter">Character</label>
+          <select id="inventory-character-filter">
+            <option value="all">All characters</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="inventory-village-filter">Village</label>
+          <select id="inventory-village-filter">
+            <option value="all">All villages</option>
+          </select>
+        </div>
       </section>
 
       <section class="inventory-table-card">

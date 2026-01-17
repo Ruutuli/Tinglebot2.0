@@ -289,9 +289,15 @@ function renderCharacterCards(characters, page = 1, enableModals = true, isFromF
       return;
     }
   
-    // ------------------- No Characters Found -------------------
-    if (!characters || characters.length === 0) {
-      grid.innerHTML = '<div class="character-loading">No characters found</div>';
+      // ------------------- No Characters Found -------------------
+      if (!characters || characters.length === 0) {
+      grid.innerHTML = `
+        <div class="blank-empty-state">
+          <i class="fas fa-inbox"></i>
+          <h3>No characters found</h3>
+          <p>Try adjusting your search or filters</p>
+        </div>
+      `;
       const pagination = document.getElementById('character-pagination');
       if (pagination) pagination.innerHTML = '';
       return;
@@ -480,10 +486,22 @@ function renderCharacterCards(characters, page = 1, enableModals = true, isFromF
     setupMobileEventHandlers();
 
     // Update results info - only if we're not in a filtered state and not called from filtering
-    const resultsInfo = document.querySelector('.character-results-info p');
+    const resultsInfo = document.querySelector('.model-results-info, .character-results-info');
     if (resultsInfo && !window.filteredCharacters && !isFromFiltering) {
-      const totalPages = Math.ceil(characters.length / charactersPerPage);
-      resultsInfo.textContent = `Showing ${startIndex + 1}-${endIndex} of ${characters.length} characters (Page ${page} of ${totalPages})`;
+      // Recalculate to ensure variables are defined
+      const charactersPerPageSelect = document.getElementById('characters-per-page');
+      const charsPerPage = charactersPerPageSelect ? 
+        (charactersPerPageSelect.value === 'all' ? characters.length : parseInt(charactersPerPageSelect.value)) : 
+        (isMobile ? 6 : 12);
+      const totalPages = Math.ceil(characters.length / charsPerPage);
+      const startIdx = (page - 1) * charsPerPage;
+      const endIdx = Math.min(startIdx + charsPerPage, characters.length);
+      
+      if (charactersPerPageSelect && charactersPerPageSelect.value === 'all') {
+        resultsInfo.textContent = `Showing all ${characters.length} characters`;
+      } else {
+        resultsInfo.textContent = `Showing ${startIdx + 1}-${endIdx} of ${characters.length} characters (Page ${page} of ${totalPages})`;
+      }
     }
     // If we're in a filtered state or called from filtering, let the filtering functions handle the results info
   }
@@ -709,9 +727,9 @@ async function populateFilterOptions(characters) {
     }
   
     // Show the filters container
-    const filtersContainer = document.querySelector('.character-filters');
+    const filtersContainer = document.querySelector('.character-filters-wrapper');
     if (filtersContainer) {
-        filtersContainer.style.display = 'flex';
+        filtersContainer.style.display = 'block';
     }
   
     const searchInput = document.getElementById('character-search-input');
@@ -833,11 +851,11 @@ async function populateFilterOptions(characters) {
       const sortBy = sortSelect.value;
       const charactersPerPage = charactersPerPageSelect.value === 'all' ? 999999 : parseInt(charactersPerPageSelect.value);
 
-      // Show loading state
-      const resultsInfo = document.querySelector('.character-results-info p');
-      if (resultsInfo) {
-        resultsInfo.textContent = 'Loading filtered characters...';
-      }
+        // Show loading state
+        const resultsInfo = document.querySelector('.model-results-info, .character-results-info');
+        if (resultsInfo) {
+          resultsInfo.textContent = 'Loading filtered characters...';
+        }
 
       try {
         // Check if we have cached data and it's recent (less than 5 minutes old)
@@ -887,15 +905,19 @@ async function populateFilterOptions(characters) {
 
           // Update results info
           if (resultsInfo) {
-          if (charactersPerPageSelect.value === 'all') {
-            resultsInfo.textContent = `Showing all ${filteredAndSorted.length} filtered characters`;
-          } else {
-            const startIndex = (page - 1) * charactersPerPage + 1;
-            const endIndex = Math.min(startIndex + paginatedCharacters.length - 1, filteredAndSorted.length);
+            const currentPage = page || 1;
+            const charsPerPage = charactersPerPage || 12;
+            const totalPgs = totalPages || Math.ceil(filteredAndSorted.length / charsPerPage);
+            
+            if (charactersPerPageSelect && charactersPerPageSelect.value === 'all') {
+              resultsInfo.textContent = `Showing all ${filteredAndSorted.length} filtered characters`;
+            } else {
+              const startIdx = (currentPage - 1) * charsPerPage + 1;
+              const endIdx = Math.min(startIdx + paginatedCharacters.length - 1, filteredAndSorted.length);
 
-            resultsInfo.textContent = `Showing ${startIndex}-${endIndex} of ${filteredAndSorted.length} characters (Page ${page} of ${totalPages})`;
+              resultsInfo.textContent = `Showing ${startIdx}-${endIdx} of ${filteredAndSorted.length} characters (Page ${currentPage} of ${totalPgs})`;
+            }
           }
-        }
 
         // Render the paginated filtered characters
         const renderStartTime = Date.now();
@@ -965,15 +987,19 @@ async function populateFilterOptions(characters) {
       const endIndex = startIndex + charactersPerPage;
       const paginatedCharacters = sorted.slice(startIndex, endIndex);
 
-      const resultsInfo = document.querySelector('.character-results-info p');
+      const resultsInfo = document.querySelector('.model-results-info, .character-results-info');
       if (resultsInfo) {
-        if (charactersPerPageSelect.value === 'all') {
-          resultsInfo.textContent = `Showing all ${sorted.length} of ${window.allCharacters.length} characters`;
+        const currentPage = page || 1;
+        const charsPerPage = charactersPerPage || 12;
+        const totalPgs = totalPages || Math.ceil(sorted.length / charsPerPage);
+        
+        if (charactersPerPageSelect && charactersPerPageSelect.value === 'all') {
+          resultsInfo.textContent = `Showing all ${sorted.length} of ${window.allCharacters ? window.allCharacters.length : sorted.length} characters`;
         } else {
-          const startIndex = (page - 1) * charactersPerPage + 1;
-          const endIndex = Math.min(startIndex + paginatedCharacters.length - 1, sorted.length);
+          const startIdx = (currentPage - 1) * charsPerPage + 1;
+          const endIdx = Math.min(startIdx + paginatedCharacters.length - 1, sorted.length);
 
-          resultsInfo.textContent = `Showing ${startIndex}-${endIndex} of ${sorted.length} characters (Page ${page} of ${totalPages})`;
+          resultsInfo.textContent = `Showing ${startIdx}-${endIdx} of ${sorted.length} characters (Page ${currentPage} of ${totalPgs})`;
         }
       }
 
@@ -1026,11 +1052,16 @@ async function populateFilterOptions(characters) {
       });
     }
 
-    // ------------------- Function: updateFilteredPagination -------------------
-    // Updates pagination for filtered results
-    function updateFilteredPagination(currentPage, totalPages, totalItems) {
+      // ------------------- Function: updateFilteredPagination -------------------
+      // Updates pagination for filtered results (matching blank.js structure)
+      function updateFilteredPagination(currentPage, totalPages, totalItems) {
       const paginationContainer = document.getElementById('character-pagination');
       if (!paginationContainer) return;
+
+      // Ensure pagination container has the right class
+      if (!paginationContainer.classList.contains('model-pagination')) {
+        paginationContainer.classList.add('model-pagination', 'blank-pagination');
+      }
 
       // Remove any existing pagination
       paginationContainer.innerHTML = '';
@@ -1041,12 +1072,16 @@ async function populateFilterOptions(characters) {
       const paginationDiv = document.createElement('div');
       paginationDiv.className = 'pagination';
 
-      // Helper to create a button
-      const makeButton = (label, pageNum, isActive = false, isDisabled = false) => {
+      // Helper to create a button (matching blank.js style)
+      const makeButton = (label, pageNum, isActive = false, icon = null) => {
         const btn = document.createElement('button');
-        btn.className = 'pagination-button' + (isActive ? ' active' : '');
-        btn.textContent = label;
-        if (isDisabled) btn.disabled = true;
+        btn.className = `pagination-button ${isActive ? 'active' : ''}`;
+        if (icon) {
+          btn.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+        } else {
+          btn.textContent = label;
+        }
+        btn.title = `Page ${pageNum}`;
         btn.addEventListener('click', () => {
           if (pageNum < 1 || pageNum > totalPages) return;
           window.filterCharacters(pageNum);
@@ -1054,46 +1089,171 @@ async function populateFilterOptions(characters) {
         return btn;
       };
 
+      // Helper to create ellipsis (matching blank.js style)
+      const makeEllipsis = (minPage, maxPage) => {
+        const ell = document.createElement('span');
+        ell.className = 'pagination-ellipsis';
+        ell.textContent = '...';
+        ell.title = `Click to jump to a page (${minPage}-${maxPage})`;
+        ell.style.cursor = 'pointer';
+        ell.onclick = () => {
+          showPageJumpModal(minPage, maxPage, totalPages);
+        };
+        return ell;
+      };
+
       // Previous button
       if (currentPage > 1) {
-        paginationDiv.appendChild(makeButton('<', currentPage - 1));
+        paginationDiv.appendChild(makeButton('Previous', currentPage - 1, false, 'left'));
       }
 
-      // Page numbers (show up to 5, with ellipsis if needed)
-      const maxVisiblePages = 5;
-      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-      if (endPage - startPage + 1 < maxVisiblePages) {
-        startPage = Math.max(1, endPage - maxVisiblePages + 1);
-      }
+      // Page numbers (matching blank.js logic)
+      const startPage = Math.max(1, currentPage - 2);
+      const endPage = Math.min(totalPages, currentPage + 2);
+
       if (startPage > 1) {
         paginationDiv.appendChild(makeButton('1', 1));
         if (startPage > 2) {
-          const ell = document.createElement('span');
-          ell.className = 'pagination-ellipsis';
-          ell.textContent = '...';
-          paginationDiv.appendChild(ell);
+          paginationDiv.appendChild(makeEllipsis(2, startPage - 1));
         }
       }
+
       for (let i = startPage; i <= endPage; i++) {
         paginationDiv.appendChild(makeButton(i.toString(), i, i === currentPage));
       }
+
       if (endPage < totalPages) {
         if (endPage < totalPages - 1) {
-          const ell = document.createElement('span');
-          ell.className = 'pagination-ellipsis';
-          ell.textContent = '...';
-          paginationDiv.appendChild(ell);
+          paginationDiv.appendChild(makeEllipsis(endPage + 1, totalPages - 1));
         }
         paginationDiv.appendChild(makeButton(totalPages.toString(), totalPages));
       }
 
       // Next button
       if (currentPage < totalPages) {
-        paginationDiv.appendChild(makeButton('>', currentPage + 1));
+        paginationDiv.appendChild(makeButton('Next', currentPage + 1, false, 'right'));
       }
 
       paginationContainer.appendChild(paginationDiv);
+    }
+
+    // ------------------- Function: showPageJumpModal -------------------
+    // Shows the page jump modal when ellipsis is clicked
+    function showPageJumpModal(minPage, maxPage, totalPages) {
+      // Remove existing modal if any
+      const existingModal = document.getElementById('character-page-jump-modal');
+      if (existingModal) {
+        existingModal.remove();
+      }
+
+      const pageRange = minPage === maxPage ? `Page ${minPage}` : `Pages ${minPage}-${maxPage}`;
+      
+      const overlay = document.createElement('div');
+      overlay.className = 'blank-page-jump-modal-overlay';
+      overlay.id = 'character-page-jump-modal';
+      
+      const modal = document.createElement('div');
+      modal.className = 'blank-page-jump-modal';
+      
+      modal.innerHTML = `
+        <div class="blank-page-jump-modal-header">
+          <h3 class="blank-page-jump-modal-title">
+            <i class="fas fa-arrow-right"></i>
+            Jump to Page
+          </h3>
+          <button class="blank-page-jump-modal-close" aria-label="Close modal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="blank-page-jump-modal-body">
+          <label class="blank-page-jump-modal-label" for="character-page-jump-input">
+            Enter a page number (${pageRange}):
+          </label>
+          <input 
+            type="number" 
+            id="character-page-jump-input" 
+            class="blank-page-jump-modal-input" 
+            min="1" 
+            max="${totalPages}" 
+            value="${minPage}"
+            placeholder="Enter page number"
+            autofocus
+          />
+          <div class="blank-page-jump-modal-info">
+            Valid range: 1 - ${totalPages}
+          </div>
+          <div class="blank-page-jump-modal-error" id="character-page-jump-error"></div>
+        </div>
+        <div class="blank-page-jump-modal-actions">
+          <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-cancel">
+            Cancel
+          </button>
+          <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-submit">
+            <i class="fas fa-check"></i>
+            Go to Page
+          </button>
+        </div>
+      `;
+      
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      
+      // Show modal with animation
+      setTimeout(() => {
+        overlay.classList.add('active');
+      }, 10);
+      
+      const input = modal.querySelector('#character-page-jump-input');
+      const errorMsg = modal.querySelector('#character-page-jump-error');
+      const submitBtn = modal.querySelector('.blank-page-jump-modal-btn-submit');
+      const cancelBtn = modal.querySelector('.blank-page-jump-modal-btn-cancel');
+      const closeBtn = modal.querySelector('.blank-page-jump-modal-close');
+      
+      const validateAndSubmit = () => {
+        const pageNum = parseInt(input.value, 10);
+        errorMsg.classList.remove('active');
+        
+        if (!pageNum || isNaN(pageNum)) {
+          errorMsg.textContent = 'Please enter a valid page number.';
+          errorMsg.classList.add('active');
+          input.focus();
+          return;
+        }
+        
+        if (pageNum < 1 || pageNum > totalPages) {
+          errorMsg.textContent = `Please enter a page number between 1 and ${totalPages}.`;
+          errorMsg.classList.add('active');
+          input.focus();
+          return;
+        }
+        
+        hidePageJumpModal();
+        window.filterCharacters(pageNum);
+      };
+      
+      const hidePageJumpModal = () => {
+        overlay.classList.remove('active');
+        setTimeout(() => {
+          overlay.remove();
+        }, 300);
+      };
+      
+      // Event listeners
+      submitBtn.addEventListener('click', validateAndSubmit);
+      cancelBtn.addEventListener('click', hidePageJumpModal);
+      closeBtn.addEventListener('click', hidePageJumpModal);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          hidePageJumpModal();
+        }
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          validateAndSubmit();
+        } else if (e.key === 'Escape') {
+          hidePageJumpModal();
+        }
+      });
     }
 
     // ------------------- Function: createNormalPagination -------------------
@@ -1102,6 +1262,11 @@ async function populateFilterOptions(characters) {
       const paginationContainer = document.getElementById('character-pagination');
       if (!paginationContainer) return;
 
+      // Ensure pagination container has the right class
+      if (!paginationContainer.classList.contains('model-pagination')) {
+        paginationContainer.classList.add('model-pagination', 'blank-pagination');
+      }
+
       // Remove any existing pagination
       paginationContainer.innerHTML = '';
 
@@ -1111,12 +1276,16 @@ async function populateFilterOptions(characters) {
       const paginationDiv = document.createElement('div');
       paginationDiv.className = 'pagination';
 
-      // Helper to create a button
-      const makeButton = (label, pageNum, isActive = false, isDisabled = false) => {
+      // Helper to create a button (matching blank.js style)
+      const makeButton = (label, pageNum, isActive = false, icon = null) => {
         const btn = document.createElement('button');
-        btn.className = 'pagination-button' + (isActive ? ' active' : '');
-        btn.textContent = label;
-        if (isDisabled) btn.disabled = true;
+        btn.className = `pagination-button ${isActive ? 'active' : ''}`;
+        if (icon) {
+          btn.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+        } else {
+          btn.textContent = label;
+        }
+        btn.title = `Page ${pageNum}`;
         btn.addEventListener('click', () => {
           if (pageNum < 1 || pageNum > totalPages) return;
           handlePageChange(pageNum);
@@ -1124,43 +1293,49 @@ async function populateFilterOptions(characters) {
         return btn;
       };
 
+      // Helper to create ellipsis (matching blank.js style)
+      const makeEllipsis = (minPage, maxPage) => {
+        const ell = document.createElement('span');
+        ell.className = 'pagination-ellipsis';
+        ell.textContent = '...';
+        ell.title = `Click to jump to a page (${minPage}-${maxPage})`;
+        ell.style.cursor = 'pointer';
+        ell.onclick = () => {
+          showPageJumpModal(minPage, maxPage, totalPages);
+        };
+        return ell;
+      };
+
       // Previous button
       if (currentPage > 1) {
-        paginationDiv.appendChild(makeButton('<', currentPage - 1));
+        paginationDiv.appendChild(makeButton('Previous', currentPage - 1, false, 'left'));
       }
 
-      // Page numbers (show up to 5, with ellipsis if needed)
-      const maxVisiblePages = 5;
-      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-      if (endPage - startPage + 1 < maxVisiblePages) {
-        startPage = Math.max(1, endPage - maxVisiblePages + 1);
-      }
+      // Page numbers (matching blank.js logic)
+      const startPage = Math.max(1, currentPage - 2);
+      const endPage = Math.min(totalPages, currentPage + 2);
+
       if (startPage > 1) {
-        paginationContainer.appendChild(makeButton('1', 1));
+        paginationDiv.appendChild(makeButton('1', 1));
         if (startPage > 2) {
-          const ell = document.createElement('span');
-          ell.className = 'pagination-ellipsis';
-          ell.textContent = '...';
-          paginationDiv.appendChild(ell);
+          paginationDiv.appendChild(makeEllipsis(2, startPage - 1));
         }
       }
+
       for (let i = startPage; i <= endPage; i++) {
         paginationDiv.appendChild(makeButton(i.toString(), i, i === currentPage));
       }
+
       if (endPage < totalPages) {
         if (endPage < totalPages - 1) {
-          const ell = document.createElement('span');
-          ell.className = 'pagination-ellipsis';
-          ell.textContent = '...';
-          paginationDiv.appendChild(ell);
+          paginationDiv.appendChild(makeEllipsis(endPage + 1, totalPages - 1));
         }
         paginationDiv.appendChild(makeButton(totalPages.toString(), totalPages));
       }
 
       // Next button
       if (currentPage < totalPages) {
-        paginationDiv.appendChild(makeButton('>', currentPage + 1));
+        paginationDiv.appendChild(makeButton('Next', currentPage + 1, false, 'right'));
       }
 
       paginationContainer.appendChild(paginationDiv);
@@ -1235,15 +1410,16 @@ async function populateFilterOptions(characters) {
         renderCharacterCards(paginatedCharacters, 1, false, false);
         
         // Update results info
-        const resultsInfo = document.querySelector('.character-results-info p');
+        const resultsInfo = document.querySelector('.model-results-info, .character-results-info');
         if (resultsInfo) {
-          if (charactersPerPageSelect.value === 'all') {
+          if (charactersPerPageSelect && charactersPerPageSelect.value === 'all') {
             resultsInfo.textContent = `Showing all ${sortedCharacters.length} characters`;
           } else {
-            const totalPages = Math.ceil(sortedCharacters.length / charactersPerPage);
-            const startIndex = 1;
-            const endIndex = Math.min(charactersPerPage, sortedCharacters.length);
-            resultsInfo.textContent = `Showing ${startIndex}-${endIndex} of ${sortedCharacters.length} characters (Page 1 of ${totalPages})`;
+            const charsPerPage = parseInt(charactersPerPage) || 12;
+            const totalPgs = Math.ceil(sortedCharacters.length / charsPerPage);
+            const startIdx = 1;
+            const endIdx = Math.min(charsPerPage, sortedCharacters.length);
+            resultsInfo.textContent = `Showing ${startIdx}-${endIdx} of ${sortedCharacters.length} characters (Page 1 of ${totalPgs})`;
           }
         }
         
@@ -1310,74 +1486,143 @@ async function initializeCharacterPage(data, page = 1, contentDiv) {
     // Apply mobile optimizations early
     const { isMobile, isTouch } = optimizeForMobile();
 
-    // Create or refresh the standard filter bar
-    let filtersContainer = document.querySelector('.character-filters');
-    if (!filtersContainer) {
-        filtersContainer = document.createElement('div');
-        filtersContainer.className = 'character-filters';
+    // Create filters wrapper (like blank.js)
+    let filtersWrapper = document.querySelector('.character-filters-wrapper');
+    if (!filtersWrapper) {
+        filtersWrapper = document.createElement('div');
+        filtersWrapper.className = 'character-filters-wrapper blank-filters-wrapper';
+        contentDiv.insertBefore(filtersWrapper, contentDiv.firstChild);
     }
-    filtersContainer.innerHTML = '';
+    filtersWrapper.innerHTML = '';
 
-    const { bar: characterFilterBar } = createSearchFilterBar({
-        layout: 'wide',
-        filters: [
-            {
-                type: 'input',
-                id: 'character-search-input',
-                placeholder: 'Search characters...',
-                attributes: { autocomplete: 'off' },
-                width: 'double'
-            },
-            {
-                type: 'select',
-                id: 'filter-job',
-                options: [{ value: 'all', label: 'All Jobs' }]
-            },
-            {
-                type: 'select',
-                id: 'filter-race',
-                options: [{ value: 'all', label: 'All Races' }]
-            },
-            {
-                type: 'select',
-                id: 'filter-village',
-                options: [{ value: 'all', label: 'All Villages' }]
-            },
-            {
-                type: 'select',
-                id: 'sort-by',
-                options: [
-                    { value: 'name-asc', label: 'Name (A-Z)', selected: true },
-                    { value: 'name-desc', label: 'Name (Z-A)' },
-                    { value: 'level-desc', label: 'Level (High-Low)' },
-                    { value: 'level-asc', label: 'Level (Low-High)' }
-                ]
-            },
-            {
-                type: 'select',
-                id: 'characters-per-page',
-                options: [
-                    { value: '6', label: '6 per page' },
-                    { value: '12', label: '12 per page', selected: true },
-                    { value: '24', label: '24 per page' },
-                    { value: '36', label: '36 per page' },
-                    { value: '48', label: '48 per page' },
-                    { value: 'all', label: 'All characters' }
-                ]
-            }
-        ],
-        buttons: [
-            {
-                id: 'clear-filters',
-                label: 'Clear Filters',
-                className: 'clear-filters-btn'
-            }
-        ]
-    });
+    // Create separate search bar (like blank.js)
+    const searchWrapper = document.createElement('div');
+    searchWrapper.className = 'model-search-wrapper blank-search-wrapper';
+    
+    const searchBar = document.createElement('div');
+    searchBar.className = 'model-search-bar blank-search-bar';
+    
+    const searchIcon = document.createElement('i');
+    searchIcon.className = 'fas fa-search model-search-icon blank-search-icon';
+    searchIcon.setAttribute('aria-hidden', 'true');
+    
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'character-search-input';
+    searchInput.className = 'model-search-input blank-search-input';
+    searchInput.placeholder = 'Search characters...';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.setAttribute('aria-label', 'Search characters');
+    
+    searchBar.appendChild(searchIcon);
+    searchBar.appendChild(searchInput);
+    searchWrapper.appendChild(searchBar);
+    filtersWrapper.appendChild(searchWrapper);
 
-    filtersContainer.appendChild(characterFilterBar);
-    contentDiv.insertBefore(filtersContainer, contentDiv.firstChild);
-    filtersContainer.style.display = 'flex';
+    // Create separate filter bar (like blank.js)
+    const filterWrapper = document.createElement('div');
+    filterWrapper.className = 'model-filter-wrapper blank-filter-wrapper';
+    
+    const filterBar = document.createElement('div');
+    filterBar.className = 'model-filter-bar blank-filter-bar';
+
+    // Job Filter
+    const jobControl = document.createElement('div');
+    jobControl.className = 'model-filter-control blank-filter-control';
+    const jobLabel = document.createElement('label');
+    jobLabel.className = 'model-filter-label blank-filter-label';
+    jobLabel.innerHTML = '<i class="fas fa-briefcase"></i> Job';
+    jobLabel.setAttribute('for', 'filter-job');
+    const jobSelect = document.createElement('select');
+    jobSelect.id = 'filter-job';
+    jobSelect.className = 'model-filter-select blank-filter-select';
+    jobSelect.innerHTML = '<option value="all">All Jobs</option>';
+    jobControl.appendChild(jobLabel);
+    jobControl.appendChild(jobSelect);
+    filterBar.appendChild(jobControl);
+
+    // Race Filter
+    const raceControl = document.createElement('div');
+    raceControl.className = 'model-filter-control blank-filter-control';
+    const raceLabel = document.createElement('label');
+    raceLabel.className = 'model-filter-label blank-filter-label';
+    raceLabel.innerHTML = '<i class="fas fa-users"></i> Race';
+    raceLabel.setAttribute('for', 'filter-race');
+    const raceSelect = document.createElement('select');
+    raceSelect.id = 'filter-race';
+    raceSelect.className = 'model-filter-select blank-filter-select';
+    raceSelect.innerHTML = '<option value="all">All Races</option>';
+    raceControl.appendChild(raceLabel);
+    raceControl.appendChild(raceSelect);
+    filterBar.appendChild(raceControl);
+
+    // Village Filter
+    const villageControl = document.createElement('div');
+    villageControl.className = 'model-filter-control blank-filter-control';
+    const villageLabel = document.createElement('label');
+    villageLabel.className = 'model-filter-label blank-filter-label';
+    villageLabel.innerHTML = '<i class="fas fa-home"></i> Village';
+    villageLabel.setAttribute('for', 'filter-village');
+    const villageSelect = document.createElement('select');
+    villageSelect.id = 'filter-village';
+    villageSelect.className = 'model-filter-select blank-filter-select';
+    villageSelect.innerHTML = '<option value="all">All Villages</option>';
+    villageControl.appendChild(villageLabel);
+    villageControl.appendChild(villageSelect);
+    filterBar.appendChild(villageControl);
+
+    // Sort Filter
+    const sortControl = document.createElement('div');
+    sortControl.className = 'model-filter-control blank-filter-control';
+    const sortLabel = document.createElement('label');
+    sortLabel.className = 'model-filter-label blank-filter-label';
+    sortLabel.innerHTML = '<i class="fas fa-sort"></i> Sort By';
+    sortLabel.setAttribute('for', 'sort-by');
+    const sortSelect = document.createElement('select');
+    sortSelect.id = 'sort-by';
+    sortSelect.className = 'model-filter-select blank-filter-select';
+    sortSelect.innerHTML = `
+      <option value="name-asc" selected>Name (A-Z)</option>
+      <option value="name-desc">Name (Z-A)</option>
+      <option value="level-desc">Level (High-Low)</option>
+      <option value="level-asc">Level (Low-High)</option>
+    `;
+    sortControl.appendChild(sortLabel);
+    sortControl.appendChild(sortSelect);
+    filterBar.appendChild(sortControl);
+
+    // Characters Per Page
+    const perPageControl = document.createElement('div');
+    perPageControl.className = 'model-filter-control blank-filter-control';
+    const perPageLabel = document.createElement('label');
+    perPageLabel.className = 'model-filter-label blank-filter-label';
+    perPageLabel.innerHTML = '<i class="fas fa-list"></i> Per Page';
+    perPageLabel.setAttribute('for', 'characters-per-page');
+    const perPageSelect = document.createElement('select');
+    perPageSelect.id = 'characters-per-page';
+    perPageSelect.className = 'model-filter-select blank-filter-select';
+    perPageSelect.innerHTML = `
+      <option value="6">6 per page</option>
+      <option value="12" selected>12 per page</option>
+      <option value="24">24 per page</option>
+      <option value="36">36 per page</option>
+      <option value="48">48 per page</option>
+      <option value="all">All characters</option>
+    `;
+    perPageControl.appendChild(perPageLabel);
+    perPageControl.appendChild(perPageSelect);
+    filterBar.appendChild(perPageControl);
+
+    // Clear Filters Button
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.id = 'clear-filters';
+    clearButton.className = 'model-clear-filters-btn blank-clear-filters-btn';
+    clearButton.innerHTML = '<i class="fas fa-times"></i> Clear Filters';
+    filterBar.appendChild(clearButton);
+
+    filterWrapper.appendChild(filterBar);
+    filtersWrapper.appendChild(filterWrapper);
 
     // Create character container if it doesn't exist
     let container = document.getElementById('characters-container');
@@ -1397,20 +1642,21 @@ async function initializeCharacterPage(data, page = 1, contentDiv) {
         contentDiv.appendChild(container);
     }
 
-    // Add results info section
+    // Add results info section using new styling
     let resultsInfo = document.querySelector('.character-results-info');
     if (!resultsInfo) {
         resultsInfo = document.createElement('div');
-        resultsInfo.className = 'character-results-info';
-        resultsInfo.innerHTML = '<p>Loading characters...</p>';
+        resultsInfo.className = 'model-results-info';
+        resultsInfo.textContent = 'Loading characters...';
         contentDiv.insertBefore(resultsInfo, container);
     }
 
-    // Create pagination container if it doesn't exist
+    // Create pagination container if it doesn't exist using new styling
     let paginationContainer = document.getElementById('character-pagination');
     if (!paginationContainer) {
         paginationContainer = document.createElement('div');
         paginationContainer.id = 'character-pagination';
+        paginationContainer.className = 'model-pagination blank-pagination';
         
         // Add mobile-specific classes
         if (isMobile) {
@@ -1418,14 +1664,19 @@ async function initializeCharacterPage(data, page = 1, contentDiv) {
         }
         
         contentDiv.appendChild(paginationContainer);
+    } else {
+        // Ensure it has the right classes
+        if (!paginationContainer.classList.contains('model-pagination')) {
+            paginationContainer.classList.add('model-pagination', 'blank-pagination');
+        }
     }
 
     // Setup mobile orientation change handler
     handleMobileOrientationChange();
 
-    // Show initial loading state
+    // Show initial loading state using new loading overlay
     container.innerHTML = `
-        <div class="character-loading">
+        <div class="model-loading-overlay">
             <i class="fas fa-spinner fa-spin"></i>
             <p>Loading characters...</p>
         </div>

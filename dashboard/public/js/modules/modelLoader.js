@@ -19,6 +19,7 @@ import * as villageShops from '../villageShops.js';
 import * as villages from '../villages.js';
 import * as vending from '../vending.js';
 import * as vendingShops from '../vendingShops.js';
+import * as blank from '../blank.js';
 import * as error from '../error.js';
 
 // ------------------- Function: getModelFetchUrl -------------------
@@ -70,10 +71,23 @@ export function setupBackButton(modelName, modelDetailsPage, dashboardSection) {
 // ------------------- Function: showModelView -------------------
 // Shows the model details view
 export function showModelView(modelName, title, contentDiv, dashboardSection, modelDetailsPage) {
+  console.log(`[Inventory Load] showModelView called for: ${modelName} at ${new Date().toISOString()}`);
   dashboardSection.style.display = 'none';
   modelDetailsPage.style.display = 'block';
   title.textContent = modelName.charAt(0).toUpperCase() + modelName.slice(1);
   contentDiv.innerHTML = '';
+  
+  // Show loading state immediately for inventory model
+  if (modelName === 'inventory' && contentDiv) {
+    console.log(`[Inventory Load] 📍 Setting initial loading state in showModelView at ${new Date().toISOString()}`);
+    contentDiv.innerHTML = `
+      <div class="model-loading-overlay">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Loading inventory data...</p>
+      </div>
+    `;
+    console.log(`[Inventory Load] ✅ Loading state HTML set, checking DOM:`, contentDiv.querySelector('.model-loading-overlay') ? 'Found' : 'Not found');
+  }
 }
 
 // ------------------- Function: initializeModelPage -------------------
@@ -100,7 +114,10 @@ export async function initializeModelPage(modelName, data, page, contentDiv, tit
       await pets.initializePetPage(data, page, contentDiv);
       break;
     case 'inventory':
+      title.textContent = 'Inventories';
+      console.log(`[Inventory Load] 🚀 initializeModelPage called for inventory at ${new Date().toISOString()}`);
       await inventory.initializeInventoryPage(data, page, contentDiv);
+      console.log(`[Inventory Load] ✅ initializeModelPage completed for inventory at ${new Date().toISOString()}`);
       break;
     case 'villageShops':
       await villageShops.initializeVillageShopsPage(data, page, contentDiv);
@@ -119,6 +136,10 @@ export async function initializeModelPage(modelName, data, page, contentDiv, tit
     case 'vendingShops':
       title.textContent = 'Vending Shops';
       await vendingShops.initializeVendingShopsPage(data, page, contentDiv);
+      break;
+    case 'blank':
+      title.textContent = 'Blank Template';
+      await blank.initializeBlankPage(data, page, contentDiv);
       break;
     default:
       console.error(`Unknown model type: ${modelName}`);
@@ -142,6 +163,10 @@ export function setupModelCardHandlers() {
     card.addEventListener('click', async (event) => {
       event.preventDefault();
       
+      if (modelName === 'inventory') {
+        console.log(`[Inventory Load] 🖱️  Inventory card clicked at ${new Date().toISOString()}`);
+      }
+      
       navigateToModel(modelName);
       resetFilterState(modelName);
       
@@ -162,12 +187,24 @@ export function setupModelCardHandlers() {
           throw new Error('Required DOM elements not found');
         }
         
+        if (modelName === 'inventory') {
+          console.log(`[Inventory Load] 📍 About to call showModelView at ${new Date().toISOString()}`);
+        }
+        
         showModelView(modelName, title, contentDiv, dashboardSection, modelDetailsPage);
         setupBackButton(modelName, modelDetailsPage, dashboardSection);
         setupBackToTopButton();
         
-        const { data, pagination } = await loadModelData(modelName);
-        await initializeModelPage(modelName, data, pagination.page, contentDiv, title);
+        // Skip API fetch for 'blank' and 'inventory' models - they fetch their own data
+        if (modelName === 'blank' || modelName === 'inventory') {
+          if (modelName === 'inventory') {
+            console.log(`[Inventory Load] ⏭️  Skipping loadModelData, calling initializeModelPage directly at ${new Date().toISOString()}`);
+          }
+          await initializeModelPage(modelName, [], 1, contentDiv, title);
+        } else {
+          const { data, pagination } = await loadModelData(modelName);
+          await initializeModelPage(modelName, data, pagination.page, contentDiv, title);
+        }
       } catch (err) {
         error.logError(err, 'Model Loading');
       }

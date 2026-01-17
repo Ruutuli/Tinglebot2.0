@@ -4,7 +4,6 @@
 /* ====================================================================== */
 
 import { scrollToTop } from './ui.js';
-import { createSearchFilterBar } from './ui.js';
 
 // ------------------- Function: formatCharacterIconUrl -------------------
 // Formats and returns character icon URL
@@ -63,12 +62,10 @@ async function initializeVendingShopsPage(data, page, contentDiv) {
     // Check if we have data
     if (!data || data.length === 0) {
       contentDiv.innerHTML = `
-        <div class="error-state">
-          <i class="fas fa-exclamation-circle"></i>
-          <p>No vending shops data available</p>
-          <p class="error-state-subtitle">
-            No vendors have set up their shops yet
-          </p>
+        <div class="blank-empty-state">
+          <i class="fas fa-inbox"></i>
+          <h3>No vending shops data available</h3>
+          <p>No vendors have set up their shops yet</p>
         </div>
       `;
       return;
@@ -81,53 +78,81 @@ async function initializeVendingShopsPage(data, page, contentDiv) {
     const container = document.createElement('div');
     container.className = 'vending-shops-container';
 
-    // Create header
-    const header = document.createElement('div');
-    header.className = 'vending-shops-header';
-    header.innerHTML = `
-      <h2>
-        <i class="fas fa-shopping-cart"></i> Vending Shops
-      </h2>
-      <p>
-        Browse items from all vendor shops
-      </p>
-    `;
-    container.appendChild(header);
+    // Create filters wrapper (like blank.js)
+    const filtersWrapper = document.createElement('div');
+    filtersWrapper.className = 'vending-shops-filters-wrapper blank-filters-wrapper';
 
-    // Create search/filter bar
-    const characters = [...new Set(data.map(item => item.characterName))].sort();
-    const characterOptions = [
-      { value: 'all', label: 'All Vendors', selected: true },
-      ...characters.map(char => ({ value: char, label: char }))
-    ];
+    // Create separate search bar (like blank.js)
+    const searchWrapper = document.createElement('div');
+    searchWrapper.className = 'model-search-wrapper blank-search-wrapper';
     
-    const { bar: filterBar } = createSearchFilterBar({
-      layout: 'compact',
-      filters: [
-        {
-          type: 'input',
-          id: 'vending-shops-search',
-          placeholder: 'Search items or vendors...',
-          attributes: { autocomplete: 'off' },
-          width: 'double'
-        },
-        {
-          type: 'select',
-          id: 'vending-shops-character-filter',
-          name: 'character',
-          'data-filter': 'character',
-          options: characterOptions
-        }
-      ]
-    });
-    container.appendChild(filterBar);
+    const searchBar = document.createElement('div');
+    searchBar.className = 'model-search-bar blank-search-bar';
+    
+    const searchIcon = document.createElement('i');
+    searchIcon.className = 'fas fa-search model-search-icon blank-search-icon';
+    searchIcon.setAttribute('aria-hidden', 'true');
+    
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'vending-shops-search';
+    searchInput.className = 'model-search-input blank-search-input';
+    searchInput.placeholder = 'Search items or vendors...';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.setAttribute('aria-label', 'Search items or vendors');
+    
+    searchBar.appendChild(searchIcon);
+    searchBar.appendChild(searchInput);
+    searchWrapper.appendChild(searchBar);
+    filtersWrapper.appendChild(searchWrapper);
 
-    // Create results info
+    // Create separate filter bar (like blank.js)
+    const filterWrapper = document.createElement('div');
+    filterWrapper.className = 'model-filter-wrapper blank-filter-wrapper';
+    
+    const filterBar = document.createElement('div');
+    filterBar.className = 'model-filter-bar blank-filter-bar';
+
+    // Character/Vendor Filter
+    const characters = [...new Set(data.map(item => item.characterName))].sort();
+    const characterControl = document.createElement('div');
+    characterControl.className = 'model-filter-control blank-filter-control';
+    const characterLabel = document.createElement('label');
+    characterLabel.className = 'model-filter-label blank-filter-label';
+    characterLabel.innerHTML = '<i class="fas fa-user"></i> Vendor';
+    characterLabel.setAttribute('for', 'vending-shops-character-filter');
+    const characterSelect = document.createElement('select');
+    characterSelect.id = 'vending-shops-character-filter';
+    characterSelect.className = 'model-filter-select blank-filter-select';
+    characterSelect.setAttribute('name', 'character');
+    characterSelect.setAttribute('data-filter', 'character');
+    
+    // Add options
+    const allOption = document.createElement('option');
+    allOption.value = 'all';
+    allOption.textContent = 'All Vendors';
+    allOption.selected = true;
+    characterSelect.appendChild(allOption);
+    
+    characters.forEach(char => {
+      const option = document.createElement('option');
+      option.value = char;
+      option.textContent = char;
+      characterSelect.appendChild(option);
+    });
+    
+    characterControl.appendChild(characterLabel);
+    characterControl.appendChild(characterSelect);
+    filterBar.appendChild(characterControl);
+
+    filterWrapper.appendChild(filterBar);
+    filtersWrapper.appendChild(filterWrapper);
+    container.appendChild(filtersWrapper);
+
+    // Create results info using new styling
     const resultsInfo = document.createElement('div');
-    resultsInfo.className = 'vending-shops-results-info';
-    resultsInfo.innerHTML = `
-      <p>Showing ${data.length} items</p>
-    `;
+    resultsInfo.className = 'model-results-info';
+    resultsInfo.textContent = `Showing ${data.length} item${data.length !== 1 ? 's' : ''}`;
     container.appendChild(resultsInfo);
 
     // Group items by character
@@ -161,10 +186,11 @@ async function initializeVendingShopsPage(data, page, contentDiv) {
     console.error('❌ Error initializing vending shops page:', error);
     if (contentDiv) {
       contentDiv.innerHTML = `
-        <div class="error-state">
+        <div class="blank-empty-state">
           <i class="fas fa-exclamation-circle"></i>
-          <p>Failed to initialize vending shops page</p>
-          <button class="retry-button" onclick="location.reload()">Retry</button>
+          <h3>Failed to initialize vending shops page</h3>
+          <p>${error.message || 'An error occurred while loading the page'}</p>
+          <button class="retry-button" onclick="location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button>
         </div>
       `;
     }
@@ -355,7 +381,7 @@ function setupFilters(container, allData, shopsGrid, resultsInfo) {
 
     // Update results info
     if (resultsInfo) {
-      resultsInfo.querySelector('p').textContent = `Showing ${filteredData.length} item${filteredData.length !== 1 ? 's' : ''}`;
+      resultsInfo.textContent = `Showing ${filteredData.length} item${filteredData.length !== 1 ? 's' : ''}`;
     }
   };
 

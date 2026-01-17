@@ -2,7 +2,7 @@
 // Monster Rendering and Filtering Module
 // ============================================================================
 
-import { scrollToTop, createSearchFilterBar } from './ui.js';
+import { scrollToTop } from './ui.js';
 import { capitalize } from './utils.js';
 
 // ------------------- Function: renderMonsterCards -------------------
@@ -60,7 +60,15 @@ function renderMonsterCards(monsters, page = 1, totalMonsters = null) {
 
       // ------------------- No Monsters Found -------------------
   if (!monstersToRender || monstersToRender.length === 0) {
-    grid.innerHTML = '<div class="monster-loading">No monsters found</div>';
+    grid.innerHTML = `
+      <div class="blank-empty-state">
+        <i class="fas fa-inbox"></i>
+        <h3>No monsters found</h3>
+        <p>Try adjusting your search or filters</p>
+      </div>
+    `;
+    const paginationContainer = document.getElementById('monster-pagination');
+    if (paginationContainer) paginationContainer.innerHTML = '';
     return;
   }
 
@@ -163,7 +171,7 @@ function renderMonsterCards(monsters, page = 1, totalMonsters = null) {
   }).join('');
 
   // Update results info
-  const resultsInfo = document.querySelector('.monster-results-info p');
+  const resultsInfo = document.querySelector('.monster-results-info, .model-results-info');
   if (resultsInfo) {
     const monstersForPagination = totalMonsters !== null ? totalMonsters : monstersToRender.length;
     const monstersPerPageSelect = document.getElementById('monsters-per-page');
@@ -895,27 +903,31 @@ async function setupMonsterFilters(monsters) {
     const sortBy = sortSelect ? sortSelect.value : 'name-asc';
 
     const filtered = window.allMonsters.filter(monster => {
-      const matchesSearch = !searchTerm ||
-        (monster.name || '').toLowerCase().includes(searchTerm) ||
-        (monster.type || '').toLowerCase().includes(searchTerm) ||
-        (monster.species || '').toLowerCase().includes(searchTerm) ||
-        (Array.isArray(monster.job) ? monster.job.some(job => job.toLowerCase().includes(searchTerm)) : false);
-
-      const monsterSpecies = getSpeciesFromName(monster.name).toLowerCase();
-      const matchesSpecies = speciesFilter === 'all' || monsterSpecies === speciesFilter;
-
+      // Use the same helper functions to derive type and species for consistent searching
       const monsterType = getTypeFromName(monster.name).toLowerCase();
+      const monsterSpecies = getSpeciesFromName(monster.name).toLowerCase();
+      const monsterName = (monster.name || '').toLowerCase();
+      const monsterJobs = Array.isArray(monster.job) ? monster.job : [];
+      const monsterLocations = Array.isArray(monster.locations) ? monster.locations : [];
+      
+      // Search across all relevant fields
+      const matchesSearch = !searchTerm ||
+        monsterName.includes(searchTerm) ||
+        monsterType.includes(searchTerm) ||
+        monsterSpecies.includes(searchTerm) ||
+        monsterJobs.some(job => job.toLowerCase().includes(searchTerm)) ||
+        monsterLocations.some(loc => loc.toLowerCase().includes(searchTerm));
+
+      const matchesSpecies = speciesFilter === 'all' || monsterSpecies === speciesFilter;
       const matchesType = typeFilter === 'all' || monsterType === typeFilter;
 
       const matchesTier = tierFilter === 'all' || (monster.tier || 1).toString() === tierFilter;
 
-      // Check job filter
-      const monsterJobs = Array.isArray(monster.job) ? monster.job : [];
+      // Check job filter (monsterJobs already declared above)
       const matchesJobs = jobsFilter === 'all' || 
         monsterJobs.some(job => job.toLowerCase() === jobsFilter);
 
-      // Check location filter
-      const monsterLocations = Array.isArray(monster.locations) ? monster.locations : [];
+      // Check location filter (monsterLocations already declared above)
       const matchesLocations = locationsFilter === 'all' || 
         monsterLocations.some(location => location.toLowerCase() === locationsFilter);
 
@@ -967,7 +979,7 @@ async function setupMonsterFilters(monsters) {
     const paginatedMonsters = sorted.slice(startIndex, endIndex);
 
     // Update results info
-    const resultsInfo = document.querySelector('.monster-results-info p');
+    const resultsInfo = document.querySelector('.monster-results-info, .model-results-info');
     if (resultsInfo) {
       const isShowingAll = monstersPerPageSelect && monstersPerPageSelect.value === 'all';
       if (isShowingAll) {
@@ -984,12 +996,9 @@ async function setupMonsterFilters(monsters) {
     if (monstersPerPageSelect && monstersPerPageSelect.value !== 'all' && sorted.length > monstersPerPage) {
       updateFilteredPagination(page, totalPages, sorted.length);
     } else {
-      const contentDiv = document.getElementById('model-details-data');
-      if (contentDiv) {
-        const existingPagination = contentDiv.querySelector('.pagination');
-        if (existingPagination) {
-          existingPagination.remove();
-        }
+      const paginationContainer = document.getElementById('monster-pagination');
+      if (paginationContainer) {
+        paginationContainer.innerHTML = '';
       }
     }
   }
@@ -1021,7 +1030,7 @@ async function setupMonsterFilters(monsters) {
       window.allMonsters = filteredAndSorted;
 
       // Update results info
-      const resultsInfo = document.querySelector('.monster-results-info p');
+      const resultsInfo = document.querySelector('.monster-results-info, .model-results-info');
       if (resultsInfo) {
         const isShowingAll = monstersPerPageSelect && monstersPerPageSelect.value === 'all';
         if (isShowingAll) {
@@ -1038,12 +1047,9 @@ async function setupMonsterFilters(monsters) {
       if (monstersPerPageSelect && monstersPerPageSelect.value !== 'all' && filteredAndSorted.length > monstersPerPage) {
         updateFilteredPagination(page, totalPages, filteredAndSorted.length);
       } else {
-        const contentDiv = document.getElementById('model-details-data');
-        if (contentDiv) {
-          const existingPagination = contentDiv.querySelector('.pagination');
-          if (existingPagination) {
-            existingPagination.remove();
-          }
+        const paginationContainer = document.getElementById('monster-pagination');
+        if (paginationContainer) {
+          paginationContainer.innerHTML = '';
         }
       }
 
@@ -1066,27 +1072,31 @@ async function setupMonsterFilters(monsters) {
 
     // Apply filters
     const filtered = monsters.filter(monster => {
-      const matchesSearch = !searchTerm ||
-        (monster.name || '').toLowerCase().includes(searchTerm) ||
-        (monster.type || '').toLowerCase().includes(searchTerm) ||
-        (monster.species || '').toLowerCase().includes(searchTerm) ||
-        (Array.isArray(monster.job) ? monster.job.some(job => job.toLowerCase().includes(searchTerm)) : false);
-
-      const monsterSpecies = getSpeciesFromName(monster.name).toLowerCase();
-      const matchesSpecies = speciesFilter === 'all' || monsterSpecies === speciesFilter;
-
+      // Use the same helper functions to derive type and species for consistent searching
       const monsterType = getTypeFromName(monster.name).toLowerCase();
-      const matchesType = typeFilter === 'all' || monsterType === typeFilter;
+      const monsterSpecies = getSpeciesFromName(monster.name).toLowerCase();
+      const monsterName = (monster.name || '').toLowerCase();
+      const monsterJobs = Array.isArray(monster.job) ? monster.job : [];
+      const monsterLocations = Array.isArray(monster.locations) ? monster.locations : [];
+      
+      // Search across all relevant fields
+      const matchesSearch = !searchTerm ||
+        monsterName.includes(searchTerm) ||
+        monsterType.includes(searchTerm) ||
+        monsterSpecies.includes(searchTerm) ||
+        monsterJobs.some(job => job.toLowerCase().includes(searchTerm)) ||
+        monsterLocations.some(loc => loc.toLowerCase().includes(searchTerm));
 
+      // Use already declared variables (monsterSpecies, monsterType, monsterJobs already declared above)
+      const matchesSpecies = speciesFilter === 'all' || monsterSpecies === speciesFilter;
+      const matchesType = typeFilter === 'all' || monsterType === typeFilter;
       const matchesTier = tierFilter === 'all' || (monster.tier || 1).toString() === tierFilter;
 
-      // Check job filter
-      const monsterJobs = Array.isArray(monster.job) ? monster.job : [];
+      // Check job filter (monsterJobs already declared above)
       const matchesJobs = jobsFilter === 'all' || 
         monsterJobs.some(job => job.toLowerCase() === jobsFilter);
 
-      // Check location filter
-      const monsterLocations = Array.isArray(monster.locations) ? monster.locations : [];
+      // Check location filter (monsterLocations already declared above)
       const matchesLocations = locationsFilter === 'all' || 
         monsterLocations.some(location => location.toLowerCase() === locationsFilter);
 
@@ -1128,95 +1138,209 @@ async function setupMonsterFilters(monsters) {
     });
   }
 
+  // ------------------- Function: showPageJumpModal -------------------
+  // Shows the page jump modal when ellipsis is clicked
+  function showPageJumpModal(minPage, maxPage, totalPages) {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('monster-page-jump-modal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    const pageRange = minPage === maxPage ? `Page ${minPage}` : `Pages ${minPage}-${maxPage}`;
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'blank-page-jump-modal-overlay';
+    overlay.id = 'monster-page-jump-modal';
+    
+    const modal = document.createElement('div');
+    modal.className = 'blank-page-jump-modal';
+    
+    modal.innerHTML = `
+      <div class="blank-page-jump-modal-header">
+        <h3 class="blank-page-jump-modal-title">
+          <i class="fas fa-arrow-right"></i>
+          Jump to Page
+        </h3>
+        <button class="blank-page-jump-modal-close" aria-label="Close modal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="blank-page-jump-modal-body">
+        <label class="blank-page-jump-modal-label" for="monster-page-jump-input">
+          Enter a page number (${pageRange}):
+        </label>
+        <input 
+          type="number" 
+          id="monster-page-jump-input" 
+          class="blank-page-jump-modal-input" 
+          min="1" 
+          max="${totalPages}" 
+          value="${minPage}"
+          placeholder="Enter page number"
+          autofocus
+        />
+        <div class="blank-page-jump-modal-info">
+          Valid range: 1 - ${totalPages}
+        </div>
+        <div class="blank-page-jump-modal-error" id="monster-page-jump-error"></div>
+      </div>
+      <div class="blank-page-jump-modal-actions">
+        <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-cancel">
+          Cancel
+        </button>
+        <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-submit">
+          <i class="fas fa-check"></i>
+          Go to Page
+        </button>
+      </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Show modal with animation
+    setTimeout(() => {
+      overlay.classList.add('active');
+    }, 10);
+    
+    const input = modal.querySelector('#monster-page-jump-input');
+    const errorMsg = modal.querySelector('#monster-page-jump-error');
+    const submitBtn = modal.querySelector('.blank-page-jump-modal-btn-submit');
+    const cancelBtn = modal.querySelector('.blank-page-jump-modal-btn-cancel');
+    const closeBtn = modal.querySelector('.blank-page-jump-modal-close');
+    
+    const validateAndSubmit = () => {
+      const pageNum = parseInt(input.value, 10);
+      errorMsg.classList.remove('active');
+      
+      if (!pageNum || isNaN(pageNum)) {
+        errorMsg.textContent = 'Please enter a valid page number.';
+        errorMsg.classList.add('active');
+        input.focus();
+        return;
+      }
+      
+      if (pageNum < 1 || pageNum > totalPages) {
+        errorMsg.textContent = `Please enter a page number between 1 and ${totalPages}.`;
+        errorMsg.classList.add('active');
+        input.focus();
+        return;
+      }
+      
+      hidePageJumpModal();
+      window.filterMonsters(pageNum);
+    };
+    
+    const hidePageJumpModal = () => {
+      overlay.classList.remove('active');
+      setTimeout(() => {
+        overlay.remove();
+      }, 300);
+    };
+    
+    // Event listeners
+    submitBtn.addEventListener('click', validateAndSubmit);
+    cancelBtn.addEventListener('click', hidePageJumpModal);
+    closeBtn.addEventListener('click', hidePageJumpModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        hidePageJumpModal();
+      }
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        validateAndSubmit();
+      } else if (e.key === 'Escape') {
+        hidePageJumpModal();
+      }
+    });
+  }
+
   // Update filtered pagination
   function updateFilteredPagination(currentPage, totalPages, totalMonsters) {
-    const contentDiv = document.getElementById('model-details-data');
-    if (!contentDiv) {
-      console.error('❌ Content div not found');
+    const paginationContainer = document.getElementById('monster-pagination');
+    if (!paginationContainer) {
+      console.error('❌ Pagination container not found');
       return;
     }
 
-    // Remove existing pagination
-    const existingPagination = contentDiv.querySelector('.pagination');
-    if (existingPagination) {
-      existingPagination.remove();
+    // Ensure pagination container has the right class
+    if (!paginationContainer.classList.contains('model-pagination')) {
+      paginationContainer.classList.add('model-pagination', 'blank-pagination');
     }
 
-    // Only show pagination if there are multiple pages
-    if (totalPages > 1) {
-      
-      const handlePageChange = async (pageNum) => {
+    // Remove any existing pagination
+    paginationContainer.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    // Create pagination bar
+    const paginationDiv = document.createElement('div');
+    paginationDiv.className = 'pagination';
+
+    // Helper to create a button (matching blank.js style)
+    const makeButton = (label, pageNum, isActive = false, icon = null) => {
+      const btn = document.createElement('button');
+      btn.className = `pagination-button ${isActive ? 'active' : ''}`;
+      btn.textContent = icon ? '' : label;
+      if (icon) {
+        btn.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+      }
+      btn.title = `Page ${pageNum}`;
+      btn.onclick = () => {
+        if (pageNum < 1 || pageNum > totalPages) return;
         window.filterMonsters(pageNum);
       };
+      return btn;
+    };
 
-      // Create pagination manually
-      const paginationDiv = document.createElement('div');
-      paginationDiv.className = 'pagination';
-      
-      // Add previous button
-      if (currentPage > 1) {
-        const prevButton = document.createElement('button');
-        prevButton.className = 'pagination-button';
-        prevButton.innerHTML = '<i class="fas fa-chevron-left"></i>';
-        prevButton.title = 'Previous Page';
-        prevButton.addEventListener('click', () => handlePageChange(currentPage - 1));
-        paginationDiv.appendChild(prevButton);
-      }
+    // Helper to create ellipsis (matching blank.js style)
+    const makeEllipsis = (minPage, maxPage) => {
+      const ell = document.createElement('span');
+      ell.className = 'pagination-ellipsis';
+      ell.textContent = '...';
+      ell.title = `Click to jump to a page (${minPage}-${maxPage})`;
+      ell.style.cursor = 'pointer';
+      ell.onclick = () => {
+        showPageJumpModal(minPage, maxPage, totalPages);
+      };
+      return ell;
+    };
 
-      // Add page numbers
-      const startPage = Math.max(1, currentPage - 2);
-      const endPage = Math.min(totalPages, currentPage + 2);
-
-      if (startPage > 1) {
-        const firstButton = document.createElement('button');
-        firstButton.className = 'pagination-button';
-        firstButton.textContent = '1';
-        firstButton.addEventListener('click', () => handlePageChange(1));
-        paginationDiv.appendChild(firstButton);
-
-        if (startPage > 2) {
-          const ellipsis = document.createElement('span');
-          ellipsis.className = 'pagination-ellipsis';
-          ellipsis.textContent = '...';
-          paginationDiv.appendChild(ellipsis);
-        }
-      }
-
-      for (let i = startPage; i <= endPage; i++) {
-        const pageButton = document.createElement('button');
-        pageButton.className = `pagination-button ${i === currentPage ? 'active' : ''}`;
-        pageButton.textContent = i.toString();
-        pageButton.addEventListener('click', () => handlePageChange(i));
-        paginationDiv.appendChild(pageButton);
-      }
-
-      if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-          const ellipsis = document.createElement('span');
-          ellipsis.className = 'pagination-ellipsis';
-          ellipsis.textContent = '...';
-          paginationDiv.appendChild(ellipsis);
-        }
-
-        const lastButton = document.createElement('button');
-        lastButton.className = 'pagination-button';
-        lastButton.textContent = totalPages.toString();
-        lastButton.addEventListener('click', () => handlePageChange(totalPages));
-        paginationDiv.appendChild(lastButton);
-      }
-
-      // Add next button
-      if (currentPage < totalPages) {
-        const nextButton = document.createElement('button');
-        nextButton.className = 'pagination-button';
-        nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
-        nextButton.title = 'Next Page';
-        nextButton.addEventListener('click', () => handlePageChange(currentPage + 1));
-        paginationDiv.appendChild(nextButton);
-      }
-
-      contentDiv.appendChild(paginationDiv);
+    // Previous button
+    if (currentPage > 1) {
+      paginationDiv.appendChild(makeButton('Previous', currentPage - 1, false, 'left'));
     }
+
+    // Page numbers (matching blank.js logic)
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+
+    if (startPage > 1) {
+      paginationDiv.appendChild(makeButton('1', 1));
+      if (startPage > 2) {
+        paginationDiv.appendChild(makeEllipsis(2, startPage - 1));
+      }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      paginationDiv.appendChild(makeButton(i.toString(), i, i === currentPage));
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        paginationDiv.appendChild(makeEllipsis(endPage + 1, totalPages - 1));
+      }
+      paginationDiv.appendChild(makeButton(totalPages.toString(), totalPages));
+    }
+
+    // Next button
+    if (currentPage < totalPages) {
+      paginationDiv.appendChild(makeButton('Next', currentPage + 1, false, 'right'));
+    }
+
+    paginationContainer.appendChild(paginationDiv);
   }
 
   // Add event listeners
@@ -1259,7 +1383,7 @@ async function setupMonsterFilters(monsters) {
         window.allMonsters = data;
         
         // Update results info
-        const resultsInfo = document.querySelector('.monster-results-info p');
+        const resultsInfo = document.querySelector('.monster-results-info, .model-results-info');
         if (resultsInfo) {
           resultsInfo.textContent = `Showing ${data.length} of ${pagination.total} monsters`;
         }
@@ -1268,12 +1392,9 @@ async function setupMonsterFilters(monsters) {
         renderMonsterCards(data, 1, pagination.total);
         
         // Remove any filtered pagination
-        const contentDiv = document.getElementById('model-details-data');
-        if (contentDiv) {
-          const existingPagination = contentDiv.querySelector('.pagination');
-          if (existingPagination) {
-            existingPagination.remove();
-          }
+        const paginationContainer = document.getElementById('monster-pagination');
+        if (paginationContainer) {
+          paginationContainer.innerHTML = '';
         }
         
       } catch (error) {
@@ -1351,62 +1472,174 @@ function populateSelect(select, values) {
 async function initializeMonsterPage(data, page = 1, contentDiv) {
   window.allMonsters = data;
 
-  // Create or refresh the standardized filter bar
-  let filtersContainer = document.querySelector('.monster-filters');
-  if (!filtersContainer) {
-    filtersContainer = document.createElement('div');
-    filtersContainer.className = 'monster-filters';
+  // Create filters wrapper (like blank.js)
+  let filtersWrapper = document.querySelector('.monster-filters-wrapper');
+  if (!filtersWrapper) {
+    filtersWrapper = document.createElement('div');
+    filtersWrapper.className = 'monster-filters-wrapper blank-filters-wrapper';
+    contentDiv.insertBefore(filtersWrapper, contentDiv.firstChild);
   }
-  filtersContainer.innerHTML = '';
+  filtersWrapper.innerHTML = '';
 
-  const { bar: monsterFilterBar } = createSearchFilterBar({
-    layout: 'wide',
-    filters: [
-      {
-        type: 'input',
-        id: 'monster-search-input',
-        placeholder: 'Search monsters...',
-        attributes: { autocomplete: 'off' },
-        width: 'double'
-      },
-      { type: 'select', id: 'filter-species', options: [{ value: 'all', label: 'All Species' }] },
-      { type: 'select', id: 'filter-type', options: [{ value: 'all', label: 'All Types' }] },
-      {
-        type: 'select',
-        id: 'sort-by',
-        options: [
-          { value: 'name-asc', label: 'Name (A-Z)', selected: true },
-          { value: 'name-desc', label: 'Name (Z-A)' },
-          { value: 'tier-asc', label: 'Tier (Low-High)' },
-          { value: 'tier-desc', label: 'Tier (High-Low)' },
-          { value: 'hearts-desc', label: 'Hearts (High-Low)' },
-          { value: 'damage-desc', label: 'Damage (High-Low)' }
-        ]
-      },
-      {
-        type: 'select',
-        id: 'monsters-per-page',
-        options: [
-          { value: '15', label: '15 per page', selected: true },
-          { value: '30', label: '30 per page' },
-          { value: '45', label: '45 per page' },
-          { value: '60', label: '60 per page' },
-          { value: 'all', label: 'All monsters' }
-        ]
-      }
-    ],
-    advancedFilters: [
-      { type: 'select', id: 'filter-tier', options: [{ value: 'all', label: 'All Tiers' }] },
-      { type: 'select', id: 'filter-jobs', options: [{ value: 'all', label: 'All Jobs' }] },
-      { type: 'select', id: 'filter-locations', options: [{ value: 'all', label: 'All Locations' }] }
-    ],
-    buttons: [
-      { id: 'clear-filters', label: 'Clear Filters', className: 'clear-filters-btn' }
-    ]
-  });
+  // Create separate search bar (like blank.js)
+  const searchWrapper = document.createElement('div');
+  searchWrapper.className = 'model-search-wrapper blank-search-wrapper';
+  
+  const searchBar = document.createElement('div');
+  searchBar.className = 'model-search-bar blank-search-bar';
+  
+  const searchIcon = document.createElement('i');
+  searchIcon.className = 'fas fa-search model-search-icon blank-search-icon';
+  searchIcon.setAttribute('aria-hidden', 'true');
+  
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.id = 'monster-search-input';
+  searchInput.className = 'model-search-input blank-search-input';
+  searchInput.placeholder = 'Search monsters...';
+  searchInput.setAttribute('autocomplete', 'off');
+  searchInput.setAttribute('aria-label', 'Search monsters');
+  
+  searchBar.appendChild(searchIcon);
+  searchBar.appendChild(searchInput);
+  searchWrapper.appendChild(searchBar);
+  filtersWrapper.appendChild(searchWrapper);
 
-  filtersContainer.appendChild(monsterFilterBar);
-  contentDiv.insertBefore(filtersContainer, contentDiv.firstChild);
+  // Create separate filter bar (like blank.js)
+  const filterWrapper = document.createElement('div');
+  filterWrapper.className = 'model-filter-wrapper blank-filter-wrapper';
+  
+  const filterBar = document.createElement('div');
+  filterBar.className = 'model-filter-bar blank-filter-bar';
+
+  // Species Filter
+  const speciesControl = document.createElement('div');
+  speciesControl.className = 'model-filter-control blank-filter-control';
+  const speciesLabel = document.createElement('label');
+  speciesLabel.className = 'model-filter-label blank-filter-label';
+  speciesLabel.innerHTML = '<i class="fas fa-dragon"></i> Species';
+  speciesLabel.setAttribute('for', 'filter-species');
+  const speciesSelect = document.createElement('select');
+  speciesSelect.id = 'filter-species';
+  speciesSelect.className = 'model-filter-select blank-filter-select';
+  speciesSelect.innerHTML = '<option value="all">All Species</option>';
+  speciesControl.appendChild(speciesLabel);
+  speciesControl.appendChild(speciesSelect);
+  filterBar.appendChild(speciesControl);
+
+  // Type Filter
+  const typeControl = document.createElement('div');
+  typeControl.className = 'model-filter-control blank-filter-control';
+  const typeLabel = document.createElement('label');
+  typeLabel.className = 'model-filter-label blank-filter-label';
+  typeLabel.innerHTML = '<i class="fas fa-fire"></i> Type';
+  typeLabel.setAttribute('for', 'filter-type');
+  const typeSelect = document.createElement('select');
+  typeSelect.id = 'filter-type';
+  typeSelect.className = 'model-filter-select blank-filter-select';
+  typeSelect.innerHTML = '<option value="all">All Types</option>';
+  typeControl.appendChild(typeLabel);
+  typeControl.appendChild(typeSelect);
+  filterBar.appendChild(typeControl);
+
+  // Tier Filter
+  const tierControl = document.createElement('div');
+  tierControl.className = 'model-filter-control blank-filter-control';
+  const tierLabel = document.createElement('label');
+  tierLabel.className = 'model-filter-label blank-filter-label';
+  tierLabel.innerHTML = '<i class="fas fa-star"></i> Tier';
+  tierLabel.setAttribute('for', 'filter-tier');
+  const tierSelect = document.createElement('select');
+  tierSelect.id = 'filter-tier';
+  tierSelect.className = 'model-filter-select blank-filter-select';
+  tierSelect.innerHTML = '<option value="all">All Tiers</option>';
+  tierControl.appendChild(tierLabel);
+  tierControl.appendChild(tierSelect);
+  filterBar.appendChild(tierControl);
+
+  // Jobs Filter
+  const jobsControl = document.createElement('div');
+  jobsControl.className = 'model-filter-control blank-filter-control';
+  const jobsLabel = document.createElement('label');
+  jobsLabel.className = 'model-filter-label blank-filter-label';
+  jobsLabel.innerHTML = '<i class="fas fa-briefcase"></i> Jobs';
+  jobsLabel.setAttribute('for', 'filter-jobs');
+  const jobsSelect = document.createElement('select');
+  jobsSelect.id = 'filter-jobs';
+  jobsSelect.className = 'model-filter-select blank-filter-select';
+  jobsSelect.innerHTML = '<option value="all">All Jobs</option>';
+  jobsControl.appendChild(jobsLabel);
+  jobsControl.appendChild(jobsSelect);
+  filterBar.appendChild(jobsControl);
+
+  // Locations Filter
+  const locationsControl = document.createElement('div');
+  locationsControl.className = 'model-filter-control blank-filter-control';
+  const locationsLabel = document.createElement('label');
+  locationsLabel.className = 'model-filter-label blank-filter-label';
+  locationsLabel.innerHTML = '<i class="fas fa-map-marker-alt"></i> Locations';
+  locationsLabel.setAttribute('for', 'filter-locations');
+  const locationsSelect = document.createElement('select');
+  locationsSelect.id = 'filter-locations';
+  locationsSelect.className = 'model-filter-select blank-filter-select';
+  locationsSelect.innerHTML = '<option value="all">All Locations</option>';
+  locationsControl.appendChild(locationsLabel);
+  locationsControl.appendChild(locationsSelect);
+  filterBar.appendChild(locationsControl);
+
+  // Sort Filter
+  const sortControl = document.createElement('div');
+  sortControl.className = 'model-filter-control blank-filter-control';
+  const sortLabel = document.createElement('label');
+  sortLabel.className = 'model-filter-label blank-filter-label';
+  sortLabel.innerHTML = '<i class="fas fa-sort"></i> Sort By';
+  sortLabel.setAttribute('for', 'sort-by');
+  const sortSelect = document.createElement('select');
+  sortSelect.id = 'sort-by';
+  sortSelect.className = 'model-filter-select blank-filter-select';
+  sortSelect.innerHTML = `
+    <option value="name-asc" selected>Name (A-Z)</option>
+    <option value="name-desc">Name (Z-A)</option>
+    <option value="tier-asc">Tier (Low-High)</option>
+    <option value="tier-desc">Tier (High-Low)</option>
+    <option value="hearts-desc">Hearts (High-Low)</option>
+    <option value="damage-desc">Damage (High-Low)</option>
+  `;
+  sortControl.appendChild(sortLabel);
+  sortControl.appendChild(sortSelect);
+  filterBar.appendChild(sortControl);
+
+  // Monsters Per Page
+  const perPageControl = document.createElement('div');
+  perPageControl.className = 'model-filter-control blank-filter-control';
+  const perPageLabel = document.createElement('label');
+  perPageLabel.className = 'model-filter-label blank-filter-label';
+  perPageLabel.innerHTML = '<i class="fas fa-list"></i> Per Page';
+  perPageLabel.setAttribute('for', 'monsters-per-page');
+  const perPageSelect = document.createElement('select');
+  perPageSelect.id = 'monsters-per-page';
+  perPageSelect.className = 'model-filter-select blank-filter-select';
+  perPageSelect.innerHTML = `
+    <option value="15" selected>15 per page</option>
+    <option value="30">30 per page</option>
+    <option value="45">45 per page</option>
+    <option value="60">60 per page</option>
+    <option value="all">All monsters</option>
+  `;
+  perPageControl.appendChild(perPageLabel);
+  perPageControl.appendChild(perPageSelect);
+  filterBar.appendChild(perPageControl);
+
+  // Clear Filters Button
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.id = 'clear-filters';
+  clearButton.className = 'model-clear-filters-btn blank-clear-filters-btn';
+  clearButton.innerHTML = '<i class="fas fa-times"></i> Clear Filters';
+  filterBar.appendChild(clearButton);
+
+  filterWrapper.appendChild(filterBar);
+  filtersWrapper.appendChild(filterWrapper);
 
   // Create monster container if it doesn't exist
   let container = document.getElementById('monsters-container');
@@ -1417,13 +1650,27 @@ async function initializeMonsterPage(data, page = 1, contentDiv) {
     contentDiv.appendChild(container);
   }
 
-  // Add results info section
+  // Add results info section using new styling
   let resultsInfo = document.querySelector('.monster-results-info');
   if (!resultsInfo) {
     resultsInfo = document.createElement('div');
-    resultsInfo.className = 'monster-results-info';
-    resultsInfo.innerHTML = `<p>Showing ${data.length} monsters (sorted alphabetically)</p>`;
+    resultsInfo.className = 'model-results-info';
+    resultsInfo.textContent = `Showing ${data.length} monsters (sorted alphabetically)`;
     contentDiv.insertBefore(resultsInfo, container);
+  }
+
+  // Create pagination container if it doesn't exist using new styling
+  let paginationContainer = document.getElementById('monster-pagination');
+  if (!paginationContainer) {
+    paginationContainer = document.createElement('div');
+    paginationContainer.id = 'monster-pagination';
+    paginationContainer.className = 'model-pagination blank-pagination';
+    contentDiv.appendChild(paginationContainer);
+  } else {
+    // Ensure it has the right classes
+    if (!paginationContainer.classList.contains('model-pagination')) {
+      paginationContainer.classList.add('model-pagination', 'blank-pagination');
+    }
   }
 
   renderMonsterCards(data, page, data.length);

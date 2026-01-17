@@ -3,7 +3,7 @@
 /* Handles quest card rendering, filtering, pagination, and quest details */
 /* ====================================================================== */
 
-import { scrollToTop, createSearchFilterBar } from './ui.js';
+import { scrollToTop } from './ui.js';
 import { capitalize } from './utils.js';
 
 // ============================================================================
@@ -37,7 +37,13 @@ function renderQuestCards(quests, page = 1, totalQuests = null) {
 
     // ------------------- No Quests Found -------------------
     if (!sortedQuests || sortedQuests.length === 0) {
-        grid.innerHTML = '<div class="quest-loading">No quests found</div>';
+        grid.innerHTML = `
+            <div class="blank-empty-state">
+                <i class="fas fa-inbox"></i>
+                <h3>No quests found</h3>
+                <p>Try adjusting your search or filters</p>
+            </div>
+        `;
         const pagination = document.getElementById('quest-pagination');
         if (pagination) pagination.innerHTML = '';
         return;
@@ -236,7 +242,7 @@ function renderQuestCards(quests, page = 1, totalQuests = null) {
     }).join('');
 
     // Update results info
-    const resultsInfo = document.querySelector('.quest-results-info p');
+    const resultsInfo = document.querySelector('.model-results-info');
     if (resultsInfo) {
         const totalPages = Math.ceil(questsForPagination / questsPerPage);
         resultsInfo.textContent = `Showing ${startIndex + 1}-${endIndex} of ${questsForPagination} quests (Page ${page} of ${totalPages})`;
@@ -665,10 +671,10 @@ async function setupQuestFilters(quests) {
         return;
     }
 
-    // Show the filters container
-    const filtersContainer = document.querySelector('.quest-filters');
-    if (filtersContainer) {
-        filtersContainer.style.display = 'flex';
+    // Show the filters wrapper (already shown, no need to set display)
+    const filtersWrapper = document.querySelector('.quest-filters-wrapper');
+    if (filtersWrapper) {
+        filtersWrapper.style.display = 'block';
     }
 
     const searchInput = document.getElementById('quest-search-input');
@@ -741,7 +747,7 @@ async function setupQuestFilters(quests) {
         const questsPerPage = questsPerPageSelect.value === 'all' ? 999999 : parseInt(questsPerPageSelect.value);
 
         // Show loading state
-        const resultsInfo = document.querySelector('.quest-results-info p');
+        const resultsInfo = document.querySelector('.model-results-info');
         if (resultsInfo) {
             resultsInfo.textContent = 'Loading filtered quests...';
         }
@@ -853,7 +859,7 @@ async function setupQuestFilters(quests) {
         const paginatedQuests = sorted.slice(startIndex, endIndex);
 
         // Update results info
-        const resultsInfo = document.querySelector('.quest-results-info p');
+        const resultsInfo = document.querySelector('.model-results-info');
         if (resultsInfo) {
             if (questsPerPageSelect.value === 'all') {
                 resultsInfo.textContent = `Showing all ${sorted.length} of ${window.allQuests.length} quests`;
@@ -929,6 +935,130 @@ async function setupQuestFilters(quests) {
         });
     }
 
+    // ------------------- Function: showPageJumpModal -------------------
+    // Shows the page jump modal when ellipsis is clicked
+    function showPageJumpModal(minPage, maxPage, totalPages) {
+        // Remove existing modal if any
+        const existingModal = document.getElementById('quest-page-jump-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const pageRange = minPage === maxPage ? `Page ${minPage}` : `Pages ${minPage}-${maxPage}`;
+        
+        const overlay = document.createElement('div');
+        overlay.className = 'blank-page-jump-modal-overlay';
+        overlay.id = 'quest-page-jump-modal';
+        
+        const modal = document.createElement('div');
+        modal.className = 'blank-page-jump-modal';
+        
+        modal.innerHTML = `
+            <div class="blank-page-jump-modal-header">
+                <h3 class="blank-page-jump-modal-title">
+                    <i class="fas fa-arrow-right"></i>
+                    Jump to Page
+                </h3>
+                <button class="blank-page-jump-modal-close" aria-label="Close modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="blank-page-jump-modal-body">
+                <label class="blank-page-jump-modal-label" for="quest-page-jump-input">
+                    Enter a page number (${pageRange}):
+                </label>
+                <input 
+                    type="number" 
+                    id="quest-page-jump-input" 
+                    class="blank-page-jump-modal-input" 
+                    min="1" 
+                    max="${totalPages}" 
+                    value="${minPage}"
+                    placeholder="Enter page number"
+                    autofocus
+                />
+                <div class="blank-page-jump-modal-info">
+                    Valid range: 1 - ${totalPages}
+                </div>
+                <div class="blank-page-jump-modal-error" id="quest-page-jump-error"></div>
+            </div>
+            <div class="blank-page-jump-modal-actions">
+                <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-cancel">
+                    Cancel
+                </button>
+                <button class="blank-page-jump-modal-btn blank-page-jump-modal-btn-submit">
+                    <i class="fas fa-check"></i>
+                    Go to Page
+                </button>
+            </div>
+        `;
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Show modal with animation
+        setTimeout(() => {
+            overlay.classList.add('active');
+        }, 10);
+        
+        const input = modal.querySelector('#quest-page-jump-input');
+        const errorMsg = modal.querySelector('#quest-page-jump-error');
+        const submitBtn = modal.querySelector('.blank-page-jump-modal-btn-submit');
+        const cancelBtn = modal.querySelector('.blank-page-jump-modal-btn-cancel');
+        const closeBtn = modal.querySelector('.blank-page-jump-modal-close');
+        
+        const validateAndSubmit = () => {
+            const pageNum = parseInt(input.value, 10);
+            errorMsg.classList.remove('active');
+            
+            if (!pageNum || isNaN(pageNum)) {
+                errorMsg.textContent = 'Please enter a valid page number.';
+                errorMsg.classList.add('active');
+                input.focus();
+                return;
+            }
+            
+            if (pageNum < 1 || pageNum > totalPages) {
+                errorMsg.textContent = `Please enter a page number between 1 and ${totalPages}.`;
+                errorMsg.classList.add('active');
+                input.focus();
+                return;
+            }
+            
+            hidePageJumpModal();
+            window.filterQuests(pageNum);
+        };
+        
+        const hidePageJumpModal = () => {
+            overlay.classList.remove('active');
+            setTimeout(() => {
+                overlay.remove();
+            }, 300);
+        };
+        
+        // Event listeners
+        submitBtn.onclick = validateAndSubmit;
+        cancelBtn.onclick = hidePageJumpModal;
+        closeBtn.onclick = hidePageJumpModal;
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                hidePageJumpModal();
+            }
+        };
+        
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                validateAndSubmit();
+            } else if (e.key === 'Escape') {
+                hidePageJumpModal();
+            }
+        };
+        
+        // Focus input
+        input.select();
+    }
+
     // ------------------- Function: updateFilteredPagination -------------------
     // Creates pagination for filtered results
     function updateFilteredPagination(currentPage, totalPages, totalItems) {
@@ -950,18 +1080,47 @@ async function setupQuestFilters(quests) {
                 window.filterQuests(pageNum);
             };
 
-            // Create pagination manually
+            // Create pagination container with standard classes
+            let paginationContainer = document.getElementById('quest-pagination');
+            if (!paginationContainer) {
+                paginationContainer = document.createElement('div');
+                paginationContainer.id = 'quest-pagination';
+                paginationContainer.className = 'model-pagination blank-pagination';
+                contentDiv.appendChild(paginationContainer);
+            }
+            paginationContainer.innerHTML = '';
+
+            // Create pagination div with proper classes
             const paginationDiv = document.createElement('div');
             paginationDiv.className = 'pagination';
             
+            const createButton = (label, pageNum, isActive = false, icon = null) => {
+                const button = document.createElement('button');
+                button.className = `pagination-button ${isActive ? 'active' : ''}`;
+                button.textContent = icon ? '' : label;
+                if (icon) {
+                    button.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+                }
+                button.title = `Page ${pageNum}`;
+                button.onclick = () => handlePageChange(pageNum);
+                return button;
+            };
+
+            const createEllipsis = (minPage, maxPage) => {
+                const ellipsis = document.createElement('span');
+                ellipsis.className = 'pagination-ellipsis';
+                ellipsis.textContent = '...';
+                ellipsis.title = `Click to jump to a page (${minPage}-${maxPage})`;
+                ellipsis.style.cursor = 'pointer';
+                ellipsis.onclick = () => {
+                    showPageJumpModal(minPage, maxPage, totalPages);
+                };
+                return ellipsis;
+            };
+
             // Add previous button
             if (currentPage > 1) {
-                const prevButton = document.createElement('button');
-                prevButton.className = 'pagination-button';
-                prevButton.innerHTML = '<i class="fas fa-chevron-left"></i>';
-                prevButton.title = 'Previous Page';
-                prevButton.addEventListener('click', () => handlePageChange(currentPage - 1));
-                paginationDiv.appendChild(prevButton);
+                paginationDiv.appendChild(createButton('Previous', currentPage - 1, false, 'left'));
             }
 
             // Add page numbers
@@ -969,54 +1128,29 @@ async function setupQuestFilters(quests) {
             const endPage = Math.min(totalPages, currentPage + 2);
 
             if (startPage > 1) {
-                const firstButton = document.createElement('button');
-                firstButton.className = 'pagination-button';
-                firstButton.textContent = '1';
-                firstButton.addEventListener('click', () => handlePageChange(1));
-                paginationDiv.appendChild(firstButton);
-
+                paginationDiv.appendChild(createButton('1', 1));
                 if (startPage > 2) {
-                    const ellipsis = document.createElement('span');
-                    ellipsis.className = 'pagination-ellipsis';
-                    ellipsis.textContent = '...';
-                    paginationDiv.appendChild(ellipsis);
+                    paginationDiv.appendChild(createEllipsis(2, startPage - 1));
                 }
             }
 
             for (let i = startPage; i <= endPage; i++) {
-                const pageButton = document.createElement('button');
-                pageButton.className = `pagination-button ${i === currentPage ? 'active' : ''}`;
-                pageButton.textContent = i.toString();
-                pageButton.addEventListener('click', () => handlePageChange(i));
-                paginationDiv.appendChild(pageButton);
+                paginationDiv.appendChild(createButton(i.toString(), i, i === currentPage));
             }
 
             if (endPage < totalPages) {
                 if (endPage < totalPages - 1) {
-                    const ellipsis = document.createElement('span');
-                    ellipsis.className = 'pagination-ellipsis';
-                    ellipsis.textContent = '...';
-                    paginationDiv.appendChild(ellipsis);
+                    paginationDiv.appendChild(createEllipsis(endPage + 1, totalPages - 1));
                 }
-
-                const lastButton = document.createElement('button');
-                lastButton.className = 'pagination-button';
-                lastButton.textContent = totalPages.toString();
-                lastButton.addEventListener('click', () => handlePageChange(totalPages));
-                paginationDiv.appendChild(lastButton);
+                paginationDiv.appendChild(createButton(totalPages.toString(), totalPages));
             }
 
             // Add next button
             if (currentPage < totalPages) {
-                const nextButton = document.createElement('button');
-                nextButton.className = 'pagination-button';
-                nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
-                nextButton.title = 'Next Page';
-                nextButton.addEventListener('click', () => handlePageChange(currentPage + 1));
-                paginationDiv.appendChild(nextButton);
+                paginationDiv.appendChild(createButton('Next', currentPage + 1, false, 'right'));
             }
 
-            contentDiv.appendChild(paginationDiv);
+            paginationContainer.appendChild(paginationDiv);
         }
     }
 
@@ -1049,7 +1183,7 @@ async function setupQuestFilters(quests) {
             window.allQuests = data;
             
             // Update results info
-            const resultsInfo = document.querySelector('.quest-results-info p');
+            const resultsInfo = document.querySelector('.model-results-info');
             if (resultsInfo) {
                 resultsInfo.textContent = `Showing ${data.length} of ${pagination.total} quests`;
             }
@@ -1074,7 +1208,7 @@ async function setupQuestFilters(quests) {
                         window.allQuests = pageData;
                         
                         // Update results info
-                        const resultsInfo = document.querySelector('.quest-results-info p');
+                        const resultsInfo = document.querySelector('.model-results-info');
                         if (resultsInfo) {
                             resultsInfo.textContent = `Showing ${pageData.length} of ${pagePagination.total} quests (sorted by date)`;
                         }
@@ -1111,17 +1245,47 @@ async function setupQuestFilters(quests) {
         const contentDiv = document.getElementById('model-details-data');
         if (!contentDiv) return;
 
+        // Create pagination container with standard classes
+        let paginationContainer = document.getElementById('quest-pagination');
+        if (!paginationContainer) {
+            paginationContainer = document.createElement('div');
+            paginationContainer.id = 'quest-pagination';
+            paginationContainer.className = 'model-pagination blank-pagination';
+            contentDiv.appendChild(paginationContainer);
+        }
+        paginationContainer.innerHTML = '';
+
+        // Create pagination div with proper classes
         const paginationDiv = document.createElement('div');
         paginationDiv.className = 'pagination';
         
+        const createButton = (label, pageNum, isActive = false, icon = null) => {
+            const button = document.createElement('button');
+            button.className = `pagination-button ${isActive ? 'active' : ''}`;
+            button.textContent = icon ? '' : label;
+            if (icon) {
+                button.innerHTML = `<i class="fas fa-chevron-${icon}"></i>`;
+            }
+            button.title = `Page ${pageNum}`;
+            button.onclick = () => handlePageChange(pageNum);
+            return button;
+        };
+
+        const createEllipsis = (minPage, maxPage) => {
+            const ellipsis = document.createElement('span');
+            ellipsis.className = 'pagination-ellipsis';
+            ellipsis.textContent = '...';
+            ellipsis.title = `Click to jump to a page (${minPage}-${maxPage})`;
+            ellipsis.style.cursor = 'pointer';
+            ellipsis.onclick = () => {
+                showPageJumpModal(minPage, maxPage, totalPages);
+            };
+            return ellipsis;
+        };
+
         // Add previous button
         if (currentPage > 1) {
-            const prevButton = document.createElement('button');
-            prevButton.className = 'pagination-button';
-            prevButton.innerHTML = '<i class="fas fa-chevron-left"></i>';
-            prevButton.title = 'Previous Page';
-            prevButton.addEventListener('click', () => handlePageChange(currentPage - 1));
-            paginationDiv.appendChild(prevButton);
+            paginationDiv.appendChild(createButton('Previous', currentPage - 1, false, 'left'));
         }
 
         // Add page numbers
@@ -1129,54 +1293,29 @@ async function setupQuestFilters(quests) {
         const endPage = Math.min(totalPages, currentPage + 2);
 
         if (startPage > 1) {
-            const firstButton = document.createElement('button');
-            firstButton.className = 'pagination-button';
-            firstButton.textContent = '1';
-            firstButton.addEventListener('click', () => handlePageChange(1));
-            paginationDiv.appendChild(firstButton);
-
+            paginationDiv.appendChild(createButton('1', 1));
             if (startPage > 2) {
-                const ellipsis = document.createElement('span');
-                ellipsis.className = 'pagination-ellipsis';
-                ellipsis.textContent = '...';
-                paginationDiv.appendChild(ellipsis);
+                paginationDiv.appendChild(createEllipsis(2, startPage - 1));
             }
         }
 
         for (let i = startPage; i <= endPage; i++) {
-            const pageButton = document.createElement('button');
-            pageButton.className = `pagination-button ${i === currentPage ? 'active' : ''}`;
-            pageButton.textContent = i.toString();
-            pageButton.addEventListener('click', () => handlePageChange(i));
-            paginationDiv.appendChild(pageButton);
+            paginationDiv.appendChild(createButton(i.toString(), i, i === currentPage));
         }
 
         if (endPage < totalPages) {
             if (endPage < totalPages - 1) {
-                const ellipsis = document.createElement('span');
-                ellipsis.className = 'pagination-ellipsis';
-                ellipsis.textContent = '...';
-                paginationDiv.appendChild(ellipsis);
+                paginationDiv.appendChild(createEllipsis(endPage + 1, totalPages - 1));
             }
-
-            const lastButton = document.createElement('button');
-            lastButton.className = 'pagination-button';
-            lastButton.textContent = totalPages.toString();
-            lastButton.addEventListener('click', () => handlePageChange(totalPages));
-            paginationDiv.appendChild(lastButton);
+            paginationDiv.appendChild(createButton(totalPages.toString(), totalPages));
         }
 
         // Add next button
         if (currentPage < totalPages) {
-            const nextButton = document.createElement('button');
-            nextButton.className = 'pagination-button';
-            nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
-            nextButton.title = 'Next Page';
-            nextButton.addEventListener('click', () => handlePageChange(currentPage + 1));
-            paginationDiv.appendChild(nextButton);
+            paginationDiv.appendChild(createButton('Next', currentPage + 1, false, 'right'));
         }
 
-        contentDiv.appendChild(paginationDiv);
+        paginationContainer.appendChild(paginationDiv);
     }
 
     window.questFiltersInitialized = true;
@@ -1196,56 +1335,142 @@ function initializeQuestPage(data, page = 1, contentDiv) {
     // Store quests globally for filtering
     window.allQuests = data;
 
-    // Create or refresh the standardized filter bar
-    let filtersContainer = document.querySelector('.quest-filters');
-    if (!filtersContainer) {
-        filtersContainer = document.createElement('div');
-        filtersContainer.className = 'quest-filters';
+    // Create filters wrapper (like blank.js and characters.js)
+    let filtersWrapper = document.querySelector('.quest-filters-wrapper');
+    if (!filtersWrapper) {
+        filtersWrapper = document.createElement('div');
+        filtersWrapper.className = 'quest-filters-wrapper blank-filters-wrapper';
+        contentDiv.insertBefore(filtersWrapper, contentDiv.firstChild);
     }
-    filtersContainer.innerHTML = '';
+    filtersWrapper.innerHTML = '';
 
-    const { bar: questFilterBar } = createSearchFilterBar({
-        layout: 'wide',
-        filters: [
-            {
-                type: 'input',
-                id: 'quest-search-input',
-                placeholder: 'Search quests...',
-                attributes: { autocomplete: 'off' },
-                width: 'double'
-            },
-            { type: 'select', id: 'filter-quest-type', options: [{ value: 'all', label: 'All Quest Types' }] },
-            { type: 'select', id: 'filter-quest-status', options: [{ value: 'all', label: 'All Status' }] },
-            { type: 'select', id: 'filter-quest-location', options: [{ value: 'all', label: 'All Locations' }] },
-            {
-                type: 'select',
-                id: 'sort-by',
-                options: [
-                    { value: 'date-desc', label: 'Date (Newest First)', selected: true },
-                    { value: 'date-asc', label: 'Date (Oldest First)' },
-                    { value: 'title-asc', label: 'Title (A-Z)' },
-                    { value: 'title-desc', label: 'Title (Z-A)' }
-                ]
-            },
-            {
-                type: 'select',
-                id: 'quests-per-page',
-                options: [
-                    { value: '12', label: '12 per page', selected: true },
-                    { value: '24', label: '24 per page' },
-                    { value: '36', label: '36 per page' },
-                    { value: '48', label: '48 per page' },
-                    { value: 'all', label: 'All quests' }
-                ]
-            }
-        ],
-        buttons: [
-            { id: 'clear-filters', label: 'Clear Filters', className: 'clear-filters-btn' }
-        ]
-    });
+    // Create separate search bar (like blank.js and characters.js)
+    const searchWrapper = document.createElement('div');
+    searchWrapper.className = 'model-search-wrapper blank-search-wrapper';
+    
+    const searchBar = document.createElement('div');
+    searchBar.className = 'model-search-bar blank-search-bar';
+    
+    const searchIcon = document.createElement('i');
+    searchIcon.className = 'fas fa-search model-search-icon blank-search-icon';
+    searchIcon.setAttribute('aria-hidden', 'true');
+    
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'quest-search-input';
+    searchInput.className = 'model-search-input blank-search-input';
+    searchInput.placeholder = 'Search quests...';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.setAttribute('aria-label', 'Search quests');
+    
+    searchBar.appendChild(searchIcon);
+    searchBar.appendChild(searchInput);
+    searchWrapper.appendChild(searchBar);
+    filtersWrapper.appendChild(searchWrapper);
 
-    filtersContainer.appendChild(questFilterBar);
-    contentDiv.insertBefore(filtersContainer, contentDiv.firstChild);
+    // Create separate filter bar (like blank.js and characters.js)
+    const filterWrapper = document.createElement('div');
+    filterWrapper.className = 'model-filter-wrapper blank-filter-wrapper';
+    
+    const filterBar = document.createElement('div');
+    filterBar.className = 'model-filter-bar blank-filter-bar';
+
+    // Quest Type Filter
+    const questTypeControl = document.createElement('div');
+    questTypeControl.className = 'model-filter-control blank-filter-control';
+    const questTypeLabel = document.createElement('label');
+    questTypeLabel.className = 'model-filter-label blank-filter-label';
+    questTypeLabel.innerHTML = '<i class="fas fa-flag"></i> Quest Type';
+    questTypeLabel.setAttribute('for', 'filter-quest-type');
+    const questTypeSelect = document.createElement('select');
+    questTypeSelect.id = 'filter-quest-type';
+    questTypeSelect.className = 'model-filter-select blank-filter-select';
+    questTypeSelect.innerHTML = '<option value="all" selected>All Quest Types</option>';
+    questTypeControl.appendChild(questTypeLabel);
+    questTypeControl.appendChild(questTypeSelect);
+    filterBar.appendChild(questTypeControl);
+
+    // Quest Status Filter
+    const questStatusControl = document.createElement('div');
+    questStatusControl.className = 'model-filter-control blank-filter-control';
+    const questStatusLabel = document.createElement('label');
+    questStatusLabel.className = 'model-filter-label blank-filter-label';
+    questStatusLabel.innerHTML = '<i class="fas fa-check-circle"></i> Status';
+    questStatusLabel.setAttribute('for', 'filter-quest-status');
+    const questStatusSelect = document.createElement('select');
+    questStatusSelect.id = 'filter-quest-status';
+    questStatusSelect.className = 'model-filter-select blank-filter-select';
+    questStatusSelect.innerHTML = '<option value="all" selected>All Status</option>';
+    questStatusControl.appendChild(questStatusLabel);
+    questStatusControl.appendChild(questStatusSelect);
+    filterBar.appendChild(questStatusControl);
+
+    // Location Filter
+    const questLocationControl = document.createElement('div');
+    questLocationControl.className = 'model-filter-control blank-filter-control';
+    const questLocationLabel = document.createElement('label');
+    questLocationLabel.className = 'model-filter-label blank-filter-label';
+    questLocationLabel.innerHTML = '<i class="fas fa-map-marker-alt"></i> Location';
+    questLocationLabel.setAttribute('for', 'filter-quest-location');
+    const questLocationSelect = document.createElement('select');
+    questLocationSelect.id = 'filter-quest-location';
+    questLocationSelect.className = 'model-filter-select blank-filter-select';
+    questLocationSelect.innerHTML = '<option value="all" selected>All Locations</option>';
+    questLocationControl.appendChild(questLocationLabel);
+    questLocationControl.appendChild(questLocationSelect);
+    filterBar.appendChild(questLocationControl);
+
+    // Sort Filter
+    const sortControl = document.createElement('div');
+    sortControl.className = 'model-filter-control blank-filter-control';
+    const sortLabel = document.createElement('label');
+    sortLabel.className = 'model-filter-label blank-filter-label';
+    sortLabel.innerHTML = '<i class="fas fa-sort"></i> Sort By';
+    sortLabel.setAttribute('for', 'sort-by');
+    const sortSelect = document.createElement('select');
+    sortSelect.id = 'sort-by';
+    sortSelect.className = 'model-filter-select blank-filter-select';
+    sortSelect.innerHTML = `
+      <option value="date-desc" selected>Date (Newest First)</option>
+      <option value="date-asc">Date (Oldest First)</option>
+      <option value="title-asc">Title (A-Z)</option>
+      <option value="title-desc">Title (Z-A)</option>
+    `;
+    sortControl.appendChild(sortLabel);
+    sortControl.appendChild(sortSelect);
+    filterBar.appendChild(sortControl);
+
+    // Quests Per Page
+    const questsPerPageControl = document.createElement('div');
+    questsPerPageControl.className = 'model-filter-control blank-filter-control';
+    const questsPerPageLabel = document.createElement('label');
+    questsPerPageLabel.className = 'model-filter-label blank-filter-label';
+    questsPerPageLabel.innerHTML = '<i class="fas fa-list"></i> Per Page';
+    questsPerPageLabel.setAttribute('for', 'quests-per-page');
+    const questsPerPageSelect = document.createElement('select');
+    questsPerPageSelect.id = 'quests-per-page';
+    questsPerPageSelect.className = 'model-filter-select blank-filter-select';
+    questsPerPageSelect.innerHTML = `
+      <option value="12" selected>12 per page</option>
+      <option value="24">24 per page</option>
+      <option value="36">36 per page</option>
+      <option value="48">48 per page</option>
+      <option value="all">All quests</option>
+    `;
+    questsPerPageControl.appendChild(questsPerPageLabel);
+    questsPerPageControl.appendChild(questsPerPageSelect);
+    filterBar.appendChild(questsPerPageControl);
+
+    // Clear Filters Button
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.id = 'clear-filters';
+    clearButton.className = 'model-clear-filters-btn blank-clear-filters-btn';
+    clearButton.innerHTML = '<i class="fas fa-times"></i> Clear Filters';
+    filterBar.appendChild(clearButton);
+
+    filterWrapper.appendChild(filterBar);
+    filtersWrapper.appendChild(filterWrapper);
 
     // Create quest container if it doesn't exist
     let container = document.getElementById('quests-container');
@@ -1256,12 +1481,12 @@ function initializeQuestPage(data, page = 1, contentDiv) {
         contentDiv.appendChild(container);
     }
 
-    // Add results info section
-    let resultsInfo = document.querySelector('.quest-results-info');
+    // Add results info section using standard class
+    let resultsInfo = document.querySelector('.model-results-info');
     if (!resultsInfo) {
         resultsInfo = document.createElement('div');
-        resultsInfo.className = 'quest-results-info';
-        resultsInfo.innerHTML = '<p>Loading quests...</p>';
+        resultsInfo.className = 'model-results-info';
+        resultsInfo.textContent = 'Loading quests...';
         contentDiv.insertBefore(resultsInfo, container);
     }
 
@@ -1275,9 +1500,9 @@ function initializeQuestPage(data, page = 1, contentDiv) {
         renderQuestCards(data, page);
     }
 
-    // Update results info
+    // Update results info (already created above)
     if (resultsInfo) {
-        resultsInfo.innerHTML = `<p>Showing ${data.length} quests (sorted by date)</p>`;
+        resultsInfo.textContent = `Showing ${data.length} quest${data.length !== 1 ? 's' : ''} (sorted by date)`;
     }
 }
 

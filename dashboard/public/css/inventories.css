@@ -18,7 +18,7 @@ body.inventories-page {
   padding: var(--main-padding, 2.5rem);
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 2.5rem;
 }
 
 .inventories-hero {
@@ -225,9 +225,10 @@ body.inventories-page {
   background: var(--inventory-panel);
   border: 1px solid var(--inventory-border);
   border-radius: 18px;
-  padding: 1.5rem;
+  padding: 1.75rem;
   backdrop-filter: blur(var(--frost-blur));
   box-shadow: var(--section-shadow);
+  margin-bottom: 0.5rem;
 }
 
 .card-header h2 {
@@ -283,7 +284,7 @@ body.inventories-page {
 }
 
 .table-wrapper {
-  margin-top: 1.25rem;
+  margin-top: 1.5rem;
   overflow-x: auto;
 }
 
@@ -436,18 +437,18 @@ body.inventories-page {
   background: var(--inventory-panel);
   border: 1px solid var(--inventory-border);
   border-radius: 18px;
-  padding: 1.5rem;
+  padding: 1.75rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
   backdrop-filter: blur(var(--frost-blur));
   box-shadow: var(--section-shadow);
 }
 
 .equipped-gear-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
 }
 
 .equipped-gear-group {
@@ -496,11 +497,12 @@ body.inventories-page {
 .gear-item-list li {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.6rem 0.7rem;
-  border-radius: 10px;
+  gap: 0.6rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   font-size: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .gear-item-info {
@@ -605,23 +607,23 @@ body.inventories-page {
 .character-section {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
 .character-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
 }
 
 .character-card {
   background: var(--inventory-panel);
   border-radius: 16px;
   border: 1px solid var(--inventory-border);
-  padding: 1.25rem;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
   backdrop-filter: blur(var(--frost-blur));
   box-shadow: var(--section-shadow);
 }
@@ -733,9 +735,9 @@ body.inventories-page {
 }
 
 .transfer-form {
-  margin-top: 1.25rem;
+  margin-top: 1.5rem;
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 

@@ -5,7 +5,8 @@ const inventoryState = {
   filters: {
     search: '',
     category: 'all',
-    character: 'all'
+    character: 'all',
+    village: 'all'
   },
   characters: [],
   aggregates: {
@@ -15,7 +16,7 @@ const inventoryState = {
   },
   aggregatedView: {
     page: 1,
-    pageSize: 25,
+    pageSize: 16,
     collapsed: false
   },
   itemCatalogLoaded: false,
@@ -627,6 +628,7 @@ function initializeEventListeners() {
   const searchInput = document.getElementById('inventory-search-input');
   const categoryFilter = document.getElementById('inventory-category-filter');
   const characterFilter = document.getElementById('inventory-character-filter');
+  const villageFilter = document.getElementById('inventory-village-filter');
   const refreshButton = document.getElementById('refresh-inventory-button');
   const transferForm = document.getElementById('transfer-form');
   const transferSourceSelect = document.getElementById('transfer-source-select');
@@ -654,6 +656,14 @@ function initializeEventListeners() {
   if (characterFilter) {
     characterFilter.addEventListener('change', (event) => {
       inventoryState.filters.character = event.target.value;
+      inventoryState.aggregatedView.page = 1;
+      renderAggregatedTable();
+    });
+  }
+
+  if (villageFilter) {
+    villageFilter.addEventListener('change', (event) => {
+      inventoryState.filters.village = event.target.value;
       inventoryState.aggregatedView.page = 1;
       renderAggregatedTable();
     });
@@ -858,6 +868,7 @@ function renderCharactersList() {
 function populateFilters() {
   const categoryFilter = document.getElementById('inventory-category-filter');
   const characterFilter = document.getElementById('inventory-character-filter');
+  const villageFilter = document.getElementById('inventory-village-filter');
 
   if (categoryFilter) {
     const categories = new Set();
@@ -902,6 +913,35 @@ function populateFilters() {
     characterFilter.value = hasValue ? currentValue : 'all';
     inventoryState.filters.character = characterFilter.value;
   }
+
+  if (villageFilter) {
+    const villages = new Set();
+    inventoryState.characters.forEach((character) => {
+      if (character.currentVillage) {
+        villages.add(character.currentVillage);
+      }
+      if (character.homeVillage) {
+        villages.add(character.homeVillage);
+      }
+    });
+
+    const currentValue = inventoryState.filters.village;
+    villageFilter.innerHTML = '<option value="all">All villages</option>';
+    Array.from(villages)
+      .filter((village) => village != null)
+      .map((village) => String(village))
+      .sort((a, b) => a.localeCompare(b))
+      .forEach((village) => {
+        const option = document.createElement('option');
+        option.value = village;
+        option.textContent = village;
+        villageFilter.appendChild(option);
+      });
+
+    const hasValue = villages.has(currentValue);
+    villageFilter.value = hasValue ? currentValue : 'all';
+    inventoryState.filters.village = villageFilter.value;
+  }
 }
 
 function renderAggregatedTable() {
@@ -924,7 +964,13 @@ function renderAggregatedTable() {
     const matchesCharacter = inventoryState.filters.character === 'all'
       ? true
       : (item.instances || []).some((instance) => instance.characterId === inventoryState.filters.character);
-    return matchesSearch && matchesCategory && matchesCharacter;
+    const matchesVillage = inventoryState.filters.village === 'all'
+      ? true
+      : (item.instances || []).some((instance) => {
+          const character = inventoryState.characters.find((char) => char.id === instance.characterId);
+          return character && (character.currentVillage === inventoryState.filters.village || character.homeVillage === inventoryState.filters.village);
+        });
+    return matchesSearch && matchesCategory && matchesCharacter && matchesVillage;
   });
 
   inventoryState.aggregatedView.totalItems = filteredItems.length;
@@ -1170,7 +1216,11 @@ function renderEquippedGearSummary() {
 }
 
 function formatGearStatsMarkup(stats = {}) {
-  const entries = Object.entries(stats || {}).filter(([, value]) => {
+  const entries = Object.entries(stats || {}).filter(([key, value]) => {
+    // Exclude staminaToCraft from gear stats display
+    if (key === 'staminaToCraft') {
+      return false;
+    }
     const numericValue = Number(value);
     return Number.isFinite(numericValue) && numericValue !== 0;
   });

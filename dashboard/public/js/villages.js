@@ -381,12 +381,10 @@ export async function initializeVillagePage(data, page, contentDiv) {
   }
 
   try {
-    // Clear content and show loading screen
+    // Clear content and show loading screen using standard class
     contentDiv.innerHTML = `
-      <div class="village-loading">
-        <div class="loading-spinner">
-          <i class="fas fa-spinner fa-spin"></i>
-        </div>
+      <div class="model-loading-overlay">
+        <i class="fas fa-spinner fa-spin"></i>
         <p>Loading village data...</p>
       </div>
     `;
@@ -417,9 +415,10 @@ export async function initializeVillagePage(data, page, contentDiv) {
   } catch (error) {
     console.error('[villages.js]: Error initializing village page:', error);
     contentDiv.innerHTML = `
-      <div class="error-state">
+      <div class="blank-empty-state blank-error-state">
         <i class="fas fa-exclamation-circle"></i>
-        <p>Error loading village data: ${error.message}</p>
+        <h3>Error loading village data</h3>
+        <p>${error.message}</p>
       </div>
     `;
   }
@@ -435,9 +434,10 @@ async function createVillageModelCard(village) {
     return `
       <div class="village-model-card">
         <div class="village-model-card-content">
-          <div class="village-no-data">
+          <div class="blank-empty-state">
             <i class="fas fa-home"></i>
-            <p>No village data available</p>
+            <h3>No village data available</h3>
+            <p>Unable to load village information</p>
           </div>
         </div>
       </div>

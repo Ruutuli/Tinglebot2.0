@@ -18,6 +18,7 @@ export function updateUserMenu() {
   const userDropdown = document.getElementById('user-dropdown');
   const adminAreaNavItem = document.getElementById('admin-area-nav-item');
   const inventoriesNavItem = document.getElementById('inventories-nav-item');
+  const inventoriesNavItemModels = document.getElementById('inventories-nav-item-models');
   
   // Show/hide admin navigation based on admin status
   if (adminAreaNavItem) {
@@ -39,6 +40,15 @@ export function updateUserMenu() {
     console.log('[auth.js] updateUserMenu - Inventories nav:', {
       isAuthenticated,
       display: inventoriesNavItem.style.display
+    });
+  }
+  
+  // Show/hide inventories navigation in Models dropdown based on authentication status
+  if (inventoriesNavItemModels) {
+    inventoriesNavItemModels.style.display = isAuthenticated ? 'block' : 'none';
+    console.log('[auth.js] updateUserMenu - Inventories nav (Models):', {
+      isAuthenticated,
+      display: inventoriesNavItemModels.style.display
     });
   }
   

@@ -61,6 +61,97 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json({ data: inventoryData });
 }));
 
+// ------------------- Function: getInventoryList -------------------
+// Returns character list with inventory summaries for simplified inventory view
+router.get('/list', asyncHandler(async (req, res) => {
+  await checkDatabaseConnections();
+  const characters = await fetchAllCharacters();
+  const list = [];
+
+  for (const char of characters) {
+    try {
+      const col = await getCharacterInventoryCollection(char.name);
+      const inv = await col.find().toArray();
+      
+      // Calculate totalItems (sum of all quantities) and uniqueItems (count of unique item names)
+      const totalItems = inv.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      const uniqueItemNames = new Set(inv.filter(item => (item.quantity || 0) > 0).map(item => item.itemName));
+      const uniqueItems = uniqueItemNames.size;
+      
+      list.push({
+        characterName: char.name,
+        icon: char.icon || null,
+        job: char.job || null,
+        currentVillage: char.currentVillage || null,
+        uniqueItems: uniqueItems,
+        totalItems: totalItems
+      });
+    } catch (error) {
+      logger.warn(`Error fetching inventory list for character ${char.name}: ${error.message}`, 'inventory.js');
+      continue;
+    }
+  }
+
+  res.json({ data: list });
+}));
+
+// ------------------- Function: getCharacterItems -------------------
+// Returns inventory items for a specific character
+router.get('/character/:characterName/items', asyncHandler(async (req, res) => {
+  const { characterName } = req.params;
+  
+  logger.info(`[inventory.js] GET /api/inventory/character/${characterName}/items - Route matched`, 'inventory.js');
+  
+  await checkDatabaseConnections();
+  
+  if (!characterName) {
+    return res.status(400).json({ error: 'Character name is required' });
+  }
+
+  try {
+    const decodedName = decodeURIComponent(characterName);
+    const escapedName = escapeRegExp(decodedName);
+    
+    const character = await Character.findOne({
+      name: { $regex: new RegExp(`^${escapedName}$`, 'i') }
+    }).lean();
+
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const col = await getCharacterInventoryCollection(character.name);
+    const items = await col.find({ quantity: { $gt: 0 } })
+      .sort({ itemName: 1 })
+      .limit(1000)
+      .toArray();
+
+    // Stack items by name and sum quantities
+    const stackedItems = new Map();
+    items.forEach(item => {
+      const itemName = item.itemName || 'Unknown Item';
+      if (stackedItems.has(itemName)) {
+        stackedItems.get(itemName).quantity += (item.quantity || 0);
+      } else {
+        stackedItems.set(itemName, {
+          itemName: itemName,
+          quantity: item.quantity || 0,
+          category: item.category || null,
+          type: item.type || null,
+          image: item.image || null
+        });
+      }
+    });
+
+    res.json({
+      data: Array.from(stackedItems.values())
+    });
+  } catch (error) {
+    logger.error(`Error fetching items for ${characterName}: ${error.message}`, 'inventory.js');
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+}));
+
 // ------------------- Function: getInventorySummary -------------------
 // Returns summary of inventory data
 router.get('/summary', asyncHandler(async (req, res) => {

@@ -22,7 +22,8 @@ let currentFilters = {
     obtain: 'all',
     location: 'all',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    sortOrder: 'newest' // 'newest' or 'oldest'
   }
 };
 
@@ -37,7 +38,6 @@ window.addEventListener('load', () => {
       const parentComputed = tabsContainer.parentElement ? window.getComputedStyle(tabsContainer.parentElement) : null;
       const logData = {location:'characterInventory.js:127',message:'On window load - tabs state',data:{display:computed.display,visibility:computed.visibility,opacity:computed.opacity,position:computed.position,top:computed.top,zIndex:computed.zIndex,width:computed.width,height:computed.height,rectTop:rect.top,rectBottom:rect.bottom,inViewport:rect.top>=0&&rect.top<=window.innerHeight,parentOverflow:parentComputed?.overflow,parentOverflowX:parentComputed?.overflowX,parentOverflowY:parentComputed?.overflowY,viewportWidth:window.innerWidth,mediaQueryMatch:window.matchMedia('(max-width: 768px)').matches},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D,E'};
       console.log('[DEBUG]', logData);
-      fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
     } else {
       console.log('[DEBUG] Tabs container NOT found on window load');
     }
@@ -183,7 +183,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tabsContainer) {
       const computed = window.getComputedStyle(tabsContainer);
       const rect = tabsContainer.getBoundingClientRect();
-      fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'characterInventory.js:160',message:'After DOMContentLoaded - initial render complete',data:{display:computed.display,visibility:computed.visibility,opacity:computed.opacity,position:computed.position,top:computed.top,zIndex:computed.zIndex,width:computed.width,height:computed.height,rectTop:rect.top,rectBottom:rect.bottom,inViewport:rect.top>=0&&rect.top<=window.innerHeight,activeContentDisplay:activeContent?window.getComputedStyle(activeContent).display:'none',viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C,E'})}).catch(()=>{});
     }
   }, 500);
   // #endregion
@@ -197,11 +196,9 @@ function setupTabs() {
     const computed = window.getComputedStyle(tabsContainer);
     const logData = {location:'characterInventory.js:162',message:'Tabs container found at setupTabs',data:{display:computed.display,visibility:computed.visibility,opacity:computed.opacity,position:computed.position,top:computed.top,zIndex:computed.zIndex,width:computed.width,height:computed.height,viewportWidth:window.innerWidth,isMobile:window.innerWidth<=768},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,D'};
     console.log('[DEBUG]', logData);
-    fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
   } else {
     const logData = {location:'characterInventory.js:162',message:'Tabs container NOT found at setupTabs',data:{viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
     console.log('[DEBUG]', logData);
-    fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
   }
   // #endregion
   const tabs = document.querySelectorAll('.char-inv-tab-button');
@@ -226,7 +223,6 @@ function setupTabs() {
           const tabsComputed = window.getComputedStyle(tabsContainer2);
           const logData = {location:'characterInventory.js:192',message:'Tab clicked - active state changed',data:{contentDisplay:contentComputed.display,contentZIndex:contentComputed.zIndex,tabsDisplay:tabsComputed.display,tabsVisibility:tabsComputed.visibility,tabsOpacity:tabsComputed.opacity,tabsZIndex:tabsComputed.zIndex,tabsTop:tabsComputed.top,tabsPosition:tabsComputed.position,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
           console.log('[DEBUG]', logData);
-          fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
         }
         // #endregion
       }
@@ -318,7 +314,6 @@ function renderInventoryView() {
     const rect = tabsContainer.getBoundingClientRect();
     const logData = {location:'characterInventory.js:274',message:'Before rendering inventory view',data:{display:computed.display,visibility:computed.visibility,opacity:computed.opacity,position:computed.position,top:computed.top,zIndex:computed.zIndex,width:computed.width,height:computed.height,rectTop:rect.top,rectBottom:rect.bottom,rectLeft:rect.left,rectRight:rect.right,inViewport:rect.top>=0&&rect.top<=window.innerHeight,activeContentDisplay:activeContent?window.getComputedStyle(activeContent).display:'none',viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'};
     console.log('[DEBUG]', logData);
-    fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
   }
   // #endregion
 
@@ -391,7 +386,6 @@ function renderInventoryView() {
       const rect2 = tabsContainer2.getBoundingClientRect();
       const logData = {location:'characterInventory.js:350',message:'After rendering inventory grid',data:{display:computed2.display,visibility:computed2.visibility,opacity:computed2.opacity,position:computed2.position,top:computed2.top,zIndex:computed2.zIndex,width:computed2.width,height:computed2.height,rectTop:rect2.top,rectBottom:rect2.bottom,rectLeft:rect2.left,rectRight:rect2.right,inViewport:rect2.top>=0&&rect2.top<=window.innerHeight,activeContentDisplay:activeContent2?window.getComputedStyle(activeContent2).display:'none',viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'};
       console.log('[DEBUG]', logData);
-      fetch('http://127.0.0.1:7242/ingest/b79e2915-9e54-4749-9849-660c6b1e1524',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(e=>console.error('[DEBUG] Fetch error:',e));
     }
   }, 100);
   // #endregion
@@ -1193,6 +1187,14 @@ function setupHistoryFilters() {
         id: 'history-end-date',
         placeholder: 'End Date (YYYY-MM-DD)',
         attributes: { type: 'date' }
+      },
+      {
+        type: 'select',
+        id: 'history-sort-order',
+        options: [
+          { value: 'newest', label: 'Newest First', selected: true },
+          { value: 'oldest', label: 'Oldest First' }
+        ]
       }
     ],
     buttons: [
@@ -1213,6 +1215,7 @@ function setupHistoryFilters() {
   const locationSelect = document.getElementById('history-location');
   const startDateInput = document.getElementById('history-start-date');
   const endDateInput = document.getElementById('history-end-date');
+  const sortOrderSelect = document.getElementById('history-sort-order');
   const clearBtn = document.getElementById('history-clear-filters');
 
   if (searchInput) {
@@ -1245,14 +1248,23 @@ function setupHistoryFilters() {
       renderHistoryView();
     });
   }
+  if (sortOrderSelect) {
+    // Restore sort order value
+    sortOrderSelect.value = currentFilters.history.sortOrder || 'newest';
+    sortOrderSelect.addEventListener('change', (e) => {
+      currentFilters.history.sortOrder = e.target.value;
+      renderHistoryView();
+    });
+  }
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
-      currentFilters.history = { search: '', obtain: 'all', location: 'all', startDate: '', endDate: '' };
+      currentFilters.history = { search: '', obtain: 'all', location: 'all', startDate: '', endDate: '', sortOrder: 'newest' };
       if (searchInput) searchInput.value = '';
       if (obtainSelect) obtainSelect.value = 'all';
       if (locationSelect) locationSelect.value = 'all';
       if (startDateInput) startDateInput.value = '';
       if (endDateInput) endDateInput.value = '';
+      if (sortOrderSelect) sortOrderSelect.value = 'newest';
       renderHistoryView();
     });
   }
@@ -1261,7 +1273,7 @@ function setupHistoryFilters() {
 function filterHistoryLogs(logs) {
   const filters = currentFilters.history;
 
-  return logs.filter(log => {
+  const filtered = logs.filter(log => {
     // Search filter
     if (filters.search && !log.itemName.toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
@@ -1294,6 +1306,16 @@ function filterHistoryLogs(logs) {
 
     return true;
   });
+
+  // Sort by date
+  const sortOrder = filters.sortOrder || 'newest';
+  filtered.sort((a, b) => {
+    const dateA = new Date(a.dateTime).getTime();
+    const dateB = new Date(b.dateTime).getTime();
+    return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+  });
+
+  return filtered;
 }
 
 function renderHistoryTable(logs) {

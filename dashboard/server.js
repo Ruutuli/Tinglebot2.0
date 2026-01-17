@@ -68,7 +68,11 @@ const Relationship = require('../shared/models/RelationshipModel');
 const Raid = require('../shared/models/RaidModel');
 const StealStats = require('../shared/models/StealStatsModel');
 const BlightRollHistory = require('../shared/models/BlightRollHistoryModel');
+const InventoryLog = require('../shared/models/InventoryLogModel');
 const { getGearType, getWeaponStyle } = require('./gearModule');
+
+// Import character stats module for updating attack and defense
+const { updateCharacterDefense, updateCharacterAttack } = require('../bot/modules/characterStatsModule');
 
 // Import calendar module
 const calendarModule = require('../bot/modules/calendarModule');
@@ -2010,56 +2014,49 @@ app.get('/api/models/counts', async (req, res) => {
 });
 
 // ------------------- Function: getInventoryData -------------------
-// Returns inventory data with streaming support for large datasets
+// Returns inventory summary data (fast - optimized endpoint)
+// NOTE: This endpoint should NOT be called by the frontend anymore - inventory.js uses /api/inventory/list instead
 app.get('/api/models/inventory', async (req, res) => {
+  console.log(`[Inventory Load] ⚠️ /api/models/inventory called - this should not happen! Caller: ${req.get('Referer') || 'unknown'}, Time: ${new Date().toISOString()}`);
   try {
     const limit = parseInt(req.query.limit) || 1000;
     const page = parseInt(req.query.page) || 1;
-    const skip = (page - 1) * limit;
     
-    const { MongoClient } = require('mongodb');
-    const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI_PROD, connectionOptions);
-    await client.connect();
-    const db = client.db('inventories');
+    // Use the optimized list endpoint logic - just return character summaries
+    const characters = await fetchAllCharacters();
+    const summary = [];
 
-    // Get character collections
-    let collections = characterListCache.data;
-    if (!collections || Date.now() - characterListCache.timestamp > characterListCache.CACHE_DURATION) {
-      collections = (await db.listCollections().toArray())
-        .map(c => c.name)
-        .filter(n => !n.startsWith('system.') && n !== 'inventories');
-      characterListCache.data = collections;
-      characterListCache.timestamp = Date.now();
+    for (const char of characters) {
+      try {
+        const col = await getCharacterInventoryCollection(char.name);
+        const inv = await col.find().toArray();
+        
+        const totalItems = inv.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const uniqueItemNames = new Set(inv.filter(item => (item.quantity || 0) > 0).map(item => item.itemName));
+        const uniqueItems = uniqueItemNames.size;
+        
+        summary.push({
+          characterName: char.name,
+          icon: char.icon || null,
+          job: char.job || null,
+          currentVillage: char.currentVillage || null,
+          uniqueItems: uniqueItems,
+          totalItems: totalItems
+        });
+      } catch (error) {
+        // Skip characters with errors
+        continue;
+      }
     }
 
-    // Process collections in batches
-    const BATCH_SIZE = 5;
-    let allItems = [];
-    for (let i = 0; i < collections.length; i += BATCH_SIZE) {
-      const batch = collections.slice(i, i + BATCH_SIZE);
-      const results = await Promise.all(batch.map(async name => {
-        const items = await db.collection(name)
-          .find()
-          .project({ itemName: 1, quantity: 1, type: 1, category: 1 })
-          .toArray();
-        return items.map(it => ({ ...it, characterName: name }));
-      }));
-      allItems.push(...results.flat());
-    }
-
-    await client.close();
-
-    const paginated = allItems.slice(skip, skip + limit);
-    
-    
-    
+    // Return in expected format for modelLoader (but data is not used by new inventory.js)
     res.json({
-      data: paginated,
+      data: summary,
       pagination: {
-        total: allItems.length,
-        page, 
+        total: summary.length,
+        page,
         limit,
-        pages: Math.ceil(allItems.length / limit)
+        pages: Math.ceil(summary.length / limit)
       }
     });
   } catch (error) {
@@ -2287,9 +2284,8 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
         break;
       case 'quest':
         Model = Quest;
-        // Filter out completed and expired quests for dashboard display
-        // Only show active quests that haven't expired
-        query = { status: 'active' };
+        // Show all quests regardless of status (active, completed, cancelled)
+        // No status filter applied - all quests from all years will be shown
         break;
       case 'helpwantedquest':
       case 'HelpWantedQuest':
@@ -2499,12 +2495,8 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
           .sort(modelType === 'item' ? { itemName: 1 } : {})
           .lean();
         
-        // For quests, filter out expired quests
-        if (modelType === 'quest') {
-          filteredData = allItemsData.filter(quest => !checkQuestExpiration(quest));
-        } else {
-          filteredData = allItemsData;
-        }
+        // Show all quests regardless of expiration status
+        filteredData = allItemsData;
       }
       
       // For characters, we need to populate user information even for all=true requests
@@ -2633,10 +2625,7 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
       .limit(limit)
       .lean();
     
-    // For quests, filter out expired quests even in paginated requests
-    if (modelType === 'quest') {
-      data = data.filter(quest => !checkQuestExpiration(quest));
-    }
+    // Quest expiration filtering removed - show all quests regardless of expiration
 
     // Transform village data to include VILLAGE_CONFIG and convert Maps to objects
     if (modelType === 'village') {
@@ -6289,57 +6278,86 @@ async function buildUserInventoryResponse(userId) {
   let totalQuantity = 0;
   const characterPayloads = [];
 
-  for (const character of characters) {
+  // Process all characters in parallel for better performance
+  const characterPromises = characters.map(async (character) => {
     try {
       const collection = await getCharacterInventoryCollection(character.name);
       const rawItems = await collection.find().toArray();
       const normalizedItems = rawItems.map(item => normalizeInventoryItem(item, character));
       const characterQuantity = normalizedItems.reduce((sum, invItem) => sum + invItem.quantity, 0);
-      totalQuantity += characterQuantity;
 
       normalizedItems.forEach(invItem => {
         if (invItem.itemName) {
           itemNames.add(invItem.itemName);
         }
-        const key = invItem.itemName ? invItem.itemName.toLowerCase() : invItem.id;
-        if (!aggregateMap.has(key)) {
-          aggregateMap.set(key, {
-            itemName: invItem.itemName || 'Unknown Item',
-            itemId: invItem.itemId,
-            categories: new Set(),
-            types: new Set(),
-            subtypes: new Set(),
-            hasFortuneBoost: false,
-            totalQuantity: 0,
-            instances: []
-          });
-        }
-
-        const aggregateEntry = aggregateMap.get(key);
-        aggregateEntry.totalQuantity += invItem.quantity;
-        if (invItem.category) {
-          aggregateEntry.categories.add(invItem.category);
-        }
-        if (invItem.type) {
-          aggregateEntry.types.add(invItem.type);
-        }
-        invItem.subtype?.forEach(sub => aggregateEntry.subtypes.add(sub));
-        if (invItem.fortuneTellerBoost) {
-          aggregateEntry.hasFortuneBoost = true;
-        }
-        aggregateEntry.instances.push({
-          inventoryId: invItem.id,
-          characterId: invItem.characterId,
-          characterName: character.name,
-          quantity: invItem.quantity,
-          location: invItem.location,
-          job: invItem.job,
-          perk: invItem.perk,
-          obtain: invItem.obtain,
-          fortuneTellerBoost: invItem.fortuneTellerBoost
-        });
       });
 
+      return {
+        success: true,
+        character,
+        normalizedItems,
+        characterQuantity
+      };
+    } catch (error) {
+      console.warn(`[server.js]: ⚠️ Error loading inventory for ${character.name}:`, error.message);
+      return {
+        success: false,
+        character,
+        normalizedItems: [],
+        characterQuantity: 0,
+        error: error.message
+      };
+    }
+  });
+
+  const characterResults = await Promise.all(characterPromises);
+
+  // Process results and build aggregates
+  characterResults.forEach((result) => {
+    const { character, normalizedItems, characterQuantity } = result;
+    totalQuantity += characterQuantity;
+
+    normalizedItems.forEach(invItem => {
+      const key = invItem.itemName ? invItem.itemName.toLowerCase() : invItem.id;
+      if (!aggregateMap.has(key)) {
+        aggregateMap.set(key, {
+          itemName: invItem.itemName || 'Unknown Item',
+          itemId: invItem.itemId,
+          categories: new Set(),
+          types: new Set(),
+          subtypes: new Set(),
+          hasFortuneBoost: false,
+          totalQuantity: 0,
+          instances: []
+        });
+      }
+
+      const aggregateEntry = aggregateMap.get(key);
+      aggregateEntry.totalQuantity += invItem.quantity;
+      if (invItem.category) {
+        aggregateEntry.categories.add(invItem.category);
+      }
+      if (invItem.type) {
+        aggregateEntry.types.add(invItem.type);
+      }
+      invItem.subtype?.forEach(sub => aggregateEntry.subtypes.add(sub));
+      if (invItem.fortuneTellerBoost) {
+        aggregateEntry.hasFortuneBoost = true;
+      }
+      aggregateEntry.instances.push({
+        inventoryId: invItem.id,
+        characterId: invItem.characterId,
+        characterName: character.name,
+        quantity: invItem.quantity,
+        location: invItem.location,
+        job: invItem.job,
+        perk: invItem.perk,
+        obtain: invItem.obtain,
+        fortuneTellerBoost: invItem.fortuneTellerBoost
+      });
+    });
+
+    if (result.success) {
       characterPayloads.push({
         id: character._id.toString(),
         name: character.name,
@@ -6354,8 +6372,7 @@ async function buildUserInventoryResponse(userId) {
         inventory: normalizedItems,
         gear: extractCharacterGear(character)
       });
-    } catch (error) {
-      console.warn(`[server.js]: ⚠️ Error loading inventory for ${character.name}:`, error.message);
+    } else {
       characterPayloads.push({
         id: character._id.toString(),
         name: character.name,
@@ -6372,7 +6389,7 @@ async function buildUserInventoryResponse(userId) {
         error: 'Failed to load inventory'
       });
     }
-  }
+  });
 
   let aggregateItems = Array.from(aggregateMap.values());
   let imageMap = {};
@@ -6384,10 +6401,20 @@ async function buildUserInventoryResponse(userId) {
     ).lean();
 
     imageMap = itemsMeta.reduce((acc, doc) => {
-      acc[doc.itemName] = doc.image;
+      if (doc.image && doc.image !== 'No Image') {
+        acc[doc.itemName] = doc.image;
+      }
       return acc;
     }, {});
   }
+
+  // Add images to individual character inventory items
+  characterPayloads.forEach(characterPayload => {
+    characterPayload.inventory = characterPayload.inventory.map(item => ({
+      ...item,
+      image: item.itemName && imageMap[item.itemName] ? imageMap[item.itemName] : null
+    }));
+  });
 
   aggregateItems = aggregateItems.map(entry => ({
     itemName: entry.itemName,
@@ -6537,6 +6564,73 @@ app.post('/api/inventories/transfer', async (req, res) => {
     const updatedSourceItem = remainingQuantity === 0
       ? null
       : await sourceCollection.findOne({ _id: sourceItemObjectId });
+
+    // Log transfer to InventoryLogModel
+    try {
+      // Try to find item details - handle items with special characters like '+'
+      let itemDetails = null;
+      if (sourceItem.itemName && sourceItem.itemName.includes('+')) {
+        // For items with '+' in name, use exact match
+        itemDetails = await Item.findOne({ itemName: sourceItem.itemName }).lean();
+      } else {
+        // For other items, use case-insensitive regex match
+        itemDetails = await Item.findOne({
+          itemName: { $regex: new RegExp(`^${escapeRegex(sourceItem.itemName)}$`, 'i') }
+        }).lean();
+      }
+
+      // Always log transfer, even if itemDetails is not found
+      // If itemDetails exists, include it; otherwise use defaults
+      const itemId = itemDetails?._id || null;
+      const category = itemDetails 
+        ? (Array.isArray(itemDetails.category) ? itemDetails.category[0] || '' : (itemDetails.category || ''))
+        : '';
+      const type = itemDetails
+        ? (Array.isArray(itemDetails.type) ? itemDetails.type[0] || '' : (itemDetails.type || ''))
+        : '';
+      const subtype = itemDetails
+        ? (Array.isArray(itemDetails.subtype) ? itemDetails.subtype[0] || '' : (itemDetails.subtype || ''))
+        : '';
+
+      // Log removal from source character
+      await InventoryLog.create({
+        characterName: sourceCharacter.name,
+        characterId: sourceCharacter._id,
+        itemName: sourceItem.itemName,
+        itemId: itemId,
+        quantity: -transferQuantity, // Negative for removal
+        category: category,
+        type: type,
+        subtype: subtype,
+        obtain: `Transfer to ${targetCharacter.name}`,
+        job: sourceCharacter.job || '',
+        location: sourceCharacter.currentVillage || ''
+      });
+
+      // Log addition to target character
+      await InventoryLog.create({
+        characterName: targetCharacter.name,
+        characterId: targetCharacter._id,
+        itemName: sourceItem.itemName,
+        itemId: itemId,
+        quantity: transferQuantity, // Positive for addition
+        category: category,
+        type: type,
+        subtype: subtype,
+        obtain: `Transfer from ${sourceCharacter.name}`,
+        job: targetCharacter.job || '',
+        location: targetCharacter.currentVillage || ''
+      });
+    } catch (logError) {
+      // Log error but don't fail the transfer if logging fails
+      console.error('[server.js]: ⚠️ Error logging transfer to InventoryLog:', logError.message);
+      console.error('[server.js]: ⚠️ Transfer details:', {
+        sourceCharacter: sourceCharacter.name,
+        targetCharacter: targetCharacter.name,
+        itemName: sourceItem.itemName,
+        quantity: transferQuantity
+      });
+    }
 
     res.json({
       success: true,
@@ -6767,6 +6861,11 @@ app.patch('/api/characters/:characterId/gear', async (req, res) => {
 
     await Character.updateOne({ _id: character._id }, gearUpdate);
 
+    // ------------------- Recalculate Character Stats -------------------
+    // Update defense and attack values after equipping/unequipping gear.
+    await updateCharacterDefense(character._id);
+    await updateCharacterAttack(character._id);
+
     const refreshedCharacter = await fetchCharacterById(character._id);
     if (!refreshedCharacter) {
       return res.status(404).json({ error: 'Character not found after update' });
@@ -6943,9 +7042,8 @@ app.get('/api/inventory/characters', async (req, res) => {
     
     const characterNames = characters.split(',').map(name => name.trim());
     
-    const inventoryData = [];
-    
-    for (const characterName of characterNames) {
+    // Process all characters in parallel for better performance
+    const inventoryPromises = characterNames.map(async (characterName) => {
       try {
         const col = await getCharacterInventoryCollection(characterName);
         const inv = await col.find().toArray();
@@ -6954,18 +7052,25 @@ app.get('/api/inventory/characters', async (req, res) => {
         // Fetch all item docs in one go
         const itemDocs = await Item.find({ itemName: { $in: itemNames } }, { itemName: 1, image: 1 }).lean();
         const itemImageMap = {};
-        itemDocs.forEach(doc => { itemImageMap[doc.itemName] = doc.image; });
+        itemDocs.forEach(doc => { 
+          if (doc.image && doc.image !== 'No Image') {
+            itemImageMap[doc.itemName] = doc.image;
+          }
+        });
         // Attach image to each inventory item
-        inventoryData.push(...inv.map(item => ({
+        return inv.map(item => ({
           ...item,
           characterName,
-          image: itemImageMap[item.itemName] || 'No Image'
-        })));
+          image: itemImageMap[item.itemName] || null
+        }));
       } catch (error) {
         console.warn(`[server.js]: ⚠️ Error fetching inventory for character ${characterName}:`, error.message);
-        continue;
+        return [];
       }
-    }
+    });
+    
+    const inventoryArrays = await Promise.all(inventoryPromises);
+    const inventoryData = inventoryArrays.flat();
     
     res.json({ data: inventoryData });
   } catch (error) {
@@ -8301,9 +8406,9 @@ app.get('/api/inventory/summary', async (req, res) => {
     
     
     const characters = await fetchAllCharacters();
-    const summary = [];
-
-    for (const char of characters) {
+    
+    // Process all characters in parallel for better performance
+    const summaryPromises = characters.map(async (char) => {
       try {
         const col = await getCharacterInventoryCollection(char.name);
         const items = await col.find().toArray();
@@ -8311,28 +8416,29 @@ app.get('/api/inventory/summary', async (req, res) => {
         const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
         const uniqueItems = items.length;
         
-        summary.push({
+        return {
           characterName: char.name,
           icon: char.icon,
           totalItems,
           uniqueItems,
           categories: [...new Set(items.map(item => item.category).filter(Boolean))],
           types: [...new Set(items.map(item => item.type).filter(Boolean))]
-        });
+        };
       } catch (error) {
         console.warn(`[server.js]: ⚠️ Error fetching inventory summary for character ${char.name}:`, error.message);
-        // Add character with zero items
-        summary.push({
+        // Return character with zero items
+        return {
           characterName: char.name,
           icon: char.icon,
           totalItems: 0,
           uniqueItems: 0,
           categories: [],
           types: []
-        });
+        };
       }
-    }
+    });
     
+    const summary = await Promise.all(summaryPromises);
 
     res.json({ data: summary });
   } catch (error) {
@@ -8360,30 +8466,106 @@ app.get('/api/items', async (req, res) => {
 
 // ------------------- Section: Weather API Routes -------------------
 
-// ------------------- Function: getWeatherDayBounds -------------------
-// Calculates the start and end of the current weather day (8am to 8am)
-function getWeatherDayBounds() {
+// ------------------- Function: getESTTime -------------------
+// Gets the current time in EST/EDT timezone
+function getESTTime() {
   const now = new Date();
-  const currentHour = now.getHours();
+  
+  // Use Intl.DateTimeFormat to get the time in EST/EDT
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  });
+  
+  // Parse the formatted date string back into a Date object
+  const parts = formatter.formatToParts(now);
+  const values = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+  
+  // Create a new date with EST/EDT components
+  const estTime = new Date(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second
+  );
+  
+  return estTime;
+}
+
+// ------------------- Function: get8AMESTInUTC -------------------
+// Converts 8:00 AM EST/EDT on a given date to UTC
+// Uses a test date to determine DST offset correctly
+function get8AMESTInUTC(year, month, day) {
+  // Create a test date at 8am on the target date
+  // We'll create it as if it were UTC and then determine the actual offset
+  const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  
+  // Format this date in EST/EDT to determine if DST is active
+  const estFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'short',
+    hour: 'numeric',
+    hour12: false
+  });
+  
+  // Get the formatted string to check for DST
+  const parts = estFormatter.formatToParts(testDate);
+  const timeZoneName = parts.find(p => p.type === 'timeZoneName')?.value || '';
+  const isDST = timeZoneName === 'EDT'; // EDT means DST is active (UTC-4), EST is UTC-5
+  
+  // Calculate offset: EST is UTC-5, EDT is UTC-4
+  const offsetHours = isDST ? 4 : 5;
+  
+  // Create UTC date for 8am EST/EDT
+  // 8am EST/EDT = 8 + offsetHours in UTC
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 8 + offsetHours, 0, 0));
+  
+  return utcDate;
+}
+
+// ------------------- Function: getWeatherDayBounds -------------------
+// Calculates the start and end of the current weather day (8am to 8am EST/EDT)
+function getWeatherDayBounds() {
+  // Get current time in EST/EDT
+  const nowEST = getESTTime();
+  const currentHour = nowEST.getHours();
+  const currentYear = nowEST.getFullYear();
+  const currentMonth = nowEST.getMonth() + 1;
+  const currentDay = nowEST.getDate();
   
   let weatherDayStart, weatherDayEnd;
   
   if (currentHour >= 8) {
-    // If it's 8am or later, the weather day started at 8am today
-    weatherDayStart = new Date(now);
-    weatherDayStart.setHours(8, 0, 0, 0);
+    // If it's 8am or later EST/EDT, the weather day started at 8am today EST/EDT
+    weatherDayStart = get8AMESTInUTC(currentYear, currentMonth, currentDay);
     
-    weatherDayEnd = new Date(now);
-    weatherDayEnd.setDate(weatherDayEnd.getDate() + 1);
-    weatherDayEnd.setHours(8, 0, 0, 0);
+    // End is 8am tomorrow EST/EDT
+    // Calculate tomorrow's date by adding 1 day to the current EST date
+    const tomorrowDate = new Date(nowEST);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    weatherDayEnd = get8AMESTInUTC(tomorrowDate.getFullYear(), tomorrowDate.getMonth() + 1, tomorrowDate.getDate());
   } else {
-    // If it's before 8am, the weather day started at 8am yesterday
-    weatherDayStart = new Date(now);
-    weatherDayStart.setDate(weatherDayStart.getDate() - 1);
-    weatherDayStart.setHours(8, 0, 0, 0);
+    // If it's before 8am EST/EDT, the weather day started at 8am yesterday EST/EDT
+    // Calculate yesterday's date by subtracting 1 day from the current EST date
+    const yesterdayDate = new Date(nowEST);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    weatherDayStart = get8AMESTInUTC(yesterdayDate.getFullYear(), yesterdayDate.getMonth() + 1, yesterdayDate.getDate());
     
-    weatherDayEnd = new Date(now);
-    weatherDayEnd.setHours(8, 0, 0, 0);
+    // End is 8am today EST/EDT
+    weatherDayEnd = get8AMESTInUTC(currentYear, currentMonth, currentDay);
   }
   
   return { weatherDayStart, weatherDayEnd };
