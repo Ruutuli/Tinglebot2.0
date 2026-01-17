@@ -360,8 +360,18 @@ const completionSummary = legacyInfo.totalTransferred > 0
     statsEmbed.setThumbnail(avatarUrl);
    }
 
+  // Get breakdown of pending turn-ins
+  const legacyPending = turnInSummary.legacyPending || legacyInfo.pendingTurnIns || 0;
+  const currentPending = turnInSummary.currentPending || (stats.pendingTurnIns && typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0);
+  const totalPendingDisplay = pendingTurnIns; // This is already the total from turnInSummary
+
   const legacyStatus = legacyInfo.transferUsed
-   ? `✅ **Transferred:** ${legacyInfo.transferredAt ? this.formatQuestStatsDate(legacyInfo.transferredAt) : '*date unknown*'}`
+   ? [
+     `✅ **Transferred:** ${legacyInfo.transferredAt ? this.formatQuestStatsDate(legacyInfo.transferredAt) : '*date unknown*'}`,
+     legacyPending > 0 ? `• 🎁 **Legacy Pending Turn-Ins:** ${this.formatQuestCount(legacyPending)}` : null,
+     currentPending > 0 ? `• 🎯 **New Quest Pending Turn-Ins:** ${this.formatQuestCount(currentPending)}` : null,
+     totalPendingDisplay > 0 ? `• 📊 **Total Pending Turn-Ins:** ${this.formatQuestCount(totalPendingDisplay)}` : null
+   ].filter(Boolean).join("\n")
    : "⚠️ **Not transferred** — use `/quest transfer` to import your legacy quests.";
 
 const snapshotLines = [
