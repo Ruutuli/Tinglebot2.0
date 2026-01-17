@@ -311,12 +311,18 @@ async function damageVillage(villageName, damageAmount) {
                 if (!client) {
                     console.error(`[damageVillage] ❌ Discord client not available for village damage notification`);
                 } else {
-                    const VILLAGE_DAMAGE_CHANNEL_ID = '1391812848099004578';
-                    console.log(`[damageVillage] 📢 Attempting to send village damage notification to channel ${VILLAGE_DAMAGE_CHANNEL_ID}`);
+                    // Get the village's specific townhall channel
+                    const TOWNHALL_CHANNELS = {
+                        Rudania: process.env.RUDANIA_TOWNHALL,
+                        Inariko: process.env.INARIKO_TOWNHALL,
+                        Vhintl: process.env.VHINTL_TOWNHALL,
+                    };
+                    const villageChannelId = TOWNHALL_CHANNELS[village.name] || '1391812848099004578'; // Fallback to test channel
+                    console.log(`[damageVillage] 📢 Attempting to send village damage notification to ${village.name} channel ${villageChannelId}`);
                     
-                    const channel = await client.channels.fetch(VILLAGE_DAMAGE_CHANNEL_ID);
+                    const channel = await client.channels.fetch(villageChannelId);
                     if (!channel) {
-                        console.error(`[damageVillage] ❌ Could not find channel ${VILLAGE_DAMAGE_CHANNEL_ID} for village damage notification`);
+                        console.error(`[damageVillage] ❌ Could not find channel ${villageChannelId} for village damage notification`);
                     } else {
                         // Prepare resource loss details
                         const materialsLost = removedResources
@@ -334,11 +340,19 @@ async function damageVillage(villageName, damageAmount) {
                             ? village.levelHealth.get(village.level.toString()) 
                             : village.levelHealth[village.level.toString()] || 100;
                         
+                        // Get village color and emoji from config
+                        const villageConfig = VILLAGE_CONFIG[village.name] || {};
+                        const villageColor = village.color || villageConfig.color || '#FF4444';
+                        const villageEmoji = village.emoji || villageConfig.emoji || '🏘️';
+                        
+                        // Convert hex color to integer for Discord embed
+                        const embedColor = parseInt(villageColor.replace('#', ''), 16) || 0xFF4444;
+                        
                         // Build embed
                         const damageEmbed = new EmbedBuilder()
-                            .setTitle(`⚠️ Village Damage Report`)
-                            .setDescription(`**${village.name}** has taken damage!`)
-                            .setColor('#FF4444')
+                            .setTitle(`${villageEmoji} ⚠️ Village Damage Report`)
+                            .setDescription(`**${village.name}** has taken damage!\n\n⚠️ **THIS IS CURRENTLY TESTING PURPOSES. PLEASE IGNORE THIS FOR THE TIME BEING.**`)
+                            .setColor(embedColor)
                             .addFields(
                                 {
                                     name: '❤️ Health',
@@ -378,7 +392,7 @@ async function damageVillage(villageName, damageAmount) {
                         }
                         
                         await channel.send({ embeds: [damageEmbed] });
-                        console.log(`[damageVillage] ✅ Successfully sent village damage notification to channel ${VILLAGE_DAMAGE_CHANNEL_ID}`);
+                        console.log(`[damageVillage] ✅ Successfully sent village damage notification to ${village.name} channel ${villageChannelId}`);
                     }
                 }
             } catch (notificationError) {
