@@ -22,6 +22,7 @@ const { getVillageRegionByName } = require('../modules/locationsModule');
 const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer, storeRaidProgress, getRaidProgressById } = require('../modules/raidModule');
 const { capitalizeVillageName } = require('../../shared/utils/stringUtils');
 const TempData = require('../../shared/models/TempDataModel');
+const { Village } = require('../../shared/models/VillageModel');
 
 // ============================================================================
 // Environment Configuration
@@ -68,6 +69,190 @@ const villageChannelMap = {
 // ------------------- Track Server Activity -------------------
 // Tracks message timestamps and unique users in each channel.
 const messageActivity = new Map();
+
+// ============================================================================
+// Village Raid Quota System Constants
+// ------------------- Quota Period Constants -------------------
+const HOUR_IN_MS = 60 * 60 * 1000;
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const WEEK_IN_MS = 7 * DAY_IN_MS;
+const HOURS_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+
+// ============================================================================
+// Period Calculation Functions
+// ------------------- Get Current Week Start (Sunday) -------------------
+function getCurrentWeekStart() {
+  const now = new Date();
+  const date = new Date(now);
+  // Sunday is 0, so subtract day of week to get Sunday
+  date.setDate(date.getDate() - date.getDay());
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+// ------------------- Get Current Month Start (First Monday) -------------------
+function getCurrentMonthStart() {
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  // Find first Monday of the month
+  // getDay() returns 0 for Sunday, 1 for Monday, etc.
+  let dayOfWeek = date.getDay();
+  // If day 1 is not Monday, find the first Monday
+  // Monday = 1, so if dayOfWeek is 0 (Sunday), add 1; if 2-6, subtract to get Monday
+  if (dayOfWeek === 0) {
+    // If 1st is Sunday, Monday is 2nd
+    date.setDate(2);
+  } else if (dayOfWeek > 1) {
+    // If 1st is Tuesday-Saturday, find next Monday
+    const daysUntilMonday = 8 - dayOfWeek; // 8 - dayOfWeek gives us days to add
+    date.setDate(1 + daysUntilMonday);
+  }
+  
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+// ------------------- Get Village Quota -------------------
+function getVillageQuota(level) {
+  switch (level) {
+    case 1: return 1; // 1 raid per week
+    case 2: return 2; // 2 raids per month
+    case 3: return 1; // 1 raid per month
+    default: return 0;
+  }
+}
+
+// ------------------- Get Village Period Start -------------------
+function getVillagePeriodStart(level) {
+  if (level === 1) {
+    return getCurrentWeekStart();
+  } else {
+    // Level 2 and 3 use monthly periods starting on Monday
+    return getCurrentMonthStart();
+  }
+}
+
+// ------------------- Get Period End Date -------------------
+function getPeriodEnd(periodStart, level) {
+  const end = new Date(periodStart);
+  if (level === 1) {
+    // Week ends on Saturday 23:59:59
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+  } else {
+    // Month: find first Monday of next month, then go back 1 day
+    end.setMonth(end.getMonth() + 1);
+    end.setDate(1);
+    // Find first Monday of next month
+    let dayOfWeek = end.getDay();
+    if (dayOfWeek === 0) {
+      end.setDate(2);
+    } else if (dayOfWeek > 1) {
+      const daysUntilMonday = 8 - dayOfWeek;
+      end.setDate(1 + daysUntilMonday);
+    }
+    // Go back 1 day to get last day of current period
+    end.setDate(end.getDate() - 1);
+    end.setHours(23, 59, 59, 999);
+  }
+  return end;
+}
+
+// ============================================================================
+// Village Period Tracking Functions
+// ------------------- Get Village Period Data -------------------
+async function getVillagePeriodData(villageName) {
+  try {
+    const key = `village_raid_period_${villageName}`;
+    const periodData = await TempData.findOne({ key, type: 'temp' });
+    
+    if (!periodData || !periodData.data) {
+      return null;
+    }
+    
+    return {
+      periodStart: new Date(periodData.data.periodStart),
+      raidCount: periodData.data.raidCount || 0,
+      periodType: periodData.data.periodType || 'week'
+    };
+  } catch (error) {
+    console.error(`[randomMonsterEncounters.js]: ❌ Error getting village period data for ${villageName}:`, error);
+    return null;
+  }
+}
+
+// ------------------- Set Village Period Data -------------------
+async function setVillagePeriodData(villageName, periodStart, raidCount, periodType) {
+  try {
+    const key = `village_raid_period_${villageName}`;
+    await TempData.findOneAndUpdate(
+      { key, type: 'temp' },
+      {
+        key,
+        type: 'temp',
+        data: {
+          periodStart: periodStart,
+          raidCount: raidCount,
+          periodType: periodType
+        }
+      },
+      { upsert: true, new: true }
+    );
+  } catch (error) {
+    console.error(`[randomMonsterEncounters.js]: ❌ Error setting village period data for ${villageName}:`, error);
+  }
+}
+
+// ------------------- Check And Reset Period -------------------
+async function checkAndResetPeriod(villageName, level) {
+  const currentPeriodStart = getVillagePeriodStart(level);
+  const periodData = await getVillagePeriodData(villageName);
+  
+  if (!periodData || periodData.periodStart.getTime() !== currentPeriodStart.getTime()) {
+    // Period has changed, reset
+    const periodType = level === 1 ? 'week' : 'month';
+    await setVillagePeriodData(villageName, currentPeriodStart, 0, periodType);
+    return {
+      periodStart: currentPeriodStart,
+      raidCount: 0,
+      periodType: periodType
+    };
+  }
+  
+  return periodData;
+}
+
+// ------------------- Get Period Remaining Ratio -------------------
+function getPeriodRemainingRatio(periodStart, level) {
+  const now = new Date();
+  const periodEnd = getPeriodEnd(periodStart, level);
+  const periodDuration = periodEnd.getTime() - periodStart.getTime();
+  const elapsed = now.getTime() - periodStart.getTime();
+  const remaining = periodEnd.getTime() - now.getTime();
+  
+  // Return ratio of time remaining (0.0 = period ended, 1.0 = period just started)
+  if (remaining <= 0) return 0;
+  if (periodDuration <= 0) return 0;
+  return remaining / periodDuration;
+}
+
+// ------------------- Increment Village Raid Count -------------------
+async function incrementVillageRaidCount(villageName) {
+  try {
+    const periodData = await getVillagePeriodData(villageName);
+    if (periodData) {
+      await setVillagePeriodData(
+        villageName,
+        periodData.periodStart,
+        periodData.raidCount + 1,
+        periodData.periodType
+      );
+    }
+  } catch (error) {
+    console.error(`[randomMonsterEncounters.js]: ❌ Error incrementing raid count for ${villageName}:`, error);
+  }
+}
 
 // ============================================================================
 // Raid Cooldown Management Functions
@@ -319,6 +504,206 @@ async function triggerRandomEncounter(channel, selectedVillage) {
 }
 
 // ============================================================================
+// Village Raid Quota Checking Functions
+// ------------------- Check Village Raid Quotas -------------------
+async function checkVillageRaidQuotas(client) {
+  try {
+    // Fetch all villages from database
+    const villages = await Village.find({}).exec();
+    
+    if (!villages || villages.length === 0) {
+      console.log('[randomMonsterEncounters.js]: ⚠️ No villages found in database');
+      return;
+    }
+    
+    const eligibleVillages = [];
+    
+    // Check each village for quota status
+    for (const village of villages) {
+      const villageName = village.name;
+      const level = village.level || 1;
+      const quota = getVillageQuota(level);
+      
+      // Check and reset period if needed
+      const periodData = await checkAndResetPeriod(villageName, level);
+      
+      if (!periodData) {
+        console.log(`[randomMonsterEncounters.js]: ⚠️ Could not get period data for ${villageName}`);
+        continue;
+      }
+      
+      const raidCount = periodData.raidCount || 0;
+      const quotaRemaining = Math.max(0, quota - raidCount);
+      
+      // If quota is already met, skip this village
+      if (quotaRemaining <= 0) {
+        continue;
+      }
+      
+      // Calculate urgency based on time remaining and quota remaining
+      const periodStart = periodData.periodStart;
+      const timeRemainingRatio = getPeriodRemainingRatio(periodStart, level);
+      
+      if (timeRemainingRatio <= 0) {
+        // Period ended but quota not met - should have been handled by reset, but trigger anyway
+        eligibleVillages.push({ village, urgency: 1.0 });
+        continue;
+      }
+      
+      // Calculate urgency: higher urgency = higher probability
+      // urgency = (quotaRemaining / quotaTotal) / timeRemainingRatio
+      const urgency = quotaRemaining / quota / timeRemainingRatio;
+      
+      // Calculate probability based on urgency
+      // Early period: 5-10% chance per hour
+      // Mid period: 15-25% chance per hour
+      // Late period: 50-100% chance per hour
+      let probability = 0.05; // Base 5% chance
+      if (urgency > 2) {
+        // Very urgent - high probability (50-100%)
+        probability = 0.5 + (urgency - 2) * 0.25;
+        probability = Math.min(1.0, probability);
+      } else if (urgency > 1) {
+        // Moderately urgent - medium probability (15-25%)
+        probability = 0.15 + (urgency - 1) * 0.1;
+      } else if (urgency > 0.5) {
+        // Some urgency - low-medium probability (10-15%)
+        probability = 0.10 + (urgency - 0.5) * 0.1;
+      }
+      
+      // If very little time remains (less than 10% of period), guarantee raid
+      if (timeRemainingRatio < 0.1 && quotaRemaining > 0) {
+        probability = 1.0;
+      }
+      
+      // Random roll
+      const roll = Math.random();
+      
+      if (roll < probability) {
+        eligibleVillages.push({ village, urgency, probability });
+        console.log(`[randomMonsterEncounters.js]: 🎲 ${villageName} (L${level}) eligible for raid - urgency: ${urgency.toFixed(2)}, prob: ${(probability * 100).toFixed(1)}%, rolled: ${(roll * 100).toFixed(1)}%`);
+      }
+    }
+    
+    // If no villages are eligible, return
+    if (eligibleVillages.length === 0) {
+      return;
+    }
+    
+    // Select a random eligible village
+    const selected = eligibleVillages[Math.floor(Math.random() * eligibleVillages.length)];
+    const selectedVillage = selected.village;
+    const selectedVillageName = selectedVillage.name.toLowerCase();
+    
+    console.log(`[randomMonsterEncounters.js]: 🎯 Selected ${selectedVillage.name} (L${selectedVillage.level}) for quota-based raid`);
+    
+    // Get the target channel for the selected village
+    const targetChannelId = villageChannelMap[selectedVillageName];
+    if (!targetChannelId) {
+      console.error(`[randomMonsterEncounters.js]: ❌ No channel mapping found for ${selectedVillageName}`);
+      return;
+    }
+    
+    const raidChannel = client.channels.cache.get(targetChannelId);
+    
+    if (raidChannel && raidChannel.type === ChannelType.GuildText) {
+      // Trigger the raid
+      await triggerQuotaBasedRaid(raidChannel, selectedVillageName, selectedVillage.name);
+    } else {
+      console.error(`[randomMonsterEncounters.js]: ❌ Could not find channel for ${selectedVillageName} (ID: ${targetChannelId})`);
+    }
+    
+  } catch (error) {
+    console.error('[randomMonsterEncounters.js]: ❌ Error checking village raid quotas:', error);
+    handleError(error, 'randomMonsterEncounters.js');
+  }
+}
+
+// ------------------- Trigger Quota-Based Raid -------------------
+async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayName) {
+  try {
+    console.log(`[randomMonsterEncounters.js]: 🎯 Processing quota-based raid for village: ${villageDisplayName}`);
+    
+    // Get the village region
+    const villageRegion = getVillageRegionByName(selectedVillage);
+    console.log(`[randomMonsterEncounters.js]: 🗺️ Village region: ${villageRegion}`);
+    
+    if (!villageRegion) {
+      console.error(`[randomMonsterEncounters.js]: ❌ Invalid village: ${selectedVillage}`);
+      await channel.send(`❌ **Invalid village: ${selectedVillage}**`);
+      return;
+    }
+    
+    // Select a monster above tier 5 from the region
+    // Filter out Yiga monsters - they should not appear in regular raids
+    const Monster = require('../../shared/models/MonsterModel');
+    const monsters = await Monster.find({
+      tier: { $gte: 5 },
+      [villageRegion.toLowerCase()]: true,
+      $or: [
+        { species: { $exists: false } },
+        { species: { $ne: 'Yiga' } }
+      ]
+    }).exec();
+    
+    if (!monsters || monsters.length === 0) {
+      console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters (excluding Yiga) found for region: ${villageRegion}`);
+      await channel.send(`❌ **No tier 5+ monsters (excluding Yiga) found in ${villageRegion} region for ${villageDisplayName}.**`);
+      return;
+    }
+    
+    const monster = monsters[Math.floor(Math.random() * monsters.length)];
+    if (!monster || !monster.name || !monster.tier) {
+      console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters found for region: ${villageRegion}`);
+      await channel.send(`❌ **No tier 5+ monsters found in ${villageRegion} region for ${villageDisplayName}.**`);
+      return;
+    }
+    
+    console.log(`[randomMonsterEncounters.js]: 🐉 Selected monster: ${monster.name} (Tier ${monster.tier}) from ${villageRegion} region`);
+    
+    // Create a mock interaction object for the triggerRaid function
+    const mockInteraction = {
+      channel: channel,
+      client: channel.client,
+      user: { id: 'quota-raid-bot', tag: 'Quota Raid Bot' },
+      guild: channel.guild,
+      editReply: async (options) => {
+        return await channel.send(options);
+      },
+      followUp: async (options) => {
+        return await channel.send(options);
+      }
+    };
+    
+    // Use the same triggerRaid function as the mod command
+    const { triggerRaid } = require('../modules/raidModule');
+    
+    // Capitalize the village name to match the RaidModel enum values
+    const capitalizedVillage = capitalizeVillageName(selectedVillage);
+    console.log(`[randomMonsterEncounters.js]: 🚀 Triggering quota-based raid for ${monster.name} in ${capitalizedVillage}`);
+    
+    // Trigger raid with isQuotaBased flag set to true
+    const result = await triggerRaid(monster, mockInteraction, capitalizedVillage, false, null, true);
+    
+    if (!result || !result.success) {
+      console.error(`[randomMonsterEncounters.js]: ❌ Failed to trigger quota-based raid: ${result?.error || 'Unknown error'}`);
+      await channel.send(`❌ **Failed to trigger the raid:** ${result?.error || 'Unknown error'}`);
+      return;
+    }
+    
+    // Increment raid count for this village
+    await incrementVillageRaidCount(villageDisplayName);
+    
+    console.log(`[randomMonsterEncounters.js]: ✅ Quota-based raid triggered successfully in ${villageDisplayName} channel`);
+    console.log(`[randomMonsterEncounters.js]: 🎉 QUOTA-BASED RAID COMPLETE! ${monster.name} (T${monster.tier}) in ${villageDisplayName}`);
+    
+  } catch (error) {
+    console.error('[randomMonsterEncounters.js]: ❌ Error triggering quota-based raid:', error);
+    await handleError(error, 'randomMonsterEncounters.js');
+  }
+}
+
+// ============================================================================
 // Initialization Function
 // ------------------- Initialize Random Encounter Bot -------------------
 async function initializeRandomEncounterBot(client) {
@@ -342,13 +727,29 @@ async function initializeRandomEncounterBot(client) {
     );
   });
 
-  // Start periodic encounter checks
+  // Start periodic encounter checks (activity-based raids)
   setInterval(() => {
     checkForRandomEncounters(client).catch(error => {
       console.error('[randomMonsterEncounters.js]: ❌ Encounter check failed:', error);
       handleError(error, 'randomMonsterEncounters.js');
     });
   }, CHECK_INTERVAL);
+
+  // Start hourly quota checks (village-level quota-based raids)
+  setInterval(() => {
+    checkVillageRaidQuotas(client).catch(error => {
+      console.error('[randomMonsterEncounters.js]: ❌ Village quota check failed:', error);
+      handleError(error, 'randomMonsterEncounters.js');
+    });
+  }, HOURS_CHECK_INTERVAL);
+  
+  // Also check immediately on startup (after a short delay to let everything initialize)
+  setTimeout(() => {
+    checkVillageRaidQuotas(client).catch(error => {
+      console.error('[randomMonsterEncounters.js]: ❌ Initial village quota check failed:', error);
+      handleError(error, 'randomMonsterEncounters.js');
+    });
+  }, 60000); // Check after 1 minute
 
 }
 
@@ -362,5 +763,9 @@ module.exports = {
   triggerRandomEncounter,
   getGlobalRaidCooldown,
   setGlobalRaidCooldown,
-  resetGlobalRaidCooldown
+  resetGlobalRaidCooldown,
+  checkVillageRaidQuotas,
+  incrementVillageRaidCount,
+  getVillagePeriodData,
+  setVillagePeriodData
 };

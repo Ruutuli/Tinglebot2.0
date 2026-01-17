@@ -139,25 +139,25 @@
       </nav>
     </aside>
 
-    <main class="main-content character-inventory-main" id="main-content" role="main" tabindex="-1">
+    <main class="main-content char-inv-main" id="main-content" role="main" tabindex="-1">
       <!-- Character Header -->
-      <section class="character-inventory-header-section">
-        <div class="character-header-content">
-          <div class="character-avatar-large">
+      <section class="char-inv-header-section">
+        <div class="char-inv-header-content">
+          <div class="char-inv-avatar-large">
             <img id="character-icon" src="/images/ankleicon.png" alt="Character avatar" />
           </div>
-          <div class="character-header-info">
+          <div class="char-inv-header-info">
             <h1 id="character-name">Loading...</h1>
-            <div class="character-stats">
-              <div class="stat-item">
+            <div class="char-inv-stats">
+              <div class="char-inv-stat-item">
                 <i class="fas fa-box"></i>
                 <span id="stat-unique-items">0</span>
-                <span class="stat-label">Unique Items</span>
+                <span class="char-inv-stat-label">Unique Items</span>
               </div>
-              <div class="stat-item">
+              <div class="char-inv-stat-item">
                 <i class="fas fa-layer-group"></i>
                 <span id="stat-total-items">0</span>
-                <span class="stat-label">Total Items</span>
+                <span class="char-inv-stat-label">Total Items</span>
               </div>
             </div>
           </div>
@@ -165,22 +165,22 @@
       </section>
 
       <!-- Tabs -->
-      <div class="character-inventory-tabs">
-        <button class="tab-button active" data-tab="inventory" id="tab-inventory">
+      <div class="char-inv-tabs">
+        <button class="char-inv-tab-button active" data-tab="inventory" id="tab-inventory">
           <i class="fas fa-boxes"></i> Complete Inventory
         </button>
-        <button class="tab-button" data-tab="history" id="tab-history">
+        <button class="char-inv-tab-button" data-tab="history" id="tab-history">
           <i class="fas fa-history"></i> Acquisition History
         </button>
       </div>
 
       <!-- Tab Content: Complete Inventory -->
-      <section class="tab-content active" id="content-inventory" role="tabpanel">
-        <div class="inventory-filters" id="inventory-filters">
+      <section class="char-inv-tab-content active" id="content-inventory" role="tabpanel">
+        <div class="char-inv-filters" id="inventory-filters">
           <!-- Filters will be inserted here by JavaScript -->
         </div>
-        <div class="inventory-grid-container" id="inventory-grid-container">
-          <div class="loading-state" id="inventory-loading">
+        <div class="char-inv-grid-container" id="inventory-grid-container">
+          <div class="char-inv-loading-state" id="inventory-loading">
             <i class="fas fa-spinner fa-spin"></i>
             <p>Loading inventory...</p>
           </div>
@@ -188,12 +188,12 @@
       </section>
 
       <!-- Tab Content: Acquisition History -->
-      <section class="tab-content" id="content-history" role="tabpanel">
-        <div class="history-filters" id="history-filters">
+      <section class="char-inv-tab-content" id="content-history" role="tabpanel">
+        <div class="char-inv-history-filters" id="history-filters">
           <!-- Filters will be inserted here by JavaScript -->
         </div>
-        <div class="history-table-container" id="history-table-container">
-          <div class="loading-state" id="history-loading">
+        <div class="char-inv-history-table-container" id="history-table-container">
+          <div class="char-inv-loading-state" id="history-loading">
             <i class="fas fa-spinner fa-spin"></i>
             <p>Loading acquisition history...</p>
           </div>

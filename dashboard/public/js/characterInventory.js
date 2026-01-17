@@ -160,8 +160,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ------------------- Tab Management -------------------
 function setupTabs() {
-  const tabs = document.querySelectorAll('.tab-button');
-  const contents = document.querySelectorAll('.tab-content');
+  const tabs = document.querySelectorAll('.char-inv-tab-button');
+  const contents = document.querySelectorAll('.char-inv-tab-content');
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -675,7 +675,7 @@ function renderInventoryGrid(itemsByCategory) {
   });
   
   if (categoriesWithItems.length === 0 && navCategories.length === 0) {
-    return '<div class="empty-state"><p>No items match the current filters.</p></div>';
+    return '<div class="char-inv-empty-state"><p>No items match the current filters.</p></div>';
   }
 
   // Get category icon based on category name
@@ -710,13 +710,13 @@ function renderInventoryGrid(itemsByCategory) {
 
   // Render category navigation - always show all required categories
   const categoryNav = `
-    <div class="category-nav">
-      <div class="category-nav-title">Jump to Category</div>
-      <div class="category-nav-links">
+    <div class="char-inv-category-nav">
+      <div class="char-inv-category-nav-title">Jump to Category</div>
+      <div class="char-inv-category-nav-links">
         ${navCategories.map(category => {
           const categorySlug = category.toLowerCase().replace(/\s+/g, '-');
           const href = `#category-${categorySlug}`;
-          return `<a href="${href}" class="category-nav-link" data-category="${categorySlug}">${category}</a>`;
+          return `<a href="${href}" class="char-inv-category-nav-link" data-category="${categorySlug}">${category}</a>`;
         }).join('')}
       </div>
     </div>
@@ -731,19 +731,19 @@ function renderInventoryGrid(itemsByCategory) {
     const categorySlug = category.toLowerCase().replace(/\s+/g, '-');
     const isImageIcon = categoryIcon.startsWith('https://');
     const iconHtml = isImageIcon 
-      ? `<img src="${categoryIcon}" alt="${category}" class="category-icon-image" />`
+      ? `<img src="${categoryIcon}" alt="${category}" class="char-inv-category-icon-image" />`
       : `<i class="fas ${categoryIcon}"></i>`;
     
     return `
-      <div class="category-section collapsed" id="category-${categorySlug}" data-category="${category}">
-        <div class="category-header">
-          <i class="fas fa-chevron-down category-toggle"></i>
+      <div class="char-inv-category-section collapsed" id="category-${categorySlug}" data-category="${category}">
+        <div class="char-inv-category-header">
+          <i class="fas fa-chevron-down char-inv-category-toggle"></i>
           ${iconHtml}
-          <h3 class="category-title">${category}</h3>
-          <span class="category-count">${ownedCount} / ${itemCount}</span>
+          <h3 class="char-inv-category-title">${category}</h3>
+          <span class="char-inv-category-count">${ownedCount} / ${itemCount}</span>
         </div>
-        <div class="category-items-container">
-          <div class="items-grid">
+        <div class="char-inv-category-items-container">
+          <div class="char-inv-items-grid">
             ${items.map(item => renderInventoryItemCard(item)).join('')}
           </div>
         </div>
@@ -762,18 +762,18 @@ function renderInventoryItemCard(item) {
   const itemNameEscaped = item.itemName.replace(/"/g, '&quot;');
 
   return `
-    <div class="inventory-item-card ${itemClass}" data-item="${itemNameEscaped}" title="${itemNameEscaped}">
-      <div class="item-info">
-        <div class="item-icon loading">
+    <div class="char-inv-item-card ${itemClass}" data-item="${itemNameEscaped}" title="${itemNameEscaped}">
+      <div class="char-inv-item-info">
+        <div class="char-inv-item-icon loading">
           <img 
             data-src="${imageUrl}" 
             alt="${itemNameEscaped}" 
             loading="lazy"
             onerror="this.onerror=null; this.src='/images/ankleicon.png'; this.classList.add('loaded'); this.parentElement.classList.remove('loading');" />
         </div>
-        <div class="item-details">
-          <h3 class="item-name">${item.itemName}</h3>
-          <p class="item-quantity ${qtyClass}">${quantityDisplay}</p>
+        <div class="char-inv-item-details">
+          <h3 class="char-inv-item-name">${item.itemName}</h3>
+          <p class="char-inv-item-quantity ${qtyClass}">${quantityDisplay}</p>
         </div>
       </div>
     </div>
@@ -793,16 +793,16 @@ function formatItemImageUrl(image) {
 
 // ------------------- Collapsible Sections -------------------
 function setupCollapsibleSections() {
-  const categoryHeaders = document.querySelectorAll('.category-header');
+  const categoryHeaders = document.querySelectorAll('.char-inv-category-header');
   
   categoryHeaders.forEach(header => {
     header.addEventListener('click', (e) => {
       // Don't collapse if clicking on count or icon
-      if (e.target.classList.contains('category-count') || e.target.classList.contains('fa-chevron-down')) {
+      if (e.target.classList.contains('char-inv-category-count') || e.target.classList.contains('fa-chevron-down')) {
         return;
       }
       
-      const section = header.closest('.category-section');
+      const section = header.closest('.char-inv-category-section');
       if (section) {
         section.classList.toggle('collapsed');
       }
@@ -810,7 +810,7 @@ function setupCollapsibleSections() {
   });
 
   // Setup category navigation links
-  const navLinks = document.querySelectorAll('.category-nav-link');
+  const navLinks = document.querySelectorAll('.char-inv-category-nav-link');
   navLinks.forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
@@ -833,7 +833,7 @@ function setupCollapsibleSections() {
 
 // ------------------- Item Click Handlers -------------------
 function setupItemClickHandlers() {
-  const itemCards = document.querySelectorAll('.inventory-item-card');
+  const itemCards = document.querySelectorAll('.char-inv-item-card');
   
   itemCards.forEach(card => {
     card.addEventListener('click', async (e) => {
@@ -854,13 +854,13 @@ async function showItemLog(itemName) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'item-log-modal';
-    modal.className = 'item-log-modal';
+    modal.className = 'char-inv-log-modal';
     document.body.appendChild(modal);
   }
 
   // Show loading state
   modal.innerHTML = `
-    <div class="item-log-modal-content">
+    <div class="char-inv-log-modal-content">
       <div style="text-align: center; padding: 3rem;">
         <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--character-inventory-accent); margin-bottom: 1rem;"></i>
         <p>Loading inventory log...</p>
@@ -886,23 +886,23 @@ async function showItemLog(itemName) {
 
     // Render modal content
     modal.innerHTML = `
-      <div class="item-log-modal-content">
-        <div class="item-log-header">
-          <div class="item-icon">
+      <div class="char-inv-log-modal-content">
+        <div class="char-inv-log-header">
+          <div class="char-inv-item-icon">
             <img src="${imageUrl}" alt="${itemName}" onerror="this.src='/images/ankleicon.png'; this.style.opacity='1';" style="opacity: 1;" />
           </div>
-          <div class="item-log-header-info">
+          <div class="char-inv-log-header-info">
             <h2>${itemName}</h2>
           </div>
-          <button class="item-log-close" aria-label="Close">
+          <button class="char-inv-log-close" aria-label="Close">
             <i class="fas fa-times"></i>
           </button>
         </div>
-        <div class="item-log-body">
+        <div class="char-inv-log-body">
           ${logs.length === 0 
             ? '<p style="text-align: center; padding: 2rem; color: var(--character-inventory-text-muted);">No inventory log entries found for this item.</p>'
             : `
-              <table class="item-log-table">
+              <table class="char-inv-log-table">
                 <thead>
                   <tr>
                     <th>Date/Time</th>
@@ -924,7 +924,7 @@ async function showItemLog(itemName) {
     `;
 
     // Setup close button
-    const closeBtn = modal.querySelector('.item-log-close');
+    const closeBtn = modal.querySelector('.char-inv-log-close');
     closeBtn.addEventListener('click', () => {
       modal.classList.remove('active');
     });
@@ -948,14 +948,14 @@ async function showItemLog(itemName) {
   } catch (error) {
     console.error('Error loading item log:', error);
     modal.innerHTML = `
-      <div class="item-log-modal-content">
-        <div class="item-log-header">
+      <div class="char-inv-log-modal-content">
+        <div class="char-inv-log-header">
           <h2>Error</h2>
-          <button class="item-log-close" aria-label="Close">
+          <button class="char-inv-log-close" aria-label="Close">
             <i class="fas fa-times"></i>
           </button>
         </div>
-        <div class="item-log-body">
+        <div class="char-inv-log-body">
           <p style="text-align: center; padding: 2rem; color: var(--error-color, #ff6b6b);">
             Failed to load inventory log: ${error.message}
           </p>
@@ -963,7 +963,7 @@ async function showItemLog(itemName) {
       </div>
     `;
     
-    const closeBtn = modal.querySelector('.item-log-close');
+    const closeBtn = modal.querySelector('.char-inv-log-close');
     closeBtn.addEventListener('click', () => {
       modal.classList.remove('active');
     });
@@ -982,12 +982,12 @@ function renderLogRow(log) {
   });
 
   const quantity = parseInt(log.quantity) || 0;
-  const quantityClass = quantity > 0 ? 'log-positive' : 'log-negative';
+  const quantityClass = quantity > 0 ? 'char-inv-log-positive' : 'char-inv-log-negative';
   const quantityDisplay = quantity > 0 ? `+${quantity}` : `${quantity}`;
   const actionDisplay = quantity > 0 ? 'Obtained' : 'Removed';
 
   const linkHtml = log.link 
-    ? `<a href="${log.link}" target="_blank" rel="noopener noreferrer" class="history-link"><i class="fas fa-external-link-alt"></i></a>`
+    ? `<a href="${log.link}" target="_blank" rel="noopener noreferrer" class="char-inv-history-link"><i class="fas fa-external-link-alt"></i></a>`
     : '-';
 
   return `
@@ -1004,7 +1004,7 @@ function renderLogRow(log) {
 
 // ------------------- Lazy Image Loading -------------------
 function setupLazyImageLoading() {
-  const images = document.querySelectorAll('.item-icon img[data-src]');
+  const images = document.querySelectorAll('.char-inv-item-icon img[data-src]');
   
   if (!('IntersectionObserver' in window)) {
     // Fallback for browsers without IntersectionObserver
@@ -1219,12 +1219,12 @@ function filterHistoryLogs(logs) {
 
 function renderHistoryTable(logs) {
   if (logs.length === 0) {
-    return '<div class="empty-state"><p>No acquisition history matches the current filters.</p></div>';
+    return '<div class="char-inv-empty-state"><p>No acquisition history matches the current filters.</p></div>';
   }
 
   return `
-    <div class="history-table-wrapper">
-      <table class="history-table">
+    <div class="char-inv-history-table-wrapper">
+      <table class="char-inv-history-table">
         <thead>
           <tr>
             <th>Item Name</th>
@@ -1257,7 +1257,7 @@ function renderHistoryRow(log) {
   });
 
   const linkHtml = log.link 
-    ? `<a href="${log.link}" target="_blank" rel="noopener noreferrer" class="history-link"><i class="fas fa-external-link-alt"></i></a>`
+    ? `<a href="${log.link}" target="_blank" rel="noopener noreferrer" class="char-inv-history-link"><i class="fas fa-external-link-alt"></i></a>`
     : '-';
 
   return `
@@ -1269,17 +1269,17 @@ function renderHistoryRow(log) {
       <td>${log.obtain || '-'}</td>
       <td>${log.location || '-'}</td>
       <td>${formattedDate}</td>
-      <td class="link-cell">${linkHtml}</td>
+      <td class="char-inv-link-cell">${linkHtml}</td>
     </tr>
   `;
 }
 
 // ------------------- Error Handling -------------------
 function showError(message) {
-  const container = document.querySelector('.main-content');
+  const container = document.querySelector('.char-inv-main');
   if (container) {
     container.innerHTML = `
-      <div class="error-state">
+      <div class="char-inv-error-state">
         <i class="fas fa-exclamation-triangle"></i>
         <h2>Error</h2>
         <p>${message}</p>

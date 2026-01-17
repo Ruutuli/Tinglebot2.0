@@ -1053,15 +1053,15 @@ function createRaidEmbed(raid, monsterImage) {
 
 // ---- Function: triggerRaid ----
 // Triggers a raid in the specified channel
-async function triggerRaid(monster, interaction, villageId, isBloodMoon = false, character = null) {
+async function triggerRaid(monster, interaction, villageId, isBloodMoon = false, character = null, isQuotaBased = false) {
   try {
     console.log(`[raidModule.js]: 🐉 Starting raid trigger for ${monster.name} in ${villageId}`);
     console.log(`[raidModule.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);
     console.log(`[raidModule.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
     
     // ------------------- Global Raid Cooldown Check -------------------
-    // For Blood Moon raids, skip cooldown entirely (do not check or set)
-    if (!isBloodMoon) {
+    // For Blood Moon raids and quota-based raids, skip cooldown entirely (do not check or set)
+    if (!isBloodMoon && !isQuotaBased) {
       // Check if we're still in global cooldown period (4 hours between raids)
       const { getGlobalRaidCooldown, setGlobalRaidCooldown } = require('../scripts/randomMonsterEncounters');
       const currentTime = Date.now();
@@ -1089,7 +1089,11 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       await setGlobalRaidCooldown(currentTime);
       console.log(`[raidModule.js]: ⏰ Global raid cooldown started - next raid available in 4 hours`);
     } else {
-      console.log('[raidModule.js]: 🌕 Blood Moon raid detected — bypassing global raid cooldown.');
+      if (isBloodMoon) {
+        console.log('[raidModule.js]: 🌕 Blood Moon raid detected — bypassing global raid cooldown.');
+      } else if (isQuotaBased) {
+        console.log('[raidModule.js]: 📅 Quota-based raid detected — bypassing global raid cooldown.');
+      }
     }
     
     // Start the raid
@@ -1124,7 +1128,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     console.log(`[raidModule.js]: 📤 Embed description: ${embed.data?.description || 'No description'}`);
     
     const raidMessage = await interaction.channel.send({
-      content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
+      content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
       embeds: [embed]
     });
 
