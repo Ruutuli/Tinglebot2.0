@@ -836,7 +836,10 @@ function validateAndSanitizeField(fieldName, value, fieldType) {
 function sanitizeString(fieldName, value) {
   let sanitized = String(value).trim();
   
-  sanitized = sanitized.replace(/[<>]/g, '');
+  // Skip angle bracket removal for emoji field (Discord emoji format requires < >)
+  if (fieldName.toLowerCase() !== 'emoji') {
+    sanitized = sanitized.replace(/[<>]/g, '');
+  }
   
   if (fieldName.toLowerCase().includes('name') && sanitized.length > 100) {
     showNotification(`Name field is too long (${sanitized.length}/100 characters). Please shorten it.`, 'warning');
