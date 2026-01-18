@@ -634,7 +634,8 @@ for (const { name } of cleanedItems) {
     aggregatedItems.push(entry);
   }
 
-  for (const { name, quantity } of aggregatedItems) {
+  for (const item of aggregatedItems) {
+   const { name, quantity } = item;
    // Extract the base item name by removing any quantity in parentheses
    const baseItemName = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
 
@@ -659,6 +660,9 @@ for (const { name } of cleanedItems) {
 
    // Use the canonical item name from the database
    const canonicalName = itemDetails.itemName;
+   
+   // Store the canonical name in the aggregated item for use during removal
+   item.canonicalName = canonicalName;
 
    // Handle items with + in their names by using exact match instead of regex
    // Use find().toArray() to get all matching entries and aggregate quantities
@@ -767,11 +771,13 @@ for (const { name } of cleanedItems) {
 
   const formattedItems = [];
 
-  for (const { name, quantity } of aggregatedItems) {
+  for (const { name, quantity, canonicalName } of aggregatedItems) {
    // Remove from source inventory first
+   // Use canonicalName if available (from availability check), otherwise fall back to name
+   const itemNameToRemove = canonicalName || name;
    const removeResult = await removeItemInventoryDatabase(
     fromCharacter._id,
-    name,
+    itemNameToRemove,
     quantity,
     interaction,
     'Gift to ' + toCharacter.name
@@ -779,16 +785,18 @@ for (const { name } of cleanedItems) {
 
    if (!removeResult) {
      await interaction.editReply({
-       content: `❌ Failed to remove ${name} from your inventory. Please try again.`,
+       content: `❌ Failed to remove ${itemNameToRemove} from your inventory. Please try again.`,
        ephemeral: true
      });
      return;
    }
 
    // Add to target inventory
+   // Use canonicalName if available (from availability check), otherwise fall back to name
+   const itemNameToAdd = canonicalName || name;
    const addResult = await addItemInventoryDatabase(
     toCharacter._id, 
-    name, 
+    itemNameToAdd, 
     quantity, 
     interaction, 
     'Gift from ' + fromCharacter.name
@@ -798,13 +806,13 @@ for (const { name } of cleanedItems) {
      // If adding to target fails, try to restore the item to source
      await addItemInventoryDatabase(
       fromCharacter._id,
-      name,
+      itemNameToAdd,
       quantity,
       interaction,
       'Restored after failed gift'
      );
      await interaction.editReply({
-       content: `❌ Failed to add ${name} to recipient's inventory. The item has been restored to your inventory.`,
+       content: `❌ Failed to add ${itemNameToAdd} to recipient's inventory. The item has been restored to your inventory.`,
        ephemeral: true
      });
      return;
@@ -814,12 +822,12 @@ for (const { name } of cleanedItems) {
 
    // Get item details for emoji
    try {
-     const itemDetails = await fetchItemByName(name);
+     const itemDetails = await fetchItemByName(itemNameToAdd);
      const itemIcon = itemDetails?.emoji || "🎁";
-     formattedItems.push({ itemName: name, quantity, itemIcon });
+     formattedItems.push({ itemName: itemNameToAdd, quantity, itemIcon });
    } catch (error) {
-     logger.error('ECONOMY', `Failed to fetch item details for ${name}: ${error.message}`);
-     formattedItems.push({ itemName: name, quantity, itemIcon: "🎁" });
+     logger.error('ECONOMY', `Failed to fetch item details for ${itemNameToAdd}: ${error.message}`);
+     formattedItems.push({ itemName: itemNameToAdd, quantity, itemIcon: "🎁" });
    }
   }
 
