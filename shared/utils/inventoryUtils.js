@@ -414,33 +414,45 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     
     const inventoryCollection = db.collection(collectionName);
 
-    // First try exact match
-    let inventoryItem = await inventoryCollection.findOne({
-      characterId: character._id,
-      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
-    });
-
-    // If no exact match, try case-insensitive match
-    if (!inventoryItem) {
-      inventoryItem = await inventoryCollection.findOne({
-        characterId: character._id,
-        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
-      });
+    // Handle items with + in their names by using exact match instead of regex
+    // Use find().toArray() to get all matching entries and aggregate quantities
+    // This matches the availability check logic in handleGift
+    let inventoryEntries;
+    if (itemName.includes('+')) {
+      inventoryEntries = await inventoryCollection
+        .find({ 
+          characterId: character._id,
+          itemName: itemName.trim()
+        })
+        .toArray();
+    } else {
+      inventoryEntries = await inventoryCollection
+        .find({ 
+          characterId: character._id,
+          itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
+        })
+        .toArray();
     }
 
-    if (!inventoryItem) {
+    if (!inventoryEntries || inventoryEntries.length === 0) {
       console.log(`[inventoryUtils.js]: ❌ Item "${itemName}" not found in ${character.name}'s inventory`);
       return false;
     }
 
-    if (inventoryItem.quantity < quantity) {
+    // Sum quantities from all matching entries (handles multiple inventory entries for same item)
+    const totalQuantity = inventoryEntries.reduce(
+      (sum, entry) => sum + (entry.quantity || 0),
+      0
+    );
+
+    if (totalQuantity < quantity) {
       const errorEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
         .setTitle('❌ Insufficient Items')
         .setDescription(`Not enough ${itemName} in inventory`)
         .addFields(
           { name: 'Required', value: quantity.toString(), inline: true },
-          { name: 'Available', value: inventoryItem ? inventoryItem.quantity.toString() : '0', inline: true }
+          { name: 'Available', value: totalQuantity.toString(), inline: true }
         )
         .setFooter({ text: 'Check your inventory and try again' })
         .setTimestamp();
@@ -448,43 +460,65 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error(`Not enough ${itemName} in inventory`);
     }
 
-    console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
+    console.log(`[inventoryUtils.js]: 📊 Found ${totalQuantity} ${itemName} across ${inventoryEntries.length} entry/entries in ${character.name}'s inventory`);
     console.log(`[inventoryUtils.js]: ➖ Removing ${quantity} ${itemName}`);
     
-    const newQuantity = inventoryItem.quantity - quantity;
-    console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
-
-    if (newQuantity === 0) {
-      const deleteResult = await inventoryCollection.deleteOne({
-        characterId: character._id,
-        itemName: inventoryItem.itemName
-      });
+    // Remove quantity from entries, starting with the first entry
+    let remainingToRemove = quantity;
+    const canonicalItemName = inventoryEntries[0].itemName; // Use canonical name from first entry
+    
+    for (const entry of inventoryEntries) {
+      if (remainingToRemove <= 0) break;
       
-      if (deleteResult.deletedCount === 0) {
-        console.error(`[inventoryUtils.js]: ❌ Failed to delete item ${itemName} from inventory`);
-        return false;
-      }
-    } else {
-      const updateResult = await inventoryCollection.updateOne(
-        { characterId: character._id, itemName: inventoryItem.itemName },
-        { $inc: { quantity: -quantity } }
-      );
+      const quantityFromThisEntry = Math.min(remainingToRemove, entry.quantity);
+      const newQuantity = entry.quantity - quantityFromThisEntry;
       
-      if (updateResult.modifiedCount === 0) {
-        console.error(`[inventoryUtils.js]: ❌ Failed to update quantity for item ${itemName}`);
-        return false;
+      if (newQuantity === 0) {
+        // Delete entry if quantity reaches 0
+        const deleteResult = await inventoryCollection.deleteOne({
+          _id: entry._id
+        });
+        
+        if (deleteResult.deletedCount === 0) {
+          console.error(`[inventoryUtils.js]: ❌ Failed to delete item ${itemName} from inventory`);
+          return false;
+        }
+        console.log(`[inventoryUtils.js]: 🗑️ Deleted entry for ${entry.itemName} (quantity was ${entry.quantity})`);
+      } else {
+        // Update entry with remaining quantity
+        const updateResult = await inventoryCollection.updateOne(
+          { _id: entry._id },
+          { $inc: { quantity: -quantityFromThisEntry } }
+        );
+        
+        if (updateResult.modifiedCount === 0) {
+          console.error(`[inventoryUtils.js]: ❌ Failed to update quantity for item ${itemName}`);
+          return false;
+        }
+        console.log(`[inventoryUtils.js]: 🔄 Updated ${entry.itemName} quantity: ${entry.quantity} → ${newQuantity}`);
       }
+      
+      remainingToRemove -= quantityFromThisEntry;
+    }
+    
+    if (remainingToRemove > 0) {
+      console.error(`[inventoryUtils.js]: ❌ Failed to remove all requested quantity. Remaining: ${remainingToRemove}`);
+      return false;
     }
 
     // Log removal to InventoryLog database collection
     try {
       // Fetch item details for proper categorization
-      const item = await dbFunctions.fetchItemByName(inventoryItem.itemName);
+      // Use canonical item name from first entry (all entries have same itemName)
+      const item = await dbFunctions.fetchItemByName(canonicalItemName);
       const interactionUrl = interaction 
         ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
         : '';
       
-      await logItemRemovalToDatabase(character, item || inventoryItem, {
+      // Use first entry for logging (or create a minimal item object if item not found)
+      const itemForLogging = item || { itemName: canonicalItemName, quantity: quantity };
+      
+      await logItemRemovalToDatabase(character, itemForLogging, {
         quantity: quantity,
         obtain: obtain || 'Manual Removal',
         location: character.currentVillage || character.homeVillage || 'Unknown',

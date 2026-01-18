@@ -1082,26 +1082,20 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       false,
       healingRequest.heartsToHeal, // original requested amount
       staminaCost, // stamina cost
-      capturedBoostInfo // boost info
+      capturedBoostInfo, // boost info
+      originalRequesterId // userId for notification
     );
 
-    // Send embed via interaction.followUp() and user ping via channel.send()
-    // This approach works because channel.send() properly handles user mentions
-    await interaction.followUp({
-      embeds: [embed],
-    });
-    
-    // Add fallback message if original message couldn't be updated
+    // Send embed with ping message in content (embeds can't ping users)
     let finalPingMessage = pingMessage;
     if (!originalMessageUpdated) {
       finalPingMessage += `\n\nℹ️ **Note:** The original healing request message could not be updated (it may have been deleted).`;
     }
     
-    if (channel) {
-      await channel.send({ 
-        content: finalPingMessage 
-      });
-    }
+    await interaction.followUp({
+      content: finalPingMessage,
+      embeds: [embed],
+    });
   } catch (error) {
     await handleInteractionErrorResponse(error, interaction, 'fulfilling the healing request');
   }
@@ -1395,7 +1389,7 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
 
     // Notify both parties
     const targetUserId = characterToHeal.userId;
-    let message = `<@${targetUserId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
+    let message = `🔔 <@${targetUserId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
 
     const embed = await createHealEmbed(
       healerCharacter,
@@ -1408,7 +1402,8 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
       true, // isDirectHealing = true
       originalHeartsRequested, // original requested amount
       staminaCost, // stamina cost
-      capturedBoostInfo // boost info
+      capturedBoostInfo, // boost info
+      targetUserId // userId for notification
     );
 
     await interaction.editReply({ content: message, embeds: [embed] });

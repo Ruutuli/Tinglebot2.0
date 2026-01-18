@@ -2146,7 +2146,8 @@ const createHealEmbed = async (
  isDirectHealing = false,
  originalHeartsRequested = null,
  staminaCost = null,
- capturedBoostInfo = null
+ capturedBoostInfo = null,
+ userId = null // Optional: userId to mention in embed title
 ) => {
  if (!characterToHeal) {
   throw new Error("Character to heal is required.");
@@ -2437,9 +2438,14 @@ const createHealEmbed = async (
   let footerText = "✨ Healing complete";
   footerText = buildFooterText(footerText, updatedHealer || healerCharacter || characterToHeal, boostInfo);
 
+  // Create notification-style title if userId is provided
+  const title = userId 
+    ? `🔔 Your character **${characterToHeal.name}** has been healed by **${healerName}**!`
+    : '✨ Healing Complete';
+
   const embed = new EmbedBuilder()
    .setColor("#4CAF50") // Green for successful healing
-   .setTitle('✨ Healing Complete')
+   .setTitle(title)
    .setDescription(description)
    .setThumbnail(healerIcon)
    .addFields(fields)

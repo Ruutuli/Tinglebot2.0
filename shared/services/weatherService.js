@@ -535,13 +535,8 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
   
   // Fallback if filtering results in empty array
   if (!validSpecials || validSpecials.length === 0) {
-    console.warn('[weatherService.js]: No valid special weather choices after filtering, using all season options');
-    const allSpecials = seasonData.Special || [];
-    if (allSpecials.length === 0) {
-      console.error('[weatherService.js]: No special weather options available for season');
-      return null;
-    }
-    return safeWeightedChoice(allSpecials, weightMapping, modifierMap);
+    console.warn('[weatherService.js]: No valid special weather choices after filtering current conditions');
+    return null; // Don't select invalid specials - skip special weather this time
   }
   
   return safeWeightedChoice(validSpecials, weightMapping, modifierMap);

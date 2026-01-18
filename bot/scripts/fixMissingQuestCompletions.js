@@ -204,7 +204,18 @@ async function fixMissingQuestCompletions() {
   // Find all completed quests
   console.log('📋 Finding all completed quests...');
   const completedQuests = await Quest.find({ status: 'completed' });
-  console.log(`✅ Found ${completedQuests.length} completed quests\n`);
+  console.log(`✅ Found ${completedQuests.length} completed quests`);
+  
+  // Also check active quests where user might have completed participants
+  // This helps find missing completions where quest status is still 'active'
+  console.log('📋 Finding active quests with user participation...');
+  const allQuests = await Quest.find({
+    $or: [
+      { status: 'completed' },
+      { status: 'active' }
+    ]
+  });
+  console.log(`✅ Found ${allQuests.length} total quests (completed + active)\n`);
   
   // Build user query
   const userQuery = {};
@@ -223,8 +234,14 @@ async function fixMissingQuestCompletions() {
       // Analyze current state
       const beforeAnalysis = analyzeUserQuestTracking(user);
       
-      // Find missing completions
-      const missingCompletions = await findMissingCompletionsForUser(user, completedQuests);
+      // Debug: Show user's recorded quest IDs
+      const questTracking = user.quests || {};
+      const userCompletions = questTracking.completions || [];
+      const recordedQuestIds = userCompletions.map(c => c.questId).filter(id => id);
+      console.log(`   📝 Recorded quest IDs: ${recordedQuestIds.length > 0 ? recordedQuestIds.join(', ') : 'none'}`);
+      
+      // Find missing completions - check all quests (completed + active) to catch edge cases
+      const missingCompletions = await findMissingCompletionsForUser(user, allQuests);
       
       if (missingCompletions.length === 0) {
         // No missing completions, but check pending turn-ins
@@ -238,8 +255,15 @@ async function fixMissingQuestCompletions() {
           console.log(`   • pendingTurnIns: ${beforeAnalysis.pendingTurnIns}`);
           
           if (!ARG_DRY_RUN) {
+            user.markModified('quests');
             await user.save();
             console.log(`   ✅ Fixed: ${pendingFix.fix}`);
+            
+            // Verify the fix was saved
+            await user.save(); // Ensure save completes
+            const afterFix = analyzeUserQuestTracking(user);
+            console.log(`   ✅ Verified - New pendingTurnIns: ${afterFix.pendingTurnIns}`);
+            
             stats.pendingTurnInsFixed++;
           } else {
             console.log(`   [DRY RUN] Would fix: ${pendingFix.fix}`);
