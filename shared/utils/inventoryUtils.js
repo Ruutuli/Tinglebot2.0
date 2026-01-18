@@ -440,7 +440,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         .setDescription(`Not enough ${itemName} in inventory`)
         .addFields(
           { name: 'Required', value: quantity.toString(), inline: true },
-          { name: 'Available', value: existingItem ? existingItem.quantity.toString() : '0', inline: true }
+          { name: 'Available', value: inventoryItem ? inventoryItem.quantity.toString() : '0', inline: true }
         )
         .setFooter({ text: 'Check your inventory and try again' })
         .setTimestamp();
