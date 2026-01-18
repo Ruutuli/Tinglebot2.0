@@ -1536,10 +1536,8 @@ async function processLootingLogic(
         
         logger.info('LOOT', `✅ Monster encounter damage: ${character.currentVillage} took ${damageAmount} HP damage from ${encounteredMonster.name} (Tier ${encounteredMonster.tier}) following ${character.name}`);
         
-        // Add flavor text note to outcome message
-        if (outcome.result && typeof outcome.result === 'string') {
-          outcome.result += `\n⚠️ **${encounteredMonster.name}** followed **${character.name}** back to **${capitalizeFirstLetter(character.currentVillage)}** and caused ${damageAmount} HP damage to the village!`;
-        }
+        // Store village damage message for later appending to outcome message
+        outcome.villageDamageMessage = `\n⚠️ **${encounteredMonster.name}** followed **${character.name}** back to **${capitalizeFirstLetter(character.currentVillage)}** and caused ${damageAmount} HP damage to the village!`;
       } else {
         logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] ❌ Damage chance not triggered (roll was too high)`);
       }
@@ -1571,6 +1569,11 @@ async function processLootingLogic(
 
   // Step 3: Generate Outcome Message
   const outcomeMessage = generateOutcomeMessage(outcome, character);
+  
+  // Append village damage message if applicable
+  if (outcome.villageDamageMessage) {
+    outcomeMessage += outcome.villageDamageMessage;
+  }
 
   // Determine if an active Fortune Teller looting boost was unused (no damage taken)
   try {

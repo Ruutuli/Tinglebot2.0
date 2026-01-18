@@ -1105,11 +1105,12 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   
   // ------------------- Monster Encounter Village Damage (Tier 1-4 only) -------------------
   // Check if character lost to a Tier 1-4 monster (not KO'd, not a win, took damage)
-  // Apply percentage chance for monster to follow character back to village
+  // Track village damage but DON'T apply it yet - it will be applied at the end of the hunt
   const logger = require('../../../shared/utils/logger');
   logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] Evaluating village damage chance for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
   logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] Conditions - Tier check: ${monster.tier >= 1 && monster.tier <= 4}, Result: "${outcome.result}", Hearts: ${outcome.hearts}, Village: ${character.currentVillage}`);
   
+  let villageDamageAmount = 0;
   if (monster.tier >= 1 && monster.tier <= 4 && 
       outcome.result !== 'Win!/Loot' && outcome.result !== 'KO' &&
       outcome.hearts && outcome.hearts > 0 &&
@@ -1123,27 +1124,24 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
       
       if (roll < DAMAGE_CHANCE) {
         // Damage amount: 1-3 HP (random between 1 and 3)
-        const damageAmount = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3 HP
+        villageDamageAmount = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3 HP
         
-        const { damageVillage } = require('../../modules/villageModule');
         const { capitalizeFirstLetter } = require('../../modules/formattingModule');
         
-        logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] 🎲 Damage chance triggered! Applying ${damageAmount} HP to ${character.currentVillage}`);
-        
-        // Apply village damage
-        await damageVillage(character.currentVillage, damageAmount);
-        
-        logger.info('HELPWANTED', `✅ Monster encounter damage: ${character.currentVillage} took ${damageAmount} HP damage from ${monster.name} (Tier ${monster.tier}) following ${character.name}`);
+        logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] 🎲 Damage chance triggered! Will apply ${villageDamageAmount} HP to ${character.currentVillage} at end of hunt`);
         
         // Add flavor text note (will be appended to outcome message below)
         // Store this for later appending to outcome message
-        outcome.villageDamageMessage = `\n⚠️ **${monster.name}** followed **${character.name}** back to **${capitalizeFirstLetter(character.currentVillage)}** and caused ${damageAmount} HP damage to the village!`;
+        outcome.villageDamageMessage = `\n⚠️ **${monster.name}** followed **${character.name}** back to **${capitalizeFirstLetter(character.currentVillage)}** and caused ${villageDamageAmount} HP damage to the village!`;
+        
+        // Store damage amount to be applied later (don't apply now)
+        outcome.pendingVillageDamage = villageDamageAmount;
       } else {
         logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] ❌ Damage chance not triggered (roll was too high)`);
       }
     } catch (damageError) {
-      logger.error('HELPWANTED', `❌ Error applying monster encounter village damage: ${damageError.message}`, damageError.stack);
-      // Don't fail the HWQ encounter if village damage fails
+      logger.error('HELPWANTED', `❌ Error checking monster encounter village damage: ${damageError.message}`, damageError.stack);
+      // Don't fail the HWQ encounter if village damage check fails
     }
   } else {
     logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] ❌ Conditions not met - skipping village damage check`);
@@ -1449,6 +1447,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   let defeatedAll = true;
   let heartsRemaining = character.currentHearts;
   let totalLoot = [];
+  let totalVillageDamage = 0; // Track total village damage to apply at the end
   
   for (let i = 0; i < monsterList.length; i++) {
     const monsterName = monsterList[i];
@@ -1456,6 +1455,11 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     try {
       const encounterResult = await processMonsterEncounter(character, monsterName, heartsRemaining);
       heartsRemaining = encounterResult.newHeartsRemaining;
+      
+      // Collect village damage but don't apply it yet
+      if (encounterResult.outcome.pendingVillageDamage) {
+        totalVillageDamage += encounterResult.outcome.pendingVillageDamage;
+      }
       
       // ------------------- Clear Boost After Encounter -------------------
       // Clear boost after the first encounter (similar to loot.js and raids)
@@ -1559,6 +1563,21 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       console.error(`[helpWanted.js]: ❌ Error processing monster encounter:`, error);
       await interaction.followUp({ content: `❌ Error processing encounter with ${monsterName}.`, flags: 64 });
       return;
+    }
+  }
+  
+  // Apply all village damage at once at the end of the hunt
+  if (totalVillageDamage > 0 && character.currentVillage) {
+    try {
+      const { damageVillage } = require('../../modules/villageModule');
+      const logger = require('../../../shared/utils/logger');
+      logger.info('HELPWANTED', `[VILLAGE_DAMAGE_FINAL] Applying total village damage of ${totalVillageDamage} HP to ${character.currentVillage} at end of hunt`);
+      await damageVillage(character.currentVillage, totalVillageDamage);
+      logger.info('HELPWANTED', `[VILLAGE_DAMAGE_FINAL] ✅ Applied ${totalVillageDamage} HP damage to ${character.currentVillage}`);
+    } catch (damageError) {
+      const logger = require('../../../shared/utils/logger');
+      logger.error('HELPWANTED', `❌ Error applying final village damage: ${damageError.message}`, damageError.stack);
+      // Don't fail the hunt if village damage fails
     }
   }
   

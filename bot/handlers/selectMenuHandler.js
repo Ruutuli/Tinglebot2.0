@@ -31,7 +31,7 @@ const {
   retrieveSubmissionFromStorage, 
   findLatestSubmissionIdForUser 
 } = require('../../shared/utils/storage');
-const { fetchCharacterByNameAndUserId, fetchCharacterByName } = require('../../shared/database/db');
+const { fetchCharacterByNameAndUserId, fetchCharacterByName, fetchCharactersByUserId, fetchModCharactersByUserId } = require('../../shared/database/db');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
 
 // Menu utilities to generate select menus for the submission process
@@ -259,12 +259,14 @@ async function handleSelectMenuInteraction(interaction) {
         : [];
 
       const focusCharacters = [];
+      const checkedCharacterMap = new Set();
       if (taggedCharacters.length > 0 && updatedSubmissionData.userId) {
         for (const taggedName of taggedCharacters) {
           try {
             const character = await fetchCharacterByNameAndUserId(taggedName, updatedSubmissionData.userId);
             if (character) {
               focusCharacters.push(character);
+              checkedCharacterMap.add(character.name.toLowerCase());
             }
           } catch (fetchError) {
             console.error(`[selectMenuHandler.js]: ❌ Failed to fetch character ${taggedName}:`, fetchError);
@@ -313,6 +315,66 @@ async function handleSelectMenuInteraction(interaction) {
             boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
             processedBoosts.add('scholar_tokens');
           }
+        }
+      }
+
+      // Check user's characters for boosts (in case they didn't tag themselves)
+      if (updatedSubmissionData.userId) {
+        try {
+          const userCharacters = await fetchCharactersByUserId(updatedSubmissionData.userId);
+          const userModCharacters = await fetchModCharactersByUserId(updatedSubmissionData.userId);
+          const allUserCharacters = [...userCharacters, ...userModCharacters];
+
+          for (const character of allUserCharacters) {
+            if (!character || !character.boostedBy) continue;
+
+            // Skip if this character was already checked in tagged characters
+            const normalizedName = character.name.toLowerCase();
+            if (checkedCharacterMap.has(normalizedName)) continue;
+
+            let booster;
+            try {
+              booster = await fetchCharacterByName(character.boostedBy);
+            } catch (fetchBoosterError) {
+              console.error(`[selectMenuHandler.js]: ❌ Failed to fetch booster ${character.boostedBy}:`, fetchBoosterError);
+              continue;
+            }
+
+            if (!booster) continue;
+
+            if (
+              updatedSubmissionData.category === 'art' &&
+              booster.job === 'Teacher' &&
+              !processedBoosts.has('teacher_tokens')
+            ) {
+              const boostedTokens = applyTeacherTokensBoost(finalTokenAmount);
+              const tokenIncrease = boostedTokens - finalTokenAmount;
+              if (tokenIncrease > 0) {
+                finalTokenAmount = boostedTokens;
+                boostEffects.push(`👩‍🏫 **Critique & Composition:** ${booster.name} added 🪙 ${tokenIncrease}.`);
+                processedBoosts.add('teacher_tokens');
+                console.log(`[selectMenuHandler.js]: 📖 Teacher boost - Critique & Composition (+${tokenIncrease} tokens) from user character ${character.name}`);
+              }
+            }
+
+            if (
+              updatedSubmissionData.category === 'writing' &&
+              booster.job === 'Scholar' &&
+              !processedBoosts.has('scholar_tokens')
+            ) {
+              const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
+              const tokenIncrease = boostedTokens - finalTokenAmount;
+              if (tokenIncrease > 0) {
+                finalTokenAmount = boostedTokens;
+                boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
+                processedBoosts.add('scholar_tokens');
+                console.log(`[selectMenuHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens) from user character ${character.name}`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`[selectMenuHandler.js]: ❌ Error checking user characters for boosts:`, error);
+          // Don't fail the submission if boost check fails
         }
       }
 
