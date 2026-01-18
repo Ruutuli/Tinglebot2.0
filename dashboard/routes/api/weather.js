@@ -97,23 +97,66 @@ router.get('/today', asyncHandler(async (req, res) => {
   const weatherByVillage = {};
   const villages = ['Rudania', 'Inariko', 'Vhintl'];
   
-  villages.forEach(village => {
+  for (const village of villages) {
     // Normalize the search village name
     const normalizedVillage = normalizeVillageName(village);
     
-    // Find weather record with case-insensitive village name match
-    const villageWeather = weatherData.find(w => {
+    // First, try to find weather record in the current period with case-insensitive village name match
+    let villageWeather = weatherData.find(w => {
       const normalizedDbVillage = normalizeVillageName(w.village);
       return normalizedDbVillage === normalizedVillage;
     });
     
-    weatherByVillage[village] = villageWeather || null;
-    if (villageWeather) {
-      logger.info('WEATHER_API', `Found weather for ${village}: ${villageWeather.date?.toISOString()}`);
+    // If no weather found in the exact period, look for the most recent posted weather for this village
+    if (!villageWeather) {
+      logger.warn('WEATHER_API', `No weather found for ${village} in current period, searching for most recent posted weather...`);
+      
+      // Try exact village name first (since enum guarantees exact match)
+      let fallbackWeather = await Weather.findOne({
+        village: village, // Exact match (enum guarantees this format)
+        $or: [
+          { postedToDiscord: true },
+          { postedToDiscord: { $exists: false } }
+        ]
+      })
+        .sort({ date: -1 }) // Get most recent
+        .lean();
+      
+      // If still not found, try case-insensitive match (for legacy data or edge cases)
+      if (!fallbackWeather) {
+        fallbackWeather = await Weather.findOne({
+          village: { $regex: new RegExp(`^${normalizedVillage}$`, 'i') },
+          $or: [
+            { postedToDiscord: true },
+            { postedToDiscord: { $exists: false } }
+          ]
+        })
+          .sort({ date: -1 })
+          .lean();
+      }
+      
+      if (fallbackWeather) {
+        logger.info('WEATHER_API', `Found fallback weather for ${village}: ${fallbackWeather.date?.toISOString()}, postedToDiscord: ${fallbackWeather.postedToDiscord}`);
+        villageWeather = fallbackWeather;
+      } else {
+        logger.warn('WEATHER_API', `No posted weather found for ${village} at all. Checking if any weather exists (posted or not)...`);
+        
+        // Last resort: check if any weather exists at all for debugging
+        const anyWeather = await Weather.findOne({ village: village })
+          .sort({ date: -1 })
+          .lean();
+        if (anyWeather) {
+          logger.warn('WEATHER_API', `Found unposted weather for ${village}: date=${anyWeather.date?.toISOString()}, postedToDiscord=${anyWeather.postedToDiscord}`);
+        } else {
+          logger.warn('WEATHER_API', `No weather records exist in database for ${village}`);
+        }
+      }
     } else {
-      logger.warn('WEATHER_API', `No weather found for ${village} (searched for normalized: "${normalizedVillage}")`);
+      logger.info('WEATHER_API', `Found weather for ${village} in current period: ${villageWeather.date?.toISOString()}`);
     }
-  });
+    
+    weatherByVillage[village] = villageWeather || null;
+  }
   
   res.json({
     date: weatherDayStart,

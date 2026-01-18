@@ -2419,33 +2419,83 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
     if (modelType === 'quest' && req.query.latestMonthOnly === 'true' && !allItems) {
       console.log(`[server.js]: 🔍 [latestMonthOnly] Starting quest filter for latestMonthOnly=true`);
       
-      // Find the most recent quest to determine the latest month
-      const latestQuest = await Quest.findOne({ postedAt: { $ne: null, $exists: true } })
+      // Find the latest month that has quests by checking both postedAt and createdAt
+      // Get the most recent date from either field across all quests
+      let latestDate = null;
+      let dateField = 'createdAt'; // Default to createdAt
+      
+      // First try to find latest postedAt
+      const latestPostedQuest = await Quest.findOne({ postedAt: { $ne: null, $exists: true } })
         .sort({ postedAt: -1 })
-        .select('postedAt')
+        .select('postedAt createdAt')
         .lean();
       
-      console.log(`[server.js]: 🔍 [latestMonthOnly] Latest quest found:`, latestQuest ? { postedAt: latestQuest.postedAt } : 'null');
+      // Then find latest createdAt
+      const latestCreatedQuest = await Quest.findOne()
+        .sort({ createdAt: -1 })
+        .select('postedAt createdAt')
+        .lean();
       
-      if (latestQuest && latestQuest.postedAt) {
-        const latestDate = new Date(latestQuest.postedAt);
+      // Determine which is more recent
+      if (latestPostedQuest && latestPostedQuest.postedAt) {
+        const postedDate = new Date(latestPostedQuest.postedAt);
+        if (latestCreatedQuest && latestCreatedQuest.createdAt) {
+          const createdDate = new Date(latestCreatedQuest.createdAt);
+          if (postedDate > createdDate) {
+            latestDate = postedDate;
+            dateField = 'postedAt';
+          } else {
+            latestDate = createdDate;
+            dateField = 'createdAt';
+          }
+        } else {
+          latestDate = postedDate;
+          dateField = 'postedAt';
+        }
+      } else if (latestCreatedQuest && latestCreatedQuest.createdAt) {
+        latestDate = new Date(latestCreatedQuest.createdAt);
+        dateField = 'createdAt';
+      }
+      
+      console.log(`[server.js]: 🔍 [latestMonthOnly] Latest quest dates found:`, {
+        latestPostedQuest: latestPostedQuest ? { postedAt: latestPostedQuest.postedAt, createdAt: latestPostedQuest.createdAt } : null,
+        latestCreatedQuest: latestCreatedQuest ? { postedAt: latestCreatedQuest.postedAt, createdAt: latestCreatedQuest.createdAt } : null,
+        usingField: dateField,
+        latestDate: latestDate
+      });
+      
+      if (latestDate) {
         const y = latestDate.getFullYear();
         const m = latestDate.getMonth(); // 0-indexed
         
         // Filter to only the latest month (start to end of that month)
         const startOfMonth = new Date(y, m, 1);
         const endOfMonth = new Date(y, m + 1, 0, 23, 59, 59, 999);
-        query.postedAt = { $gte: startOfMonth, $lte: endOfMonth };
+        
+        // Use $or to check both postedAt and createdAt fields
+        // This handles cases where some quests have postedAt and others only have createdAt
+        if (dateField === 'postedAt') {
+          // If latest is from postedAt, prefer postedAt but include createdAt for same month
+          query.$or = [
+            { postedAt: { $gte: startOfMonth, $lte: endOfMonth, $ne: null } },
+            { postedAt: null, createdAt: { $gte: startOfMonth, $lte: endOfMonth } }
+          ];
+        } else {
+          // If latest is from createdAt, check both fields for same month
+          query.$or = [
+            { postedAt: { $gte: startOfMonth, $lte: endOfMonth, $ne: null } },
+            { createdAt: { $gte: startOfMonth, $lte: endOfMonth } }
+          ];
+        }
         
         console.log(`[server.js]: 🔍 [latestMonthOnly] Filtering to month ${y}-${m + 1}:`, {
           startOfMonth: startOfMonth.toISOString(),
           endOfMonth: endOfMonth.toISOString(),
-          query: query.postedAt
+          query: query.$or
         });
       } else {
-        console.log(`[server.js]: ⚠️ [latestMonthOnly] No quests with postedAt found, not applying date filter`);
+        console.log(`[server.js]: ⚠️ [latestMonthOnly] No quests with valid dates found, not applying date filter`);
       }
-      // If no quests with postedAt exist, don't filter by date
     }
 
     // Ensure database connection is available
@@ -2670,7 +2720,9 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
       console.log(`[server.js]: 🔍 [latestMonthOnly] Query returned ${data.length} quests:`, data.map(q => ({
         questID: q.questID,
         title: q.title,
+        date: q.date,
         postedAt: q.postedAt,
+        createdAt: q.createdAt,
         status: q.status
       })));
     }
