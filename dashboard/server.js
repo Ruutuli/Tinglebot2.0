@@ -2415,20 +2415,37 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
       return res.status(500).json({ error: `Model not initialized for type: ${modelType}` });
     }
 
-    // For quest + latestMonthOnly: restrict to the calendar month of the most recently posted quest
+    // For quest + latestMonthOnly: find the latest month that has quests and show only that month
     if (modelType === 'quest' && req.query.latestMonthOnly === 'true' && !allItems) {
-      const latest = await Quest.findOne({ postedAt: { $ne: null, $exists: true } })
+      console.log(`[server.js]: 🔍 [latestMonthOnly] Starting quest filter for latestMonthOnly=true`);
+      
+      // Find the most recent quest to determine the latest month
+      const latestQuest = await Quest.findOne({ postedAt: { $ne: null, $exists: true } })
         .sort({ postedAt: -1 })
         .select('postedAt')
         .lean();
-      if (latest && latest.postedAt) {
-        const d = new Date(latest.postedAt);
-        const y = d.getFullYear();
-        const m = d.getMonth(); // 0-indexed
+      
+      console.log(`[server.js]: 🔍 [latestMonthOnly] Latest quest found:`, latestQuest ? { postedAt: latestQuest.postedAt } : 'null');
+      
+      if (latestQuest && latestQuest.postedAt) {
+        const latestDate = new Date(latestQuest.postedAt);
+        const y = latestDate.getFullYear();
+        const m = latestDate.getMonth(); // 0-indexed
+        
+        // Filter to only the latest month (start to end of that month)
         const startOfMonth = new Date(y, m, 1);
         const endOfMonth = new Date(y, m + 1, 0, 23, 59, 59, 999);
         query.postedAt = { $gte: startOfMonth, $lte: endOfMonth };
+        
+        console.log(`[server.js]: 🔍 [latestMonthOnly] Filtering to month ${y}-${m + 1}:`, {
+          startOfMonth: startOfMonth.toISOString(),
+          endOfMonth: endOfMonth.toISOString(),
+          query: query.postedAt
+        });
+      } else {
+        console.log(`[server.js]: ⚠️ [latestMonthOnly] No quests with postedAt found, not applying date filter`);
       }
+      // If no quests with postedAt exist, don't filter by date
     }
 
     // Ensure database connection is available
@@ -2625,7 +2642,15 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
     const total = await Model.countDocuments(query);
     const pages = Math.ceil(total / limit);
 
-
+    if (modelType === 'quest' && req.query.latestMonthOnly === 'true') {
+      console.log(`[server.js]: 🔍 [latestMonthOnly] Query count result:`, {
+        total,
+        query: JSON.stringify(query, null, 2),
+        limit,
+        skip,
+        pages
+      });
+    }
 
     // Fetch paginated data with custom sorting
     const sortOptions = {};
@@ -2640,6 +2665,15 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
       .skip(skip)
       .limit(limit)
       .lean();
+    
+    if (modelType === 'quest' && req.query.latestMonthOnly === 'true') {
+      console.log(`[server.js]: 🔍 [latestMonthOnly] Query returned ${data.length} quests:`, data.map(q => ({
+        questID: q.questID,
+        title: q.title,
+        postedAt: q.postedAt,
+        status: q.status
+      })));
+    }
     
     // Quest expiration filtering removed - show all quests regardless of expiration
 
