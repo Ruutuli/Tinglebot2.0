@@ -229,11 +229,29 @@ async function handleSubmissionCompletion(interaction) {
     const processedBoostTypes = new Set();
 
     for (const character of focusCharacters) {
-      if (!character || !character.boostedBy) continue;
+      if (!character) continue;
 
-      const boosterChar = await resolveTaggedCharacter(character.boostedBy);
+      // Check character.boostedBy first, but also check TempData if it's null
+      let boosterName = character.boostedBy;
+      if (!boosterName) {
+        // Check TempData for active boosts - this will also self-repair boostedBy if needed
+        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+        if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
+          boosterName = activeBoost.boostingCharacter;
+          // Ensure boostedBy is saved to the database
+          if (boosterName) {
+            character.boostedBy = boosterName;
+            await character.save();
+            console.log(`[submissionHandler.js]: ✅ Restored boostedBy for ${character.name} from TempData (boosted by ${boosterName})`);
+          }
+        }
+      }
+
+      if (!boosterName) continue;
+
+      const boosterChar = await resolveTaggedCharacter(boosterName);
       if (!boosterChar) {
-        console.warn(`[submissionHandler.js]: ⚠️ Booster ${character.boostedBy} not found for ${character.name}`);
+        console.warn(`[submissionHandler.js]: ⚠️ Booster ${boosterName} not found for ${character.name}`);
         continue;
       }
 
@@ -316,15 +334,33 @@ async function handleSubmissionCompletion(interaction) {
         const allUserCharacters = [...userCharacters, ...userModCharacters];
 
         for (const character of allUserCharacters) {
-          if (!character || !character.boostedBy) continue;
+          if (!character) continue;
 
           // Skip if this character was already checked in tagged characters
           const normalizedName = character.name.toLowerCase();
           if (focusCharacterMap.has(normalizedName)) continue;
 
-          const boosterChar = await resolveTaggedCharacter(character.boostedBy);
+          // Check character.boostedBy first, but also check TempData if it's null
+          let boosterName = character.boostedBy;
+          if (!boosterName) {
+            // Check TempData for active boosts - this will also self-repair boostedBy if needed
+            const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+            if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
+              boosterName = activeBoost.boostingCharacter;
+              // Ensure boostedBy is saved to the database
+              if (boosterName) {
+                character.boostedBy = boosterName;
+                await character.save();
+                console.log(`[submissionHandler.js]: ✅ Restored boostedBy for ${character.name} from TempData (boosted by ${boosterName})`);
+              }
+            }
+          }
+
+          if (!boosterName) continue;
+
+          const boosterChar = await resolveTaggedCharacter(boosterName);
           if (!boosterChar) {
-            console.warn(`[submissionHandler.js]: ⚠️ Booster ${character.boostedBy} not found for ${character.name}`);
+            console.warn(`[submissionHandler.js]: ⚠️ Booster ${boosterName} not found for ${character.name}`);
             continue;
           }
 
