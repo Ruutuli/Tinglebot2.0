@@ -82,36 +82,30 @@ const HOURS_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
 
 // ============================================================================
 // Period Calculation Functions
-// ------------------- Get Current Week Start (Sunday) -------------------
+// ------------------- Get Current Week Start (Sunday 00:00 UTC) -------------------
+// Uses UTC so period boundaries match MongoDB's UTC storage and avoid timezone
+// mismatches that caused checkAndResetPeriod to falsely reset raidQuotaCount.
 function getCurrentWeekStart() {
   const now = new Date();
   const date = new Date(now);
-  // Sunday is 0, so subtract day of week to get Sunday
-  date.setDate(date.getDate() - date.getDay());
-  date.setHours(0, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
+  date.setUTCHours(0, 0, 0, 0);
   return date;
 }
 
-// ------------------- Get Current Month Start (First Monday) -------------------
+// ------------------- Get Current Month Start (First Monday 00:00 UTC) -------------------
+// Uses UTC so period boundaries match MongoDB's UTC storage.
 function getCurrentMonthStart() {
   const now = new Date();
-  const date = new Date(now.getFullYear(), now.getMonth(), 1);
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
   
-  // Find first Monday of the month
-  // getDay() returns 0 for Sunday, 1 for Monday, etc.
-  let dayOfWeek = date.getDay();
-  // If day 1 is not Monday, find the first Monday
-  // Monday = 1, so if dayOfWeek is 0 (Sunday), add 1; if 2-6, subtract to get Monday
+  // Find first Monday of the month (getUTCDay: 0=Sunday, 1=Monday, ...)
+  let dayOfWeek = date.getUTCDay();
   if (dayOfWeek === 0) {
-    // If 1st is Sunday, Monday is 2nd
-    date.setDate(2);
+    date.setUTCDate(2); // Sunday -> Monday is 2nd
   } else if (dayOfWeek > 1) {
-    // If 1st is Tuesday-Saturday, find next Monday
-    const daysUntilMonday = 8 - dayOfWeek; // 8 - dayOfWeek gives us days to add
-    date.setDate(1 + daysUntilMonday);
+    date.setUTCDate(1 + (8 - dayOfWeek));
   }
-  
-  date.setHours(0, 0, 0, 0);
   return date;
 }
 
@@ -135,28 +129,23 @@ function getVillagePeriodStart(level) {
   }
 }
 
-// ------------------- Get Period End Date -------------------
+// ------------------- Get Period End Date (UTC, consistent with periodStart) -------------------
 function getPeriodEnd(periodStart, level) {
-  const end = new Date(periodStart);
+  const end = new Date(periodStart.getTime());
   if (level === 1) {
-    // Week ends on Saturday 23:59:59
-    end.setDate(end.getDate() + 6);
-    end.setHours(23, 59, 59, 999);
+    end.setUTCDate(end.getUTCDate() + 6);
+    end.setUTCHours(23, 59, 59, 999);
   } else {
-    // Month: find first Monday of next month, then go back 1 day
-    end.setMonth(end.getMonth() + 1);
-    end.setDate(1);
-    // Find first Monday of next month
-    let dayOfWeek = end.getDay();
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    end.setUTCDate(1);
+    let dayOfWeek = end.getUTCDay();
     if (dayOfWeek === 0) {
-      end.setDate(2);
+      end.setUTCDate(2);
     } else if (dayOfWeek > 1) {
-      const daysUntilMonday = 8 - dayOfWeek;
-      end.setDate(1 + daysUntilMonday);
+      end.setUTCDate(1 + (8 - dayOfWeek));
     }
-    // Go back 1 day to get last day of current period
-    end.setDate(end.getDate() - 1);
-    end.setHours(23, 59, 59, 999);
+    end.setUTCDate(end.getUTCDate() - 1);
+    end.setUTCHours(23, 59, 59, 999);
   }
   return end;
 }
@@ -202,12 +191,15 @@ async function setVillagePeriodData(villageName, periodStart, raidCount, periodT
 }
 
 // ------------------- Check And Reset Period -------------------
+// Only resets when we've rolled into a new period (current > stored). This avoids
+// falsely clearing raidQuotaCount when timezones or clock skew would make !== match.
 async function checkAndResetPeriod(villageName, level) {
   const currentPeriodStart = getVillagePeriodStart(level);
   const periodData = await getVillagePeriodData(villageName);
   
-  if (!periodData || periodData.periodStart.getTime() !== currentPeriodStart.getTime()) {
-    // Period has changed, reset
+  const shouldReset = !periodData ||
+    currentPeriodStart.getTime() > periodData.periodStart.getTime();
+  if (shouldReset) {
     const periodType = level === 1 ? 'week' : 'month';
     await setVillagePeriodData(villageName, currentPeriodStart, 0, periodType);
     console.log(`[randomMonsterEncounters.js]: 🔄 Reset raid quota period for ${villageName} (${periodType})`);
