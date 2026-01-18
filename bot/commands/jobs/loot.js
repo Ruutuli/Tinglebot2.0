@@ -1425,8 +1425,8 @@ async function processLootingLogic(
     const boosterChar = await fetchCharacterByName(character.boostedBy);
     
     if (boosterChar && boosterChar.job?.toLowerCase() === 'entertainer') {
-      if (outcome.hearts && outcome.hearts > 0) {
-        // Apply damage reduction with monster tier scaling
+      if (outcome.hearts && outcome.hearts > 0 && outcome.result !== 'KO') {
+        // Apply damage reduction with monster tier scaling (skip when KO'd: recoverHearts requires a healer to revive)
         const originalHeartDamage = outcome.hearts;
         const monsterTier = encounteredMonster.tier || 1;
         const reducedDamage = await applyLootingDamageBoost(character.name, outcome.hearts, monsterTier);
@@ -1470,7 +1470,7 @@ async function processLootingLogic(
   // ------------------- Apply Village Level Damage Reduction -------------------
   // Village level provides protection: Level 2: 5-10% reduction, Level 3: 10-15% reduction
   let villageDamageReduction = 0;
-  if (villageLevel >= 2 && outcome.hearts && outcome.hearts > 0) {
+  if (villageLevel >= 2 && outcome.hearts && outcome.hearts > 0 && outcome.result !== 'KO') {
     const reductionPercentage = villageLevel === 2
       ? Math.random() * 0.05 + 0.05  // Random between 0.05 and 0.10 (5-10%)
       : Math.random() * 0.05 + 0.10;  // Random between 0.10 and 0.15 (10-15%)

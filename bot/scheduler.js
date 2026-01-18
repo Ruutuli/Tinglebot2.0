@@ -346,7 +346,18 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
   }
 
   logger.info('WEATHER', `Getting weather for ${village}...`);
-  const weather = await getCurrentWeather(village);
+  let weather;
+  if (isReminder) {
+   // Reminder: only use posted weather for the current period so we don't show
+   // next period's Song-of-Storms-scheduled weather (e.g. Rock Slide tomorrow
+   // when today is Muggy). Fall back to getCurrentWeather if none posted.
+   weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
+   if (!weather) {
+    weather = await getCurrentWeather(village);
+   }
+  } else {
+   weather = await getCurrentWeather(village);
+  }
   if (!weather) {
    logger.error('WEATHER', `Failed to get weather for ${village} - getCurrentWeather returned null/undefined`);
    return false;

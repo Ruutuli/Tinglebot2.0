@@ -278,9 +278,10 @@ module.exports = {
         return;
       }
 
-      // Get current weather for the village
+      // Get current weather for the village (onlyPosted: exclude Song-of-Storms-scheduled
+      // future weather that hasn't been posted yet — players gather for today's posted weather only)
       const currentVillage = channelVillage; // Use the village from the channel
-      const weather = await getWeatherWithoutGeneration(currentVillage);
+      const weather = await getWeatherWithoutGeneration(currentVillage, { onlyPosted: true });
 
 
       

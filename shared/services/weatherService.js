@@ -199,26 +199,40 @@ function getNextPeriodBounds(referenceDate = new Date()) {
 }
 
 async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
-  const { legacyFallback = true, fallbackWindowMs = LEGACY_PERIOD_FALLBACK_MS, exclusiveEnd = false } = options;
+  const { legacyFallback = true, fallbackWindowMs = LEGACY_PERIOD_FALLBACK_MS, exclusiveEnd = false, onlyPosted = false } = options;
   const normalizedVillage = normalizeVillageName(village);
 
   const dateRange = exclusiveEnd
     ? { $gte: startUTC, $lt: endUTC }
     : { $gte: startUTC, $lte: endUTC };
 
-  let weather = await Weather.findOne({
-    village: normalizedVillage,
-    date: dateRange
-  });
+  const baseQuery = { village: normalizedVillage, date: dateRange };
+  if (onlyPosted) {
+    // Exclude future/scheduled weather (e.g. Song of Storms) that hasn't been posted yet.
+    // Include: postedToDiscord true, or legacy docs without the field.
+    baseQuery.$or = [
+      { postedToDiscord: true },
+      { postedToDiscord: { $exists: false } }
+    ];
+  }
+
+  let weather = await Weather.findOne(baseQuery).sort({ date: 1 });
 
   if (!weather && legacyFallback) {
-    const legacyWeather = await Weather.findOne({
+    const legacyQuery = {
       village: normalizedVillage,
       date: {
         $gte: new Date(startUTC.getTime() - fallbackWindowMs),
         $lte: new Date(endUTC.getTime() - fallbackWindowMs)
       }
-    });
+    };
+    if (onlyPosted) {
+      legacyQuery.$or = [
+        { postedToDiscord: true },
+        { postedToDiscord: { $exists: false } }
+      ];
+    }
+    const legacyWeather = await Weather.findOne(legacyQuery);
 
     if (legacyWeather) {
       // Check if the legacy weather's date is already close to the target period
@@ -702,7 +716,7 @@ async function simulateWeightedWeather(village, season, options = {}) {
 // ============================================================================
 
 // ------------------- Get Weather Without Generation -------------------
-async function getWeatherWithoutGeneration(village) {
+async function getWeatherWithoutGeneration(village, options = {}) {
   try {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
@@ -712,8 +726,12 @@ async function getWeatherWithoutGeneration(village) {
 
     // Use exclusive upper bound (next period's start) so we never pick up the next period's
     // weather (e.g. tomorrow's Song of Storms Rock Slide when today is Muggy).
+    // onlyPosted: when true, exclude future/scheduled weather (e.g. Song of Storms) that
+    // hasn't been posted yet — use for gathering/specialweather so players only get
+    // the in-effect (posted) weather for the current period.
     const weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
-      exclusiveEnd: true
+      exclusiveEnd: true,
+      onlyPosted: options.onlyPosted
     });
 
     return weather;
