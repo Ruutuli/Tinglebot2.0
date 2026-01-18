@@ -35,23 +35,39 @@ function getWeatherDayBounds() {
   const now = new Date();
   const { easternDate, offsetMs } = getEasternReference(now);
   
+  logger.info('WEATHER_BOUNDS', `Current time: ${now.toISOString()}, Eastern date: ${easternDate.toISOString()}, Offset: ${offsetMs}ms (${Math.round(offsetMs / (60 * 60 * 1000))} hours)`);
+  
   // Calculate start of current weather period (8am EST)
   const startEastern = new Date(easternDate);
   startEastern.setHours(8, 0, 0, 0);
   
   // If it's before 8am EST, the period started yesterday at 8am EST
-  if (getHourInEastern(now) < 8) {
+  const currentHourEastern = getHourInEastern(now);
+  if (currentHourEastern < 8) {
     startEastern.setDate(startEastern.getDate() - 1);
   }
+  
+  logger.info('WEATHER_BOUNDS', `Current hour in EST: ${currentHourEastern}, Start Eastern: ${startEastern.toISOString()}`);
+  
+  // Recalculate offset for the startEastern date to handle DST correctly
+  const { offsetMs: startOffsetMs } = getEasternReference(startEastern);
   
   // Calculate end of current weather period (7:59:59.999am EST next day)
   const endEastern = new Date(startEastern);
   endEastern.setDate(endEastern.getDate() + 1);
   endEastern.setHours(7, 59, 59, 999);
   
-  // Convert to UTC using the offset
-  const weatherDayStart = new Date(startEastern.getTime() + offsetMs);
-  const weatherDayEnd = new Date(endEastern.getTime() + offsetMs);
+  logger.info('WEATHER_BOUNDS', `End Eastern: ${endEastern.toISOString()}`);
+  
+  // Recalculate offset for the endEastern date to handle DST correctly
+  const { offsetMs: endOffsetMs } = getEasternReference(endEastern);
+  
+  // Convert to UTC using the offset calculated for each specific date
+  const weatherDayStart = new Date(startEastern.getTime() + startOffsetMs);
+  const weatherDayEnd = new Date(endEastern.getTime() + endOffsetMs);
+  
+  logger.info('WEATHER_BOUNDS', `Calculated UTC bounds - Start: ${weatherDayStart.toISOString()}, End: ${weatherDayEnd.toISOString()}`);
+  logger.info('WEATHER_BOUNDS', `Offsets used - Start: ${startOffsetMs}ms, End: ${endOffsetMs}ms`);
   
   return { weatherDayStart, weatherDayEnd };
 }
@@ -65,10 +81,15 @@ router.get('/today', asyncHandler(async (req, res) => {
   
   // Get weather for all villages for the current weather day
   // Include only posted weather (exclude future/scheduled weather that hasn't been posted yet)
+  // Add a small buffer (1 second) to account for any timing precision issues
+  const bufferMs = 1000; // 1 second buffer
+  const queryStart = new Date(weatherDayStart.getTime() - bufferMs);
+  const queryEnd = new Date(weatherDayEnd.getTime() + bufferMs);
+  
   const weatherQuery = {
     date: {
-      $gte: weatherDayStart,
-      $lt: weatherDayEnd
+      $gte: queryStart,
+      $lt: queryEnd
     },
     $or: [
       { postedToDiscord: true },
@@ -76,7 +97,7 @@ router.get('/today', asyncHandler(async (req, res) => {
     ]
   };
   
-  logger.info('WEATHER_API', `Query: ${JSON.stringify(weatherQuery)}`);
+  logger.info('WEATHER_API', `Query date range: ${queryStart.toISOString()} to ${queryEnd.toISOString()}`);
   
   const weatherData = await Weather.find(weatherQuery).lean();
   
