@@ -1568,7 +1568,7 @@ async function processLootingLogic(
   }
 
   // Step 3: Generate Outcome Message
-  const outcomeMessage = generateOutcomeMessage(outcome, character);
+  let outcomeMessage = generateOutcomeMessage(outcome, character);
   
   // Append village damage message if applicable
   if (outcome.villageDamageMessage) {

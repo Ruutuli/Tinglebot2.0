@@ -82,15 +82,97 @@ const HOURS_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
 
 // ============================================================================
 // Period Calculation Functions
-// ------------------- Get Current Week Start (Sunday 00:00 UTC) -------------------
-// Uses UTC so period boundaries match MongoDB's UTC storage and avoid timezone
-// mismatches that caused checkAndResetPeriod to falsely reset raidQuotaCount.
+// ------------------- Get Midnight EST in UTC -------------------
+// Converts midnight EST/EDT to UTC for a given date
+// Uses a test date to determine DST offset correctly
+function getMidnightESTInUTC(year, month, day) {
+  // Create a test date at noon on the target date to determine DST status
+  const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  
+  // Format this date in EST/EDT to determine if DST is active
+  const estFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'short',
+    hour: 'numeric',
+    hour12: false
+  });
+  
+  // Get the formatted string to check for DST
+  const parts = estFormatter.formatToParts(testDate);
+  const timeZoneName = parts.find(p => p.type === 'timeZoneName')?.value || '';
+  const isDST = timeZoneName === 'EDT'; // EDT means DST is active (UTC-4), EST is UTC-5
+  
+  // Calculate offset: EST is UTC-5, EDT is UTC-4
+  const offsetHours = isDST ? 4 : 5;
+  
+  // Create UTC date for midnight EST/EDT (00:00)
+  // midnight EST/EDT = 0 + offsetHours in UTC (which wraps to previous day)
+  // EST: 00:00 EST = 05:00 UTC (same day)
+  // EDT: 00:00 EDT = 04:00 UTC (same day)
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 0 + offsetHours, 0, 0));
+  
+  return utcDate;
+}
+
+// ------------------- Get Current Week Start (Sunday 00:00 EST) -------------------
+// Returns the start of the current week at midnight EST (Sunday 00:00 EST)
+// Handles DST automatically via America/New_York timezone
 function getCurrentWeekStart() {
   const now = new Date();
-  const date = new Date(now);
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
+  
+  // Get current date in EST/EDT
+  const estFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'long'
+  });
+  
+  const parts = estFormatter.formatToParts(now);
+  const values = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+  
+  const estYear = parseInt(values.year);
+  const estMonth = parseInt(values.month);
+  const estDay = parseInt(values.day);
+  
+  // Get day of week (0=Sunday, 1=Monday, etc.)
+  const weekdayMap = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
+  const dayOfWeek = weekdayMap[values.weekday] || 0;
+  
+  // Calculate Sunday's date by subtracting days
+  // Use a Date object to handle month/year boundaries correctly
+  // Create a date representing today at noon EST (converted to UTC) to avoid DST edge cases
+  const todayMidnightEST = getMidnightESTInUTC(estYear, estMonth, estDay);
+  const todayNoonUTC = new Date(todayMidnightEST);
+  todayNoonUTC.setUTCHours(todayNoonUTC.getUTCHours() + 12); // Noon to avoid midnight edge cases
+  
+  // Subtract days to get to Sunday
+  const sundayNoonUTC = new Date(todayNoonUTC);
+  sundayNoonUTC.setUTCDate(sundayNoonUTC.getUTCDate() - dayOfWeek);
+  
+  // Format Sunday's date in EST to get the correct date components
+  const sundayParts = estFormatter.formatToParts(sundayNoonUTC);
+  const sundayValues = {};
+  sundayParts.forEach(part => {
+    if (part.type !== 'literal') {
+      sundayValues[part.type] = part.value;
+    }
+  });
+  
+  // Get midnight EST for that Sunday in UTC
+  const sundayMidnightEST = getMidnightESTInUTC(
+    parseInt(sundayValues.year),
+    parseInt(sundayValues.month),
+    parseInt(sundayValues.day)
+  );
+  
+  return sundayMidnightEST;
 }
 
 // ------------------- Get Current Month Start (First Monday 00:00 UTC) -------------------
@@ -696,6 +778,20 @@ async function checkVillageRaidQuotas(client) {
       // If very little time remains (less than 10% of period), guarantee raid
       if (timeRemainingRatio < 0.1 && quotaRemaining > 0) {
         probability = 1.0;
+      }
+      
+      // Grace period: reduce probability if village recently reset (within last 48 hours)
+      // This prevents all raids from clustering on the reset day
+      const now = new Date();
+      const timeSinceReset = now.getTime() - periodStart.getTime();
+      const GRACE_PERIOD_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+      const GRACE_PERIOD_REDUCTION_FACTOR = 0.25; // Reduce probability to 25% of original
+      
+      if (timeSinceReset < GRACE_PERIOD_MS && timeSinceReset >= 0) {
+        // Apply grace period reduction, but don't reduce below base probability
+        // This ensures raids can still happen randomly, just less likely right after reset
+        const gracePeriodReducedProbability = probability * GRACE_PERIOD_REDUCTION_FACTOR;
+        probability = Math.max(gracePeriodReducedProbability, 0.05); // Minimum 5% chance
       }
       
       // Random roll

@@ -12,6 +12,7 @@ const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLi
 const HelpWantedQuest = require('../../../shared/models/HelpWantedQuestModel');
 const { getWeatherWithoutGeneration } = require('../../../shared/services/weatherService');
 const VillageShopItem = require('../../../shared/models/VillageShopsModel');
+const TempData = require('../../../shared/models/TempDataModel');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -872,6 +873,83 @@ function createWeeklyCooldownEmbed() {
 // ------------------- Monster Hunt Functions -------------------
 // ============================================================================
 
+const ACTIVE_MONSTER_HUNT_KEY = 'active_monster_hunt';
+const MONSTER_HUNT_LOCK_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Get active monster hunt status
+ * @returns {Promise<Object|null>} Active hunt data or null
+ */
+async function getActiveMonsterHunt() {
+  try {
+    const huntData = await TempData.findOne({ key: ACTIVE_MONSTER_HUNT_KEY, type: 'temp' });
+    
+    if (!huntData || !huntData.data) {
+      return null;
+    }
+    
+    // Check if expired (safety check)
+    const now = Date.now();
+    const startTime = huntData.data.startTime || 0;
+    if (now - startTime > MONSTER_HUNT_LOCK_TIMEOUT) {
+      // Clean up expired lock
+      await clearActiveMonsterHunt();
+      return null;
+    }
+    
+    return huntData.data;
+  } catch (error) {
+    console.error('[helpWanted.js]: ❌ Error getting active monster hunt:', error);
+    return null;
+  }
+}
+
+/**
+ * Set active monster hunt lock
+ * @param {string} characterName - Character name
+ * @param {string} userId - User ID
+ * @param {string} questId - Quest ID
+ * @returns {Promise<void>}
+ */
+async function setActiveMonsterHunt(characterName, userId, questId) {
+  try {
+    const huntData = {
+      characterName,
+      userId,
+      questId,
+      startTime: Date.now()
+    };
+    
+    await TempData.findOneAndUpdate(
+      { key: ACTIVE_MONSTER_HUNT_KEY, type: 'temp' },
+      {
+        key: ACTIVE_MONSTER_HUNT_KEY,
+        type: 'temp',
+        data: huntData,
+        expiresAt: new Date(Date.now() + MONSTER_HUNT_LOCK_TIMEOUT)
+      },
+      { upsert: true, new: true }
+    );
+    
+    console.log(`[helpWanted.js]: 🔒 Monster hunt lock set for ${characterName} (Quest: ${questId})`);
+  } catch (error) {
+    console.error('[helpWanted.js]: ❌ Error setting active monster hunt:', error);
+  }
+}
+
+/**
+ * Clear active monster hunt lock
+ * @returns {Promise<void>}
+ */
+async function clearActiveMonsterHunt() {
+  try {
+    await TempData.findOneAndDelete({ key: ACTIVE_MONSTER_HUNT_KEY, type: 'temp' });
+    console.log('[helpWanted.js]: 🔓 Monster hunt lock cleared');
+  } catch (error) {
+    console.error('[helpWanted.js]: ❌ Error clearing active monster hunt:', error);
+  }
+}
+
 /**
  * Generates looted item from monster encounter
  * @param {Object} encounteredMonster - Monster object
@@ -1407,6 +1485,16 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     }
   }
   
+  // ------------------- Check for Active Monster Hunt -------------------
+  const activeHunt = await getActiveMonsterHunt();
+  if (activeHunt) {
+    const startTime = new Date(activeHunt.startTime);
+    const timestamp = startTime.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    return await interaction.editReply({
+      content: `❌ **A monster hunt is already in progress!**\n\n🗡️ **${activeHunt.characterName}** is currently on a monster hunt.\nPlease wait for the current hunt to complete before starting a new one.\n\n**Quest ID:** ${activeHunt.questId}\n**Started:** ${timestamp}`
+    });
+  }
+  
     // Check stamina
   const currentStamina = parseInt(character.currentStamina) || 0;
   if (currentStamina < 1) {
@@ -1426,6 +1514,9 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   character.currentStamina = newStamina;
   character.lastStaminaUsage = new Date();
   await character.save();
+  
+  // Set active monster hunt lock
+  await setActiveMonsterHunt(character.name, interaction.user.id, questId);
   
   const startEmbed = new EmbedBuilder()
     .setColor(0x0099FF)
@@ -1562,6 +1653,8 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     } catch (error) {
       console.error(`[helpWanted.js]: ❌ Error processing monster encounter:`, error);
       await interaction.followUp({ content: `❌ Error processing encounter with ${monsterName}.`, flags: 64 });
+      // Clear active monster hunt lock on error
+      await clearActiveMonsterHunt();
       return;
     }
   }
@@ -1597,6 +1690,9 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   
   // Send final summary
   await sendMonsterHuntSummary(interaction, character, questId, monsterList, summary, totalLoot, defeatedAll, heartsRemaining);
+
+  // Clear active monster hunt lock
+  await clearActiveMonsterHunt();
 
   if (blightRainMessage) {
     await interaction.followUp({ content: blightRainMessage });
@@ -1757,6 +1853,9 @@ module.exports = {
       try {
         await handleMonsterHunt(interaction, questId, characterName);
       } catch (error) {
+        // Clear active monster hunt lock on error
+        await clearActiveMonsterHunt();
+        
         handleInteractionError(error, 'helpWanted.js', {
           commandName: 'helpwanted monsterhunt',
           userTag: interaction.user.tag,
