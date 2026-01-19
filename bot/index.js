@@ -756,6 +756,54 @@ async function initializeClient() {
     const VERIFIED_ROLE_ID = '1460099245347700962';
     const TRAVELER_ROLE_ID = '788137818135330837';
     
+    // ------------------- Validate Intro Format -------------------
+    // Validates that an intro message contains required Name and Age fields
+    function validateIntroFormat(message) {
+      const content = message.content;
+      const errors = [];
+      
+      // Check for Name field - flexible with brackets and case
+      // Matches: **[Name:]**, **Name:**, **[name:]**, etc.
+      const namePattern = /\*\*\[?Name:\]?\*\*/i;
+      const nameMatch = content.match(namePattern);
+      
+      if (!nameMatch) {
+        errors.push('Name');
+      } else {
+        // Check if there's actual content after the Name field
+        const nameIndex = nameMatch.index + nameMatch[0].length;
+        const afterName = content.substring(nameIndex).trim();
+        // Remove markdown formatting and check for actual content
+        const cleanedName = afterName.replace(/\*\*/g, '').replace(/\[|\]/g, '').trim();
+        if (!cleanedName || cleanedName.length === 0) {
+          errors.push('Name (field exists but is empty)');
+        }
+      }
+      
+      // Check for Age field - flexible with brackets and case
+      // Matches: **[Age:]**, **Age:**, **[age:]**, etc.
+      const agePattern = /\*\*\[?Age:\]?\*\*/i;
+      const ageMatch = content.match(agePattern);
+      
+      if (!ageMatch) {
+        errors.push('Age');
+      } else {
+        // Check if there's actual content after the Age field
+        const ageIndex = ageMatch.index + ageMatch[0].length;
+        const afterAge = content.substring(ageIndex).trim();
+        // Remove markdown formatting and check for actual content
+        const cleanedAge = afterAge.replace(/\*\*/g, '').replace(/\[|\]/g, '').trim();
+        if (!cleanedAge || cleanedAge.length === 0) {
+          errors.push('Age (field exists but is empty)');
+        }
+      }
+      
+      return {
+        valid: errors.length === 0,
+        errors: errors
+      };
+    }
+    
     client.on("messageCreate", async (message) => {
       try {
         // Only process messages in intro channel
@@ -800,6 +848,39 @@ async function initializeClient() {
         }
         
         console.log(`[index.js]: 🔍 Processing intro post for ${message.author.tag}...`);
+        
+        // Validate intro format before assigning role
+        const validation = validateIntroFormat(message);
+        if (!validation.valid) {
+          console.log(`[index.js]: ❌ Intro validation failed for ${message.author.tag}. Missing: ${validation.errors.join(', ')}`);
+          
+          // Build error message
+          const missingFields = validation.errors.filter(e => !e.includes('(field exists but is empty)')).join(' and ');
+          const emptyFields = validation.errors.filter(e => e.includes('(field exists but is empty)')).map(e => e.replace(' (field exists but is empty)', '')).join(' and ');
+          
+          let errorMessage = '❌ **Intro Rejected — Missing Required Fields!**\n\n';
+          if (missingFields) {
+            errorMessage += `Your intro is missing the following required field${missingFields.includes(' and ') ? 's' : ''}: **${missingFields}**\n\n`;
+          }
+          if (emptyFields) {
+            errorMessage += `The following field${emptyFields.includes(' and ') ? 's' : ''} ${emptyFields.includes(' and ') ? 'are' : 'is'} empty: **${emptyFields}**. Please add content after the field label.\n\n`;
+          }
+          
+          errorMessage += 'Your intro must include at least:\n';
+          errorMessage += '• `**[Name:]**` (with your name/nickname)\n';
+          errorMessage += '• `**[Age:]**` (with your age)\n\n';
+          errorMessage += '> 📌 Check the pinned template in this channel for the full format!\n\n';
+          errorMessage += 'Please update your intro and try again.';
+          
+          const reply = await message.reply(errorMessage);
+          
+          // Auto-delete the error reply after 10 minutes
+          setTimeout(() => reply.delete().catch(() => {}), 600000);
+          
+          return;
+        }
+        
+        console.log(`[index.js]: ✅ Intro validation passed for ${message.author.tag}`);
         
         // Get Verified role and assign it
         const verifiedRole = message.guild.roles.cache.get(VERIFIED_ROLE_ID);
