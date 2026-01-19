@@ -874,8 +874,16 @@ async function initializeClient() {
           
           const reply = await message.reply(errorMessage);
           
-          // Auto-delete the error reply after 10 minutes
-          setTimeout(() => reply.delete().catch(() => {}), 600000);
+          // Auto-delete both the error reply and the user's message after 30 seconds
+          setTimeout(async () => {
+            try {
+              await reply.delete();
+              await message.delete();
+            } catch (deleteError) {
+              // Messages may already be deleted, that's okay
+              console.log(`[index.js]: ⚠️  Could not delete intro rejection message(s): ${deleteError.message}`);
+            }
+          }, 30000);
           
           return;
         }
