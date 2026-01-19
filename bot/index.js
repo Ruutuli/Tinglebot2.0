@@ -762,9 +762,10 @@ async function initializeClient() {
       const content = message.content;
       const errors = [];
       
-      // Check for Name field - flexible with brackets and case
-      // Matches: **[Name:]**, **Name:**, **[name:]**, etc.
-      const namePattern = /\*\*\[?Name:\]?\*\*/i;
+      // Check for Name field - flexible with or without markdown, brackets, and case
+      // Matches: **[Name:]**, **Name:**, Name:, name:, etc.
+      // Simplified: just look for "Name:" (case insensitive), optionally preceded/followed by ** and brackets
+      const namePattern = /\*\*\[?Name:\]?\*\*|Name:/i;
       const nameMatch = content.match(namePattern);
       
       if (!nameMatch) {
@@ -772,17 +773,26 @@ async function initializeClient() {
       } else {
         // Check if there's actual content after the Name field
         const nameIndex = nameMatch.index + nameMatch[0].length;
-        const afterName = content.substring(nameIndex).trim();
+        const afterName = content.substring(nameIndex);
+        
+        // Look for the next line or field marker, or end of content
+        // Extract content up to next field marker or new line
+        const nextFieldMatch = afterName.match(/\n|(?:\*\*\[?)?(?:Age|Pronouns|Character|RP|Favored|Timezone|Other):/i);
+        const nameContent = nextFieldMatch 
+          ? afterName.substring(0, nextFieldMatch.index).trim()
+          : afterName.trim();
+        
         // Remove markdown formatting and check for actual content
-        const cleanedName = afterName.replace(/\*\*/g, '').replace(/\[|\]/g, '').trim();
+        const cleanedName = nameContent.replace(/\*\*/g, '').replace(/\[|\]/g, '').trim();
         if (!cleanedName || cleanedName.length === 0) {
           errors.push('Name (field exists but is empty)');
         }
       }
       
-      // Check for Age field - flexible with brackets and case
-      // Matches: **[Age:]**, **Age:**, **[age:]**, etc.
-      const agePattern = /\*\*\[?Age:\]?\*\*/i;
+      // Check for Age field - flexible with or without markdown, brackets, and case
+      // Matches: **[Age:]**, **Age:**, Age:, age:, etc.
+      // Simplified: just look for "Age:" (case insensitive), optionally preceded/followed by ** and brackets
+      const agePattern = /\*\*\[?Age:\]?\*\*|Age:/i;
       const ageMatch = content.match(agePattern);
       
       if (!ageMatch) {
@@ -790,9 +800,17 @@ async function initializeClient() {
       } else {
         // Check if there's actual content after the Age field
         const ageIndex = ageMatch.index + ageMatch[0].length;
-        const afterAge = content.substring(ageIndex).trim();
+        const afterAge = content.substring(ageIndex);
+        
+        // Look for the next line or field marker, or end of content
+        // Extract content up to next field marker or new line
+        const nextFieldMatch = afterAge.match(/\n|(?:\*\*\[?)?(?:Name|Pronouns|Character|RP|Favored|Timezone|Other):/i);
+        const ageContent = nextFieldMatch 
+          ? afterAge.substring(0, nextFieldMatch.index).trim()
+          : afterAge.trim();
+        
         // Remove markdown formatting and check for actual content
-        const cleanedAge = afterAge.replace(/\*\*/g, '').replace(/\[|\]/g, '').trim();
+        const cleanedAge = ageContent.replace(/\*\*/g, '').replace(/\[|\]/g, '').trim();
         if (!cleanedAge || cleanedAge.length === 0) {
           errors.push('Age (field exists but is empty)');
         }
