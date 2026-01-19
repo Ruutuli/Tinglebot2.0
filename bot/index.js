@@ -919,6 +919,14 @@ async function initializeClient() {
         await member.roles.add(verifiedRole);
         console.log(`[index.js]: ✅ Added Verified role to ${message.author.tag} after intro post`);
         
+        // React to the intro message with blue checkmark emoji
+        try {
+          await message.react('☑️'); // Blue ballot box with check
+          console.log(`[index.js]: ✅ Reacted to intro message for ${message.author.tag}`);
+        } catch (reactError) {
+          console.log(`[index.js]: ⚠️  Could not react to intro message: ${reactError.message}`);
+        }
+        
         // Track intro post in database
         const User = require('../shared/models/UserModel');
         const userDoc = await User.getOrCreateUser(message.author.id);
