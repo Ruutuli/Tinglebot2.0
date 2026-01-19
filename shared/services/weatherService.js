@@ -98,6 +98,7 @@ const OVERLAY_MAPPING = {
 const bannerCache = new Map();
 const CACHE_DURATION = 300000; // 5 minutes
 const LEGACY_PERIOD_FALLBACK_MS = 8 * 60 * 60 * 1000; // 8 hours
+const PERIOD_VALIDATION_TOLERANCE_MS = 5 * 1000; // 5 seconds - tolerance for timing differences in period calculation
 
 // ============================================================================
 // ------------------- Utility Functions -------------------
@@ -920,11 +921,14 @@ async function getWeatherWithoutGeneration(village, options = {}) {
       const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
       
       // Ensure weather is within current period bounds
-      if (weatherDate < startOfPeriodUTC || weatherDate >= startOfNextPeriodUTC) {
+      // Use tolerance on lower bound to account for timing differences when period bounds are recalculated
+      const periodStartWithTolerance = new Date(startOfPeriodUTC.getTime() - PERIOD_VALIDATION_TOLERANCE_MS);
+      if (weatherDate < periodStartWithTolerance || weatherDate >= startOfNextPeriodUTC) {
         console.error('[weatherService.js]: ❌ Retrieved weather outside current period bounds', {
           village: normalizedVillage,
           weatherDate: weatherDate.toISOString(),
           periodStart: startOfPeriodUTC.toISOString(),
+          periodStartWithTolerance: periodStartWithTolerance.toISOString(),
           nextPeriodStart: startOfNextPeriodUTC.toISOString(),
           onlyPosted: options.onlyPosted,
           postedToDiscord: weather.postedToDiscord,
@@ -1474,6 +1478,9 @@ module.exports = {
   parseFahrenheit,
   parseWind,
   scheduleSpecialWeather,
+  
+  // Constants
+  PERIOD_VALIDATION_TOLERANCE_MS,
   
   // Cache management
   bannerCache

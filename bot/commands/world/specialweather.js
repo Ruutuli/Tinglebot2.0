@@ -15,7 +15,7 @@ const { createWeightedItemList } = require('../../modules/rngModule.js');
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('../../../shared/utils/inventoryUtils.js');
 const weatherService = require('../../../shared/services/weatherService');
-const { getWeatherWithoutGeneration, getCurrentPeriodBounds, getNextPeriodBounds } = weatherService;
+const { getWeatherWithoutGeneration, getCurrentPeriodBounds, getNextPeriodBounds, PERIOD_VALIDATION_TOLERANCE_MS } = weatherService;
 const { canUseSpecialWeather, normalizeVillageName } = require('../../../shared/utils/specialWeatherUtils');
 const { enforceJail } = require('../../../shared/utils/jailCheck.js');
 const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
@@ -297,10 +297,13 @@ module.exports = {
           const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
           
           // Reject weather from future periods even from fallback
-          if (weatherDate < startOfPeriodUTC || weatherDate >= startOfNextPeriodUTC) {
+          // Use tolerance on lower bound to account for timing differences when period bounds are recalculated
+          const periodStartWithTolerance = new Date(startOfPeriodUTC.getTime() - PERIOD_VALIDATION_TOLERANCE_MS);
+          if (weatherDate < periodStartWithTolerance || weatherDate >= startOfNextPeriodUTC) {
             console.error(`[specialweather.js]: ❌ Fallback weather rejected: outside current period bounds for ${currentVillage}`, {
               weatherDate: weatherDate.toISOString(),
               periodStart: startOfPeriodUTC.toISOString(),
+              periodStartWithTolerance: periodStartWithTolerance.toISOString(),
               nextPeriodStart: startOfNextPeriodUTC.toISOString(),
               postedToDiscord: weather.postedToDiscord
             });
@@ -364,11 +367,14 @@ module.exports = {
       // Additional period validation: ensure weather date matches current period
       const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
       
-      if (weatherDate < startOfPeriodUTC || weatherDate >= startOfNextPeriodUTC) {
+      // Use tolerance on lower bound to account for timing differences when period bounds are recalculated
+      const periodStartWithTolerance = new Date(startOfPeriodUTC.getTime() - PERIOD_VALIDATION_TOLERANCE_MS);
+      if (weatherDate < periodStartWithTolerance || weatherDate >= startOfNextPeriodUTC) {
         console.error(`[specialweather.js]: ❌ Weather rejected: outside current period bounds`, {
           village: currentVillage,
           weatherDate: weatherDate.toISOString(),
           periodStart: startOfPeriodUTC.toISOString(),
+          periodStartWithTolerance: periodStartWithTolerance.toISOString(),
           nextPeriodStart: startOfNextPeriodUTC.toISOString(),
           characterName: character.name
         });
