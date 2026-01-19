@@ -163,6 +163,12 @@ function getHourInEastern(date = new Date()) {
 }
 
 function getCurrentPeriodBounds(referenceDate = new Date()) {
+  // Validate input
+  if (!(referenceDate instanceof Date) || isNaN(referenceDate.getTime())) {
+    console.error('[weatherService.js]: ❌ Invalid referenceDate provided to getCurrentPeriodBounds:', referenceDate);
+    referenceDate = new Date(); // Fallback to now
+  }
+
   const { easternDate, offsetMs } = getEasternReference(referenceDate);
 
   const startEastern = new Date(easternDate);
@@ -176,9 +182,34 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
   endEastern.setDate(endEastern.getDate() + 1);
   endEastern.setHours(7, 59, 59, 999);
 
+  // Recalculate offset for end date to handle DST transitions correctly
+  const { offsetMs: endOffsetMs } = getEasternReference(endEastern);
+
+  const startUTC = new Date(startEastern.getTime() + offsetMs);
+  const endUTC = new Date(endEastern.getTime() + endOffsetMs);
+
+  // Validate calculated bounds
+  if (isNaN(startUTC.getTime()) || isNaN(endUTC.getTime())) {
+    console.error('[weatherService.js]: ❌ Invalid period bounds calculated', {
+      referenceDate: referenceDate.toISOString(),
+      startUTC: startUTC.toISOString(),
+      endUTC: endUTC.toISOString()
+    });
+    throw new Error('Failed to calculate valid period bounds');
+  }
+
+  // Sanity check: end should be after start
+  if (endUTC <= startUTC) {
+    console.error('[weatherService.js]: ❌ Period bounds validation failed: end <= start', {
+      startUTC: startUTC.toISOString(),
+      endUTC: endUTC.toISOString()
+    });
+    throw new Error('Invalid period bounds: end time is not after start time');
+  }
+
   return {
-    startUTC: new Date(startEastern.getTime() + offsetMs),
-    endUTC: new Date(endEastern.getTime() + offsetMs),
+    startUTC,
+    endUTC,
     startEastern,
     endEastern
   };
@@ -190,11 +221,37 @@ function getNextPeriodBounds(referenceDate = new Date()) {
   const current = getCurrentPeriodBounds(referenceDate);
   const msPerDay = 24 * 60 * 60 * 1000;
 
+  const nextStartUTC = new Date(current.startUTC.getTime() + msPerDay);
+  const nextEndUTC = new Date(current.endUTC.getTime() + msPerDay);
+  const nextStartEastern = new Date(current.startEastern.getTime() + msPerDay);
+  const nextEndEastern = new Date(current.endEastern.getTime() + msPerDay);
+
+  // Validate calculated bounds
+  if (isNaN(nextStartUTC.getTime()) || isNaN(nextEndUTC.getTime())) {
+    console.error('[weatherService.js]: ❌ Invalid next period bounds calculated', {
+      referenceDate: referenceDate.toISOString(),
+      nextStartUTC: nextStartUTC.toISOString(),
+      nextEndUTC: nextEndUTC.toISOString()
+    });
+    throw new Error('Failed to calculate valid next period bounds');
+  }
+
+  // Sanity check: next period should be after current period
+  if (nextStartUTC <= current.startUTC || nextEndUTC <= current.endUTC) {
+    console.error('[weatherService.js]: ❌ Next period bounds validation failed', {
+      currentStart: current.startUTC.toISOString(),
+      currentEnd: current.endUTC.toISOString(),
+      nextStart: nextStartUTC.toISOString(),
+      nextEnd: nextEndUTC.toISOString()
+    });
+    throw new Error('Invalid next period bounds: next period is not after current period');
+  }
+
   return {
-    startUTC: new Date(current.startUTC.getTime() + msPerDay),
-    endUTC: new Date(current.endUTC.getTime() + msPerDay),
-    startEastern: new Date(current.startEastern.getTime() + msPerDay),
-    endEastern: new Date(current.endEastern.getTime() + msPerDay)
+    startUTC: nextStartUTC,
+    endUTC: nextEndUTC,
+    startEastern: nextStartEastern,
+    endEastern: nextEndEastern
   };
 }
 
@@ -210,13 +267,54 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
   if (onlyPosted) {
     // Exclude future/scheduled weather (e.g. Song of Storms) that hasn't been posted yet.
     // Include: postedToDiscord true, or legacy docs without the field.
-    baseQuery.$or = [
-      { postedToDiscord: true },
-      { postedToDiscord: { $exists: false } }
+    // Explicitly exclude postedToDiscord: false to prevent future weather from slipping through.
+    baseQuery.$and = [
+      {
+        $or: [
+          { postedToDiscord: true },
+          { postedToDiscord: { $exists: false } }
+        ]
+      },
+      // Explicitly exclude false values for new documents (future weather from Song of Storms)
+      {
+        $or: [
+          { postedToDiscord: { $exists: false } },
+          { postedToDiscord: { $ne: false } }
+        ]
+      }
     ];
   }
 
   let weather = await Weather.findOne(baseQuery).sort({ date: 1 });
+
+  // Period validation: ensure retrieved weather is actually within the requested bounds
+  if (weather && onlyPosted) {
+    const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+    const isValidDate = exclusiveEnd
+      ? (weatherDate >= startUTC && weatherDate < endUTC)
+      : (weatherDate >= startUTC && weatherDate <= endUTC);
+    
+    if (!isValidDate) {
+      console.warn(`[weatherService.js]: ⚠️ Retrieved weather outside period bounds for ${normalizedVillage}`, {
+        weatherDate: weatherDate.toISOString(),
+        startUTC: startUTC.toISOString(),
+        endUTC: endUTC.toISOString(),
+        exclusiveEnd,
+        postedToDiscord: weather.postedToDiscord,
+        hasSpecial: !!weather.special,
+        specialLabel: weather.special?.label || 'none'
+      });
+      weather = null; // Reject weather outside bounds
+    } else {
+      console.log(`[weatherService.js]: ✅ Valid weather retrieved for ${normalizedVillage}`, {
+        weatherDate: weatherDate.toISOString(),
+        postedToDiscord: weather.postedToDiscord,
+        hasSpecial: !!weather.special,
+        specialLabel: weather.special?.label || 'none',
+        onlyPosted
+      });
+    }
+  }
 
   if (!weather && legacyFallback) {
     const legacyQuery = {
@@ -227,17 +325,43 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
       }
     };
     if (onlyPosted) {
-      legacyQuery.$or = [
-        { postedToDiscord: true },
-        { postedToDiscord: { $exists: false } }
+      legacyQuery.$and = [
+        {
+          $or: [
+            { postedToDiscord: true },
+            { postedToDiscord: { $exists: false } }
+          ]
+        },
+        {
+          $or: [
+            { postedToDiscord: { $exists: false } },
+            { postedToDiscord: { $ne: false } }
+          ]
+        }
       ];
     }
     const legacyWeather = await Weather.findOne(legacyQuery);
 
     if (legacyWeather) {
+      // Validate legacy weather is actually within current period bounds before using it
+      const legacyDate = legacyWeather.date instanceof Date ? legacyWeather.date : new Date(legacyWeather.date);
+      const legacyIsInBounds = exclusiveEnd
+        ? (legacyDate >= startUTC && legacyDate < endUTC)
+        : (legacyDate >= startUTC && legacyDate <= endUTC);
+
+      if (!legacyIsInBounds && legacyDate >= endUTC) {
+        // Legacy weather is from future period - reject it to prevent next period leaks
+        console.warn(`[weatherService.js]: ⚠️ Legacy weather rejected: outside current period bounds for ${normalizedVillage}`, {
+          legacyDate: legacyDate.toISOString(),
+          startUTC: startUTC.toISOString(),
+          endUTC: endUTC.toISOString()
+        });
+        return null;
+      }
+
       // Check if the legacy weather's date is already close to the target period
       // If it's within 1 hour of the start, it was likely already realigned
-      const timeDiff = Math.abs(legacyWeather.date.getTime() - startUTC.getTime());
+      const timeDiff = Math.abs(legacyDate.getTime() - startUTC.getTime());
       const oneHourMs = 60 * 60 * 1000;
       
       if (timeDiff > oneHourMs) {
@@ -256,6 +380,57 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
         // Date is already close to target - use it without realignment
         weather = legacyWeather;
       }
+
+      // Final validation after legacy handling
+      if (weather && onlyPosted) {
+        const finalDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+        
+        // Validate date is valid
+        if (isNaN(finalDate.getTime())) {
+          console.error(`[weatherService.js]: ❌ Invalid date in legacy weather for ${normalizedVillage}`, {
+            date: weather.date,
+            type: typeof weather.date
+          });
+          weather = null;
+        } else {
+          const finalIsValid = exclusiveEnd
+            ? (finalDate >= startUTC && finalDate < endUTC)
+            : (finalDate >= startUTC && finalDate <= endUTC);
+          
+          if (!finalIsValid) {
+            console.warn(`[weatherService.js]: ⚠️ Legacy weather rejected after realignment: outside period bounds for ${normalizedVillage}`, {
+              finalDate: finalDate.toISOString(),
+              startUTC: startUTC.toISOString(),
+              endUTC: endUTC.toISOString(),
+              exclusiveEnd
+            });
+            weather = null;
+          }
+        }
+      }
+    }
+  }
+
+  // Final database consistency check: validate weather structure before returning
+  if (weather) {
+    // Check for required fields
+    if (!weather.village || !weather.date) {
+      console.error(`[weatherService.js]: ❌ Weather document missing required fields for ${normalizedVillage}`, {
+        hasVillage: !!weather.village,
+        hasDate: !!weather.date,
+        weatherKeys: Object.keys(weather)
+      });
+      return null;
+    }
+
+    // Validate date is a valid Date object or can be converted to one
+    const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+    if (isNaN(weatherDate.getTime())) {
+      console.error(`[weatherService.js]: ❌ Weather document has invalid date for ${normalizedVillage}`, {
+        date: weather.date,
+        type: typeof weather.date
+      });
+      return null;
     }
   }
 
@@ -716,8 +891,19 @@ async function getWeatherWithoutGeneration(village, options = {}) {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
 
+    console.log(`[weatherService.js]: 🔍 Getting weather for ${normalizedVillage}`, {
+      onlyPosted: options.onlyPosted,
+      timestamp: now.toISOString()
+    });
+
     const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
     const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
+
+    console.log(`[weatherService.js]: 📅 Period bounds calculated for ${normalizedVillage}`, {
+      periodStart: startOfPeriodUTC.toISOString(),
+      nextPeriodStart: startOfNextPeriodUTC.toISOString(),
+      onlyPosted: options.onlyPosted
+    });
 
     // Use exclusive upper bound (next period's start) so we never pick up the next period's
     // weather (e.g. tomorrow's Song of Storms Rock Slide when today is Muggy).
@@ -729,9 +915,61 @@ async function getWeatherWithoutGeneration(village, options = {}) {
       onlyPosted: options.onlyPosted
     });
 
+    // Validate that returned weather is for the current period (not future)
+    if (weather) {
+      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+      
+      // Ensure weather is within current period bounds
+      if (weatherDate < startOfPeriodUTC || weatherDate >= startOfNextPeriodUTC) {
+        console.error('[weatherService.js]: ❌ Retrieved weather outside current period bounds', {
+          village: normalizedVillage,
+          weatherDate: weatherDate.toISOString(),
+          periodStart: startOfPeriodUTC.toISOString(),
+          nextPeriodStart: startOfNextPeriodUTC.toISOString(),
+          onlyPosted: options.onlyPosted,
+          postedToDiscord: weather.postedToDiscord,
+          hasSpecial: !!weather.special,
+          specialLabel: weather.special?.label || 'none'
+        });
+        return null; // Reject weather from future periods
+      }
+
+      // Additional validation: ensure weather date is not in the future (within reasonable margin for clock skew)
+      const nowPlusMargin = new Date(now.getTime() + (5 * 60 * 1000)); // 5 minute margin for clock skew
+      if (weatherDate > nowPlusMargin) {
+        console.warn('[weatherService.js]: ⚠️ Retrieved weather is significantly in the future', {
+          village: normalizedVillage,
+          weatherDate: weatherDate.toISOString(),
+          currentTime: now.toISOString(),
+          timeDiffMs: weatherDate.getTime() - now.getTime(),
+          timeDiffHours: ((weatherDate.getTime() - now.getTime()) / (60 * 60 * 1000)).toFixed(2)
+        });
+        // Still allow it if within period bounds, but log warning
+      }
+
+      console.log(`[weatherService.js]: ✅ Successfully retrieved weather for ${normalizedVillage}`, {
+        weatherDate: weatherDate.toISOString(),
+        postedToDiscord: weather.postedToDiscord,
+        hasSpecial: !!weather.special,
+        specialLabel: weather.special?.label || 'none',
+        onlyPosted: options.onlyPosted
+      });
+    } else {
+      console.log(`[weatherService.js]: ℹ️ No weather found for ${normalizedVillage}`, {
+        onlyPosted: options.onlyPosted,
+        periodStart: startOfPeriodUTC.toISOString(),
+        nextPeriodStart: startOfNextPeriodUTC.toISOString()
+      });
+    }
+
     return weather;
   } catch (error) {
     console.error('[weatherService.js]: ❌ Error getting weather:', error);
+    console.error('[weatherService.js]: Error details:', {
+      village,
+      onlyPosted: options.onlyPosted,
+      stack: error.stack
+    });
     throw error;
   }
 }
@@ -990,13 +1228,33 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
 
     // Validate that the next period is in the future (never schedule for the current period)
     if (startOfNextPeriodUTC <= now) {
+      console.error('[weatherService.js]: ❌ Date calculation error in scheduleSpecialWeather', {
+        currentTime: now.toISOString(),
+        nextPeriodStart: startOfNextPeriodUTC.toISOString(),
+        village: normalizedVillage
+      });
       throw new Error('Calculated next period is not in the future. This indicates a date calculation error.');
+    }
+
+    // Additional validation: ensure the scheduled date is clearly in the future period
+    const timeUntilNextPeriod = startOfNextPeriodUTC.getTime() - now.getTime();
+    const oneHourMs = 60 * 60 * 1000;
+    if (timeUntilNextPeriod < oneHourMs) {
+      console.warn('[weatherService.js]: ⚠️ Warning: Scheduled weather is very close to current time', {
+        timeUntilNextPeriodMs: timeUntilNextPeriod,
+        timeUntilNextPeriodHours: (timeUntilNextPeriod / oneHourMs).toFixed(2),
+        village: normalizedVillage
+      });
     }
 
     console.log('[weatherService.js]: 🎵 Song of Storms: scheduling special for next period', {
       currentTimeUTC: now.toISOString(),
       nextPeriodStartUTC: startOfNextPeriodUTC.toISOString(),
-      village: normalizedVillage
+      nextPeriodEndUTC: endOfNextPeriodUTC.toISOString(),
+      village: normalizedVillage,
+      specialLabel: normalizedLabel,
+      timeUntilNextPeriodMs: startOfNextPeriodUTC.getTime() - now.getTime(),
+      timeUntilNextPeriodHours: ((startOfNextPeriodUTC.getTime() - now.getTime()) / (60 * 60 * 1000)).toFixed(2)
     });
 
     let weatherDoc = await findWeatherForPeriod(
@@ -1023,10 +1281,18 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
         season: seasonForPeriod,
         temperature: generatedWeather.temperature,
         wind: generatedWeather.wind,
-        precipitation: generatedWeather.precipitation
+        precipitation: generatedWeather.precipitation,
+        postedToDiscord: false  // Explicitly mark future weather as not posted
       });
-    } else if (!weatherDoc.season) {
-      weatherDoc.season = seasonForPeriod;
+    } else {
+      // Existing weather doc for next period - ensure it's marked as not posted
+      // This prevents future weather from being accessible via onlyPosted: true filter
+      if (!weatherDoc.postedToDiscord) {
+        weatherDoc.postedToDiscord = false;
+      }
+      if (!weatherDoc.season) {
+        weatherDoc.season = seasonForPeriod;
+      }
     }
 
     const existingSpecialLabel = weatherDoc?.special?.label;
@@ -1074,6 +1340,14 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
     };
 
     console.log('[weatherService.js]: 🎵 Scheduled special weather', logContext);
+    console.log('[weatherService.js]: ✅ Song of Storms weather document created', {
+      village: normalizedVillage,
+      special: specialEntry.label,
+      date: savedWeather.date?.toISOString() || startOfNextPeriodUTC.toISOString(),
+      postedToDiscord: savedWeather.postedToDiscord,
+      hasSpecial: !!savedWeather.special,
+      specialLabel: savedWeather.special?.label
+    });
 
     const serializedWeather =
       typeof savedWeather.toObject === 'function' ? savedWeather.toObject() : savedWeather;

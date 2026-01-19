@@ -613,6 +613,46 @@ for (const { name } of cleanedItems) {
    return;
   }
 
+  // ------------------- Check if command is used in the correct townhall channel -------------------
+  const testingChannelId = '1391812848099004578';
+  const isTestingChannel = interaction.channelId === testingChannelId;
+  
+  const villageChannelMap = {
+    'Rudania': process.env.RUDANIA_TOWNHALL,
+    'Inariko': process.env.INARIKO_TOWNHALL,
+    'Vhintl': process.env.VHINTL_TOWNHALL
+  };
+  
+  const characterVillage = capitalizeWords(fromCharacter.currentVillage.trim());
+  const allowedChannel = villageChannelMap[characterVillage];
+  
+  if (!allowedChannel || (interaction.channelId !== allowedChannel && !isTestingChannel)) {
+    const channelMention = allowedChannel ? `<#${allowedChannel}>` : 'the village town hall';
+    const villageCapitalized = capitalizeWords(fromCharacter.currentVillage.trim());
+    
+    await interaction.editReply({
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Wrong Townhall Channel',
+        description: `You cannot gift in this channel. Both characters are in **${villageCapitalized}**, so you must use the gift command in ${channelMention}.`,
+        fields: [
+          {
+            name: 'How to Fix',
+            value: `Please use the </economy gift:> command in ${channelMention} where both characters are located.`
+          }
+        ],
+        image: {
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+        },
+        footer: {
+          text: 'Channel Validation'
+        }
+      }],
+      ephemeral: true
+    });
+    return;
+  }
+
   const fromInventoryCollection = await getCharacterInventoryCollectionWithModSupport(
    fromCharacter
   );

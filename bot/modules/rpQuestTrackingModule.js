@@ -143,7 +143,7 @@ async function processValidRPPost(quest, participant, channelId) {
         }
         
         await sendRequirementMetNotification(quest, participant, channelId);
-        logger.quest.completed(quest.questID, 1);
+        logger.success('QUEST', `Quest ${quest.questID}: ${participant.characterName} completed requirements`);
     }
 
     await quest.save();

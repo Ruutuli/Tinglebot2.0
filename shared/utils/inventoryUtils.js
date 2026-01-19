@@ -317,7 +317,14 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    const collectionName = character.name.toLowerCase();
+    
+    // Use shared inventory collection for mod characters
+    let collectionName;
+    if (character.isModCharacter) {
+      collectionName = 'mod_shared_inventory';
+    } else {
+      collectionName = character.name.toLowerCase();
+    }
     console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
@@ -327,21 +334,30 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       throw new Error(`Item with name "${itemName}" not found`);
     }
 
+    // Query for existing item matching both itemName AND obtain field
+    // This allows items with different obtain methods to be tracked separately
+    const itemNameRegex = new RegExp(`^${escapeRegExp(itemName.trim())}$`, "i");
+    const obtainValue = obtain || ""; // Normalize empty string for comparison
+    
     const inventoryItem = await inventoryCollection.findOne({
       characterId,
-      itemName: new RegExp(`^${escapeRegExp(itemName.trim())}$`, "i"),
+      itemName: itemNameRegex,
+      obtain: obtainValue
     });
 
     if (inventoryItem) {
-      console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
+      // Item exists with same name AND same obtain method - increment quantity
+      console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} (obtain: "${obtainValue}") in ${character.name}'s inventory`);
       console.log(`[inventoryUtils.js]: ➕ Adding ${quantity} ${itemName}`);
       await inventoryCollection.updateOne(
-        { characterId, itemName: inventoryItem.itemName },
+        { characterId, itemName: inventoryItem.itemName, obtain: obtainValue },
         { $inc: { quantity: quantity } }
       );
       console.log(`[inventoryUtils.js]: ✅ Updated ${itemName} quantity (incremented by ${quantity})`);
     } else {
-      console.log(`[inventoryUtils.js]: ➕ Adding new item ${itemName} (${quantity}) to ${character.name}'s inventory`);
+      // Item doesn't exist with this obtain method - create new entry
+      // This allows items with different obtain methods (crafting, trading, etc.) to be tracked separately
+      console.log(`[inventoryUtils.js]: ➕ Adding new item ${itemName} (${quantity}) with obtain method "${obtainValue}" to ${character.name}'s inventory`);
       const newItem = {
         characterId,
         itemName: item.itemName,
@@ -352,9 +368,10 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         subtype: Array.isArray(item.subtype) ? item.subtype.join(", ") : "",
         location: character.currentVillage || "Unknown",
         date: new Date(),
-        obtain,
+        obtain: obtainValue,
       };
       await inventoryCollection.insertOne(newItem);
+      console.log(`[inventoryUtils.js]: ✅ Created new inventory entry for ${itemName} with obtain method "${obtainValue}"`);
     }
     
     // Log to InventoryLog database collection

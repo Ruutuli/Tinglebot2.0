@@ -15,7 +15,7 @@ const { createWeightedItemList } = require('../../modules/rngModule.js');
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('../../../shared/utils/inventoryUtils.js');
 const weatherService = require('../../../shared/services/weatherService');
-const { getWeatherWithoutGeneration } = weatherService;
+const { getWeatherWithoutGeneration, getCurrentPeriodBounds, getNextPeriodBounds } = weatherService;
 const { canUseSpecialWeather, normalizeVillageName } = require('../../../shared/utils/specialWeatherUtils');
 const { enforceJail } = require('../../../shared/utils/jailCheck.js');
 const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
@@ -160,6 +160,7 @@ module.exports = {
 
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
+    const now = new Date(); // Declare once for entire function scope
     try {
       await interaction.deferReply();
 
@@ -228,7 +229,7 @@ module.exports = {
       }
 
       // Check if character is KOed
-      if (character.isKO) {
+      if (character.ko) {
         await interaction.editReply({
           content: `❌ **${character.name} is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
           ephemeral: true,
@@ -239,9 +240,8 @@ module.exports = {
       // Check if character is debuffed
       if (character.debuff?.active) {
         const debuffEndDate = new Date(character.debuff.endDate);
-        const now = new Date();
         
-        // Check if debuff has actually expired
+        // Check if debuff has actually expired (reuse 'now' from function scope)
         if (debuffEndDate <= now) {
           // Debuff has expired, clear it
           character.debuff.active = false;
@@ -281,12 +281,46 @@ module.exports = {
       // Get current weather for the village (onlyPosted: exclude Song-of-Storms-scheduled
       // future weather that hasn't been posted yet — players gather for today's posted weather only)
       const currentVillage = channelVillage; // Use the village from the channel
-      const weather = await getWeatherWithoutGeneration(currentVillage, { onlyPosted: true });
-
-
+      // Reuse 'now' from function scope
+      const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
+      const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
+      
+      // Try to get posted weather first (most secure)
+      let weather = await getWeatherWithoutGeneration(currentVillage, { onlyPosted: true });
+      
+      // Fallback: if no posted weather found, try without onlyPosted filter (with logging)
+      if (!weather) {
+        console.warn(`[specialweather.js]: ⚠️ No posted weather found for ${currentVillage}, attempting fallback without onlyPosted filter`);
+        weather = await getWeatherWithoutGeneration(currentVillage, { onlyPosted: false });
+        
+        if (weather) {
+          const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+          
+          // Reject weather from future periods even from fallback
+          if (weatherDate < startOfPeriodUTC || weatherDate >= startOfNextPeriodUTC) {
+            console.error(`[specialweather.js]: ❌ Fallback weather rejected: outside current period bounds for ${currentVillage}`, {
+              weatherDate: weatherDate.toISOString(),
+              periodStart: startOfPeriodUTC.toISOString(),
+              nextPeriodStart: startOfNextPeriodUTC.toISOString(),
+              postedToDiscord: weather.postedToDiscord
+            });
+            weather = null;
+          } else {
+            console.warn(`[specialweather.js]: ⚠️ Using fallback weather for ${currentVillage} (not marked as posted)`, {
+              weatherDate: weatherDate.toISOString(),
+              postedToDiscord: weather.postedToDiscord
+            });
+          }
+        }
+      }
       
       if (!weather) {
-        console.error(`[specialweather.js]: ❌ No weather data found for ${currentVillage}`);
+        console.error(`[specialweather.js]: ❌ No weather data found for ${currentVillage}`, {
+          characterName: character.name,
+          userId: interaction.user.id,
+          channelVillage: currentVillage,
+          timestamp: now.toISOString()
+        });
         await interaction.editReply({
           embeds: [{
             color: 0x008B8B,
@@ -302,9 +336,65 @@ module.exports = {
         });
         return;
       }
+      
+      // Validate weather structure before accessing properties
+      if (!weather.date || !weather.temperature || !weather.precipitation) {
+        console.error(`[specialweather.js]: ❌ Invalid weather structure for ${currentVillage}`, {
+          hasDate: !!weather.date,
+          hasTemperature: !!weather.temperature,
+          hasPrecipitation: !!weather.precipitation,
+          weatherKeys: Object.keys(weather)
+        });
+        await interaction.editReply({
+          embeds: [{
+            color: 0x008B8B,
+            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe weather data for ${currentVillage} appears to be incomplete.\n\nPlease try again in a few moments.`,
+            image: {
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+            },
+            footer: {
+              text: 'Weather Data Error'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Additional period validation: ensure weather date matches current period
+      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+      
+      if (weatherDate < startOfPeriodUTC || weatherDate >= startOfNextPeriodUTC) {
+        console.error(`[specialweather.js]: ❌ Weather rejected: outside current period bounds`, {
+          village: currentVillage,
+          weatherDate: weatherDate.toISOString(),
+          periodStart: startOfPeriodUTC.toISOString(),
+          nextPeriodStart: startOfNextPeriodUTC.toISOString(),
+          characterName: character.name
+        });
+        await interaction.editReply({
+          embeds: [{
+            color: 0x008B8B,
+            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe retrieved weather data for ${currentVillage} appears to be from a different period.\n\nPlease try again in a few moments.`,
+            image: {
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+            },
+            footer: {
+              text: 'Weather Data Error'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      }
 
       if (!weather.special) {
-        console.log(`[specialweather.js]: ⚠️ No special weather object found for ${currentVillage}`);
+        console.log(`[specialweather.js]: ⚠️ No special weather object found for ${currentVillage}`, {
+          characterName: character.name,
+          weatherDate: weatherDate.toISOString(),
+          hasSpecial: !!weather.special,
+          postedToDiscord: weather.postedToDiscord
+        });
         await interaction.editReply({
           embeds: [{
             color: 0x008B8B,
@@ -340,7 +430,16 @@ module.exports = {
         return;
       }
 
-      console.log(`[specialweather.js]: ✅ Special weather detected: ${weather.special.label}`);
+      console.log(`[specialweather.js]: ✅ Special weather detected: ${weather.special.label}`, {
+        characterName: character.name,
+        village: currentVillage,
+        weatherDate: weatherDate.toISOString(),
+        periodStart: startOfPeriodUTC.toISOString(),
+        nextPeriodStart: startOfNextPeriodUTC.toISOString(),
+        postedToDiscord: weather.postedToDiscord,
+        specialLabel: weather.special.label,
+        specialEmoji: weather.special.emoji
+      });
 
       // Check if character is in the correct village
       if (character.currentVillage.toLowerCase() !== currentVillage.toLowerCase()) {
@@ -452,7 +551,7 @@ module.exports = {
       await syncToInventoryDatabase(character, itemToSync, interaction);
 
       // 1x per period per village: record usage for this village
-      const now = new Date();
+      // Reuse 'now' variable declared at start of function
       if (!character.specialWeatherUsage) {
         character.specialWeatherUsage = new Map();
       }
