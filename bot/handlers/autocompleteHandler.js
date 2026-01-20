@@ -978,10 +978,41 @@ async function handleCharacterBasedCommandsAutocomplete(
     }
 
     const userId = interaction.user.id;
+    const mongoose = require('mongoose');
+    
+    // Log connection state and pool info (interactionAge already calculated above)
+    const connectionState = mongoose.connection.readyState;
+    const connectionStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+    const stateName = connectionStates[connectionState] || 'unknown';
+    
+    // Try to get pool information if available
+    let poolInfo = 'N/A';
+    try {
+      const db = mongoose.connection.db;
+      if (db && db.serverConfig && db.serverConfig.s && db.serverConfig.s.pool) {
+        const pool = db.serverConfig.s.pool;
+        poolInfo = `total: ${pool.totalConnectionCount || 'N/A'}, available: ${pool.availableConnectionCount || 'N/A'}, waitQueue: ${pool.waitQueueSize || 0}`;
+      }
+    } catch (poolError) {
+      // Pool info not available, that's okay
+    }
+    
+    console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} start - userId: ${userId}, interactionAge: ${interactionAge}ms, connectionState: ${stateName} (${connectionState}), pool: ${poolInfo}`);
+    
     const requiredFields = ['name', 'currentVillage', 'job'];
     // Use longer timeout on Railway due to network latency, but stay under Discord's 3s limit
     const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || process.env.NODE_ENV === 'production';
     const timeoutMs = isRailway ? 2800 : 2500; // 2.8 seconds on Railway, 2.5 seconds locally
+    
+    const queryStartTime = Date.now();
+    console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Starting queries with ${timeoutMs}ms timeout`);
+    
+    // Track individual query times
+    let regularCharsStartTime = null;
+    let modCharsStartTime = null;
+    let regularCharsEndTime = null;
+    let modCharsEndTime = null;
+    
     const queryTimeout = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Database query timeout')), timeoutMs)
     );
@@ -989,11 +1020,28 @@ async function handleCharacterBasedCommandsAutocomplete(
     try {
       const [characters, modCharacters] = await Promise.race([
         Promise.all([
-          fetchCharactersByUserId(userId, requiredFields),
-          fetchModCharactersByUserId(userId, requiredFields)
+          (async () => {
+            regularCharsStartTime = Date.now();
+            console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Regular chars query START`);
+            const result = await fetchCharactersByUserId(userId, requiredFields);
+            regularCharsEndTime = Date.now();
+            console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Regular chars query END (${regularCharsEndTime - regularCharsStartTime}ms)`);
+            return result;
+          })(),
+          (async () => {
+            modCharsStartTime = Date.now();
+            console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Mod chars query START`);
+            const result = await fetchModCharactersByUserId(userId, requiredFields);
+            modCharsEndTime = Date.now();
+            console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Mod chars query END (${modCharsEndTime - modCharsStartTime}ms)`);
+            return result;
+          })()
         ]),
         queryTimeout
       ]);
+      
+      const totalTime = Date.now() - queryStartTime;
+      console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Queries completed in ${totalTime}ms (regular: ${regularCharsEndTime ? regularCharsEndTime - regularCharsStartTime : 'N/A'}ms, mod: ${modCharsEndTime ? modCharsEndTime - modCharsStartTime : 'N/A'}ms)`);
       
       // Combine regular characters and mod characters
       const allCharacters = [...(characters || []), ...(modCharacters || [])];
@@ -1006,6 +1054,27 @@ async function handleCharacterBasedCommandsAutocomplete(
       
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     } catch (queryError) {
+      const totalTime = Date.now() - queryStartTime;
+      console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Query failed after ${totalTime}ms`);
+      console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Regular chars: ${regularCharsStartTime ? (regularCharsEndTime ? `completed in ${regularCharsEndTime - regularCharsStartTime}ms` : 'still running') : 'never started'}`);
+      console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Mod chars: ${modCharsStartTime ? (modCharsEndTime ? `completed in ${modCharsEndTime - modCharsStartTime}ms` : 'still running') : 'never started'}`);
+      
+      // Log connection state and pool info on timeout
+      const connectionState = mongoose.connection.readyState;
+      const connectionStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+      const stateName = connectionStates[connectionState] || 'unknown';
+      let poolInfo = 'N/A';
+      try {
+        const db = mongoose.connection.db;
+        if (db && db.serverConfig && db.serverConfig.s && db.serverConfig.s.pool) {
+          const pool = db.serverConfig.s.pool;
+          poolInfo = `total: ${pool.totalConnectionCount || 'N/A'}, available: ${pool.availableConnectionCount || 'N/A'}, waitQueue: ${pool.waitQueueSize || 0}`;
+        }
+      } catch (poolError) {
+        // Pool info not available
+      }
+      console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Connection state: ${stateName} (${connectionState}), pool: ${poolInfo}`);
+      
       console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error for ${commandName}:`, queryError);
       if (queryError.message === 'Database query timeout') {
         console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);

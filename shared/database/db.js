@@ -347,7 +347,11 @@ const fetchCharacterById = async (characterId) => {
 
 // ------------------- fetchCharactersByUserId -------------------
 const fetchCharactersByUserId = async (userId, fields = null) => {
+  const queryStartTime = Date.now();
+  
   try {
+    console.log(`[DB-DEBUG] fetchCharactersByUserId START - userId: ${userId}, connectionState: ${mongoose.connection.readyState}, fields: ${fields?.join(',') || 'all'}`);
+    
     // Connection is established at startup - use directly to avoid overhead
     // Use lean() for faster queries and hint() to ensure index usage
     let query = Character.find({ userId }).lean();
@@ -356,11 +360,21 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
     }
     // Hint to use userId index for faster queries on Railway
     query = query.hint({ userId: 1 });
+    
+    const execStartTime = Date.now();
     const characters = await query.exec();
+    const execTime = Date.now() - execStartTime;
+    const totalTime = Date.now() - queryStartTime;
+    
+    console.log(`[DB-DEBUG] fetchCharactersByUserId END - ${characters.length} results, execTime: ${execTime}ms, totalTime: ${totalTime}ms`);
     return characters;
   } catch (error) {
+    const totalTime = Date.now() - queryStartTime;
+    console.error(`[DB-DEBUG] fetchCharactersByUserId ERROR after ${totalTime}ms - connectionState: ${mongoose.connection.readyState}`, error.message);
+    
     // If query fails, try reconnecting once
     if (mongoose.connection.readyState !== 1) {
+      console.log(`[DB-DEBUG] fetchCharactersByUserId - Reconnecting (state: ${mongoose.connection.readyState})`);
       await connectToTinglebot();
       // Retry query after reconnection
       let query = Character.find({ userId }).lean();
@@ -368,7 +382,9 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
         query = query.select(fields.join(' '));
       }
       query = query.hint({ userId: 1 });
-      return await query.exec();
+      const retryResult = await query.exec();
+      console.log(`[DB-DEBUG] fetchCharactersByUserId - Retry successful, ${retryResult.length} results`);
+      return retryResult;
     }
     handleError(error, "db.js");
     throw error;
@@ -688,7 +704,11 @@ const fetchModCharacterByName = async (characterName) => {
 };
 
 const fetchModCharactersByUserId = async (userId, fields = null) => {
+  const queryStartTime = Date.now();
+  
  try {
+  console.log(`[DB-DEBUG] fetchModCharactersByUserId START - userId: ${userId}, connectionState: ${mongoose.connection.readyState}, fields: ${fields?.join(',') || 'all'}`);
+  
   // Connection is established at startup - use directly to avoid overhead
   // Use lean() for faster queries and hint() to ensure index usage
   let query = ModCharacter.find({ userId: userId }).lean();
@@ -697,11 +717,21 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
   }
   // Hint to use userId index for faster queries on Railway
   query = query.hint({ userId: 1 });
+  
+  const execStartTime = Date.now();
   const modCharacters = await query.exec();
+  const execTime = Date.now() - execStartTime;
+  const totalTime = Date.now() - queryStartTime;
+  
+  console.log(`[DB-DEBUG] fetchModCharactersByUserId END - ${modCharacters.length} results, execTime: ${execTime}ms, totalTime: ${totalTime}ms`);
   return modCharacters;
  } catch (error) {
+  const totalTime = Date.now() - queryStartTime;
+  console.error(`[DB-DEBUG] fetchModCharactersByUserId ERROR after ${totalTime}ms - connectionState: ${mongoose.connection.readyState}`, error.message);
+  
   // If query fails, try reconnecting once
   if (mongoose.connection.readyState !== 1) {
+    console.log(`[DB-DEBUG] fetchModCharactersByUserId - Reconnecting (state: ${mongoose.connection.readyState})`);
     await connectToTinglebot();
     // Retry query after reconnection
     let query = ModCharacter.find({ userId: userId }).lean();
@@ -709,7 +739,9 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
       query = query.select(fields.join(' '));
     }
     query = query.hint({ userId: 1 });
-    return await query.exec();
+    const retryResult = await query.exec();
+    console.log(`[DB-DEBUG] fetchModCharactersByUserId - Retry successful, ${retryResult.length} results`);
+    return retryResult;
   }
   handleError(error, "db.js", {
    function: "fetchModCharactersByUserId",
