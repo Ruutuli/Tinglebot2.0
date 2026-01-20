@@ -1226,10 +1226,32 @@ async function registerCommands(client) {
     
     // Collect all commands from client.commands
     const commands = [];
+    const failedCommands = [];
+    
     for (const [name, command] of client.commands) {
       if (command.data) {
-        commands.push(command.data.toJSON());
+        try {
+          const commandData = command.data.toJSON();
+          // Validate that the command data is valid
+          if (commandData && typeof commandData === 'object') {
+            commands.push(commandData);
+          } else {
+            failedCommands.push({ name, reason: 'Invalid command data structure' });
+            logger.warn('COMMANDS', `Command "${name}" has invalid data structure, skipping...`);
+          }
+        } catch (jsonError) {
+          failedCommands.push({ name, reason: jsonError.message });
+          logger.error('COMMANDS', `Error converting command "${name}" to JSON: ${jsonError.message}`);
+          logger.error('COMMANDS', `Command "${name}" stack: ${jsonError.stack}`);
+        }
+      } else {
+        failedCommands.push({ name, reason: 'Missing data property' });
+        logger.warn('COMMANDS', `Command "${name}" is missing data property, skipping...`);
       }
+    }
+    
+    if (failedCommands.length > 0) {
+      logger.warn('COMMANDS', `${failedCommands.length} command(s) failed to load: ${failedCommands.map(c => `${c.name} (${c.reason})`).join(', ')}`);
     }
     
     if (commands.length === 0) {
@@ -1238,6 +1260,12 @@ async function registerCommands(client) {
     }
     
     logger.info('COMMANDS', `Registering ${commands.length} commands...`);
+    
+    // Validate commands array before sending
+    if (!Array.isArray(commands)) {
+      logger.error('COMMANDS', 'Commands array is invalid');
+      return;
+    }
     
     // Register commands with Discord
     const rest = new REST().setToken(process.env.DISCORD_TOKEN);

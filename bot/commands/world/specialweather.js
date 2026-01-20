@@ -93,7 +93,7 @@ function createErrorEmbed(title, description, footer = null, color = 0x008B8B) {
     .setColor(color)
     .setTitle(title)
     .setDescription(description)
-    .setImage({ url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' });
+    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
   
   if (footer) {
     embed.setFooter({ text: footer });

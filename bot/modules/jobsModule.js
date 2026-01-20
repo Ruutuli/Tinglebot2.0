@@ -167,7 +167,13 @@ module.exports = {
   getAllJobCategories,
   getJobsByCategory,
   getJobPerk,
-  createJobOptions: (jobs) => jobs.map(job => ({ name: job, value: job.toLowerCase() })),
+  createJobOptions: (jobs) => {
+    if (!jobs || !Array.isArray(jobs) || jobs.length === 0) {
+      console.error('[jobsModule] createJobOptions: Invalid jobs parameter - expected non-empty array, got:', typeof jobs, jobs);
+      return [];
+    }
+    return jobs.map(job => ({ name: job, value: job.toLowerCase() }));
+  },
   updateJob,
   getGeneralJobsPage,
   isVillageExclusiveJob,

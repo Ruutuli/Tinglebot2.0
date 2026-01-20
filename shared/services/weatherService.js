@@ -268,21 +268,10 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
   if (onlyPosted) {
     // Exclude future/scheduled weather (e.g. Song of Storms) that hasn't been posted yet.
     // Include: postedToDiscord true, or legacy docs without the field.
-    // Explicitly exclude postedToDiscord: false to prevent future weather from slipping through.
-    baseQuery.$and = [
-      {
-        $or: [
-          { postedToDiscord: true },
-          { postedToDiscord: { $exists: false } }
-        ]
-      },
-      // Explicitly exclude false values for new documents (future weather from Song of Storms)
-      {
-        $or: [
-          { postedToDiscord: { $exists: false } },
-          { postedToDiscord: { $ne: false } }
-        ]
-      }
+    // This will automatically exclude postedToDiscord: false documents.
+    baseQuery.$or = [
+      { postedToDiscord: true },
+      { postedToDiscord: { $exists: false } }
     ];
   }
 
@@ -326,19 +315,9 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
       }
     };
     if (onlyPosted) {
-      legacyQuery.$and = [
-        {
-          $or: [
-            { postedToDiscord: true },
-            { postedToDiscord: { $exists: false } }
-          ]
-        },
-        {
-          $or: [
-            { postedToDiscord: { $exists: false } },
-            { postedToDiscord: { $ne: false } }
-          ]
-        }
+      legacyQuery.$or = [
+        { postedToDiscord: true },
+        { postedToDiscord: { $exists: false } }
       ];
     }
     const legacyWeather = await Weather.findOne(legacyQuery);
