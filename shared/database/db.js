@@ -359,18 +359,11 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
       query = query.select(fields.join(' '));
     }
     
-    console.log(`[DB-DEBUG] fetchCharactersByUserId - Query built, about to add hint, connectionState: ${mongoose.connection.readyState}`);
+    console.log(`[DB-DEBUG] fetchCharactersByUserId - Query built, connectionState: ${mongoose.connection.readyState}`);
     
-    // Hint to use userId index for faster queries on Railway
-    // Try-catch around hint in case index doesn't exist
-    try {
-      query = query.hint({ userId: 1 });
-      console.log(`[DB-DEBUG] fetchCharactersByUserId - Hint added successfully`);
-    } catch (hintError) {
-      console.error(`[DB-DEBUG] fetchCharactersByUserId - Hint failed, continuing without hint:`, hintError.message);
-    }
-    
-    console.log(`[DB-DEBUG] fetchCharactersByUserId - About to execute query, connectionState: ${mongoose.connection.readyState}`);
+    // Try query WITHOUT hint first - hint() may be causing hangs if index doesn't exist or is misconfigured
+    // If this works, we know the hint was the problem
+    console.log(`[DB-DEBUG] fetchCharactersByUserId - Executing query WITHOUT hint (testing if hint causes hangs)`);
     const execStartTime = Date.now();
     
     const characters = await query.exec();
@@ -387,13 +380,13 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
     if (mongoose.connection.readyState !== 1) {
       console.log(`[DB-DEBUG] fetchCharactersByUserId - Reconnecting (state: ${mongoose.connection.readyState})`);
       await connectToTinglebot();
-      // Retry query after reconnection
-      let query = Character.find({ userId }).lean();
+      // Retry query after reconnection (without hint to avoid potential issues)
+      let retryQuery = Character.find({ userId }).lean();
       if (fields && Array.isArray(fields)) {
-        query = query.select(fields.join(' '));
+        retryQuery = retryQuery.select(fields.join(' '));
       }
-      query = query.hint({ userId: 1 });
-      const retryResult = await query.exec();
+      // Don't use hint on retry - if hint was the problem, this will work
+      const retryResult = await retryQuery.exec();
       console.log(`[DB-DEBUG] fetchCharactersByUserId - Retry successful, ${retryResult.length} results`);
       return retryResult;
     }
@@ -727,18 +720,11 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
     query = query.select(fields.join(' '));
   }
   
-  console.log(`[DB-DEBUG] fetchModCharactersByUserId - Query built, about to add hint, connectionState: ${mongoose.connection.readyState}`);
+  console.log(`[DB-DEBUG] fetchModCharactersByUserId - Query built, connectionState: ${mongoose.connection.readyState}`);
   
-  // Hint to use userId index for faster queries on Railway
-  // Try-catch around hint in case index doesn't exist
-  try {
-    query = query.hint({ userId: 1 });
-    console.log(`[DB-DEBUG] fetchModCharactersByUserId - Hint added successfully`);
-  } catch (hintError) {
-    console.error(`[DB-DEBUG] fetchModCharactersByUserId - Hint failed, continuing without hint:`, hintError.message);
-  }
-  
-  console.log(`[DB-DEBUG] fetchModCharactersByUserId - About to execute query, connectionState: ${mongoose.connection.readyState}`);
+  // Try query WITHOUT hint first - hint() may be causing hangs if index doesn't exist or is misconfigured
+  // If this works, we know the hint was the problem
+  console.log(`[DB-DEBUG] fetchModCharactersByUserId - Executing query WITHOUT hint (testing if hint causes hangs)`);
   const execStartTime = Date.now();
   
   const modCharacters = await query.exec();
@@ -755,13 +741,13 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
   if (mongoose.connection.readyState !== 1) {
     console.log(`[DB-DEBUG] fetchModCharactersByUserId - Reconnecting (state: ${mongoose.connection.readyState})`);
     await connectToTinglebot();
-    // Retry query after reconnection
-    let query = ModCharacter.find({ userId: userId }).lean();
+    // Retry query after reconnection (without hint to avoid potential issues)
+    let retryQuery = ModCharacter.find({ userId: userId }).lean();
     if (fields && Array.isArray(fields)) {
-      query = query.select(fields.join(' '));
+      retryQuery = retryQuery.select(fields.join(' '));
     }
-    query = query.hint({ userId: 1 });
-    const retryResult = await query.exec();
+    // Don't use hint on retry - if hint was the problem, this will work
+    const retryResult = await retryQuery.exec();
     console.log(`[DB-DEBUG] fetchModCharactersByUserId - Retry successful, ${retryResult.length} results`);
     return retryResult;
   }
