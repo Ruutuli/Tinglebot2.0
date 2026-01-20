@@ -373,13 +373,7 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
     console.log(`[DB-DEBUG] fetchCharactersByUserId - About to execute query, connectionState: ${mongoose.connection.readyState}`);
     const execStartTime = Date.now();
     
-    // Add a timeout wrapper to detect if exec() hangs
-    const execPromise = query.exec();
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Query exec() timeout - query.exec() never resolved')), 3000)
-    );
-    
-    const characters = await Promise.race([execPromise, timeoutPromise]);
+    const characters = await query.exec();
     const execTime = Date.now() - execStartTime;
     const totalTime = Date.now() - queryStartTime;
     
@@ -747,13 +741,7 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
   console.log(`[DB-DEBUG] fetchModCharactersByUserId - About to execute query, connectionState: ${mongoose.connection.readyState}`);
   const execStartTime = Date.now();
   
-  // Add a timeout wrapper to detect if exec() hangs
-  const execPromise = query.exec();
-  const timeoutPromise = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error('Query exec() timeout - query.exec() never resolved')), 3000)
-  );
-  
-  const modCharacters = await Promise.race([execPromise, timeoutPromise]);
+  const modCharacters = await query.exec();
   const execTime = Date.now() - execStartTime;
   const totalTime = Date.now() - queryStartTime;
   

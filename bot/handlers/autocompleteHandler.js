@@ -32,6 +32,14 @@ const {
 // ------------------- Utilities -------------------
 const logger = require('../../shared/utils/logger');
 
+// ------------------- Autocomplete Request Management -------------------
+// Per-user debounce and inflight request tracking to prevent self-DOS
+const autocompleteLocks = new Map(); // userId -> { promise, timestamp }
+const autocompleteCache = new Map(); // userId -> { data, timestamp, ttl }
+const AUTCOMPLETE_DEBOUNCE_MS = 200; // 200ms debounce
+const AUTCOMPLETE_CACHE_TTL = 30 * 1000; // 30 second cache
+const AUTCOMPLETE_MAX_INFLIGHT_AGE = 5000; // Clean up stale locks after 5s
+
 // ------------------- Custom Modules -------------------
 const {
  capitalize,
@@ -980,7 +988,64 @@ async function handleCharacterBasedCommandsAutocomplete(
     const userId = interaction.user.id;
     const mongoose = require('mongoose');
     
-    // Log connection state and pool info (interactionAge already calculated above)
+    // ========== DEBOUNCE & INFLIGHT LOCK ==========
+    // Check for existing inflight request
+    const existingLock = autocompleteLocks.get(userId);
+    if (existingLock) {
+      const lockAge = Date.now() - existingLock.timestamp;
+      if (lockAge < AUTCOMPLETE_MAX_INFLIGHT_AGE) {
+        console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Reusing inflight request for userId: ${userId} (age: ${lockAge}ms)`);
+        try {
+          const cachedResult = await existingLock.promise;
+          // Respond with cached result
+          const choices = cachedResult.map((character) => ({
+            name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+            value: character.name,
+          }));
+          await respondWithFilteredChoices(interaction, focusedOption, choices);
+          return;
+        } catch (error) {
+          // If the inflight request failed, continue to make a new one
+          console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Inflight request failed, starting new request`);
+          autocompleteLocks.delete(userId);
+        }
+      } else {
+        // Stale lock, remove it
+        console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Removing stale lock for userId: ${userId}`);
+        autocompleteLocks.delete(userId);
+      }
+    }
+    
+    // Check cache first
+    const cached = autocompleteCache.get(userId);
+    if (cached && (Date.now() - cached.timestamp) < cached.ttl) {
+      console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Using cached data for userId: ${userId}`);
+      const choices = cached.data.map((character) => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }));
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+      return;
+    }
+    
+    // Create new request promise and lock
+    let resolveLock, rejectLock;
+    const requestPromise = new Promise((resolve, reject) => {
+      resolveLock = resolve;
+      rejectLock = reject;
+    });
+    
+    autocompleteLocks.set(userId, {
+      promise: requestPromise,
+      timestamp: Date.now()
+    });
+    
+    // Clean up lock after request completes (or fails)
+    const cleanupLock = () => {
+      autocompleteLocks.delete(userId);
+    };
+    
+    // Log connection state and pool info
     const connectionState = mongoose.connection.readyState;
     const connectionStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
     const stateName = connectionStates[connectionState] || 'unknown';
@@ -1001,8 +1066,12 @@ async function handleCharacterBasedCommandsAutocomplete(
     
     const requiredFields = ['name', 'currentVillage', 'job'];
     // Use longer timeout on Railway due to network latency, but stay under Discord's 3s limit
-    const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || process.env.NODE_ENV === 'production';
-    const timeoutMs = isRailway ? 2800 : 2500; // 2.8 seconds on Railway, 2.5 seconds locally
+    // Fix: Check for 'production' string, not just 'true'
+    const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || 
+                      process.env.RAILWAY_ENVIRONMENT === 'production' || 
+                      process.env.NODE_ENV === 'production';
+    // Temporarily increase to 10s for diagnostic purposes
+    const timeoutMs = isRailway ? 10000 : 2500; // 10 seconds on Railway (diagnostic), 2.5 seconds locally
     console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Railway detection: isRailway=${isRailway}, RAILWAY_ENVIRONMENT=${process.env.RAILWAY_ENVIRONMENT}, NODE_ENV=${process.env.NODE_ENV}`);
     
     const queryStartTime = Date.now();
@@ -1046,6 +1115,17 @@ async function handleCharacterBasedCommandsAutocomplete(
       
       // Combine regular characters and mod characters
       const allCharacters = [...(characters || []), ...(modCharacters || [])];
+      
+      // Cache the result
+      autocompleteCache.set(userId, {
+        data: allCharacters,
+        timestamp: Date.now(),
+        ttl: AUTCOMPLETE_CACHE_TTL
+      });
+      
+      // Resolve the lock promise so other concurrent requests can use this result
+      resolveLock(allCharacters);
+      cleanupLock();
     
       // Map all characters to choices with their basic info
       const choices = allCharacters.map((character) => ({
@@ -1075,6 +1155,10 @@ async function handleCharacterBasedCommandsAutocomplete(
         // Pool info not available
       }
       console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Connection state: ${stateName} (${connectionState}), pool: ${poolInfo}`);
+      
+      // Reject the lock promise and clean up
+      rejectLock(queryError);
+      cleanupLock();
       
       console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error for ${commandName}:`, queryError);
       if (queryError.message === 'Database query timeout') {
