@@ -177,9 +177,10 @@ Both services share code from the `shared/` directory and use the same MongoDB d
 4. Railway will create the first service automatically
 5. **Configure the Bot Service**:
    - Go to the service settings
-   - Set **Root Directory** to: `bot`
-   - Railway will automatically detect `bot/railway.json` and `bot/package.json`
-   - The service will use the start command: `node index.js` (from `bot/railway.json`)
+   - **Important**: Leave **Root Directory** empty (or set to `/`) - this ensures both `package.json` and the `shared/` directory are available
+   - In service settings → **Config File**, specify: `bot/railway.json`
+   - The service will use the start command: `node bot/index.js` (from `bot/railway.json`)
+   - Dependencies will be installed from the root `package.json`
 
 #### 2. Create Dashboard Service
 
@@ -187,9 +188,10 @@ Both services share code from the `shared/` directory and use the same MongoDB d
 2. Select the **same repository** as the Bot Service
 3. **Configure the Dashboard Service**:
    - Go to the service settings
-   - Set **Root Directory** to: `dashboard`
-   - Railway will automatically detect `dashboard/railway.json` and `dashboard/package.json`
-   - The service will use the start command: `node server.js` (from `dashboard/railway.json`)
+   - **Important**: Leave **Root Directory** empty (or set to `/`) - this ensures both `package.json` and the `shared/` directory are available
+   - In service settings → **Config File**, specify: `dashboard/railway.json`
+   - The service will use the start command: `node dashboard/server.js` (from `dashboard/railway.json`)
+   - Dependencies will be installed from the root `package.json`
 
 #### 3. Configure Watch Paths (Recommended)
 
@@ -303,16 +305,16 @@ ADMIN_ROLE_ID=your_admin_role_id
 ### Railway Configuration Files
 
 - `bot/railway.json` - Bot service configuration
-- `bot/package.json` - Bot service dependencies
 - `dashboard/railway.json` - Dashboard service configuration
-- `dashboard/package.json` - Dashboard service dependencies
+- Root `package.json` - Shared dependencies for both services
 
-Each service directory has its own `package.json` file, allowing Railway to build each service independently when Root Directory is set to the respective subdirectory.
+**Important**: Both services use the root `package.json` for dependencies. The `bot/package.json` and `dashboard/package.json` files are kept for reference but are not used during Railway builds. This ensures the `shared/` directory is accessible to both services.
 
 ### Troubleshooting Railway Deployment
 
 - **Service not starting?** Check the deployment logs in Railway dashboard
-- **Build failing with "package.json not found"?** Ensure Root Directory is set correctly (`bot` for Bot Service, `dashboard` for Dashboard Service). Each service directory has its own `package.json` file.
+- **Build failing with "package.json not found"?** Ensure Root Directory is **empty** (root `/`). The root `package.json` must be accessible during build.
+- **"Cannot find module '../shared/..."?** Ensure Root Directory is **empty** (root `/`). The `shared/` directory must be accessible from the service code. If Root Directory is set to a subdirectory, the `shared/` directory won't be available.
 - **Environment variables not working?** Verify they're set in the correct service's environment variables section
 - **Both services rebuilding unnecessarily?** Configure Watch Paths as described above
 - **Bot not connecting?** Check that `DISCORD_TOKEN` is set correctly in Bot Service
