@@ -916,36 +916,41 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: weather -------------------
-.addSubcommand(sub =>
-  sub
+// ------------------- Subcommand Group: weather -------------------
+.addSubcommandGroup(group =>
+  group
     .setName('weather')
-    .setDescription('🌤️ Generate weather and post in channel (does not save to database)')
-    .addStringOption(opt =>
-      opt
-        .setName('village')
-        .setDescription('The village to generate weather for')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Rudania', value: 'Rudania' },
-          { name: 'Inariko', value: 'Inariko' },
-          { name: 'Vhintl', value: 'Vhintl' }
+    .setDescription('🌤️ Weather management commands')
+    .addSubcommand(sub =>
+      sub
+        .setName('generate')
+        .setDescription('🌤️ Generate weather and post in channel (does not save to database)')
+        .addStringOption(opt =>
+          opt
+            .setName('village')
+            .setDescription('The village to generate weather for')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Rudania', value: 'Rudania' },
+              { name: 'Inariko', value: 'Inariko' },
+              { name: 'Vhintl', value: 'Vhintl' }
+            )
         )
     )
-)
-.addSubcommand(sub =>
-  sub
-    .setName('weather-forecast')
-    .setDescription('🌤️ Post the current weather forecast for a village')
-    .addStringOption(opt =>
-      opt
-        .setName('village')
-        .setDescription('The village to get weather forecast for')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Rudania', value: 'Rudania' },
-          { name: 'Inariko', value: 'Inariko' },
-          { name: 'Vhintl', value: 'Vhintl' }
+    .addSubcommand(sub =>
+      sub
+        .setName('forecast')
+        .setDescription('🌤️ Post the current weather forecast for a village')
+        .addStringOption(opt =>
+          opt
+            .setName('village')
+            .setDescription('The village to get weather forecast for')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Rudania', value: 'Rudania' },
+              { name: 'Inariko', value: 'Inariko' },
+              { name: 'Vhintl', value: 'Vhintl' }
+            )
         )
     )
 )
@@ -1367,11 +1372,12 @@ const modCommand = new SlashCommandBuilder()
 
 async function execute(interaction) {
   try {
+    const subcommandGroup = interaction.options.getSubcommandGroup(false);
     const subcommand = interaction.options.getSubcommand(false);
     
     // Only defer with ephemeral for non-mount and non-weather commands
     try {
-      if (subcommand !== 'mount' && subcommand !== 'weather' && subcommand !== 'weather-forecast') {
+      if (subcommand !== 'mount' && subcommandGroup !== 'weather') {
         await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
       } else {
         await interaction.deferReply();
@@ -1445,10 +1451,12 @@ async function execute(interaction) {
         }      
     } else if (subcommand === 'slots') {
         return await handleSlots(interaction);
-    } else if (subcommand === 'weather') {
-        return await handleWeather(interaction);
-    } else if (subcommand === 'weather-forecast') {
-        return await handleWeatherForecast(interaction);
+    } else if (subcommandGroup === 'weather') {
+        if (subcommand === 'generate') {
+            return await handleWeather(interaction);
+        } else if (subcommand === 'forecast') {
+            return await handleWeatherForecast(interaction);
+        }
     } else if (subcommand === 'vendingreset') {
         return await handleVendingReset(interaction);
     } else if (subcommand === 'stealreset') {
