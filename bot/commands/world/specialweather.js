@@ -102,6 +102,90 @@ function createErrorEmbed(title, description, footer = null, color = 0x008B8B) {
   return embed;
 }
 
+function createDetailedErrorEmbed(error, context = {}) {
+  const characterName = context.characterName || 'Unknown';
+  const village = context.village || 'Unknown';
+  const timestamp = new Date().toISOString();
+  
+  // Extract error information
+  const errorName = error?.name || 'Unknown Error';
+  const errorMessage = error?.message || 'An unexpected error occurred';
+  const errorCode = error?.code || 'N/A';
+  const errorStack = error?.stack ? error.stack.split('\n').slice(0, 5).join('\n') : 'No stack trace available';
+  
+  // Determine error type
+  let errorType = 'Unknown Error';
+  let errorDescription = errorMessage;
+  let suggestedFix = 'Please try again in a few moments. If the issue persists, contact support.';
+  
+  if (errorMessage.includes('Received one or more errors')) {
+    errorType = 'Validation Error';
+    errorDescription = 'A validation error occurred while processing your request. This usually happens when data format is incorrect.';
+    suggestedFix = 'This is likely a bug. The error has been logged for review.';
+  } else if (errorMessage.includes('MongoDB') || errorMessage.includes('database')) {
+    errorType = 'Database Error';
+    errorDescription = 'Failed to connect to or query the database.';
+    suggestedFix = 'Please try again in a few moments. The database may be temporarily unavailable.';
+  } else if (errorMessage.includes('Google Sheets') || errorMessage.includes('sheets')) {
+    errorType = 'Inventory Sync Error';
+    errorDescription = 'Failed to sync items to your inventory sheet.';
+    suggestedFix = 'Your items may have been gathered but not synced. Check your inventory or try syncing manually.';
+  } else if (errorMessage.includes('ETIMEDOUT') || errorMessage.includes('timeout')) {
+    errorType = 'Connection Timeout';
+    errorDescription = 'The request took too long to complete.';
+    suggestedFix = 'Please try again. The service may be experiencing high load.';
+  } else if (errorMessage.includes('Permission denied') || errorMessage.includes('permission')) {
+    errorType = 'Permission Error';
+    errorDescription = 'The bot does not have permission to access required resources.';
+    suggestedFix = 'Please ensure your inventory sheet is shared with the bot.';
+  } else if (errorMessage.includes('Invalid') || errorMessage.includes('invalid')) {
+    errorType = 'Invalid Data Error';
+    errorDescription = errorMessage;
+    suggestedFix = 'Please check your input and try again.';
+  }
+  
+  const embed = new EmbedBuilder()
+    .setColor(0xFF0000)
+    .setTitle('🐛 Special Weather Gathering Error')
+    .setDescription(`*${characterName} looks confused as something goes wrong...*\n\n**An error occurred while gathering during special weather.**`)
+    .addFields(
+      {
+        name: '📋 Error Type',
+        value: `\`${errorType}\``,
+        inline: true
+      },
+      {
+        name: '🔢 Error Code',
+        value: `\`${errorCode}\``,
+        inline: true
+      },
+      {
+        name: '📍 Context',
+        value: `**Character:** ${characterName}\n**Village:** ${village}\n**Time:** <t:${Math.floor(Date.now() / 1000)}:F>`,
+        inline: false
+      },
+      {
+        name: '💬 Error Message',
+        value: `\`\`\`${errorMessage.substring(0, 500)}\`\`\``,
+        inline: false
+      },
+      {
+        name: '🔧 Suggested Fix',
+        value: suggestedFix,
+        inline: false
+      },
+      {
+        name: '📝 Technical Details',
+        value: `**Error Name:** \`${errorName}\`\n**Timestamp:** \`${timestamp}\`\n\n*This error has been automatically logged for review.*`,
+        inline: false
+      }
+    )
+    .setFooter({ text: 'Bug Report • Error ID: ' + Date.now().toString(36).toUpperCase() })
+    .setTimestamp();
+  
+  return embed;
+}
+
 function createWeatherErrorEmbed(characterName, village, errorType) {
   const errorMessages = {
     notFound: {
@@ -425,6 +509,7 @@ module.exports = {
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
     const now = new Date();
+    let channelVillage = null; // Declare at top level for error handling
     try {
       await interaction.deferReply();
 
@@ -432,7 +517,7 @@ module.exports = {
       if (!channelValidation.valid) {
         return;
       }
-      const channelVillage = channelValidation.village;
+      channelVillage = channelValidation.village;
 
       const characterName = interaction.options.getString('charactername');
       const characterValidation = await validateCharacter(characterName, interaction.user.id);
@@ -525,16 +610,24 @@ module.exports = {
       await interaction.editReply({ embeds: [embed], files: files });
 
     } catch (error) {
+      // Always log the error for debugging
+      const characterName = interaction.options.getString('charactername') || 'Unknown';
+      
+      const context = {
+        commandName: '/specialweather',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: characterName,
+        village: channelVillage || 'Unknown',
+        guildId: interaction.guildId,
+        channelId: interaction.channelId
+      };
+      
       if (!error.message.includes('inventory is not synced')) {
-        handleInteractionError(error, 'specialweather.js', {
-          commandName: '/specialweather',
-          userTag: interaction.user.tag,
-          userId: interaction.user.id,
-          characterName: interaction.options.getString('charactername')
-        });
+        handleInteractionError(error, 'specialweather.js', context);
       }
 
-      let errorMessage;
+      // Handle inventory sync errors with specific embed
       if (error.message.includes('inventory is not synced')) {
         const embed = createErrorEmbed(
           '❌ Inventory Not Synced',
@@ -554,29 +647,24 @@ module.exports = {
           console.warn(`[specialweather.js]: ⚠️ Interaction expired for user ${interaction.user.tag}`);
         }
         return;
-      } else if (error.message.includes('MongoDB')) {
-        errorMessage = '❌ **Database connection error.** Please try again in a few moments.';
-      } else if (error.message.includes('Google Sheets')) {
-        errorMessage = '❌ **Inventory sync error.** Your items were gathered but may not appear in your inventory sheet immediately.';
-      } else if (error.message.includes('ETIMEDOUT') || error.message.includes('Connect Timeout')) {
-        errorMessage = '❌ **Connection timeout.** Please try again in a few moments.';
-      } else if (error.message.includes('Permission denied')) {
-        errorMessage = '❌ **Permission denied.** Please make sure your inventory sheet is shared with the bot.';
-      } else if (error.message.includes('Invalid Google Sheets URL')) {
-        errorMessage = '❌ **Invalid inventory sheet URL.** Please check your character\'s inventory sheet link.';
-      } else {
-        errorMessage = `❌ **Error during special weather gathering:** ${error.message}`;
       }
 
-      if (errorMessage) {
-        try {
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: errorMessage, ephemeral: true });
-          } else if (interaction.deferred) {
-            await interaction.editReply({ content: errorMessage, ephemeral: true });
-          }
-        } catch (replyError) {
-          if (replyError.code !== 10062) throw replyError;
+      // Create detailed error embed for all other errors
+      const errorEmbed = createDetailedErrorEmbed(error, context);
+      
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        } else if (interaction.deferred) {
+          await interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
+        } else if (interaction.replied) {
+          await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
+        }
+      } catch (replyError) {
+        if (replyError.code !== 10062) {
+          // Log if it's not just an expired interaction
+          console.error(`[specialweather.js]: ❌ Failed to send error embed:`, replyError);
+        } else {
           console.warn(`[specialweather.js]: ⚠️ Interaction expired for user ${interaction.user.tag}`);
         }
       }
