@@ -724,7 +724,8 @@ async function checkForRandomEncounters(client) {
   let totalUsers = new Set();
   let activeChannels = 0;
 
-  // First pass: collect total activity across all channels
+  // First pass: collect total activity across all channels and clean up inactive ones
+  const channelsToRemove = [];
   for (const [channelId, activity] of messageActivity.entries()) {
     // Skip excluded channels
     if (EXCLUDED_CHANNELS.includes(channelId)) {
@@ -736,14 +737,29 @@ async function checkForRandomEncounters(client) {
       (timestamp) => currentTime - timestamp <= TIME_WINDOW
     );
 
+    // Clean up users that haven't been active (remove users from set if no recent messages)
+    // This is a simple cleanup - in practice, users are only added when they send messages
+    // so we don't need to track individual user timestamps for cleanup
+
     const messageCount = activity.messages.length;
     const uniqueUserCount = activity.users.size;
+
+    // If channel has no recent activity, mark it for removal to prevent memory leak
+    if (messageCount === 0 && uniqueUserCount === 0) {
+      channelsToRemove.push(channelId);
+      continue;
+    }
 
     if (messageCount > 0) {
       totalMessages += messageCount;
       activity.users.forEach(userId => totalUsers.add(userId));
       activeChannels++;
     }
+  }
+
+  // Clean up inactive channels from the Map to prevent memory leak
+  for (const channelId of channelsToRemove) {
+    messageActivity.delete(channelId);
   }
 
   // Check if server-wide activity meets threshold
@@ -1094,6 +1110,44 @@ async function initializeRandomEncounterBot(client) {
       handleError(error, 'randomMonsterEncounters.js');
     });
   }, CHECK_INTERVAL);
+
+  // Periodic cleanup of messageActivity Map to prevent memory leaks
+  // Run cleanup every 10 minutes (600000ms) to remove completely inactive channels
+  setInterval(() => {
+    const currentTime = Date.now();
+    const channelsToRemove = [];
+    
+    for (const [channelId, activity] of messageActivity.entries()) {
+      // Skip excluded channels
+      if (EXCLUDED_CHANNELS.includes(channelId)) {
+        continue;
+      }
+      
+      // Remove outdated messages
+      activity.messages = activity.messages.filter(
+        (timestamp) => currentTime - timestamp <= TIME_WINDOW
+      );
+      
+      // If channel has no recent activity for 2x the time window, remove it
+      const oldestMessage = activity.messages.length > 0 
+        ? Math.min(...activity.messages) 
+        : currentTime;
+      const timeSinceLastActivity = currentTime - oldestMessage;
+      
+      if (timeSinceLastActivity > TIME_WINDOW * 2) {
+        channelsToRemove.push(channelId);
+      }
+    }
+    
+    // Remove inactive channels
+    for (const channelId of channelsToRemove) {
+      messageActivity.delete(channelId);
+    }
+    
+    if (channelsToRemove.length > 0) {
+      console.log(`[randomMonsterEncounters.js]: 🧹 Cleaned up ${channelsToRemove.length} inactive channel(s) from messageActivity Map`);
+    }
+  }, 10 * 60 * 1000); // Every 10 minutes
 
   // Note: Hourly quota checks are handled by scheduler.js
   // Startup checks are disabled - raids will only trigger during scheduled hourly checks to prevent raids on bot restart
