@@ -177,9 +177,9 @@ Both services share code from the `shared/` directory and use the same MongoDB d
 4. Railway will create the first service automatically
 5. **Configure the Bot Service**:
    - Go to the service settings
-   - Set **Root Directory** to: `bot`
-   - Railway will automatically detect `bot/railway.json`
-   - The service will use the start command: `node bot/index.js`
+   - **Important**: Leave **Root Directory** empty (or set to `/`) - this ensures `package.json` at the root is available during build
+   - Railway will automatically detect `bot/railway.json` from the repo root
+   - The service will use the start command: `node bot/index.js` (from `bot/railway.json`)
 
 #### 2. Create Dashboard Service
 
@@ -187,9 +187,9 @@ Both services share code from the `shared/` directory and use the same MongoDB d
 2. Select the **same repository** as the Bot Service
 3. **Configure the Dashboard Service**:
    - Go to the service settings
-   - Set **Root Directory** to: `dashboard`
-   - Railway will automatically detect `dashboard/railway.json`
-   - The service will use the start command: `node dashboard/server.js`
+   - **Important**: Leave **Root Directory** empty (or set to `/`) - this ensures `package.json` at the root is available during build
+   - Railway will automatically detect `dashboard/railway.json` from the repo root
+   - The service will use the start command: `node dashboard/server.js` (from `dashboard/railway.json`)
 
 #### 3. Configure Watch Paths (Recommended)
 
@@ -305,12 +305,16 @@ ADMIN_ROLE_ID=your_admin_role_id
 - `bot/railway.json` - Bot service configuration
 - `dashboard/railway.json` - Dashboard service configuration
 
-Both files are automatically detected when the Root Directory is set correctly.
+**Important**: When Root Directory is set to root (`/`), you may need to manually specify the config file path in Railway service settings:
+- For Bot Service: In service settings → Config File, specify `bot/railway.json`
+- For Dashboard Service: In service settings → Config File, specify `dashboard/railway.json`
+
+Alternatively, Railway may auto-detect the correct config file based on the start command. If auto-detection doesn't work, manually link the config file as described above.
 
 ### Troubleshooting Railway Deployment
 
 - **Service not starting?** Check the deployment logs in Railway dashboard
-- **Build failing?** Ensure Root Directory is set correctly (`bot` or `dashboard`)
+- **Build failing with "package.json not found"?** Ensure Root Directory is **empty** (root `/`), not set to `bot` or `dashboard`. The root `package.json` must be accessible during build.
 - **Environment variables not working?** Verify they're set in the correct service's environment variables section
 - **Both services rebuilding unnecessarily?** Configure Watch Paths as described above
 - **Bot not connecting?** Check that `DISCORD_TOKEN` is set correctly in Bot Service
