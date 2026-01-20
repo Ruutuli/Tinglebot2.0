@@ -523,29 +523,33 @@ initWeather();
 // ============================================================================
 
 /**
- * Calculates the current weather day bounds (8am to 8am)
+ * Calculates the current weather day bounds (8am to 8am EST)
  */
 function calculateWeatherDayBounds() {
   const now = new Date();
-  const currentHour = now.getHours();
+  
+  // Get current time in EST
+  const estString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+  const estNow = new Date(estString);
+  const currentHour = estNow.getHours();
   
   let weatherDayStart, weatherDayEnd;
   
   if (currentHour >= 8) {
-    // If it's 8am or later, the weather day started at 8am today
-    weatherDayStart = new Date(now);
+    // If it's 8am or later EST, the weather day started at 8am EST today
+    weatherDayStart = new Date(estNow);
     weatherDayStart.setHours(8, 0, 0, 0);
     
-    weatherDayEnd = new Date(now);
+    weatherDayEnd = new Date(estNow);
     weatherDayEnd.setDate(weatherDayEnd.getDate() + 1);
     weatherDayEnd.setHours(8, 0, 0, 0);
   } else {
-    // If it's before 8am, the weather day started at 8am yesterday
-    weatherDayStart = new Date(now);
+    // If it's before 8am EST, the weather day started at 8am EST yesterday
+    weatherDayStart = new Date(estNow);
     weatherDayStart.setDate(weatherDayStart.getDate() - 1);
     weatherDayStart.setHours(8, 0, 0, 0);
     
-    weatherDayEnd = new Date(now);
+    weatherDayEnd = new Date(estNow);
     weatherDayEnd.setHours(8, 0, 0, 0);
   }
   

@@ -85,18 +85,23 @@ async function checkExpiredRequests(client) {
 
 // Function to start the expiration check interval
 function startExpirationChecks(client) {
-  // Function to calculate time until next 8 AM
+  // Function to calculate time until next 8 AM EST
   function getTimeUntilNext8AM() {
     const now = new Date();
-    const next8AM = new Date(now);
+    // Get current time in EST
+    const estString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+    const estNow = new Date(estString);
+    const next8AM = new Date(estNow);
     next8AM.setHours(8, 0, 0, 0);
     
-    // If it's already past 8 AM, schedule for next day
-    if (now > next8AM) {
+    // If it's already past 8 AM EST, schedule for next day
+    if (estNow > next8AM) {
       next8AM.setDate(next8AM.getDate() + 1);
     }
     
-    return next8AM.getTime() - now.getTime();
+    // Convert back to UTC for time calculation
+    const next8AMUTC = new Date(next8AM.toLocaleString("en-US", { timeZone: "UTC" }));
+    return next8AMUTC.getTime() - now.getTime();
   }
 
   // Function to schedule next check

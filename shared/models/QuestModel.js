@@ -1367,7 +1367,9 @@ questSchema.methods.checkTimeExpiration = function() {
         return false;
     }
     
+    // Convert current time to EST for consistent timezone handling
     const now = new Date();
+    const nowEST = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
     const startDateTime = new Date(startDate);
     const timeLimit = this.timeLimit.toLowerCase();
     
@@ -1388,7 +1390,7 @@ questSchema.methods.checkTimeExpiration = function() {
     }
     
     const expirationTime = new Date(startDateTime.getTime() + durationMs);
-    return now > expirationTime;
+    return nowEST > expirationTime;
 };
 
 // ------------------- Token Reward Normalization ------------------

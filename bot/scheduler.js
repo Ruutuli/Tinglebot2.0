@@ -125,7 +125,7 @@ try {
    dotenv.config({ path: rootEnvPath });
  }
 } catch (error) {
- logger.error('SYSTEM', `Failed to load .env:`, error.message);
+ logger.error('SYSTEM', `[scheduler.js]❌ Failed to load .env:`, error.message);
  dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 }
 
@@ -146,7 +146,7 @@ function createCronJob(
     await jobFunction();
    } catch (error) {
     handleError(error, "scheduler.js");
-    logger.error('SCHEDULER', `${jobName} failed`, error.message);
+    logger.error('SCHEDULER', `[scheduler.js]❌ ${jobName} failed:`, error.message);
    }
   },
   { timezone }
@@ -176,11 +176,18 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
  return embed;
 }
 
+// ------------------- getESTDate ------------------
+// Converts a date to EST timezone
+function getESTDate(date = new Date()) {
+ return new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+}
+
 // ============================================================================
 // ------------------- Helper Functions -------------------
 // ============================================================================
 
-// Helper function to get the appropriate village channel ID
+// ------------------- getVillageChannelId ------------------
+// Gets the appropriate village channel ID
 function getVillageChannelId(villageName) {
   // Capitalize the village name to match the TOWNHALL_CHANNELS keys
   const capitalizedVillage = villageName.charAt(0).toUpperCase() + villageName.slice(1).toLowerCase();
@@ -199,13 +206,14 @@ async function applyWeatherDamage(villageName, weather) {
     }
 
     // Check if damage was already applied today
-    // Compare lastDamageTime to today's date (same day = already applied)
+    // Compare lastDamageTime to today's date in EST (same day = already applied)
     if (village.lastDamageTime) {
       const lastDamageDate = new Date(village.lastDamageTime);
-      const today = new Date();
-      const isSameDay = lastDamageDate.getDate() === today.getDate() &&
-                        lastDamageDate.getMonth() === today.getMonth() &&
-                        lastDamageDate.getFullYear() === today.getFullYear();
+      const lastDamageDateEST = getESTDate(lastDamageDate);
+      const todayEST = getESTDate(new Date());
+      const isSameDay = lastDamageDateEST.getDate() === todayEST.getDate() &&
+                        lastDamageDateEST.getMonth() === todayEST.getMonth() &&
+                        lastDamageDateEST.getFullYear() === todayEST.getFullYear();
       
       if (isSameDay) {
         logger.info('WEATHER', `Weather damage already applied to ${villageName} today, skipping`);
@@ -300,16 +308,21 @@ async function applyWeatherDamage(villageName, weather) {
       logger.info('WEATHER', `No weather damage for ${villageName} - weather conditions do not cause damage`);
     }
   } catch (error) {
-    logger.error('WEATHER', `Error in applyWeatherDamage for ${villageName}: ${error.message}`, error.stack);
+    logger.error('WEATHER', `[scheduler.js]❌ Error in applyWeatherDamage for ${villageName}: ${error.message}`, error.stack);
+    handleError(error, "scheduler.js", {
+      functionName: 'applyWeatherDamage',
+      villageName: villageName
+    });
     throw error;
   }
 }
 
-// Helper function to check if current time is within a valid weather posting window
+// ------------------- isWithinWeatherPostingWindow ------------------
+// Checks if current time is within a valid weather posting window
 // Valid windows: 8:00-8:15 AM EST or 8:00-8:15 PM EST
 function isWithinWeatherPostingWindow() {
   const now = new Date();
-  const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const estTime = getESTDate(now);
   const currentHour = estTime.getHours();
   const currentMinute = estTime.getMinutes();
   
@@ -359,13 +372,13 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
    weather = await getCurrentWeather(village);
   }
   if (!weather) {
-   logger.error('WEATHER', `Failed to get weather for ${village} - getCurrentWeather returned null/undefined`);
+   logger.error('WEATHER', `[scheduler.js]❌ Failed to get weather for ${village} - getCurrentWeather returned null/undefined`);
    return false;
   }
 
   const channelId = TOWNHALL_CHANNELS[village];
   if (!channelId) {
-   logger.error('WEATHER', `No channel ID configured for ${village} in TOWNHALL_CHANNELS`);
+   logger.error('WEATHER', `[scheduler.js]❌ No channel ID configured for ${village} in TOWNHALL_CHANNELS`);
    return false;
   }
 
@@ -373,16 +386,16 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
   let channel = client.channels.cache.get(channelId);
 
   if (!channel) {
-   logger.error('WEATHER', `Channel not found in cache: ${channelId} for ${village}. Attempting fetch...`);
+   logger.error('WEATHER', `[scheduler.js]❌ Channel not found in cache: ${channelId} for ${village}. Attempting fetch...`);
    try {
     channel = await client.channels.fetch(channelId);
     if (!channel) {
-     logger.error('WEATHER', `Channel ${channelId} does not exist for ${village}`);
+     logger.error('WEATHER', `[scheduler.js]❌ Channel ${channelId} does not exist for ${village}`);
      return false;
     }
     logger.info('WEATHER', `Successfully fetched channel ${channelId} for ${village}`);
    } catch (fetchError) {
-    logger.error('WEATHER', `Failed to fetch channel ${channelId} for ${village}: ${fetchError.message}`);
+    logger.error('WEATHER', `[scheduler.js]❌ Failed to fetch channel ${channelId} for ${village}: ${fetchError.message}`);
     return false;
    }
   }
@@ -406,7 +419,7 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
    try {
      await applyWeatherDamage(village, weather);
    } catch (damageError) {
-     logger.error('WEATHER', `Error applying weather damage to ${village}: ${damageError.message}`);
+     logger.error('WEATHER', `[scheduler.js]❌ Error applying weather damage to ${village}: ${damageError.message}`);
      // Don't fail weather posting if damage application fails
    }
   }
@@ -414,7 +427,7 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
   logger.success('WEATHER', `Successfully posted weather for ${village}${isReminder ? ' (reminder)' : ''}`);
   return true;
  } catch (error) {
-  logger.error('WEATHER', `Error posting weather for ${village}: ${error.message}`, error.stack);
+  logger.error('WEATHER', `[scheduler.js]❌ Error posting weather for ${village}: ${error.message}`, error.stack);
   handleError(error, "scheduler.js", {
    commandName: 'postWeatherForVillage',
    village: village
@@ -460,7 +473,7 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
     }
    } catch (error) {
     results.push({ village, success: false, reason: error.message });
-    logger.error('WEATHER', `Failed to post weather for ${village}: ${error.message}`);
+    logger.error('WEATHER', `[scheduler.js]❌ Failed to post weather for ${village}: ${error.message}`);
    }
   }
 
@@ -468,7 +481,7 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
   const successVillages = results.filter(r => r.success).map(r => r.village);
   
   if (failedVillages.length > 0) {
-   logger.error('WEATHER', `Failed to post weather for: ${failedVillages.join(', ')}`);
+   logger.error('WEATHER', `[scheduler.js]❌ Failed to post weather for: ${failedVillages.join(', ')}`);
   }
   
   if (postedCount > 0) {
@@ -481,17 +494,17 @@ async function processWeatherForAllVillages(client, checkExisting = false, conte
        villages: weatherDataForNotifications
      });
     } catch (notificationError) {
-     logger.error('WEATHER', `Failed to send daily weather notifications: ${notificationError.message}`);
+     logger.error('WEATHER', `[scheduler.js]❌ Failed to send daily weather notifications: ${notificationError.message}`);
      // Don't throw - notification failures shouldn't break weather posting
     }
    }
   } else if (failedVillages.length === villages.length && villages.length > 0) {
-   logger.error('WEATHER', `No weather posted - all villages failed${context ? ` (${context})` : ''}`);
+   logger.error('WEATHER', `[scheduler.js]❌ No weather posted - all villages failed${context ? ` (${context})` : ''}`);
   }
 
   return postedCount;
  } catch (error) {
-  logger.error('WEATHER', `Process failed${context ? ` (${context})` : ''}`, error.message);
+  logger.error('WEATHER', `[scheduler.js]❌ Process failed${context ? ` (${context})` : ''}:`, error.message);
   handleError(error, "scheduler.js", {
    commandName: 'processWeatherForAllVillages',
    context: context
@@ -516,7 +529,7 @@ async function checkAndPostWeatherIfNeeded(client) {
   
   if (!windowCheck.valid) {
    const now = new Date();
-   const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+   const estTime = getESTDate(now);
    const currentHour = estTime.getHours();
    const currentMinute = estTime.getMinutes();
    logger.info('WEATHER', `Backup check skipped - outside valid posting window (${currentHour}:${String(currentMinute).padStart(2, '0')} EST). Valid windows: 8:00-8:15 AM or 8:00-8:15 PM EST`);
@@ -526,7 +539,7 @@ async function checkAndPostWeatherIfNeeded(client) {
   logger.info('WEATHER', `Backup check within valid ${windowCheck.window} posting window, proceeding...`);
   return await processWeatherForAllVillages(client, true, 'backup check');
  } catch (error) {
-  logger.error('WEATHER', 'Backup check failed');
+  logger.error('WEATHER', '[scheduler.js]❌ Backup check failed');
   handleError(error, "scheduler.js", {
    commandName: 'checkAndPostWeatherIfNeeded'
   });
@@ -540,7 +553,7 @@ async function checkAndPostWeatherOnRestart(client) {
   
   if (!windowCheck.valid) {
    const now = new Date();
-   const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+   const estTime = getESTDate(now);
    const currentHour = estTime.getHours();
    const currentMinute = estTime.getMinutes();
    logger.info('WEATHER', `Restart check skipped - outside valid posting window (${currentHour}:${String(currentMinute).padStart(2, '0')} EST). Valid windows: 8:00-8:15 AM or 8:00-8:15 PM EST`);
@@ -555,7 +568,7 @@ async function checkAndPostWeatherOnRestart(client) {
   // - Generate and post if weather doesn't exist
   return await processWeatherForAllVillages(client, true, 'restart check');
  } catch (error) {
-  logger.error('WEATHER', 'Restart check failed');
+  logger.error('WEATHER', '[scheduler.js]❌ Restart check failed');
   handleError(error, "scheduler.js", {
    commandName: 'checkAndPostWeatherOnRestart'
   });
@@ -579,7 +592,6 @@ async function cleanupExpiredRaids(client = null) {
   
   logger.info('CLEANUP', `Found ${expiredRaids.length} expired raid(s)`);
   
-  const { EmbedBuilder } = require('discord.js');
   let cleanedCount = 0;
   
   for (const raid of expiredRaids) {
@@ -657,7 +669,7 @@ async function cleanupExpiredRaids(client = null) {
     logger.success('RAID', `Cleaned up ${raid.raidId}`);
     
    } catch (raidError) {
-    logger.error('RAID', `Error cleaning up ${raid.raidId}`);
+    logger.error('RAID', `[scheduler.js]❌ Error cleaning up ${raid.raidId}`);
     handleError(raidError, "scheduler.js", {
      raidId: raid.raidId,
      functionName: 'cleanupExpiredRaids'
@@ -671,7 +683,7 @@ async function cleanupExpiredRaids(client = null) {
   
   return { expiredCount: cleanedCount };
  } catch (error) {
-  logger.error('CLEANUP', 'Error cleaning up expired raids');
+  logger.error('CLEANUP', '[scheduler.js]❌ Error cleaning up expired raids');
   handleError(error, "scheduler.js");
   return { expiredCount: 0 };
  }
@@ -698,7 +710,7 @@ async function cleanupOldRuuGameSessions() {
   
   return result;
  } catch (error) {
-  logger.error('CLEANUP', 'Error cleaning up RuuGame sessions');
+  logger.error('CLEANUP', '[scheduler.js]❌ Error cleaning up RuuGame sessions');
   handleError(error, "scheduler.js");
   return { deletedCount: 0, finishedCount: 0, expiredCount: 0 };
  }
@@ -723,7 +735,7 @@ async function cleanupFinishedMinigameSessions() {
   
   return result;
  } catch (error) {
-  logger.error('CLEANUP', 'Error cleaning up Minigame sessions');
+  logger.error('CLEANUP', '[scheduler.js]❌ Error cleaning up Minigame sessions');
   handleError(error, "scheduler.js");
   return { deletedCount: 0, finishedCount: 0 };
  }
@@ -752,7 +764,7 @@ async function runDailyCleanupTasks(client) {
   
   return results;
  } catch (error) {
-  logger.error('CLEANUP', 'Error during daily cleanup', error);
+  logger.error('CLEANUP', '[scheduler.js]❌ Error during daily cleanup', error);
   handleError(error, 'scheduler.js');
   return [];
  }
@@ -768,7 +780,7 @@ async function distributeMonthlyBoostRewards(client) {
   try {
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) {
-      logger.error('BOOST', 'Guild not found');
+      logger.error('BOOST', '[scheduler.js]❌ Guild not found');
       return { success: false, error: 'Guild not found' };
     }
 
@@ -787,7 +799,8 @@ async function distributeMonthlyBoostRewards(client) {
     
     const User = require('../shared/models/UserModel');
     const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const nowEST = getESTDate(now);
+    const currentMonth = `${nowEST.getFullYear()}-${String(nowEST.getMonth() + 1).padStart(2, '0')}`;
     
     let rewardedCount = 0;
     let totalTokensDistributed = 0;
@@ -830,7 +843,6 @@ async function distributeMonthlyBoostRewards(client) {
           try {
             const announcementChannel = await client.channels.fetch(boostAnnouncementChannelId);
             if (announcementChannel) {
-              const { EmbedBuilder } = require('discord.js');
               const announcementEmbed = new EmbedBuilder()
                 .setColor('#ff73fa')
                 .setTitle('💎 Nitro Boost Reward!')
@@ -853,7 +865,12 @@ async function distributeMonthlyBoostRewards(client) {
               logger.info('BOOST', `Posted boost reward announcement for ${member.user.tag} in channel ${boostAnnouncementChannelId}`);
             }
           } catch (announcementError) {
-            logger.error('BOOST', `Error posting boost reward announcement for ${member.user.tag}`, announcementError);
+            logger.error('BOOST', `[scheduler.js]❌ Error posting boost reward announcement for ${member.user.tag}`, announcementError);
+            handleError(announcementError, "scheduler.js", {
+              functionName: 'distributeMonthlyBoostRewards',
+              operation: 'boostAnnouncement',
+              memberTag: member.user.tag
+            });
           }
         } else if (result.alreadyRewarded) {
           alreadyRewardedCount++;
@@ -875,7 +892,6 @@ async function distributeMonthlyBoostRewards(client) {
       try {
         const logChannel = await client.channels.fetch(logChannelId);
         if (logChannel) {
-          const { EmbedBuilder } = require('discord.js');
           const summaryEmbed = new EmbedBuilder()
             .setColor('#ff73fa')
             .setTitle('💎 Monthly Nitro Boost Rewards Distributed')
@@ -910,7 +926,11 @@ async function distributeMonthlyBoostRewards(client) {
           await logChannel.send({ embeds: [summaryEmbed] });
         }
       } catch (logError) {
-        logger.error('BOOST', 'Error sending boost reward summary to log channel', logError);
+        logger.error('BOOST', '[scheduler.js]❌ Error sending boost reward summary to log channel', logError);
+        handleError(logError, "scheduler.js", {
+          functionName: 'distributeMonthlyBoostRewards',
+          operation: 'logChannelSummary'
+        });
       }
     }
     
@@ -926,7 +946,7 @@ async function distributeMonthlyBoostRewards(client) {
     };
     
   } catch (error) {
-    logger.error('BOOST', 'Error during boost reward distribution', error);
+    logger.error('BOOST', '[scheduler.js]❌ Error during boost reward distribution', error);
     handleError(error, 'scheduler.js', {
       commandName: 'distributeMonthlyBoostRewards'
     });
@@ -946,12 +966,19 @@ const BIRTHDAY_ROLE_ID = '658152196642308111';
 const MOD_BIRTHDAY_ROLE_ID = '1095909468941864990';
 const BIRTHDAY_ANNOUNCEMENT_CHANNEL_ID = '606004354419392513';
 
+// Birthday messages
+const BIRTHDAY_MESSAGES = [
+  "May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way!",
+  "On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding!",
+  "As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace!",
+];
+
 async function handleBirthdayRoleAssignment(client) {
   logger.info('SCHEDULER', 'Starting birthday role assignment check...');
   
   try {
     const now = new Date();
-    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const estNow = getESTDate(now);
     const today = estNow.toISOString().slice(5, 10); // MM-DD format
     const month = estNow.getMonth() + 1;
     const day = estNow.getDate();
@@ -1058,23 +1085,16 @@ async function sendBirthdayAnnouncements(client, birthdayUsers) {
     }
     
     const now = new Date();
-    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const estNow = getESTDate(now);
     const realWorldDate = estNow.toLocaleString("en-US", {
       month: "long",
       day: "numeric",
     });
     const hyruleanDate = convertToHyruleanDate(estNow);
     
-    // Create birthday messages
-    const birthdayMessages = [
-      "May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way!",
-      "On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding!",
-      "As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace!",
-    ];
-    
     for (const birthdayUser of birthdayUsers) {
       try {
-        const randomMessage = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
+        const randomMessage = BIRTHDAY_MESSAGES[Math.floor(Math.random() * BIRTHDAY_MESSAGES.length)];
         
         const embed = new EmbedBuilder()
           .setColor("#FF709B")
@@ -1132,7 +1152,7 @@ async function handleBirthdayRoleRemoval(client) {
   try {
     // Calculate yesterday's date in EST timezone
     const now = new Date();
-    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const estNow = getESTDate(now);
     const yesterday = new Date(estNow);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayMonth = yesterday.getMonth() + 1;
@@ -1214,9 +1234,7 @@ async function executeBirthdayAnnouncements(client) {
  logger.info('SCHEDULER', 'Starting birthday announcement check...');
  
  const now = new Date();
- const estNow = new Date(
-  now.toLocaleString("en-US", { timeZone: "America/New_York" })
- );
+ const estNow = getESTDate(now);
  const today = estNow.toISOString().slice(5, 10);
  const guildIds = [process.env.GUILD_ID];
  
@@ -1226,12 +1244,6 @@ async function executeBirthdayAnnouncements(client) {
   [process.env.GUILD_ID]:
    process.env.BIRTHDAY_CHANNEL_ID || "606004354419392513",
  };
-
- const birthdayMessages = [
-  "May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way!",
-  "On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding!",
-  "As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace!",
- ];
 
  const realWorldDate = estNow.toLocaleString("en-US", {
   month: "long",
@@ -1291,7 +1303,7 @@ async function executeBirthdayAnnouncements(client) {
    try {
     const user = await client.users.fetch(character.userId);
     const randomMessage =
-     birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
+     BIRTHDAY_MESSAGES[Math.floor(Math.random() * BIRTHDAY_MESSAGES.length)];
 
     // Give character a random birthday gift (1% chance for Spirit Orb, 99% chance for cake)
     const isLuckyRoll = Math.random() < 0.01; // 1% chance
@@ -1468,7 +1480,7 @@ async function executeBirthdayAnnouncements(client) {
    try {
     const user = await client.users.fetch(modCharacter.userId);
     const randomMessage =
-     birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
+     BIRTHDAY_MESSAGES[Math.floor(Math.random() * BIRTHDAY_MESSAGES.length)];
 
     const embed = new EmbedBuilder()
      .setColor("#FF709B")
@@ -1622,7 +1634,7 @@ async function handleDebuffExpiry(client) {
 async function handleBuffExpiry(client) {
   const now = new Date();
   // Get current time in EST
-  const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const estDate = getESTDate(now);
   // Create midnight EST in UTC (5 AM UTC = midnight EST)
   const midnightEST = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 5, 0, 0, 0));
   
@@ -1917,7 +1929,8 @@ async function handleQuestExpirationAtMidnight(client = null) {
     const { updateQuestEmbed } = require('./modules/helpWantedModule');
     
     const now = new Date();
-    const yesterday = new Date(now);
+    const nowEST = getESTDate(now);
+    const yesterday = new Date(nowEST);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayDate = yesterday.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     
@@ -2148,7 +2161,7 @@ async function postQuestToChannel(client, quest, context = '') {
 async function checkAndPostMissedQuests(client) {
   try {
     const now = new Date();
-    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const estTime = getESTDate(now);
     const currentHour = estTime.getHours();
     const currentMinute = estTime.getMinutes();
     
@@ -2247,7 +2260,7 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     
     // Check if it's after 12pm EST - if so, don't post art/writing quests
-    const estHour = parseInt(now.toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}));
+    const estHour = getESTDate(now).getHours();
     const isAfterNoon = estHour >= 12;
     
     const questsToPost = await HelpWantedQuest.find({
@@ -2363,7 +2376,7 @@ async function handleBloodMoonStart(client) {
 
   // Check if today is specifically the day BEFORE a Blood Moon (not the actual day or day after)
   const now = new Date();
-  const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const estTime = getESTDate(now);
   // Normalize date by stripping time components
   const today = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
   
@@ -2431,7 +2444,7 @@ async function handleBloodMoonEnd(client) {
 
 function checkBloodMoonTransition() {
   const now = new Date();
-  const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const estTime = getESTDate(now);
   const today = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
@@ -2497,8 +2510,9 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
     logger.info('SCHEDULER', 'Checking if monthly boost rewards need to be distributed...');
     
     const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const currentDay = now.getDate();
+    const nowEST = getESTDate(now);
+    const currentMonth = `${nowEST.getFullYear()}-${String(nowEST.getMonth() + 1).padStart(2, '0')}`;
+    const currentDay = nowEST.getDate();
     
     // Only auto-distribute if we're past the 1st of the month
     if (currentDay === 1) {
