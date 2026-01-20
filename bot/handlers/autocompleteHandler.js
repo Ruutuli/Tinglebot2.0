@@ -979,21 +979,31 @@ async function handleCharacterBasedCommandsAutocomplete(
 
     const userId = interaction.user.id;
 
-    // Check cache first
+    // Check cache first (including stale cache for fallback)
     const cacheKey = userId;
     const cached = characterListCache.get(cacheKey);
     const now = Date.now();
     let characters = [];
     let modCharacters = [];
+    const cacheAge = cached ? (now - cached.timestamp) : null;
+    const isCacheFresh = cached && cacheAge < CHARACTER_LIST_CACHE_TTL;
+    const isCacheStale = cached && cacheAge >= CHARACTER_LIST_CACHE_TTL;
 
-    if (cached && (now - cached.timestamp) < CHARACTER_LIST_CACHE_TTL) {
-      // Use cached data
+    if (isCacheFresh) {
+      // Use fresh cached data - respond immediately
       characters = cached.characters || [];
       modCharacters = cached.modCharacters || [];
+    } else if (isCacheStale) {
+      // Cache exists but is stale - use it immediately as fallback
+      console.log(`[handleCharacterBasedCommandsAutocomplete]: Using stale cache for ${commandName}, userId: ${userId} (age: ${Math.floor(cacheAge / 1000)}s)`);
+      characters = cached.characters || [];
+      modCharacters = cached.modCharacters || [];
+      // Don't wait for refresh - respond with stale data immediately
     } else {
-      // Add timeout protection for database queries (2.8 seconds max)
+      // No cache available - must query database with timeout
+      // Add timeout protection for database queries (2.9 seconds max for Railway)
       const queryTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 2800)
+        setTimeout(() => reject(new Error('Database query timeout')), 2900)
       );
 
       // Fetch all characters owned by the user (both regular and mod characters) with timeout
@@ -1018,19 +1028,20 @@ async function handleCharacterBasedCommandsAutocomplete(
           timestamp: now
         });
         
-        // Clean up cache entry after TTL expires
+        // Clean up cache entry after extended period (5 minutes) to allow stale cache fallback
+        // Cache is considered "fresh" for CHARACTER_LIST_CACHE_TTL (45s), but kept longer for fallback
         setTimeout(() => {
           characterListCache.delete(cacheKey);
-        }, CHARACTER_LIST_CACHE_TTL);
+        }, 5 * 60 * 1000); // 5 minutes
       } catch (queryError) {
         console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error:`, queryError);
         if (queryError.message === 'Database query timeout') {
           console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);
           
-          // Check if we have stale cache data we can use as fallback
+          // Check if we have stale cache data we can use as fallback (shouldn't happen since we check above, but safety net)
           const staleCache = characterListCache.get(cacheKey);
           if (staleCache) {
-            console.log(`[handleCharacterBasedCommandsAutocomplete]: Using stale cache for ${commandName}, userId: ${userId}`);
+            console.log(`[handleCharacterBasedCommandsAutocomplete]: Using stale cache as fallback for ${commandName}, userId: ${userId}`);
             characters = staleCache.characters || [];
             modCharacters = staleCache.modCharacters || [];
             // Don't delete cache - keep it for next time as fallback
