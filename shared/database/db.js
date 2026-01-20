@@ -349,23 +349,26 @@ const fetchCharacterById = async (characterId) => {
 const fetchCharactersByUserId = async (userId, fields = null) => {
   try {
     // Connection is established at startup - use directly to avoid overhead
-    // Only reconnect if query fails (mongoose handles reconnection automatically)
-    let query = Character.find({ userId });
+    // Use lean() for faster queries and hint() to ensure index usage
+    let query = Character.find({ userId }).lean();
     if (fields && Array.isArray(fields)) {
       query = query.select(fields.join(' '));
     }
-    const characters = await query.lean().exec();
+    // Hint to use userId index for faster queries on Railway
+    query = query.hint({ userId: 1 });
+    const characters = await query.exec();
     return characters;
   } catch (error) {
     // If query fails, try reconnecting once
     if (mongoose.connection.readyState !== 1) {
       await connectToTinglebot();
       // Retry query after reconnection
-      let query = Character.find({ userId });
+      let query = Character.find({ userId }).lean();
       if (fields && Array.isArray(fields)) {
         query = query.select(fields.join(' '));
       }
-      return await query.lean().exec();
+      query = query.hint({ userId: 1 });
+      return await query.exec();
     }
     handleError(error, "db.js");
     throw error;
@@ -687,23 +690,26 @@ const fetchModCharacterByName = async (characterName) => {
 const fetchModCharactersByUserId = async (userId, fields = null) => {
  try {
   // Connection is established at startup - use directly to avoid overhead
-  // Only reconnect if query fails (mongoose handles reconnection automatically)
-  let query = ModCharacter.find({ userId: userId });
+  // Use lean() for faster queries and hint() to ensure index usage
+  let query = ModCharacter.find({ userId: userId }).lean();
   if (fields && Array.isArray(fields)) {
     query = query.select(fields.join(' '));
   }
-  const modCharacters = await query.lean().exec();
+  // Hint to use userId index for faster queries on Railway
+  query = query.hint({ userId: 1 });
+  const modCharacters = await query.exec();
   return modCharacters;
  } catch (error) {
   // If query fails, try reconnecting once
   if (mongoose.connection.readyState !== 1) {
     await connectToTinglebot();
     // Retry query after reconnection
-    let query = ModCharacter.find({ userId: userId });
+    let query = ModCharacter.find({ userId: userId }).lean();
     if (fields && Array.isArray(fields)) {
       query = query.select(fields.join(' '));
     }
-    return await query.lean().exec();
+    query = query.hint({ userId: 1 });
+    return await query.exec();
   }
   handleError(error, "db.js", {
    function: "fetchModCharactersByUserId",

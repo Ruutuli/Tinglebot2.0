@@ -979,8 +979,11 @@ async function handleCharacterBasedCommandsAutocomplete(
 
     const userId = interaction.user.id;
     const requiredFields = ['name', 'currentVillage', 'job'];
+    // Use longer timeout on Railway due to network latency, but stay under Discord's 3s limit
+    const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || process.env.NODE_ENV === 'production';
+    const timeoutMs = isRailway ? 2800 : 2500; // 2.8 seconds on Railway, 2.5 seconds locally
     const queryTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Database query timeout')), 2500)
+      setTimeout(() => reject(new Error('Database query timeout')), timeoutMs)
     );
 
     try {
