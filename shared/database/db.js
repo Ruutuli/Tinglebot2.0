@@ -358,11 +358,28 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
     if (fields && Array.isArray(fields)) {
       query = query.select(fields.join(' '));
     }
-    // Hint to use userId index for faster queries on Railway
-    query = query.hint({ userId: 1 });
     
+    console.log(`[DB-DEBUG] fetchCharactersByUserId - Query built, about to add hint, connectionState: ${mongoose.connection.readyState}`);
+    
+    // Hint to use userId index for faster queries on Railway
+    // Try-catch around hint in case index doesn't exist
+    try {
+      query = query.hint({ userId: 1 });
+      console.log(`[DB-DEBUG] fetchCharactersByUserId - Hint added successfully`);
+    } catch (hintError) {
+      console.error(`[DB-DEBUG] fetchCharactersByUserId - Hint failed, continuing without hint:`, hintError.message);
+    }
+    
+    console.log(`[DB-DEBUG] fetchCharactersByUserId - About to execute query, connectionState: ${mongoose.connection.readyState}`);
     const execStartTime = Date.now();
-    const characters = await query.exec();
+    
+    // Add a timeout wrapper to detect if exec() hangs
+    const execPromise = query.exec();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Query exec() timeout - query.exec() never resolved')), 3000)
+    );
+    
+    const characters = await Promise.race([execPromise, timeoutPromise]);
     const execTime = Date.now() - execStartTime;
     const totalTime = Date.now() - queryStartTime;
     
@@ -715,11 +732,28 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
   if (fields && Array.isArray(fields)) {
     query = query.select(fields.join(' '));
   }
-  // Hint to use userId index for faster queries on Railway
-  query = query.hint({ userId: 1 });
   
+  console.log(`[DB-DEBUG] fetchModCharactersByUserId - Query built, about to add hint, connectionState: ${mongoose.connection.readyState}`);
+  
+  // Hint to use userId index for faster queries on Railway
+  // Try-catch around hint in case index doesn't exist
+  try {
+    query = query.hint({ userId: 1 });
+    console.log(`[DB-DEBUG] fetchModCharactersByUserId - Hint added successfully`);
+  } catch (hintError) {
+    console.error(`[DB-DEBUG] fetchModCharactersByUserId - Hint failed, continuing without hint:`, hintError.message);
+  }
+  
+  console.log(`[DB-DEBUG] fetchModCharactersByUserId - About to execute query, connectionState: ${mongoose.connection.readyState}`);
   const execStartTime = Date.now();
-  const modCharacters = await query.exec();
+  
+  // Add a timeout wrapper to detect if exec() hangs
+  const execPromise = query.exec();
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Query exec() timeout - query.exec() never resolved')), 3000)
+  );
+  
+  const modCharacters = await Promise.race([execPromise, timeoutPromise]);
   const execTime = Date.now() - execStartTime;
   const totalTime = Date.now() - queryStartTime;
   

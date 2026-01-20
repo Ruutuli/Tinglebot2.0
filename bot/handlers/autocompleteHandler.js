@@ -1003,6 +1003,7 @@ async function handleCharacterBasedCommandsAutocomplete(
     // Use longer timeout on Railway due to network latency, but stay under Discord's 3s limit
     const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || process.env.NODE_ENV === 'production';
     const timeoutMs = isRailway ? 2800 : 2500; // 2.8 seconds on Railway, 2.5 seconds locally
+    console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Railway detection: isRailway=${isRailway}, RAILWAY_ENVIRONMENT=${process.env.RAILWAY_ENVIRONMENT}, NODE_ENV=${process.env.NODE_ENV}`);
     
     const queryStartTime = Date.now();
     console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Starting queries with ${timeoutMs}ms timeout`);
