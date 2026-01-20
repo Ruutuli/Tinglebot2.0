@@ -348,7 +348,10 @@ const fetchCharacterById = async (characterId) => {
 // ------------------- fetchCharactersByUserId -------------------
 const fetchCharactersByUserId = async (userId, fields = null) => {
   try {
-    await connectToTinglebot();
+    // Only connect if connection is not ready (avoid overhead on every query)
+    if (mongoose.connection.readyState !== 1) {
+      await connectToTinglebot();
+    }
     let query = Character.find({ userId });
     if (fields && Array.isArray(fields)) {
       query = query.select(fields.join(' '));
@@ -675,7 +678,10 @@ const fetchModCharacterByName = async (characterName) => {
 
 const fetchModCharactersByUserId = async (userId, fields = null) => {
  try {
-  await connectToTinglebot();
+  // Only connect if connection is not ready (avoid overhead on every query)
+  if (mongoose.connection.readyState !== 1) {
+    await connectToTinglebot();
+  }
   let query = ModCharacter.find({ userId: userId });
   if (fields && Array.isArray(fields)) {
     query = query.select(fields.join(' '));
