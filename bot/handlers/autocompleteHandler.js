@@ -5721,15 +5721,19 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
     );
 
     // Respond with filtered choices (limit to 25)
-    await interaction.respond(filteredChoices.slice(0, 25));
+    await safeRespondWithValidation(interaction, filteredChoices.slice(0, 25));
   } catch (error) {
-    handleError(error, "autocompleteHandler.js");
-    
-    // Log and handle errors gracefully
-    console.error(
-      "[handleViewInventoryAutocomplete]: Error handling inventory autocomplete:",
-      error
-    );
+    // Don't log expired interactions as errors (code 10062 is expected)
+    if (error.code !== 10062) {
+      handleError(error, "autocompleteHandler.js");
+      console.error(
+        "[handleViewInventoryAutocomplete]: Error handling inventory autocomplete:",
+        error
+      );
+    } else {
+      // Silently handle expired interactions
+      logger.info('INTERACTION', 'Autocomplete interaction expired in handleViewInventoryAutocomplete');
+    }
     await safeRespondWithError(interaction);
   }
 }

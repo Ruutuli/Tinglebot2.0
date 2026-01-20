@@ -433,6 +433,12 @@ async function handleError(error, source = "Unknown Source", context = {}) {
     return;
   }
   
+  // Skip logging for Discord interaction expiration errors (10062) - these are normal
+  if (error?.code === 10062) {
+    // Silently ignore - expired interactions are normal Discord behavior
+    return;
+  }
+  
   // Check error deduplication - skip if recently logged
   const shouldLog = shouldLogError(error, source);
   
