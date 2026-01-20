@@ -15,7 +15,7 @@
         },
         "restartPolicyType": "ON_FAILURE",
         "restartPolicyMaxRetries": 10,
-        "startCommand": "node server.js"
+        "startCommand": "cd dashboard && node server.js"
     }
 }
 
