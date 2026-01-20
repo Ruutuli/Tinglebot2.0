@@ -1001,70 +1001,87 @@ async function handleCharacterBasedCommandsAutocomplete(
       // Don't wait for refresh - respond with stale data immediately
     } else {
       // No cache available - must query database with timeout
-      // Add timeout protection for database queries (2.9 seconds max for Railway)
-      const queryTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 2900)
-      );
-
-      // Fetch all characters owned by the user (both regular and mod characters) with timeout
-      // Only fetch the fields needed for autocomplete: name, currentVillage, job
+      // Strategy: Try regular characters first (usually faster), then mod characters
+      // This allows partial results even if one query is slow
       const requiredFields = ['name', 'currentVillage', 'job'];
+      const queryTimeout = 2900; // 2.9 seconds max for Railway
       
       try {
-        const [charsResult, modCharsResult] = await Promise.race([
-          Promise.all([
+        // Try regular characters first with timeout
+        const regularCharsTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Regular characters query timeout')), queryTimeout)
+        );
+        
+        try {
+          characters = await Promise.race([
             fetchCharactersByUserId(userId, requiredFields),
-            fetchModCharactersByUserId(userId, requiredFields)
-          ]),
-          queryTimeout
-        ]);
-        characters = charsResult || [];
-        modCharacters = modCharsResult || [];
+            regularCharsTimeout
+          ]) || [];
+        } catch (regularError) {
+          console.warn(`[handleCharacterBasedCommandsAutocomplete]: Regular characters query failed for ${commandName}, userId: ${userId}:`, regularError.message);
+          characters = []; // Continue with empty, try mod characters
+        }
         
-        // Cache the results
-        characterListCache.set(cacheKey, {
-          characters,
-          modCharacters,
-          timestamp: now
-        });
+        // Try mod characters (with remaining time budget)
+        // Calculate remaining time: if regular chars took time, reduce timeout for mod chars
+        const modCharsTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Mod characters query timeout')), Math.max(1000, queryTimeout - 500))
+        );
         
-        // Clean up cache entry after extended period (5 minutes) to allow stale cache fallback
-        // Cache is considered "fresh" for CHARACTER_LIST_CACHE_TTL (45s), but kept longer for fallback
-        setTimeout(() => {
-          characterListCache.delete(cacheKey);
-        }, 5 * 60 * 1000); // 5 minutes
-      } catch (queryError) {
-        console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error:`, queryError);
-        if (queryError.message === 'Database query timeout') {
-          console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);
+        try {
+          modCharacters = await Promise.race([
+            fetchModCharactersByUserId(userId, requiredFields),
+            modCharsTimeout
+          ]) || [];
+        } catch (modError) {
+          console.warn(`[handleCharacterBasedCommandsAutocomplete]: Mod characters query failed for ${commandName}, userId: ${userId}:`, modError.message);
+          modCharacters = []; // Continue with empty
+        }
+        
+        // If we got any results (even partial), cache them for next time
+        if (characters.length > 0 || modCharacters.length > 0) {
+          // Cache the results (even if partial - better than nothing)
+          characterListCache.set(cacheKey, {
+            characters,
+            modCharacters,
+            timestamp: now
+          });
           
-          // Check if we have stale cache data we can use as fallback (shouldn't happen since we check above, but safety net)
-          const staleCache = characterListCache.get(cacheKey);
-          if (staleCache) {
-            console.log(`[handleCharacterBasedCommandsAutocomplete]: Using stale cache as fallback for ${commandName}, userId: ${userId}`);
-            characters = staleCache.characters || [];
-            modCharacters = staleCache.modCharacters || [];
-            // Don't delete cache - keep it for next time as fallback
-          } else {
-            // No cache available, respond with empty array
-            console.log(`[handleCharacterBasedCommandsAutocomplete]: No cache available for ${commandName}, responding with empty array`);
-            characters = [];
-            modCharacters = [];
-            try {
-              if (!interaction.responded && interaction.isAutocomplete()) {
-                await interaction.respond([]);
-              }
-            } catch (respondError) {
-              if (respondError.code !== 10062) {
-                console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding with empty array:`, respondError);
-              }
-            }
-            return;
-          }
+          // Clean up cache entry after extended period (5 minutes) to allow stale cache fallback
+          // Cache is considered "fresh" for CHARACTER_LIST_CACHE_TTL (45s), but kept longer for fallback
+          setTimeout(() => {
+            characterListCache.delete(cacheKey);
+          }, 5 * 60 * 1000); // 5 minutes
         } else {
-          // Other database errors - invalidate cache and respond with empty array
-          console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error for ${commandName}:`, queryError);
-          characterListCache.delete(cacheKey);
+          // Both queries failed - no results at all
+          console.log(`[handleCharacterBasedCommandsAutocomplete]: No cache available and all queries failed for ${commandName}, responding with empty array`);
+          try {
+            if (!interaction.responded && interaction.isAutocomplete()) {
+              await interaction.respond([]);
+            }
+          } catch (respondError) {
+            if (respondError.code !== 10062) {
+              console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding with empty array:`, respondError);
+            }
+          }
+          return;
+        }
+      } catch (queryError) {
+        // Unexpected error (not a timeout from our Promise.race)
+        console.error(`[handleCharacterBasedCommandsAutocomplete]: Unexpected database query error for ${commandName}:`, queryError);
+        
+        // Check if we have stale cache data we can use as fallback
+        const staleCache = characterListCache.get(cacheKey);
+        if (staleCache) {
+          console.log(`[handleCharacterBasedCommandsAutocomplete]: Using stale cache as fallback for ${commandName}, userId: ${userId}`);
+          characters = staleCache.characters || [];
+          modCharacters = staleCache.modCharacters || [];
+          // Don't delete cache - keep it for next time as fallback
+        } else {
+          // No cache available, respond with empty array
+          console.log(`[handleCharacterBasedCommandsAutocomplete]: No cache available for ${commandName}, responding with empty array`);
+          characters = [];
+          modCharacters = [];
           try {
             if (!interaction.responded && interaction.isAutocomplete()) {
               await interaction.respond([]);
