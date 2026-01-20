@@ -991,9 +991,9 @@ async function handleCharacterBasedCommandsAutocomplete(
       characters = cached.characters || [];
       modCharacters = cached.modCharacters || [];
     } else {
-      // Add timeout protection for database queries (2.5 seconds max)
+      // Add timeout protection for database queries (2.8 seconds max)
       const queryTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 2500)
+        setTimeout(() => reject(new Error('Database query timeout')), 2800)
       );
 
       // Fetch all characters owned by the user (both regular and mod characters) with timeout
@@ -1026,22 +1026,45 @@ async function handleCharacterBasedCommandsAutocomplete(
         console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error:`, queryError);
         if (queryError.message === 'Database query timeout') {
           console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);
+          
+          // Check if we have stale cache data we can use as fallback
+          const staleCache = characterListCache.get(cacheKey);
+          if (staleCache) {
+            console.log(`[handleCharacterBasedCommandsAutocomplete]: Using stale cache for ${commandName}, userId: ${userId}`);
+            characters = staleCache.characters || [];
+            modCharacters = staleCache.modCharacters || [];
+            // Don't delete cache - keep it for next time as fallback
+          } else {
+            // No cache available, respond with empty array
+            console.log(`[handleCharacterBasedCommandsAutocomplete]: No cache available for ${commandName}, responding with empty array`);
+            characters = [];
+            modCharacters = [];
+            try {
+              if (!interaction.responded && interaction.isAutocomplete()) {
+                await interaction.respond([]);
+              }
+            } catch (respondError) {
+              if (respondError.code !== 10062) {
+                console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding with empty array:`, respondError);
+              }
+            }
+            return;
+          }
         } else {
+          // Other database errors - invalidate cache and respond with empty array
           console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error for ${commandName}:`, queryError);
-        }
-        // Invalidate cache on error to prevent serving stale data
-        characterListCache.delete(cacheKey);
-        // Respond with empty array on query failure
-        try {
-          if (!interaction.responded && interaction.isAutocomplete()) {
-            await interaction.respond([]);
+          characterListCache.delete(cacheKey);
+          try {
+            if (!interaction.responded && interaction.isAutocomplete()) {
+              await interaction.respond([]);
+            }
+          } catch (respondError) {
+            if (respondError.code !== 10062) {
+              console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding with empty array:`, respondError);
+            }
           }
-        } catch (respondError) {
-          if (respondError.code !== 10062) {
-            console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding with empty array:`, respondError);
-          }
+          return;
         }
-        return;
       }
     }
     

@@ -513,9 +513,37 @@ module.exports = {
   // Creates a chest with 4 random items that users can claim
   // ============================================================================
   async handleChest(interaction) {
+    // Check if interaction is still valid before proceeding
+    if (!interaction.isRepliable()) {
+      console.log('[RuuGame] Interaction is no longer repliable, skipping chest creation');
+      return;
+    }
+
+    // Defer immediately to prevent timeout
+    try {
+      await interaction.deferReply();
+    } catch (deferError) {
+      console.error('[RuuGame] Failed to defer reply:', deferError);
+      // If defer fails, the interaction might have expired - don't try to reply
+      if (deferError.code === 10062) {
+        console.log('[RuuGame] Interaction expired before defer could complete');
+        return;
+      }
+      // For other errors, try immediate reply as fallback
+      try {
+        await interaction.reply({ 
+          content: '⚠️ Processing your request...', 
+          flags: 64 
+        });
+      } catch (replyError) {
+        console.error('[RuuGame] Failed to reply after defer failure:', replyError);
+        return; // Can't proceed if we can't respond
+      }
+    }
+
     // Check if user is admin
     if (!interaction.member.permissions.has('Administrator')) {
-      return await interaction.reply({
+      return await interaction.editReply({
         content: '❌ Only administrators can spawn chests.',
         flags: 64
       });
@@ -526,7 +554,7 @@ module.exports = {
       const allItems = await fetchAllItems();
       
       if (!allItems || allItems.length === 0) {
-        return await interaction.reply({
+        return await interaction.editReply({
           content: '❌ No items found in database.',
           flags: 64
         });
@@ -552,7 +580,7 @@ module.exports = {
       }
 
       if (selectedItems.length < 4) {
-        return await interaction.reply({
+        return await interaction.editReply({
           content: '❌ Not enough items in database to create a chest.',
           flags: 64
         });
@@ -597,11 +625,31 @@ module.exports = {
         .addComponents(claimButton);
 
       // Send message
-      const message = await interaction.reply({
-        embeds: [embed],
-        components: [buttons],
-        fetchReply: true
-      });
+      let message;
+      try {
+        await interaction.editReply({
+          embeds: [embed],
+          components: [buttons]
+        });
+
+        // Fetch the message to get its ID
+        message = await interaction.fetchReply();
+      } catch (replyError) {
+        console.error('[RuuGame] Failed to edit reply or fetch message:', replyError);
+        // If we can't get the message, we can't store the chest data properly
+        // Try to send an error message
+        if (interaction.deferred && !interaction.replied) {
+          try {
+            await interaction.editReply({
+              content: '❌ Failed to create chest message. Please try again.',
+              flags: 64
+            });
+          } catch (editError) {
+            console.error('[RuuGame] Failed to send error message:', editError);
+          }
+        }
+        return; // Can't proceed without message ID
+      }
 
       // Store chest data in TempData
       const chestData = {
@@ -628,11 +676,24 @@ module.exports = {
       console.log(`[RuuGame] Chest ${chestId} created in channel ${channelId}`);
     } catch (error) {
       console.error('[RuuGame] Error creating chest:', error);
-      if (!interaction.replied) {
-        await interaction.reply({
-          content: '❌ An error occurred while creating the chest.',
-          flags: 64
-        });
+      if (!interaction.replied && interaction.deferred) {
+        try {
+          await interaction.editReply({
+            content: '❌ An error occurred while creating the chest.',
+            flags: 64
+          });
+        } catch (editError) {
+          console.error('[RuuGame] Failed to send error edit response:', editError);
+        }
+      } else if (!interaction.replied && !interaction.deferred) {
+        try {
+          await interaction.reply({
+            content: '❌ An error occurred while creating the chest.',
+            flags: 64
+          });
+        } catch (replyError) {
+          console.error('[RuuGame] Failed to send error response:', replyError);
+        }
       }
     }
   }
