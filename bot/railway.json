@@ -2,8 +2,7 @@
     "$schema": "https://railway.com/railway.schema.json",
     "_comment": "Railway configuration for Bot Service - Discord bot application",
     "build": {
-        "builder": "NIXPACKS",
-        "buildCommand": "npm install"
+        "builder": "NIXPACKS"
     },
     "deploy": {
         "runtime": "V2",
