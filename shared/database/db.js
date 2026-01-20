@@ -348,10 +348,8 @@ const fetchCharacterById = async (characterId) => {
 // ------------------- fetchCharactersByUserId -------------------
 const fetchCharactersByUserId = async (userId, fields = null) => {
   try {
-    // Only connect if connection is not ready (avoid overhead on every query)
-    if (mongoose.connection.readyState !== 1) {
-      await connectToTinglebot();
-    }
+    // Connection is established at startup - use directly to avoid overhead
+    // Only reconnect if query fails (mongoose handles reconnection automatically)
     let query = Character.find({ userId });
     if (fields && Array.isArray(fields)) {
       query = query.select(fields.join(' '));
@@ -359,6 +357,16 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
     const characters = await query.lean().exec();
     return characters;
   } catch (error) {
+    // If query fails, try reconnecting once
+    if (mongoose.connection.readyState !== 1) {
+      await connectToTinglebot();
+      // Retry query after reconnection
+      let query = Character.find({ userId });
+      if (fields && Array.isArray(fields)) {
+        query = query.select(fields.join(' '));
+      }
+      return await query.lean().exec();
+    }
     handleError(error, "db.js");
     throw error;
   }
@@ -678,10 +686,8 @@ const fetchModCharacterByName = async (characterName) => {
 
 const fetchModCharactersByUserId = async (userId, fields = null) => {
  try {
-  // Only connect if connection is not ready (avoid overhead on every query)
-  if (mongoose.connection.readyState !== 1) {
-    await connectToTinglebot();
-  }
+  // Connection is established at startup - use directly to avoid overhead
+  // Only reconnect if query fails (mongoose handles reconnection automatically)
   let query = ModCharacter.find({ userId: userId });
   if (fields && Array.isArray(fields)) {
     query = query.select(fields.join(' '));
@@ -689,6 +695,16 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
   const modCharacters = await query.lean().exec();
   return modCharacters;
  } catch (error) {
+  // If query fails, try reconnecting once
+  if (mongoose.connection.readyState !== 1) {
+    await connectToTinglebot();
+    // Retry query after reconnection
+    let query = ModCharacter.find({ userId: userId });
+    if (fields && Array.isArray(fields)) {
+      query = query.select(fields.join(' '));
+    }
+    return await query.lean().exec();
+  }
   handleError(error, "db.js", {
    function: "fetchModCharactersByUserId",
    userId: userId,
