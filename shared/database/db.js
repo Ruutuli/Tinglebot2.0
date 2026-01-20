@@ -346,10 +346,14 @@ const fetchCharacterById = async (characterId) => {
 };
 
 // ------------------- fetchCharactersByUserId -------------------
-const fetchCharactersByUserId = async (userId) => {
+const fetchCharactersByUserId = async (userId, fields = null) => {
   try {
     await connectToTinglebot();
-    const characters = await Character.find({ userId }).lean().exec();
+    let query = Character.find({ userId });
+    if (fields && Array.isArray(fields)) {
+      query = query.select(fields.join(' '));
+    }
+    const characters = await query.lean().exec();
     return characters;
   } catch (error) {
     handleError(error, "db.js");
@@ -669,10 +673,14 @@ const fetchModCharacterByName = async (characterName) => {
  }
 };
 
-const fetchModCharactersByUserId = async (userId) => {
+const fetchModCharactersByUserId = async (userId, fields = null) => {
  try {
   await connectToTinglebot();
-  const modCharacters = await ModCharacter.find({ userId: userId });
+  let query = ModCharacter.find({ userId: userId });
+  if (fields && Array.isArray(fields)) {
+    query = query.select(fields.join(' '));
+  }
+  const modCharacters = await query.lean().exec();
   return modCharacters;
  } catch (error) {
   handleError(error, "db.js", {
