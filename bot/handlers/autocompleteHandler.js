@@ -978,80 +978,47 @@ async function handleCharacterBasedCommandsAutocomplete(
     }
 
     const userId = interaction.user.id;
+    const requiredFields = ['name', 'currentVillage', 'job'];
+    const queryTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database query timeout')), 2500)
+    );
 
-    // Check cache first
-    const cacheKey = userId;
-    const cached = characterListCache.get(cacheKey);
-    const now = Date.now();
-    let characters = [];
-    let modCharacters = [];
-
-    if (cached && (now - cached.timestamp) < CHARACTER_LIST_CACHE_TTL) {
-      // Use cached data
-      characters = cached.characters || [];
-      modCharacters = cached.modCharacters || [];
-    } else {
-      // No cache or cache expired - query database
-      const requiredFields = ['name', 'currentVillage', 'job'];
-      const queryTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 2500)
-      );
-
-      try {
-        const [charsResult, modCharsResult] = await Promise.race([
-          Promise.all([
-            fetchCharactersByUserId(userId, requiredFields),
-            fetchModCharactersByUserId(userId, requiredFields)
-          ]),
-          queryTimeout
-        ]);
-        characters = charsResult || [];
-        modCharacters = modCharsResult || [];
-        
-        // Cache the results
-        characterListCache.set(cacheKey, {
-          characters,
-          modCharacters,
-          timestamp: now
-        });
-        
-        // Clean up cache entry after TTL expires
-        setTimeout(() => {
-          characterListCache.delete(cacheKey);
-        }, CHARACTER_LIST_CACHE_TTL);
-      } catch (queryError) {
-        console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error:`, queryError);
-        if (queryError.message === 'Database query timeout') {
-          console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);
-        } else {
-          console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error for ${commandName}:`, queryError);
-        }
-        // Invalidate cache on error
-        characterListCache.delete(cacheKey);
-        // Respond with empty array on query failure
-        try {
-          if (!interaction.responded && interaction.isAutocomplete()) {
-            await interaction.respond([]);
-          }
-        } catch (respondError) {
-          if (respondError.code !== 10062) {
-            console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding with empty array:`, respondError);
-          }
-        }
-        return;
+    try {
+      const [characters, modCharacters] = await Promise.race([
+        Promise.all([
+          fetchCharactersByUserId(userId, requiredFields),
+          fetchModCharactersByUserId(userId, requiredFields)
+        ]),
+        queryTimeout
+      ]);
+      
+      // Combine regular characters and mod characters
+      const allCharacters = [...(characters || []), ...(modCharacters || [])];
+    
+      // Map all characters to choices with their basic info
+      const choices = allCharacters.map((character) => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }));
+      
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+    } catch (queryError) {
+      console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error for ${commandName}:`, queryError);
+      if (queryError.message === 'Database query timeout') {
+        console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);
       }
+      // Respond with empty array on query failure
+      try {
+        if (!interaction.responded && interaction.isAutocomplete()) {
+          await interaction.respond([]);
+        }
+      } catch (respondError) {
+        if (respondError.code !== 10062) {
+          console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding:`, respondError);
+        }
+      }
+      return;
     }
-    
-    // Combine regular characters and mod characters
-    const allCharacters = [...characters, ...modCharacters];
-    
-    // Map all characters to choices with their basic info
-    const choices = allCharacters.map((character) => ({
-      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-      value: character.name,
-    }));
-    
-    await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -1764,10 +1731,6 @@ async function handleChangeVillageNewVillageAutocomplete(interaction, focusedOpt
 const jobPerksCache = new Map();
 const craftableItemsCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-
-// Cache for character lists (short TTL to prevent repeated queries)
-const characterListCache = new Map();
-const CHARACTER_LIST_CACHE_TTL = 45 * 1000; // 45 seconds
 
 // ------------------- Crafting Autocomplete -------------------
 // Provides autocomplete suggestions for craftable items based on the character's
