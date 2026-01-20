@@ -16,8 +16,8 @@ const fetch = require('node-fetch');
 const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
-const { getDiscordGateway } = require('../shared/utils/discordGateway');
-const MessageTracking = require('../shared/models/MessageTrackingModel');
+const { getDiscordGateway } = require(path.resolve(__dirname, '../shared/utils/discordGateway'));
+const MessageTracking = require(path.resolve(__dirname, '../shared/models/MessageTrackingModel'));
 const compression = require('compression');
 const multer = require('multer');
 const fs = require('fs').promises;
@@ -47,28 +47,28 @@ const {
 } = require('./database/db');
 
 // Import models
-const Character = require('../shared/models/CharacterModel');
-const ModCharacter = require('../shared/models/ModCharacterModel');
-const Quest = require('../shared/models/QuestModel');
-const Item = require('../shared/models/ItemModel');
-const Monster = require('../shared/models/MonsterModel');
-const User = require('../shared/models/UserModel');
-const Pet = require('../shared/models/PetModel');
-const Mount = require('../shared/models/MountModel');
-const VillageShops = require('../shared/models/VillageShopsModel');
-const Weather = require('../shared/models/WeatherModel');
-const { VendingRequest } = require('../shared/models/VendingModel');
-const { initializeVendingStockModel, getVendingStockModel } = require('../shared/models/VendingStockModel');
-const Square = require('../shared/models/mapModel');
-const { Village } = require('../shared/models/VillageModel');
-const Party = require('../shared/models/PartyModel');
-const Relic = require('../shared/models/RelicModel');
-const CharacterOfWeek = require('../shared/models/CharacterOfWeekModel');
-const Relationship = require('../shared/models/RelationshipModel');
-const Raid = require('../shared/models/RaidModel');
-const StealStats = require('../shared/models/StealStatsModel');
-const BlightRollHistory = require('../shared/models/BlightRollHistoryModel');
-const InventoryLog = require('../shared/models/InventoryLogModel');
+const Character = require(path.resolve(__dirname, '../shared/models/CharacterModel'));
+const ModCharacter = require(path.resolve(__dirname, '../shared/models/ModCharacterModel'));
+const Quest = require(path.resolve(__dirname, '../shared/models/QuestModel'));
+const Item = require(path.resolve(__dirname, '../shared/models/ItemModel'));
+const Monster = require(path.resolve(__dirname, '../shared/models/MonsterModel'));
+const User = require(path.resolve(__dirname, '../shared/models/UserModel'));
+const Pet = require(path.resolve(__dirname, '../shared/models/PetModel'));
+const Mount = require(path.resolve(__dirname, '../shared/models/MountModel'));
+const VillageShops = require(path.resolve(__dirname, '../shared/models/VillageShopsModel'));
+const Weather = require(path.resolve(__dirname, '../shared/models/WeatherModel'));
+const { VendingRequest } = require(path.resolve(__dirname, '../shared/models/VendingModel'));
+const { initializeVendingStockModel, getVendingStockModel } = require(path.resolve(__dirname, '../shared/models/VendingStockModel'));
+const Square = require(path.resolve(__dirname, '../shared/models/mapModel'));
+const { Village } = require(path.resolve(__dirname, '../shared/models/VillageModel'));
+const Party = require(path.resolve(__dirname, '../shared/models/PartyModel'));
+const Relic = require(path.resolve(__dirname, '../shared/models/RelicModel'));
+const CharacterOfWeek = require(path.resolve(__dirname, '../shared/models/CharacterOfWeekModel'));
+const Relationship = require(path.resolve(__dirname, '../shared/models/RelationshipModel'));
+const Raid = require(path.resolve(__dirname, '../shared/models/RaidModel'));
+const StealStats = require(path.resolve(__dirname, '../shared/models/StealStatsModel'));
+const BlightRollHistory = require(path.resolve(__dirname, '../shared/models/BlightRollHistoryModel'));
+const InventoryLog = require(path.resolve(__dirname, '../shared/models/InventoryLogModel'));
 const { getGearType, getWeaponStyle } = require('./gearModule');
 
 // Import character stats module for updating attack and defense
@@ -78,10 +78,10 @@ const { updateCharacterDefense, updateCharacterAttack } = require('../bot/module
 const calendarModule = require('../bot/modules/calendarModule');
 
 // Import pretty logger utility
-const logger = require('../shared/utils/logger');
+const logger = require(path.resolve(__dirname, '../shared/utils/logger'));
 
 // Import Google Sheets utilities
-const googleSheets = require('../shared/utils/googleSheetsUtils');
+const googleSheets = require(path.resolve(__dirname, '../shared/utils/googleSheetsUtils'));
 const { google } = require('googleapis');
 
 // Import route modules
@@ -136,7 +136,7 @@ const {
   characterListCache,
   characterDataCache,
   spiritOrbCache
-} = require('../shared/utils/cache');
+} = require(path.resolve(__dirname, '../shared/utils/cache'));
 
 // Cache duration constants (in milliseconds)
 const SPIRIT_ORB_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
@@ -443,7 +443,7 @@ async function uploadPinImageToGCS(file, pinId) {
   try {
     if (!file) return null;
     
-    const bucket = require('../shared/config/gcsService');
+    const bucket = require(path.resolve(__dirname, '../shared/config/gcsService'));
     const fileName = `tinglebot/mapUserImages/${pinId}_${Date.now()}_${Math.round(Math.random() * 1E9)}`;
     
     const fileUpload = bucket.file(fileName);
@@ -11245,7 +11245,7 @@ app.get('/api/blupee/status', async (req, res) => {
 
 // ------------------- Section: Notification API Routes -------------------
 
-const notificationService = require('../shared/utils/notificationService');
+const notificationService = require(path.resolve(__dirname, '../shared/utils/notificationService'));
 
 // Send Blood Moon alerts
 app.post('/api/notifications/blood-moon', async (req, res) => {
@@ -12595,22 +12595,22 @@ app.delete('/api/admin/village-shops/:id', async (req, res) => {
 // ------------------- Section: Admin Database Editor -------------------
 
 // ------------------- Import AuditLog model for audit logging -------------------
-const AuditLog = require('../shared/models/AuditLogModel');
+const AuditLog = require(path.resolve(__dirname, '../shared/models/AuditLogModel'));
 
 // ------------------- Import all remaining models for database management -------------------
-const ApprovedSubmission = require('../shared/models/ApprovedSubmissionModel');
-const BloodMoonTracking = require('../shared/models/BloodMoonTrackingModel');
-const GeneralItem = require('../shared/models/GeneralItemModel');
-const HelpWantedQuest = require('../shared/models/HelpWantedQuestModel');
-const Inventory = require('../shared/models/InventoryModel');
-const MemberLore = require('../shared/models/MemberLoreModel');
-const Minigame = require('../shared/models/MinigameModel');
-const NPC = require('../shared/models/NPCModel');
-const RuuGame = require('../shared/models/RuuGameModel');
-const TableModel = require('../shared/models/TableModel');
-const TableRoll = require('../shared/models/TableRollModel');
-const TempData = require('../shared/models/TempDataModel');
-const TokenTransaction = require('../shared/models/TokenTransactionModel');
+const ApprovedSubmission = require(path.resolve(__dirname, '../shared/models/ApprovedSubmissionModel'));
+const BloodMoonTracking = require(path.resolve(__dirname, '../shared/models/BloodMoonTrackingModel'));
+const GeneralItem = require(path.resolve(__dirname, '../shared/models/GeneralItemModel'));
+const HelpWantedQuest = require(path.resolve(__dirname, '../shared/models/HelpWantedQuestModel'));
+const Inventory = require(path.resolve(__dirname, '../shared/models/InventoryModel'));
+const MemberLore = require(path.resolve(__dirname, '../shared/models/MemberLoreModel'));
+const Minigame = require(path.resolve(__dirname, '../shared/models/MinigameModel'));
+const NPC = require(path.resolve(__dirname, '../shared/models/NPCModel'));
+const RuuGame = require(path.resolve(__dirname, '../shared/models/RuuGameModel'));
+const TableModel = require(path.resolve(__dirname, '../shared/models/TableModel'));
+const TableRoll = require(path.resolve(__dirname, '../shared/models/TableRollModel'));
+const TempData = require(path.resolve(__dirname, '../shared/models/TempDataModel'));
+const TokenTransaction = require(path.resolve(__dirname, '../shared/models/TokenTransactionModel'));
 // Note: Raid, StealStats, and BlightRollHistory are imported at the top of the file
 
 // ------------------- Model Registry -------------------
@@ -13871,7 +13871,7 @@ app.use(errorHandler); // Handle errors and send responses
 // ============================================================================
 
 // Import Pin model
-const Pin = require('../shared/models/PinModel');
+const Pin = require(path.resolve(__dirname, '../shared/models/PinModel'));
 
 // ------------------- Function: checkUserAccess -------------------
 // Helper function to check if user has access to pin operations
