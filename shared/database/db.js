@@ -89,8 +89,8 @@ async function connectToTinglebot() {
     serverSelectionTimeoutMS: 10000, // 10 seconds
     socketTimeoutMS: 30000,          // 30 seconds
     connectTimeoutMS: 10000,         // 10 seconds
-    maxPoolSize: 5,
-    minPoolSize: 1
+    maxPoolSize: 10,                 // Increased from 5 to handle Railway concurrency
+    minPoolSize: 2                   // Increased from 1 to maintain warm connections
    });
    
    logger.success('DATABASE', 'Tinglebot database connected');

@@ -1008,6 +1008,7 @@ async function handleCharacterBasedCommandsAutocomplete(
       
       try {
         // Try regular characters first with timeout
+        const regularStartTime = Date.now();
         const regularCharsTimeout = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Regular characters query timeout')), queryTimeout)
         );
@@ -1017,15 +1018,22 @@ async function handleCharacterBasedCommandsAutocomplete(
             fetchCharactersByUserId(userId, requiredFields),
             regularCharsTimeout
           ]) || [];
+          const regularDuration = Date.now() - regularStartTime;
+          if (regularDuration > 1000) {
+            console.log(`[handleCharacterBasedCommandsAutocomplete]: Regular characters query took ${regularDuration}ms for ${commandName}, userId: ${userId}`);
+          }
         } catch (regularError) {
-          console.warn(`[handleCharacterBasedCommandsAutocomplete]: Regular characters query failed for ${commandName}, userId: ${userId}:`, regularError.message);
+          const regularDuration = Date.now() - regularStartTime;
+          console.warn(`[handleCharacterBasedCommandsAutocomplete]: Regular characters query failed after ${regularDuration}ms for ${commandName}, userId: ${userId}:`, regularError.message);
           characters = []; // Continue with empty, try mod characters
         }
         
         // Try mod characters (with remaining time budget)
         // Calculate remaining time: if regular chars took time, reduce timeout for mod chars
+        const modStartTime = Date.now();
+        const remainingTime = Math.max(1000, queryTimeout - (Date.now() - regularStartTime));
         const modCharsTimeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Mod characters query timeout')), Math.max(1000, queryTimeout - 500))
+          setTimeout(() => reject(new Error('Mod characters query timeout')), remainingTime)
         );
         
         try {
@@ -1033,8 +1041,13 @@ async function handleCharacterBasedCommandsAutocomplete(
             fetchModCharactersByUserId(userId, requiredFields),
             modCharsTimeout
           ]) || [];
+          const modDuration = Date.now() - modStartTime;
+          if (modDuration > 1000) {
+            console.log(`[handleCharacterBasedCommandsAutocomplete]: Mod characters query took ${modDuration}ms for ${commandName}, userId: ${userId}`);
+          }
         } catch (modError) {
-          console.warn(`[handleCharacterBasedCommandsAutocomplete]: Mod characters query failed for ${commandName}, userId: ${userId}:`, modError.message);
+          const modDuration = Date.now() - modStartTime;
+          console.warn(`[handleCharacterBasedCommandsAutocomplete]: Mod characters query failed after ${modDuration}ms for ${commandName}, userId: ${userId}:`, modError.message);
           modCharacters = []; // Continue with empty
         }
         
