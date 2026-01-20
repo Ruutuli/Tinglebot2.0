@@ -67,9 +67,8 @@ const villageChannelMap = {
 };
 
 // ============================================================================
-// Message Activity Tracking & Cooldown System
+// Message Activity Tracking
 // ------------------- Track Server Activity -------------------
-// Tracks message timestamps and unique users in each channel.
 const messageActivity = new Map();
 
 // ============================================================================
@@ -83,8 +82,6 @@ const HOURS_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
 // ============================================================================
 // Period Calculation Functions
 // ------------------- Get Midnight EST in UTC -------------------
-// Converts midnight EST/EDT to UTC for a given date
-// Uses a test date to determine DST offset correctly
 function getMidnightESTInUTC(year, month, day) {
   // Create a test date at noon on the target date to determine DST status
   const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
@@ -114,9 +111,7 @@ function getMidnightESTInUTC(year, month, day) {
   return utcDate;
 }
 
-// ------------------- Get Current Week Start (Sunday 00:00 EST) -------------------
-// Returns the start of the current week at midnight EST (Sunday 00:00 EST)
-// Handles DST automatically via America/New_York timezone
+// ------------------- Get Current Week Start -------------------
 function getCurrentWeekStart() {
   const now = new Date();
   
@@ -262,34 +257,97 @@ async function setVillagePeriodData(villageName, periodStart, raidCount, periodT
       {
         raidQuotaPeriodStart: periodStart,
         raidQuotaCount: raidCount,
-        raidQuotaPeriodType: periodType
+        raidQuotaPeriodType: periodType,
+        lastQuotaRaidTime: null // Reset when period resets
       },
       { upsert: false, new: true }
     );
-    console.log(`[randomMonsterEncounters.js]: ✅ Updated raid quota for ${villageName}: ${raidCount} raids (${periodType})`);
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error setting village period data for ${villageName}:`, error);
   }
 }
 
 // ------------------- Check And Reset Period -------------------
-// Only resets when we've rolled into a new period (current > stored). This avoids
-// falsely clearing raidQuotaCount when timezones or clock skew would make !== match.
 async function checkAndResetPeriod(villageName, level) {
   const currentPeriodStart = getVillagePeriodStart(level);
   const periodData = await getVillagePeriodData(villageName);
   
-  const shouldReset = !periodData ||
-    currentPeriodStart.getTime() > periodData.periodStart.getTime();
-  if (shouldReset) {
+  if (!periodData) {
+    // No period data exists, initialize with current period
     const periodType = level === 1 ? 'week' : 'month';
     await setVillagePeriodData(villageName, currentPeriodStart, 0, periodType);
-    console.log(`[randomMonsterEncounters.js]: 🔄 Reset raid quota period for ${villageName} (${periodType})`);
     return {
       periodStart: currentPeriodStart,
       raidCount: 0,
       periodType: periodType
     };
+  }
+  
+  const storedPeriodStart = periodData.periodStart;
+  const periodType = level === 1 ? 'week' : 'month';
+  const periodDuration = level === 1 ? WEEK_IN_MS : 30 * DAY_IN_MS; // Approximate month duration
+  
+  const storedTime = storedPeriodStart.getTime();
+  const currentTime = currentPeriodStart.getTime();
+  const timeDiff = currentTime - storedTime;
+  
+  // For level 1 (weekly), check if we're in a different week
+  // For level 2-3 (monthly), check if we're in a different month
+  if (level === 1) {
+    // Weekly period: if time difference is >= 5 days, we're likely in a new week
+    // (5 days accounts for some timezone variance but catches week transitions)
+    if (timeDiff >= 5 * DAY_IN_MS) {
+      await setVillagePeriodData(villageName, currentPeriodStart, 0, periodType);
+      return {
+        periodStart: currentPeriodStart,
+        raidCount: 0,
+        periodType: periodType
+      };
+    } else if (timeDiff < -DAY_IN_MS) {
+      // Stored period is in the future (shouldn't happen, but handle it)
+      // This could happen if clocks are skewed - normalize without resetting
+      await Village.findOneAndUpdate(
+        { name: villageName },
+        { 
+          $set: {
+            raidQuotaPeriodStart: currentPeriodStart,
+            raidQuotaPeriodType: periodType
+          }
+        }
+      );
+      return {
+        periodStart: currentPeriodStart,
+        raidCount: periodData.raidCount,
+        periodType: periodType
+      };
+    } else if (Math.abs(timeDiff) > 0 && Math.abs(timeDiff) < 6 * 60 * 60 * 1000) {
+      // Within 6 hours difference - likely same period but different timezone calculation
+      // Normalize to current period start without resetting count
+      // This handles migration from UTC-based to EST-based period starts
+      await Village.findOneAndUpdate(
+        { name: villageName },
+        { 
+          $set: {
+            raidQuotaPeriodStart: currentPeriodStart,
+            raidQuotaPeriodType: periodType
+          }
+        }
+      );
+      return {
+        periodStart: currentPeriodStart,
+        raidCount: periodData.raidCount,
+        periodType: periodType
+      };
+    }
+  } else {
+    if (timeDiff >= 25 * DAY_IN_MS) {
+      await setVillagePeriodData(villageName, currentPeriodStart, 0, periodType);
+      return {
+        periodStart: currentPeriodStart,
+        raidCount: 0,
+        periodType: periodType
+      };
+    }
   }
   
   return periodData;
@@ -304,7 +362,6 @@ async function resetAllVillageRaidQuotas() {
     const villages = await Village.find({}).exec();
     
     if (!villages || villages.length === 0) {
-      console.log('[randomMonsterEncounters.js]: ⚠️ No villages found in database');
       return;
     }
     
@@ -328,19 +385,17 @@ async function resetAllVillageRaidQuotas() {
           {
             raidQuotaPeriodStart: currentPeriodStart,
             raidQuotaCount: 0,
-            raidQuotaPeriodType: periodType
+            raidQuotaPeriodType: periodType,
+            lastQuotaRaidTime: null
           }
         );
         
-        console.log(`[randomMonsterEncounters.js]: ✅ Reset raid quota for ${villageName} (L${level}, ${periodType})`);
         resetCount++;
       }
     }
     
     if (resetCount > 0) {
       console.log(`[randomMonsterEncounters.js]: 🔄 Reset ${resetCount} village raid quota(s)`);
-    } else {
-      console.log('[randomMonsterEncounters.js]: ✓ All village raid quotas are current');
     }
     
     return resetCount;
@@ -365,6 +420,132 @@ function getPeriodRemainingRatio(periodStart, level) {
   return remaining / periodDuration;
 }
 
+// ============================================================================
+// Village Raid Distribution Helper Functions
+// ------------------- Has Raid Within Last Day -------------------
+function hasRaidWithinLastDay(lastRaidTime) {
+  if (!lastRaidTime) return false;
+  
+  const now = new Date();
+  const timeSinceLastRaid = now.getTime() - new Date(lastRaidTime).getTime();
+  const MIN_SPACING_MS = 36 * 60 * 60 * 1000;
+  
+  return timeSinceLastRaid < MIN_SPACING_MS;
+}
+
+// ------------------- Calculate Time-Based Probability -------------------
+function calculateTimeBasedProbability(timeSinceReset, timeRemainingRatio) {
+  const daysSinceReset = timeSinceReset / DAY_IN_MS;
+  
+  // Days 0-1 (Sun-Mon after reset): Very low probability (2-5%) - grace period
+  if (daysSinceReset < 1.5) {
+    return 0.02 + (daysSinceReset / 1.5) * 0.03; // 2% to 5%
+  }
+  
+  // Days 2-4 (Tue-Thu): Low-medium probability (8-15%) - early week window
+  if (daysSinceReset < 4.5) {
+    const progress = (daysSinceReset - 1.5) / 3.0; // Progress within Tue-Thu window
+    return 0.08 + progress * 0.07; // 8% to 15%
+  }
+  
+  // Days 5-6 (Fri-Sat): Medium-high probability (20-40%) - increasing urgency
+  if (daysSinceReset < 6.5) {
+    const progress = (daysSinceReset - 4.5) / 2.0; // Progress within Fri-Sat window
+    return 0.20 + progress * 0.20; // 20% to 40%
+  }
+  
+  // Day 7+ (Overdue): High probability (60-100%) - ensure quota met before reset
+  if (timeRemainingRatio < 0.1) {
+    return 1.0; // Guarantee raid if less than 10% of period remains
+  }
+  
+  // Between day 7 and end of period
+  const urgency = (1.0 - timeRemainingRatio) * 2.0; // Increases as time remaining decreases
+  return Math.min(0.60 + urgency * 0.40, 1.0); // 60% to 100%
+}
+
+// ------------------- Is Village Eligible For Raid -------------------
+async function isVillageEligibleForRaid(village, periodData, quota) {
+  if (!periodData) {
+    return { eligible: false, reason: 'No period data' };
+  }
+  
+  const raidCount = periodData.raidCount || 0;
+  const quotaRemaining = Math.max(0, quota - raidCount);
+  
+  if (quotaRemaining <= 0) {
+    return { eligible: false, reason: 'Quota already met' };
+  }
+  
+  if (village.lastQuotaRaidTime && hasRaidWithinLastDay(village.lastQuotaRaidTime)) {
+    return { eligible: false, reason: 'Raid within last 36 hours' };
+  }
+  
+  return { eligible: true };
+}
+
+// ------------------- Rollback Quota Reservation -------------------
+async function rollbackQuotaReservation(villageDisplayName) {
+  try {
+    await Village.findOneAndUpdate(
+      { name: villageDisplayName },
+      { $inc: { raidQuotaCount: -1 } }
+    );
+  } catch (error) {
+    console.error(`[randomMonsterEncounters.js]: ❌ Failed to rollback quota for ${villageDisplayName}:`, error);
+  }
+}
+
+// ------------------- Select Monster For Raid -------------------
+async function selectMonsterForRaid(villageRegion, villageDisplayName, channel) {
+  const Monster = require('../../shared/models/MonsterModel');
+  const monsters = await Monster.find({
+    tier: { $gte: 5 },
+    [villageRegion.toLowerCase()]: true,
+    $or: [
+      { species: { $exists: false } },
+      { species: { $ne: 'Yiga' } }
+    ]
+  }).exec();
+  
+  if (!monsters || monsters.length === 0) {
+    const errorMsg = `No tier 5+ monsters (excluding Yiga) found in ${villageRegion} region for ${villageDisplayName}.`;
+    console.error(`[randomMonsterEncounters.js]: ❌ ${errorMsg}`);
+    if (channel) {
+      await channel.send(`❌ **${errorMsg}**`);
+    }
+    return null;
+  }
+  
+  const monster = monsters[Math.floor(Math.random() * monsters.length)];
+  if (!monster || !monster.name || !monster.tier) {
+    const errorMsg = `No eligible monsters found for region: ${villageRegion}`;
+    console.error(`[randomMonsterEncounters.js]: ❌ ${errorMsg}`);
+    if (channel) {
+      await channel.send(`❌ **No tier 5+ monsters found in ${villageRegion} region for ${villageDisplayName}.**`);
+    }
+    return null;
+  }
+  
+  return monster;
+}
+
+// ------------------- Create Mock Interaction -------------------
+function createMockInteraction(channel, botId = 'quota-raid-bot', botTag = 'Quota Raid Bot') {
+  return {
+    channel: channel,
+    client: channel.client,
+    user: { id: botId, tag: botTag },
+    guild: channel.guild,
+    editReply: async (options) => {
+      return await channel.send(options);
+    },
+    followUp: async (options) => {
+      return await channel.send(options);
+    }
+  };
+}
+
 // ------------------- Increment Village Raid Count (Atomic) -------------------
 async function incrementVillageRaidCount(villageName, level) {
   try {
@@ -387,8 +568,6 @@ async function incrementVillageRaidCount(villageName, level) {
     }
     
     const newCount = result.raidQuotaCount || 1;
-    console.log(`[randomMonsterEncounters.js]: ✅ Atomically incremented raid count for ${villageName} to ${newCount}`);
-    
     return newCount;
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error incrementing raid count for ${villageName}:`, error);
@@ -407,19 +586,16 @@ async function getGlobalRaidCooldown() {
     if (!cooldownData) {
       const oldCooldownData = await TempData.findOne({ key: RAID_COOLDOWN_KEY });
       if (oldCooldownData) {
-        console.log('[randomMonsterEncounters.js]: 🧹 Found old cooldown entry without type field, cleaning up...');
         await TempData.findOneAndDelete({ key: RAID_COOLDOWN_KEY });
       }
       return 0;
     }
     
-    // Validate the timestamp is reasonable (not more than 1 year ago)
     const lastRaidTime = cooldownData.data.lastRaidTime;
     const currentTime = Date.now();
     const oneYearAgo = currentTime - (365 * 24 * 60 * 60 * 1000);
     
     if (lastRaidTime && lastRaidTime < oneYearAgo) {
-      console.log('[randomMonsterEncounters.js]: 🧹 Found corrupted cooldown timestamp, resetting...');
       await resetGlobalRaidCooldown();
       return 0;
     }
@@ -443,7 +619,6 @@ async function setGlobalRaidCooldown(timestamp) {
       },
       { upsert: true, new: true }
     );
-    console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown set to: ${new Date(timestamp).toISOString()}`);
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error setting raid cooldown:', error);
   }
@@ -453,7 +628,6 @@ async function setGlobalRaidCooldown(timestamp) {
 async function resetGlobalRaidCooldown() {
   try {
     await TempData.findOneAndDelete({ key: RAID_COOLDOWN_KEY, type: 'temp' });
-    console.log(`[randomMonsterEncounters.js]: 🔄 Global raid cooldown reset - raids can now be triggered immediately`);
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error resetting raid cooldown:', error);
   }
@@ -465,12 +639,7 @@ async function getVillageRaidCooldown(villageName) {
     const cooldownKey = `${VILLAGE_RAID_COOLDOWN_PREFIX}${villageName.toLowerCase()}`;
     const cooldownData = await TempData.findOne({ key: cooldownKey, type: 'temp' });
     
-    if (!cooldownData) {
-      return 0;
-    }
-    
-    // Validate the timestamp is reasonable (not more than 1 year ago)
-    const lastRaidTime = cooldownData.data?.lastRaidTime;
+    const lastRaidTime = cooldownData?.data?.lastRaidTime;
     if (!lastRaidTime) {
       return 0;
     }
@@ -479,12 +648,11 @@ async function getVillageRaidCooldown(villageName) {
     const oneYearAgo = currentTime - (365 * 24 * 60 * 60 * 1000);
     
     if (lastRaidTime < oneYearAgo) {
-      console.log(`[randomMonsterEncounters.js]: 🧹 Found corrupted village cooldown timestamp for ${villageName}, resetting...`);
       await resetVillageRaidCooldown(villageName);
       return 0;
     }
     
-    return lastRaidTime || 0;
+    return lastRaidTime;
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error getting village raid cooldown for ${villageName}:`, error);
     return 0; // Default to 0 if there's an error
@@ -504,7 +672,6 @@ async function setVillageRaidCooldown(villageName, timestamp) {
       },
       { upsert: true, new: true }
     );
-    console.log(`[randomMonsterEncounters.js]: ⏰ Village raid cooldown set for ${villageName}: ${new Date(timestamp).toISOString()}`);
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error setting village raid cooldown for ${villageName}:`, error);
   }
@@ -515,7 +682,6 @@ async function resetVillageRaidCooldown(villageName) {
   try {
     const cooldownKey = `${VILLAGE_RAID_COOLDOWN_PREFIX}${villageName.toLowerCase()}`;
     await TempData.findOneAndDelete({ key: cooldownKey, type: 'temp' });
-    console.log(`[randomMonsterEncounters.js]: 🔄 Village raid cooldown reset for ${villageName} - raids can now be triggered immediately`);
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error resetting village raid cooldown for ${villageName}:`, error);
   }
@@ -584,8 +750,6 @@ async function checkForRandomEncounters(client) {
   const meetsThreshold = totalMessages >= MESSAGE_THRESHOLD && totalUsers.size >= MIN_ACTIVE_USERS;
 
   if (meetsThreshold) {
-    console.log(`[randomMonsterEncounters.js]: 🐉 TRIGGERING ENCOUNTER! Server-wide activity: ${totalMessages} messages, ${totalUsers.size} users across ${activeChannels} channels`);
-    
     // Reset all channel activity after triggering encounter
     for (const [channelId, activity] of messageActivity.entries()) {
       if (!EXCLUDED_CHANNELS.includes(channelId)) {
@@ -597,8 +761,6 @@ async function checkForRandomEncounters(client) {
     const villages = Object.keys(villageChannelMap);
     const selectedVillage = villages[Math.floor(Math.random() * villages.length)];
     const selectedVillageKey = selectedVillage.toLowerCase();
-    
-    console.log(`[randomMonsterEncounters.js]: 🎯 Selected village for raid: ${selectedVillage}`);
     
     // Get the target channel for the selected village
     const targetChannelId = villageChannelMap[selectedVillageKey];
@@ -617,92 +779,39 @@ async function checkForRandomEncounters(client) {
 // ------------------- Trigger Random Encounter -------------------
 async function triggerRandomEncounter(channel, selectedVillage) {
   try {
-    console.log(`[randomMonsterEncounters.js]: 🎯 Processing raid for village: ${selectedVillage}`);
-    
-    // Get the village region.
     const villageRegion = getVillageRegionByName(selectedVillage);
-    console.log(`[randomMonsterEncounters.js]: 🗺️ Village region: ${villageRegion}`);
-
     if (!villageRegion) {
       console.error(`[randomMonsterEncounters.js]: ❌ Invalid village: ${selectedVillage}`);
       await channel.send(`❌ **Invalid village: ${selectedVillage}**`);
       return;
     }
 
-    // Select a monster above tier 5 from the region.
-    // Filter out Yiga monsters - they should not appear in regular raids
-    const Monster = require('../../shared/models/MonsterModel');
-    const monsters = await Monster.find({
-      tier: { $gte: 5 },
-      [villageRegion.toLowerCase()]: true,
-      $or: [
-        { species: { $exists: false } },
-        { species: { $ne: 'Yiga' } }
-      ]
-    }).exec();
-    
-    if (!monsters || monsters.length === 0) {
-      console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters (excluding Yiga) found for region: ${villageRegion}`);
-      await channel.send(`❌ **No tier 5+ monsters (excluding Yiga) found in ${villageRegion} region for ${selectedVillage}.**`);
-      return;
-    }
-    
-    const monster = monsters[Math.floor(Math.random() * monsters.length)];
-    if (!monster || !monster.name || !monster.tier) {
-      console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters found for region: ${villageRegion}`);
-      await channel.send(`❌ **No tier 5+ monsters found in ${villageRegion} region for ${selectedVillage}.**`);
+    const monster = await selectMonsterForRaid(villageRegion, selectedVillage, channel);
+    if (!monster) {
       return;
     }
 
-    console.log(`[randomMonsterEncounters.js]: 🐉 Selected monster: ${monster.name} (Tier ${monster.tier}) from ${villageRegion} region`);
-
-    // Create a mock interaction object for the triggerRaid function
-    const mockInteraction = {
-      channel: channel,
-      client: channel.client,
-      user: { id: 'random-encounter-bot', tag: 'Random Encounter Bot' },
-      guild: channel.guild,
-      editReply: async (options) => {
-        return await channel.send(options);
-      },
-      followUp: async (options) => {
-        return await channel.send(options);
-      }
-    };
-    
-    // Use the same triggerRaid function as the mod command
+    const mockInteraction = createMockInteraction(channel, 'random-encounter-bot', 'Random Encounter Bot');
     const { triggerRaid } = require('../modules/raidModule');
-    
-    // Capitalize the village name to match the RaidModel enum values
     const capitalizedVillage = capitalizeVillageName(selectedVillage);
-    console.log(`[randomMonsterEncounters.js]: 🚀 Triggering raid for ${monster.name} in ${capitalizedVillage}`);
     
     const result = await triggerRaid(monster, mockInteraction, capitalizedVillage, false);
 
     if (!result || !result.success) {
-      console.error(`[randomMonsterEncounters.js]: ❌ Failed to trigger raid: ${result?.error || 'Unknown error'}`);
-      
-      // Don't send error messages to channel for cooldown - this is expected behavior
       if (result?.error && result.error.includes('Raid cooldown active')) {
-        console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown active - skipping random encounter`);
         return;
       }
-      
+      console.error(`[randomMonsterEncounters.js]: ❌ Failed to trigger raid: ${result?.error || 'Unknown error'}`);
       await channel.send(`❌ **Failed to trigger the raid:** ${result?.error || 'Unknown error'}`);
       return;
     }
 
-    console.log(`[randomMonsterEncounters.js]: ✅ Raid triggered successfully in ${selectedVillage} channel`);
-    console.log(`[randomMonsterEncounters.js]: 🎉 RANDOM ENCOUNTER COMPLETE! ${monster.name} (T${monster.tier}) in ${selectedVillage}`);
+    console.log(`[randomMonsterEncounters.js]: ✅ Raid triggered in ${selectedVillage}: ${monster.name} (T${monster.tier})`);
   } catch (error) {
-    console.error('[randomMonsterEncounters.js]: ❌ Error triggering encounter:', error);
-    
-    // Don't send cooldown errors to Discord - they're expected behavior
     if (error.message && error.message.includes('Raid cooldown active')) {
-      console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown active - skipping random encounter`);
       return;
     }
-    
+    console.error('[randomMonsterEncounters.js]: ❌ Error triggering encounter:', error);
     await handleError(error, 'randomMonsterEncounters.js');
   }
 }
@@ -712,17 +821,16 @@ async function triggerRandomEncounter(channel, selectedVillage) {
 // ------------------- Check Village Raid Quotas -------------------
 async function checkVillageRaidQuotas(client) {
   try {
-    // Fetch all villages from database
     const villages = await Village.find({}).exec();
     
     if (!villages || villages.length === 0) {
-      console.log('[randomMonsterEncounters.js]: ⚠️ No villages found in database');
       return;
     }
     
     const eligibleVillages = [];
+    const now = new Date();
     
-    // Check each village for quota status
+    // Check each village for eligibility and calculate probability
     for (const village of villages) {
       const villageName = village.name;
       const level = village.level || 1;
@@ -730,76 +838,34 @@ async function checkVillageRaidQuotas(client) {
       
       // Check and reset period if needed
       const periodData = await checkAndResetPeriod(villageName, level);
-      
       if (!periodData) {
-        console.log(`[randomMonsterEncounters.js]: ⚠️ Could not get period data for ${villageName}`);
         continue;
       }
       
-      const raidCount = periodData.raidCount || 0;
-      const quotaRemaining = Math.max(0, quota - raidCount);
-      
-      // If quota is already met, skip this village
-      if (quotaRemaining <= 0) {
+      // Check if village is eligible (quota remaining, no same-day raid)
+      const eligibility = await isVillageEligibleForRaid(village, periodData, quota);
+      if (!eligibility.eligible) {
         continue;
       }
       
-      // Calculate urgency based on time remaining and quota remaining
+      // Calculate time-based probability (same for all villages at same point in week)
       const periodStart = periodData.periodStart;
+      const timeSinceReset = now.getTime() - periodStart.getTime();
       const timeRemainingRatio = getPeriodRemainingRatio(periodStart, level);
       
       if (timeRemainingRatio <= 0) {
-        // Period ended but quota not met - should have been handled by reset, but trigger anyway
-        eligibleVillages.push({ village, urgency: 1.0 });
+        // Period ended but quota not met - guarantee raid
+        eligibleVillages.push({ village, periodData, quota });
         continue;
       }
       
-      // Calculate urgency: higher urgency = higher probability
-      // urgency = (quotaRemaining / quotaTotal) / timeRemainingRatio
-      const urgency = quotaRemaining / quota / timeRemainingRatio;
-      
-      // Calculate probability based on urgency
-      // Early period: 5-10% chance per hour
-      // Mid period: 15-25% chance per hour
-      // Late period: 50-100% chance per hour
-      let probability = 0.05; // Base 5% chance
-      if (urgency > 2) {
-        // Very urgent - high probability (50-100%)
-        probability = 0.5 + (urgency - 2) * 0.25;
-        probability = Math.min(1.0, probability);
-      } else if (urgency > 1) {
-        // Moderately urgent - medium probability (15-25%)
-        probability = 0.15 + (urgency - 1) * 0.1;
-      } else if (urgency > 0.5) {
-        // Some urgency - low-medium probability (10-15%)
-        probability = 0.10 + (urgency - 0.5) * 0.1;
-      }
-      
-      // If very little time remains (less than 10% of period), guarantee raid
-      if (timeRemainingRatio < 0.1 && quotaRemaining > 0) {
-        probability = 1.0;
-      }
-      
-      // Grace period: reduce probability if village recently reset (within last 48 hours)
-      // This prevents all raids from clustering on the reset day
-      const now = new Date();
-      const timeSinceReset = now.getTime() - periodStart.getTime();
-      const GRACE_PERIOD_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
-      const GRACE_PERIOD_REDUCTION_FACTOR = 0.25; // Reduce probability to 25% of original
-      
-      if (timeSinceReset < GRACE_PERIOD_MS && timeSinceReset >= 0) {
-        // Apply grace period reduction, but don't reduce below base probability
-        // This ensures raids can still happen randomly, just less likely right after reset
-        const gracePeriodReducedProbability = probability * GRACE_PERIOD_REDUCTION_FACTOR;
-        probability = Math.max(gracePeriodReducedProbability, 0.05); // Minimum 5% chance
-      }
+      // Calculate uniform time-based probability
+      const probability = calculateTimeBasedProbability(timeSinceReset, timeRemainingRatio);
       
       // Random roll
       const roll = Math.random();
-      
       if (roll < probability) {
-        eligibleVillages.push({ village, urgency, probability });
-        console.log(`[randomMonsterEncounters.js]: 🎲 ${villageName} (L${level}) eligible for raid - urgency: ${urgency.toFixed(2)}, prob: ${(probability * 100).toFixed(1)}%, rolled: ${(roll * 100).toFixed(1)}%`);
+        eligibleVillages.push({ village, periodData, quota });
       }
     }
     
@@ -808,12 +874,29 @@ async function checkVillageRaidQuotas(client) {
       return;
     }
     
-    // Select a random eligible village
+    // Random selection from eligible villages (equal probability for each)
     const selected = eligibleVillages[Math.floor(Math.random() * eligibleVillages.length)];
     const selectedVillage = selected.village;
     const selectedVillageName = selectedVillage.name.toLowerCase();
+    const quota = selected.quota;
     
-    console.log(`[randomMonsterEncounters.js]: 🎯 Selected ${selectedVillage.name} (L${selectedVillage.level}) for quota-based raid`);
+    // Double-check: Re-verify quota status before triggering raid
+    const currentVillage = await Village.findOne({ name: selectedVillage.name }).exec();
+    if (!currentVillage) {
+      console.error(`[randomMonsterEncounters.js]: ❌ Village ${selectedVillage.name} not found during double-check`);
+      return;
+    }
+    
+    // Verify period matches and quota not met
+    const currentPeriodStart = getVillagePeriodStart(selectedVillage.level || 1);
+    const storedPeriodStart = currentVillage.raidQuotaPeriodStart ? new Date(currentVillage.raidQuotaPeriodStart) : null;
+    const periodMatches = storedPeriodStart && Math.abs(storedPeriodStart.getTime() - currentPeriodStart.getTime()) < 1000;
+    const currentCount = currentVillage.raidQuotaCount || 0;
+    
+    if (!periodMatches || currentCount >= quota) {
+      console.log(`[randomMonsterEncounters.js]: ⚠️ Double-check failed for ${selectedVillage.name} - Period match: ${periodMatches}, Count: ${currentCount}/${quota}`);
+      return;
+    }
     
     // Get the target channel for the selected village
     const targetChannelId = villageChannelMap[selectedVillageName];
@@ -823,14 +906,13 @@ async function checkVillageRaidQuotas(client) {
     }
     
     const raidChannel = client.channels.cache.get(targetChannelId);
-    
-    if (raidChannel && raidChannel.type === ChannelType.GuildText) {
-      // Trigger the raid (pass level and quota for atomic quota reservation)
-      const quota = getVillageQuota(selectedVillage.level || 1);
-      await triggerQuotaBasedRaid(raidChannel, selectedVillageName, selectedVillage.name, selectedVillage.level || 1, quota);
-    } else {
+    if (!raidChannel || raidChannel.type !== ChannelType.GuildText) {
       console.error(`[randomMonsterEncounters.js]: ❌ Could not find channel for ${selectedVillageName} (ID: ${targetChannelId})`);
+      return;
     }
+    
+    // Trigger the raid (atomic reservation happens inside triggerQuotaBasedRaid)
+    await triggerQuotaBasedRaid(raidChannel, selectedVillageName, selectedVillage.name, selectedVillage.level || 1, quota);
     
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error checking village raid quotas:', error);
@@ -838,14 +920,13 @@ async function checkVillageRaidQuotas(client) {
   }
 }
 
-// ------------------- Try Reserve Quota Slot (Atomic) -------------------
+// ------------------- Try Reserve Quota Slot -------------------
 async function tryReserveQuotaSlot(villageName, level, quota) {
   try {
     const periodStart = getVillagePeriodStart(level);
     const periodType = level === 1 ? 'week' : 'month';
     
-    // First, ensure the period data exists and is current
-    // This resets the period if needed, so we can trust it
+    // Ensure period data exists and is current
     const periodData = await checkAndResetPeriod(villageName, level);
     if (!periodData) {
       return { success: false, reason: 'Could not get period data' };
@@ -853,7 +934,6 @@ async function tryReserveQuotaSlot(villageName, level, quota) {
     
     // Atomically increment only if current count is less than quota AND period matches
     // This prevents race conditions where multiple checks happen simultaneously
-    // We need to check both: period matches AND count is less than quota
     const result = await Village.findOneAndUpdate(
       { 
         name: villageName,
@@ -861,7 +941,7 @@ async function tryReserveQuotaSlot(villageName, level, quota) {
           {
             $or: [
               { raidQuotaPeriodStart: { $exists: false } },
-              { raidQuotaPeriodStart: periodStart } // Ensure period matches
+              { raidQuotaPeriodStart: periodStart }
             ]
           },
           {
@@ -876,30 +956,45 @@ async function tryReserveQuotaSlot(villageName, level, quota) {
         $inc: { raidQuotaCount: 1 },
         $set: {
           raidQuotaPeriodStart: periodStart,
-          raidQuotaPeriodType: periodType
+          raidQuotaPeriodType: periodType,
+          lastQuotaRaidTime: new Date()
         }
       },
       { upsert: false, new: true }
     );
     
+    // If reservation failed, get current state to determine reason
     if (!result) {
-      // Another process already reserved the last slot or period mismatch
-      return { success: false, reason: 'Quota already met or period mismatch' };
+      const currentVillage = await Village.findOne({ name: villageName }).exec();
+      if (currentVillage) {
+        const storedPeriodTime = currentVillage.raidQuotaPeriodStart ? new Date(currentVillage.raidQuotaPeriodStart).getTime() : 0;
+        const expectedPeriodTime = periodStart.getTime();
+        const periodMatches = Math.abs(storedPeriodTime - expectedPeriodTime) < 1000;
+        const count = currentVillage.raidQuotaCount || 0;
+        
+        if (!periodMatches) {
+          return { success: false, reason: 'Period mismatch' };
+        }
+        if (count >= quota) {
+          return { success: false, reason: 'Quota already met' };
+        }
+      }
+      return { success: false, reason: 'Reservation failed' };
     }
     
     const newCount = result.raidQuotaCount || 1;
     
-    // Double-check we didn't exceed quota (shouldn't happen with the condition above, but be safe)
+    // Post-reservation validation: verify we didn't exceed quota
     if (newCount > quota) {
       // Rollback the increment
       await Village.findOneAndUpdate(
         { name: villageName },
         { $inc: { raidQuotaCount: -1 } }
       );
+      console.error(`[randomMonsterEncounters.js]: ❌ Quota exceeded for ${villageName} (${newCount}/${quota}) - rollback performed`);
       return { success: false, reason: 'Quota exceeded' };
     }
     
-    console.log(`[randomMonsterEncounters.js]: ✅ Reserved quota slot for ${villageName}: ${newCount}/${quota} (period: ${periodType})`);
     return { success: true, newCount };
   } catch (error) {
     console.error(`[randomMonsterEncounters.js]: ❌ Error reserving quota slot for ${villageName}:`, error);
@@ -910,121 +1005,60 @@ async function tryReserveQuotaSlot(villageName, level, quota) {
 // ------------------- Trigger Quota-Based Raid -------------------
 async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayName, villageLevel, quota) {
   try {
-    console.log(`[randomMonsterEncounters.js]: 🎯 Processing quota-based raid for village: ${villageDisplayName}`);
-    
-    // Atomically reserve a quota slot BEFORE triggering the raid
-    // This prevents race conditions where multiple checks happen simultaneously
-    const quotaReservation = await tryReserveQuotaSlot(villageDisplayName, villageLevel, quota);
-    
-    if (!quotaReservation.success) {
-      console.log(`[randomMonsterEncounters.js]: ⚠️ Could not reserve quota slot for ${villageDisplayName}: ${quotaReservation.reason}`);
+    const currentVillage = await Village.findOne({ name: villageDisplayName }).exec();
+    if (!currentVillage) {
+      console.error(`[randomMonsterEncounters.js]: ❌ Village ${villageDisplayName} not found during pre-trigger check`);
       return;
     }
     
-    // Get the village region
-    const villageRegion = getVillageRegionByName(selectedVillage);
-    console.log(`[randomMonsterEncounters.js]: 🗺️ Village region: ${villageRegion}`);
+    const currentPeriodStart = getVillagePeriodStart(villageLevel);
+    const storedPeriodStart = currentVillage.raidQuotaPeriodStart ? new Date(currentVillage.raidQuotaPeriodStart) : null;
+    const periodMatches = storedPeriodStart && Math.abs(storedPeriodStart.getTime() - currentPeriodStart.getTime()) < 1000;
+    const currentCount = currentVillage.raidQuotaCount || 0;
     
+    if (!periodMatches || currentCount >= quota) {
+      console.log(`[randomMonsterEncounters.js]: ⚠️ Pre-trigger check failed for ${villageDisplayName} - Period match: ${periodMatches}, Count: ${currentCount}/${quota}`);
+      return;
+    }
+    
+    const quotaReservation = await tryReserveQuotaSlot(villageDisplayName, villageLevel, quota);
+    if (!quotaReservation.success) {
+      console.log(`[randomMonsterEncounters.js]: ⚠️ Reservation failed for ${villageDisplayName}: ${quotaReservation.reason}`);
+      return;
+    }
+    
+    const villageRegion = getVillageRegionByName(selectedVillage);
     if (!villageRegion) {
       console.error(`[randomMonsterEncounters.js]: ❌ Invalid village: ${selectedVillage}`);
-      // Rollback the quota reservation
-      await Village.findOneAndUpdate(
-        { name: villageDisplayName },
-        { $inc: { raidQuotaCount: -1 } }
-      );
+      await rollbackQuotaReservation(villageDisplayName);
       await channel.send(`❌ **Invalid village: ${selectedVillage}**`);
       return;
     }
     
-    // Select a monster above tier 5 from the region
-    // Filter out Yiga monsters - they should not appear in regular raids
-    const Monster = require('../../shared/models/MonsterModel');
-    const monsters = await Monster.find({
-      tier: { $gte: 5 },
-      [villageRegion.toLowerCase()]: true,
-      $or: [
-        { species: { $exists: false } },
-        { species: { $ne: 'Yiga' } }
-      ]
-    }).exec();
-    
-    if (!monsters || monsters.length === 0) {
-      console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters (excluding Yiga) found for region: ${villageRegion}`);
-      // Rollback the quota reservation
-      await Village.findOneAndUpdate(
-        { name: villageDisplayName },
-        { $inc: { raidQuotaCount: -1 } }
-      );
-      await channel.send(`❌ **No tier 5+ monsters (excluding Yiga) found in ${villageRegion} region for ${villageDisplayName}.**`);
+    const monster = await selectMonsterForRaid(villageRegion, villageDisplayName, channel);
+    if (!monster) {
+      await rollbackQuotaReservation(villageDisplayName);
       return;
     }
     
-    const monster = monsters[Math.floor(Math.random() * monsters.length)];
-    if (!monster || !monster.name || !monster.tier) {
-      console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters found for region: ${villageRegion}`);
-      // Rollback the quota reservation
-      await Village.findOneAndUpdate(
-        { name: villageDisplayName },
-        { $inc: { raidQuotaCount: -1 } }
-      );
-      await channel.send(`❌ **No tier 5+ monsters found in ${villageRegion} region for ${villageDisplayName}.**`);
-      return;
-    }
-    
-    console.log(`[randomMonsterEncounters.js]: 🐉 Selected monster: ${monster.name} (Tier ${monster.tier}) from ${villageRegion} region`);
-    
-    // Create a mock interaction object for the triggerRaid function
-    const mockInteraction = {
-      channel: channel,
-      client: channel.client,
-      user: { id: 'quota-raid-bot', tag: 'Quota Raid Bot' },
-      guild: channel.guild,
-      editReply: async (options) => {
-        return await channel.send(options);
-      },
-      followUp: async (options) => {
-        return await channel.send(options);
-      }
-    };
-    
-    // Use the same triggerRaid function as the mod command
+    const mockInteraction = createMockInteraction(channel);
     const { triggerRaid } = require('../modules/raidModule');
-    
-    // Capitalize the village name to match the RaidModel enum values
     const capitalizedVillage = capitalizeVillageName(selectedVillage);
-    console.log(`[randomMonsterEncounters.js]: 🚀 Triggering quota-based raid for ${monster.name} in ${capitalizedVillage}`);
     
-    // Trigger raid with isQuotaBased flag set to true
     const result = await triggerRaid(monster, mockInteraction, capitalizedVillage, false, null, true);
     
     if (!result || !result.success) {
       console.error(`[randomMonsterEncounters.js]: ❌ Failed to trigger quota-based raid: ${result?.error || 'Unknown error'}`);
-      // Rollback the quota reservation if raid failed
-      await Village.findOneAndUpdate(
-        { name: villageDisplayName },
-        { $inc: { raidQuotaCount: -1 } }
-      );
+      await rollbackQuotaReservation(villageDisplayName);
       await channel.send(`❌ **Failed to trigger the raid:** ${result?.error || 'Unknown error'}`);
       return;
     }
     
-    // Quota was already incremented before triggering, so we're done
-    console.log(`[randomMonsterEncounters.js]: ✅ Quota-based raid triggered successfully in ${villageDisplayName} channel (quota: ${quotaReservation.newCount}/${quota})`);
-    console.log(`[randomMonsterEncounters.js]: 🎉 QUOTA-BASED RAID COMPLETE! ${monster.name} (T${monster.tier}) in ${villageDisplayName}`);
+    console.log(`[randomMonsterEncounters.js]: ✅ Quota-based raid triggered in ${villageDisplayName}: ${monster.name} (T${monster.tier}) - ${quotaReservation.newCount}/${quota}`);
     
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error triggering quota-based raid:', error);
-    
-    // Try to rollback quota on error
-    try {
-      await Village.findOneAndUpdate(
-        { name: villageDisplayName },
-        { $inc: { raidQuotaCount: -1 } }
-      );
-    } catch (rollbackError) {
-      console.error(`[randomMonsterEncounters.js]: ❌ Failed to rollback quota for ${villageDisplayName}:`, rollbackError);
-    }
-    
+    await rollbackQuotaReservation(villageDisplayName);
     await handleError(error, 'randomMonsterEncounters.js');
   }
 }

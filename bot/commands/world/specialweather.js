@@ -9,11 +9,12 @@ const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discor
 // ------------------- Database Services -------------------
 const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../../../shared/database/db.js');
 const ItemModel = require('../../../shared/models/ItemModel');
+const Weather = require('../../../shared/models/WeatherModel');
 
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../../modules/rngModule.js');
 const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
-const { syncToInventoryDatabase, SOURCE_TYPES } = require('../../../shared/utils/inventoryUtils.js');
+const { syncToInventoryDatabase } = require('../../../shared/utils/inventoryUtils.js');
 const weatherService = require('../../../shared/services/weatherService');
 const { getWeatherWithoutGeneration, getCurrentPeriodBounds, getNextPeriodBounds, PERIOD_VALIDATION_TOLERANCE_MS } = weatherService;
 const { canUseSpecialWeather, normalizeVillageName } = require('../../../shared/utils/specialWeatherUtils');
@@ -36,11 +37,7 @@ const VILLAGE_IMAGES = {
   Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png"
 };
 
-// Add banner cache
-const bannerCache = new Map();
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-
-// Add channel mapping
+// ------------------- Channel Mapping -------------------
 const VILLAGE_CHANNELS = {
   Rudania: process.env.RUDANIA_TOWNHALL,
   Inariko: process.env.INARIKO_TOWNHALL,
@@ -88,6 +85,273 @@ async function generateBanner(village, weather) {
     enableCaching: true, 
     cacheDuration: 300000 // 5 minutes
   });
+}
+
+// ------------------- Error Embed Helpers -------------------
+function createErrorEmbed(title, description, footer = null, color = 0x008B8B) {
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(title)
+    .setDescription(description)
+    .setImage({ url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' });
+  
+  if (footer) {
+    embed.setFooter({ text: footer });
+  }
+  
+  return embed;
+}
+
+function createWeatherErrorEmbed(characterName, village, errorType) {
+  const errorMessages = {
+    notFound: {
+      title: '❌ Invalid Channel',
+      description: '**This command can only be used in a village\'s town hall channel.**',
+      footer: 'Channel Restriction',
+      color: 0xFF6B6B
+    },
+    invalidChannel: {
+      title: '❌ Invalid Channel',
+      description: '**This command can only be used in a village\'s town hall channel.**',
+      footer: 'Channel Restriction',
+      color: 0xFF6B6B
+    },
+    noWeather: {
+      title: 'Weather Data Error',
+      description: `*${characterName} looks up at the sky...*\n\n**Weather Data Error**\nUnable to retrieve weather data for ${village}.\n\nPlease try again in a few moments.`,
+      footer: 'Weather Data Error',
+      color: 0x008B8B
+    },
+    invalidWeather: {
+      title: 'Weather Data Error',
+      description: `*${characterName} looks up at the sky...*\n\n**Weather Data Error**\nThe weather data for ${village} appears to be incomplete.\n\nPlease try again in a few moments.`,
+      footer: 'Weather Data Error',
+      color: 0x008B8B
+    },
+    futurePeriod: {
+      title: 'Weather Data Error',
+      description: `*${characterName} looks up at the sky...*\n\n**Weather Data Error**\nThe retrieved weather data for ${village} appears to be from a future period.\n\nPlease try again in a few moments.`,
+      footer: 'Weather Data Error',
+      color: 0x008B8B
+    },
+    noSpecial: {
+      title: 'No Special Weather Today!',
+      description: `*${characterName} looks up at the sky...*\n\n**No Special Weather Today!**\nThere is no special weather in ${village} right now.\n\n⏰ **Wait until this village has special weather to use this command!**\n\nSpecial weather events are rare and unpredictable - keep an eye out for the next one!`,
+      footer: 'Weather Check',
+      color: 0x008B8B
+    },
+    malformed: {
+      title: 'Weather Data Error',
+      description: `*${characterName} looks up at the sky...*\n\n**Weather Data Error**\nThe special weather data for ${village} appears to be malformed.\n\nPlease try again in a few moments.`,
+      footer: 'Weather Data Error',
+      color: 0x008B8B
+    },
+    wrongVillage: {
+      title: 'Wrong Village Location',
+      description: `*${characterName} looks around confused...*\n\n**Wrong Village Location**\nYou must be in ${village} to gather during its special weather.`,
+      footer: 'Location Check',
+      color: 0x008B8B
+    }
+  };
+
+  const config = errorMessages[errorType] || errorMessages.noWeather;
+  return createErrorEmbed(config.title, config.description, config.footer, config.color);
+}
+
+// ------------------- Validation Functions -------------------
+async function validateChannel(interaction) {
+  const channelId = interaction.channelId;
+  const validChannels = Object.values(VILLAGE_CHANNELS);
+  
+  if (!validChannels.includes(channelId)) {
+    const embed = createErrorEmbed(
+      '❌ Invalid Channel',
+      '**This command can only be used in a village\'s town hall channel.**',
+      'Channel Restriction',
+      0xFF6B6B
+    );
+    embed.addFields([{
+      name: '🏛️ Valid Town Hall Channels',
+      value: `🔥 <#${VILLAGE_CHANNELS.Rudania}> (Rudania)\n💧 <#${VILLAGE_CHANNELS.Inariko}> (Inariko)\n🌱 <#${VILLAGE_CHANNELS.Vhintl}> (Vhintl)`,
+      inline: false
+    }]);
+    embed.setTimestamp();
+    
+    await interaction.editReply({ embeds: [embed], ephemeral: true });
+    return { valid: false, village: null };
+  }
+
+  const village = Object.entries(VILLAGE_CHANNELS).find(([_, id]) => id === channelId)?.[0];
+  if (!village) {
+    await interaction.editReply({ content: '❌ **Invalid town hall channel.**', ephemeral: true });
+    return { valid: false, village: null };
+  }
+
+  return { valid: true, village };
+}
+
+async function validateCharacter(characterName, userId) {
+  let character = await fetchCharacterByNameAndUserId(characterName, userId);
+  
+  if (!character) {
+    const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
+    character = await fetchModCharacterByNameAndUserId(characterName, userId);
+  }
+
+  if (!character) {
+    return { valid: false, character: null };
+  }
+
+  await checkInventorySync(character);
+  return { valid: true, character };
+}
+
+async function validateCharacterState(interaction, character, now) {
+  const jailCheck = await enforceJail(interaction, character);
+  if (jailCheck) {
+    return { valid: false };
+  }
+
+  if (character.ko) {
+    await interaction.editReply({
+      content: `❌ **${character.name} is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
+      ephemeral: true
+    });
+    return { valid: false };
+  }
+
+  if (character.debuff?.active) {
+    const debuffEndDate = new Date(character.debuff.endDate);
+    if (debuffEndDate <= now) {
+      character.debuff.active = false;
+      character.debuff.endDate = null;
+      await character.save();
+    } else {
+      const debuffEmbed = createGatherDebuffEmbed(character);
+      await interaction.editReply({ embeds: [debuffEmbed], ephemeral: true });
+      return { valid: false };
+    }
+  }
+
+  return { valid: true };
+}
+
+function validateWeather(weather, village, periodBounds) {
+  if (!weather) {
+    return { valid: false, error: 'notFound' };
+  }
+
+  if (!weather.date || !weather.temperature || !weather.precipitation) {
+    return { valid: false, error: 'invalidWeather' };
+  }
+
+  const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+  
+  if (weatherDate >= periodBounds.nextPeriodStart) {
+    return { valid: false, error: 'futurePeriod' };
+  }
+
+  if (!weather.special) {
+    return { valid: false, error: 'noSpecial' };
+  }
+
+  if (!weather.special.label) {
+    return { valid: false, error: 'malformed' };
+  }
+
+  return { valid: true, weatherDate };
+}
+
+// ------------------- Weather Retrieval -------------------
+async function getWeatherForVillage(village, now) {
+  const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
+  const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
+  
+  let weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
+  
+  if (!weather) {
+    const normalizedVillage = normalizeVillageName(village);
+    const fallbackWeather = await Weather.findOne({
+      village: normalizedVillage,
+      $or: [
+        { postedToDiscord: true },
+        { postedToDiscord: { $exists: false } }
+      ]
+    })
+      .sort({ date: -1 })
+      .lean();
+    
+    if (fallbackWeather) {
+      const weatherDate = fallbackWeather.date instanceof Date ? fallbackWeather.date : new Date(fallbackWeather.date);
+      if (weatherDate >= startOfNextPeriodUTC) {
+        console.error(`[specialweather.js]: ❌ Fallback weather rejected: from future period for ${village}`);
+        weather = null;
+      } else {
+        weather = fallbackWeather;
+      }
+    }
+  }
+
+  return { weather, periodBounds: { startOfPeriodUTC, startOfNextPeriodUTC } };
+}
+
+// ------------------- Item Selection Functions -------------------
+function getSpecialWeatherFieldName(weatherLabel) {
+  const specialWeatherField = weatherLabel
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+  
+  return specialWeatherField === 'meteorshower' ? 'meteorShower' : specialWeatherField;
+}
+
+function getSpecialWeatherItems(items, fieldName) {
+  return items.filter(item => 
+    item.specialWeather && 
+    item.specialWeather[fieldName] === true
+  );
+}
+
+function createWarningEmbed(weather, village) {
+  const warningMessages = {
+    "Flood": {
+      title: `🌊 **${weather.special.label} Warning**`,
+      description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of flood exposure\n\n🌊 The floodwaters create dangerous conditions. Consider waiting for the waters to recede.`
+    },
+    "Blight Rain": {
+      title: `🌧️🧿 **${weather.special.label} Warning**`,
+      description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of blight exposure\n\n<:blight_eye:805576955725611058> The blighted rain creates dangerous conditions. Consider waiting for clearer weather.`
+    },
+    "Lightning Storm": {
+      title: `⚡⛈️ **${weather.special.label} Warning**`,
+      description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\nLightning crackles across the sky in a dangerous storm! The storm is unpredictable and dangerous - any character who gathers, loots, or travels in this village today risks being struck by lightning!`
+    },
+    "Avalanche": {
+      title: `🏔️ **${weather.special.label} Warning**`,
+      description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of avalanche exposure\n\n🏔️ The avalanche debris creates dangerous conditions. Consider waiting for safer conditions.`
+    },
+    "Drought": {
+      title: `🌵 **${weather.special.label} Warning**`,
+      description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of dehydration\n\n🌵 The drought creates harsh conditions. Consider waiting for more favorable weather.`
+    },
+    "Rock Slide": {
+      title: `⛏️ **${weather.special.label} Warning**`,
+      description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of rock slide exposure\n\n⛏️ The rock slide debris creates dangerous conditions. Consider waiting for safer conditions.`
+    }
+  };
+
+  const warningConfig = warningMessages[weather.special.label] || {
+    title: `⚠️ **${weather.special.label} Warning**`,
+    description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of weather exposure\n\n⚠️ The weather conditions create dangerous situations. Consider waiting for better conditions.`
+  };
+
+  return new EmbedBuilder()
+    .setColor(0x8B0000)
+    .setTitle(warningConfig.title)
+    .setDescription(warningConfig.description)
+    .setThumbnail({ url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' })
+    .setFooter({ text: `${village} Weather Advisory` })
+    .setTimestamp();
 }
 
 // ------------------- Embed Creation -------------------
@@ -138,7 +402,7 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
       itemRarity = itemFromDb.itemRarity;
     }
   } catch (error) {
-    console.error(`[specialweather.js]: Error fetching item rarity for ${item.itemName}:`, error);
+    console.error(`[specialweather.js]: ❌ Error fetching item rarity for ${item.itemName}:`, error);
   }
 
   // Add rarity to footer
@@ -160,388 +424,77 @@ module.exports = {
 
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
-    const now = new Date(); // Declare once for entire function scope
+    const now = new Date();
     try {
       await interaction.deferReply();
 
-      // Check if command is used in a valid town hall channel
-      const channelId = interaction.channelId;
-      const validChannels = Object.values(VILLAGE_CHANNELS);
-      if (!validChannels.includes(channelId)) {
-        await interaction.editReply({
-          embeds: [{
-            color: 0xFF6B6B, // Red color for error
-            title: '❌ Invalid Channel',
-            description: '**This command can only be used in a village\'s town hall channel.**',
-            fields: [
-              {
-                name: '🏛️ Valid Town Hall Channels',
-                value: `🔥 <#${VILLAGE_CHANNELS.Rudania}> (Rudania)\n💧 <#${VILLAGE_CHANNELS.Inariko}> (Inariko)\n🌱 <#${VILLAGE_CHANNELS.Vhintl}> (Vhintl)`,
-                inline: false
-              }
-            ],
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Channel Restriction'
-            },
-            timestamp: new Date()
-          }],
-          ephemeral: true
-        });
+      const channelValidation = await validateChannel(interaction);
+      if (!channelValidation.valid) {
         return;
       }
-
-      // Get the village from the channel ID
-      const channelVillage = Object.entries(VILLAGE_CHANNELS).find(([_, id]) => id === channelId)?.[0];
-      if (!channelVillage) {
-        await interaction.editReply({
-          content: `❌ **Invalid town hall channel.**`,
-          ephemeral: true
-        });
-        return;
-      }
+      const channelVillage = channelValidation.village;
 
       const characterName = interaction.options.getString('charactername');
-      let character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-      
-      // If not found as regular character, try as mod character
-      if (!character) {
-        const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
-        character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
-      }
-      
-      if (!character) {
+      const characterValidation = await validateCharacter(characterName, interaction.user.id);
+      if (!characterValidation.valid) {
         await interaction.editReply({
-          content: `❌ **Character ${characterName} not found or does not belong to you.**`,
+          content: `❌ **Character ${characterName} not found or does not belong to you.**`
         });
         return;
       }
+      const character = characterValidation.character;
 
-      // Check inventory sync before proceeding
-      await checkInventorySync(character);
-
-      // Check if character is in jail
-      const jailCheck = await enforceJail(interaction, character);
-      if (jailCheck) {
+      const stateValidation = await validateCharacterState(interaction, character, now);
+      if (!stateValidation.valid) {
         return;
       }
 
-      // Check if character is KOed
-      if (character.ko) {
-        await interaction.editReply({
-          content: `❌ **${character.name} is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // Check if character is debuffed
-      if (character.debuff?.active) {
-        const debuffEndDate = new Date(character.debuff.endDate);
-        
-        // Check if debuff has actually expired (reuse 'now' from function scope)
-        if (debuffEndDate <= now) {
-          // Debuff has expired, clear it
-          character.debuff.active = false;
-          character.debuff.endDate = null;
-          await character.save();
-        } else {
-          // Debuff is still active
-          const debuffEmbed = createGatherDebuffEmbed(character);
-          
-          await interaction.editReply({
-            embeds: [debuffEmbed],
-            ephemeral: true,
-          });
-          return;
-        }
-      }
-
-      // Check if character has already gathered during special weather in this village this period
-      const isModerator = ['inarikomod', 'rudaniamod', 'vhintlmod'].includes(character.name.toLowerCase()); // Bypass for mod accounts and mod characters.
+      const isModerator = ['inarikomod', 'rudaniamod', 'vhintlmod'].includes(character.name.toLowerCase());
       if ((!isModerator && !character.isModCharacter) && !canUseSpecialWeather(character, channelVillage)) {
-        await interaction.editReply({
-          embeds: [{
-            color: 0x008B8B, // Dark cyan color
-            description: `*${character.name} has found all the special weather had to offer in ${channelVillage} this period!*\n\n**Period special weather gathering limit reached for ${channelVillage}.**\nYou've already gathered during special weather in ${channelVillage} this period (8am–7:59am EST). Special weather events are rare and unpredictable - keep an eye out for the next one!`,
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Period Activity Limit'
-            }
-          }],
-          ephemeral: true,
-        });
+        const embed = createErrorEmbed(
+          'Period Activity Limit',
+          `*${character.name} has found all the special weather had to offer in ${channelVillage} this period!*\n\n**Period special weather gathering limit reached for ${channelVillage}.**\nYou've already gathered during special weather in ${channelVillage} this period (8am–7:59am EST). Special weather events are rare and unpredictable - keep an eye out for the next one!`,
+          'Period Activity Limit'
+        );
+        await interaction.editReply({ embeds: [embed], ephemeral: true });
         return;
       }
 
-      // Get current weather for the village (onlyPosted: exclude Song-of-Storms-scheduled
-      // future weather that hasn't been posted yet — players gather for today's posted weather only)
-      const currentVillage = channelVillage; // Use the village from the channel
-      // Reuse 'now' from function scope
-      const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
-      const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
-      
-      // Try to get posted weather first (most secure)
-      let weather = await getWeatherWithoutGeneration(currentVillage, { onlyPosted: true });
-      
-      // Fallback: if no posted weather found, try without onlyPosted filter (with logging)
-      if (!weather) {
-        console.warn(`[specialweather.js]: ⚠️ No posted weather found for ${currentVillage}, attempting fallback without onlyPosted filter`);
-        weather = await getWeatherWithoutGeneration(currentVillage, { onlyPosted: false });
-        
-        if (weather) {
-          const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-          
-          // Reject weather from future periods even from fallback
-          // Use tolerance on lower bound to account for timing differences when period bounds are recalculated
-          const periodStartWithTolerance = new Date(startOfPeriodUTC.getTime() - PERIOD_VALIDATION_TOLERANCE_MS);
-          if (weatherDate < periodStartWithTolerance || weatherDate >= startOfNextPeriodUTC) {
-            console.error(`[specialweather.js]: ❌ Fallback weather rejected: outside current period bounds for ${currentVillage}`, {
-              weatherDate: weatherDate.toISOString(),
-              periodStart: startOfPeriodUTC.toISOString(),
-              periodStartWithTolerance: periodStartWithTolerance.toISOString(),
-              nextPeriodStart: startOfNextPeriodUTC.toISOString(),
-              postedToDiscord: weather.postedToDiscord
-            });
-            weather = null;
-          } else {
-            console.warn(`[specialweather.js]: ⚠️ Using fallback weather for ${currentVillage} (not marked as posted)`, {
-              weatherDate: weatherDate.toISOString(),
-              postedToDiscord: weather.postedToDiscord
-            });
-          }
-        }
-      }
+      const { weather, periodBounds } = await getWeatherForVillage(channelVillage, now);
       
       if (!weather) {
-        console.error(`[specialweather.js]: ❌ No weather data found for ${currentVillage}`, {
-          characterName: character.name,
-          userId: interaction.user.id,
-          channelVillage: currentVillage,
-          timestamp: now.toISOString()
-        });
-        await interaction.editReply({
-          embeds: [{
-            color: 0x008B8B,
-            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nUnable to retrieve weather data for ${currentVillage}.\n\nPlease try again in a few moments.`,
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Weather Data Error'
-            }
-          }],
-          ephemeral: true
-        });
-        return;
-      }
-      
-      // Validate weather structure before accessing properties
-      if (!weather.date || !weather.temperature || !weather.precipitation) {
-        console.error(`[specialweather.js]: ❌ Invalid weather structure for ${currentVillage}`, {
-          hasDate: !!weather.date,
-          hasTemperature: !!weather.temperature,
-          hasPrecipitation: !!weather.precipitation,
-          weatherKeys: Object.keys(weather)
-        });
-        await interaction.editReply({
-          embeds: [{
-            color: 0x008B8B,
-            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe weather data for ${currentVillage} appears to be incomplete.\n\nPlease try again in a few moments.`,
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Weather Data Error'
-            }
-          }],
-          ephemeral: true
-        });
-        return;
-      }
-      
-      // Additional period validation: ensure weather date matches current period
-      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-      
-      // Use tolerance on lower bound to account for timing differences when period bounds are recalculated
-      const periodStartWithTolerance = new Date(startOfPeriodUTC.getTime() - PERIOD_VALIDATION_TOLERANCE_MS);
-      if (weatherDate < periodStartWithTolerance || weatherDate >= startOfNextPeriodUTC) {
-        console.error(`[specialweather.js]: ❌ Weather rejected: outside current period bounds`, {
-          village: currentVillage,
-          weatherDate: weatherDate.toISOString(),
-          periodStart: startOfPeriodUTC.toISOString(),
-          periodStartWithTolerance: periodStartWithTolerance.toISOString(),
-          nextPeriodStart: startOfNextPeriodUTC.toISOString(),
-          characterName: character.name
-        });
-        await interaction.editReply({
-          embeds: [{
-            color: 0x008B8B,
-            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe retrieved weather data for ${currentVillage} appears to be from a different period.\n\nPlease try again in a few moments.`,
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Weather Data Error'
-            }
-          }],
-          ephemeral: true
-        });
+        const embed = createWeatherErrorEmbed(character.name, channelVillage, 'noWeather');
+        await interaction.editReply({ embeds: [embed], ephemeral: true });
         return;
       }
 
-      if (!weather.special) {
-        console.log(`[specialweather.js]: ⚠️ No special weather object found for ${currentVillage}`, {
-          characterName: character.name,
-          weatherDate: weatherDate.toISOString(),
-          hasSpecial: !!weather.special,
-          postedToDiscord: weather.postedToDiscord
-        });
-        await interaction.editReply({
-          embeds: [{
-            color: 0x008B8B,
-            description: `*${character.name} looks up at the sky...*\n\n**No Special Weather Today!**\nThere is no special weather in ${currentVillage} right now.\n\n⏰ **Wait until this village has special weather to use this command!**\n\nSpecial weather events are rare and unpredictable - keep an eye out for the next one!`,
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Weather Check'
-            }
-          }],
-          ephemeral: true
-        });
+      const weatherValidation = validateWeather(weather, channelVillage, periodBounds);
+      if (!weatherValidation.valid) {
+        const embed = createWeatherErrorEmbed(character.name, channelVillage, weatherValidation.error);
+        await interaction.editReply({ embeds: [embed], ephemeral: true });
         return;
       }
 
-      // Safety check for malformed special weather data (only if we have special weather)
-      if (weather.special && !weather.special.label) {
-        console.error(`[specialweather.js]: ❌ Special weather object found but no label for ${currentVillage}`);
-        await interaction.editReply({
-          embeds: [{
-            color: 0x008B8B,
-            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe special weather data for ${currentVillage} appears to be malformed.\n\nPlease try again in a few moments.`,
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Weather Data Error'
-            }
-          }],
-          ephemeral: true
-        });
+      if (character.currentVillage.toLowerCase() !== channelVillage.toLowerCase()) {
+        const embed = createWeatherErrorEmbed(character.name, channelVillage, 'wrongVillage');
+        embed.setDescription(`${embed.data.description}\n\n🗺️ **Current Location:** ${character.currentVillage}`);
+        await interaction.editReply({ embeds: [embed], ephemeral: true });
         return;
       }
 
-      console.log(`[specialweather.js]: ✅ Special weather detected: ${weather.special.label}`, {
-        characterName: character.name,
-        village: currentVillage,
-        weatherDate: weatherDate.toISOString(),
-        periodStart: startOfPeriodUTC.toISOString(),
-        nextPeriodStart: startOfNextPeriodUTC.toISOString(),
-        postedToDiscord: weather.postedToDiscord,
-        specialLabel: weather.special.label,
-        specialEmoji: weather.special.emoji
-      });
-
-      // Check if character is in the correct village
-      if (character.currentVillage.toLowerCase() !== currentVillage.toLowerCase()) {
-        await interaction.editReply({
-          embeds: [{
-            color: 0x008B8B, // Dark cyan color
-            description: `*${character.name} looks around confused...*\n\n**Wrong Village Location**\nYou must be in ${currentVillage} to gather during its special weather.\n\n🗺️ **Current Location:** ${character.currentVillage}`,
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Location Check'
-            }
-          }],
-          ephemeral: true
-        });
-        return;
-      }
-
-      // Get special weather items
       const items = await fetchAllItems();
-      // Convert weather.special.label to ItemModel.specialWeather field: muggy, flowerbloom, fairycircle,
-      // jubilee, meteorShower, rockslide, avalanche. (Meteor Shower -> meteorShower; rest lowercase, no spaces.)
-      const specialWeatherField = weather.special.label
-        .toLowerCase()
-        .replace(/\s+/g, '') // Remove spaces
-        .replace(/[^a-z0-9]/g, ''); // Remove special characters
-
-      // Special case for meteorShower
-      const fieldName = specialWeatherField === 'meteorshower' ? 'meteorShower' : specialWeatherField;
-
-      // Filter items that are available for this special weather (ignoring location)
-      const specialWeatherItems = items.filter(item => 
-        item.specialWeather && 
-        item.specialWeather[fieldName] === true
-      );
+      const fieldName = getSpecialWeatherFieldName(weather.special.label);
+      const specialWeatherItems = getSpecialWeatherItems(items, fieldName);
 
       if (specialWeatherItems.length === 0) {
-        // Create weather-specific warning messages
-        const warningMessages = {
-          "Flood": {
-            title: `🌊 **${weather.special.label} Warning**`,
-            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of flood exposure\n\n🌊 The floodwaters create dangerous conditions. Consider waiting for the waters to recede.`
-          },
-          "Blight Rain": {
-            title: `🌧️🧿 **${weather.special.label} Warning**`,
-            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of blight exposure\n\n<:blight_eye:805576955725611058> The blighted rain creates dangerous conditions. Consider waiting for clearer weather.`
-          },
-          "Lightning Storm": {
-            title: `⚡⛈️ **${weather.special.label} Warning**`,
-            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\nLightning crackles across the sky in a dangerous storm! The storm is unpredictable and dangerous - any character who gathers, loots, or travels in this village today risks being struck by lightning!`
-          },
-          "Avalanche": {
-            title: `🏔️ **${weather.special.label} Warning**`,
-            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of avalanche exposure\n\n🏔️ The avalanche debris creates dangerous conditions. Consider waiting for safer conditions.`
-          },
-          "Drought": {
-            title: `🌵 **${weather.special.label} Warning**`,
-            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of dehydration\n\n🌵 The drought creates harsh conditions. Consider waiting for more favorable weather.`
-          },
-          "Rock Slide": {
-            title: `⛏️ **${weather.special.label} Warning**`,
-            description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of rock slide exposure\n\n⛏️ The rock slide debris creates dangerous conditions. Consider waiting for safer conditions.`
-          }
-        };
-
-        const warningConfig = warningMessages[weather.special.label] || {
-          title: `⚠️ **${weather.special.label} Warning**`,
-          description: `**No special items to gather in ${currentVillage} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of weather exposure\n\n⚠️ The weather conditions create dangerous situations. Consider waiting for better conditions.`
-        };
-
-        // Create a warning embed for when no special items are available
-        const warningEmbed = {
-          color: 0x8B0000, // Dark red color for warning
-          title: warningConfig.title,
-          description: warningConfig.description,
-          thumbnail: {
-            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-          },
-          footer: {
-            text: `${currentVillage} Weather Advisory`
-          },
-          timestamp: new Date()
-        };
-
-        await interaction.editReply({
-          embeds: [warningEmbed]
-        });
+        const warningEmbed = createWarningEmbed(weather, channelVillage);
+        await interaction.editReply({ embeds: [warningEmbed] });
         return;
       }
 
-      // Select and gather item
       const weightedItems = createWeightedItemList(specialWeatherItems);
       const randomItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
       
-      // Format item for syncing
       const itemToSync = {
         itemName: randomItem.itemName,
         quantity: 1,
@@ -553,11 +506,8 @@ module.exports = {
         link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
       };
 
-      // Sync item using itemSyncUtils
       await syncToInventoryDatabase(character, itemToSync, interaction);
 
-      // 1x per period per village: record usage for this village
-      // Reuse 'now' variable declared at start of function
       if (!character.specialWeatherUsage) {
         character.specialWeatherUsage = new Map();
       }
@@ -565,24 +515,16 @@ module.exports = {
       character.markModified('specialWeatherUsage');
       await character.save();
 
-      // Create and send embed
       const { embed, files } = await createSpecialWeatherEmbed(character, randomItem, weather);
-      
-      // Generate banner and add it to the embed
-      const banner = await generateBanner(currentVillage, weather);
+      const banner = await generateBanner(channelVillage, weather);
       if (banner) {
         embed.setImage(`attachment://${banner.name}`);
         files.push(banner);
       }
 
-      // Send response with embed and banner
-      await interaction.editReply({ 
-        embeds: [embed], 
-        files: files 
-      });
+      await interaction.editReply({ embeds: [embed], files: files });
 
     } catch (error) {
-      // Only log errors that aren't inventory sync related
       if (!error.message.includes('inventory is not synced')) {
         handleInteractionError(error, 'specialweather.js', {
           commandName: '/specialweather',
@@ -592,36 +534,24 @@ module.exports = {
         });
       }
 
-      // Provide more specific error messages based on the error type
       let errorMessage;
       if (error.message.includes('inventory is not synced')) {
+        const embed = createErrorEmbed(
+          '❌ Inventory Not Synced',
+          error.message,
+          'Inventory Sync Required',
+          0xFF0000
+        );
+        embed.addFields([{
+          name: 'How to Fix',
+          value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+        }]);
+        
         try {
-          await interaction.editReply({
-            embeds: [{
-              color: 0xFF0000, // Red color
-              title: '❌ Inventory Not Synced',
-              description: error.message,
-              fields: [
-                {
-                  name: 'How to Fix',
-                  value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-                }
-              ],
-              image: {
-                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-              },
-              footer: {
-                text: 'Inventory Sync Required'
-              }
-            }],
-            ephemeral: true
-          });
+          await interaction.editReply({ embeds: [embed], ephemeral: true });
         } catch (replyError) {
-          if (replyError.code === 10062) {
-            console.warn(`[specialweather.js]: Interaction expired for user ${interaction.user.tag}, cannot send inventory sync error response`);
-          } else {
-            throw replyError;
-          }
+          if (replyError.code !== 10062) throw replyError;
+          console.warn(`[specialweather.js]: ⚠️ Interaction expired for user ${interaction.user.tag}`);
         }
         return;
       } else if (error.message.includes('MongoDB')) {
@@ -639,35 +569,15 @@ module.exports = {
       }
 
       if (errorMessage) {
-        // Check if interaction is still valid before trying to reply
-        if (!interaction.replied && !interaction.deferred) {
-          try {
-            await interaction.reply({
-              content: errorMessage,
-              ephemeral: true
-            });
-          } catch (replyError) {
-            if (replyError.code === 10062) {
-              // Interaction expired, log but don't try to respond
-              console.warn(`[specialweather.js]: Interaction expired for user ${interaction.user.tag}, cannot send error response`);
-            } else {
-              throw replyError;
-            }
+        try {
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: errorMessage, ephemeral: true });
+          } else if (interaction.deferred) {
+            await interaction.editReply({ content: errorMessage, ephemeral: true });
           }
-        } else if (interaction.deferred) {
-          try {
-            await interaction.editReply({
-              content: errorMessage,
-              ephemeral: true
-            });
-          } catch (editError) {
-            if (editError.code === 10062) {
-              // Interaction expired, log but don't try to respond
-              console.warn(`[specialweather.js]: Interaction expired for user ${interaction.user.tag}, cannot send error response`);
-            } else {
-              throw editError;
-            }
-          }
+        } catch (replyError) {
+          if (replyError.code !== 10062) throw replyError;
+          console.warn(`[specialweather.js]: ⚠️ Interaction expired for user ${interaction.user.tag}`);
         }
       }
     }

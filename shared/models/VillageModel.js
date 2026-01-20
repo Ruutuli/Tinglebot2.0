@@ -193,6 +193,10 @@ const VillageSchema = new mongoose.Schema({
         enum: ['week', 'month'],
         default: null,
     },
+    lastQuotaRaidTime: {
+        type: Date,
+        default: null,
+    },
 }, { timestamps: true });
 
 // ============================================================================
