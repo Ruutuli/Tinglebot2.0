@@ -994,7 +994,6 @@ async function handleCharacterBasedCommandsAutocomplete(
     if (existingLock) {
       const lockAge = Date.now() - existingLock.timestamp;
       if (lockAge < AUTCOMPLETE_MAX_INFLIGHT_AGE) {
-        console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Reusing inflight request for userId: ${userId} (age: ${lockAge}ms)`);
         try {
           const cachedResult = await existingLock.promise;
           // Respond with cached result
@@ -1006,12 +1005,10 @@ async function handleCharacterBasedCommandsAutocomplete(
           return;
         } catch (error) {
           // If the inflight request failed, continue to make a new one
-          console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Inflight request failed, starting new request`);
           autocompleteLocks.delete(userId);
         }
       } else {
         // Stale lock, remove it
-        console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Removing stale lock for userId: ${userId}`);
         autocompleteLocks.delete(userId);
       }
     }
@@ -1019,7 +1016,6 @@ async function handleCharacterBasedCommandsAutocomplete(
     // Check cache first
     const cached = autocompleteCache.get(userId);
     if (cached && (Date.now() - cached.timestamp) < cached.ttl) {
-      console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Using cached data for userId: ${userId}`);
       const choices = cached.data.map((character) => ({
         name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
         value: character.name,
@@ -1045,43 +1041,8 @@ async function handleCharacterBasedCommandsAutocomplete(
       autocompleteLocks.delete(userId);
     };
     
-    // Log connection state and pool info
-    const connectionState = mongoose.connection.readyState;
-    const connectionStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
-    const stateName = connectionStates[connectionState] || 'unknown';
-    
-    // Try to get pool information if available
-    let poolInfo = 'N/A';
-    try {
-      const db = mongoose.connection.db;
-      if (db && db.serverConfig && db.serverConfig.s && db.serverConfig.s.pool) {
-        const pool = db.serverConfig.s.pool;
-        poolInfo = `total: ${pool.totalConnectionCount || 'N/A'}, available: ${pool.availableConnectionCount || 'N/A'}, waitQueue: ${pool.waitQueueSize || 0}`;
-      }
-    } catch (poolError) {
-      // Pool info not available, that's okay
-    }
-    
-    console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} start - userId: ${userId}, interactionAge: ${interactionAge}ms, connectionState: ${stateName} (${connectionState}), pool: ${poolInfo}`);
-    
     const requiredFields = ['name', 'currentVillage', 'job'];
-    // Use longer timeout on Railway due to network latency, but stay under Discord's 3s limit
-    // Fix: Check for 'production' string, not just 'true'
-    const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || 
-                      process.env.RAILWAY_ENVIRONMENT === 'production' || 
-                      process.env.NODE_ENV === 'production';
-    // Temporarily increase to 10s for diagnostic purposes
-    const timeoutMs = isRailway ? 10000 : 2500; // 10 seconds on Railway (diagnostic), 2.5 seconds locally
-    console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Railway detection: isRailway=${isRailway}, RAILWAY_ENVIRONMENT=${process.env.RAILWAY_ENVIRONMENT}, NODE_ENV=${process.env.NODE_ENV}`);
-    
-    const queryStartTime = Date.now();
-    console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Starting queries with ${timeoutMs}ms timeout`);
-    
-    // Track individual query times
-    let regularCharsStartTime = null;
-    let modCharsStartTime = null;
-    let regularCharsEndTime = null;
-    let modCharsEndTime = null;
+    const timeoutMs = 2500; // 2.5 seconds timeout
     
     const queryTimeout = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Database query timeout')), timeoutMs)
@@ -1090,28 +1051,11 @@ async function handleCharacterBasedCommandsAutocomplete(
     try {
       const [characters, modCharacters] = await Promise.race([
         Promise.all([
-          (async () => {
-            regularCharsStartTime = Date.now();
-            console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Regular chars query START`);
-            const result = await fetchCharactersByUserId(userId, requiredFields);
-            regularCharsEndTime = Date.now();
-            console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Regular chars query END (${regularCharsEndTime - regularCharsStartTime}ms)`);
-            return result;
-          })(),
-          (async () => {
-            modCharsStartTime = Date.now();
-            console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Mod chars query START`);
-            const result = await fetchModCharactersByUserId(userId, requiredFields);
-            modCharsEndTime = Date.now();
-            console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Mod chars query END (${modCharsEndTime - modCharsStartTime}ms)`);
-            return result;
-          })()
+          fetchCharactersByUserId(userId, requiredFields),
+          fetchModCharactersByUserId(userId, requiredFields)
         ]),
         queryTimeout
       ]);
-      
-      const totalTime = Date.now() - queryStartTime;
-      console.log(`[AUTOCOMPLETE-DEBUG] ${commandName} - Queries completed in ${totalTime}ms (regular: ${regularCharsEndTime ? regularCharsEndTime - regularCharsStartTime : 'N/A'}ms, mod: ${modCharsEndTime ? modCharsEndTime - modCharsStartTime : 'N/A'}ms)`);
       
       // Combine regular characters and mod characters
       const allCharacters = [...(characters || []), ...(modCharacters || [])];
@@ -1135,35 +1079,12 @@ async function handleCharacterBasedCommandsAutocomplete(
       
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     } catch (queryError) {
-      const totalTime = Date.now() - queryStartTime;
-      console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Query failed after ${totalTime}ms`);
-      console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Regular chars: ${regularCharsStartTime ? (regularCharsEndTime ? `completed in ${regularCharsEndTime - regularCharsStartTime}ms` : 'still running') : 'never started'}`);
-      console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Mod chars: ${modCharsStartTime ? (modCharsEndTime ? `completed in ${modCharsEndTime - modCharsStartTime}ms` : 'still running') : 'never started'}`);
-      
-      // Log connection state and pool info on timeout
-      const connectionState = mongoose.connection.readyState;
-      const connectionStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
-      const stateName = connectionStates[connectionState] || 'unknown';
-      let poolInfo = 'N/A';
-      try {
-        const db = mongoose.connection.db;
-        if (db && db.serverConfig && db.serverConfig.s && db.serverConfig.s.pool) {
-          const pool = db.serverConfig.s.pool;
-          poolInfo = `total: ${pool.totalConnectionCount || 'N/A'}, available: ${pool.availableConnectionCount || 'N/A'}, waitQueue: ${pool.waitQueueSize || 0}`;
-        }
-      } catch (poolError) {
-        // Pool info not available
-      }
-      console.error(`[AUTOCOMPLETE-DEBUG] ${commandName} - Connection state: ${stateName} (${connectionState}), pool: ${poolInfo}`);
-      
       // Reject the lock promise and clean up
       rejectLock(queryError);
       cleanupLock();
       
-      console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query error for ${commandName}:`, queryError);
-      if (queryError.message === 'Database query timeout') {
-        console.error(`[handleCharacterBasedCommandsAutocomplete]: Database query timeout for ${commandName}, userId: ${userId}`);
-      }
+      logger.error('AUTOCOMPLETE', `Database query error for ${commandName}: ${queryError.message}`, queryError);
+      
       // Respond with empty array on query failure
       try {
         if (!interaction.responded && interaction.isAutocomplete()) {
@@ -1171,7 +1092,7 @@ async function handleCharacterBasedCommandsAutocomplete(
         }
       } catch (respondError) {
         if (respondError.code !== 10062) {
-          console.error(`[handleCharacterBasedCommandsAutocomplete]: Error responding:`, respondError);
+          logger.error('AUTOCOMPLETE', `Error responding to autocomplete: ${respondError.message}`, respondError);
         }
       }
       return;

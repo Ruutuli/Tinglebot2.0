@@ -148,7 +148,7 @@ const {
   handleModGiveItemAutocomplete
 } = require('../../handlers/autocompleteHandler');
 
-const { simulateWeightedWeather } = require('../../../shared/services/weatherService');
+const { simulateWeightedWeather, getCurrentWeather } = require('../../../shared/services/weatherService');
 
 // ------------------- Database Models -------------------
 const ApprovedSubmission = require('../../../shared/models/ApprovedSubmissionModel');
@@ -933,6 +933,22 @@ const modCommand = new SlashCommandBuilder()
         )
     )
 )
+.addSubcommand(sub =>
+  sub
+    .setName('weather-forecast')
+    .setDescription('🌤️ Post the current weather forecast for a village')
+    .addStringOption(opt =>
+      opt
+        .setName('village')
+        .setDescription('The village to get weather forecast for')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Rudania', value: 'Rudania' },
+          { name: 'Inariko', value: 'Inariko' },
+          { name: 'Vhintl', value: 'Vhintl' }
+        )
+    )
+)
 
 // ------------------- Subcommand: vendingreset -------------------
 .addSubcommand(sub =>
@@ -1355,7 +1371,7 @@ async function execute(interaction) {
     
     // Only defer with ephemeral for non-mount and non-weather commands
     try {
-      if (subcommand !== 'mount' && subcommand !== 'weather') {
+      if (subcommand !== 'mount' && subcommand !== 'weather' && subcommand !== 'weather-forecast') {
         await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
       } else {
         await interaction.deferReply();
@@ -1431,6 +1447,8 @@ async function execute(interaction) {
         return await handleSlots(interaction);
     } else if (subcommand === 'weather') {
         return await handleWeather(interaction);
+    } else if (subcommand === 'weather-forecast') {
+        return await handleWeatherForecast(interaction);
     } else if (subcommand === 'vendingreset') {
         return await handleVendingReset(interaction);
     } else if (subcommand === 'stealreset') {
@@ -2867,6 +2885,44 @@ async function handleWeather(interaction) {
   } catch (error) {
     console.error('[mod.js]: Error handling weather command:', error);
     await interaction.editReply({ content: '❌ An error occurred while generating the weather report.' });
+  }
+}
+
+// ------------------- Weather Forecast Handler -------------------
+async function handleWeatherForecast(interaction) {
+  try {
+    const village = interaction.options.getString('village');
+    
+    // Get the current weather from the database
+    const weather = await getCurrentWeather(village);
+    
+    if (!weather) {
+      await interaction.editReply({ content: `❌ No weather found for ${village}. Weather may need to be generated first.` });
+      return;
+    }
+    
+    // Ensure weather has season (it should from getCurrentWeather, but just in case)
+    if (!weather.season) {
+      weather.season = WeatherService.getCurrentSeason();
+    }
+    
+    // Generate the weather embed
+    const { embed, files } = await generateWeatherEmbed(village, weather);
+    
+    // Send processing message as ephemeral
+    await interaction.editReply({ content: '✅ Fetching weather forecast...', ephemeral: true });
+    
+    // Post the weather embed in the channel (not ephemeral)
+    await interaction.followUp({ 
+      embeds: [embed], 
+      files,
+      content: `🌤️ **${village} Weather Forecast** - Posted by ${interaction.user.tag}`
+    });
+    
+    console.log(`[mod.js]: Posted weather forecast for ${village} in channel`);
+  } catch (error) {
+    console.error('[mod.js]: Error handling weather forecast command:', error);
+    await interaction.editReply({ content: '❌ An error occurred while fetching the weather forecast.' });
   }
 }
 

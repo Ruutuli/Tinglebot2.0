@@ -8,14 +8,15 @@ const { google } = require("googleapis");
 // ------------------- Project Utilities -------------------
 const { handleError, resetErrorCounter } = require("../utils/globalErrorHandler");
 const {
- authorizeSheets,
- appendSheetData,
- extractSpreadsheetId,
- getActualSheetName,
- isValidGoogleSheetsUrl,
- readSheetData,
- safeAppendDataToSheet,
+  authorizeSheets,
+  appendSheetData,
+  extractSpreadsheetId,
+  getActualSheetName,
+  isValidGoogleSheetsUrl,
+  readSheetData,
+  safeAppendDataToSheet,
 } = require("../utils/googleSheetsUtils");
+const { characterQueryDetector, modCharacterQueryDetector } = require("../utils/throttleDetector");
 const dbConfig = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -347,49 +348,52 @@ const fetchCharacterById = async (characterId) => {
 
 // ------------------- fetchCharactersByUserId -------------------
 const fetchCharactersByUserId = async (userId, fields = null) => {
-  const queryStartTime = Date.now();
+  const startTime = Date.now();
+  
+  // Check circuit breaker
+  if (characterQueryDetector.shouldBlock()) {
+    const duration = Date.now() - startTime;
+    characterQueryDetector.recordQuery(false, duration);
+    throw new Error('Database queries temporarily blocked due to circuit breaker');
+  }
+  
+  // Wait for backoff if throttled
+  await characterQueryDetector.waitIfNeeded();
   
   try {
-    console.log(`[DB-DEBUG] fetchCharactersByUserId START - userId: ${userId}, connectionState: ${mongoose.connection.readyState}, fields: ${fields?.join(',') || 'all'}`);
-    
-    // Connection is established at startup - use directly to avoid overhead
-    // Use lean() for faster queries and hint() to ensure index usage
     let query = Character.find({ userId }).lean();
     if (fields && Array.isArray(fields)) {
       query = query.select(fields.join(' '));
     }
     
-    console.log(`[DB-DEBUG] fetchCharactersByUserId - Query built, connectionState: ${mongoose.connection.readyState}`);
-    
-    // Try query WITHOUT hint first - hint() may be causing hangs if index doesn't exist or is misconfigured
-    // If this works, we know the hint was the problem
-    console.log(`[DB-DEBUG] fetchCharactersByUserId - Executing query WITHOUT hint (testing if hint causes hangs)`);
-    const execStartTime = Date.now();
-    
     const characters = await query.exec();
-    const execTime = Date.now() - execStartTime;
-    const totalTime = Date.now() - queryStartTime;
-    
-    console.log(`[DB-DEBUG] fetchCharactersByUserId END - ${characters.length} results, execTime: ${execTime}ms, totalTime: ${totalTime}ms`);
+    const duration = Date.now() - startTime;
+    characterQueryDetector.recordQuery(true, duration);
     return characters;
   } catch (error) {
-    const totalTime = Date.now() - queryStartTime;
-    console.error(`[DB-DEBUG] fetchCharactersByUserId ERROR after ${totalTime}ms - connectionState: ${mongoose.connection.readyState}`, error.message);
+    const duration = Date.now() - startTime;
     
     // If query fails, try reconnecting once
     if (mongoose.connection.readyState !== 1) {
-      console.log(`[DB-DEBUG] fetchCharactersByUserId - Reconnecting (state: ${mongoose.connection.readyState})`);
-      await connectToTinglebot();
-      // Retry query after reconnection (without hint to avoid potential issues)
-      let retryQuery = Character.find({ userId }).lean();
-      if (fields && Array.isArray(fields)) {
-        retryQuery = retryQuery.select(fields.join(' '));
+      try {
+        await connectToTinglebot();
+        let retryQuery = Character.find({ userId }).lean();
+        if (fields && Array.isArray(fields)) {
+          retryQuery = retryQuery.select(fields.join(' '));
+        }
+        const retryResult = await retryQuery.exec();
+        const retryDuration = Date.now() - startTime;
+        characterQueryDetector.recordQuery(true, retryDuration);
+        return retryResult;
+      } catch (retryError) {
+        const retryDuration = Date.now() - startTime;
+        characterQueryDetector.recordQuery(false, retryDuration);
+        handleError(retryError, "db.js");
+        throw retryError;
       }
-      // Don't use hint on retry - if hint was the problem, this will work
-      const retryResult = await retryQuery.exec();
-      console.log(`[DB-DEBUG] fetchCharactersByUserId - Retry successful, ${retryResult.length} results`);
-      return retryResult;
     }
+    
+    characterQueryDetector.recordQuery(false, duration);
     handleError(error, "db.js");
     throw error;
   }
@@ -708,55 +712,61 @@ const fetchModCharacterByName = async (characterName) => {
 };
 
 const fetchModCharactersByUserId = async (userId, fields = null) => {
-  const queryStartTime = Date.now();
+  const startTime = Date.now();
   
- try {
-  console.log(`[DB-DEBUG] fetchModCharactersByUserId START - userId: ${userId}, connectionState: ${mongoose.connection.readyState}, fields: ${fields?.join(',') || 'all'}`);
-  
-  // Connection is established at startup - use directly to avoid overhead
-  // Use lean() for faster queries and hint() to ensure index usage
-  let query = ModCharacter.find({ userId: userId }).lean();
-  if (fields && Array.isArray(fields)) {
-    query = query.select(fields.join(' '));
+  // Check circuit breaker
+  if (modCharacterQueryDetector.shouldBlock()) {
+    const duration = Date.now() - startTime;
+    modCharacterQueryDetector.recordQuery(false, duration);
+    throw new Error('Database queries temporarily blocked due to circuit breaker');
   }
   
-  console.log(`[DB-DEBUG] fetchModCharactersByUserId - Query built, connectionState: ${mongoose.connection.readyState}`);
+  // Wait for backoff if throttled
+  await modCharacterQueryDetector.waitIfNeeded();
   
-  // Try query WITHOUT hint first - hint() may be causing hangs if index doesn't exist or is misconfigured
-  // If this works, we know the hint was the problem
-  console.log(`[DB-DEBUG] fetchModCharactersByUserId - Executing query WITHOUT hint (testing if hint causes hangs)`);
-  const execStartTime = Date.now();
-  
-  const modCharacters = await query.exec();
-  const execTime = Date.now() - execStartTime;
-  const totalTime = Date.now() - queryStartTime;
-  
-  console.log(`[DB-DEBUG] fetchModCharactersByUserId END - ${modCharacters.length} results, execTime: ${execTime}ms, totalTime: ${totalTime}ms`);
-  return modCharacters;
- } catch (error) {
-  const totalTime = Date.now() - queryStartTime;
-  console.error(`[DB-DEBUG] fetchModCharactersByUserId ERROR after ${totalTime}ms - connectionState: ${mongoose.connection.readyState}`, error.message);
-  
-  // If query fails, try reconnecting once
-  if (mongoose.connection.readyState !== 1) {
-    console.log(`[DB-DEBUG] fetchModCharactersByUserId - Reconnecting (state: ${mongoose.connection.readyState})`);
-    await connectToTinglebot();
-    // Retry query after reconnection (without hint to avoid potential issues)
-    let retryQuery = ModCharacter.find({ userId: userId }).lean();
+  try {
+    let query = ModCharacter.find({ userId: userId }).lean();
     if (fields && Array.isArray(fields)) {
-      retryQuery = retryQuery.select(fields.join(' '));
+      query = query.select(fields.join(' '));
     }
-    // Don't use hint on retry - if hint was the problem, this will work
-    const retryResult = await retryQuery.exec();
-    console.log(`[DB-DEBUG] fetchModCharactersByUserId - Retry successful, ${retryResult.length} results`);
-    return retryResult;
+    
+    const modCharacters = await query.exec();
+    const duration = Date.now() - startTime;
+    modCharacterQueryDetector.recordQuery(true, duration);
+    return modCharacters;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    
+    // If query fails, try reconnecting once
+    if (mongoose.connection.readyState !== 1) {
+      try {
+        await connectToTinglebot();
+        let retryQuery = ModCharacter.find({ userId: userId }).lean();
+        if (fields && Array.isArray(fields)) {
+          retryQuery = retryQuery.select(fields.join(' '));
+        }
+        const retryResult = await retryQuery.exec();
+        const retryDuration = Date.now() - startTime;
+        modCharacterQueryDetector.recordQuery(true, retryDuration);
+        return retryResult;
+      } catch (retryError) {
+        const retryDuration = Date.now() - startTime;
+        modCharacterQueryDetector.recordQuery(false, retryDuration);
+        handleError(retryError, "db.js", {
+          function: "fetchModCharactersByUserId",
+          userId: userId,
+        });
+        throw retryError;
+      }
+    }
+    
+    modCharacterQueryDetector.recordQuery(false, duration);
+    handleError(error, "db.js", {
+      function: "fetchModCharactersByUserId",
+      userId: userId,
+    });
+    throw error;
   }
-  handleError(error, "db.js", {
-   function: "fetchModCharactersByUserId",
-   userId: userId,
-  });
-  throw error;
- }
 };
 
 const fetchAllModCharacters = async () => {
