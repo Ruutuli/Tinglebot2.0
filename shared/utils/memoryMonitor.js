@@ -498,18 +498,34 @@ class MemoryMonitor {
     };
     
     // Log memory stats
+    const nodeCronTimerCount = Array.from(this.activeTimers.values()).filter(t => t.isNodeCron).length;
+    const nonNodeCronTimerCount = stats.activeTimers - nodeCronTimerCount;
+    const nodeCronInfo = nodeCronTimerCount > 0 ? ` (${nodeCronTimerCount} node-cron, ${nonNodeCronTimerCount} other)` : '';
     logger.info('MEM', `Memory Stats - RSS: ${formatBytes(stats.rss)}, Heap Used: ${formatBytes(stats.heapUsed)}, Heap Total: ${formatBytes(stats.heapTotal)}`);
-    logger.info('MEM', `Active Resources - Intervals: ${stats.activeIntervals}, Timers: ${stats.activeTimers}, Total Created: ${stats.totalIntervalsCreated} intervals, ${stats.totalTimersCreated} timers`);
+    logger.info('MEM', `Active Resources - Intervals: ${stats.activeIntervals}, Timers: ${stats.activeTimers}${nodeCronInfo}, Total Created: ${stats.totalIntervalsCreated} intervals, ${stats.totalTimersCreated} timers`);
     
-    // Log top timer sources if there are many active timers
+    // Log top timer sources if there are many active timers (excluding node-cron for cleaner output)
     if (stats.activeTimers > 50) {
       const topTimerSources = Array.from(this.timerSources.entries())
+        .filter(([source]) => !source.startsWith('node-cron:'))
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
         .map(([source, count]) => `${source}: ${count}`)
         .join(', ');
       if (topTimerSources) {
         logger.info('MEM', `Top timer sources: ${topTimerSources}`);
+      }
+      // Also show node-cron count if significant
+      if (nodeCronTimerCount > 0) {
+        const nodeCronSources = Array.from(this.timerSources.entries())
+          .filter(([source]) => source.startsWith('node-cron:'))
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([source, count]) => `${source}: ${count}`)
+          .join(', ');
+        if (nodeCronSources) {
+          logger.info('MEM', `Node-cron timer sources: ${nodeCronSources} (expected behavior with timezone support)`);
+        }
       }
     }
     
@@ -573,14 +589,17 @@ class MemoryMonitor {
       logger.warn('MEM', `Memory growth detected: ${formatBytes(growth.growth)} over ${Math.round(growth.duration / 1000)}s (${formatBytes(growth.ratePerMinute)}/min)`);
     }
     
-    // Warn about timer leaks
+    // Warn about timer leaks (excluding node-cron timers)
     if (timerLeak.hasLeak) {
-      logger.warn('MEM', `Potential timer leak detected: ${timerLeak.activeCount} active ${timerLeak.type} (${timerLeak.createdCount} total created)`);
+      const nodeCronCount = Array.from(this.activeTimers.values()).filter(t => t.isNodeCron).length;
+      const nodeCronInfo = nodeCronCount > 0 ? ` (${nodeCronCount} from node-cron - expected, ${timerLeak.nonNodeCronCount || timerLeak.activeCount} non-node-cron)` : '';
+      logger.warn('MEM', `Potential timer leak detected: ${timerLeak.activeCount} active ${timerLeak.type}${nodeCronInfo} (${timerLeak.createdCount} total created)`);
       
       // Log detailed analysis when leak is detected
-      if (timerLeak.type === 'timers' && stats.activeTimers > 200) {
-        // Get top sources
+      if (timerLeak.type === 'timers' && (timerLeak.nonNodeCronCount || timerLeak.activeCount) > 200) {
+        // Get top sources (excluding node-cron)
         const topSources = Array.from(this.timerSources.entries())
+          .filter(([source]) => !source.startsWith('node-cron:'))
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)
           .map(([source, count]) => `${source}: ${count}`)
@@ -644,7 +663,11 @@ class MemoryMonitor {
       .map(i => ({ ...i, age: now - i.createdAt }))
       .sort((a, b) => b.age - a.age);
     
-    const timerAge = Array.from(this.activeTimers.values())
+    // Filter out node-cron timers - they're expected behavior, not leaks
+    // node-cron with timezone support creates many internal timers for scheduling
+    const nonNodeCronTimers = Array.from(this.activeTimers.values())
+      .filter(t => !t.isNodeCron);
+    const timerAge = nonNodeCronTimers
       .map(t => ({ ...t, age: now - t.createdAt }))
       .sort((a, b) => b.age - a.age);
     
@@ -662,8 +685,9 @@ class MemoryMonitor {
       }
     }
     
-    // Check timers
-    if (this.activeTimers.size > 50) {
+    // Check timers (excluding node-cron timers which are expected)
+    // node-cron with timezone creates many timers per job, so we only check non-node-cron timers
+    if (nonNodeCronTimers.length > 50) {
       const oldTimers = timerAge.filter(t => t.age > 1 * 60 * 1000); // Older than 1 minute
       if (oldTimers.length > 20) {
         return {
@@ -671,6 +695,7 @@ class MemoryMonitor {
           type: 'timers',
           activeCount: this.activeTimers.size,
           createdCount: this.timerCount,
+          nonNodeCronCount: nonNodeCronTimers.length,
           oldest: timerAge[0]
         };
       }
