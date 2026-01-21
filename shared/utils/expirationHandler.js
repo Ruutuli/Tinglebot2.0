@@ -110,9 +110,16 @@ function getTimeUntilNext8AM() {
 
 // Function to schedule next check (module-level singleton)
 function scheduleNextCheck(delayMs) {
-  // Don't schedule duplicates - if timer already exists, don't create another
-  if (expirationCheckTimer) {
+  // CRITICAL: Don't schedule duplicates - if timer already exists or is being scheduled, don't create another
+  // This check must happen FIRST to prevent race conditions
+  if (expirationCheckTimer !== null) {
     console.log('[expirationHandler.js]: Timer already scheduled - skipping duplicate schedule');
+    return;
+  }
+  
+  // CRITICAL: Also don't schedule if a check is in progress (it will reschedule when done)
+  if (isCheckInProgress) {
+    console.log('[expirationHandler.js]: Check in progress - skipping schedule, will reschedule when check completes');
     return;
   }
 
@@ -125,18 +132,27 @@ function scheduleNextCheck(delayMs) {
   // Use provided delay or calculate from 8 AM EST
   const timeUntilNext = delayMs !== undefined ? delayMs : getTimeUntilNext8AM();
   
-  // Clear timer slot BEFORE scheduling new timer (prevent race condition)
-  expirationCheckTimer = setTimeout(async () => {
-    // Clear the timer reference immediately to allow rescheduling
-    expirationCheckTimer = null;
+  // CRITICAL: Set a sentinel value FIRST to prevent other calls from passing the null check
+  // This prevents race conditions where multiple calls see expirationCheckTimer === null simultaneously
+  expirationCheckTimer = { _scheduling: true };
+  
+  // Now create the actual timer
+  const timerId = setTimeout(async () => {
+    // CRITICAL: Clear timer reference IMMEDIATELY to allow rescheduling
+    // But only if this is still the active timer (defense in depth)
+    if (expirationCheckTimer === timerId) {
+      expirationCheckTimer = null;
+    } else {
+      // Another timer has already been scheduled, ignore this callback
+      console.log('[expirationHandler.js]: Timer callback skipped - newer timer already scheduled');
+      return;
+    }
     
     // Prevent overlap if the work takes longer than delay
     if (isCheckInProgress) {
-      console.log('[expirationHandler.js]: Check already in progress - skipping this run');
-      // Schedule next check anyway, but wait 5 minutes before retrying to avoid rapid re-scheduling
-      if (isExpirationChecksRunning) {
-        scheduleNextCheck(5 * 60 * 1000); // 5 minutes
-      }
+      console.log('[expirationHandler.js]: Check already in progress - skipping this run, will reschedule when check completes');
+      // DO NOT schedule another timer here - the check that's in progress will schedule one when it finishes
+      // This prevents exponential growth
       return;
     }
 
@@ -151,12 +167,15 @@ function scheduleNextCheck(delayMs) {
       // Clear the flag
       isCheckInProgress = false;
       
-      // Schedule next check (only if still running)
-      if (isExpirationChecksRunning) {
+      // Schedule next check (only if still running and no timer already scheduled)
+      if (isExpirationChecksRunning && expirationCheckTimer === null) {
         scheduleNextCheck();
       }
     }
   }, timeUntilNext);
+  
+  // CRITICAL: Replace sentinel with actual timer ID atomically
+  expirationCheckTimer = timerId;
 }
 
 // Function to stop expiration checks (for cleanup)
