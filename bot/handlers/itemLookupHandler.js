@@ -4,7 +4,13 @@ const NodeCache = require('node-cache');
 const Item = require('../../shared/models/ItemModel');
 
 // ------------------- Cache and constants -------------------
-const cache = new NodeCache();
+// Configure NodeCache with reasonable checkperiod to avoid excessive timer usage
+// stdTTL: default TTL for items (items are set with 3600s TTL anyway, but this is a fallback)
+// checkperiod: how often to check for expired items (2 minutes is reasonable for hourly cache)
+const cache = new NodeCache({
+  stdTTL: 3600, // 1 hour default (matches the TTL used when setting items)
+  checkperiod: 120 // Check for expired items every 2 minutes (instead of default ~600ms)
+});
 const ITEMS_PER_PAGE = 25;
 
 // ------------------- Handles the item lookup interaction -------------------
