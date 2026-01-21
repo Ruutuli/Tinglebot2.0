@@ -1247,7 +1247,7 @@ async function initializeClient() {
     // --------------------------------------------------------------------------
     // HTTP Healthcheck Server (for Railway auto-restart on high memory)
     // --------------------------------------------------------------------------
-    const http = require('http');
+    // Note: http is already required above for error handling
     const healthcheckServer = http.createServer((req, res) => {
       // Only respond to healthcheck endpoint
       if (req.url === '/health' || req.url === '/healthcheck') {

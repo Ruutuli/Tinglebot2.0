@@ -390,6 +390,13 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
       // If it's within 1 hour of the start, it was likely already realigned
       const timeDiff = Math.abs(legacyDate.getTime() - startUTC.getTime());
       const oneHourMs = 60 * 60 * 1000;
+      const toleranceMs = PERIOD_VALIDATION_TOLERANCE_MS;
+      
+      // Use tolerance for date comparison to handle small timing differences
+      const periodStartWithTolerance = new Date(startUTC.getTime() - toleranceMs);
+      const legacyIsInBounds = exclusiveEnd
+        ? (legacyDate >= periodStartWithTolerance && legacyDate < endUTC)
+        : (legacyDate >= periodStartWithTolerance && legacyDate <= endUTC);
       
       // Only realign if the date is significantly different AND the legacy date is before the period start
       // Don't realign if legacy date is in the future (next period) - that should have been caught above
@@ -411,10 +418,9 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
           
           // Verify the saved date is within bounds (with tolerance for timing differences)
           const savedDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-          const toleranceMs = PERIOD_VALIDATION_TOLERANCE_MS;
           const savedIsValid = exclusiveEnd
-            ? (savedDate >= new Date(startUTC.getTime() - toleranceMs) && savedDate < endUTC)
-            : (savedDate >= new Date(startUTC.getTime() - toleranceMs) && savedDate <= endUTC);
+            ? (savedDate >= periodStartWithTolerance && savedDate < endUTC)
+            : (savedDate >= periodStartWithTolerance && savedDate <= endUTC);
           
           if (!savedIsValid) {
             console.warn(`[weatherService.js]: ⚠️ Realigned date is outside bounds after save for ${normalizedVillage}`, {
@@ -431,8 +437,8 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
           console.error(`[weatherService.js]: ❌ Error saving realigned weather for ${normalizedVillage}:`, saveError);
           weather = null;
         }
-      } else if (legacyDate >= startUTC && legacyDate < endUTC) {
-        // Date is already within bounds - use it without realignment
+      } else if (legacyIsInBounds) {
+        // Date is already within bounds (with tolerance) - use it without realignment
         weather = legacyWeather;
       } else {
         // Legacy date is outside bounds and shouldn't be realigned - reject it

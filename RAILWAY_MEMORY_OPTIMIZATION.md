@@ -130,3 +130,24 @@ After startup and stabilization:
 - **Critical Threshold**: 1GB RSS
 
 If you consistently see >600MB RSS, investigate for leaks.
+
+
+Error log cache (minor)
+Location: shared/utils/globalErrorHandler.js
+Issue: errorLogCache Map has no size limit
+Impact: Low (errors are usually repetitive)
+Fix: Add size limit (I can add this)
+Database connections
+Need to verify connection pools are closed properly
+Check for connection leaks
+Event listeners
+Need to audit that all listeners are cleaned up
+Other shared code
+Caches: bounded with maxSize limits
+Throttle detector: bounded to 20 entries
+Memory monitor history: bounded to 100 entries
+Recommendation
+Fix node-cron → croner migration (highest priority)
+Add errorLogCache size limit (quick fix)
+Verify database connection cleanup
+Audit event listeners
