@@ -96,9 +96,37 @@ const OVERLAY_MAPPING = {
 
 // Banner cache for performance
 const bannerCache = new Map();
-const CACHE_DURATION = 300000; // 5 minutes
+const CACHE_DURATION = 60000; // 1 minute - reduced to prevent memory buildup
+const MAX_CACHE_SIZE = 10; // Maximum number of cached banners - reduced to prevent memory leaks
 const LEGACY_PERIOD_FALLBACK_MS = 8 * 60 * 60 * 1000; // 8 hours
 const PERIOD_VALIDATION_TOLERANCE_MS = 5 * 1000; // 5 seconds - tolerance for timing differences in period calculation
+
+// Cleanup banner cache periodically to prevent memory leaks
+function cleanupBannerCache() {
+  const now = Date.now();
+  const entriesToDelete = [];
+  
+  // Remove expired entries
+  for (const [key, value] of bannerCache.entries()) {
+    if (now - value.timestamp >= CACHE_DURATION) {
+      entriesToDelete.push(key);
+    }
+  }
+  
+  entriesToDelete.forEach(key => bannerCache.delete(key));
+  
+  // If cache is still too large, remove oldest entries aggressively
+  if (bannerCache.size > MAX_CACHE_SIZE) {
+    const sortedEntries = Array.from(bannerCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    
+    const toRemove = sortedEntries.slice(0, bannerCache.size - MAX_CACHE_SIZE);
+    toRemove.forEach(([key]) => bannerCache.delete(key));
+  }
+}
+
+// Run cleanup every 1 minute to be more aggressive
+setInterval(cleanupBannerCache, 60 * 1000);
 
 // ============================================================================
 // ------------------- Utility Functions -------------------
@@ -344,21 +372,58 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
       const timeDiff = Math.abs(legacyDate.getTime() - startUTC.getTime());
       const oneHourMs = 60 * 60 * 1000;
       
-      if (timeDiff > oneHourMs) {
-        // Only realign if the date is significantly different
-        legacyWeather.date = startUTC;
+      // Only realign if the date is significantly different AND the legacy date is before the period start
+      // Don't realign if legacy date is in the future (next period) - that should have been caught above
+      if (timeDiff > oneHourMs && legacyDate < startUTC) {
+        // Realign to period start only if legacy is from past period
+        // Use a timestamp to ensure exact match
+        const targetDate = new Date(startUTC.getTime());
+        legacyWeather.date = targetDate;
 
         if (legacyWeather.prediction) {
-          legacyWeather.prediction.periodStart = startUTC;
+          legacyWeather.prediction.periodStart = targetDate;
           legacyWeather.prediction.periodEnd = endUTC;
           legacyWeather.markModified('prediction');
         }
 
-        weather = await legacyWeather.save();
-        console.log(`[weatherService.js]: ℹ️ Realigned legacy weather record for ${normalizedVillage} to new UTC window.`);
-      } else {
-        // Date is already close to target - use it without realignment
+        // Save the realigned weather
+        try {
+          weather = await legacyWeather.save();
+          
+          // Verify the saved date is within bounds (with tolerance for timing differences)
+          const savedDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+          const toleranceMs = PERIOD_VALIDATION_TOLERANCE_MS;
+          const savedIsValid = exclusiveEnd
+            ? (savedDate >= new Date(startUTC.getTime() - toleranceMs) && savedDate < endUTC)
+            : (savedDate >= new Date(startUTC.getTime() - toleranceMs) && savedDate <= endUTC);
+          
+          if (!savedIsValid) {
+            console.warn(`[weatherService.js]: ⚠️ Realigned date is outside bounds after save for ${normalizedVillage}`, {
+              savedDate: savedDate.toISOString(),
+              startUTC: startUTC.toISOString(),
+              endUTC: endUTC.toISOString(),
+              exclusiveEnd
+            });
+            weather = null;
+          } else {
+            console.log(`[weatherService.js]: ℹ️ Realigned legacy weather record for ${normalizedVillage} to new UTC window.`);
+          }
+        } catch (saveError) {
+          console.error(`[weatherService.js]: ❌ Error saving realigned weather for ${normalizedVillage}:`, saveError);
+          weather = null;
+        }
+      } else if (legacyDate >= startUTC && legacyDate < endUTC) {
+        // Date is already within bounds - use it without realignment
         weather = legacyWeather;
+      } else {
+        // Legacy date is outside bounds and shouldn't be realigned - reject it
+        console.warn(`[weatherService.js]: ⚠️ Legacy weather date cannot be realigned for ${normalizedVillage}`, {
+          legacyDate: legacyDate.toISOString(),
+          startUTC: startUTC.toISOString(),
+          endUTC: endUTC.toISOString(),
+          timeDiffHours: (timeDiff / oneHourMs).toFixed(2)
+        });
+        weather = null;
       }
 
       // Final validation after legacy handling
@@ -373,14 +438,18 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
           });
           weather = null;
         } else {
+          // Use tolerance for timing differences in period calculation
+          const toleranceMs = PERIOD_VALIDATION_TOLERANCE_MS;
+          const periodStartWithTolerance = new Date(startUTC.getTime() - toleranceMs);
           const finalIsValid = exclusiveEnd
-            ? (finalDate >= startUTC && finalDate < endUTC)
-            : (finalDate >= startUTC && finalDate <= endUTC);
+            ? (finalDate >= periodStartWithTolerance && finalDate < endUTC)
+            : (finalDate >= periodStartWithTolerance && finalDate <= endUTC);
           
           if (!finalIsValid) {
             console.warn(`[weatherService.js]: ⚠️ Legacy weather rejected after realignment: outside period bounds for ${normalizedVillage}`, {
               finalDate: finalDate.toISOString(),
               startUTC: startUTC.toISOString(),
+              periodStartWithTolerance: periodStartWithTolerance.toISOString(),
               endUTC: endUTC.toISOString(),
               exclusiveEnd
             });
@@ -918,16 +987,29 @@ async function getWeatherWithoutGeneration(village, options = {}) {
       }
 
       // Additional validation: ensure weather date is not in the future (within reasonable margin for clock skew)
+      // However, if the weather date is within the current period bounds, it's valid even if it's ahead of current time
+      // This can happen when the period starts at 8 AM EST (13:00 UTC) and current time is earlier
       const nowPlusMargin = new Date(now.getTime() + (5 * 60 * 1000)); // 5 minute margin for clock skew
-      if (weatherDate > nowPlusMargin) {
+      const maxFutureAllowed = new Date(startOfPeriodUTC.getTime() + (24 * 60 * 60 * 1000)); // Allow up to 24h into period
+      
+      if (weatherDate > nowPlusMargin && weatherDate > maxFutureAllowed) {
         console.warn('[weatherService.js]: ⚠️ Retrieved weather is significantly in the future', {
           village: normalizedVillage,
           weatherDate: weatherDate.toISOString(),
           currentTime: now.toISOString(),
+          periodStart: startOfPeriodUTC.toISOString(),
           timeDiffMs: weatherDate.getTime() - now.getTime(),
           timeDiffHours: ((weatherDate.getTime() - now.getTime()) / (60 * 60 * 1000)).toFixed(2)
         });
         // Still allow it if within period bounds, but log warning
+      } else if (weatherDate > nowPlusMargin) {
+        // Weather is in the future but within the period - this is expected for period start times
+        console.log('[weatherService.js]: ℹ️ Weather date is in future but within period bounds (expected for period start)', {
+          village: normalizedVillage,
+          weatherDate: weatherDate.toISOString(),
+          currentTime: now.toISOString(),
+          periodStart: startOfPeriodUTC.toISOString()
+        });
       }
 
       console.log(`[weatherService.js]: ✅ Successfully retrieved weather for ${normalizedVillage}`, {
@@ -1099,10 +1181,11 @@ async function generateBanner(village, weather, options = {}) {
     const bannerPromise = Jimp.read(bannerPath);
     const bannerImg = await Promise.race([bannerPromise, timeoutPromise]);
     
-    if (overlayPath) {
-      try {
+    let overlayImg = null;
+    try {
+      if (overlayPath) {
         const overlayPromise = Jimp.read(overlayPath);
-        const overlayImg = await Promise.race([overlayPromise, timeoutPromise]);
+        overlayImg = await Promise.race([overlayPromise, timeoutPromise]);
         // Validate image dimensions before processing
         if (bannerImg.bitmap.width > 0 && bannerImg.bitmap.height > 0) {
           overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
@@ -1114,25 +1197,44 @@ async function generateBanner(village, weather, options = {}) {
         } else {
           throw new Error('Invalid image dimensions');
         }
-      } catch (overlayError) {
-        console.error(`[weatherService.js]: ❌ Error loading/compositing overlay: ${overlayError.message}`);
+      }
+      
+      const outName = `banner-${village.toLowerCase()}.png`;
+      const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
+      const banner = new AttachmentBuilder(buffer, { name: outName });
+      
+      // Cache if enabled
+      if (enableCaching) {
+        // Cleanup cache before adding new entry to prevent unbounded growth
+        cleanupBannerCache();
+        
+        const cacheKey = `${village}-${weather.special?.label || weather.precipitation?.label}`;
+        bannerCache.set(cacheKey, {
+          banner,
+          timestamp: Date.now()
+        });
+      }
+      
+      return banner;
+    } catch (overlayError) {
+      console.error(`[weatherService.js]: ❌ Error loading/compositing overlay: ${overlayError.message}`);
+      // Still return banner even if overlay fails
+      const outName = `banner-${village.toLowerCase()}.png`;
+      const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
+      return new AttachmentBuilder(buffer, { name: outName });
+    } finally {
+      // Explicitly dispose Jimp images to free memory
+      try {
+        if (bannerImg && typeof bannerImg.dispose === 'function') {
+          bannerImg.dispose();
+        }
+        if (overlayImg && typeof overlayImg.dispose === 'function') {
+          overlayImg.dispose();
+        }
+      } catch (disposeError) {
+        // Ignore disposal errors - images may already be disposed
       }
     }
-    
-    const outName = `banner-${village.toLowerCase()}.png`;
-    const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
-    const banner = new AttachmentBuilder(buffer, { name: outName });
-    
-    // Cache if enabled
-    if (enableCaching) {
-      const cacheKey = `${village}-${weather.special?.label || weather.precipitation?.label}`;
-      bannerCache.set(cacheKey, {
-        banner,
-        timestamp: Date.now()
-      });
-    }
-    
-    return banner;
   } catch (error) {
     console.error('[weatherService.js]: Error generating banner:', error);
     return null;
