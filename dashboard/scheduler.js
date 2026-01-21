@@ -152,26 +152,45 @@ function createCronJob(
  // Store the cron job instance to prevent leaks
  activeCronJobs.push(cronJob);
  
+ // Log creation for debugging (only log first few to avoid spam)
+ if (activeCronJobs.length <= 5 || activeCronJobs.length % 10 === 0) {
+  console.log(`[scheduler.js]: 📅 Created cron job "${jobName}" (${activeCronJobs.length} total active jobs)`);
+ }
+ 
  return cronJob;
 }
 
 // Stop all active cron jobs (for cleanup/reinitialization)
 function stopAllCronJobs() {
  let stoppedCount = 0;
- for (const job of activeCronJobs) {
+ const jobsToStop = [...activeCronJobs]; // Copy array to avoid modification during iteration
+ activeCronJobs.length = 0; // Clear the array first
+ 
+ for (const job of jobsToStop) {
   try {
-   if (job && typeof job.stop === 'function') {
-    job.stop();
+   if (job) {
+    // Try multiple cleanup methods to ensure proper cleanup
+    if (typeof job.stop === 'function') {
+     job.stop();
+    }
+    // Some versions of croner may have different methods
+    if (typeof job.destroy === 'function') {
+     job.destroy();
+    }
+    if (typeof job.pause === 'function') {
+     job.pause();
+    }
     stoppedCount++;
    }
   } catch (error) {
    console.error(`[scheduler.js]: Error stopping cron job:`, error.message);
   }
  }
- activeCronJobs.length = 0; // Clear the array
+ 
  if (stoppedCount > 0) {
   console.log(`[scheduler.js]: 🛑 Stopped ${stoppedCount} cron job(s)`);
  }
+ 
  return stoppedCount;
 }
 
@@ -2310,7 +2329,7 @@ function setupGoogleSheetsRetry() {
 // Track initialization state to prevent duplicate initialization
 let isInitialized = false;
 
-function initializeScheduler(client) {
+async function initializeScheduler(client) {
  if (!client || !client.isReady()) {
   console.error("[scheduler.js]: ❌ Invalid or unready Discord client provided to scheduler");
   return;
@@ -2319,10 +2338,15 @@ function initializeScheduler(client) {
  // Prevent duplicate initialization
  if (isInitialized) {
   console.warn("[scheduler.js]: ⚠️ Scheduler already initialized - stopping existing jobs and reinitializing");
-  stopAllCronJobs();
+  const stoppedCount = stopAllCronJobs();
+  console.log(`[scheduler.js]: 🔄 Reinitializing scheduler (stopped ${stoppedCount} existing jobs)`);
+  // Give a moment for cleanup to complete
+  await new Promise(resolve => setImmediate(resolve));
  }
  
  isInitialized = true;
+ 
+ console.log(`[scheduler.js]: 🚀 Initializing scheduler (first time)`);
 
  // Run startup checks
  runStartupChecks(client);
@@ -2352,7 +2376,7 @@ function initializeScheduler(client) {
    }
  })();
 
- console.log("[scheduler.js]: ✅ All scheduled tasks initialized");
+ console.log(`[scheduler.js]: ✅ All scheduled tasks initialized (${activeCronJobs.length} total cron jobs)`);
 }
 
 module.exports = {
