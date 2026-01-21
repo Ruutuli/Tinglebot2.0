@@ -117,6 +117,13 @@ try {
 }
 
 // ============================================================================
+// ------------------- Cron Job Tracking -------------------
+// ============================================================================
+
+// Store all active cron jobs to prevent leaks
+const activeCronJobs = [];
+
+// ============================================================================
 // ------------------- Utility Functions -------------------
 // ============================================================================
 
@@ -126,7 +133,7 @@ function createCronJob(
  jobFunction,
  timezone = "America/New_York"
 ) {
- return new Cron(
+ const cronJob = new Cron(
   schedule,
   {
     timezone: timezone,
@@ -141,6 +148,31 @@ function createCronJob(
    }
   }
  );
+ 
+ // Store the cron job instance to prevent leaks
+ activeCronJobs.push(cronJob);
+ 
+ return cronJob;
+}
+
+// Stop all active cron jobs (for cleanup/reinitialization)
+function stopAllCronJobs() {
+ let stoppedCount = 0;
+ for (const job of activeCronJobs) {
+  try {
+   if (job && typeof job.stop === 'function') {
+    job.stop();
+    stoppedCount++;
+   }
+  } catch (error) {
+   console.error(`[scheduler.js]: Error stopping cron job:`, error.message);
+  }
+ }
+ activeCronJobs.length = 0; // Clear the array
+ if (stoppedCount > 0) {
+  console.log(`[scheduler.js]: 🛑 Stopped ${stoppedCount} cron job(s)`);
+ }
+ return stoppedCount;
 }
 
 function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
@@ -2275,11 +2307,22 @@ function setupGoogleSheetsRetry() {
 
 // ------------------- Main Initialization Function ------------------
 
+// Track initialization state to prevent duplicate initialization
+let isInitialized = false;
+
 function initializeScheduler(client) {
  if (!client || !client.isReady()) {
   console.error("[scheduler.js]: ❌ Invalid or unready Discord client provided to scheduler");
   return;
  }
+
+ // Prevent duplicate initialization
+ if (isInitialized) {
+  console.warn("[scheduler.js]: ⚠️ Scheduler already initialized - stopping existing jobs and reinitializing");
+  stopAllCronJobs();
+ }
+ 
+ isInitialized = true;
 
  // Run startup checks
  runStartupChecks(client);
@@ -2336,4 +2379,5 @@ module.exports = {
  cleanupExpiredRaids,
  distributeMonthlyBoostRewards,
  checkAndDistributeMonthlyBoostRewards,
+ stopAllCronJobs, // Export for manual cleanup if needed
 };
