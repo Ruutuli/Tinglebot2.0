@@ -2805,9 +2805,9 @@ function setupBloodMoonScheduling(client) {
 // memory to grow over time. The proper fix is to migrate to 'croner' package.
 
 function setupNodeCronLeakMonitoring() {
- // Check every 30 minutes for excessive node-cron timer accumulation
+ // Check every 15 minutes for excessive node-cron timer accumulation
  // NOTE: This monitors the known memory leak in node-cron with timezone support
- createCronJob("*/30 * * * *", "node-cron leak monitoring", async () => {
+ createCronJob("*/15 * * * *", "node-cron leak monitoring", async () => {
   try {
    const { getMemoryMonitor } = require('../shared/utils/memoryMonitor');
    const memoryMonitor = getMemoryMonitor();
@@ -2819,11 +2819,36 @@ function setupNodeCronLeakMonitoring() {
    const nodeCronTimers = allTimers.filter(t => t.isNodeCron);
    const nodeCronCount = nodeCronTimers.length;
    
-   // Warn if node-cron timers exceed 200k (indicating severe leak)
-   if (nodeCronCount > 200000) {
+   // Memory thresholds
+   const MEMORY_CRITICAL_THRESHOLD = 1000 * 1024 * 1024; // 1 GB
+   const TIMER_CRITICAL_THRESHOLD = 300000; // 300k timers
+   const MEMORY_EMERGENCY_THRESHOLD = 2000 * 1024 * 1024; // 2 GB - force restart
+   const TIMER_EMERGENCY_THRESHOLD = 500000; // 500k timers - force restart
+   
+   const isMemoryCritical = stats.rss > MEMORY_CRITICAL_THRESHOLD;
+   const isMemoryEmergency = stats.rss > MEMORY_EMERGENCY_THRESHOLD;
+   const isTimerCritical = nodeCronCount > TIMER_CRITICAL_THRESHOLD;
+   const isTimerEmergency = nodeCronCount > TIMER_EMERGENCY_THRESHOLD;
+   
+   // EMERGENCY: Force restart if memory or timers are extremely high
+   if (isMemoryEmergency || isTimerEmergency) {
+    logger.error('SCHEDULER', `🚨 EMERGENCY: Forcing restart - Memory: ${(stats.rss / 1024 / 1024).toFixed(2)} MB, Timers: ${nodeCronCount.toLocaleString()}`);
+    logger.error('SCHEDULER', 'This is a known bug in node-cron with timezone support. Consider migrating to croner package.');
+    logger.error('SCHEDULER', 'Forcing process exit to trigger Railway restart...');
+    
+    // Give a moment for logs to flush, then exit
+    setTimeout(() => {
+     process.exit(1); // Exit with error code to trigger Railway restart
+    }, 2000);
+    return;
+   }
+   
+   // CRITICAL: Warn and attempt cleanup
+   if (isMemoryCritical || isTimerCritical) {
     logger.error('SCHEDULER', `CRITICAL: node-cron timer leak detected - ${nodeCronCount.toLocaleString()} active timers`);
     logger.error('SCHEDULER', 'This is a known bug in node-cron with timezone support. Consider migrating to croner package.');
     logger.error('SCHEDULER', `Memory usage: RSS ${(stats.rss / 1024 / 1024).toFixed(2)} MB, Heap ${(stats.heapUsed / 1024 / 1024).toFixed(2)} MB`);
+    logger.warn('SCHEDULER', '⚠️ Healthcheck should trigger restart. If not, configure Railway Healthcheck Path to /health');
     
     // Force garbage collection if available (requires --expose-gc flag)
     if (global.gc) {

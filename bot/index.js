@@ -1249,6 +1249,11 @@ async function initializeClient() {
     // --------------------------------------------------------------------------
     // Note: http is already required above for error handling
     const healthcheckServer = http.createServer((req, res) => {
+      // Log all healthcheck requests for debugging
+      if (req.url === '/health' || req.url === '/healthcheck') {
+        logger.info('HEALTHCHECK', `Healthcheck request received from ${req.headers['user-agent'] || 'unknown'}`);
+      }
+      
       // Only respond to healthcheck endpoint
       if (req.url === '/health' || req.url === '/healthcheck') {
         try {
@@ -1324,9 +1329,10 @@ async function initializeClient() {
     });
     
     healthcheckServer.listen(port, '0.0.0.0', () => {
-      logger.info('HEALTHCHECK', `Healthcheck server listening on port ${port}`);
-      logger.info('HEALTHCHECK', 'Healthcheck endpoint: /health or /healthcheck');
-      logger.info('HEALTHCHECK', 'Returns 503 (unhealthy) when memory > 1GB or node-cron timers > 300k');
+      logger.success('HEALTHCHECK', `✅ Healthcheck server listening on port ${port}`);
+      logger.info('HEALTHCHECK', `📍 Healthcheck endpoint: http://0.0.0.0:${port}/health or /healthcheck`);
+      logger.info('HEALTHCHECK', '⚠️ Returns 503 (unhealthy) when memory > 1GB or node-cron timers > 300k');
+      logger.warn('HEALTHCHECK', '🔧 IMPORTANT: Configure Railway Healthcheck Path to /health in service settings!');
     });
     
     healthcheckServer.on('error', (error) => {
