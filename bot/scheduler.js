@@ -372,7 +372,17 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
   // postedToDiscord flag prevents duplicate posts
   
   // Get current period bounds to verify weather is for the correct period
-  const { startUTC: currentPeriodStart } = getCurrentPeriodBounds(new Date());
+  const { startUTC: currentPeriodStart, endUTC: currentPeriodEnd } = getCurrentPeriodBounds(new Date());
+  
+  // Helper function to check if weather date is within current period
+  // Uses range check with 1 second tolerance before period start to handle millisecond precision differences
+  const isWeatherInCurrentPeriod = (weatherDate) => {
+   const date = weatherDate instanceof Date ? weatherDate : new Date(weatherDate);
+   const weatherTime = date.getTime();
+   const periodSearchStart = new Date(currentPeriodStart);
+   periodSearchStart.setSeconds(periodSearchStart.getSeconds() - 1);
+   return weatherTime >= periodSearchStart.getTime() && weatherTime < currentPeriodEnd.getTime();
+  };
   
   // STRICT CHECK: Always check if weather was already posted to prevent duplicates
   // Check for weather that has BOTH postedToDiscord: true AND postedAt exists
@@ -382,12 +392,7 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
    // Verify it's actually posted (both flags must be true)
    const isPosted = existingPostedWeather.postedToDiscord === true;
    const hasPostedAt = existingPostedWeather.postedAt && existingPostedWeather.postedAt instanceof Date;
-   
-   // Verify weather is for current period (not a different period)
-   const weatherDate = existingPostedWeather.date instanceof Date 
-    ? existingPostedWeather.date 
-    : new Date(existingPostedWeather.date);
-   const isCurrentPeriod = weatherDate.getTime() >= currentPeriodStart.getTime();
+   const isCurrentPeriod = isWeatherInCurrentPeriod(existingPostedWeather.date);
    
    if (isPosted && hasPostedAt && isCurrentPeriod) {
     logger.info('WEATHER', `Weather already exists and posted for ${village} (ID: ${existingPostedWeather._id}, postedAt: ${existingPostedWeather.postedAt}), skipping duplicate post`);
@@ -395,6 +400,9 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
    } else if (isPosted && !hasPostedAt) {
     logger.warn('WEATHER', `Weather for ${village} has postedToDiscord=true but missing postedAt - this may indicate a data inconsistency`);
    } else if (isPosted && !isCurrentPeriod) {
+    const weatherDate = existingPostedWeather.date instanceof Date 
+     ? existingPostedWeather.date 
+     : new Date(existingPostedWeather.date);
     logger.info('WEATHER', `Weather for ${village} is posted but for a different period (date: ${weatherDate.toISOString()}, current period: ${currentPeriodStart.toISOString()})`);
    }
   }
@@ -447,8 +455,7 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
    
    // STRICT FINAL CHECK: Verify weather is for current period and hasn't been posted
    // Check both postedToDiscord AND postedAt to be absolutely sure
-   const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-   const isCurrentPeriod = weatherDate.getTime() >= currentPeriodStart.getTime();
+   const isCurrentPeriod = isWeatherInCurrentPeriod(weather.date);
    const isPosted = weather.postedToDiscord === true;
    const hasPostedAt = weather.postedAt && weather.postedAt instanceof Date;
    
@@ -459,6 +466,7 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
     logger.warn('WEATHER', `Weather for ${village} has postedToDiscord=true but missing postedAt - will skip to prevent duplicate`);
     return true;
    } else if (!isCurrentPeriod) {
+    const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
     logger.warn('WEATHER', `Weather for ${village} is not for current period (date: ${weatherDate.toISOString()}, current: ${currentPeriodStart.toISOString()}) - skipping`);
     return false;
    }

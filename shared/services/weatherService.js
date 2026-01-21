@@ -806,13 +806,18 @@ async function getWeatherWithoutGeneration(village, options = {}) {
     const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
     const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
 
+    // Use a range that starts slightly before the period start to catch weather saved with different period calculations
+    // This ensures we find weather even if the period calculation varies slightly
+    const periodSearchStart = new Date(startOfPeriodUTC);
+    periodSearchStart.setSeconds(periodSearchStart.getSeconds() - 1); // Include 1 second before period start
+
     // Add debug logging
     if (options.onlyPosted) {
-      console.log(`[weatherService.js]: Looking for posted weather for ${normalizedVillage} in period ${startOfPeriodUTC.toISOString()} to ${startOfNextPeriodUTC.toISOString()}`);
+      console.log(`[weatherService.js]: Looking for posted weather for ${normalizedVillage} in period ${periodSearchStart.toISOString()} to ${startOfNextPeriodUTC.toISOString()}`);
     }
 
     // Use exclusive upper bound to avoid picking up next period's weather
-    const weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
+    const weather = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
       exclusiveEnd: true,
       onlyPosted: options.onlyPosted
     });
@@ -844,18 +849,22 @@ async function getCurrentWeather(village) {
     const normalizedDate = new Date(startOfPeriodUTC);
     normalizedDate.setMilliseconds(0);
 
-    // FIRST: Check for existing weather using exact normalized date (most reliable)
-    // This matches how weather is saved and prevents duplicates
-    let weather = await Weather.findOne({
-      village: normalizedVillage,
-      date: normalizedDate
+    // FIRST: Check for existing weather using date range (covers entire period)
+    // This is more reliable than exact match because period calculation may vary slightly
+    // Use a range that starts slightly before the period start to catch weather saved with different period calculations
+    const periodSearchStart = new Date(startOfPeriodUTC);
+    periodSearchStart.setSeconds(periodSearchStart.getSeconds() - 1); // Include 1 second before period start
+    
+    let weather = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
+      exclusiveEnd: true,
+      onlyPosted: false // Get current period weather even if not posted yet
     });
 
-    // SECOND: If not found by exact date, check using date range (for legacy records or edge cases)
+    // SECOND: If not found by range, try exact normalized date (for newly saved weather)
     if (!weather) {
-      weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
-        exclusiveEnd: true,
-        onlyPosted: false // Get current period weather even if not posted yet
+      weather = await Weather.findOne({
+        village: normalizedVillage,
+        date: normalizedDate
       });
     }
     
@@ -872,10 +881,11 @@ async function getCurrentWeather(village) {
     
     // Generate new weather if none exists or if we filtered out future weather
     if (!weather) {
-      // Final check: Try exact date match one more time (race condition protection)
-      const finalCheck = await Weather.findOne({
-        village: normalizedVillage,
-        date: normalizedDate
+      // Final check: Try range query one more time (race condition protection)
+      // This catches weather that might have been saved between our checks
+      const finalCheck = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
+        exclusiveEnd: true,
+        onlyPosted: false
       });
       
       if (finalCheck) {
@@ -917,26 +927,26 @@ async function getCurrentWeather(village) {
           weather = savedWeather;
           console.log(`[weatherService.js]: ✅ Generated and saved new weather for ${normalizedVillage} period (ID: ${savedWeather._id}, Date: ${savedWeather.date.toISOString()})`);
         } catch (saveError) {
-          // If save failed (e.g., duplicate key error), try to find the existing weather using exact date
+          // If save failed (e.g., duplicate key error), try to find the existing weather using range query
           if (saveError.code === 11000 || saveError.name === 'MongoServerError') {
             console.warn(`[weatherService.js]: Duplicate weather detected for ${village}, fetching existing record`);
-            // Try exact date match first (most reliable)
-            const existingWeather = await Weather.findOne({
-              village: normalizedVillage,
-              date: normalizedDate
+            // Try range query first (most reliable - catches weather with different period calculations)
+            const existingWeatherByRange = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
+              exclusiveEnd: true,
+              onlyPosted: false
             });
-            if (existingWeather) {
-              weather = existingWeather;
-              console.log(`[weatherService.js]: ✅ Found existing weather by exact date match (ID: ${existingWeather._id})`);
+            if (existingWeatherByRange) {
+              weather = existingWeatherByRange;
+              console.log(`[weatherService.js]: ✅ Found existing weather by range query (ID: ${existingWeatherByRange._id})`);
             } else {
-              // Fallback to range query for edge cases
-              const existingWeatherByRange = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
-                exclusiveEnd: true,
-                onlyPosted: false
+              // Fallback to exact date match
+              const existingWeather = await Weather.findOne({
+                village: normalizedVillage,
+                date: normalizedDate
               });
-              if (existingWeatherByRange) {
-                weather = existingWeatherByRange;
-                console.log(`[weatherService.js]: ✅ Found existing weather by range query (ID: ${existingWeatherByRange._id})`);
+              if (existingWeather) {
+                weather = existingWeather;
+                console.log(`[weatherService.js]: ✅ Found existing weather by exact date match (ID: ${existingWeather._id})`);
               } else {
                 console.error(`[weatherService.js]: ❌ Failed to save weather and could not find existing:`, saveError);
                 throw saveError;
