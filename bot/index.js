@@ -191,17 +191,79 @@ process.on('unhandledRejection', (reason, promise) => {
 // Add graceful shutdown handler
 process.on('SIGTERM', async () => {
   logger.info('SYSTEM', 'Received SIGTERM. Performing graceful shutdown...');
+  await performGracefulShutdown();
+});
+
+// Shared graceful shutdown function
+async function performGracefulShutdown() {
   try {
+    // 1. Stop expiration checks (prevents recursive timer creation)
+    try {
+      const { stopExpirationChecks } = require('../shared/utils/expirationHandler');
+      stopExpirationChecks();
+      logger.info('SYSTEM', 'Expiration checks stopped');
+    } catch (error) {
+      logger.warn('SYSTEM', `Error stopping expiration checks: ${error.message}`);
+    }
+    
+    // 2. Destroy all cron jobs first (prevents new timers from being created)
+    try {
+      const { destroyAllCronJobs } = require('./scheduler');
+      const destroyedCount = destroyAllCronJobs();
+      logger.info('SYSTEM', `Destroyed ${destroyedCount} cron jobs`);
+    } catch (error) {
+      logger.warn('SYSTEM', `Error destroying cron jobs: ${error.message}`);
+    }
+    
+    // 3. Destroy Discord client
     if (client) {
       logger.info('SYSTEM', 'Destroying Discord client...');
       await client.destroy();
     }
     
-    // Close database connections gracefully
+    // 4. Close all database connections gracefully
     logger.info('SYSTEM', 'Closing database connections...');
     const mongoose = require('mongoose');
+    
+    // Close main mongoose connection
     if (mongoose.connection.readyState !== 0) {
       await mongoose.disconnect();
+    }
+    
+    // Close additional database connections
+    try {
+      const DatabaseConnectionManager = require('../shared/database/connectionManager');
+      await DatabaseConnectionManager.closeAllConnections();
+    } catch (error) {
+      logger.warn('SYSTEM', `Error closing additional database connections: ${error.message}`);
+    }
+    
+    // 5. Clear all caches
+    try {
+      const { inventoryCache, characterListCache, characterDataCache, spiritOrbCache } = require('../shared/utils/cache');
+      [inventoryCache, characterListCache, characterDataCache, spiritOrbCache].forEach(cache => {
+        if (cache && typeof cache.clear === 'function') {
+          cache.clear();
+          if (cache.stopCleanup && typeof cache.stopCleanup === 'function') {
+            cache.stopCleanup();
+          }
+        }
+      });
+      logger.info('SYSTEM', 'All caches cleared');
+    } catch (error) {
+      logger.warn('SYSTEM', `Error clearing caches: ${error.message}`);
+    }
+    
+    // 6. Stop memory monitor
+    try {
+      const { getMemoryMonitor } = require('../shared/utils/memoryMonitor');
+      const memoryMonitor = getMemoryMonitor();
+      if (memoryMonitor) {
+        memoryMonitor.stop();
+        logger.info('SYSTEM', 'Memory monitor stopped');
+      }
+    } catch (error) {
+      logger.warn('SYSTEM', `Error stopping memory monitor: ${error.message}`);
     }
     
     logger.success('SYSTEM', 'Graceful shutdown complete');
@@ -210,30 +272,12 @@ process.on('SIGTERM', async () => {
     logger.error('SYSTEM', `Error during graceful shutdown: ${error.message}`);
     process.exit(1);
   }
-});
+}
 
 // Also handle SIGINT (Ctrl+C) gracefully
 process.on('SIGINT', async () => {
   logger.info('SYSTEM', 'Received SIGINT. Performing graceful shutdown...');
-  try {
-    if (client) {
-      logger.info('SYSTEM', 'Destroying Discord client...');
-      await client.destroy();
-    }
-    
-    // Close database connections gracefully
-    logger.info('DATABASE', 'Closing database connections...');
-    const mongoose = require('mongoose');
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.disconnect();
-    }
-    
-    logger.success('SYSTEM', 'Graceful shutdown complete');
-    process.exit(0);
-  } catch (error) {
-    logger.error('SYSTEM', `Error during graceful shutdown: ${error.message}`);
-    process.exit(1);
-  }
+  await performGracefulShutdown();
 });
 
 // ----------------------------------------------------------------------------
@@ -241,6 +285,15 @@ process.on('SIGINT', async () => {
 // ----------------------------------------------------------------------------
 async function initializeClient() {
   try {
+    // Apply Railway-specific optimizations
+    try {
+      const { configureRailwayOptimizations, setupRailwayMemoryMonitoring } = require('../shared/utils/railwayOptimizations');
+      configureRailwayOptimizations();
+      setupRailwayMemoryMonitoring();
+    } catch (error) {
+      logger.warn('SYSTEM', `Could not apply Railway optimizations: ${error.message}`);
+    }
+    
     // Initialize memory monitoring
     const memoryMonitor = getMemoryMonitor({
       enabled: true,

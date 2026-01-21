@@ -83,52 +83,145 @@ async function checkExpiredRequests(client) {
   }
 }
 
+// Track expiration check state to prevent duplicate initialization
+let expirationCheckTimer = null;
+let isExpirationChecksRunning = false;
+let isCheckInProgress = false;
+let expirationClient = null;
+
+// Function to calculate time until next 8 AM EST
+function getTimeUntilNext8AM() {
+  const now = new Date();
+  // Get current time in EST
+  const estString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+  const estNow = new Date(estString);
+  const next8AM = new Date(estNow);
+  next8AM.setHours(8, 0, 0, 0);
+  
+  // If it's already past 8 AM EST, schedule for next day
+  if (estNow > next8AM) {
+    next8AM.setDate(next8AM.getDate() + 1);
+  }
+  
+  // Convert back to UTC for time calculation
+  const next8AMUTC = new Date(next8AM.toLocaleString("en-US", { timeZone: "UTC" }));
+  return next8AMUTC.getTime() - now.getTime();
+}
+
+// Function to schedule next check (module-level singleton)
+function scheduleNextCheck(delayMs) {
+  // Don't schedule duplicates - if timer already exists, don't create another
+  if (expirationCheckTimer) {
+    console.log('[expirationHandler.js]: Timer already scheduled - skipping duplicate schedule');
+    return;
+  }
+
+  // Don't schedule if checks are not running
+  if (!isExpirationChecksRunning || !expirationClient) {
+    console.log('[expirationHandler.js]: Expiration checks not active - skipping schedule');
+    return;
+  }
+
+  // Use provided delay or calculate from 8 AM EST
+  const timeUntilNext = delayMs !== undefined ? delayMs : getTimeUntilNext8AM();
+  
+  // Clear timer slot BEFORE scheduling new timer (prevent race condition)
+  expirationCheckTimer = setTimeout(async () => {
+    // Clear the timer reference immediately to allow rescheduling
+    expirationCheckTimer = null;
+    
+    // Prevent overlap if the work takes longer than delay
+    if (isCheckInProgress) {
+      console.log('[expirationHandler.js]: Check already in progress - skipping this run');
+      // Schedule next check anyway, but wait 5 minutes before retrying to avoid rapid re-scheduling
+      if (isExpirationChecksRunning) {
+        scheduleNextCheck(5 * 60 * 1000); // 5 minutes
+      }
+      return;
+    }
+
+    // Set flag to prevent concurrent execution
+    isCheckInProgress = true;
+
+    try {
+      await checkExpiredRequests(expirationClient);
+    } catch (error) {
+      console.error('[expirationHandler.js]: Error in expiration check:', error);
+    } finally {
+      // Clear the flag
+      isCheckInProgress = false;
+      
+      // Schedule next check (only if still running)
+      if (isExpirationChecksRunning) {
+        scheduleNextCheck();
+      }
+    }
+  }, timeUntilNext);
+}
+
+// Function to stop expiration checks (for cleanup)
+function stopExpirationChecks() {
+  console.log('[expirationHandler.js]: Stopping expiration checks...');
+  
+  // Clear the running flag first to prevent new schedules
+  isExpirationChecksRunning = false;
+  
+  // Clear any existing timer
+  if (expirationCheckTimer) {
+    clearTimeout(expirationCheckTimer);
+    expirationCheckTimer = null;
+  }
+  
+  // Clear client reference
+  expirationClient = null;
+  
+  console.log('[expirationHandler.js]: Expiration checks stopped');
+}
+
 // Function to start the expiration check interval
 function startExpirationChecks(client) {
-  // Function to calculate time until next 8 AM EST
-  function getTimeUntilNext8AM() {
-    const now = new Date();
-    // Get current time in EST
-    const estString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
-    const estNow = new Date(estString);
-    const next8AM = new Date(estNow);
-    next8AM.setHours(8, 0, 0, 0);
-    
-    // If it's already past 8 AM EST, schedule for next day
-    if (estNow > next8AM) {
-      next8AM.setDate(next8AM.getDate() + 1);
-    }
-    
-    // Convert back to UTC for time calculation
-    const next8AMUTC = new Date(next8AM.toLocaleString("en-US", { timeZone: "UTC" }));
-    return next8AMUTC.getTime() - now.getTime();
+  // Atomic check-and-set: Prevent duplicate initialization
+  if (isExpirationChecksRunning) {
+    console.log('[expirationHandler.js]: Expiration checks already running - skipping duplicate initialization');
+    return;
   }
 
-  // Function to schedule next check
-  function scheduleNextCheck() {
-    const timeUntilNext = getTimeUntilNext8AM();
-    
-    setTimeout(() => {
-      // Run the check
-      checkExpiredRequests(client).catch(error => {
-        console.error('[expirationHandler.js]: Error in expiration check:', error);
-      });
-      
-      // Schedule next check
-      scheduleNextCheck();
-    }, timeUntilNext);
+  // Clear any existing timer (safety check for edge cases)
+  if (expirationCheckTimer) {
+    console.log('[expirationHandler.js]: Found existing timer during initialization - clearing it');
+    clearTimeout(expirationCheckTimer);
+    expirationCheckTimer = null;
   }
 
-  // Start the scheduling
+  // Set flags atomically
+  isExpirationChecksRunning = true;
+  expirationClient = client;
+
+  console.log('[expirationHandler.js]: Starting expiration checks...');
+
+  // Start the scheduling loop
   scheduleNextCheck();
   
-  // Run initial check
-  checkExpiredRequests(client).catch(error => {
-    console.error('[expirationHandler.js]: Error in initial expiration check:', error);
-  });
+  // Run initial check (async, non-blocking)
+  (async () => {
+    if (isCheckInProgress) {
+      console.log('[expirationHandler.js]: Initial check skipped - check already in progress');
+      return;
+    }
+    
+    isCheckInProgress = true;
+    try {
+      await checkExpiredRequests(client);
+    } catch (error) {
+      console.error('[expirationHandler.js]: Error in initial expiration check:', error);
+    } finally {
+      isCheckInProgress = false;
+    }
+  })();
 }
 
 module.exports = {
   checkExpiredRequests,
-  startExpirationChecks
+  startExpirationChecks,
+  stopExpirationChecks
 }; 
