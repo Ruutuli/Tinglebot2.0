@@ -1245,6 +1245,96 @@ async function initializeClient() {
     });
 
     // --------------------------------------------------------------------------
+    // HTTP Healthcheck Server (for Railway auto-restart on high memory)
+    // --------------------------------------------------------------------------
+    const http = require('http');
+    const healthcheckServer = http.createServer((req, res) => {
+      // Only respond to healthcheck endpoint
+      if (req.url === '/health' || req.url === '/healthcheck') {
+        try {
+          const memoryMonitor = getMemoryMonitor();
+          if (!memoryMonitor) {
+            // If memory monitor not available, return healthy
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 'healthy', message: 'Memory monitor not available' }));
+            return;
+          }
+          
+          const stats = memoryMonitor.getMemoryStats();
+          const allTimers = Array.from(memoryMonitor.activeTimers?.values() || []);
+          const nodeCronTimers = allTimers.filter(t => t.isNodeCron);
+          const nodeCronCount = nodeCronTimers.length;
+          
+          // Memory thresholds (in bytes)
+          const MEMORY_WARNING_THRESHOLD = 800 * 1024 * 1024; // 800 MB
+          const MEMORY_CRITICAL_THRESHOLD = 1000 * 1024 * 1024; // 1 GB
+          const TIMER_CRITICAL_THRESHOLD = 300000; // 300k timers
+          
+          const isMemoryCritical = stats.rss > MEMORY_CRITICAL_THRESHOLD;
+          const isMemoryWarning = stats.rss > MEMORY_WARNING_THRESHOLD;
+          const isTimerCritical = nodeCronCount > TIMER_CRITICAL_THRESHOLD;
+          
+          // Return unhealthy status if memory or timers exceed critical thresholds
+          // This will cause Railway to restart the service
+          if (isMemoryCritical || isTimerCritical) {
+            logger.error('HEALTHCHECK', `Healthcheck FAILED - Memory: ${(stats.rss / 1024 / 1024).toFixed(2)} MB, Node-cron timers: ${nodeCronCount.toLocaleString()}`);
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              status: 'unhealthy',
+              reason: isMemoryCritical ? 'high_memory' : 'high_timers',
+              memory_mb: (stats.rss / 1024 / 1024).toFixed(2),
+              node_cron_timers: nodeCronCount,
+              heap_used_mb: (stats.heapUsed / 1024 / 1024).toFixed(2)
+            }));
+            return;
+          }
+          
+          // Return warning status if approaching limits
+          if (isMemoryWarning) {
+            logger.warn('HEALTHCHECK', `Healthcheck WARNING - Memory: ${(stats.rss / 1024 / 1024).toFixed(2)} MB`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              status: 'healthy',
+              warning: 'high_memory',
+              memory_mb: (stats.rss / 1024 / 1024).toFixed(2),
+              node_cron_timers: nodeCronCount
+            }));
+            return;
+          }
+          
+          // Healthy status
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: 'healthy',
+            memory_mb: (stats.rss / 1024 / 1024).toFixed(2),
+            heap_used_mb: (stats.heapUsed / 1024 / 1024).toFixed(2),
+            node_cron_timers: nodeCronCount
+          }));
+        } catch (error) {
+          logger.error('HEALTHCHECK', `Error in healthcheck: ${error.message}`);
+          // On error, return unhealthy to trigger restart
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'unhealthy', error: error.message }));
+        }
+      } else {
+        // 404 for other paths
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'not_found' }));
+      }
+    });
+    
+    healthcheckServer.listen(port, '0.0.0.0', () => {
+      logger.info('HEALTHCHECK', `Healthcheck server listening on port ${port}`);
+      logger.info('HEALTHCHECK', 'Healthcheck endpoint: /health or /healthcheck');
+      logger.info('HEALTHCHECK', 'Returns 503 (unhealthy) when memory > 1GB or node-cron timers > 300k');
+    });
+    
+    healthcheckServer.on('error', (error) => {
+      logger.error('HEALTHCHECK', `Healthcheck server error: ${error.message}`);
+      // Don't exit - bot can still run without healthcheck
+    });
+
+    // --------------------------------------------------------------------------
     // Start the Bot
     // --------------------------------------------------------------------------
     try {

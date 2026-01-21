@@ -2299,6 +2299,58 @@ function setupGoogleSheetsRetry() {
  }, "America/New_York");
 }
 
+// ============================================================================
+// ------------------- Node-Cron Leak Monitoring -------------------
+// ============================================================================
+// NOTE: This is a workaround for a known memory leak in node-cron when using
+// timezone support. Internal timers are not properly cleaned up, causing
+// memory to grow over time. The proper fix is to migrate to 'croner' package.
+
+function setupNodeCronLeakMonitoring() {
+ // Check every 30 minutes for excessive node-cron timer accumulation
+ // NOTE: This monitors the known memory leak in node-cron with timezone support
+ createCronJob("*/30 * * * *", "node-cron leak monitoring", async () => {
+  try {
+   const { getMemoryMonitor } = require('../shared/utils/memoryMonitor');
+   const memoryMonitor = getMemoryMonitor();
+   if (!memoryMonitor) return;
+   
+   const stats = memoryMonitor.getMemoryStats();
+   // Access activeTimers through the class instance
+   const allTimers = Array.from(memoryMonitor.activeTimers?.values() || []);
+   const nodeCronTimers = allTimers.filter(t => t.isNodeCron);
+   const nodeCronCount = nodeCronTimers.length;
+   
+   // Warn if node-cron timers exceed 50k (dashboard has fewer cron jobs, so lower threshold)
+   if (nodeCronCount > 50000) {
+    console.error(`[scheduler.js]: ❌ CRITICAL: node-cron timer leak detected - ${nodeCronCount.toLocaleString()} active timers`);
+    console.error(`[scheduler.js]: This is a known bug in node-cron with timezone support. Consider migrating to croner package.`);
+    console.error(`[scheduler.js]: Memory usage: RSS ${(stats.rss / 1024 / 1024).toFixed(2)} MB, Heap ${(stats.heapUsed / 1024 / 1024).toFixed(2)} MB`);
+    
+    // Force garbage collection if available (requires --expose-gc flag)
+    if (global.gc) {
+     console.warn('[scheduler.js]: ⚠️ Forcing garbage collection to attempt cleanup...');
+     global.gc();
+     // Check again after GC
+     setTimeout(() => {
+      const statsAfter = memoryMonitor.getMemoryStats();
+      const timersAfter = Array.from(memoryMonitor.activeTimers?.values() || []).filter(t => t.isNodeCron).length;
+      console.log(`[scheduler.js]: ℹ️ After GC: ${timersAfter.toLocaleString()} node-cron timers, RSS ${(statsAfter.rss / 1024 / 1024).toFixed(2)} MB`);
+     }, 5000);
+    } else {
+     console.warn('[scheduler.js]: ⚠️ Garbage collection not available. Run with --expose-gc flag to enable.');
+     console.warn('[scheduler.js]: Consider restarting the process periodically to clear accumulated timers.');
+    }
+   } else if (nodeCronCount > 20000) {
+    console.warn(`[scheduler.js]: ⚠️ Warning: High node-cron timer count - ${nodeCronCount.toLocaleString()} active timers`);
+    console.warn(`[scheduler.js]: This indicates a memory leak in node-cron. Consider migrating to croner package.`);
+   }
+  } catch (error) {
+   console.error('[scheduler.js]: ❌ Error monitoring node-cron leak:', error.message);
+  }
+ }, "America/New_York");
+}
+
 // ------------------- Main Initialization Function ------------------
 
 function initializeScheduler(client) {
@@ -2321,6 +2373,11 @@ function initializeScheduler(client) {
  setupBoostingScheduler(client);
  setupWeatherScheduler(client);
  setupHelpWantedFixedScheduler(client);
+ 
+ // Setup periodic cleanup for node-cron timer leak
+ // NOTE: node-cron with timezone support has a known memory leak where internal timers
+ // are not properly cleaned up. This is a workaround until we migrate to croner.
+ setupNodeCronLeakMonitoring();
  
  // Check and post weather on restart if needed
  (async () => {
