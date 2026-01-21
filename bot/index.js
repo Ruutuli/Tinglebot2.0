@@ -1266,29 +1266,23 @@ async function initializeClient() {
           }
           
           const stats = memoryMonitor.getMemoryStats();
-          const allTimers = Array.from(memoryMonitor.activeTimers?.values() || []);
-          const nodeCronTimers = allTimers.filter(t => t.isNodeCron);
-          const nodeCronCount = nodeCronTimers.length;
           
           // Memory thresholds (in bytes)
           const MEMORY_WARNING_THRESHOLD = 800 * 1024 * 1024; // 800 MB
           const MEMORY_CRITICAL_THRESHOLD = 1000 * 1024 * 1024; // 1 GB
-          const TIMER_CRITICAL_THRESHOLD = 300000; // 300k timers
           
           const isMemoryCritical = stats.rss > MEMORY_CRITICAL_THRESHOLD;
           const isMemoryWarning = stats.rss > MEMORY_WARNING_THRESHOLD;
-          const isTimerCritical = nodeCronCount > TIMER_CRITICAL_THRESHOLD;
           
-          // Return unhealthy status if memory or timers exceed critical thresholds
+          // Return unhealthy status if memory exceeds critical threshold
           // This will cause Railway to restart the service
-          if (isMemoryCritical || isTimerCritical) {
-            logger.error('HEALTHCHECK', `Healthcheck FAILED - Memory: ${(stats.rss / 1024 / 1024).toFixed(2)} MB, Node-cron timers: ${nodeCronCount.toLocaleString()}`);
+          if (isMemoryCritical) {
+            logger.error('HEALTHCHECK', `Healthcheck FAILED - Memory: ${(stats.rss / 1024 / 1024).toFixed(2)} MB`);
             res.writeHead(503, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
               status: 'unhealthy',
-              reason: isMemoryCritical ? 'high_memory' : 'high_timers',
+              reason: 'high_memory',
               memory_mb: (stats.rss / 1024 / 1024).toFixed(2),
-              node_cron_timers: nodeCronCount,
               heap_used_mb: (stats.heapUsed / 1024 / 1024).toFixed(2)
             }));
             return;
@@ -1301,8 +1295,7 @@ async function initializeClient() {
             res.end(JSON.stringify({
               status: 'healthy',
               warning: 'high_memory',
-              memory_mb: (stats.rss / 1024 / 1024).toFixed(2),
-              node_cron_timers: nodeCronCount
+              memory_mb: (stats.rss / 1024 / 1024).toFixed(2)
             }));
             return;
           }
@@ -1312,8 +1305,7 @@ async function initializeClient() {
           res.end(JSON.stringify({
             status: 'healthy',
             memory_mb: (stats.rss / 1024 / 1024).toFixed(2),
-            heap_used_mb: (stats.heapUsed / 1024 / 1024).toFixed(2),
-            node_cron_timers: nodeCronCount
+            heap_used_mb: (stats.heapUsed / 1024 / 1024).toFixed(2)
           }));
         } catch (error) {
           logger.error('HEALTHCHECK', `Error in healthcheck: ${error.message}`);
@@ -1331,7 +1323,7 @@ async function initializeClient() {
     healthcheckServer.listen(port, '0.0.0.0', () => {
       logger.success('HEALTHCHECK', `✅ Healthcheck server listening on port ${port}`);
       logger.info('HEALTHCHECK', `📍 Healthcheck endpoint: http://0.0.0.0:${port}/health or /healthcheck`);
-      logger.info('HEALTHCHECK', '⚠️ Returns 503 (unhealthy) when memory > 1GB or node-cron timers > 300k');
+      logger.info('HEALTHCHECK', '⚠️ Returns 503 (unhealthy) when memory > 1GB');
       logger.warn('HEALTHCHECK', '🔧 IMPORTANT: Configure Railway Healthcheck Path to /health in service settings!');
     });
     

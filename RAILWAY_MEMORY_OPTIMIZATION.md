@@ -147,7 +147,7 @@ Caches: bounded with maxSize limits
 Throttle detector: bounded to 20 entries
 Memory monitor history: bounded to 100 entries
 Recommendation
-Fix node-cron → croner migration (highest priority)
+✅ node-cron → croner migration completed
 Add errorLogCache size limit (quick fix)
 Verify database connection cleanup
 Audit event listeners

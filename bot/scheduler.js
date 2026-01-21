@@ -5,7 +5,7 @@
 // Core dependencies
 const dotenv = require("dotenv");
 const path = require("path");
-const cron = require("node-cron");
+const { Cron } = require("croner");
 const { v4: uuidv4 } = require("uuid");
 
 // Discord.js
@@ -143,8 +143,12 @@ function createCronJob(
  jobFunction,
  timezone = "America/New_York"
 ) {
- const task = cron.schedule(
+ const task = new Cron(
   schedule,
+  {
+    timezone: timezone,
+    catch: true, // Automatically catch errors
+  },
   async () => {
    try {
     await jobFunction();
@@ -152,8 +156,7 @@ function createCronJob(
     handleError(error, "scheduler.js");
     logger.error('SCHEDULER', `[scheduler.js]❌ ${jobName} failed:`, error.message);
    }
-  },
-  { timezone }
+  }
  );
  
  // Track the cron job instance
@@ -167,7 +170,7 @@ function destroyAllCronJobs() {
  let destroyedCount = 0;
  for (const task of activeCronJobs) {
   try {
-   task.destroy();
+   task.stop(); // croner uses stop() instead of destroy()
    destroyedCount++;
   } catch (error) {
    logger.error('SCHEDULER', 'Error destroying cron job', error.message);
@@ -2797,84 +2800,6 @@ function setupBloodMoonScheduling(client) {
   }, "America/New_York");
  }
 
-// ============================================================================
-// ------------------- Node-Cron Leak Monitoring -------------------
-// ============================================================================
-// NOTE: This is a workaround for a known memory leak in node-cron when using
-// timezone support. Internal timers are not properly cleaned up, causing
-// memory to grow over time. The proper fix is to migrate to 'croner' package.
-
-function setupNodeCronLeakMonitoring() {
- // Check every 15 minutes for excessive node-cron timer accumulation
- // NOTE: This monitors the known memory leak in node-cron with timezone support
- createCronJob("*/15 * * * *", "node-cron leak monitoring", async () => {
-  try {
-   const { getMemoryMonitor } = require('../shared/utils/memoryMonitor');
-   const memoryMonitor = getMemoryMonitor();
-   if (!memoryMonitor) return;
-   
-   const stats = memoryMonitor.getMemoryStats();
-   // Access activeTimers through the class instance
-   const allTimers = Array.from(memoryMonitor.activeTimers?.values() || []);
-   const nodeCronTimers = allTimers.filter(t => t.isNodeCron);
-   const nodeCronCount = nodeCronTimers.length;
-   
-   // Memory thresholds
-   const MEMORY_CRITICAL_THRESHOLD = 1000 * 1024 * 1024; // 1 GB
-   const TIMER_CRITICAL_THRESHOLD = 300000; // 300k timers
-   const MEMORY_EMERGENCY_THRESHOLD = 2000 * 1024 * 1024; // 2 GB - force restart
-   const TIMER_EMERGENCY_THRESHOLD = 500000; // 500k timers - force restart
-   
-   const isMemoryCritical = stats.rss > MEMORY_CRITICAL_THRESHOLD;
-   const isMemoryEmergency = stats.rss > MEMORY_EMERGENCY_THRESHOLD;
-   const isTimerCritical = nodeCronCount > TIMER_CRITICAL_THRESHOLD;
-   const isTimerEmergency = nodeCronCount > TIMER_EMERGENCY_THRESHOLD;
-   
-   // EMERGENCY: Force restart if memory or timers are extremely high
-   if (isMemoryEmergency || isTimerEmergency) {
-    logger.error('SCHEDULER', `🚨 EMERGENCY: Forcing restart - Memory: ${(stats.rss / 1024 / 1024).toFixed(2)} MB, Timers: ${nodeCronCount.toLocaleString()}`);
-    logger.error('SCHEDULER', 'This is a known bug in node-cron with timezone support. Consider migrating to croner package.');
-    logger.error('SCHEDULER', 'Forcing process exit to trigger Railway restart...');
-    
-    // Give a moment for logs to flush, then exit
-    setTimeout(() => {
-     process.exit(1); // Exit with error code to trigger Railway restart
-    }, 2000);
-    return;
-   }
-   
-   // CRITICAL: Warn and attempt cleanup
-   if (isMemoryCritical || isTimerCritical) {
-    logger.error('SCHEDULER', `CRITICAL: node-cron timer leak detected - ${nodeCronCount.toLocaleString()} active timers`);
-    logger.error('SCHEDULER', 'This is a known bug in node-cron with timezone support. Consider migrating to croner package.');
-    logger.error('SCHEDULER', `Memory usage: RSS ${(stats.rss / 1024 / 1024).toFixed(2)} MB, Heap ${(stats.heapUsed / 1024 / 1024).toFixed(2)} MB`);
-    logger.warn('SCHEDULER', '⚠️ Healthcheck should trigger restart. If not, configure Railway Healthcheck Path to /health');
-    
-    // Force garbage collection if available (requires --expose-gc flag)
-    if (global.gc) {
-     logger.warn('SCHEDULER', 'Forcing garbage collection to attempt cleanup...');
-     global.gc();
-     // Check again after GC
-     setTimeout(() => {
-      const statsAfter = memoryMonitor.getMemoryStats();
-      const timersAfter = Array.from(memoryMonitor.activeTimers?.values() || []).filter(t => t.isNodeCron).length;
-      logger.info('SCHEDULER', `After GC: ${timersAfter.toLocaleString()} node-cron timers, RSS ${(statsAfter.rss / 1024 / 1024).toFixed(2)} MB`);
-     }, 5000);
-    } else {
-     logger.warn('SCHEDULER', 'Garbage collection not available. Run with --expose-gc flag to enable.');
-     logger.warn('SCHEDULER', 'Consider restarting the process periodically to clear accumulated timers.');
-    }
-   } else if (nodeCronCount > 100000) {
-    logger.warn('SCHEDULER', `Warning: High node-cron timer count - ${nodeCronCount.toLocaleString()} active timers`);
-    logger.warn('SCHEDULER', 'This indicates a memory leak in node-cron. Consider migrating to croner package.');
-   }
-  } catch (error) {
-   logger.error('SCHEDULER', 'Error monitoring node-cron leak', error.message);
-  }
- }, "America/New_York");
-}
-
-
 // ------------------- Main Initialization Function ------------------
 
 function initializeScheduler(client) {
@@ -2908,11 +2833,6 @@ function initializeScheduler(client) {
  
  isSchedulerInitialized = true;
  logger.success('SCHEDULER', `All scheduled tasks initialized (${activeCronJobs.size} active cron jobs)`);
- 
- // Setup periodic cleanup for node-cron timer leak
- // NOTE: node-cron with timezone support has a known memory leak where internal timers
- // are not properly cleaned up. This is a workaround until we migrate to croner.
- setupNodeCronLeakMonitoring();
  
  // Check and post weather on restart if needed
  (async () => {
