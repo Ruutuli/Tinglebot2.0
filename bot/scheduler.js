@@ -133,13 +133,17 @@ try {
 // ------------------- Utility Functions -------------------
 // ============================================================================
 
+// Track all cron jobs to prevent leaks
+const activeCronJobs = new Set();
+let isSchedulerInitialized = false;
+
 function createCronJob(
  schedule,
  jobName,
  jobFunction,
  timezone = "America/New_York"
 ) {
- return cron.schedule(
+ const task = cron.schedule(
   schedule,
   async () => {
    try {
@@ -151,6 +155,27 @@ function createCronJob(
   },
   { timezone }
  );
+ 
+ // Track the cron job instance
+ activeCronJobs.add(task);
+ 
+ return task;
+}
+
+// Function to destroy all active cron jobs
+function destroyAllCronJobs() {
+ let destroyedCount = 0;
+ for (const task of activeCronJobs) {
+  try {
+   task.destroy();
+   destroyedCount++;
+  } catch (error) {
+   logger.error('SCHEDULER', 'Error destroying cron job', error.message);
+  }
+ }
+ activeCronJobs.clear();
+ logger.info('SCHEDULER', `Destroyed ${destroyedCount} cron jobs`);
+ return destroyedCount;
 }
 
 function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
@@ -2781,6 +2806,13 @@ function initializeScheduler(client) {
   return;
  }
 
+ // Prevent duplicate initialization
+ if (isSchedulerInitialized) {
+  const destroyedCount = destroyAllCronJobs();
+  logger.warn('SCHEDULER', `Scheduler already initialized - destroyed ${destroyedCount} existing jobs and reinitializing`);
+  isSchedulerInitialized = false; // Reset flag before reinitializing
+ }
+
  // Run startup checks
  runStartupChecks(client);
 
@@ -2797,7 +2829,8 @@ function initializeScheduler(client) {
  setupHelpWantedFixedScheduler(client);
  setupSecretSantaScheduler(client);
  
- logger.success('SCHEDULER', 'All scheduled tasks initialized');
+ isSchedulerInitialized = true;
+ logger.success('SCHEDULER', `All scheduled tasks initialized (${activeCronJobs.size} active cron jobs)`);
  
  // Check and post weather on restart if needed
  (async () => {
@@ -2815,6 +2848,7 @@ function initializeScheduler(client) {
 
 module.exports = {
  initializeScheduler,
+ destroyAllCronJobs,
  setupBlightScheduler,
  setupBoostingScheduler,
  setupWeatherScheduler,
