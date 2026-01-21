@@ -79,6 +79,7 @@ const calendarModule = require('../bot/modules/calendarModule');
 
 // Import pretty logger utility
 const logger = require(path.resolve(__dirname, '../shared/utils/logger'));
+const { getMemoryMonitor } = require(path.resolve(__dirname, '../shared/utils/memoryMonitor'));
 
 // Import Google Sheets utilities
 const googleSheets = require(path.resolve(__dirname, '../shared/utils/googleSheetsUtils'));
@@ -14338,6 +14339,15 @@ app.use((req, res, next) => {
 const startServer = async () => {
   // Display startup banner
   logger.banner('TINGLEBOT DASHBOARD', 'Initializing server components...');
+  
+  // Initialize memory monitoring
+  const memoryMonitor = getMemoryMonitor({
+    enabled: true,
+    logInterval: 5 * 60 * 1000, // 5 minutes
+    warningThreshold: 500 * 1024 * 1024, // 500MB
+    criticalThreshold: 1000 * 1024 * 1024 // 1GB
+  });
+  logger.info('server.js', 'Memory monitoring initialized');
   
   // Initialize cache cleanup (safe operation)
   try {

@@ -32,6 +32,15 @@ const {
 // ------------------- Utilities -------------------
 const logger = require('../../shared/utils/logger');
 
+// Memory monitor (optional - won't break if not initialized)
+let memoryMonitor = null;
+try {
+  const { getMemoryMonitor } = require('../../shared/utils/memoryMonitor');
+  memoryMonitor = getMemoryMonitor();
+} catch (err) {
+  // Memory monitor not available, continue without it
+}
+
 // ------------------- Autocomplete Request Management -------------------
 // Per-user debounce and inflight request tracking to prevent self-DOS
 const autocompleteLocks = new Map(); // userId -> { promise, timestamp }
@@ -39,6 +48,46 @@ const autocompleteCache = new Map(); // userId -> { data, timestamp, ttl }
 const AUTCOMPLETE_DEBOUNCE_MS = 200; // 200ms debounce
 const AUTCOMPLETE_CACHE_TTL = 30 * 1000; // 30 second cache
 const AUTCOMPLETE_MAX_INFLIGHT_AGE = 5000; // Clean up stale locks after 5s
+
+// Cleanup function for autocomplete caches
+function cleanupAutocompleteCaches() {
+  const now = Date.now();
+  let cleanedLocks = 0;
+  let cleanedCache = 0;
+  
+  // Clean up stale locks
+  for (const [userId, lock] of autocompleteLocks.entries()) {
+    if (now - lock.timestamp > AUTCOMPLETE_MAX_INFLIGHT_AGE) {
+      autocompleteLocks.delete(userId);
+      cleanedLocks++;
+    }
+  }
+  
+  // Clean up expired cache entries
+  for (const [userId, cached] of autocompleteCache.entries()) {
+    if (now - cached.timestamp >= cached.ttl) {
+      autocompleteCache.delete(userId);
+      cleanedCache++;
+    }
+  }
+  
+  // Update memory monitor
+  if (memoryMonitor) {
+    memoryMonitor.trackCache('autocompleteCache', autocompleteCache.size);
+    memoryMonitor.trackResource('autocompleteLocks', autocompleteLocks.size);
+  }
+  
+  // Log if caches are getting large
+  if (autocompleteCache.size > 100) {
+    logger.warn('AUTOCOMPLETE', `Autocomplete cache is large: ${autocompleteCache.size} entries`);
+  }
+  if (autocompleteLocks.size > 50) {
+    logger.warn('AUTOCOMPLETE', `Autocomplete locks are high: ${autocompleteLocks.size} active locks`);
+  }
+}
+
+// Run cleanup every 30 seconds
+setInterval(cleanupAutocompleteCaches, 30 * 1000);
 
 // ------------------- Custom Modules -------------------
 const {
@@ -1066,6 +1115,12 @@ async function handleCharacterBasedCommandsAutocomplete(
         timestamp: Date.now(),
         ttl: AUTCOMPLETE_CACHE_TTL
       });
+      
+      // Update memory monitor
+      if (memoryMonitor) {
+        memoryMonitor.trackCache('autocompleteCache', autocompleteCache.size);
+        memoryMonitor.trackResource('autocompleteLocks', autocompleteLocks.size);
+      }
       
       // Resolve the lock promise so other concurrent requests can use this result
       resolveLock(allCharacters);

@@ -20,6 +20,46 @@ const { characterQueryDetector, modCharacterQueryDetector } = require("../utils/
 const dbConfig = require('../config/database');
 const logger = require('../utils/logger');
 
+// Memory monitor (optional - won't break if not initialized)
+let memoryMonitor = null;
+try {
+  const { getMemoryMonitor } = require('../utils/memoryMonitor');
+  memoryMonitor = getMemoryMonitor();
+} catch (err) {
+  // Memory monitor not available, continue without it
+}
+
+// Database operation tracking
+let dbOperationCounts = {
+  queries: 0,
+  updates: 0,
+  inserts: 0,
+  deletes: 0,
+  transactions: 0
+};
+
+// Track database operations
+function trackDbOperation(type) {
+  if (dbOperationCounts[type] !== undefined) {
+    dbOperationCounts[type]++;
+  }
+  
+  // Update memory monitor every 100 operations
+  const totalOps = Object.values(dbOperationCounts).reduce((a, b) => a + b, 0);
+  if (memoryMonitor && totalOps % 100 === 0) {
+    memoryMonitor.trackResource('dbQueries', dbOperationCounts.queries);
+    memoryMonitor.trackResource('dbUpdates', dbOperationCounts.updates);
+    memoryMonitor.trackResource('dbInserts', dbOperationCounts.inserts);
+    memoryMonitor.trackResource('dbDeletes', dbOperationCounts.deletes);
+    memoryMonitor.trackResource('dbTransactions', dbOperationCounts.transactions);
+  }
+}
+
+// Export function to get operation counts
+function getDbOperationCounts() {
+  return { ...dbOperationCounts };
+}
+
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
 const inventoryUtils = require("../utils/inventoryUtils");
 
@@ -95,6 +135,16 @@ async function connectToTinglebot() {
    });
    
    logger.success('DATABASE', 'Tinglebot database connected');
+   
+   // Track connection pool size
+   if (memoryMonitor) {
+     try {
+       const poolSize = mongoose.connection.db?.serverConfig?.poolSize || 0;
+       memoryMonitor.trackResource('dbPoolSize_tinglebot', poolSize);
+     } catch (e) {
+       // Ignore errors getting pool size
+     }
+   }
    
    // Reset error counter on successful connection
    resetErrorCounter();
@@ -193,6 +243,17 @@ const connectToInventoriesNative = async () => {
         const db = client.db('inventories');
         inventoriesDbNativeConnection = db;
         logger.success('DATABASE', 'Native inventories database connected');
+        
+        // Track connection pool size
+        if (memoryMonitor) {
+          try {
+            const poolSize = client.topology?.s?.pool?.totalConnectionCount || 0;
+            memoryMonitor.trackResource('dbPoolSize_inventories', poolSize);
+          } catch (e) {
+            // Ignore errors getting pool size
+          }
+        }
+        
         connectingInventoriesNativePromise = null;
         return db;
       } catch (error) {
@@ -283,6 +344,7 @@ const fetchCharacterByName = async (characterName) => {
   await connectToTinglebot();
   // Escape special regex characters in the character name
   const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  trackDbOperation('queries');
   const character = await Character.findOne({
    name: new RegExp(`^${escapedName}$`, "i"),
   });
@@ -304,6 +366,7 @@ const fetchCharacterByName = async (characterName) => {
 const fetchBlightedCharactersByUserId = async (userId) => {
  try {
   await connectToTinglebot();
+  trackDbOperation('queries');
   return await Character.find({ userId, blighted: true }).lean().exec();
  } catch (error) {
   handleError(error, "db.js");
@@ -318,6 +381,7 @@ const fetchBlightedCharactersByUserId = async (userId) => {
 const fetchAllCharacters = async () => {
  try {
   await connectToTinglebot();
+  trackDbOperation('queries');
   return await Character.find().lean().exec();
  } catch (error) {
   handleError(error, "db.js");
@@ -2795,5 +2859,6 @@ module.exports = {
  connectToVending,
  addItemToInventory,
  restorePetLevel,
- forceResetPetRolls
+ forceResetPetRolls,
+ getDbOperationCounts
 };

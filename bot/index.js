@@ -29,6 +29,7 @@ const { initializeReactionRolesHandler } = require('./handlers/reactionRolesHand
 // const { handleMessage } = require('./handlers/messageHandler');
 const { startExpirationChecks } = require('../shared/utils/expirationHandler');
 const logger = require('../shared/utils/logger');
+const { getMemoryMonitor } = require('../shared/utils/memoryMonitor');
 
 // ------------------- Scripts -------------------
 const {
@@ -240,6 +241,15 @@ process.on('SIGINT', async () => {
 // ----------------------------------------------------------------------------
 async function initializeClient() {
   try {
+    // Initialize memory monitoring
+    const memoryMonitor = getMemoryMonitor({
+      enabled: true,
+      logInterval: 5 * 60 * 1000, // 5 minutes
+      warningThreshold: 500 * 1024 * 1024, // 500MB
+      criticalThreshold: 1000 * 1024 * 1024 // 1GB
+    });
+    logger.info('SYSTEM', 'Memory monitoring initialized');
+    
     // Initialize databases first
     await initializeDatabases();
 

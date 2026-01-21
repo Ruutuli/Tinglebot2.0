@@ -26,6 +26,15 @@ const fs = require('fs');
 const Jimp = require('jimp');
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
+// Memory monitor (optional - won't break if not initialized)
+let memoryMonitor = null;
+try {
+  const { getMemoryMonitor } = require('../utils/memoryMonitor');
+  memoryMonitor = getMemoryMonitor();
+} catch (err) {
+  // Memory monitor not available, continue without it
+}
+
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
@@ -122,6 +131,16 @@ function cleanupBannerCache() {
     
     const toRemove = sortedEntries.slice(0, bannerCache.size - MAX_CACHE_SIZE);
     toRemove.forEach(([key]) => bannerCache.delete(key));
+  }
+  
+  // Update memory monitor with cache size
+  if (memoryMonitor) {
+    memoryMonitor.trackCache('bannerCache', bannerCache.size);
+  }
+  
+  // Log if cache is getting large
+  if (bannerCache.size > MAX_CACHE_SIZE * 0.8) {
+    logger.warn('WTHR', `Banner cache is large: ${bannerCache.size}/${MAX_CACHE_SIZE} entries`);
   }
 }
 
@@ -1213,6 +1232,11 @@ async function generateBanner(village, weather, options = {}) {
           banner,
           timestamp: Date.now()
         });
+        
+        // Update memory monitor with cache size
+        if (memoryMonitor) {
+          memoryMonitor.trackCache('bannerCache', bannerCache.size);
+        }
       }
       
       return banner;

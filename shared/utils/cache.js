@@ -8,6 +8,15 @@ const logger = require('./logger');
 // Check if we're in production
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';
 
+// Memory monitor (optional - won't break if not initialized)
+let memoryMonitor = null;
+try {
+  const { getMemoryMonitor } = require('./memoryMonitor');
+  memoryMonitor = getMemoryMonitor();
+} catch (err) {
+  // Memory monitor not available, continue without it
+}
+
 // ------------------- Cache Entry Class -------------------
 class CacheEntry {
   constructor(data, ttl) {
@@ -35,9 +44,15 @@ class Cache {
     this.defaultTTL = options.defaultTTL || 30 * 60 * 1000; // 30 minutes default
     this.store = new Map();
     this.cleanupInterval = options.cleanupInterval || 5 * 60 * 1000; // 5 minutes
+    this.cacheName = options.name || 'unnamed'; // Cache name for tracking
     
     // Start cleanup interval
     this.startCleanup();
+    
+    // Register cache size with memory monitor
+    if (memoryMonitor) {
+      memoryMonitor.trackCache(this.cacheName, this.store.size);
+    }
   }
 
   // ------------------- Function: get -------------------
@@ -68,6 +83,11 @@ class Cache {
     
     const entryTTL = ttl || this.defaultTTL;
     this.store.set(key, new CacheEntry(value, entryTTL));
+    
+    // Update memory monitor with cache size
+    if (memoryMonitor && this.cacheName) {
+      memoryMonitor.trackCache(this.cacheName, this.store.size);
+    }
   }
 
   // ------------------- Function: has -------------------
@@ -129,6 +149,11 @@ class Cache {
       }
     }
     
+    // Update memory monitor with cache size
+    if (memoryMonitor && this.cacheName) {
+      memoryMonitor.trackCache(this.cacheName, this.store.size);
+    }
+    
     // Don't log cache cleanup in production
     if (cleaned > 0 && !isProduction) {
       logger.debug(`Cache cleanup: removed ${cleaned} expired entries`, null, 'cache.js');
@@ -182,24 +207,28 @@ class Cache {
 
 // ------------------- Create Cache Instances -------------------
 const inventoryCache = new Cache({
+  name: 'inventoryCache',
   maxSize: 500,
   defaultTTL: 30 * 60 * 1000, // 30 minutes
   cleanupInterval: 5 * 60 * 1000 // 5 minutes
 });
 
 const characterListCache = new Cache({
+  name: 'characterListCache',
   maxSize: 10,
   defaultTTL: 10 * 60 * 1000, // 10 minutes
   cleanupInterval: 5 * 60 * 1000
 });
 
 const characterDataCache = new Cache({
+  name: 'characterDataCache',
   maxSize: 100,
   defaultTTL: 5 * 60 * 1000, // 5 minutes
   cleanupInterval: 5 * 60 * 1000
 });
 
 const spiritOrbCache = new Cache({
+  name: 'spiritOrbCache',
   maxSize: 200,
   defaultTTL: 10 * 60 * 1000, // 10 minutes
   cleanupInterval: 5 * 60 * 1000
